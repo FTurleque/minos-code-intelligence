@@ -9,6 +9,8 @@ import com.minos.domain.SymbolSearchCriteria;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.CommitUncertainException;
 import com.minos.io.PrivateLocalStorage;
+import com.minos.orchestration.ScipSymbolSnapshotReport;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.CodeKnowledgeStore;
 import org.scip_code.scip.Index;

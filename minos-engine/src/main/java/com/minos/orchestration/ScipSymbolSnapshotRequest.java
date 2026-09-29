@@ -1,4 +1,4 @@
-package com.minos.adapter.scip;
+package com.minos.orchestration;
 
 import java.nio.file.Path;
 import java.util.Map;

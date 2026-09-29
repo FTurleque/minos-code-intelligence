@@ -4,6 +4,8 @@ import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.io.CommitUncertainException;
+import com.minos.orchestration.ScipSymbolSnapshotReport;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotQueryView;

@@ -1,7 +1,7 @@
 package com.minos.impact;
 
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
-import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.domain.Symbol;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.FileSymbolSnapshotStore;

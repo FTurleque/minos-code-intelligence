@@ -112,176 +112,176 @@ Scripts de relevé : `inventory.py`, `pkgprivate.py`, `mapping.py` (scratch de l
 
 Générée depuis les sources de `10486cb7` ; mise à jour à chaque lot si un arbitrage du § 3.2 la modifie. « inchangé » = déplacement pur, seul le jar change. La ligne 1 (`DockerRuntimeBootstrap`) suit la proposition du § 3.2 (1).
 
-| # | Nature | Ancien module | Ancien FQN | Nouveau module | Nouveau FQN |
-|---|---|---|---|---|---|
-| 1 | déplacement | `app` | `com.minos.cli.DockerRuntimeBootstrap` | `cli` | inchangé |
-| 2 | déplacement | `app` | `com.minos.cli.MinosLauncher` | `cli` | inchangé |
-| 3 | déplacement | `application` | `com.minos.discovery.DefaultDiscoveryPlugins` | `engine` | inchangé |
-| 4 | déplacement | `application` | `com.minos.discovery.ProjectDiscoveryService` | `engine` | inchangé |
-| 5 | déplacement | `application` | `com.minos.discovery.ProjectIgnorePolicy` | `engine` | inchangé |
-| 6 | déplacement | `application` | `com.minos.discovery.spi.BuildSystemDetector` | `engine` | inchangé |
-| 7 | déplacement | `application` | `com.minos.discovery.spi.LanguageDetector` | `engine` | inchangé |
-| 8 | déplacement | `application` | `com.minos.discovery.spi.ProjectDetector` | `engine` | inchangé |
-| 9 | déplacement | `application` | `com.minos.discovery.spi.SourceRootDetector` | `engine` | inchangé |
-| 10 | déplacement | `application` | `com.minos.hosted.HmacHostedIdentityProvider` | `engine` | inchangé |
-| 11 | déplacement | `application` | `com.minos.hosted.HostedAuditChain` | `engine` | inchangé |
-| 12 | déplacement | `application` | `com.minos.hosted.HostedAuditDelivery` | `engine` | inchangé |
-| 13 | déplacement | `application` | `com.minos.hosted.HostedAuditSink` | `engine` | inchangé |
-| 14 | déplacement | `application` | `com.minos.hosted.HostedAuthorizationService` | `engine` | inchangé |
-| 15 | déplacement | `application` | `com.minos.hosted.HostedAvailabilityPort` | `engine` | inchangé |
-| 16 | déplacement | `application` | `com.minos.hosted.HostedCommitRecovery` | `engine` | inchangé |
-| 17 | déplacement | `application` | `com.minos.hosted.HostedControlPlaneService` | `engine` | inchangé |
-| 18 | déplacement | `application` | `com.minos.hosted.HostedDenialThrottle` | `engine` | inchangé |
-| 19 | déplacement | `application` | `com.minos.hosted.HostedIdentityProvider` | `engine` | inchangé |
-| 20 | déplacement | `application` | `com.minos.hosted.HostedMembershipService` | `engine` | inchangé |
-| 21 | déplacement | `application` | `com.minos.hosted.HostedProductionBoundary` | `engine` | inchangé |
-| 22 | déplacement | `application` | `com.minos.hosted.HostedRetentionService` | `engine` | inchangé |
-| 23 | déplacement | `application` | `com.minos.hosted.HostedTenantMutationWriter` | `engine` | inchangé |
-| 24 | déplacement | `application` | `com.minos.hosted.HostedTenantService` | `engine` | inchangé |
-| 25 | déplacement | `application` | `com.minos.hosted.HostedTokenService` | `engine` | inchangé |
-| 26 | déplacement | `application` | `com.minos.hosted.HostedTransportSecurityPort` | `engine` | inchangé |
-| 27 | déplacement | `application` | `com.minos.hosted.HostedWorkspaceService` | `engine` | inchangé |
-| 28 | déplacement | `application` | `com.minos.incremental.IncrementalIndexingCoordinator` | `engine` | inchangé |
-| 29 | déplacement | `application` | `com.minos.incremental.IncrementalIndexingPlan` | `engine` | inchangé |
-| 30 | déplacement | `application` | `com.minos.incremental.IncrementalIndexingPlanReason` | `engine` | inchangé |
-| 31 | déplacement | `application` | `com.minos.incremental.IncrementalIndexingPlanner` | `engine` | inchangé |
-| 32 | déplacement | `application` | `com.minos.incremental.IncrementalIndexingResult` | `engine` | inchangé |
-| 33 | déplacement | `application` | `com.minos.incremental.ProjectChangeSet` | `engine` | inchangé |
-| 34 | déplacement | `application` | `com.minos.incremental.ProjectFingerprintService` | `engine` | inchangé |
-| 35 | déplacement | `application` | `com.minos.incremental.ProjectFingerprintSnapshotAlignmentService` | `engine` | inchangé |
-| 36 | déplacement | `application` | `com.minos.incremental.ProjectInvalidationAssessment` | `engine` | inchangé |
-| 37 | déplacement | `application` | `com.minos.incremental.ProjectInvalidationReason` | `engine` | inchangé |
-| 38 | déplacement | `application` | `com.minos.incremental.ProjectInvalidationScope` | `engine` | inchangé |
-| 39 | déplacement | `application` | `com.minos.incremental.ProjectInvalidationService` | `engine` | inchangé |
-| 40 | déplacement | `application` | `com.minos.orchestration.AuthoritativeProjectStateReconciler` | `engine` | inchangé |
-| 41 | déplacement | `application` | `com.minos.orchestration.ExecutionCheckpoints` | `engine` | inchangé |
-| 42 | déplacement | `application` | `com.minos.orchestration.IndexerExecutionScopeResolver` | `engine` | inchangé |
-| 43 | déplacement | `application` | `com.minos.orchestration.IndexingExecutionTarget` | `engine` | inchangé |
-| 44 | déplacement | `application` | `com.minos.orchestration.IndexingLifecyclePlanSupport` | `engine` | inchangé |
-| 45 | déplacement | `application` | `com.minos.orchestration.IndexingLifecycleService` | `engine` | inchangé |
-| 46 | déplacement | `application` | `com.minos.orchestration.IndexingResumePlanner` | `engine` | inchangé |
-| 47 | déplacement | `application` | `com.minos.orchestration.IndexingResumePolicy` | `engine` | inchangé |
-| 48 | déplacement | `application` | `com.minos.orchestration.IndexingRunExecutor` | `engine` | inchangé |
-| 49 | déplacement | `application` | `com.minos.orchestration.ResumableArtifactPolicy` | `engine` | inchangé |
-| 50 | déplacement | `application` | `com.minos.orchestration.ResumableRunMarkers` | `engine` | inchangé |
-| 51 | déplacement | `application` | `com.minos.orchestration.ResumableRunSummary` | `engine` | inchangé |
-| 52 | déplacement | `application` | `com.minos.runtime.MinosVersion` | `engine` | inchangé |
-| 53 | déplacement | `domain` | `com.minos.dynamic.CorrelatedRuntimeObservation` | `engine` | inchangé |
-| 54 | déplacement | `domain` | `com.minos.dynamic.CorrelatedRuntimeSession` | `engine` | inchangé |
-| 55 | déplacement | `domain` | `com.minos.dynamic.RuntimeObservation` | `engine` | inchangé |
-| 56 | déplacement | `domain` | `com.minos.dynamic.RuntimeObservationCompleteness` | `engine` | inchangé |
-| 57 | déplacement | `domain` | `com.minos.dynamic.RuntimeObservationSession` | `engine` | inchangé |
-| 58 | déplacement | `domain` | `com.minos.dynamic.RuntimeObservationType` | `engine` | inchangé |
-| 59 | déplacement | `domain` | `com.minos.dynamic.RuntimeResolutionStatus` | `engine` | inchangé |
-| 60 | déplacement | `domain` | `com.minos.dynamic.RuntimeSymbolReference` | `engine` | inchangé |
-| 61 | déplacement | `domain` | `com.minos.dynamic.RuntimeSymbolResolution` | `engine` | inchangé |
-| 62 | déplacement | `domain` | `com.minos.hosted.HostedAccessClaims` | `engine` | inchangé |
-| 63 | déplacement | `domain` | `com.minos.hosted.HostedAuditEvent` | `engine` | inchangé |
-| 64 | déplacement | `domain` | `com.minos.hosted.HostedPermission` | `engine` | inchangé |
-| 65 | déplacement | `domain` | `com.minos.hosted.HostedPrincipal` | `engine` | inchangé |
-| 66 | déplacement | `domain` | `com.minos.hosted.HostedProjectBinding` | `engine` | inchangé |
-| 67 | déplacement | `domain` | `com.minos.hosted.HostedRetentionPlan` | `engine` | inchangé |
-| 68 | déplacement | `domain` | `com.minos.hosted.HostedRetentionPolicy` | `engine` | inchangé |
-| 69 | déplacement | `domain` | `com.minos.hosted.HostedRole` | `engine` | inchangé |
-| 70 | déplacement | `domain` | `com.minos.hosted.HostedTenantState` | `engine` | inchangé |
-| 71 | déplacement | `domain` | `com.minos.hosted.SharedWorkspace` | `engine` | inchangé |
-| 72 | renommage | `app` | `com.minos.cli.DockerMcpTransport` | `app` | `com.minos.app.DockerMcpTransport` |
-| 73 | renommage | `app` | `com.minos.cli.McpBackend` | `app` | `com.minos.app.McpBackend` |
-| 74 | renommage | `app` | `com.minos.cli.McpBackendConfiguration` | `app` | `com.minos.app.McpBackendConfiguration` |
-| 75 | renommage | `app` | `com.minos.cli.McpBackendConfigurationStore` | `app` | `com.minos.app.McpBackendConfigurationStore` |
-| 76 | renommage | `app` | `com.minos.cli.McpBackendRouter` | `app` | `com.minos.app.McpBackendRouter` |
-| 77 | renommage | `application` | `com.minos.dynamic.RuntimeIntelligenceService` | `application` | `com.minos.application.dynamic.RuntimeIntelligenceService` |
-| 78 | renommage | `application` | `com.minos.dynamic.RuntimeObservationEnvelopeCodec` | `application` | `com.minos.application.dynamic.RuntimeObservationEnvelopeCodec` |
-| 79 | renommage | `application` | `com.minos.semantic.EmbeddingProvider` | `application` | `com.minos.application.semantic.EmbeddingProvider` |
-| 80 | renommage | `application` | `com.minos.semantic.HybridContextBuilder` | `application` | `com.minos.application.semantic.HybridContextBuilder` |
-| 81 | renommage | `application` | `com.minos.semantic.HybridSearchService` | `application` | `com.minos.application.semantic.HybridSearchService` |
-| 82 | renommage | `application` | `com.minos.semantic.LocalHashEmbeddingProvider` | `application` | `com.minos.application.semantic.LocalHashEmbeddingProvider` |
-| 83 | renommage | `application` | `com.minos.semantic.OllamaEmbeddingProvider` | `application` | `com.minos.application.semantic.OllamaEmbeddingProvider` |
-| 84 | renommage | `application` | `com.minos.semantic.SemanticDocumentFactory` | `application` | `com.minos.application.semantic.SemanticDocumentFactory` |
-| 85 | renommage | `application` | `com.minos.semantic.SemanticIndexBudget` | `application` | `com.minos.application.semantic.SemanticIndexBudget` |
-| 86 | renommage | `application` | `com.minos.semantic.SemanticIndexService` | `application` | `com.minos.application.semantic.SemanticIndexService` |
-| 87 | renommage | `application` | `com.minos.semantic.SemanticSearchEvaluator` | `application` | `com.minos.application.semantic.SemanticSearchEvaluator` |
-| 88 | renommage | `application` | `com.minos.semantic.SemanticSearchService` | `application` | `com.minos.application.semantic.SemanticSearchService` |
-| 89 | renommage | `application` | `com.minos.storage.StorageBackends` | `application` | `com.minos.application.StorageBackends` |
-| 90 | renommage | `engine` | `com.minos.adapter.scip.ScipSymbolSnapshotReport` | `engine` | `com.minos.orchestration.ScipSymbolSnapshotReport` |
-| 91 | renommage | `engine` | `com.minos.adapter.scip.ScipSymbolSnapshotRequest` | `engine` | `com.minos.orchestration.ScipSymbolSnapshotRequest` |
-| 92 | renommage | `integration-git` | `com.minos.git.GitIntelligenceService` | `integration-git` | `com.minos.integration.git.GitIntelligenceService` |
-| 93 | renommage | `integration-git` | `com.minos.git.JGitCloneDeadline` | `integration-git` | `com.minos.integration.git.JGitCloneDeadline` |
-| 94 | renommage | `integration-git` | `com.minos.git.JGitRemoteGitClient` | `integration-git` | `com.minos.integration.git.JGitRemoteGitClient` |
-| 95 | renommage | `integration-git` | `com.minos.git.JGitRemoteRepositoryMaterializer` | `integration-git` | `com.minos.integration.git.JGitRemoteRepositoryMaterializer` |
-| 96 | renommage | `integration-git` | `com.minos.git.RemoteCloneBudget` | `integration-git` | `com.minos.integration.git.RemoteCloneBudget` |
-| 97 | renommage | `integration-git` | `com.minos.git.RemoteRepositoryCachePolicy` | `integration-git` | `com.minos.integration.git.RemoteRepositoryCachePolicy` |
-| 98 | renommage | `nexus` | `com.minos.integration.nexus.NexusExportContract` | `nexus` | `com.minos.nexus.NexusExportContract` |
-| 99 | renommage | `nexus` | `com.minos.integration.nexus.NexusExportService` | `nexus` | `com.minos.nexus.NexusExportService` |
-| 100 | renommage | `nexus` | `com.minos.integration.nexus.NexusSemanticSignalContract` | `nexus` | `com.minos.nexus.NexusSemanticSignalContract` |
-| 101 | renommage | `nexus` | `com.minos.integration.nexus.NexusSemanticSignalService` | `nexus` | `com.minos.nexus.NexusSemanticSignalService` |
-| 102 | renommage | `runtime-local` | `com.minos.runtime.BoundedProcessOutput` | `runtime-local` | `com.minos.runtime.local.BoundedProcessOutput` |
-| 103 | renommage | `runtime-local` | `com.minos.runtime.CgroupJobOwnership` | `runtime-local` | `com.minos.runtime.local.CgroupJobOwnership` |
-| 104 | renommage | `runtime-local` | `com.minos.runtime.CommandLocator` | `runtime-local` | `com.minos.runtime.local.CommandLocator` |
-| 105 | renommage | `runtime-local` | `com.minos.runtime.CompositeProviderRuntimeManager` | `runtime-local` | `com.minos.runtime.local.CompositeProviderRuntimeManager` |
-| 106 | renommage | `runtime-local` | `com.minos.runtime.DistributedArtifactBundleStore` | `runtime-local` | `com.minos.runtime.local.DistributedArtifactBundleStore` |
-| 107 | renommage | `runtime-local` | `com.minos.runtime.DistributedArtifactCachePolicy` | `runtime-local` | `com.minos.runtime.local.DistributedArtifactCachePolicy` |
-| 108 | renommage | `runtime-local` | `com.minos.runtime.DistributedIndexerExecutor` | `runtime-local` | `com.minos.runtime.local.DistributedIndexerExecutor` |
-| 109 | renommage | `runtime-local` | `com.minos.runtime.FileResumableRunMarkers` | `runtime-local` | `com.minos.runtime.local.FileResumableRunMarkers` |
-| 110 | renommage | `runtime-local` | `com.minos.runtime.IndexerProcessPlan` | `runtime-local` | `com.minos.runtime.local.IndexerProcessPlan` |
-| 111 | renommage | `runtime-local` | `com.minos.runtime.IndexerProcessPlanFactory` | `runtime-local` | `com.minos.runtime.local.IndexerProcessPlanFactory` |
-| 112 | renommage | `runtime-local` | `com.minos.runtime.LinuxBubblewrapWorkerSandboxBackend` | `runtime-local` | `com.minos.runtime.local.LinuxBubblewrapWorkerSandboxBackend` |
-| 113 | renommage | `runtime-local` | `com.minos.runtime.LinuxCgroupJob` | `runtime-local` | `com.minos.runtime.local.LinuxCgroupJob` |
-| 114 | renommage | `runtime-local` | `com.minos.runtime.LocalIsolatedIndexWorker` | `runtime-local` | `com.minos.runtime.local.LocalIsolatedIndexWorker` |
-| 115 | renommage | `runtime-local` | `com.minos.runtime.LocalProviderWorkspace` | `runtime-local` | `com.minos.runtime.local.LocalProviderWorkspace` |
-| 116 | renommage | `runtime-local` | `com.minos.runtime.ProcessIndexerExecutor` | `runtime-local` | `com.minos.runtime.local.ProcessIndexerExecutor` |
-| 117 | renommage | `runtime-local` | `com.minos.runtime.ProcessOwnershipTracker` | `runtime-local` | `com.minos.runtime.local.ProcessOwnershipTracker` |
-| 118 | renommage | `runtime-local` | `com.minos.runtime.ProcessSandboxCapableIndexerExecutor` | `runtime-local` | `com.minos.runtime.local.ProcessSandboxCapableIndexerExecutor` |
-| 119 | renommage | `runtime-local` | `com.minos.runtime.ProcessTreeTermination` | `runtime-local` | `com.minos.runtime.local.ProcessTreeTermination` |
-| 120 | renommage | `runtime-local` | `com.minos.runtime.ProviderProcessEnvironment` | `runtime-local` | `com.minos.runtime.local.ProviderProcessEnvironment` |
-| 121 | renommage | `runtime-local` | `com.minos.runtime.ProviderResidueReclamation` | `runtime-local` | `com.minos.runtime.local.ProviderResidueReclamation` |
-| 122 | renommage | `runtime-local` | `com.minos.runtime.ProviderWorkspaceFiles` | `runtime-local` | `com.minos.runtime.local.ProviderWorkspaceFiles` |
-| 123 | renommage | `runtime-local` | `com.minos.runtime.ProviderWriteQuota` | `runtime-local` | `com.minos.runtime.local.ProviderWriteQuota` |
-| 124 | renommage | `runtime-local` | `com.minos.runtime.ProviderWriteQuotaSupervisor` | `runtime-local` | `com.minos.runtime.local.ProviderWriteQuotaSupervisor` |
-| 125 | renommage | `runtime-local` | `com.minos.runtime.RunDirectoryRetention` | `runtime-local` | `com.minos.runtime.local.RunDirectoryRetention` |
-| 126 | renommage | `runtime-local` | `com.minos.runtime.StrongProcessOwnershipIndexerExecutor` | `runtime-local` | `com.minos.runtime.local.StrongProcessOwnershipIndexerExecutor` |
-| 127 | renommage | `runtime-local` | `com.minos.runtime.WindowsAppContainerWorkerSandboxBackend` | `runtime-local` | `com.minos.runtime.local.WindowsAppContainerWorkerSandboxBackend` |
-| 128 | renommage | `runtime-local` | `com.minos.runtime.WindowsContainmentScript` | `runtime-local` | `com.minos.runtime.local.WindowsContainmentScript` |
-| 129 | renommage | `runtime-local` | `com.minos.runtime.WindowsExecutionPathIdentityProvider` | `runtime-local` | `com.minos.runtime.local.WindowsExecutionPathIdentityProvider` |
-| 130 | renommage | `runtime-local` | `com.minos.runtime.WindowsJobObjectProcessOwnership` | `runtime-local` | `com.minos.runtime.local.WindowsJobObjectProcessOwnership` |
-| 131 | renommage | `runtime-local` | `com.minos.runtime.WorkerResourceContainment` | `runtime-local` | `com.minos.runtime.local.WorkerResourceContainment` |
-| 132 | renommage | `runtime-local` | `com.minos.runtime.WorkerSandboxBackend` | `runtime-local` | `com.minos.runtime.local.WorkerSandboxBackend` |
-| 133 | renommage | `runtime-local` | `com.minos.runtime.WorkerSandboxBackends` | `runtime-local` | `com.minos.runtime.local.WorkerSandboxBackends` |
-| 134 | renommage | `runtime-local` | `com.minos.runtime.WorkerSandboxQualification` | `runtime-local` | `com.minos.runtime.local.WorkerSandboxQualification` |
-| 135 | renommage | `runtime-local` | `com.minos.runtime.WorkerSandboxSelection` | `runtime-local` | `com.minos.runtime.local.WorkerSandboxSelection` |
-| 136 | renommage | `storage-local` | `com.minos.incremental.FileProjectFingerprintSnapshotStore` | `storage-local` | `com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore` |
-| 137 | renommage | `storage-local` | `com.minos.orchestration.FileIndexStateStore` | `storage-local` | `com.minos.storage.local.orchestration.FileIndexStateStore` |
-| 138 | renommage | `storage-local` | `com.minos.orchestration.IndexRunRetentionPolicy` | `storage-local` | `com.minos.storage.local.orchestration.IndexRunRetentionPolicy` |
-| 139 | renommage | `storage-local` | `com.minos.orchestration.IndexRunRetentionService` | `storage-local` | `com.minos.storage.local.orchestration.IndexRunRetentionService` |
-| 140 | renommage | `storage-local` | `com.minos.orchestration.ProjectIndexLease` | `storage-local` | `com.minos.storage.local.orchestration.ProjectIndexLease` |
-| 141 | renommage | `storage-local` | `com.minos.registry.InterProcessLocalProjectRegistry` | `storage-local` | `com.minos.storage.local.registry.InterProcessLocalProjectRegistry` |
-| 142 | renommage | `storage-local` | `com.minos.registry.LocalProjectRegistry` | `storage-local` | `com.minos.storage.local.registry.LocalProjectRegistry` |
-| 143 | renommage | `storage-local` | `com.minos.registry.ProjectPathMappingStore` | `storage-local` | `com.minos.storage.local.registry.ProjectPathMappingStore` |
-| 144 | renommage | `storage-local` | `com.minos.storage.LocalStorageBackend` | `storage-local` | `com.minos.storage.local.LocalStorageBackend` |
-| 145 | renommage | `storage-local` | `com.minos.storage.LocalStorageRetentionService` | `storage-local` | `com.minos.storage.local.LocalStorageRetentionService` |
-| 146 | renommage | `storage-local` | `com.minos.storage.SerializedRuntimeObservationStore` | `storage-local` | `com.minos.storage.local.SerializedRuntimeObservationStore` |
-| 147 | renommage | `storage-local` | `com.minos.store.ActiveSnapshotRepository` | `storage-local` | `com.minos.storage.local.store.ActiveSnapshotRepository` |
-| 148 | renommage | `storage-local` | `com.minos.store.CodeKnowledgeSnapshotBinaryCodec` | `storage-local` | `com.minos.storage.local.store.CodeKnowledgeSnapshotBinaryCodec` |
-| 149 | renommage | `storage-local` | `com.minos.store.EnvironmentHostedTenantKeyProvider` | `storage-local` | `com.minos.storage.local.store.EnvironmentHostedTenantKeyProvider` |
-| 150 | renommage | `storage-local` | `com.minos.store.FileHostedControlPlaneStore` | `storage-local` | `com.minos.storage.local.store.FileHostedControlPlaneStore` |
-| 151 | renommage | `storage-local` | `com.minos.store.FileRuntimeObservationStore` | `storage-local` | `com.minos.storage.local.store.FileRuntimeObservationStore` |
-| 152 | renommage | `storage-local` | `com.minos.store.FileSemanticVectorStore` | `storage-local` | `com.minos.storage.local.store.FileSemanticVectorStore` |
-| 153 | renommage | `storage-local` | `com.minos.store.FileSymbolSnapshotStore` | `storage-local` | `com.minos.storage.local.store.FileSymbolSnapshotStore` |
-| 154 | renommage | `storage-local` | `com.minos.store.ProjectMutationSemanticVectorStore` | `storage-local` | `com.minos.storage.local.store.ProjectMutationSemanticVectorStore` |
-| 155 | renommage | `storage-local` | `com.minos.store.SnapshotBinaryCodecSupport` | `storage-local` | `com.minos.storage.local.store.SnapshotBinaryCodecSupport` |
-| 156 | renommage | `storage-local` | `com.minos.store.SnapshotCodec` | `storage-local` | `com.minos.storage.local.store.SnapshotCodec` |
-| 157 | renommage | `storage-local` | `com.minos.store.SnapshotCodecV1` | `storage-local` | `com.minos.storage.local.store.SnapshotCodecV1` |
-| 158 | renommage | `storage-local` | `com.minos.store.SnapshotCodecV2` | `storage-local` | `com.minos.storage.local.store.SnapshotCodecV2` |
-| 159 | renommage | `storage-local` | `com.minos.store.SnapshotCompactionService` | `storage-local` | `com.minos.storage.local.store.SnapshotCompactionService` |
-| 160 | renommage | `storage-local` | `com.minos.store.SnapshotIntegrityService` | `storage-local` | `com.minos.storage.local.store.SnapshotIntegrityService` |
-| 161 | renommage | `storage-local` | `com.minos.store.SnapshotProjectLease` | `storage-local` | `com.minos.storage.local.store.SnapshotProjectLease` |
-| 162 | renommage | `storage-local` | `com.minos.store.SnapshotRepository` | `storage-local` | `com.minos.storage.local.store.SnapshotRepository` |
-| 163 | renommage | `storage-local` | `com.minos.store.SnapshotRetentionPolicy` | `storage-local` | `com.minos.storage.local.store.SnapshotRetentionPolicy` |
-| 164 | renommage | `storage-local` | `com.minos.store.SnapshotRetentionService` | `storage-local` | `com.minos.storage.local.store.SnapshotRetentionService` |
-| 165 | suppression | `cli` | `com.minos.cli.LocalProjectOperations` | `—` | supprimé → appelants sur `com.minos.application.LocalProjectOperations` |
-| 166 | suppression | `cli` | `com.minos.cli.LocalProjectSymbolQuery` | `—` | supprimé → appelants sur `com.minos.application.LocalProjectSymbolQuery` |
-| 167 | suppression | `cli` | `com.minos.cli.ProjectOperations` | `—` | supprimé → appelants sur `com.minos.application.ProjectOperations` |
-| 168 | suppression | `cli` | `com.minos.cli.ProjectSymbolQuery` | `—` | supprimé → appelants sur `com.minos.application.ProjectSymbolQuery` |
+| # | Nature | Ancien module | Ancien FQN | Nouveau module | Nouveau FQN | Statut |
+|---|---|---|---|---|---|---|
+| 1 | déplacement | `app` | `com.minos.cli.DockerRuntimeBootstrap` | `cli` | inchangé | prévu |
+| 2 | déplacement | `app` | `com.minos.cli.MinosLauncher` | `cli` | inchangé | prévu |
+| 3 | déplacement | `application` | `com.minos.discovery.DefaultDiscoveryPlugins` | `engine` | inchangé | prévu |
+| 4 | déplacement | `application` | `com.minos.discovery.ProjectDiscoveryService` | `engine` | inchangé | prévu |
+| 5 | déplacement | `application` | `com.minos.discovery.ProjectIgnorePolicy` | `engine` | inchangé | prévu |
+| 6 | déplacement | `application` | `com.minos.discovery.spi.BuildSystemDetector` | `engine` | inchangé | prévu |
+| 7 | déplacement | `application` | `com.minos.discovery.spi.LanguageDetector` | `engine` | inchangé | prévu |
+| 8 | déplacement | `application` | `com.minos.discovery.spi.ProjectDetector` | `engine` | inchangé | prévu |
+| 9 | déplacement | `application` | `com.minos.discovery.spi.SourceRootDetector` | `engine` | inchangé | prévu |
+| 10 | déplacement | `application` | `com.minos.hosted.HmacHostedIdentityProvider` | `engine` | inchangé | prévu |
+| 11 | déplacement | `application` | `com.minos.hosted.HostedAuditChain` | `engine` | inchangé | prévu |
+| 12 | déplacement | `application` | `com.minos.hosted.HostedAuditDelivery` | `engine` | inchangé | prévu |
+| 13 | déplacement | `application` | `com.minos.hosted.HostedAuditSink` | `engine` | inchangé | prévu |
+| 14 | déplacement | `application` | `com.minos.hosted.HostedAuthorizationService` | `engine` | inchangé | prévu |
+| 15 | déplacement | `application` | `com.minos.hosted.HostedAvailabilityPort` | `engine` | inchangé | prévu |
+| 16 | déplacement | `application` | `com.minos.hosted.HostedCommitRecovery` | `engine` | inchangé | prévu |
+| 17 | déplacement | `application` | `com.minos.hosted.HostedControlPlaneService` | `engine` | inchangé | prévu |
+| 18 | déplacement | `application` | `com.minos.hosted.HostedDenialThrottle` | `engine` | inchangé | prévu |
+| 19 | déplacement | `application` | `com.minos.hosted.HostedIdentityProvider` | `engine` | inchangé | prévu |
+| 20 | déplacement | `application` | `com.minos.hosted.HostedMembershipService` | `engine` | inchangé | prévu |
+| 21 | déplacement | `application` | `com.minos.hosted.HostedProductionBoundary` | `engine` | inchangé | prévu |
+| 22 | déplacement | `application` | `com.minos.hosted.HostedRetentionService` | `engine` | inchangé | prévu |
+| 23 | déplacement | `application` | `com.minos.hosted.HostedTenantMutationWriter` | `engine` | inchangé | prévu |
+| 24 | déplacement | `application` | `com.minos.hosted.HostedTenantService` | `engine` | inchangé | prévu |
+| 25 | déplacement | `application` | `com.minos.hosted.HostedTokenService` | `engine` | inchangé | prévu |
+| 26 | déplacement | `application` | `com.minos.hosted.HostedTransportSecurityPort` | `engine` | inchangé | prévu |
+| 27 | déplacement | `application` | `com.minos.hosted.HostedWorkspaceService` | `engine` | inchangé | prévu |
+| 28 | déplacement | `application` | `com.minos.incremental.IncrementalIndexingCoordinator` | `engine` | inchangé | prévu |
+| 29 | déplacement | `application` | `com.minos.incremental.IncrementalIndexingPlan` | `engine` | inchangé | prévu |
+| 30 | déplacement | `application` | `com.minos.incremental.IncrementalIndexingPlanReason` | `engine` | inchangé | prévu |
+| 31 | déplacement | `application` | `com.minos.incremental.IncrementalIndexingPlanner` | `engine` | inchangé | prévu |
+| 32 | déplacement | `application` | `com.minos.incremental.IncrementalIndexingResult` | `engine` | inchangé | prévu |
+| 33 | déplacement | `application` | `com.minos.incremental.ProjectChangeSet` | `engine` | inchangé | prévu |
+| 34 | déplacement | `application` | `com.minos.incremental.ProjectFingerprintService` | `engine` | inchangé | prévu |
+| 35 | déplacement | `application` | `com.minos.incremental.ProjectFingerprintSnapshotAlignmentService` | `engine` | inchangé | prévu |
+| 36 | déplacement | `application` | `com.minos.incremental.ProjectInvalidationAssessment` | `engine` | inchangé | prévu |
+| 37 | déplacement | `application` | `com.minos.incremental.ProjectInvalidationReason` | `engine` | inchangé | prévu |
+| 38 | déplacement | `application` | `com.minos.incremental.ProjectInvalidationScope` | `engine` | inchangé | prévu |
+| 39 | déplacement | `application` | `com.minos.incremental.ProjectInvalidationService` | `engine` | inchangé | prévu |
+| 40 | déplacement | `application` | `com.minos.orchestration.AuthoritativeProjectStateReconciler` | `engine` | inchangé | prévu |
+| 41 | déplacement | `application` | `com.minos.orchestration.ExecutionCheckpoints` | `engine` | inchangé | prévu |
+| 42 | déplacement | `application` | `com.minos.orchestration.IndexerExecutionScopeResolver` | `engine` | inchangé | prévu |
+| 43 | déplacement | `application` | `com.minos.orchestration.IndexingExecutionTarget` | `engine` | inchangé | prévu |
+| 44 | déplacement | `application` | `com.minos.orchestration.IndexingLifecyclePlanSupport` | `engine` | inchangé | prévu |
+| 45 | déplacement | `application` | `com.minos.orchestration.IndexingLifecycleService` | `engine` | inchangé | prévu |
+| 46 | déplacement | `application` | `com.minos.orchestration.IndexingResumePlanner` | `engine` | inchangé | prévu |
+| 47 | déplacement | `application` | `com.minos.orchestration.IndexingResumePolicy` | `engine` | inchangé | prévu |
+| 48 | déplacement | `application` | `com.minos.orchestration.IndexingRunExecutor` | `engine` | inchangé | prévu |
+| 49 | déplacement | `application` | `com.minos.orchestration.ResumableArtifactPolicy` | `engine` | inchangé | prévu |
+| 50 | déplacement | `application` | `com.minos.orchestration.ResumableRunMarkers` | `engine` | inchangé | prévu |
+| 51 | déplacement | `application` | `com.minos.orchestration.ResumableRunSummary` | `engine` | inchangé | prévu |
+| 52 | déplacement | `application` | `com.minos.runtime.MinosVersion` | `engine` | inchangé | prévu |
+| 53 | déplacement | `domain` | `com.minos.dynamic.CorrelatedRuntimeObservation` | `engine` | inchangé | prévu |
+| 54 | déplacement | `domain` | `com.minos.dynamic.CorrelatedRuntimeSession` | `engine` | inchangé | prévu |
+| 55 | déplacement | `domain` | `com.minos.dynamic.RuntimeObservation` | `engine` | inchangé | prévu |
+| 56 | déplacement | `domain` | `com.minos.dynamic.RuntimeObservationCompleteness` | `engine` | inchangé | prévu |
+| 57 | déplacement | `domain` | `com.minos.dynamic.RuntimeObservationSession` | `engine` | inchangé | prévu |
+| 58 | déplacement | `domain` | `com.minos.dynamic.RuntimeObservationType` | `engine` | inchangé | prévu |
+| 59 | déplacement | `domain` | `com.minos.dynamic.RuntimeResolutionStatus` | `engine` | inchangé | prévu |
+| 60 | déplacement | `domain` | `com.minos.dynamic.RuntimeSymbolReference` | `engine` | inchangé | prévu |
+| 61 | déplacement | `domain` | `com.minos.dynamic.RuntimeSymbolResolution` | `engine` | inchangé | prévu |
+| 62 | déplacement | `domain` | `com.minos.hosted.HostedAccessClaims` | `engine` | inchangé | prévu |
+| 63 | déplacement | `domain` | `com.minos.hosted.HostedAuditEvent` | `engine` | inchangé | prévu |
+| 64 | déplacement | `domain` | `com.minos.hosted.HostedPermission` | `engine` | inchangé | prévu |
+| 65 | déplacement | `domain` | `com.minos.hosted.HostedPrincipal` | `engine` | inchangé | prévu |
+| 66 | déplacement | `domain` | `com.minos.hosted.HostedProjectBinding` | `engine` | inchangé | prévu |
+| 67 | déplacement | `domain` | `com.minos.hosted.HostedRetentionPlan` | `engine` | inchangé | prévu |
+| 68 | déplacement | `domain` | `com.minos.hosted.HostedRetentionPolicy` | `engine` | inchangé | prévu |
+| 69 | déplacement | `domain` | `com.minos.hosted.HostedRole` | `engine` | inchangé | prévu |
+| 70 | déplacement | `domain` | `com.minos.hosted.HostedTenantState` | `engine` | inchangé | prévu |
+| 71 | déplacement | `domain` | `com.minos.hosted.SharedWorkspace` | `engine` | inchangé | prévu |
+| 72 | renommage | `app` | `com.minos.cli.DockerMcpTransport` | `app` | `com.minos.app.DockerMcpTransport` | prévu |
+| 73 | renommage | `app` | `com.minos.cli.McpBackend` | `app` | `com.minos.app.McpBackend` | prévu |
+| 74 | renommage | `app` | `com.minos.cli.McpBackendConfiguration` | `app` | `com.minos.app.McpBackendConfiguration` | prévu |
+| 75 | renommage | `app` | `com.minos.cli.McpBackendConfigurationStore` | `app` | `com.minos.app.McpBackendConfigurationStore` | prévu |
+| 76 | renommage | `app` | `com.minos.cli.McpBackendRouter` | `app` | `com.minos.app.McpBackendRouter` | prévu |
+| 77 | renommage | `application` | `com.minos.dynamic.RuntimeIntelligenceService` | `application` | `com.minos.application.dynamic.RuntimeIntelligenceService` | prévu |
+| 78 | renommage | `application` | `com.minos.dynamic.RuntimeObservationEnvelopeCodec` | `application` | `com.minos.application.dynamic.RuntimeObservationEnvelopeCodec` | prévu |
+| 79 | renommage | `application` | `com.minos.semantic.EmbeddingProvider` | `application` | `com.minos.application.semantic.EmbeddingProvider` | prévu |
+| 80 | renommage | `application` | `com.minos.semantic.HybridContextBuilder` | `application` | `com.minos.application.semantic.HybridContextBuilder` | prévu |
+| 81 | renommage | `application` | `com.minos.semantic.HybridSearchService` | `application` | `com.minos.application.semantic.HybridSearchService` | prévu |
+| 82 | renommage | `application` | `com.minos.semantic.LocalHashEmbeddingProvider` | `application` | `com.minos.application.semantic.LocalHashEmbeddingProvider` | prévu |
+| 83 | renommage | `application` | `com.minos.semantic.OllamaEmbeddingProvider` | `application` | `com.minos.application.semantic.OllamaEmbeddingProvider` | prévu |
+| 84 | renommage | `application` | `com.minos.semantic.SemanticDocumentFactory` | `application` | `com.minos.application.semantic.SemanticDocumentFactory` | prévu |
+| 85 | renommage | `application` | `com.minos.semantic.SemanticIndexBudget` | `application` | `com.minos.application.semantic.SemanticIndexBudget` | prévu |
+| 86 | renommage | `application` | `com.minos.semantic.SemanticIndexService` | `application` | `com.minos.application.semantic.SemanticIndexService` | prévu |
+| 87 | renommage | `application` | `com.minos.semantic.SemanticSearchEvaluator` | `application` | `com.minos.application.semantic.SemanticSearchEvaluator` | prévu |
+| 88 | renommage | `application` | `com.minos.semantic.SemanticSearchService` | `application` | `com.minos.application.semantic.SemanticSearchService` | prévu |
+| 89 | renommage | `application` | `com.minos.storage.StorageBackends` | `application` | `com.minos.application.StorageBackends` | prévu |
+| 90 | renommage | `engine` | `com.minos.adapter.scip.ScipSymbolSnapshotReport` | `engine` | `com.minos.orchestration.ScipSymbolSnapshotReport` | fait (groupe a) |
+| 91 | renommage | `engine` | `com.minos.adapter.scip.ScipSymbolSnapshotRequest` | `engine` | `com.minos.orchestration.ScipSymbolSnapshotRequest` | fait (groupe a) |
+| 92 | renommage | `integration-git` | `com.minos.git.GitIntelligenceService` | `integration-git` | `com.minos.integration.git.GitIntelligenceService` | prévu |
+| 93 | renommage | `integration-git` | `com.minos.git.JGitCloneDeadline` | `integration-git` | `com.minos.integration.git.JGitCloneDeadline` | prévu |
+| 94 | renommage | `integration-git` | `com.minos.git.JGitRemoteGitClient` | `integration-git` | `com.minos.integration.git.JGitRemoteGitClient` | prévu |
+| 95 | renommage | `integration-git` | `com.minos.git.JGitRemoteRepositoryMaterializer` | `integration-git` | `com.minos.integration.git.JGitRemoteRepositoryMaterializer` | prévu |
+| 96 | renommage | `integration-git` | `com.minos.git.RemoteCloneBudget` | `integration-git` | `com.minos.integration.git.RemoteCloneBudget` | prévu |
+| 97 | renommage | `integration-git` | `com.minos.git.RemoteRepositoryCachePolicy` | `integration-git` | `com.minos.integration.git.RemoteRepositoryCachePolicy` | prévu |
+| 98 | renommage | `nexus` | `com.minos.integration.nexus.NexusExportContract` | `nexus` | `com.minos.nexus.NexusExportContract` | prévu |
+| 99 | renommage | `nexus` | `com.minos.integration.nexus.NexusExportService` | `nexus` | `com.minos.nexus.NexusExportService` | prévu |
+| 100 | renommage | `nexus` | `com.minos.integration.nexus.NexusSemanticSignalContract` | `nexus` | `com.minos.nexus.NexusSemanticSignalContract` | prévu |
+| 101 | renommage | `nexus` | `com.minos.integration.nexus.NexusSemanticSignalService` | `nexus` | `com.minos.nexus.NexusSemanticSignalService` | prévu |
+| 102 | renommage | `runtime-local` | `com.minos.runtime.BoundedProcessOutput` | `runtime-local` | `com.minos.runtime.local.BoundedProcessOutput` | prévu |
+| 103 | renommage | `runtime-local` | `com.minos.runtime.CgroupJobOwnership` | `runtime-local` | `com.minos.runtime.local.CgroupJobOwnership` | prévu |
+| 104 | renommage | `runtime-local` | `com.minos.runtime.CommandLocator` | `runtime-local` | `com.minos.runtime.local.CommandLocator` | prévu |
+| 105 | renommage | `runtime-local` | `com.minos.runtime.CompositeProviderRuntimeManager` | `runtime-local` | `com.minos.runtime.local.CompositeProviderRuntimeManager` | prévu |
+| 106 | renommage | `runtime-local` | `com.minos.runtime.DistributedArtifactBundleStore` | `runtime-local` | `com.minos.runtime.local.DistributedArtifactBundleStore` | prévu |
+| 107 | renommage | `runtime-local` | `com.minos.runtime.DistributedArtifactCachePolicy` | `runtime-local` | `com.minos.runtime.local.DistributedArtifactCachePolicy` | prévu |
+| 108 | renommage | `runtime-local` | `com.minos.runtime.DistributedIndexerExecutor` | `runtime-local` | `com.minos.runtime.local.DistributedIndexerExecutor` | prévu |
+| 109 | renommage | `runtime-local` | `com.minos.runtime.FileResumableRunMarkers` | `runtime-local` | `com.minos.runtime.local.FileResumableRunMarkers` | prévu |
+| 110 | renommage | `runtime-local` | `com.minos.runtime.IndexerProcessPlan` | `runtime-local` | `com.minos.runtime.local.IndexerProcessPlan` | prévu |
+| 111 | renommage | `runtime-local` | `com.minos.runtime.IndexerProcessPlanFactory` | `runtime-local` | `com.minos.runtime.local.IndexerProcessPlanFactory` | prévu |
+| 112 | renommage | `runtime-local` | `com.minos.runtime.LinuxBubblewrapWorkerSandboxBackend` | `runtime-local` | `com.minos.runtime.local.LinuxBubblewrapWorkerSandboxBackend` | prévu |
+| 113 | renommage | `runtime-local` | `com.minos.runtime.LinuxCgroupJob` | `runtime-local` | `com.minos.runtime.local.LinuxCgroupJob` | prévu |
+| 114 | renommage | `runtime-local` | `com.minos.runtime.LocalIsolatedIndexWorker` | `runtime-local` | `com.minos.runtime.local.LocalIsolatedIndexWorker` | prévu |
+| 115 | renommage | `runtime-local` | `com.minos.runtime.LocalProviderWorkspace` | `runtime-local` | `com.minos.runtime.local.LocalProviderWorkspace` | prévu |
+| 116 | renommage | `runtime-local` | `com.minos.runtime.ProcessIndexerExecutor` | `runtime-local` | `com.minos.runtime.local.ProcessIndexerExecutor` | prévu |
+| 117 | renommage | `runtime-local` | `com.minos.runtime.ProcessOwnershipTracker` | `runtime-local` | `com.minos.runtime.local.ProcessOwnershipTracker` | prévu |
+| 118 | renommage | `runtime-local` | `com.minos.runtime.ProcessSandboxCapableIndexerExecutor` | `runtime-local` | `com.minos.runtime.local.ProcessSandboxCapableIndexerExecutor` | prévu |
+| 119 | renommage | `runtime-local` | `com.minos.runtime.ProcessTreeTermination` | `runtime-local` | `com.minos.runtime.local.ProcessTreeTermination` | prévu |
+| 120 | renommage | `runtime-local` | `com.minos.runtime.ProviderProcessEnvironment` | `runtime-local` | `com.minos.runtime.local.ProviderProcessEnvironment` | prévu |
+| 121 | renommage | `runtime-local` | `com.minos.runtime.ProviderResidueReclamation` | `runtime-local` | `com.minos.runtime.local.ProviderResidueReclamation` | prévu |
+| 122 | renommage | `runtime-local` | `com.minos.runtime.ProviderWorkspaceFiles` | `runtime-local` | `com.minos.runtime.local.ProviderWorkspaceFiles` | prévu |
+| 123 | renommage | `runtime-local` | `com.minos.runtime.ProviderWriteQuota` | `runtime-local` | `com.minos.runtime.local.ProviderWriteQuota` | prévu |
+| 124 | renommage | `runtime-local` | `com.minos.runtime.ProviderWriteQuotaSupervisor` | `runtime-local` | `com.minos.runtime.local.ProviderWriteQuotaSupervisor` | prévu |
+| 125 | renommage | `runtime-local` | `com.minos.runtime.RunDirectoryRetention` | `runtime-local` | `com.minos.runtime.local.RunDirectoryRetention` | prévu |
+| 126 | renommage | `runtime-local` | `com.minos.runtime.StrongProcessOwnershipIndexerExecutor` | `runtime-local` | `com.minos.runtime.local.StrongProcessOwnershipIndexerExecutor` | prévu |
+| 127 | renommage | `runtime-local` | `com.minos.runtime.WindowsAppContainerWorkerSandboxBackend` | `runtime-local` | `com.minos.runtime.local.WindowsAppContainerWorkerSandboxBackend` | prévu |
+| 128 | renommage | `runtime-local` | `com.minos.runtime.WindowsContainmentScript` | `runtime-local` | `com.minos.runtime.local.WindowsContainmentScript` | prévu |
+| 129 | renommage | `runtime-local` | `com.minos.runtime.WindowsExecutionPathIdentityProvider` | `runtime-local` | `com.minos.runtime.local.WindowsExecutionPathIdentityProvider` | prévu |
+| 130 | renommage | `runtime-local` | `com.minos.runtime.WindowsJobObjectProcessOwnership` | `runtime-local` | `com.minos.runtime.local.WindowsJobObjectProcessOwnership` | prévu |
+| 131 | renommage | `runtime-local` | `com.minos.runtime.WorkerResourceContainment` | `runtime-local` | `com.minos.runtime.local.WorkerResourceContainment` | prévu |
+| 132 | renommage | `runtime-local` | `com.minos.runtime.WorkerSandboxBackend` | `runtime-local` | `com.minos.runtime.local.WorkerSandboxBackend` | prévu |
+| 133 | renommage | `runtime-local` | `com.minos.runtime.WorkerSandboxBackends` | `runtime-local` | `com.minos.runtime.local.WorkerSandboxBackends` | prévu |
+| 134 | renommage | `runtime-local` | `com.minos.runtime.WorkerSandboxQualification` | `runtime-local` | `com.minos.runtime.local.WorkerSandboxQualification` | prévu |
+| 135 | renommage | `runtime-local` | `com.minos.runtime.WorkerSandboxSelection` | `runtime-local` | `com.minos.runtime.local.WorkerSandboxSelection` | prévu |
+| 136 | renommage | `storage-local` | `com.minos.incremental.FileProjectFingerprintSnapshotStore` | `storage-local` | `com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore` | prévu |
+| 137 | renommage | `storage-local` | `com.minos.orchestration.FileIndexStateStore` | `storage-local` | `com.minos.storage.local.orchestration.FileIndexStateStore` | prévu |
+| 138 | renommage | `storage-local` | `com.minos.orchestration.IndexRunRetentionPolicy` | `storage-local` | `com.minos.storage.local.orchestration.IndexRunRetentionPolicy` | prévu |
+| 139 | renommage | `storage-local` | `com.minos.orchestration.IndexRunRetentionService` | `storage-local` | `com.minos.storage.local.orchestration.IndexRunRetentionService` | prévu |
+| 140 | renommage | `storage-local` | `com.minos.orchestration.ProjectIndexLease` | `storage-local` | `com.minos.storage.local.orchestration.ProjectIndexLease` | prévu |
+| 141 | renommage | `storage-local` | `com.minos.registry.InterProcessLocalProjectRegistry` | `storage-local` | `com.minos.storage.local.registry.InterProcessLocalProjectRegistry` | prévu |
+| 142 | renommage | `storage-local` | `com.minos.registry.LocalProjectRegistry` | `storage-local` | `com.minos.storage.local.registry.LocalProjectRegistry` | prévu |
+| 143 | renommage | `storage-local` | `com.minos.registry.ProjectPathMappingStore` | `storage-local` | `com.minos.storage.local.registry.ProjectPathMappingStore` | prévu |
+| 144 | renommage | `storage-local` | `com.minos.storage.LocalStorageBackend` | `storage-local` | `com.minos.storage.local.LocalStorageBackend` | prévu |
+| 145 | renommage | `storage-local` | `com.minos.storage.LocalStorageRetentionService` | `storage-local` | `com.minos.storage.local.LocalStorageRetentionService` | prévu |
+| 146 | renommage | `storage-local` | `com.minos.storage.SerializedRuntimeObservationStore` | `storage-local` | `com.minos.storage.local.SerializedRuntimeObservationStore` | prévu |
+| 147 | renommage | `storage-local` | `com.minos.store.ActiveSnapshotRepository` | `storage-local` | `com.minos.storage.local.store.ActiveSnapshotRepository` | prévu |
+| 148 | renommage | `storage-local` | `com.minos.store.CodeKnowledgeSnapshotBinaryCodec` | `storage-local` | `com.minos.storage.local.store.CodeKnowledgeSnapshotBinaryCodec` | prévu |
+| 149 | renommage | `storage-local` | `com.minos.store.EnvironmentHostedTenantKeyProvider` | `storage-local` | `com.minos.storage.local.store.EnvironmentHostedTenantKeyProvider` | prévu |
+| 150 | renommage | `storage-local` | `com.minos.store.FileHostedControlPlaneStore` | `storage-local` | `com.minos.storage.local.store.FileHostedControlPlaneStore` | prévu |
+| 151 | renommage | `storage-local` | `com.minos.store.FileRuntimeObservationStore` | `storage-local` | `com.minos.storage.local.store.FileRuntimeObservationStore` | prévu |
+| 152 | renommage | `storage-local` | `com.minos.store.FileSemanticVectorStore` | `storage-local` | `com.minos.storage.local.store.FileSemanticVectorStore` | prévu |
+| 153 | renommage | `storage-local` | `com.minos.store.FileSymbolSnapshotStore` | `storage-local` | `com.minos.storage.local.store.FileSymbolSnapshotStore` | prévu |
+| 154 | renommage | `storage-local` | `com.minos.store.ProjectMutationSemanticVectorStore` | `storage-local` | `com.minos.storage.local.store.ProjectMutationSemanticVectorStore` | prévu |
+| 155 | renommage | `storage-local` | `com.minos.store.SnapshotBinaryCodecSupport` | `storage-local` | `com.minos.storage.local.store.SnapshotBinaryCodecSupport` | prévu |
+| 156 | renommage | `storage-local` | `com.minos.store.SnapshotCodec` | `storage-local` | `com.minos.storage.local.store.SnapshotCodec` | prévu |
+| 157 | renommage | `storage-local` | `com.minos.store.SnapshotCodecV1` | `storage-local` | `com.minos.storage.local.store.SnapshotCodecV1` | prévu |
+| 158 | renommage | `storage-local` | `com.minos.store.SnapshotCodecV2` | `storage-local` | `com.minos.storage.local.store.SnapshotCodecV2` | prévu |
+| 159 | renommage | `storage-local` | `com.minos.store.SnapshotCompactionService` | `storage-local` | `com.minos.storage.local.store.SnapshotCompactionService` | prévu |
+| 160 | renommage | `storage-local` | `com.minos.store.SnapshotIntegrityService` | `storage-local` | `com.minos.storage.local.store.SnapshotIntegrityService` | prévu |
+| 161 | renommage | `storage-local` | `com.minos.store.SnapshotProjectLease` | `storage-local` | `com.minos.storage.local.store.SnapshotProjectLease` | prévu |
+| 162 | renommage | `storage-local` | `com.minos.store.SnapshotRepository` | `storage-local` | `com.minos.storage.local.store.SnapshotRepository` | prévu |
+| 163 | renommage | `storage-local` | `com.minos.store.SnapshotRetentionPolicy` | `storage-local` | `com.minos.storage.local.store.SnapshotRetentionPolicy` | prévu |
+| 164 | renommage | `storage-local` | `com.minos.store.SnapshotRetentionService` | `storage-local` | `com.minos.storage.local.store.SnapshotRetentionService` | prévu |
+| 165 | suppression | `cli` | `com.minos.cli.LocalProjectOperations` | `—` | supprimé → appelants sur `com.minos.application.LocalProjectOperations` | prévu |
+| 166 | suppression | `cli` | `com.minos.cli.LocalProjectSymbolQuery` | `—` | supprimé → appelants sur `com.minos.application.LocalProjectSymbolQuery` | prévu |
+| 167 | suppression | `cli` | `com.minos.cli.ProjectOperations` | `—` | supprimé → appelants sur `com.minos.application.ProjectOperations` | prévu |
+| 168 | suppression | `cli` | `com.minos.cli.ProjectSymbolQuery` | `—` | supprimé → appelants sur `com.minos.application.ProjectSymbolQuery` | prévu |
 
 Total : 71 déplacements, 93 renommages, 4 suppressions.
 
@@ -309,6 +309,7 @@ Points d'entrée dont le FQN ne change pas : `com.minos.cli.MinosLauncher` (`doc
 - 2026-09-29 — impl-archi, jalon 1 : worktree `a3-packages` sur `10486cb7`, gates de base verts (`check-module-boundaries.py` SUCCESS 14 modules / 498 sources, `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py`). Inventaire recalculé (§ 2), identique à celui de l'orchestrateur (14 packages, 45 tests). Accès package-private relevés dans le bytecode (§ 2.3). Décisions vérifiées (§ 3.1), cinq points soumis (§ 3.2).
 - 2026-09-29 — impl-archi : `073f4a43` (docs) — ce suivi et l'ADR 0044, ajouté à l'index des ADR. Gates docs verts.
 - 2026-09-29 — impl-archi : `26e63775` (build) — `check-module-boundaries.py` : règle A3 « un package, un module » (production éclatée et test en package étranger) en cliquet (`TOLERATED_SPLIT_PACKAGES` 14, `TOLERATED_FOREIGN_TESTS` 45, entrée périmée ou élargie = échec) et règle A7 (`MODULES` confronté aux `<modules>` du POM racine, profils compris). Aucune règle existante assouplie ; ligne de succès : `packagePolicy=A3-ADR-0044, reactor=root-pom-modules` ajoutés. Auto-test `scripts/architecture/test_check_module_boundaries.py` (13 cas, vert) branché dans le job `invariants` de `pr-ci.yml` après le script ; quatre mutations du script (règle des tests neutralisée, règle de production neutralisée, A7 neutralisé, détection des entrées périmées neutralisée) toutes rouges. **Preuve rouge** sur l'arbre de `10486cb7` avec cliquet vide : `M21 MODULE BOUNDARY CONSISTENCY FAILED`, 59 violations (14 packages éclatés + 45 tests en package étranger), sortie conservée ; A7 rejoué sur l'arbre réel : `MODULES` privé de `minos-bootstrap` → rouge, `MODULES` augmenté de `minos-intellij` (Gradle, hors reactor) → rouge. Reproduction : charger le script par `importlib`, remplacer les deux listes de tolérance par des listes vides dans les valeurs par défaut de `check_package_ownership`, puis appeler `main()`. Verts sur la tête : `check-module-boundaries.py` (14 modules, 498 sources, 34 packages), `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py` (95 scripts), `check-workflow-pins.py`, les sept `scripts/remediation/check-*.py` du job `invariants`.
+- 2026-09-29 — impl-archi, jalon 2 groupe a (`adapter.scip`) : `ScipSymbolSnapshotRequest` et `ScipSymbolSnapshotReport` (engine) passent de `com.minos.adapter.scip` à `com.minos.orchestration`, à côté du port `ScipArtifactImporter`. 13 fichiers Java touchés (imports seulement, plus les deux déclarations de package) ; aucune référence littérale hors Java à mettre à jour (seuls des suivis historiques les citent). Entrée `com.minos.adapter.scip` retirée du cliquet ; les 6 tests de minos-app dans `com.minos.adapter.scip` restent tolérés (production désormais dans provider-scip seul). Aucune portée JaCoCo ne cite ces classes. Ruptures ajoutées à `docs/user/java-api.md`. Vérifié : `-pl minos-engine,minos-provider-scip,minos-application -am test` vert, `test-compile` de tout le reactor vert, gates verts.
 
 ## 7. Constats verif-archi
 

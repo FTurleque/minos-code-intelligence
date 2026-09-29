@@ -2,7 +2,7 @@ package com.minos.adapter.scip.runtime;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
-import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.io.FileTreeOperations;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;

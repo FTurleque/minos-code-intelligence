@@ -1,7 +1,5 @@
 package com.minos.orchestration;
 
-import com.minos.adapter.scip.ScipSymbolSnapshotReport;
-import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;

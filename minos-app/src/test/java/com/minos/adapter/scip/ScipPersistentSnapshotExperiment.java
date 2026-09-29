@@ -1,5 +1,7 @@
 package com.minos.adapter.scip;
 
+import com.minos.orchestration.ScipSymbolSnapshotReport;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;

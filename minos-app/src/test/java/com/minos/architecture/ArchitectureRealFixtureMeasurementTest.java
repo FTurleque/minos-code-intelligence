@@ -1,7 +1,7 @@
 package com.minos.architecture;
 
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
-import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.store.CodeKnowledgeSnapshot;

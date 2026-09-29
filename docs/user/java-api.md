@@ -271,3 +271,19 @@ classDiagram
 Les signatures publiques utilisent uniquement des types JDK et les DTOs des interfaces publiques. Un consommateur n’a pas besoin de dépendre directement des modèles SCIP, JGit, MCP ou des classes internes de domaine.
 
 Pour les détails d’architecture, voir [../developer/public-surfaces.md](../developer/public-surfaces.md).
+
+## Ruptures
+
+### Packages internes renommés : un package, un module ([ADR 0044](../adr/0044-un-package-un-module.md))
+
+Aucune signature de `com.minos.api` ne change : les contrats publics ne nomment que `com.minos.api.*` et
+`com.minos.application.MinosApplication`. Les points d'entrée de processus gardent leur nom
+(`com.minos.cli.MinosLauncher`, `com.minos.cli.DockerRuntimeBootstrap`,
+`com.minos.integration.nexus.NexusExportBridgeMain`, `com.minos.mcp.MinosMcpServer`).
+
+Seuls changent des packages internes : un code qui importait directement l'une de ces classes doit mettre
+à jour ses imports. Le nom simple des classes ne change pas.
+
+| Ancien package (module) | Nouveau package | Classes |
+|---|---|---|
+| `com.minos.adapter.scip` (`minos-engine`) | `com.minos.orchestration` | `ScipSymbolSnapshotRequest`, `ScipSymbolSnapshotReport` |

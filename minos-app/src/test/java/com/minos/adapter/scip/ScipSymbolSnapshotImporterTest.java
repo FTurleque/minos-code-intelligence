@@ -8,6 +8,8 @@ import com.minos.domain.RelationshipKind;
 import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolSearchCriteria;
+import com.minos.orchestration.ScipSymbolSnapshotReport;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.query.SymbolResult;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
