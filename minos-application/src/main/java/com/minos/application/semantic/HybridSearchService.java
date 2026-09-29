@@ -189,13 +189,15 @@ public final class HybridSearchService {
     }
 
     /**
-     * Conservative estimate that decides cache admission. The normalized contents are deliberately left out:
-     * counting them would halve the corpus size the cache admits, while the estimate still exceeds the heap
-     * measured with them (A6: 137.6 MB estimated for 74.4 MB retained on this repository's 81,095 documents).
+     * Upper bound of the heap a cached corpus retains; it decides cache admission. Every string counts, the
+     * normalized contents included, at the width the JVM actually stores: one byte per character when the
+     * string is Latin-1 (compact strings), two otherwise. An ASCII corpus therefore never weighs more than it
+     * did when every character counted two bytes, and a CJK or accented one is no longer under-estimated (A6).
      */
     private static long estimateCorpusWeight(CachedCorpus corpus) {
         long weight = 4_096L;
-        for (SemanticDocument document : corpus.documents()) {
+        for (int index = 0; index < corpus.documents().size(); index++) {
+            SemanticDocument document = corpus.documents().get(index);
             weight = safeAdd(weight, 256L);
             weight = safeAdd(weight, stringWeight(document.id()));
             weight = safeAdd(weight, stringWeight(document.stableKey()));
@@ -203,6 +205,7 @@ public final class HybridSearchService {
             weight = safeAdd(weight, stringWeight(document.fileId()));
             weight = safeAdd(weight, stringWeight(document.content()));
             weight = safeAdd(weight, stringWeight(document.checksum()));
+            weight = safeAdd(weight, stringWeight(corpus.normalizedContents().get(index)));
         }
         for (String key : corpus.graphDegree().keySet()) {
             weight = safeAdd(weight, 64L);
@@ -211,8 +214,17 @@ public final class HybridSearchService {
         return weight;
     }
 
+    /** Object and array headers (40 bytes) plus the characters at their stored width. */
     private static long stringWeight(String value) {
-        return value == null ? 0L : safeAdd(40L, (long) value.length() * Character.BYTES);
+        if (value == null) return 0L;
+        return safeAdd(40L, (long) value.length() * (isLatin1(value) ? Byte.BYTES : Character.BYTES));
+    }
+
+    private static boolean isLatin1(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            if (value.charAt(index) > 0xFF) return false;
+        }
+        return true;
     }
 
     private static long safeAdd(long left, long right) {
