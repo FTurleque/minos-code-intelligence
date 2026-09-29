@@ -12,6 +12,7 @@ import com.minos.architecture.ArchitectureOverview;
 import com.minos.architecture.ArchitectureTechnology;
 import com.minos.architecture.ArchitectureTechnologyReport;
 import com.minos.architecture.LocalProjectArchitectureQuery;
+import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.Evidence;
@@ -63,7 +64,7 @@ class LocalProjectArchitectureQueryTest {
                 List.of()
         );
 
-        LocalProjectArchitectureQuery query = new LocalProjectArchitectureQuery(registry, snapshots);
+        LocalProjectArchitectureQuery query = LocalProjectArchitectureQuery.defaults(registry, snapshots, new ProjectDiscoveryService());
         ArchitectureOverview overview = query.getArchitectureOverview("architecture-fixture");
         ArchitectureTechnologyReport technologies = query.getArchitectureTechnologies("architecture-fixture");
         ArchitectureIntelligenceView intelligence = query.getArchitectureIntelligence("architecture-fixture");
@@ -129,7 +130,7 @@ class LocalProjectArchitectureQueryTest {
                 List.of(dependency(project, app, api))
         );
 
-        LocalProjectArchitectureQuery query = new LocalProjectArchitectureQuery(registry, snapshots);
+        LocalProjectArchitectureQuery query = LocalProjectArchitectureQuery.defaults(registry, snapshots, new ProjectDiscoveryService());
         ArchitectureOverview overview = query.getArchitectureOverview("dependency-fixture");
         ArchitectureDependencyGraph graph = query.getModuleDependencies("dependency-fixture");
         ArchitectureConcentrationReport concentration = query.getArchitectureConcentration("dependency-fixture");
@@ -234,7 +235,7 @@ class LocalProjectArchitectureQueryTest {
                 List.of()
         );
 
-        LocalProjectArchitectureQuery query = new LocalProjectArchitectureQuery(registry, snapshots);
+        LocalProjectArchitectureQuery query = LocalProjectArchitectureQuery.defaults(registry, snapshots, new ProjectDiscoveryService());
 
         assertThrows(IllegalArgumentException.class,
                 () -> query.getModuleContext("ambiguous-fixture", "service"));

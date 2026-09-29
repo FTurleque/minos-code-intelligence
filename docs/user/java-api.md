@@ -303,3 +303,19 @@ Seuls changent des packages internes : un code qui importait directement l'une d
 **Signatures publiques de `MinosApplication` touchées.** `MinosApplication` ne bouge pas, mais six de ses signatures publiques nomment des types renommés : les accesseurs `semanticIndexService()`, `semanticSearchService()`, `hybridSearchService()`, `hybridContextBuilder()` (désormais `com.minos.application.semantic.*`) et `runtimeIntelligenceService()` (désormais `com.minos.application.dynamic.RuntimeIntelligenceService`), ainsi que `MinosApplication.Builder.embeddingProvider(EmbeddingProvider)` (`com.minos.application.semantic.EmbeddingProvider`). Ce que chaque accesseur retourne est inchangé ; seul le package du type change. C'est une rupture de source et binaire pour un code qui appelle directement ces méthodes : il doit mettre à jour ses imports et être recompilé. Aucune signature de `com.minos.api` n'est concernée.
 
 **Alias supprimés.** Les quatre alias dépréciés de `minos-cli` — `com.minos.cli.ProjectOperations`, `com.minos.cli.ProjectSymbolQuery`, `com.minos.cli.LocalProjectOperations`, `com.minos.cli.LocalProjectSymbolQuery` — n'existent plus : ils ne faisaient que déléguer aux types de `com.minos.application` du même nom, à utiliser directement.
+
+### Constructeurs télescopiques retirés ([ADR 0045](../adr/0045-constructeur-unique-et-point-d-entree-nomme.md))
+
+Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change : `MinosApplication` est regroupée par domaine en interne, et ses accesseurs gardent nom, type et instance retournée.
+
+Deux classes publiques internes n'ont plus qu'un constructeur, privé, et un point d'entrée nommé. Les cinq constructeurs publics suivants n'existent plus (rupture de source et binaire pour un code qui les appelait directement) :
+
+| Constructeur retiré | Remplaçant |
+|---|---|
+| `new LocalProjectArchitectureQuery(ProjectRegistry, CodeKnowledgeSnapshotStore)` | `LocalProjectArchitectureQuery.defaults(registry, snapshots, new ProjectDiscoveryService())` |
+| `new LocalProjectArchitectureQuery(ProjectRegistry, CodeKnowledgeSnapshotStore, ProjectDiscoveryService)` | `LocalProjectArchitectureQuery.defaults(registry, snapshots, discovery)` |
+| `new LocalProjectArchitectureQuery(ProjectResolver, CodeKnowledgeSnapshotStore, ProjectDiscoveryService)` | `LocalProjectArchitectureQuery.defaults(registry, snapshots, discovery)` (la résolution est construite sur le registre) |
+| `new MinosCli(ProjectSymbolQuery)` | `MinosCli.builder(symbolQuery).build()` |
+| `new MinosCli(ProjectSymbolQuery, ProjectOperations, ProjectArchitectureQuery, ProjectImpactQuery)` | `MinosCli.builder(symbolQuery).projectOperations(...).architectureQuery(...).impactQuery(...).build()` |
+
+Un collaborateur de `MinosCli` que l'on ne fournit pas laisse sa commande « not configured in this CLI bootstrap », comme l'ancien `null` ; les mutateurs du `Builder` refusent `null`. Le contrat de la ligne de commande (`MinosCli.run`) ne change pas.
