@@ -98,7 +98,6 @@ TOLERATED_SPLIT_PACKAGES: dict[str, frozenset[str]] = {
     "com.minos.integration.nexus": frozenset({"minos-app", "minos-nexus"}),
     "com.minos.orchestration": frozenset({"minos-application", "minos-engine", "minos-storage-local"}),
     "com.minos.registry": frozenset({"minos-engine", "minos-storage-local"}),
-    "com.minos.runtime": frozenset({"minos-application", "minos-engine"}),
     "com.minos.semantic": frozenset({"minos-application", "minos-domain"}),
     "com.minos.storage": frozenset({"minos-application", "minos-engine", "minos-storage-local"}),
     "com.minos.store": frozenset({"minos-engine", "minos-storage-local"}),
