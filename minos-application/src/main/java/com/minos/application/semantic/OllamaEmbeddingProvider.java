@@ -2,6 +2,7 @@ package com.minos.application.semantic;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.minos.output.DeterministicJson;
 import com.minos.semantic.SemanticVector;
 
 import java.io.IOException;
@@ -144,9 +145,10 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
     }
 
     static String requestBody(String model, String input) {
-        return "{\"model\":\"" + jsonEscape(requireText(model, "model"))
-                + "\",\"input\":\"" + jsonEscape(Objects.requireNonNull(input, "input"))
-                + "\",\"truncate\":true}";
+        return DeterministicJson.render(DeterministicJson.object(
+                "model", requireText(model, "model"),
+                "input", Objects.requireNonNull(input, "input"),
+                "truncate", true));
     }
 
     private static boolean isTrustedHost(String host) {
@@ -173,27 +175,6 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
             if (bytes.length > MAX_RESPONSE_BYTES) throw new IOException("Ollama response exceeds safety limit");
             return new String(bytes, StandardCharsets.UTF_8);
         }
-    }
-
-    private static String jsonEscape(String value) {
-        StringBuilder result = new StringBuilder(value.length() + 16);
-        for (int index = 0; index < value.length(); index++) {
-            char current = value.charAt(index);
-            switch (current) {
-                case '"' -> result.append("\\\"");
-                case '\\' -> result.append("\\\\");
-                case '\b' -> result.append("\\b");
-                case '\f' -> result.append("\\f");
-                case '\n' -> result.append("\\n");
-                case '\r' -> result.append("\\r");
-                case '\t' -> result.append("\\t");
-                default -> {
-                    if (current < 0x20) result.append(String.format("\\u%04x", (int) current));
-                    else result.append(current);
-                }
-            }
-        }
-        return result.toString();
     }
 
     private static String requireText(String value, String name) {

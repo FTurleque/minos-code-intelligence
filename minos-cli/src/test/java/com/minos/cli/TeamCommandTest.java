@@ -350,4 +350,33 @@ class TeamCommandTest {
         assertTrue(matcher.find());
         return matcher.group(1);
     }
+
+    @Test
+    void projectBindEscapesEveryCharacterOfTheSnapshotIdentifier() throws Exception {
+        SpyStore store = new SpyStore();
+        AtomicReference<String> token = new AtomicReference<>();
+        TeamCommand command = new TeamCommand(service(store), token::get);
+        StringBuilder output = new StringBuilder();
+        StringBuilder error = new StringBuilder();
+        token.set(bootstrap(command, UUID.randomUUID(), output, error));
+        String workspaceId = extract(run(command, output, error, "workspace-create", "--name", "Platform"), "workspaceId");
+        UUID project = UUID.randomUUID();
+        StringBuilder snapshot = new StringBuilder("snap");
+        for (char control = 1; control < 0x20; control++) {
+            // The service already refuses NUL, tab, LF and CR in a snapshot identifier; every other control is accepted.
+            if (control != '\t' && control != '\n' && control != '\r') snapshot.append(control);
+        }
+        snapshot.append("\"quoted\"\\path");
+
+        String bound = run(command, output, error, "project-bind", "--workspace", workspaceId,
+                "--project", project.toString(), "--snapshot", snapshot.toString());
+
+        for (int index = 0; index < bound.length() - 1; index++) {
+            assertTrue(bound.charAt(index) >= 0x20, "raw control character U+%04X in the JSON".formatted((int) bound.charAt(index)));
+        }
+        var parsed = new com.fasterxml.jackson.databind.ObjectMapper().readTree(bound);
+        assertEquals(snapshot.toString(), parsed.get("snapshotId").textValue());
+        assertEquals(project.toString(), parsed.get("projectId").textValue());
+        assertEquals("BOUND", parsed.get("status").textValue());
+    }
 }

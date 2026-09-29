@@ -1,9 +1,30 @@
 package com.minos.output;
 
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Minimal deterministic JSON encoder shared by transport renderers. */
+/**
+ * Minimal deterministic JSON encoder shared by transport renderers, and the single place in the
+ * code base where text is escaped for JSON.
+ *
+ * <p>Contract:</p>
+ * <ul>
+ *   <li><b>Key order.</b> A {@link Map} is written in its own iteration order, so the caller owns
+ *       the order: pass a {@link java.util.LinkedHashMap} (see {@link #object(Object...)}) or a
+ *       {@link java.util.TreeMap}. {@code Map.of}, {@code Map.copyOf}, {@code Set.of} and
+ *       {@code Set.copyOf} with two or more elements iterate in an order drawn at random when the
+ *       JVM starts, so they must never reach this encoder.</li>
+ *   <li><b>Numbers.</b> JSON (RFC 8259) has no text for {@code NaN} or the infinities, so a
+ *       {@link Double} or {@link Float} that is not finite is <em>refused</em> with a
+ *       {@link NonFiniteNumberException} rather than written as invalid JSON or silently turned
+ *       into {@code null} (which would hide a wrong upstream value). Every other number keeps its
+ *       {@code toString()} form.</li>
+ *   <li><b>Strings.</b> {@code "} and {@code \}, every control character U+0000 to U+001F, lone
+ *       surrogates (which UTF-8 cannot carry) and U+2028/U+2029 (which break JavaScript
+ *       consumers) are escaped; valid surrogate pairs are written as they are.</li>
+ * </ul>
+ */
 public final class DeterministicJson {
 
     private DeterministicJson() {
@@ -23,12 +44,46 @@ public final class DeterministicJson {
         return output.toString();
     }
 
+    /**
+     * Builds an ordered JSON object from alternating keys and values; the pairs are written in the
+     * order given.
+     */
+    public static Map<String, Object> object(Object... keyValues) {
+        if (keyValues.length % 2 != 0) {
+            throw new IllegalArgumentException("object requires key/value pairs");
+        }
+        Map<String, Object> value = new LinkedHashMap<>();
+        for (int index = 0; index < keyValues.length; index += 2) {
+            value.put(String.valueOf(keyValues[index]), keyValues[index + 1]);
+        }
+        return value;
+    }
+
+    /**
+     * Text of a number for hand-written JSON: the {@code Double.toString} form of a finite value.
+     *
+     * @throws NonFiniteNumberException if the value is {@code NaN} or infinite
+     */
+    public static String number(double value) {
+        if (!Double.isFinite(value)) throw new NonFiniteNumberException();
+        return Double.toString(value);
+    }
+
+    private static String numberText(Number number) {
+        if (number instanceof Double || number instanceof Float) {
+            return number(number.doubleValue());
+        }
+        return number.toString();
+    }
+
     private static void append(JsonOutput output, Object value) {
         if (value == null) {
             output.append("null");
         } else if (value instanceof String string) {
             quote(output, string);
-        } else if (value instanceof Number || value instanceof Boolean) {
+        } else if (value instanceof Number number) {
+            output.append(numberText(number));
+        } else if (value instanceof Boolean) {
             output.append(value.toString());
         } else if (value instanceof Enum<?> enumeration) {
             quote(output, enumeration.name());
@@ -68,6 +123,14 @@ public final class DeterministicJson {
         output.append(']');
     }
 
+    /** Returns {@code value} as a quoted, escaped JSON string. */
+    public static String quote(String value) {
+        StringBuilder builder = new StringBuilder(value.length() + 2);
+        quote(builder, value);
+        return builder.toString();
+    }
+
+    /** Appends {@code value} to {@code builder} as a quoted, escaped JSON string. */
     public static void quote(StringBuilder builder, String value) {
         quote(new JsonOutput(builder, Long.MAX_VALUE), value);
     }
@@ -85,12 +148,13 @@ public final class DeterministicJson {
                 case '\r' -> output.append("\\r");
                 case '\t' -> output.append("\\t");
                 default -> {
-                    if (character < 0x20) {
-                        output.append("\\u%04x".formatted((int) character));
-                    } else if (Character.isHighSurrogate(character)
+                    if (Character.isHighSurrogate(character)
                             && index + 1 < value.length()
                             && Character.isLowSurrogate(value.charAt(index + 1))) {
                         output.appendCodePoint(Character.toCodePoint(character, value.charAt(++index)));
+                    } else if (character < 0x20 || Character.isSurrogate(character)
+                            || character == ' ' || character == ' ') {
+                        output.append("\\u%04x".formatted((int) character));
                     } else {
                         output.append(character);
                     }
@@ -98,6 +162,13 @@ public final class DeterministicJson {
             }
         }
         output.append('"');
+    }
+
+    /** A {@code NaN} or infinite {@code Double}/{@code Float} reached the encoder; JSON cannot carry it. */
+    public static final class NonFiniteNumberException extends IllegalStateException {
+        private NonFiniteNumberException() {
+            super("deterministic JSON cannot represent a non-finite number (NaN or Infinity)");
+        }
     }
 
     public static final class OutputBudgetExceededException extends IllegalStateException {
