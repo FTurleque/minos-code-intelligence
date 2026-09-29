@@ -30,6 +30,7 @@ import com.minos.registry.RegisteredProject;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import com.minos.storage.local.store.SnapshotCodec;
 import com.minos.storage.local.store.SnapshotCodecV2;
+import com.minos.storage.local.store.SnapshotCodecV3;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.InMemoryCodeKnowledgeStore;
@@ -64,6 +65,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -131,11 +133,9 @@ public final class SnapshotScalabilityBenchmark {
             metric("size", dataset, "relationships", slice.relationships().size());
             Census census = Census.of(slice);
             census.emit("size", dataset, slice);
-            if (census.v2Bytes() > persistedLimit) {
-                overLimitPublish(application, mainProject, slice, dataset);
-                continue;
-            }
-            publish(application, mainProject, slice, "scalability-" + dataset, dataset);
+            // Le magasin décide du format et du refus (V3, ou V2 s'il reste un surrogate isolé) : le banc
+            // tente la publication et consigne l'issue, sans préjuger du format.
+            if (!publish(application, mainProject, slice, "scalability-" + dataset, dataset)) continue;
             slice = null;
             if (options.enabled("memory")) guarded("memory", dataset, () -> memory(options, mainProject, dataset));
             CodeKnowledgeSnapshot active = application.snapshotStore().loadActiveKnowledge(mainProject.id()).orElseThrow();
@@ -363,26 +363,22 @@ public final class SnapshotScalabilityBenchmark {
 
     // ---------------------------------------------------------------- publication
 
-    private static void publish(MinosApplication application, RegisteredProject project, CodeKnowledgeSnapshot snapshot,
-                                String snapshotId, String dataset) throws IOException {
-        long started = System.nanoTime();
-        application.snapshotStore().publish(project.id(), snapshotId,
-                snapshot.symbols(), snapshot.occurrences(), snapshot.relationships());
-        metric("size", dataset, "publishMs", millis(System.nanoTime() - started));
-    }
-
-    private static void overLimitPublish(MinosApplication application, RegisteredProject project,
-                                         CodeKnowledgeSnapshot snapshot, String dataset) {
+    /** Publie et consigne l'issue ; {@code false} si le magasin refuse le snapshot. */
+    private static boolean publish(MinosApplication application, RegisteredProject project, CodeKnowledgeSnapshot snapshot,
+                                   String snapshotId, String dataset) {
         long started = System.nanoTime();
         try {
-            application.snapshotStore().publish(project.id(), "scalability-" + dataset + "-over-limit",
+            application.snapshotStore().publish(project.id(), snapshotId,
                     snapshot.symbols(), snapshot.occurrences(), snapshot.relationships());
-            metric("size", dataset, "overLimitPublish", "UNEXPECTED_SUCCESS");
+            metric("size", dataset, "publishOutcome", "PUBLISHED");
+            return true;
         } catch (IOException | RuntimeException failure) {
-            metric("size", dataset, "overLimitPublish", "REFUSED " + failure.getClass().getSimpleName());
-            metric("size", dataset, "overLimitMessage", String.valueOf(failure.getMessage()));
+            metric("size", dataset, "publishOutcome", "REFUSED " + failure.getClass().getSimpleName());
+            metric("size", dataset, "publishMessage", String.valueOf(failure.getMessage()));
+            return false;
+        } finally {
+            metric("size", dataset, "publishMs", millis(System.nanoTime() - started));
         }
-        metric("size", dataset, "overLimitPublishMs", millis(System.nanoTime() - started));
     }
 
     // ---------------------------------------------------------------- memory
@@ -815,6 +811,17 @@ public final class SnapshotScalabilityBenchmark {
                 metric(section, dataset, "censusMatchesEncoder", encoded == v2Bytes());
             } catch (IOException refused) {
                 metric(section, dataset, "encodedV2Bytes", "REFUSED " + refused.getMessage());
+            } catch (LinkageError unavailable) {
+                metric(section, dataset, "encodedV2Bytes", "UNAVAILABLE " + unavailable.getClass().getSimpleName());
+            }
+            try {
+                // Taille V3 issue du vrai encodeur (ADR 0046), jamais d'une projection du recensement.
+                OptionalLong encoded = new SnapshotCodecV3().encodedSizeIfEncodable(snapshot);
+                metric(section, dataset, "encodedV3Bytes", encoded.isPresent() ? encoded.getAsLong() : "UNPAIRED_SURROGATE");
+                if (encoded.isPresent()) metric(section, dataset, "v3OverV2", ratio(encoded.getAsLong(), v2Bytes()));
+            } catch (IOException | LinkageError unavailable) {
+                // Classes de stockage de la base en tête du classpath (mesure « avant ») : pas de V3.
+                metric(section, dataset, "encodedV3Bytes", "UNAVAILABLE " + unavailable.getClass().getSimpleName());
             }
         }
 
