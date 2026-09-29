@@ -802,7 +802,8 @@ Les cinq écarts déclarés au jalon 2 (§ A4.6 et rapport : pas de commit rouge
 | 2.3 | Étape 3 — traversée d'impact : non faite, verdict consigné (§ A6.12) | consigné | `ea5132b6` |
 | 2.4 | Étape 4 — contenu normalisé mis en cache dans le corpus hybride, classement identique à l'octet (§ A6.13) | livré | `1c54a3a4` (référence, avant), `bba7a91b` ; M3 : `e32bd9f6` |
 | 2.5 | Étape 5 — ADR 0047 `Proposed` : dédoublonnage des chaînes, table de chaînes, pagination ou mappage (§ A6.14) | livré | `a3aa4baf` |
-| **Bilan** | Ce dépôt redevient indexable (V3, 194,6 Mo au lieu d'un refus à 355 Mo en V2) ; un snapshot trop grand est refusé sans rien écrire ; lecture à froid ≈ 2,5 fois plus rapide ; recherche hybride en mémoire 4 à 6 fois plus rapide, à classement identique à l'octet ; traversée d'impact non touchée ; seul golden modifié : `retention.golden` (suffixes sha, preuve) ; aucun gain mémoire revendiqué | lot terminé, en attente de verif | — |
+| 2.6 | Correctifs de l'étape 4 (verif, bloquants) : V-A6-10 référence étendue, V-A6-09 republication, V-A6-11 poids du corpus (§ A6.15) | livré, en attente de verif | `eb001186`, `bf3bd9b0`, `0a92f97f`, commit de docs |
+| **Bilan** | Ce dépôt redevient indexable (V3, 194,6 Mo au lieu d'un refus à 355 Mo en V2) ; un snapshot trop grand est refusé sans rien écrire ; lecture à froid ≈ 2,5 fois plus rapide ; recherche hybride en mémoire 4 à 6 fois plus rapide, à classement identique à l'octet ; poids du corpus hybride redevenu un vrai majorant ; traversée d'impact non touchée ; seul golden modifié : `retention.golden` (suffixes sha, preuve) ; aucun gain mémoire revendiqué | lot terminé, en attente de verif | — |
 
 ## A6.2 Procédure de mesure
 
@@ -950,6 +951,12 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 - 2026-09-29 — impl-archi, étape 4 : `1c54a3a4`, référence du classement écrite par le `minos-application` de `d9ae1005` (identique à la base, `git diff --quiet`) et test vert sur ce commit ; `bba7a91b`, cache du contenu normalisé, avec la même référence verte à l'octet ; `e32bd9f6`, suggestion M3 de verif. `-pl minos-bootstrap -am test` vert, gates verts.
 - 2026-09-29 — impl-archi, étape 5 : ADR 0047 (`Proposed`), sans implémentation (§ A6.14). Constats V-A6-05 à 08 consignés (§ A6.7) ; ADR 0046 complété (retour arrière, asymétrie au ré-import, « snapshot de connaissance », commit volontairement rouge).
 - 2026-09-29 — impl-archi, fin de lot (tête `a3aa4baf`) : `./mvnw -B clean verify -Dminos.postgresql.tests.required=true` **vert**, 564 s, **1409 tests, 0 échec, 0 erreur, 46 ignorés** (PostgreSQL sous Docker). `check-jacoco.py` : seul `m24-polyglot-provider-platform` est rouge (préexistant sous Windows : `ManagedPolyglotScipRuntimeManager`) ; `persistence-cache-indexes` et `semantic-hybrid-retrieval` passent. 15 gates Python verts. `git diff --stat d9ae1005 -- minos-app/src/test/resources/characterization` : `retention.golden` seul, 3 lignes.
+- 2026-09-29 — impl-archi, correctifs de verif sur l'étape 4 :
+  - `eb001186` (V-A6-10) : référence étendue, régénérée avec le `HybridSearchService` de `d9ae1005`, fichier courant remis ensuite ; H3 et H4 rouges.
+  - `bf3bd9b0` (V-A6-09) : H2 rouge. Premier essai insuffisant (suffixe de nom), consigné au § A6.7.
+  - `0a92f97f` (V-A6-11) : estimateur corrigé ; poids de référence de la base relevés avec le code de `d9ae1005`.
+  - Tests ciblés, gates, clean verify et JaCoCo : ligne suivante.
+- 2026-09-29 — impl-archi, contrôle des correctifs (tête `0a92f97f` + docs) : `./mvnw -B clean verify -Dminos.postgresql.tests.required=true` **vert**, 623 s, **1411 tests, 0 échec, 0 erreur, 46 ignorés**. JaCoCo : seul `m24-polyglot-provider-platform` rouge (préexistant) ; `semantic-hybrid-retrieval` ligne 0,90, branche 0,71. 15 gates Python verts. Golden : `retention.golden` seul.
 
 ## A6.7 Constats verif-archi
 
@@ -967,6 +974,11 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 | M3 | `a68c560e` | Suggestion : un aller-retour positif d'une chaîne non ASCII de plus de 8 Mio et d'au plus 8 Mi caractères, pour que la mutation « borne en caractères » soit prise par un test positif. | suggestion | **Fait** : `e32bd9f6` (8 Mi « é », 16 Mio en UTF-8, restitués exactement). |
 | — | contrôles étape 1 | Étape 1 vérifiée (`e23b5ded`, `1acb68e8`) : octets V1/V2 identiques après réécriture ; frontière exacte ; aucun effet de bord au refus ; A/B rejoué avant 3 492/3 211 ms et ≈256 Mio écrits, après 1 777/1 738 ms et 0 octet ; refus pendant l'ingestion écarté à raison. | information | — |
 | — | contrôles étape 2 | Étape 2 vérifiée (`a68c560e`…`5f0c2d53`) : golden masqué identique ; fixtures régénérées 8/8 identiques ; fixtures piégées de verif exactes ; mutations rouges ; anti-bombe OK ; PostgreSQL requis vert ; import de ce dépôt publié à 194 552 030 o ; lecture froide ariane 128–133 ms contre 314–328 ms ; tas identique ; clean verify 1407/0/0/46. | information | — |
+| — | contrôles étape 4 | Contrôles `044c7f34` : clean verify 1409/0/0/46 ; référence hybride régénérée par verif et identique à l'octet ; classement identique. | information | — |
+| V-A6-09 | `bba7a91b` | La mutation H2 (réutiliser les textes normalisés du corpus précédent du même projet, s'il a autant de documents) survit à `HybridRankingEquivalenceTest`, `SemanticHybridIntelligenceTest` et `MinosApplicationWiringTest` : l'équivalence ouvre une application neuve par mode et ne publie qu'un snapshot. | bloquant | **Corrigé** (`bf3bd9b0`) : `HybridCorpusRefreshTest` publie A, B puis C dans une même application (B et C : nouvel identifiant, même nombre de documents, termes différents ; C après synchronisation sémantique). À chaque étape, le classement est égal à celui d'une application neuve et différent de l'étape précédente. H2 est rouge. Première tentative (suffixe ajouté aux noms) : H2 survivait, car les termes des requêtes ne changeaient pas. Remplacée par un décalage du nom dans le vocabulaire. |
+| V-A6-10 | `1c54a3a4` | La référence n'exerce jamais le bonus de phrase seul (aucune ligne à 0,25 sur une requête à un terme ; saturation à 60 ; `clamp01` masque le bonus) : H3 (phrase bornée aux termes) et H4 (bonus supprimé) survivent. | à corriger | **Corrigé** (`eb001186`) : 8 requêtes qui ne trouvent le texte que comme sous-chaîne (`napsho`, `tore`, `ormaliz`…), plus le classement complet (limite 500) de « store » et « napsho » dans les deux modes. Référence régénérée avec le `HybridSearchService` de `d9ae1005` (6 080 lignes, sha256 `e20c3dc4…6d11f`). H3 et H4 sont rouges. |
+| V-A6-11 | `bba7a91b` | `estimateCorpusWeight` ne compte pas `normalizedContents`. En non-Latin-1, un `String` prend 2 octets par caractère et le rapport estimé/retenu tombe à 0,68–0,75 (1,20–1,29 à la base) : le plafond de 256 Mio pourrait retenir environ 1,5 fois plus de tas que prévu. | bloquant | **Corrigé** (`0a92f97f`) : chaque chaîne est comptée, texte normalisé compris, à 1 octet par caractère en Latin-1 et 2 sinon. `HybridCorpusWeightTest` : estimé ≥ retenu sur 7 corpus (rapports 1,06 à 1,31) ; un corpus ASCII ne pèse pas plus qu'à `d9ae1005`. Rouge avec l'estimateur de `bba7a91b`. Limite d'admission et mesures au § A6.15 ; § A6.13 et Javadoc corrigés. |
+| V-A6-12 | (préexistant) | Le cache de corpus est identifié par le seul `snapshotId`. Un même identifiant republié avec un autre contenu, ou une source modifiée, sert un corpus périmé ; c'était déjà le cas à `d9ae1005`. | remarque, hors lot | **Renvoyé** au § A6.8, avec la piste « sha du snapshot actif dans l'identité du corpus ». Non corrigé. |
 | V-A6-00 | (avant le jalon 1) | Mesures indépendantes de verif (ratio 12,45 / 10,79 / 8,51, UTF-8 ≈ 0,55×, lecture froide d'ariane 452 ms) et huit pièges pour la suite : pointeur actif encodé avec les mêmes `writeString`/`readString` (l'encodage doit dépendre de la version, pointeur compris) ; PostgreSQL décode toujours en V2 sans colonne de version, plafond dupliqué ; ré-import du même SCIP après changement de format (« already exists with different content ») ; `logicalIdHash` et `listSnapshotFiles` à ne pas changer ; poids du cache (8×) qui baisserait sans gain de tas ; surrogates isolés (V2 les conserve, `getBytes(UTF_8)` les remplace par `?`) ; hybride : bonus de phrase sur sous-chaîne brute et égalités de score ; impact : limitations et marque de test posées pendant la traversée. | information | Intégré : recoupement au § A6.3.1 (écarts de 3 à 6 % expliqués par `indexRunId`), poids du cache présenté comme poids estimé et non comme mémoire (§ A6.3.3), pièges reportés dans les recommandations (§ A6.4). |
 
 ## A6.8 À traiter plus tard (hors périmètre)
@@ -981,6 +993,7 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 | impl-archi (jalon 1) | `minos-app` construit dans le `target/` racine : sur un dépôt organisé ainsi, scip-java perd tous les modules sauf le dernier (l'agrégat `target/scip-targetroot` est effacé par le `clean` du module). Vaut pour ce dépôt, et pour tout projet utilisateur de même forme. | provider scip-java |
 | impl-archi (jalon 1) | Découverte de projet (`ProjectDiscoveryService.discover`) : 12,7 s sur ce worktree, 36 s sous `%TEMP%`, dont 99,6 % des échantillons natifs dans `discoverModuleRoots` ; elle fait 96 % de chaque requête d'architecture (§ A6.3.6). Profil du parcours (répertoires `target/`, détecteurs par répertoire, règles d'ignorance) à instruire. | lot perf |
 | verif-archi (V-A6-08) | `FileSymbolSnapshotStore.publish(UUID, String, Collection<Symbol>)` (publication « symboles seuls », V1) n'a aucun appelant de production ; elle écrit encore en UTF-16. À retirer du port ou à justifier. | hygiène stockage |
+| verif-archi (V-A6-12) | Cache de corpus hybride identifié par le seul `snapshotId` : un même identifiant republié avec un autre contenu, ou une source modifiée, sert un corpus périmé (préexistant à `d9ae1005`). Piste : mettre le sha du snapshot actif, et une empreinte des sources lues, dans l'identité du corpus. | lot perf ou sémantique |
 | impl-archi (jalon 1) | `minos index` impossible sur un poste où PowerShell 7 est sous `Program Files` sans élévation (bac à sable AppContainer). | A1 / D1 |
 
 ## A6.9 Arbitrages de l'orchestrateur (29 septembre 2026)
@@ -1170,7 +1183,7 @@ Arbitrage : **ne pas faire**. Le constat de l'audit est exact dans le code : `Im
 - Même durée de vie que le corpus, donc mêmes péremptions : même identité (`snapshotId`, index sémantique), même éviction. Les deux péremptions déjà connues du cache de corpus (même `snapshotId` republié avec un autre contenu, sources modifiées) s'appliquent à l'identique, sans en ajouter.
 - `LexicalQuery.scoreNormalized` évalue le texte déjà normalisé ; `score(content)` délègue à `normalize` puis à `scoreNormalized`.
 - Pas d'index inversé : le bonus de phrase porte sur une sous-chaîne brute, qu'un index par termes perdrait.
-- Le poids estimé du corpus ne compte pas les textes normalisés, par choix documenté dans le Javadoc. Les compter réduirait de moitié la taille de corpus que le cache admet, alors que l'estimation reste au-dessus du tas mesuré avec eux (ci-dessous).
+- ~~Le poids estimé du corpus ne compte pas les textes normalisés~~ : **erreur corrigée** (V-A6-11, § A6.15). Ne pas les compter faisait passer le poids estimé sous le tas réel pour les contenus non Latin-1, avec un rapport de 0,65 à 0,73. Le poids compte désormais toutes les chaînes à leur largeur réelle.
 
 **Équivalence du classement** (`1c54a3a4`, puis vert à l'octet après `bba7a91b`).
 
@@ -1188,7 +1201,7 @@ Arbitrage : **ne pas faire**. Le constat de l'audit est exact dans le code : `Im
 | Allocation par requête | 63–65 Mo | **2,1–4,6 Mo** |
 | Part de `normalize` (JFR) | 82,9 % | 0 % |
 | Tas retenu par le corpus | 55,2 Mo | 74,4 Mo (+19,2 Mo) |
-| Poids estimé du corpus | 137,6 Mo | 137,6 Mo (inchangé, toujours un majorant) |
+| Poids estimé du corpus | 137,6 Mo | 137,6 Mo à `bba7a91b`, puis 107,5 Mo après V-A6-11 (§ A6.15). « Toujours un majorant » était faux pour les contenus non Latin-1. |
 | Construction du corpus (1re recherche) | 506 s | 542 s (normalisation + dispersion des E/S) |
 
 **Portée dans le chemin produit** (dit honnêtement) : le gain est **nul** tant que le cache de vues refuse les snapshots de plus de 64 Mio persistés. Au-delà, chaque requête relit le snapshot, deux fois (§ A6.3.4), et ce rechargement fait 96–97 % du temps. Le gain est aussi sans objet au-delà d'environ 158 000 documents, où le corpus lui-même n'est plus mis en cache. Il porte sur les projets dont la vue est en cache, et sur tout chemin qui garde le snapshot en mémoire. Corrections renvoyées au § A6.8.
@@ -1207,3 +1220,45 @@ Ordre proposé, chaque passage conditionné par une mesure sur le corpus réel :
 2. dédoublonnage des chaînes au décodage (pas de nouveau format) ;
 3. table de chaînes sur disque (format V4) si nécessaire ;
 4. snapshot paginé ou mappé seulement si le tas d'un projet cible reste hors budget, en chantier propre, précédé de l'inventaire des 25 classes de production qui consomment `CodeKnowledgeSnapshot`.
+
+## A6.15 Correctifs de l'étape 4 (V-A6-09 à 11)
+
+**V-A6-10, référence étendue** (`eb001186`).
+
+- 8 requêtes ne trouvent le texte que comme sous-chaîne d'un terme ; le score lexical vaut alors exactement 0,25, sans `clamp01`.
+- « store » et « napsho » sont classées en entier (limite 500) dans les deux modes.
+- Régénération par la procédure existante : `HybridSearchService` remplacé par `git show d9ae1005:…` (le `git diff --quiet d9ae1005 -- minos-application` le confirme), test lancé avec `-Dminos.hybridRanking.write=<fichier>`, puis fichier courant remis en place. Référence de 6 080 lignes, sha256 `e20c3dc48100b4c14f4c033c1b556dbfab3bb568b68782a4416888862ce6d11f`.
+- Code courant : identique à l'octet. Mutations H3 (`containsTerm` à la place de `contains` pour la phrase) et H4 (bonus supprimé) : rouges.
+
+**V-A6-09, republication dans une même application** (`bf3bd9b0`).
+
+- `HybridCorpusRefreshTest` publie A, B puis C dans une même application (voir § A6.7). Chaque classement est comparé à celui d'une application neuve sur le même état, et doit différer de l'étape précédente.
+- Mutation H2 (textes normalisés du corpus précédent réutilisés à taille égale) : rouge à la première republication. Le premier essai, qui ajoutait un suffixe aux noms, laissait survivre H2, parce que les termes des requêtes ne changeaient pas.
+
+**V-A6-11, poids du corpus** (`0a92f97f`).
+
+- `stringWeight` compte 40 octets plus 1 octet par caractère si la chaîne est entièrement Latin-1 (chaînes compactes de la JVM), 2 octets sinon. Le texte normalisé est compté.
+- Pour un corpus ASCII, le nouveau poids ne dépasse jamais l'ancien. Chaque document a au moins un identifiant de 73 caractères et un checksum de 64, qui passent de 2 octets à 1 octet par caractère. Cette économie couvre les 40 octets d'en-tête du texte normalisé, qui n'est jamais plus long que le contenu en ASCII.
+- `HybridCorpusWeightTest` : 120 fichiers, 1 200 symboles, environ 2 500 documents ; tas retenu après GC autour de la première recherche, snapshot et état sémantique déjà chargés.
+
+| Corpus | Base `d9ae1005` : estimé / retenu (rapport) | `bba7a91b` | Après correctif |
+|---|---:|---:|---:|
+| ASCII, lignes courtes | 3 268 704 / 1 561 080 (2,09) | 3 268 704 / 2 205 272 (1,48) | 2 885 224 / 2 204 600 (1,31) |
+| ASCII, chunks longs | 9 055 400 / 4 439 600 (2,04) | 9 055 400 / 7 978 744 (1,13) | 8 671 920 / 7 977 416 (1,09) |
+| Latin-1, courtes | 3 063 746 / 1 765 320 (1,74) | 3 063 746 / 2 630 560 (1,16) | 3 330 694 / 2 630 664 (1,27) |
+| Latin-1, longs | 7 434 820 / 6 129 952 (1,21) | 7 434 820 / 11 360 312 (**0,65**) | 12 061 681 / 11 361 280 (1,06) |
+| CJK, courtes | 2 777 146 / 1 579 632 (1,76) | 2 777 146 / 2 249 272 (1,23) | 2 953 156 / 2 249 024 (1,31) |
+| CJK, longs | 5 180 204 / 3 982 608 (1,30) | 5 180 204 / 7 055 488 (**0,73**) | 7 759 272 / 7 055 640 (1,10) |
+| Mixte, longs | 7 219 462 / 5 949 840 (1,21) | 7 219 462 / 10 996 712 (**0,66**) | 11 698 930 / 10 996 712 (1,06) |
+
+Le vocabulaire « Latin-1 » contient `œ` (U+0153), qui n'est pas Latin-1 : ses contenus sont stockés à 2 octets par caractère, et l'estimateur les compte ainsi.
+
+**Limite d'admission (documents ASCII)**, sur le corpus de ce dépôt (`mem-k1`, 81 095 documents, en mémoire) :
+
+| | Poids estimé | Octets par document | Limite d'admission (256 Mio) | Tas retenu | Estimé / retenu |
+|---|---:|---:|---:|---:|---:|
+| Base `d9ae1005` | 137 587 170 | 1 697 | ≈ 158 200 documents | 55,2 Mo | 2,49 |
+| `bba7a91b` | 137 587 216 | 1 697 | ≈ 158 200 documents | 74,4 Mo | 1,85 |
+| Après correctif | 107 482 154 | 1 325 | ≈ 202 500 documents | 74,7 Mo | 1,44 |
+
+La limite d'admission ne baisse pas : elle monte, et l'estimation reste un majorant du tas réel. Temps par requête après correctif : 31–40 ms en médiane, dans la dispersion de l'étape 4 (23–37 ms). Le plafond de 250 000 documents du budget sémantique reste la borne dure.
