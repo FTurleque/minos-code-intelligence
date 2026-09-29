@@ -313,8 +313,17 @@ Points d'entrée dont le FQN ne change pas : `com.minos.cli.MinosLauncher` (`doc
 
 ## 7. Constats verif-archi
 
+### Jalon 1
+
+« Jalon 1 (073f4a43, 26e63775, 38d65cf9) — inspecté par verif-archi. Gates identiques à la base, golden identiques (sha256), comptes et helpers inchangés. Cliquet prouvé : les témoins nouveau package éclaté, éclatement élargi à un 3e/4e module, test en package étranger et module de reactor non gouverné sont rouges ; les tolérances périmées, plus étroites ou plus larges sont rouges ; tolérance vide = 59 violations (14 + 45). Étape CI sans action ajoutée. ADR conforme à l'index. »
+
 | # | Commit | Constat | Sévérité | Résolution |
 |---|---|---|---|---|
+| V-A3-01 | `26e63775` | L'auto-test n'appelle jamais `main()` : retirer de `main()` les appels à `check_reactor_modules()` et `check_package_ownership()` laisse tout vert. | à corriger | **résolu** (commit des constats du jalon 1) : classe `MainWiringTest`, deux cas qui remplacent les règles par des espions levant `RuntimeError` et vérifient que `main()` renvoie 1 et que chaque espion est appelé (dans l'ordre). Mutations rejouées : appel `check_reactor_modules()` retiré → 2 échecs ; appel `check_package_ownership()` neutralisé → 1 échec. |
+| V-A3-02 | `26e63775` | `TOLERATED_FOREIGN_TESTS` est indexé par le chemin seul : un test toléré pourrait changer de package sans changer de chemin. | remarque | **résolu** : le contrôle chemin/package est étendu aux sources de test (un test dont le répertoire ne dit pas le package est une erreur), le chemin suffit donc à fixer le package. Cas d'auto-test ajouté (test toléré dont le chemin ment → rouge). Aucun test du dépôt n'était en défaut. |
+| V-A3-03 | `26e63775` | `check-module-boundaries.py` : espace perdue dans `PACKAGE = re.compile(`. | remarque | **résolu** : espace rétablie. |
+| V-A3-04 | `073f4a43` | La ligne Status de l'ADR 0044 cite la branche et « en cours ». | remarque (fin de lot) | ouvert : nettoyée au dernier commit du lot. |
+| V-A3-05 | `26e63775` | Pas de cas d'auto-test « tolérance plus large que la réalité ». | remarque | **résolu** : cas ajouté (3 modules tolérés, 2 réels → rouge). L'auto-test compte 17 cas. |
 
 ## 8. À traiter plus tard (hors périmètre)
 

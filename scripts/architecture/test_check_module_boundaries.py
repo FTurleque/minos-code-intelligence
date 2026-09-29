@@ -4,12 +4,16 @@
 Each case builds a throw-away source tree (root pom.xml plus module directories) and runs one rule of
 the real script against it: a production package split across modules, a test declared in a package
 owned by another module, a reactor module missing from the governed list, a governed module missing
-from the reactor, the ratchet (tolerated, stale and widened entries) and a clean tree. The repository
+from the reactor, the ratchet (tolerated, stale, widened and too-wide entries, paths that lie about
+their package) and a clean tree. main() is checked to run both rules (failing spies). The repository
 itself is checked by running the script directly, as the CI does just before this self-test.
 """
 
 from __future__ import annotations
 
+import contextlib
+import io
+import sys
 import tempfile
 import unittest
 
@@ -127,6 +131,21 @@ class RatchetTest(BoundaryTestCase):
             lambda: self.ownership({"com.example.a": frozenset({"minos-a", "minos-b"})}),
             "minos-a, minos-b, minos-c", "the ratchet tolerates only minos-a, minos-b")
 
+    def test_tolerance_wider_than_the_remaining_split_fails(self):
+        self.tree.java("minos-b", "main", "com.example.a", "Intruder")
+        self.assertFailure(
+            lambda: self.ownership({"com.example.a": frozenset({"minos-a", "minos-b", "minos-c"})}),
+            "package com.example.a", "minos-a, minos-b", "the ratchet tolerates only minos-a, minos-b, minos-c")
+
+    def test_tolerated_test_whose_path_does_not_state_its_package_fails(self):
+        # The foreign-test ratchet is keyed by path: a path that lies about the package must not pass.
+        self.tree.java("minos-a", "main", "com.example.moved", "Owner")
+        relative = self.tree.java("minos-b", "test", "com.example.b", "Liar")
+        source = self.tree.root / relative
+        source.write_text("package com.example.moved;\n\nclass Liar {\n}\n", encoding="utf-8")
+        self.assertFailure(lambda: self.ownership(tolerated_tests=frozenset({relative})),
+                           relative, "package/path mismatch")
+
 
 class ReactorTest(BoundaryTestCase):
     def test_reactor_module_absent_from_the_governed_list_fails(self):
@@ -150,6 +169,50 @@ class ReactorTest(BoundaryTestCase):
     def test_missing_root_pom_fails_instead_of_passing(self):
         (self.tree.root / "pom.xml").unlink()
         self.assertFailure(lambda: check_reactor_modules(self.tree.root, self.modules), "root pom.xml is missing")
+
+
+class MainWiringTest(unittest.TestCase):
+    """main() must run both rules: a spy that fails must turn the whole gate red."""
+
+    def run_main_with(self, **spies):
+        originals = {name: getattr(_MODULE, name) for name in spies}
+        argv = sys.argv
+        try:
+            for name, spy in spies.items():
+                setattr(_MODULE, name, spy)
+            sys.argv = [str(_MODULE_PATH)]
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as error:
+                code = _MODULE.main()
+            return code, error.getvalue()
+        finally:
+            sys.argv = argv
+            for name, original in originals.items():
+                setattr(_MODULE, name, original)
+
+    @staticmethod
+    def spy(calls, name, fail=True, result=None):
+        def spy(*arguments, **keywords):
+            calls.append(name)
+            if fail:
+                raise RuntimeError(f"spy {name} failed")
+            return result
+        return spy
+
+    def test_main_runs_the_reactor_rule(self):
+        calls: list[str] = []
+        code, error = self.run_main_with(check_reactor_modules=self.spy(calls, "reactor"))
+        self.assertEqual(code, 1)
+        self.assertEqual(calls, ["reactor"])
+        self.assertIn("spy reactor failed", error)
+
+    def test_main_runs_the_package_ownership_rule(self):
+        calls: list[str] = []
+        code, error = self.run_main_with(
+            check_reactor_modules=self.spy(calls, "reactor", fail=False),
+            check_package_ownership=self.spy(calls, "ownership"))
+        self.assertEqual(code, 1)
+        self.assertEqual(calls, ["reactor", "ownership"])
+        self.assertIn("spy ownership failed", error)
 
 
 class RepositoryPolicyTest(unittest.TestCase):

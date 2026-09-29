@@ -153,7 +153,7 @@ TOLERATED_FOREIGN_TESTS: frozenset[str] = frozenset({
 })
 
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
-PACKAGE =re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
+PACKAGE = re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
 ARTIFACT_TO_MODULE = {
     "minos-domain": "minos-domain",
     "minos-engine": "minos-engine",
@@ -530,10 +530,14 @@ def check_package_ownership(
             continue
         for source in sorted(source_root.rglob("*.java")):
             package = declared_package(source)
+            relative = source.relative_to(root).as_posix()
+            # A tolerated test is named by its path: the path must state its package, as for production.
+            if source.relative_to(source_root).parent != Path(*package.split(".")):
+                violations.append(f"test {relative} of {module}: package/path mismatch (package={package or '<default>'})")
+                continue
             package_owners = owners.get(package, set())
             if not package_owners or module in package_owners:
                 continue
-            relative = source.relative_to(root).as_posix()
             foreign.add(relative)
             if relative not in tolerated_tests:
                 violations.append(
