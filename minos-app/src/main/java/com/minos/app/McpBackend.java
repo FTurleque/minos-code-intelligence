@@ -1,4 +1,4 @@
-package com.minos.cli;
+package com.minos.app;
 
 import java.util.Locale;
 

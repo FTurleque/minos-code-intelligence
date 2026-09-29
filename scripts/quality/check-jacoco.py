@@ -149,10 +149,11 @@ SCOPES = {
     },
     "m29-backend-routing": {
         "prefixes": (
-            "com/minos/cli/McpBackend", "com/minos/cli/McpBackendConfiguration", "com/minos/cli/McpBackendConfigurationStore",
-            "com/minos/cli/McpBackendRouter", "com/minos/cli/DockerRuntimeBootstrap",
+            "com/minos/app/McpBackend", "com/minos/app/McpBackendConfiguration", "com/minos/app/McpBackendConfigurationStore",
+            "com/minos/app/McpBackendRouter", "com/minos/cli/DockerRuntimeBootstrap",
         ),
-        "report": "target/site/jacoco/jacoco.xml",
+        # A3 / ADR 0044: DockerRuntimeBootstrap now lives in minos-cli (same FQN) with its tests, so the scope
+        # reads the aggregate report (all modules) instead of minos-app's own; same classes, same floors.
         "line": 0.55, "branch": 0.30,
     },
     "m30-storage-backend-selection": {

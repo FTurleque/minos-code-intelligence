@@ -1,6 +1,7 @@
-package com.minos.cli;
+package com.minos.app;
 
 import com.minos.application.MinosApplicationComposers;
+import com.minos.cli.FindSymbolCommand;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

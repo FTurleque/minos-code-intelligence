@@ -36,9 +36,11 @@ public final class MinosLauncher {
                 Path home = resolveHome(System.getenv(), System.getProperties());
                 if (arguments.length == 1 && "mcp".equals(arguments[0])) {
                     // Route before opening MinosApplication so Docker MCP does not touch native
-                    // business stores. McpBackendRouter still validates/hardens MINOS_HOME before
-                    // it reads backend.properties or performs any Docker side effect.
-                    exitCode = new McpBackendRouter().run(home);
+                    // business stores. The registered entry point (minos-app's McpBackendRouter)
+                    // still validates/hardens MINOS_HOME before it reads backend.properties or
+                    // performs any Docker side effect. ADR 0044: minos-cli cannot depend on
+                    // minos-mcp, so the route is an SPI resolved in MINOS's own class loader.
+                    exitCode = McpLaunchRoutes.resolve().run(home);
                 } else {
                     MinosApplication application = MinosApplication.open(home);
                     exitCode = run(application, arguments, System.out, System.err);

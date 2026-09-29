@@ -19,7 +19,7 @@ C4Container
     Person(ai_agent, "Agent IA", "«Person»")
 
     System_Boundary(minos_sys, "MINOS Code Intelligence") {
-        Container(app, "minos-app", "«Container»\nJava 24 / Shaded JAR\nComposition root, MinosLauncher\nBackend router natif / Docker")
+        Container(app, "minos-app", "«Container»\nJava 24 / Shaded JAR\nAssemblage final, route MCP\nBackend router natif / Docker")
         Container(cli, "minos-cli", "«Container»\nJava 24\nSurface CLI stable — toutes les commandes")
         Container(mcp, "minos-mcp", "«Container»\nJava 24 / SDK MCP 2.0\nServeur MCP STDIO read-only")
         Container(api, "minos-api", "«Container»\nJava 24\nAPI Java publique versionnée")
@@ -125,7 +125,7 @@ C4Container
 
 ### minos-cli
 - **Responsabilité** : surface CLI stable — dispatcher `MinosCli`, toutes les commandes (project, index, search, find-symbol, architecture, impact, runtime, team…).
-- **Types clés** : `MinosCli`, `MinosCliRunner`, `MinosLauncher` (dans `minos-app`).
+- **Types clés** : `MinosCli`, `MinosCliRunner`, `MinosLauncher` et `DockerRuntimeBootstrap` (points d'entrée de processus, noms stables), SPI `McpLaunchRoute` (route `minos mcp`, fournie par `minos-app`).
 - **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-integration-git`, `minos-storage-local`, `minos-provider-scip`, `minos-runtime-local`, `minos-nexus`.
 - **Sources** : `minos-cli/src/main/java/com/minos/cli/`.
 
@@ -141,7 +141,7 @@ C4Container
 - **Sources** : `minos-mcp/src/main/java/com/minos/mcp/`.
 
 ### minos-app
-- **Responsabilité** : composition root, points d'entrée (`MinosLauncher`, `NexusExportBridgeMain`), shaded JAR, router backend natif/Docker.
+- **Responsabilité** : assemblage final (shaded JAR), point d'entrée NEXUS (`NexusExportBridgeMain`), route `minos mcp` (`McpBackendLaunchRoute` → router backend natif/Docker, `com.minos.app`) fournie à `MinosLauncher` par `META-INF/services` ([ADR 0044](../../adr/0044-un-package-un-module.md)).
 - **Dépendances** : tous les modules.
 - **Sources** : `minos-app/src/main/java/`.
 

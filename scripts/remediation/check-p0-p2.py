@@ -176,7 +176,7 @@ def main() -> int:
         )
         c0_research = read("docs/research/code-intelligence-architecture-analysis.md")
 
-        docker_transport = read("minos-app/src/main/java/com/minos/cli/DockerMcpTransport.java")
+        docker_transport = read("minos-app/src/main/java/com/minos/app/DockerMcpTransport.java")
         pg_connections = read(
             "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java"
         )

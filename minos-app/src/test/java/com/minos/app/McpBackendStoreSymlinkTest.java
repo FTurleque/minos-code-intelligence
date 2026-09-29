@@ -1,4 +1,4 @@
-package com.minos.cli;
+package com.minos.app;
 
 import com.minos.io.PrivateLocalStorage;
 import org.junit.jupiter.api.Assumptions;

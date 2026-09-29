@@ -91,7 +91,7 @@ def main() -> int:
         source_probe = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java")
         ignore_rules = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
         runtime_settings = read("minos-engine/src/main/java/com/minos/storage/MinosRuntimeSettings.java")
-        backend_store = read("minos-app/src/main/java/com/minos/cli/McpBackendConfigurationStore.java")
+        backend_store = read("minos-app/src/main/java/com/minos/app/McpBackendConfigurationStore.java")
         path_store = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/ProjectPathMappingStore.java")
         registry = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java")
         storage_config = read("minos-engine/src/main/java/com/minos/storage/StorageBackendConfiguration.java")
