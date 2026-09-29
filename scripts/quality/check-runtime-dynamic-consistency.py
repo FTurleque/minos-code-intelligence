@@ -122,6 +122,8 @@ def main() -> int:
             "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreTest.java"),
             "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreSymlinkTest.java"),
             "RuntimeIntelligenceServiceTest.java": read("minos-application/src/test/java/com/minos/application/dynamic/RuntimeIntelligenceServiceTest.java"),
+            # A3 / ADR 0044: the file-adapter half of the split runtime service test (real local stores).
+            "RuntimeIntelligenceFileAdaptersTest.java": read("minos-bootstrap/src/test/java/com/minos/bootstrap/RuntimeIntelligenceFileAdaptersTest.java"),
             "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RuntimeCommandTest.java"),
             "MinosMcpToolsTest.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosMcpToolsTest.java"),
         }
@@ -136,6 +138,9 @@ def main() -> int:
         require_facts("RuntimeIntelligenceServiceTest.java", tests["RuntimeIntelligenceServiceTest.java"],
                       "ReportsResolutionHotPathsAndSymbolFacts", "rejectsProjectAndSnapshotMisalignment",
                       "codecFailsClosedOnBomTraversalUnknownKindsAndNonPartialCompleteness")
+        require_facts("RuntimeIntelligenceFileAdaptersTest.java", tests["RuntimeIntelligenceFileAdaptersTest.java"],
+                      "importsStrictPartialEvidenceAndReportsResolutionHotPathsAndSymbolFacts",
+                      "rejectsProjectAndSnapshotMisalignmentAndStaleSessionQueries")
         require_facts("RuntimeCommandTest.java", tests["RuntimeCommandTest.java"],
                       "AcrossAllCliActions", "ActionSpecificRequiredOptionsAndBounds")
         require_facts("MinosMcpToolsTest.java", tests["MinosMcpToolsTest.java"],
