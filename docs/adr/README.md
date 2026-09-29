@@ -60,6 +60,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0043](0043-retrait-des-artefacts-de-jalon.md) | Politique de retrait des scripts et workflows de jalon (permanent / gelé par assertion / archivé) | Accepted | Audit 2026-09, G3 |
 | [0044](0044-un-package-un-module.md) | Un package, un module : replier les packages éclatés par déplacement, renommer le côté interne | Accepted | Audit 2026-09, A3 (et A7) |
 | [0045](0045-constructeur-unique-et-point-d-entree-nomme.md) | Constructeur unique et point d'entrée nommé ; racine de composition regroupée par domaine, sans cache d'architecture | Accepted | Audit 2026-09, A4 |
+| [0046](0046-format-de-snapshot-v3-chaines-utf8.md) | Format de snapshot V3 : chaînes UTF-8, repli V2 pour les surrogates isolés, lecture de tous les formats antérieurs | Accepted | Audit 2026-09, A6 |
 
 ## Règle de rédaction
 

@@ -797,7 +797,8 @@ Les cinq écarts déclarés au jalon 2 (§ A4.6 et rapport : pas de commit rouge
 | Jalon | Contenu | Statut | Commits |
 |---|---|---|---|
 | 1 | Corpus réel (ce dépôt indexé par scip-java géré), harnais `benchmarks/scalability/`, mesures avant, verdicts et recommandations ; aucune optimisation | livré, accepté par verif-archi, arbitré (§ A6.9) | `fb363253`, `d491519d` |
-| 2.1 | Étape 1 — plafond : taille encodée exacte, refus avant toute écriture (fichier et PostgreSQL) | livré | voir § A6.6 |
+| 2.1 | Étape 1 — plafond : taille encodée exacte, refus avant toute écriture (fichier et PostgreSQL) | livré | `e23b5ded` ; V-A6-01 à 04 : `1acb68e8` |
+| 2.2 | Étape 2 — format V3 UTF-8 (fichier, pointeur, PostgreSQL), ADR 0046 ; exception `retention.golden` prouvée | livré, en attente de verif (bloquant) | `a68c560e`, `ebdc6969` (golden seul + preuve), `095c4c60` (banc), commit de docs |
 
 ## A6.2 Procédure de mesure
 
@@ -940,6 +941,7 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 - 2026-09-29 — impl-archi, étape 1 (tests d'abord) : `PersistedSnapshotLimitTest` exécuté sur la base : **2 tests sur 2 rouges**. Le premier écrit 256 Mio en 2,3 s puis échoue sur `knowledge snapshot exceeds byte limit: 268443632/268435456`. Le second, dont le répertoire du projet est occupé par un fichier ordinaire, échoue sur `private storage path is not a directory: C:\Users\…` : une écriture était tentée avant tout refus, et ce message, qui porte un chemin absolu, aurait été remplacé par un repli générique à la frontière publique.
 - 2026-09-29 — impl-archi, étape 1 : commit `perf(archi)` (§ A6.10) ; `./mvnw -q -pl minos-storage-postgresql -am test -Dminos.postgresql.tests.required=true` vert (PostgreSQL sous Docker) ; gates `remediation/*`, `check-module-boundaries`, `check-milestone-artifact-references`, `check-current-docs` verts.
 - 2026-09-29 — impl-archi : V-A6-01 à 04 (commit `test(archi)`) : Javadoc du banc en français, prérequis du README, requête d'import du banc calquée sur `import-scip`, constante publique au lieu de la réflexion, taille V2 par `encodedSize` ; remesure des ratios (§ A6.3.1).
+- 2026-09-29 — impl-archi, étape 2 : `a68c560e` (V3). Au premier essai, `A2SurfaceCharacterizationTest.retentionEffectIsUnchanged` était rouge : les noms de fichier de `retention.golden` finissent par le sha256 du contenu. Arrêt et signalement ; arbitrage : voie 1 sous preuve stricte (§ A6.11). `ebdc6969` : golden seul, plus la preuve `RetentionFormatEquivalenceTest`. `095c4c60` : banc (taille V3 du vrai encodeur, publication décidée par le magasin). Fixtures V1/V2 : `git add` refusé sous Windows (« Filename too long ») pour les noms d'origine ; ils ont été remplacés par `snapshot.<extension>`, le test reconstitue le nom d'origine, octets inchangés. Tests : `-pl minos-storage-postgresql -am test -Dminos.postgresql.tests.required=true` vert ; tests A2 (12 + 5) et `RetentionFormatEquivalenceTest` verts ; gates verts.
 
 ## A6.7 Constats verif-archi
 
@@ -1016,3 +1018,103 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 - Le passage de comptage n'a pas de coût mesurable sur les imports qui passent : les écarts restent dans le bruit.
 - Le refus de ce dépôt arrive 1,6 à 2,5 s plus tôt et n'écrit plus rien. Les 379 à 660 ms restants sont le tri et le contrôle d'unicité du magasin, plus le comptage.
 - La taille est calculée sur le snapshot réellement ingéré, donc sur l'`Origin` du produit (`indexRunId`, `providerVersion`), jamais sur une estimation (V-A6-03).
+
+## A6.11 Étape 2 — format V3 UTF-8
+
+Décision : [ADR 0046](../adr/0046-format-de-snapshot-v3-chaines-utf8.md).
+
+**Réalisation** (`a68c560e`).
+
+- `SnapshotCodecV3` : même mise en page que V2, version 3, chaînes UTF-8 préfixées par leur longueur en octets.
+  - Écriture exacte : une chaîne avec un surrogate isolé est refusée, jamais remplacée par `?`.
+  - Lecture stricte (`CodingErrorAction.REPORT`), bornée à 3 × 8 Mi octets par chaîne avant toute lecture, par `readNBytes` sans pré-allocation.
+- `SnapshotBinaryCodecSupport` : les lecteurs passent par un `SnapshotInput` qui décode les chaînes selon le format ; les écrivains, par un `EncodingSink` paramétré par l'encodage. V1, V2 et V3 partagent ainsi un seul parcours.
+- `KnowledgeSnapshotCodecs` : politique commune au magasin fichier et à PostgreSQL.
+  - `select` : V3 par défaut ; V2 pour le snapshot entier dès qu'une chaîne contient un surrogate isolé ; taille exacte et refus au plafond calculés avant toute E/S.
+  - `forVersion` et `read` : lecture d'un payload dans le format que déclare son en-tête.
+- `ActiveSnapshotRepository` : version 3 acceptée. La mise en page du pointeur est inchangée depuis V2, donc les pointeurs V1/V2 gardent leurs octets.
+- PostgreSQL :
+  - `PostgresSnapshotPayloadCodec` passe par `KnowledgeSnapshotCodecs` ;
+  - le descripteur porte la version lue dans l'en-tête, et non plus un 2 écrit en dur ;
+  - ré-import sous le même identifiant avec d'autres octets : les deux payloads sont décodés et comparés comme contenus ; un V2 identique est conservé, un contenu différent reste refusé.
+- Inchangés : `logicalIdHash`, le schéma des noms, `listSnapshotFiles`, la compaction, le calcul d'intégrité (sha256 des octets), `CodeKnowledgeSnapshotBinaryCodec` (pont V2).
+
+**Fixtures de la base.**
+
+- `LegacySnapshotFixtureGenerator` et `LegacySnapshotContent` (sources de test, autonomes) se compilent contre le `minos-storage-local` de `d9ae1005`, compilé depuis `git archive d9ae1005`. `minos-domain` et `minos-engine` sont identiques à `d9ae1005` (`git diff --quiet d9ae1005 -- minos-domain minos-engine`).
+- Trois magasins : `v1-symbols`, `v2-well-formed`, `v2-lone-surrogate`. Chaînes piégées : accents, emoji (paire), CJK, NUL, U+FFFF, et un surrogate isolé dans la troisième variante.
+- L'écriture est déterministe : deux générations donnent des octets identiques (`diff -r`).
+- sha256 des fichiers de snapshot :
+  - `v1` : `ae66cfbfd0c3653a71dc8aca085806c7b673dfdee35ef150dc7877c8bd6912b2`
+  - `v2-well-formed` : `f29cf835e97ba31a88f1149db4c7b153306edc8ec06364c7855c25f64398aae3`
+  - `v2-lone-surrogate` : `49e434c3d070e9ea19cac719eb4378732cceab629af3baf926ad87e4120212a4`
+- sha256 des pointeurs :
+  - `v1` : `c369dea7…`
+  - `v2-well-formed` : `af0c2ea7…`
+  - `v2-lone-surrogate` : `99af981d…`
+- Stockés sous `src/test/resources/snapshot-formats/base-d9ae1005/` avec un nom court (limite de chemin de Git sous Windows), marqués `binary` dans `.gitattributes`. Les deux payloads V2 sont recopiés pour PostgreSQL.
+
+**Tests.**
+
+- `SnapshotFormatCompatibilityTest` :
+  - les stores V1 et V2 de la base s'ouvrent, leurs octets restent intacts et le descripteur porte la version 1 ou 2 ;
+  - un home V2 existant s'ouvre, puis un nouvel import est promu en V3 : pointeur 3, en-tête 3, checksum cohérent ; `listSnapshotFiles` voit les deux fichiers et la compaction garde le V2 comme historique valide ;
+  - le ré-import du même snapshot après le changement de format passe, avec des noms issus du même `logicalIdHash` ;
+  - un snapshot avec surrogate isolé est republié en V2, exact.
+- `SnapshotCodecV3Test` :
+  - aller-retour de toutes les chaînes piégées ;
+  - taille ASCII ≈ moitié de V2 ;
+  - surrogate isolé : `encodedSizeIfEncodable` vide, écriture V3 refusée, `select` → V2 ;
+  - UTF-8 mal formé (CESU-8, suite invalide) signalé ;
+  - bornes en octets : longueur excessive refusée, longueur au-delà du fichier → « truncated », sans allocation de 24 Mo ;
+  - chaque codec refuse la version de l'autre.
+- `SnapshotEncodedSizeTest` : taille V3 annoncée = taille écrite.
+- `PersistedSnapshotLimitTest` : frontière du plafond mesurée en V3 ; un snapshot qui tient en V3 mais que son surrogate isolé force en V2 est refusé sur sa taille V2.
+- `PostgresSnapshotFormatCompatibilityTest` :
+  - payload V2 de la base inséré tel quel : lu (descripteur 2) ;
+  - ré-import du même snapshot : le payload V2 est conservé octet pour octet ;
+  - contenu différent sous le même identifiant : toujours refusé ;
+  - nouvel import : payload V3 ;
+  - payload avec surrogate isolé : lu exactement et republié en V2.
+
+**Exception `retention.golden`** (arbitrage : voie 1 sous preuve stricte ; seul golden modifié du chantier, commit `ebdc6969` qui ne contient que ce fichier et sa preuve).
+
+- **Cause.** Le golden liste les noms `snapshot-<logicalIdHash>-<sha256 du contenu>.knowledge`. V3 change les octets, donc le suffixe.
+- **Preuve mécanique.** Dans l'ancien golden (`d9ae1005`) et le nouveau, on remplace chaque `-<64 hex>.knowledge` par `-<SHA>.knowledge`. Résultat :
+  - textes identiques octet pour octet, 4 312 octets chacun ;
+  - 8 noms de chaque côté ;
+  - seules les lignes 11, 14 et 17 diffèrent, et seulement par ces suffixes ;
+  - préfixes `logicalIdHash`, comptes de suppression (1 puis 2), snapshot actif (`a2-snapshot-4`) et ordre des lignes inchangés.
+- **Même contenu logique.** `RetentionFormatEquivalenceTest` rejoue l'import du scénario : même fixture, identité de projet figée, `indexRunId = "application-" + snapshotId`, `scip-typescript` 0.4.0. Pour chacun des 4 snapshots :
+  - le fichier V3 porte le sha du nouveau golden ;
+  - son modèle décodé, réencodé en V2, redonne à l'octet près le sha que `d9ae1005` avait écrit (ancien golden).
+
+  Le V2 étant déterministe, le modèle V3 est exactement celui que la base avait écrit.
+
+  | Snapshot | sha V2 écrit par la base | sha V3 |
+  |---|---|---|
+  | a2-snapshot-1 | `ae70a8e4…00ea` | `65c5b788…003a` |
+  | a2-snapshot-2 | `0aa1a3f1…0ce87d` | `cdc627e4…ab8f239c` |
+  | a2-snapshot-3 | `cf9fefcb…effcd00ec` | `43f45d5f…d9e65da6b30` |
+  | a2-snapshot-4 | `97f23527…5c9ff5c` | `57ba81ec…3f9c88839` |
+
+- **Autres golden.** Les 11 autres golden et `A2CompositionCharacterizationTest` sont verts et inchangés (`git diff --stat d9ae1005 -- minos-app/src/test/resources/characterization` : `retention.golden` seul, 3 lignes).
+- **Documentation.** ADR 0046 § Conséquences. `docs/user/` n'a pas de section qui décrive le stockage ou la rétention des snapshots locaux : rien à y ajouter.
+
+**Mesures avant/après.** Banc : `minos-storage-local` de `d9ae1005` en tête du classpath pour « avant », deux paires A/B en ordre inversé. Tailles données par le vrai encodeur (V-A6-04).
+
+| Mesure | V2 (avant) | V3 (après) |
+|---|---:|---:|
+| Import de ce dépôt | refusé (355 045 885 octets) | **publié, 194 552 030 octets** (0,548×) |
+| ariane-chatbot / nexus-context-engine | 33 157 453 / 27 515 826 | 18 198 069 / 15 120 767 (0,549 / 0,550) |
+| Tranche `file-f0.50` sur disque | 170 196 551 | 93 266 764 (0,548×) |
+| Lecture à froid de `file-f0.50` (médiane, deux paires) | 1 494 / 1 728 ms | **614 / 597 ms** |
+| Tas de `file-f0.50` : vue / snapshot seul | 238,7 / 199,2 Mo | 237,9 / 198,3 Mo |
+| Publication de `file-f0.50` | 1 394 / 1 283 ms | 1 098 / 1 035 ms |
+| Import publié : ariane / nexus | 354 / 288 ms | 305 / 296 ms |
+| Dépôt entier en V3 : publication, lecture à froid, construction des index | — | 2 209 ms, 1 655 ms, 395 ms |
+| Dépôt entier en V3 : tas vue / snapshot seul | — | 494,7 / 413,2 Mo, non mis en cache |
+
+- **Aucun gain mémoire.** Le tas réel est identique en V2 et en V3. Le poids **estimé** par le cache de vues (8 fois la taille du fichier) baisse de 45 %, et le cache admet donc des snapshots un peu plus gros ; le tas, lui, ne bouge pas.
+- Le dépôt entier (vue de 495 Mo en tas, poids estimé 1,56 Go) n'est toujours pas mis en cache ; § A6.8.
+- Seuil SCIP du plafond pour ce corpus, avec l'`Origin` du produit : de 18,0 à 32,9 Mo.
