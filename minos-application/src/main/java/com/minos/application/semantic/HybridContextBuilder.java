@@ -1,4 +1,4 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
 import com.minos.context.TokenEstimator;
 

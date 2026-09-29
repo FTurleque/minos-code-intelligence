@@ -1,6 +1,8 @@
 package com.minos.semantic;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.semantic.EmbeddingProvider;
+import com.minos.application.semantic.SemanticIndexService;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.PositionEncoding;

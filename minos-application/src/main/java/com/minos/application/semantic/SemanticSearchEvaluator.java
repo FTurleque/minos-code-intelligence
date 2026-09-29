@@ -1,4 +1,4 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
 import java.util.HashSet;
 import java.util.List;

@@ -1,5 +1,6 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
+import com.minos.semantic.SemanticVector;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

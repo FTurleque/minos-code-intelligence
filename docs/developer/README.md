@@ -71,7 +71,8 @@ flowchart TB
 | `com.minos.adapter.scip` | lecture et normalisation SCIP |
 | `com.minos.domain` | symboles, relations, origine, preuves et critères |
 | `com.minos.program` | modèle provider-independent des graphes de programme M19 |
-| `com.minos.semantic` | documents, embeddings, recherche sémantique/hybride, provider learned local et budgets M20/M23 |
+| `com.minos.semantic` | modèle sémantique : documents, vecteurs et port de stockage vectoriel (domaine) |
+| `com.minos.application.semantic` | embeddings, indexation et recherche sémantique/hybride, provider learned local et budgets M20/M23 (services applicatifs) |
 | `com.minos.store` | ports et modèles de snapshots, index reconstruisibles (moteur) |
 | `com.minos.storage.local.store` | persistance locale des snapshots, vecteurs, observations runtime et plan de contrôle (adaptateur `minos-storage-local`) |
 | `com.minos.storage.local` | backend de stockage local, rétention persistante et observations runtime sérialisées (adaptateur `minos-storage-local`) |

@@ -1,10 +1,13 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
 import com.minos.application.ProjectResolver;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.InformationNature;
 import com.minos.domain.Relationship;
 import com.minos.registry.RegisteredProject;
+import com.minos.semantic.SemanticDocument;
+import com.minos.semantic.SemanticDocumentKind;
+import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 

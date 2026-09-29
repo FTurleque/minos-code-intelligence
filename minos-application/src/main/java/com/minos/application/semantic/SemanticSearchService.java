@@ -1,6 +1,9 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
 import com.minos.domain.InformationNature;
+import com.minos.semantic.SemanticDocument;
+import com.minos.semantic.SemanticVector;
+import com.minos.semantic.SemanticVectorStore;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

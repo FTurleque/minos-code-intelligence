@@ -274,7 +274,7 @@ public final class LocalAutonomousIndexOperations
         if (application.semanticIndexService().embeddingProvider().isEmpty()) return null;
         try {
             var report = application.semanticIndexService().synchronize(projectId);
-            return report.state() == com.minos.semantic.SemanticIndexService.State.READY
+            return report.state() == com.minos.application.semantic.SemanticIndexService.State.READY
                     ? null
                     : "semantic index state after structured indexing: " + report.state();
         } catch (Exception exception) {

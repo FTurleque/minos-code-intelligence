@@ -1,6 +1,12 @@
 package com.minos.semantic;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.semantic.EmbeddingProvider;
+import com.minos.application.semantic.HybridContextBuilder;
+import com.minos.application.semantic.HybridSearchService;
+import com.minos.application.semantic.SemanticIndexService;
+import com.minos.application.semantic.SemanticSearchEvaluator;
+import com.minos.application.semantic.SemanticSearchService;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.PositionEncoding;

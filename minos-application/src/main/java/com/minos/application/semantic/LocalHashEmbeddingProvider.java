@@ -1,5 +1,6 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
+import com.minos.semantic.SemanticVector;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;

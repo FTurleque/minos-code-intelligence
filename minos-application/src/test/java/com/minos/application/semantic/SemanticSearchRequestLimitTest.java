@@ -1,4 +1,4 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
 import org.junit.jupiter.api.Test;
 

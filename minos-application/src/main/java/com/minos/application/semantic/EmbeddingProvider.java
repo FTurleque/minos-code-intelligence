@@ -1,5 +1,6 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
+import com.minos.semantic.SemanticVector;
 import java.io.IOException;
 import java.util.List;
 

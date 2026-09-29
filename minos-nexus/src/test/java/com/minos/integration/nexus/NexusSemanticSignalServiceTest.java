@@ -7,7 +7,7 @@ import com.minos.domain.ResolutionStatus;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
-import com.minos.semantic.LocalHashEmbeddingProvider;
+import com.minos.application.semantic.LocalHashEmbeddingProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

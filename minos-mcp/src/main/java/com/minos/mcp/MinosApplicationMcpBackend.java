@@ -26,9 +26,9 @@ import com.minos.output.SemanticAnalysisResultRenderer;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.output.SymbolResultRenderer;
 import com.minos.program.analysis.SecurityAnalysisService;
-import com.minos.semantic.HybridContextBuilder;
-import com.minos.semantic.HybridSearchService;
-import com.minos.semantic.SemanticSearchService;
+import com.minos.application.semantic.HybridContextBuilder;
+import com.minos.application.semantic.HybridSearchService;
+import com.minos.application.semantic.SemanticSearchService;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;

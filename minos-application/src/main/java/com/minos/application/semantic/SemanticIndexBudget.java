@@ -1,5 +1,6 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
+import com.minos.semantic.SemanticDocument;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;

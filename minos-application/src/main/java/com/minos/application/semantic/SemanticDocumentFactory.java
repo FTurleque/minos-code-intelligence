@@ -1,4 +1,4 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
 import com.minos.context.LocalSourceReader;
 import com.minos.context.SourceExcerpt;
@@ -6,6 +6,8 @@ import com.minos.context.TokenEstimator;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolLocation;
 import com.minos.registry.RegisteredProject;
+import com.minos.semantic.SemanticDocument;
+import com.minos.semantic.SemanticDocumentKind;
 import com.minos.store.CodeKnowledgeSnapshot;
 
 import java.io.IOException;

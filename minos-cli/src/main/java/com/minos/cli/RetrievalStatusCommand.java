@@ -1,7 +1,7 @@
 package com.minos.cli;
 
 import com.minos.output.SymbolOutputFormat;
-import com.minos.semantic.SemanticIndexService;
+import com.minos.application.semantic.SemanticIndexService;
 
 import java.io.IOException;
 import java.util.ArrayList;

@@ -1,7 +1,7 @@
 package com.minos.integration.nexus;
 
 import com.minos.application.MinosApplication;
-import com.minos.semantic.HybridSearchService;
+import com.minos.application.semantic.HybridSearchService;
 
 import java.io.IOException;
 import java.util.ArrayList;

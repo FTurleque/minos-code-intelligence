@@ -45,12 +45,12 @@ SCOPES = {
         "line": 0.47, "branch": 0.27,
     },
     "semantic-vector-store": {"prefixes": ("com/minos/storage/local/store/FileSemanticVectorStore",), "line": 0.45, "branch": 0.20},
-    "semantic-learned-provider": {"prefixes": ("com/minos/semantic/OllamaEmbeddingProvider",), "line": 0.52, "branch": 0.32},
+    "semantic-learned-provider": {"prefixes": ("com/minos/application/semantic/OllamaEmbeddingProvider",), "line": 0.52, "branch": 0.32},
     "semantic-hybrid-retrieval": {
         "prefixes": (
-            "com/minos/semantic/SemanticDocumentFactory", "com/minos/semantic/SemanticIndexService",
-            "com/minos/semantic/SemanticSearchService", "com/minos/semantic/HybridSearchService",
-            "com/minos/semantic/HybridContextBuilder", "com/minos/semantic/SemanticSearchEvaluator",
+            "com/minos/application/semantic/SemanticDocumentFactory", "com/minos/application/semantic/SemanticIndexService",
+            "com/minos/application/semantic/SemanticSearchService", "com/minos/application/semantic/HybridSearchService",
+            "com/minos/application/semantic/HybridContextBuilder", "com/minos/application/semantic/SemanticSearchEvaluator",
         ), "line": 0.50, "branch": 0.30,
     },
     "advanced-public-api": {

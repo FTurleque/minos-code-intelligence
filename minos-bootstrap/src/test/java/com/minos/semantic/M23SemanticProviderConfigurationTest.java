@@ -1,6 +1,8 @@
 package com.minos.semantic;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.semantic.EmbeddingProvider;
+import com.minos.application.semantic.OllamaEmbeddingProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

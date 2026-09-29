@@ -1,7 +1,8 @@
-package com.minos.semantic;
+package com.minos.application.semantic;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.minos.semantic.SemanticVector;
 
 import java.io.IOException;
 import java.io.InputStream;
