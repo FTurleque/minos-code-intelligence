@@ -85,7 +85,13 @@ Les quatre alias dépréciés de `minos-cli` disparaissent. `docs/user/java-api.
 
 ## Amendement de l'ADR 0022
 
-L'ADR 0022 plaçait dans `minos-application` « discovery local, incrémental, orchestration locale » et `MinosVersion`. Ces classes ne dépendent que d'engine et de domain ; elles rejoignent `minos-engine`, conformément à la vue des blocs (arc42, section 5 : « engine : ports, orchestration indexeurs… »). `minos-application` garde les services applicatifs qui ont besoin d'un contexte applicatif (architecture, contexte, impact, sortie, analyse de programme, espace de travail, résolution de projet, sémantique, runtime dynamique, composition). Le reste de l'ADR 0022 est inchangé.
+L'ADR 0022 attribuait les packages aux modules par leur nom, sans prévoir qu'un même nom en couvre plusieurs. Il est amendé sur deux plans.
+
+**Côté application.** L'ADR 0022 plaçait dans `minos-application` « discovery local, incrémental, orchestration locale » et `MinosVersion`. Ces classes ne dépendent que d'engine et de domain ; elles rejoignent `minos-engine`, conformément à la vue des blocs (arc42, section 5 : « engine : ports, orchestration indexeurs… »). `minos-application` garde les services applicatifs qui ont besoin d'un contexte applicatif (architecture, contexte, impact, sortie, analyse de programme, espace de travail, résolution de projet, sémantique, runtime dynamique, composition).
+
+**Côté adaptateurs.** L'ADR 0022 attribuait aux adaptateurs des packages que les ports d'engine partagent désormais : `com.minos.store.*` (hors `CodeKnowledgeStore`) à `minos-storage-local`, `com.minos.git.*` à `minos-integration-git`, `com.minos.runtime.*` (`CommandLocator`, `ProcessIndexerExecutor`…) à `minos-runtime-local`. Ces attributions sont remplacées : les ports gardent `com.minos.store`, `com.minos.git`, `com.minos.runtime` dans `minos-engine`, et les adaptateurs prennent l'espace de noms de leur module — `com.minos.storage.local.*` (dont `store`, `registry`, `orchestration`, `incremental`), `com.minos.integration.git`, `com.minos.runtime.local`. De même, `minos-app` ne porte plus `MinosLauncher`, déplacé dans `minos-cli`.
+
+L'emplacement de chaque package est désormais donné par la *Table des décisions* ci-dessus ; les frontières de dépendances de l'ADR 0022 (direction, reactor, coordonnée de l'artefact) ne changent pas.
 
 ## Conséquences
 
