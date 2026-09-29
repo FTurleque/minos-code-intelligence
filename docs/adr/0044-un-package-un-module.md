@@ -81,6 +81,8 @@ Les packages renommés sont tous internes (adaptateurs, services applicatifs, cl
 | `com.minos.adapter.scip.ScipSymbolSnapshotRequest`/`Report` (engine) | `com.minos.orchestration` |
 | `com.minos.cli` (app, hors points d'entrée) | `com.minos.app` |
 
+**Signatures publiques de `MinosApplication` touchées.** `MinosApplication` ne bouge pas, mais six de ses signatures publiques nomment des types renommés : les accesseurs `semanticIndexService()`, `semanticSearchService()`, `hybridSearchService()`, `hybridContextBuilder()` (désormais `com.minos.application.semantic.*`) et `runtimeIntelligenceService()` (désormais `com.minos.application.dynamic.RuntimeIntelligenceService`), ainsi que `MinosApplication.Builder.embeddingProvider(EmbeddingProvider)` (`com.minos.application.semantic.EmbeddingProvider`). Ce que chaque accesseur retourne est inchangé ; seul le package du type change. C'est une rupture de source et binaire pour un code qui appelle directement ces méthodes : il doit mettre à jour ses imports et être recompilé. Aucune signature de `com.minos.api` n'est concernée.
+
 Les quatre alias dépréciés de `minos-cli` (`ProjectOperations`, `ProjectSymbolQuery`, `LocalProjectOperations`, `LocalProjectSymbolQuery`) disparaissent : ils ne faisaient que déléguer aux types de `com.minos.application` du même nom. `minos-cli` gagne un type public, le SPI `com.minos.cli.McpLaunchRoute` (route `minos mcp`, fournie par `minos-app`). `docs/user/java-api.md` porte la même liste dans sa section « Ruptures ».
 
 ## Amendement de l'ADR 0022
