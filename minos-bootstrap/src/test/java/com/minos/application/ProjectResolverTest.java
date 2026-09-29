@@ -1,6 +1,6 @@
 package com.minos.application;
 
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

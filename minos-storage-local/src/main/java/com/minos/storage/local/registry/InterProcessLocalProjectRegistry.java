@@ -1,7 +1,10 @@
-package com.minos.registry;
+package com.minos.storage.local.registry;
 
 import com.minos.io.BoundedFileLease;
 import com.minos.io.DurableAtomicFile;
+import com.minos.registry.ProjectRegistry;
+import com.minos.registry.RegisteredProject;
+import com.minos.registry.RegisteredWorkspace;
 
 import java.io.IOException;
 import java.nio.file.DirectoryStream;

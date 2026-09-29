@@ -6,7 +6,7 @@ import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.io.DurableAtomicFile;
 import com.minos.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexStateStore;
-import com.minos.registry.InterProcessLocalProjectRegistry;
+import com.minos.storage.local.registry.InterProcessLocalProjectRegistry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshotStore;

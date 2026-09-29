@@ -10,7 +10,7 @@ import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
 import com.minos.domain.SymbolSearchCriteria;
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;

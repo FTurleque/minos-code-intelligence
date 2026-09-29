@@ -92,8 +92,8 @@ def main() -> int:
         ignore_rules = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
         runtime_settings = read("minos-engine/src/main/java/com/minos/storage/MinosRuntimeSettings.java")
         backend_store = read("minos-app/src/main/java/com/minos/cli/McpBackendConfigurationStore.java")
-        path_store = read("minos-storage-local/src/main/java/com/minos/registry/ProjectPathMappingStore.java")
-        registry = read("minos-storage-local/src/main/java/com/minos/registry/LocalProjectRegistry.java")
+        path_store = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/ProjectPathMappingStore.java")
+        registry = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java")
         storage_config = read("minos-engine/src/main/java/com/minos/storage/StorageBackendConfiguration.java")
         postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java")
         postgres_policy = read(

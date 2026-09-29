@@ -3,7 +3,7 @@ package com.minos.program.analysis;
 import com.minos.program.ProgramEdgeKind;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphCapability;
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;

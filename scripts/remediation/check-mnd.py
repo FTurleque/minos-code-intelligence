@@ -56,7 +56,7 @@ def main() -> int:
         polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
         discovery = read("minos-application/src/main/java/com/minos/discovery/ProjectIgnorePolicy.java")
         plugins = read("minos-application/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java")
-        registry = read("minos-storage-local/src/main/java/com/minos/registry/InterProcessLocalProjectRegistry.java")
+        registry = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java")
         coursier = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
 

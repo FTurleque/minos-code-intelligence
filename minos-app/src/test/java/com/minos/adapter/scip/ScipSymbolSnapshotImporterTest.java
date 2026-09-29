@@ -11,7 +11,7 @@ import com.minos.domain.SymbolSearchCriteria;
 import com.minos.orchestration.ScipSymbolSnapshotReport;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.query.SymbolResult;
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;

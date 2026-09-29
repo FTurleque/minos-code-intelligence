@@ -1,7 +1,12 @@
-package com.minos.registry;
+package com.minos.storage.local.registry;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
+import com.minos.registry.ProjectPathMapping;
+import com.minos.registry.ProjectRegistry;
+import com.minos.registry.ProjectRegistryLimits;
+import com.minos.registry.RegisteredProject;
+import com.minos.registry.RegisteredWorkspace;
 
 import java.io.IOException;
 import java.io.Writer;

@@ -62,7 +62,8 @@ flowchart TB
 | Package | Responsabilité |
 |---|---|
 | `com.minos.discovery` | découverte de projet, langages, builds, modules |
-| `com.minos.registry` | projets et workspaces persistés |
+| `com.minos.registry` | ports et modèles du registre de projets et workspaces (moteur) |
+| `com.minos.storage.local.registry` | registre local persisté des projets, workspaces et correspondances de chemins (adaptateur `minos-storage-local`) |
 | `com.minos.orchestration` | négociation, lifecycle et promotion |
 | `com.minos.incremental` | fingerprints, invalidation, plans NONE/FULL/INCREMENTAL |
 | `com.minos.adapter.scip` | lecture et normalisation SCIP |

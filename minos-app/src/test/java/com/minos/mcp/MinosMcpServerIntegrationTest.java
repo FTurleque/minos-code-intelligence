@@ -2,7 +2,7 @@ package com.minos.mcp;
 
 import com.minos.cli.MinosLauncher;
 import com.minos.domain.Symbol;
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
