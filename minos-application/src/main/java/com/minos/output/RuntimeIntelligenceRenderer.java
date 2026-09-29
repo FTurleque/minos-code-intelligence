@@ -32,7 +32,7 @@ public final class RuntimeIntelligenceRenderer {
     }
 
     public static String renderSessions(List<SessionView> sessions) {
-        return DeterministicJson.render(Map.of(
+        return DeterministicJson.render(DeterministicJson.object(
                 "nature", "OBSERVED_PARTIAL",
                 "exhaustive", false,
                 "sessions", sessions.stream().map(RuntimeIntelligenceRenderer::sessionMap).toList(),
