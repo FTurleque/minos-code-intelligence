@@ -73,11 +73,15 @@ class TeamCommandTest {
     void reportsDisabledTeamModeWithoutBreakingLocalCli() throws Exception {
         MinosApplication local = MinosApplication.builder(home).build();
         StringBuilder error = new StringBuilder();
-        assertEquals(1, new MinosCli(
-                new LocalProjectSymbolQuery(local), new LocalProjectOperations(local), local.architectureQuery(),
-                local.impactQuery(), null, new LocalAutonomousIndexOperations(local), home, null, null, null,
-                local.runtimeIntelligenceService(), null
-        ).run(new String[]{"team", "tenant"}, new StringBuilder(), error));
+        assertEquals(1, MinosCli.builder(new LocalProjectSymbolQuery(local))
+                .projectOperations(new LocalProjectOperations(local))
+                .architectureQuery(local.architectureQuery())
+                .impactQuery(local.impactQuery())
+                .autonomousOperations(new LocalAutonomousIndexOperations(local))
+                .home(home)
+                .runtimeIntelligenceService(local.runtimeIntelligenceService())
+                .build()
+                .run(new String[]{"team", "tenant"}, new StringBuilder(), error));
         assertTrue(error.toString().contains("team is not configured"));
     }
 

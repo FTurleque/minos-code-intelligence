@@ -90,142 +90,29 @@ public final class MinosCli {
     private final RuntimeCommand runtimeCommand;
     private final TeamCommand teamCommand;
 
-    public MinosCli(ProjectSymbolQuery symbolQuery) {
-        this(symbolQuery, null, null, null, null, null, null, null);
+    /**
+     * Seul point d'entrée (ADR 0045). Seules les requêtes de symboles sont obligatoires ; un collaborateur
+     * non fourni laisse sa commande « not configured in this CLI bootstrap ».
+     */
+    public static Builder builder(ProjectSymbolQuery symbolQuery) {
+        return new Builder(symbolQuery);
     }
 
-    public MinosCli(
-            ProjectSymbolQuery symbolQuery,
-            ProjectOperations projectOperations,
-            ProjectArchitectureQuery architectureQuery,
-            ProjectImpactQuery impactQuery
-    ) {
-        this(symbolQuery, projectOperations, architectureQuery, impactQuery, null, null, null, null);
-    }
-
-    MinosCli(
-            ProjectSymbolQuery symbolQuery,
-            ProjectOperations projectOperations,
-            ProjectArchitectureQuery architectureQuery,
-            ProjectImpactQuery impactQuery,
-            NexusExportCommand nexusExportCommand
-    ) {
-        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand, null, null, null);
-    }
-
-    MinosCli(
-            ProjectSymbolQuery symbolQuery,
-            ProjectOperations projectOperations,
-            ProjectArchitectureQuery architectureQuery,
-            ProjectImpactQuery impactQuery,
-            NexusExportCommand nexusExportCommand,
-            AutonomousIndexOperations autonomousOperations,
-            Path home
-    ) {
-        this(symbolQuery, projectOperations, architectureQuery, impactQuery,
-                nexusExportCommand, autonomousOperations, home, null);
-    }
-
-    MinosCli(
-            ProjectSymbolQuery symbolQuery,
-            ProjectOperations projectOperations,
-            ProjectArchitectureQuery architectureQuery,
-            ProjectImpactQuery impactQuery,
-            NexusExportCommand nexusExportCommand,
-            AutonomousIndexOperations autonomousOperations,
-            Path home,
-            ProviderPlatformService providerPlatformService
-    ) {
-        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
-                autonomousOperations, home, providerPlatformService, null);
-    }
-
-    MinosCli(
-            ProjectSymbolQuery symbolQuery,
-            ProjectOperations projectOperations,
-            ProjectArchitectureQuery architectureQuery,
-            ProjectImpactQuery impactQuery,
-            NexusExportCommand nexusExportCommand,
-            AutonomousIndexOperations autonomousOperations,
-            Path home,
-            ProviderPlatformService providerPlatformService,
-            GitIntelligence gitIntelligenceService
-    ) {
-        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
-                autonomousOperations, home, providerPlatformService, gitIntelligenceService, null);
-    }
-
-    MinosCli(
-            ProjectSymbolQuery symbolQuery,
-            ProjectOperations projectOperations,
-            ProjectArchitectureQuery architectureQuery,
-            ProjectImpactQuery impactQuery,
-            NexusExportCommand nexusExportCommand,
-            AutonomousIndexOperations autonomousOperations,
-            Path home,
-            ProviderPlatformService providerPlatformService,
-            GitIntelligence gitIntelligenceService,
-            RemoteIndexOperations remoteIndexOperations
-    ) {
-        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
-                autonomousOperations, home, providerPlatformService, gitIntelligenceService,
-                remoteIndexOperations, null);
-    }
-
-    MinosCli(
-            ProjectSymbolQuery symbolQuery,
-            ProjectOperations projectOperations,
-            ProjectArchitectureQuery architectureQuery,
-            ProjectImpactQuery impactQuery,
-            NexusExportCommand nexusExportCommand,
-            AutonomousIndexOperations autonomousOperations,
-            Path home,
-            ProviderPlatformService providerPlatformService,
-            GitIntelligence gitIntelligenceService,
-            RemoteIndexOperations remoteIndexOperations,
-            RuntimeIntelligenceService runtimeIntelligenceService
-    ) {
-        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
-                autonomousOperations, home, providerPlatformService, gitIntelligenceService,
-                remoteIndexOperations, runtimeIntelligenceService, null);
-    }
-
-    MinosCli(
-            ProjectSymbolQuery symbolQuery,
-            ProjectOperations projectOperations,
-            ProjectArchitectureQuery architectureQuery,
-            ProjectImpactQuery impactQuery,
-            NexusExportCommand nexusExportCommand,
-            AutonomousIndexOperations autonomousOperations,
-            Path home,
-            ProviderPlatformService providerPlatformService,
-            GitIntelligence gitIntelligenceService,
-            RemoteIndexOperations remoteIndexOperations,
-            RuntimeIntelligenceService runtimeIntelligenceService,
-            HostedControlPlaneService hostedControlPlaneService
-    ) {
-        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
-                autonomousOperations, home, providerPlatformService, gitIntelligenceService,
-                remoteIndexOperations, runtimeIntelligenceService, hostedControlPlaneService, null);
-    }
-
-    /** Full wiring; {@code resumeStatus} feeds `index-status` with the run offered for resume (ADR 0039 §6). */
-    MinosCli(
-            ProjectSymbolQuery symbolQuery,
-            ProjectOperations projectOperations,
-            ProjectArchitectureQuery architectureQuery,
-            ProjectImpactQuery impactQuery,
-            NexusExportCommand nexusExportCommand,
-            AutonomousIndexOperations autonomousOperations,
-            Path home,
-            ProviderPlatformService providerPlatformService,
-            GitIntelligence gitIntelligenceService,
-            RemoteIndexOperations remoteIndexOperations,
-            RuntimeIntelligenceService runtimeIntelligenceService,
-            HostedControlPlaneService hostedControlPlaneService,
-            IndexResumeStatusSource resumeStatus
-    ) {
-        Objects.requireNonNull(symbolQuery, "symbolQuery");
+    /** Câblage complet ; {@code resumeStatus} alimente `index-status` avec le run proposé à la reprise (ADR 0039 §6). */
+    private MinosCli(Builder builder) {
+        ProjectSymbolQuery symbolQuery = builder.symbolQuery;
+        ProjectOperations projectOperations = builder.projectOperations;
+        ProjectArchitectureQuery architectureQuery = builder.architectureQuery;
+        ProjectImpactQuery impactQuery = builder.impactQuery;
+        NexusExportCommand nexusExportCommand = builder.nexusExportCommand;
+        AutonomousIndexOperations autonomousOperations = builder.autonomousOperations;
+        Path home = builder.home;
+        ProviderPlatformService providerPlatformService = builder.providerPlatformService;
+        GitIntelligence gitIntelligenceService = builder.gitIntelligence;
+        RemoteIndexOperations remoteIndexOperations = builder.remoteIndexOperations;
+        RuntimeIntelligenceService runtimeIntelligenceService = builder.runtimeIntelligenceService;
+        HostedControlPlaneService hostedControlPlaneService = builder.hostedControlPlaneService;
+        IndexResumeStatusSource resumeStatus = builder.resumeStatus;
         this.findSymbolCommand = new FindSymbolCommand(symbolQuery);
         this.searchCodeCommand = new SearchCodeCommand(symbolQuery);
         this.getSourceCommand = new GetSourceCommand(symbolQuery);
@@ -333,5 +220,90 @@ public final class MinosCli {
     private static int unavailable(String command, Appendable error) throws IOException {
         error.append("error: ").append(command).append(" is not configured in this CLI bootstrap\n");
         return FindSymbolCommand.EXECUTION_ERROR;
+    }
+
+    /** Collaborateurs de {@link MinosCli} ; chaque mutateur refuse {@code null}, un collaborateur absent n'est simplement pas fourni. */
+    public static final class Builder {
+        private final ProjectSymbolQuery symbolQuery;
+        private ProjectOperations projectOperations;
+        private ProjectArchitectureQuery architectureQuery;
+        private ProjectImpactQuery impactQuery;
+        private NexusExportCommand nexusExportCommand;
+        private AutonomousIndexOperations autonomousOperations;
+        private Path home;
+        private ProviderPlatformService providerPlatformService;
+        private GitIntelligence gitIntelligence;
+        private RemoteIndexOperations remoteIndexOperations;
+        private RuntimeIntelligenceService runtimeIntelligenceService;
+        private HostedControlPlaneService hostedControlPlaneService;
+        private IndexResumeStatusSource resumeStatus;
+
+        private Builder(ProjectSymbolQuery symbolQuery) {
+            this.symbolQuery = Objects.requireNonNull(symbolQuery, "symbolQuery");
+        }
+
+        public Builder projectOperations(ProjectOperations value) {
+            this.projectOperations = Objects.requireNonNull(value);
+            return this;
+        }
+
+        public Builder architectureQuery(ProjectArchitectureQuery value) {
+            this.architectureQuery = Objects.requireNonNull(value);
+            return this;
+        }
+
+        public Builder impactQuery(ProjectImpactQuery value) {
+            this.impactQuery = Objects.requireNonNull(value);
+            return this;
+        }
+
+        Builder nexusExportCommand(NexusExportCommand value) {
+            this.nexusExportCommand = Objects.requireNonNull(value);
+            return this;
+        }
+
+        Builder autonomousOperations(AutonomousIndexOperations value) {
+            this.autonomousOperations = Objects.requireNonNull(value);
+            return this;
+        }
+
+        Builder home(Path value) {
+            this.home = Objects.requireNonNull(value);
+            return this;
+        }
+
+        Builder providerPlatformService(ProviderPlatformService value) {
+            this.providerPlatformService = Objects.requireNonNull(value);
+            return this;
+        }
+
+        Builder gitIntelligence(GitIntelligence value) {
+            this.gitIntelligence = Objects.requireNonNull(value);
+            return this;
+        }
+
+        Builder remoteIndexOperations(RemoteIndexOperations value) {
+            this.remoteIndexOperations = Objects.requireNonNull(value);
+            return this;
+        }
+
+        Builder runtimeIntelligenceService(RuntimeIntelligenceService value) {
+            this.runtimeIntelligenceService = Objects.requireNonNull(value);
+            return this;
+        }
+
+        Builder hostedControlPlaneService(HostedControlPlaneService value) {
+            this.hostedControlPlaneService = Objects.requireNonNull(value);
+            return this;
+        }
+
+        Builder resumeStatus(IndexResumeStatusSource value) {
+            this.resumeStatus = Objects.requireNonNull(value);
+            return this;
+        }
+
+        public MinosCli build() {
+            return new MinosCli(this);
+        }
     }
 }

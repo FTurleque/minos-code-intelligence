@@ -90,21 +90,19 @@ public final class MinosCliRunner {
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(app.projectRegistry(), app.snapshotStore()).export(projectRoot));
         LocalAutonomousIndexOperations autonomousIndex = new LocalAutonomousIndexOperations(app);
-        return new MinosCli(
-                new LocalProjectSymbolQuery(app),
-                new LocalProjectOperations(app),
-                app.architectureQuery(),
-                app.impactQuery(),
-                nexusExportCommand,
-                autonomousIndex,
-                app.home(),
-                ProviderPlatformService.defaults(app),
-                app.gitIntelligence(),
-                new LocalRemoteIndexOperations(app),
-                app.runtimeIntelligenceService(),
-                app.hostedControlPlaneService().orElse(null),
-                autonomousIndex
-        ).run(arguments, output, error);
+        MinosCli.Builder cli = MinosCli.builder(new LocalProjectSymbolQuery(app))
+                .projectOperations(new LocalProjectOperations(app))
+                .architectureQuery(app.architectureQuery())
+                .impactQuery(app.impactQuery())
+                .nexusExportCommand(nexusExportCommand)
+                .autonomousOperations(autonomousIndex)
+                .home(app.home())
+                .providerPlatformService(ProviderPlatformService.defaults(app))
+                .gitIntelligence(app.gitIntelligence())
+                .remoteIndexOperations(new LocalRemoteIndexOperations(app))
+                .runtimeIntelligenceService(app.runtimeIntelligenceService());
+        app.hostedControlPlaneService().ifPresent(cli::hostedControlPlaneService);
+        return cli.resumeStatus(autonomousIndex).build().run(arguments, output, error);
     }
 
     static boolean isStatelessHelpRequest(String[] arguments) {
@@ -207,17 +205,16 @@ public final class MinosCliRunner {
         ProjectSymbolQuery symbolQuery = unused(ProjectSymbolQuery.class);
         ProjectOperations projectOperations = unused(ProjectOperations.class);
         AutonomousIndexOperations autonomousOperations = unused(AutonomousIndexOperations.class);
-        return new MinosCli(
-                symbolQuery,
-                projectOperations,
-                unused(ProjectArchitectureQuery.class),
-                unused(ProjectImpactQuery.class),
-                new NexusExportCommand(projectRoot -> {
+        return MinosCli.builder(symbolQuery)
+                .projectOperations(projectOperations)
+                .architectureQuery(unused(ProjectArchitectureQuery.class))
+                .impactQuery(unused(ProjectImpactQuery.class))
+                .nexusExportCommand(new NexusExportCommand(projectRoot -> {
                     throw new IllegalStateException("stateless help attempted NEXUS export");
-                }),
-                autonomousOperations,
-                Path.of(".")
-        );
+                }))
+                .autonomousOperations(autonomousOperations)
+                .home(Path.of("."))
+                .build();
     }
 
     private static <T> T unused(Class<T> contract) {

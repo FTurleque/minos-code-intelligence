@@ -66,7 +66,7 @@ class ScipRelatedTestSnapshotIntegrationTest {
                 .id();
         StringBuilder output = new StringBuilder();
 
-        int exitCode = new MinosCli(reopened).run(
+        int exitCode = MinosCli.builder(reopened).build().run(
                 new String[]{
                         "related-tests", project.id().toString(), productionId,
                         "--format", "json"
