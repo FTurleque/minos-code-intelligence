@@ -47,7 +47,7 @@ def main() -> int:
         postgres_runtime = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresRuntimeObservationStore.java")
         provider_api = read("minos-api/src/main/java/com/minos/api/LocalProviderPlatformApi.java")
         multi_api = read("minos-api/src/main/java/com/minos/api/LocalMinosMultiRepositoryApi.java")
-        nexus = read("minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java")
+        nexus = read("minos-nexus/src/main/java/com/minos/nexus/NexusExportService.java")
         hybrid = read("minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java")
         token = read("minos-application/src/main/java/com/minos/context/TokenEstimator.java")
         polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")

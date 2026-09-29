@@ -1,4 +1,4 @@
-package com.minos.integration.nexus;
+package com.minos.nexus;
 
 import org.junit.jupiter.api.Test;
 

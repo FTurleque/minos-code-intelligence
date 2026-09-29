@@ -53,7 +53,7 @@ flowchart TB
     REMOTE[remote source cache] --> ORCH
     ORCH --> WORKER[isolated worker]
     WORKER --> STORE
-    STORE --> NEXUS[integration.nexus]
+    STORE --> NEXUS[nexus]
     SEM --> NEXUS
 ```
 
@@ -87,7 +87,8 @@ flowchart TB
 | `com.minos.git` | port Git du moteur (`GitIntelligence`) |
 | `com.minos.integration.git` | faits Git via JGit (adaptateur `minos-integration-git`) |
 | `com.minos.workspace` | intelligence cross-repository |
-| `com.minos.integration.nexus` | projections versionnées vers NEXUS |
+| `com.minos.nexus` | projections versionnées vers NEXUS (`minos-nexus`) |
+| `com.minos.integration.nexus` | point d'entrée de processus de NEXUS, `NexusExportBridgeMain` (`minos-app`) |
 | `com.minos.output` | rendus texte/JSON |
 | `com.minos.hosted` | identité, RBAC, espaces partagés, audit, rétention et frontières opérateur M27/M28 |
 | `com.minos.runtime` | ports d'exécution des providers (`ProviderRuntimeManager`, `WorkerSandboxProbe`, `HostCommandLocator`) |

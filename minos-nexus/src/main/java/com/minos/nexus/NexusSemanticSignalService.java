@@ -1,4 +1,4 @@
-package com.minos.integration.nexus;
+package com.minos.nexus;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.semantic.HybridSearchService;

@@ -5,7 +5,7 @@ import com.minos.application.MinosHome;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.impact.ProjectImpactQuery;
-import com.minos.integration.nexus.NexusExportService;
+import com.minos.nexus.NexusExportService;
 
 import java.io.IOException;
 import java.lang.reflect.Proxy;

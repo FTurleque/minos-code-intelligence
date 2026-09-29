@@ -1,4 +1,4 @@
-package com.minos.integration.nexus;
+package com.minos.nexus;
 
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.Evidence;
@@ -32,8 +32,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static com.minos.integration.nexus.NexusExportContract.CONTRACT_VERSION;
-import static com.minos.integration.nexus.NexusExportContract.PRODUCER;
+import static com.minos.nexus.NexusExportContract.CONTRACT_VERSION;
+import static com.minos.nexus.NexusExportContract.PRODUCER;
 
 /** Read-only M13 projection of an active MINOS knowledge snapshot for NEXUS. */
 public final class NexusExportService {
