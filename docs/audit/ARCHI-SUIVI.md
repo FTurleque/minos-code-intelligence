@@ -769,6 +769,10 @@ Les cinq écarts déclarés au jalon 2 (§ A4.6 et rapport : pas de commit rouge
 | V-A4-05 | `b89f20c5` | `statelessHelpCli` : `home(Path.of("."))` n'est jamais atteint, `doctor` ne figurant pas dans `STATELESS_HELP_COMMANDS`. Préexistant, hors lot. | remarque | **noté** au § A4.8, code inchangé. |
 | V-A4-06 | `9ad3e074` | `MinosCliRunnerResumeStatusTest` recopie la fixture de `MinosApplicationMcpBackendResumeStatusTest` (≈ 19 lignes, 3 assertions) alors que commit, Javadoc et § A4.6 disent « réutilise ». | à corriger | **résolu** (`6fb603ab`) : fixture factorisée dans `ResumableRunFixtures` (test-jar de minos-bootstrap), appelée par les deux tests ; dépendance test-jar ajoutée à `minos-mcp` ; Javadoc, § A4.6 et journal corrigés ; mutation `run-resume` toujours rouge. |
 
+« V-A4-06 et docs (6fb603ab, 4faed2d3) — inspectés par verif-archi. clean verify complet de 4faed2d3 (worktree verif) : BUILD SUCCESS, 1383 tests / 0 échec / 0 erreur / 46 ignorés, check-jacoco.py seul m24 rouge (chiffres de la base). 23 gates verts (check-module-boundaries et son auto-test ; diagramme généré non périmé, l'arête minos-mcp → minos-bootstrap existait déjà en runtime), 12 golden identiques, 7 témoins rouges, helpers 63/31/8, 0 package éclaté, 0 @Disabled. Fixture unique (ResumableRunFixtures, test-jar de minos-bootstrap), identique à l'ancienne (chemin d'artefact dérivé de home(), même valeur normalisée) ; assertions CLI et MCP conservées, dont l'absence de chemin côté MCP ; dépendance test-jar de minos-mcp en portée test seulement. Mutation run-resume rejouée sur 4faed2d3 : rouge. V-A4-06 résolu. Bilan : aucun constat ouvert (V-A4-05 remarque hors lot, § A4.8) ; lot A4 prêt pour la PR. »
+
+**Statut du lot A4 : accepté par verif-archi, aucun constat ouvert.**
+
 ## A4.8 À traiter plus tard (hors périmètre)
 
 | Origine | Description | Renvoi |
