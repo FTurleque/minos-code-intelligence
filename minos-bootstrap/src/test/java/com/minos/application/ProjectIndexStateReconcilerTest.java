@@ -1,6 +1,6 @@
 package com.minos.application;
 
-import com.minos.orchestration.FileIndexStateStore;
+import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;

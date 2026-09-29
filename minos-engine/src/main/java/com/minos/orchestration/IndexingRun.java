@@ -166,7 +166,13 @@ public record IndexingRun(
         return value;
     }
 
-    static String portable(Path path) {
+    /**
+     * Règle de format sur disque partagée entre ce port et ses adaptateurs : forme portable d'un chemin
+     * relatif au projet (normalisé, séparateur {@code /}), telle qu'elle entre dans {@link #targetKey} et
+     * telle que les adaptateurs de persistance l'écrivent dans les points de contrôle. Publique pour qu'il
+     * n'en existe qu'une définition (ADR 0044) ; la modifier change le format des runs déjà persistés.
+     */
+    public static String portable(Path path) {
         return path.normalize().toString().replace('\\', '/');
     }
 

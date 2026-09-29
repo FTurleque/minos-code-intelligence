@@ -2,7 +2,7 @@ package com.minos.cli;
 
 import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
 import com.minos.discovery.ProjectDiscovery.Language;
-import com.minos.orchestration.FileIndexStateStore;
+import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.local.registry.LocalProjectRegistry;

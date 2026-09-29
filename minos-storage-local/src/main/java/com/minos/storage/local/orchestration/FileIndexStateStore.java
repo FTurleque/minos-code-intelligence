@@ -1,10 +1,14 @@
-package com.minos.orchestration;
+package com.minos.storage.local.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
+import com.minos.orchestration.IndexStateStore;
+import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRun.ExecutionCheckpoint;
 import com.minos.orchestration.IndexingRun.IndexerExecution;
+import com.minos.orchestration.IndexingRun;
+import com.minos.orchestration.ProjectIndexState;
 
 import java.io.IOException;
 import java.io.OutputStream;

@@ -1,5 +1,7 @@
-package com.minos.orchestration;
+package com.minos.storage.local.orchestration;
 
+import com.minos.orchestration.InMemoryIndexStateStore;
+import com.minos.orchestration.IndexStateStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

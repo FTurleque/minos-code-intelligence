@@ -65,6 +65,7 @@ flowchart TB
 | `com.minos.registry` | ports et modèles du registre de projets et workspaces (moteur) |
 | `com.minos.storage.local.registry` | registre local persisté des projets, workspaces et correspondances de chemins (adaptateur `minos-storage-local`) |
 | `com.minos.orchestration` | négociation, lifecycle et promotion |
+| `com.minos.storage.local.orchestration` | état d'indexation persisté, bail projet inter-JVM et rétention des runs (adaptateur `minos-storage-local`) |
 | `com.minos.incremental` | fingerprints, invalidation, plans NONE/FULL/INCREMENTAL |
 | `com.minos.adapter.scip` | lecture et normalisation SCIP |
 | `com.minos.domain` | symboles, relations, origine, preuves et critères |

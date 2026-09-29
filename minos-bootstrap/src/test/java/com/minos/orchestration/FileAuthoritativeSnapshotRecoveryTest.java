@@ -2,6 +2,7 @@ package com.minos.orchestration;
 
 import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
+import com.minos.storage.local.orchestration.FileIndexStateStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

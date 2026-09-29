@@ -16,6 +16,7 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.runtime.local.FileResumableRunMarkers;
+import com.minos.storage.local.orchestration.FileIndexStateStore;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

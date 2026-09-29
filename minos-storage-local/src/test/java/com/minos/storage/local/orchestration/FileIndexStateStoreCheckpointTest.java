@@ -1,8 +1,11 @@
-package com.minos.orchestration;
+package com.minos.storage.local.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.orchestration.InMemoryIndexStateStore;
+import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRun.ExecutionCheckpoint;
 import com.minos.orchestration.IndexingRun.IndexerExecution;
+import com.minos.orchestration.IndexingRun;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

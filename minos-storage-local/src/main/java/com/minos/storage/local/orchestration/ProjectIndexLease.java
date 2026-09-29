@@ -1,4 +1,4 @@
-package com.minos.orchestration;
+package com.minos.storage.local.orchestration;
 
 import com.minos.io.BoundedFileLease;
 import com.minos.io.DurableAtomicFile;

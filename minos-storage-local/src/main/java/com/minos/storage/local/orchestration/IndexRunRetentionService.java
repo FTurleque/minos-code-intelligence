@@ -1,5 +1,7 @@
-package com.minos.orchestration;
+package com.minos.storage.local.orchestration;
 
+import com.minos.orchestration.IndexingRun;
+import com.minos.orchestration.ProjectIndexState;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;

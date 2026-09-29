@@ -4,7 +4,7 @@ import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.io.DurableAtomicFile;
-import com.minos.orchestration.FileIndexStateStore;
+import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageRetentionService;

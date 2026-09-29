@@ -1,6 +1,7 @@
-package com.minos.orchestration;
+package com.minos.storage.local.orchestration;
 
 import com.minos.orchestration.IndexingRun.ResumeTrace;
+import com.minos.orchestration.IndexingRun;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

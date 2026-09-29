@@ -1,5 +1,6 @@
 package com.minos.orchestration;
 
+import com.minos.storage.local.orchestration.FileIndexStateStore;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

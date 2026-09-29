@@ -1,4 +1,4 @@
-package com.minos.orchestration;
+package com.minos.storage.local.orchestration;
 
 /** Count-based retention policy for persisted indexing runs. */
 public record IndexRunRetentionPolicy(int maxSucceededRuns, int maxNonSucceededRuns) {

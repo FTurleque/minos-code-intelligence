@@ -1,9 +1,9 @@
 package com.minos.storage.local;
 
 import com.minos.incremental.FileProjectFingerprintSnapshotStore;
-import com.minos.orchestration.FileIndexStateStore;
-import com.minos.orchestration.IndexRunRetentionPolicy;
-import com.minos.orchestration.IndexRunRetentionService;
+import com.minos.storage.local.orchestration.FileIndexStateStore;
+import com.minos.storage.local.orchestration.IndexRunRetentionPolicy;
+import com.minos.storage.local.orchestration.IndexRunRetentionService;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.PersistentRetentionPolicy;
 import com.minos.storage.StorageRetentionService;
