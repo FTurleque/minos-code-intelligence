@@ -797,9 +797,11 @@ Les cinq écarts déclarés au jalon 2 (§ A4.6 et rapport : pas de commit rouge
 | Jalon | Contenu | Statut | Commits |
 |---|---|---|---|
 | 1 | Corpus réel (ce dépôt indexé par scip-java géré), harnais `benchmarks/scalability/`, mesures avant, verdicts et recommandations ; aucune optimisation | livré, accepté par verif-archi, arbitré (§ A6.9) | `fb363253`, `d491519d` |
-| 2.1 | Étape 1 — plafond : taille encodée exacte, refus avant toute écriture (fichier et PostgreSQL) | livré | `e23b5ded` ; V-A6-01 à 04 : `1acb68e8` |
-| 2.2 | Étape 2 — format V3 UTF-8 (fichier, pointeur, PostgreSQL), ADR 0046 ; exception `retention.golden` prouvée | livré, en attente de verif (bloquant) | `a68c560e`, `ebdc6969` (golden seul + preuve), `095c4c60` (banc), `5f0c2d53` (docs) |
-| 2.3 | Étape 3 — traversée d'impact : non faite, verdict consigné (§ A6.12) | consigné | commit de docs |
+| 2.1 | Étape 1 — plafond : taille encodée exacte, refus avant toute écriture (fichier et PostgreSQL) | livré, vérifié par verif-archi | `e23b5ded` ; V-A6-01 à 04 : `1acb68e8` |
+| 2.2 | Étape 2 — format V3 UTF-8 (fichier, pointeur, PostgreSQL), ADR 0046 ; exception `retention.golden` prouvée | livré, vérifié par verif-archi | `a68c560e`, `ebdc6969` (golden seul + preuve), `095c4c60` (banc), `5f0c2d53` (docs) |
+| 2.3 | Étape 3 — traversée d'impact : non faite, verdict consigné (§ A6.12) | consigné | `ea5132b6` |
+| 2.4 | Étape 4 — contenu normalisé mis en cache dans le corpus hybride, classement identique à l'octet (§ A6.13) | livré | `1c54a3a4` (référence, avant), `bba7a91b` ; M3 : `e32bd9f6` |
+| 2.5 | Étape 5 — ADR 0047 `Proposed` : dédoublonnage des chaînes, table de chaînes, pagination ou mappage (§ A6.14) | livré | commit de docs |
 
 ## A6.2 Procédure de mesure
 
@@ -943,6 +945,9 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 - 2026-09-29 — impl-archi, étape 1 : commit `perf(archi)` (§ A6.10) ; `./mvnw -q -pl minos-storage-postgresql -am test -Dminos.postgresql.tests.required=true` vert (PostgreSQL sous Docker) ; gates `remediation/*`, `check-module-boundaries`, `check-milestone-artifact-references`, `check-current-docs` verts.
 - 2026-09-29 — impl-archi : V-A6-01 à 04 (commit `test(archi)`) : Javadoc du banc en français, prérequis du README, requête d'import du banc calquée sur `import-scip`, constante publique au lieu de la réflexion, taille V2 par `encodedSize` ; remesure des ratios (§ A6.3.1).
 - 2026-09-29 — impl-archi, étape 2 : `a68c560e` (V3). Au premier essai, `A2SurfaceCharacterizationTest.retentionEffectIsUnchanged` était rouge : les noms de fichier de `retention.golden` finissent par le sha256 du contenu. Arrêt et signalement ; arbitrage : voie 1 sous preuve stricte (§ A6.11). `ebdc6969` : golden seul, plus la preuve `RetentionFormatEquivalenceTest`. `095c4c60` : banc (taille V3 du vrai encodeur, publication décidée par le magasin). Fixtures V1/V2 : `git add` refusé sous Windows (« Filename too long ») pour les noms d'origine ; ils ont été remplacés par `snapshot.<extension>`, le test reconstitue le nom d'origine, octets inchangés. Tests : `-pl minos-storage-postgresql -am test -Dminos.postgresql.tests.required=true` vert ; tests A2 (12 + 5) et `RetentionFormatEquivalenceTest` verts ; gates verts.
+- 2026-09-29 — impl-archi, étape 3 : `ea5132b6` (docs), verdict « infirmé en pratique » (§ A6.12).
+- 2026-09-29 — impl-archi, étape 4 : `1c54a3a4`, référence du classement écrite par le `minos-application` de `d9ae1005` (identique à la base, `git diff --quiet`) et test vert sur ce commit ; `bba7a91b`, cache du contenu normalisé, avec la même référence verte à l'octet ; `e32bd9f6`, suggestion M3 de verif. `-pl minos-bootstrap -am test` vert, gates verts.
+- 2026-09-29 — impl-archi, étape 5 : ADR 0047 (`Proposed`), sans implémentation (§ A6.14). Constats V-A6-05 à 08 consignés (§ A6.7) ; ADR 0046 complété (retour arrière, asymétrie au ré-import, « snapshot de connaissance », commit volontairement rouge).
 
 ## A6.7 Constats verif-archi
 
@@ -953,6 +958,13 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 | V-A6-03 | `d491519d` | L'écart de 3 à 6 % avec les ratios de verif vient de l'`Origin` recopiée sur chaque entité (`indexRunId` et `providerVersion`) ; le produit écrit un `indexRunId` de 41 caractères et une version, donc un ratio plus haut et un seuil SCIP plus bas que 18,9 Mo. Calculer le plafond sur l'`Origin` réelle. | remarque | **Intégré** : requête d'import du banc calquée sur `import-scip` (`indexRunId`, `providerVersion`) ; remesure au § A6.3.1 (ratio 14,91, seuil 18,0 Mo) ; le refus de l'étape 1 porte sur le snapshot réellement ingéré. |
 | V-A6-04 | `fb363253` | Le banc lisait `MAX_PERSISTED_SNAPSHOT_BYTES` par réflexion, et son recensement n'était vérifié que contre V2 ; après V3, les tailles devront venir du vrai encodeur. | remarque | **Corrigé** : le banc lit `SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES` (public depuis l'étape 1) ; la taille V2 vient de `SnapshotCodecV2.encodedSize` (sans plafond) ; le recensement ne sert plus qu'à la composition et aux projections, les tailles de chaque format seront rapportées par leur vrai encodeur. |
 | — | contrôles | Contrôles `fb363253`/`d491519d` : banc absent de tous les rapports Surefire ; clean verify 1383/0/0/46 ; JaCoCo seulement m24 préexistant ; 23 gates verts, 12 golden identiques, 7 témoins rouges ; helpers 63/31/8 ; aucune donnée volumineuse ; suivi A3/A4 intact (+170/−0). Tas rejoué par verif : vue 1,50–1,52× V2, snapshot relu 1,23–1,25× (ariane, nexus), cohérent avec 1,39–1,40× et 1,15× du suivi ; ×8 reste 5,3 à 5,7 fois trop fort. | information | — |
+| V-A6-05 | `a68c560e` | Pris seul, ce commit est rouge (`retention.golden`) : c'est la conséquence du commit séparé imposé par l'arbitrage. | décision de l'orchestrateur | **Consigné** : pas de réécriture d'historique ; ADR 0046 § Conséquences (« pour un `git bisect`, traiter la paire `a68c560e` / `ebdc6969` comme une seule étape ») ; annoncé en tête de PR. |
+| V-A6-06 | `a68c560e` | Retour arrière mesuré par verif : un ancien binaire refuse proprement la lecture et la compaction (« unsupported active snapshot pointer version: 3 »), ne modifie aucun fichier, et se rétablit en republiant un import (pointeur v2 réécrit). | remarque | **Documenté** dans l'ADR 0046 § Conséquences. |
+| V-A6-07 | `a68c560e` | Magasin fichier : un ré-import du même `snapshotId` laisse le V2 de même préfixe comme historique, qui occupe un emplacement de rétention jusqu'à la compaction ; PostgreSQL conserve le V2. | remarque | **Documenté** dans l'ADR 0046 (asymétrie), non corrigé. |
+| V-A6-08 | `a68c560e` | `FileSymbolSnapshotStore.publish(UUID, String, Collection<Symbol>)` écrit toujours en V1 UTF-16 ; l'ADR doit dire « un nouveau snapshot de connaissance ». | remarque | **Corrigé** dans l'ADR 0046. La méthode n'a aucun appelant de production (vérifié : `ScipSymbolSnapshotImporter` et `ScipProjectSnapshotLifecycle` publient avec occurrences et relations) ; renvoyée au § A6.8. |
+| M3 | `a68c560e` | Suggestion : un aller-retour positif d'une chaîne non ASCII de plus de 8 Mio et d'au plus 8 Mi caractères, pour que la mutation « borne en caractères » soit prise par un test positif. | suggestion | **Fait** : `e32bd9f6` (8 Mi « é », 16 Mio en UTF-8, restitués exactement). |
+| — | contrôles étape 1 | Étape 1 vérifiée (`e23b5ded`, `1acb68e8`) : octets V1/V2 identiques après réécriture ; frontière exacte ; aucun effet de bord au refus ; A/B rejoué avant 3 492/3 211 ms et ≈256 Mio écrits, après 1 777/1 738 ms et 0 octet ; refus pendant l'ingestion écarté à raison. | information | — |
+| — | contrôles étape 2 | Étape 2 vérifiée (`a68c560e`…`5f0c2d53`) : golden masqué identique ; fixtures régénérées 8/8 identiques ; fixtures piégées de verif exactes ; mutations rouges ; anti-bombe OK ; PostgreSQL requis vert ; import de ce dépôt publié à 194 552 030 o ; lecture froide ariane 128–133 ms contre 314–328 ms ; tas identique ; clean verify 1407/0/0/46. | information | — |
 | V-A6-00 | (avant le jalon 1) | Mesures indépendantes de verif (ratio 12,45 / 10,79 / 8,51, UTF-8 ≈ 0,55×, lecture froide d'ariane 452 ms) et huit pièges pour la suite : pointeur actif encodé avec les mêmes `writeString`/`readString` (l'encodage doit dépendre de la version, pointeur compris) ; PostgreSQL décode toujours en V2 sans colonne de version, plafond dupliqué ; ré-import du même SCIP après changement de format (« already exists with different content ») ; `logicalIdHash` et `listSnapshotFiles` à ne pas changer ; poids du cache (8×) qui baisserait sans gain de tas ; surrogates isolés (V2 les conserve, `getBytes(UTF_8)` les remplace par `?`) ; hybride : bonus de phrase sur sous-chaîne brute et égalités de score ; impact : limitations et marque de test posées pendant la traversée. | information | Intégré : recoupement au § A6.3.1 (écarts de 3 à 6 % expliqués par `indexRunId`), poids du cache présenté comme poids estimé et non comme mémoire (§ A6.3.3), pièges reportés dans les recommandations (§ A6.4). |
 
 ## A6.8 À traiter plus tard (hors périmètre)
@@ -966,6 +978,7 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 | impl-archi (jalon 1) | `ImpactAnalysisService` reconstruit la table des symboles et l'index trié des arêtes entrantes à chaque appel (100 % du coût mesuré). | lot perf |
 | impl-archi (jalon 1) | `minos-app` construit dans le `target/` racine : sur un dépôt organisé ainsi, scip-java perd tous les modules sauf le dernier (l'agrégat `target/scip-targetroot` est effacé par le `clean` du module). Vaut pour ce dépôt, et pour tout projet utilisateur de même forme. | provider scip-java |
 | impl-archi (jalon 1) | Découverte de projet (`ProjectDiscoveryService.discover`) : 12,7 s sur ce worktree, 36 s sous `%TEMP%`, dont 99,6 % des échantillons natifs dans `discoverModuleRoots` ; elle fait 96 % de chaque requête d'architecture (§ A6.3.6). Profil du parcours (répertoires `target/`, détecteurs par répertoire, règles d'ignorance) à instruire. | lot perf |
+| verif-archi (V-A6-08) | `FileSymbolSnapshotStore.publish(UUID, String, Collection<Symbol>)` (publication « symboles seuls », V1) n'a aucun appelant de production ; elle écrit encore en UTF-16. À retirer du port ou à justifier. | hygiène stockage |
 | impl-archi (jalon 1) | `minos index` impossible sur un poste où PowerShell 7 est sous `Program Files` sans élévation (bac à sable AppContainer). | A1 / D1 |
 
 ## A6.9 Arbitrages de l'orchestrateur (29 septembre 2026)
@@ -1146,3 +1159,49 @@ Arbitrage : **ne pas faire**. Le constat de l'audit est exact dans le code : `Im
 - **Aucun gain mesurable.** Il n'y aurait donc rien à mettre en balance avec ce risque.
 
 **Levier réel, hors lot** (§ A6.8) : la table des symboles et l'index trié des arêtes entrantes sont reconstruits à chaque appel. Les construire une fois par snapshot, sur le modèle de la vue de requête, supprimerait l'essentiel du coût sans rien changer au parcours, donc sans risque pour le rapport. Ce levier demande sa propre mesure et son propre test d'équivalence.
+
+## A6.13 Étape 4 — normalisation hybride mise en cache
+
+**Réalisation** (`bba7a91b`).
+
+- `CachedCorpus` porte `normalizedContents`, un texte normalisé par document. Il est calculé une seule fois à la construction du corpus, par la même fonction `normalize` que le score appelait à chaque requête.
+- Même durée de vie que le corpus, donc mêmes péremptions : même identité (`snapshotId`, index sémantique), même éviction. Les deux péremptions déjà connues du cache de corpus (même `snapshotId` republié avec un autre contenu, sources modifiées) s'appliquent à l'identique, sans en ajouter.
+- `LexicalQuery.scoreNormalized` évalue le texte déjà normalisé ; `score(content)` délègue à `normalize` puis à `scoreNormalized`.
+- Pas d'index inversé : le bonus de phrase porte sur une sous-chaîne brute, qu'un index par termes perdrait.
+- Le poids estimé du corpus ne compte pas les textes normalisés, par choix documenté dans le Javadoc. Les compter réduirait de moitié la taille de corpus que le cache admet, alors que l'estimation reste au-dessus du tas mesuré avec eux (ci-dessous).
+
+**Équivalence du classement** (`1c54a3a4`, puis vert à l'octet après `bba7a91b`).
+
+- `HybridRankingEquivalenceTest` compare octet pour octet à `hybrid-ranking-d9ae1005.tsv`, produite par le même test avec le `minos-application` de `d9ae1005` (sha256 `a4a77406…45244`, épinglée en LF).
+- Corpus déterministe : 250 fichiers, 1 500 symboles, environ 3 300 documents.
+- Vocabulaire piégé pour la normalisation : casse, accents, ligature `ﬁ`, `İ` dont la minuscule change de longueur, sigma grec, CJK, emoji, chiffres exotiques, soulignés, ponctuation.
+- 30 requêtes, 60 résultats, en mode structuré et en mode sémantique (`local-hash`) : 3 300 lignes, avec la clé stable, les bits IEEE 754 de chaque score et le mode ; 1 489 égalités exactes départagées par `stableKey`.
+
+**Mesures avant/après** : ce dépôt en mémoire (`mem-k1`, 81 095 documents), 4 requêtes, préchauffage 3, 15 itérations ; `minos-application` de `d9ae1005` en tête du classpath pour « avant ». L'effet dépasse de loin l'écart d'une exécution à l'autre, d'où une seule paire.
+
+| Mesure | Avant | Après |
+|---|---:|---:|
+| Requête (médiane, quatre requêtes) | 133–148 ms | **23–37 ms** |
+| Requête (p95) | 164–212 ms | 28–45 ms |
+| Allocation par requête | 63–65 Mo | **2,1–4,6 Mo** |
+| Part de `normalize` (JFR) | 82,9 % | 0 % |
+| Tas retenu par le corpus | 55,2 Mo | 74,4 Mo (+19,2 Mo) |
+| Poids estimé du corpus | 137,6 Mo | 137,6 Mo (inchangé, toujours un majorant) |
+| Construction du corpus (1re recherche) | 506 s | 542 s (normalisation + dispersion des E/S) |
+
+**Portée dans le chemin produit** (dit honnêtement) : le gain est **nul** tant que le cache de vues refuse les snapshots de plus de 64 Mio persistés. Au-delà, chaque requête relit le snapshot, deux fois (§ A6.3.4), et ce rechargement fait 96–97 % du temps. Le gain est aussi sans objet au-delà d'environ 158 000 documents, où le corpus lui-même n'est plus mis en cache. Il porte sur les projets dont la vue est en cache, et sur tout chemin qui garde le snapshot en mémoire. Corrections renvoyées au § A6.8.
+
+## A6.14 Étape 5 — ADR 0047 (`Proposed`)
+
+[ADR 0047](../adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md), appuyé sur les mesures des § A6.3 et § A6.11, sans implémentation.
+
+Constats :
+- le tas d'un snapshot relu (413 Mo pour ce dépôt) est 2,5 fois celui du même snapshot ingéré (163 Mo), parce que le décodage recrée une chaîne par champ ;
+- une table de chaînes réduirait le fichier à environ 0,35 fois V3 ;
+- les gros projets ne sont pas en cache.
+
+Ordre proposé, chaque passage conditionné par une mesure sur le corpus réel :
+1. les corrections bornées du § A6.8 ;
+2. dédoublonnage des chaînes au décodage (pas de nouveau format) ;
+3. table de chaînes sur disque (format V4) si nécessaire ;
+4. snapshot paginé ou mappé seulement si le tas d'un projet cible reste hors budget, en chantier propre, précédé de l'inventaire des 25 classes de production qui consomment `CodeKnowledgeSnapshot`.
