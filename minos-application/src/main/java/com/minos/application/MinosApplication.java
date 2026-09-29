@@ -158,7 +158,7 @@ public final class MinosApplication implements AutoCloseable {
         this.projectInspectionService = new ProjectInspectionService(
                 this.home, projectRegistry, snapshotStore, indexStateStore, discoveryService, this.indexerDescriptors);
         this.projectQueryService = new ProjectQueryService(projectRegistry, snapshotStore);
-        this.architectureQuery = new LocalProjectArchitectureQuery(projectRegistry, snapshotStore, discoveryService);
+        this.architectureQuery = LocalProjectArchitectureQuery.defaults(projectRegistry, snapshotStore, discoveryService);
         this.impactQuery = new LocalProjectImpactQuery(projectRegistry, snapshotStore);
         this.programGraphService = new ProgramGraphService(projectRegistry, snapshotStore, graphProviders);
         this.advancedImpactService = new AdvancedImpactService(this.impactQuery, this.programGraphService);
