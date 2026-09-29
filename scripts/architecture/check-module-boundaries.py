@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Enforce MINOS source ownership, Maven dependency directions, and generated architecture facts."""
+"""Enforce MINOS source ownership, Maven dependency directions, and generated architecture facts.
+
+The governed module list is checked against the root reactor (A7), and every Java package belongs to
+exactly one module (A3 / ADR 0044). Self-test: scripts/architecture/test_check_module_boundaries.py.
+"""
 
 from __future__ import annotations
 
@@ -78,8 +82,79 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     }),
 }
 
+# A3 / ADR 0044 — one package, one module. A Java package belongs to exactly one module: no package is
+# declared by the production sources of two modules, and no test is declared in a package whose production
+# sources live in another module. Either would let package-private visibility cross a jar boundary.
+#
+# Ratchet while the A3 lot is in progress: the splits below are still tolerated. Each entry must match the
+# current state exactly (same module set, same test file); an entry that no longer matches is stale and
+# fails, so every commit that folds a package removes its entries. Both lists end empty, then disappear.
+TOLERATED_SPLIT_PACKAGES: dict[str, frozenset[str]] = {
+    "com.minos.adapter.scip": frozenset({"minos-engine", "minos-provider-scip"}),
+    "com.minos.cli": frozenset({"minos-app", "minos-cli"}),
+    "com.minos.discovery": frozenset({"minos-application", "minos-engine"}),
+    "com.minos.dynamic": frozenset({"minos-application", "minos-domain", "minos-engine"}),
+    "com.minos.git": frozenset({"minos-engine", "minos-integration-git"}),
+    "com.minos.hosted": frozenset({"minos-application", "minos-domain", "minos-engine"}),
+    "com.minos.incremental": frozenset({"minos-application", "minos-engine", "minos-storage-local"}),
+    "com.minos.integration.nexus": frozenset({"minos-app", "minos-nexus"}),
+    "com.minos.orchestration": frozenset({"minos-application", "minos-engine", "minos-storage-local"}),
+    "com.minos.registry": frozenset({"minos-engine", "minos-storage-local"}),
+    "com.minos.runtime": frozenset({"minos-application", "minos-engine", "minos-runtime-local"}),
+    "com.minos.semantic": frozenset({"minos-application", "minos-domain"}),
+    "com.minos.storage": frozenset({"minos-application", "minos-engine", "minos-storage-local"}),
+    "com.minos.store": frozenset({"minos-engine", "minos-storage-local"}),
+}
+TOLERATED_FOREIGN_TESTS: frozenset[str] = frozenset({
+    "minos-bootstrap/src/test/java/com/minos/application/MinosApplicationTest.java",
+    "minos-bootstrap/src/test/java/com/minos/application/ProgramGraphPerformanceQualificationTest.java",
+    "minos-bootstrap/src/test/java/com/minos/application/ProjectIndexStateReconcilerTest.java",
+    "minos-bootstrap/src/test/java/com/minos/application/ProjectInspectionSnapshotConsistencyTest.java",
+    "minos-bootstrap/src/test/java/com/minos/application/ProjectResolverTest.java",
+    "minos-bootstrap/src/test/java/com/minos/application/ProviderPlatformDiagnosticRedactionTest.java",
+    "minos-bootstrap/src/test/java/com/minos/architecture/ArchitectureJavaFixtureMeasurementTest.java",
+    "minos-bootstrap/src/test/java/com/minos/architecture/LocalProjectArchitectureQueryTest.java",
+    "minos-bootstrap/src/test/java/com/minos/dynamic/RuntimeIntelligenceServiceTest.java",
+    "minos-bootstrap/src/test/java/com/minos/impact/LocalProjectImpactQueryTest.java",
+    "minos-bootstrap/src/test/java/com/minos/incremental/FileProjectFingerprintSnapshotStoreSymlinkTest.java",
+    "minos-bootstrap/src/test/java/com/minos/incremental/FileProjectFingerprintSnapshotStoreTest.java",
+    "minos-bootstrap/src/test/java/com/minos/incremental/IncrementalIndexingCoordinatorTest.java",
+    "minos-bootstrap/src/test/java/com/minos/incremental/IncrementalIndexingDiagnosticRedactionTest.java",
+    "minos-bootstrap/src/test/java/com/minos/incremental/ProjectFingerprintSnapshotAlignmentServiceTest.java",
+    "minos-bootstrap/src/test/java/com/minos/incremental/ProjectFingerprintSnapshotRealFixtureTest.java",
+    "minos-bootstrap/src/test/java/com/minos/orchestration/FileAuthoritativeSnapshotRecoveryTest.java",
+    "minos-bootstrap/src/test/java/com/minos/orchestration/ResumeAfterHardKillIntegrationTest.java",
+    "minos-bootstrap/src/test/java/com/minos/orchestration/ResumeCrashFixtureMain.java",
+    "minos-bootstrap/src/test/java/com/minos/program/analysis/FileProgramGraphProviderTest.java",
+    "minos-bootstrap/src/test/java/com/minos/program/analysis/ProgramGraphAnalysisTest.java",
+    "minos-bootstrap/src/test/java/com/minos/program/analysis/ProgramGraphServiceConcurrencyTest.java",
+    "minos-bootstrap/src/test/java/com/minos/semantic/M23SemanticProviderConfigurationTest.java",
+    "minos-bootstrap/src/test/java/com/minos/semantic/SemanticHybridIntelligenceTest.java",
+    "minos-bootstrap/src/test/java/com/minos/semantic/SemanticSyncConsistencyTest.java",
+    "minos-bootstrap/src/test/java/com/minos/storage/postgresql/PostgresAuthoritativeSnapshotConsistencyTest.java",
+    "minos-bootstrap/src/test/java/com/minos/workspace/WorkspaceIntelligenceServiceTest.java",
+    "minos-app/src/test/java/com/minos/adapter/scip/M17ProviderPlatformTest.java",
+    "minos-app/src/test/java/com/minos/adapter/scip/M24PolyglotProviderTest.java",
+    "minos-app/src/test/java/com/minos/adapter/scip/ScipIndexerCatalogTest.java",
+    "minos-app/src/test/java/com/minos/adapter/scip/ScipPersistentSnapshotExperiment.java",
+    "minos-app/src/test/java/com/minos/adapter/scip/ScipRelatedTestSnapshotIntegrationTest.java",
+    "minos-app/src/test/java/com/minos/adapter/scip/ScipSymbolSnapshotImporterTest.java",
+    "minos-app/src/test/java/com/minos/application/M17ProviderSurfaceIntegrationTest.java",
+    "minos-app/src/test/java/com/minos/application/ProviderCatalogPortTest.java",
+    "minos-app/src/test/java/com/minos/application/SharedMinosApplicationIntegrationTest.java",
+    "minos-app/src/test/java/com/minos/architecture/ArchitectureRealFixtureMeasurementTest.java",
+    "minos-app/src/test/java/com/minos/context/CodeSearchBenchmark.java",
+    "minos-app/src/test/java/com/minos/impact/ImpactAnalysisRealFixtureTest.java",
+    "minos-app/src/test/java/com/minos/incremental/IncrementalIndexingRealFixtureTest.java",
+    "minos-app/src/test/java/com/minos/mcp/MinosMcpServerIntegrationTest.java",
+    "minos-app/src/test/java/com/minos/query/DependencyDerivationServiceTest.java",
+    "minos-app/src/test/java/com/minos/query/RelatedTestDerivationServiceTest.java",
+    "minos-app/src/test/java/com/minos/query/RelationshipQueryServiceTest.java",
+    "minos-app/src/test/java/com/minos/query/SymbolQueryServiceTest.java",
+})
+
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
-PACKAGE = re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
+PACKAGE =re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
 ARTIFACT_TO_MODULE = {
     "minos-domain": "minos-domain",
     "minos-engine": "minos-engine",
@@ -376,6 +451,105 @@ def check_java_layout() -> tuple[int, dict[str, int]]:
     return total, counts
 
 
+def reactor_modules(root: Path = ROOT) -> list[str]:
+    """Modules of the root reactor: <modules> of pom.xml, including those a <profile> would add."""
+    pom = root / "pom.xml"
+    if not pom.is_file():
+        fail("root pom.xml is missing: the module list cannot be checked against the reactor")
+    project = ET.parse(pom).getroot()
+    declared = project.findall("m:modules/m:module", NS) + project.findall("m:profiles/m:profile/m:modules/m:module", NS)
+    modules = [(element.text or "").strip().rstrip("/") for element in declared]
+    if not modules or any(not module for module in modules):
+        fail("root pom.xml declares no usable <modules>: the module list cannot be checked against the reactor")
+    return modules
+
+
+def check_reactor_modules(root: Path = ROOT, modules: tuple[str, ...] = MODULES) -> None:
+    """A7 — the governed module list must be exactly the reactor.
+
+    A module added to the reactor and forgotten here would escape every rule of this script, POM and
+    sources alike; a module listed here but gone from the reactor would be checked against stale files.
+    """
+    reactor = reactor_modules(root)
+    problems: list[str] = []
+    duplicated = sorted({module for module in modules if modules.count(module) > 1})
+    if duplicated:
+        problems.append(f"MODULES lists {', '.join(duplicated)} more than once")
+    missing = sorted(set(reactor) - set(modules))
+    if missing:
+        problems.append(
+            f"reactor module(s) {', '.join(missing)} declared in the root pom.xml <modules> are absent from MODULES "
+            "(an ungoverned module escapes every boundary rule)")
+    extra = sorted(set(modules) - set(reactor))
+    if extra:
+        problems.append(f"MODULES lists {', '.join(extra)}, absent from the root pom.xml <modules>")
+    if problems:
+        fail("A7 module list and Maven reactor diverge: " + "; ".join(problems))
+
+
+def declared_package(source: Path) -> str:
+    match = PACKAGE.search(COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8")))
+    return match.group(1) if match else ""
+
+
+def check_package_ownership(
+        root: Path = ROOT,
+        modules: tuple[str, ...] = MODULES,
+        tolerated_split: dict[str, frozenset[str]] = TOLERATED_SPLIT_PACKAGES,
+        tolerated_tests: frozenset[str] = TOLERATED_FOREIGN_TESTS,
+) -> tuple[int, int, int]:
+    """A3 / ADR 0044 — one package, one module (see TOLERATED_SPLIT_PACKAGES for the ratchet).
+
+    Returns (packages, tolerated split packages, tolerated foreign tests) for the success line.
+    """
+    owners: dict[str, set[str]] = {}
+    for module in modules:
+        source_root = root / module / "src" / "main" / "java"
+        if source_root.is_dir():
+            for source in sorted(source_root.rglob("*.java")):
+                owners.setdefault(declared_package(source), set()).add(module)
+
+    violations: list[str] = []
+    split = {package: frozenset(owned) for package, owned in owners.items() if len(owned) > 1}
+    for package, owned in sorted(split.items()):
+        tolerated = tolerated_split.get(package)
+        if tolerated == owned:
+            continue
+        violation = (f"package {package} is declared by the production sources of {len(owned)} modules: "
+                     f"{', '.join(sorted(owned))}")
+        if tolerated is not None:
+            violation += f" (the ratchet tolerates only {', '.join(sorted(tolerated))}; update the ratchet)"
+        violations.append(violation)
+    for package in sorted(set(tolerated_split) - set(split)):
+        violations.append(f"stale ratchet entry: package {package} is no longer split, "
+                          "remove it from TOLERATED_SPLIT_PACKAGES")
+
+    foreign: set[str] = set()
+    for module in modules:
+        source_root = root / module / "src" / "test" / "java"
+        if not source_root.is_dir():
+            continue
+        for source in sorted(source_root.rglob("*.java")):
+            package = declared_package(source)
+            package_owners = owners.get(package, set())
+            if not package_owners or module in package_owners:
+                continue
+            relative = source.relative_to(root).as_posix()
+            foreign.add(relative)
+            if relative not in tolerated_tests:
+                violations.append(
+                    f"test {relative} of {module} is declared in package {package}, whose production sources "
+                    f"belong to {', '.join(sorted(package_owners))}")
+    for relative in sorted(set(tolerated_tests) - foreign):
+        violations.append(f"stale ratchet entry: test {relative} is no longer declared in a foreign package, "
+                          "remove it from TOLERATED_FOREIGN_TESTS")
+
+    if violations:
+        fail("A3 one-package-one-module violated (package-private visibility would cross a jar boundary): "
+             + "; ".join(violations))
+    return len(owners), len(split), len(foreign)
+
+
 def mermaid_id(module: str) -> str:
     return module.replace("-", "_")
 
@@ -446,6 +620,7 @@ def main() -> int:
             fail(f"unknown arguments: {', '.join(unknown)}")
         write_doc = "--write-doc" in arguments
 
+        check_reactor_modules()
         roots = {module: parse_pom(module) for module in MODULES}
         for module, root in roots.items():
             check_pom_layout(module, root)
@@ -455,13 +630,19 @@ def main() -> int:
         check_dependency_policy(scoped)
         total, counts = check_java_layout()
         check_source_boundaries()
+        packages, tolerated_split, tolerated_tests = check_package_ownership()
         check_or_write_dependency_document(graph, write_doc)
         for module in MODULES:
             dependencies = ",".join(sorted(graph[module])) or "-"
             print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")
         print(
+            f"A3 package ownership: packages={packages}, tolerated split packages={tolerated_split}, "
+            f"tolerated foreign-package tests={tolerated_tests}"
+        )
+        print(
             f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "
-            f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042)"
+            f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042, "
+            f"packagePolicy=A3-ADR-0044, reactor=root-pom-modules)"
         )
         return 0
     except Exception as exception:
