@@ -488,7 +488,7 @@ Points d'entrée dont le FQN ne change pas : `com.minos.cli.MinosLauncher` (`doc
 # Lot 2 — A4 : surfaces d'objet (classes-dieux et constructeurs télescopiques)
 
 > Branche : `archi/a4-surfaces`, créée depuis la tête d'A3 (`324d85bb`), worktree `minos-wt/a4-surfaces` ; elle sera rebasée sur `develop` après la fusion d'A3 (PR draft #302).
-> Constat : **A4** (`AUDIT-2026-09.md` § 3). Décision d'architecture : [ADR 0045](../adr/0045-constructeur-unique-et-point-d-entree-nomme.md) (Proposed, en attente d'arbitrage).
+> Constat : **A4** (`AUDIT-2026-09.md` § 3). Décision d'architecture : [ADR 0045](../adr/0045-constructeur-unique-et-point-d-entree-nomme.md) (Accepted).
 > Agents : `impl-archi` (implémentation), `verif-archi` (inspection de chaque commit). Aucun push, aucune PR ouverte par les agents.
 > Règles du lot : aucun changement de comportement (les deux tests de caractérisation A2 verts, les 12 golden de `minos-app/src/test/resources/characterization/` identiques octet pour octet, jamais régénérés) ; un constructeur unique et un point d'entrée nommé à la place des constructeurs télescopiques ; aucun alias déprécié ; toute rupture d'une signature publique de `minos-api` ou de `MinosApplication` listée, justifiée et documentée (`docs/user/java-api.md` § Ruptures, en-tête de PR) ; cache de `LocalProjectArchitectureQuery` seulement si son invalidation est prouvée.
 
@@ -496,9 +496,9 @@ Points d'entrée dont le FQN ne change pas : `com.minos.cli.MinosLauncher` (`doc
 
 | Jalon | Contenu | Statut | Commits |
 |---|---|---|---|
-| 1 | Inventaire (accesseurs de `MinosApplication`, constructeurs de `LocalProjectArchitectureQuery` et `MinosCli`, balayage ≥ 4 constructeurs), conception cible, analyse du cache, références littérales, ADR 0045 en brouillon | livré, **en attente d'arbitrage** (§ A4.4) | ce commit |
-| 2 | Refonte (ordre proposé) : garde-fous par réflexion (rouges avant), `LocalProjectArchitectureQuery`, `MinosCli`, `MinosApplication` selon l'option arbitrée | à faire | — |
-| 3 | Clôture : `clean verify` complet, ADR accepté, docs, bilan verif-archi | à faire | — |
+| 1 | Inventaire (accesseurs de `MinosApplication`, constructeurs de `LocalProjectArchitectureQuery` et `MinosCli`, balayage ≥ 4 constructeurs), conception cible, analyse du cache, références littérales, ADR 0045 en brouillon | livré, accepté par verif-archi (V-A4-01, V-A4-02 : remarques) ; arbitré (§ A4.5) | `970273b2` |
+| 2 | Garde-fous par réflexion (rouges sur la base, § A4.6), `LocalProjectArchitectureQuery.defaults` (b), `MinosCli.builder` (c), identités de câblage puis `MinosApplication` regroupée, option B (d), docs et ADR accepté (e) | livré | `08ea7a76`, `b89f20c5`, `2d0a06e4`, `98df6d4c`, commit de docs de l'étape e |
+| **Bilan** | Constructeurs : `LocalProjectArchitectureQuery` 9 → 1, `MinosCli` 10 → 1 ; `MinosApplication` : constructeur 24 → 9 paramètres, surface publique identique (35 accesseurs, `javap -public` inchangé) ; pas de cache (non prouvable) ; golden intacts | lot terminé, en attente de verif-archi | — |
 
 ## A4.2 Inventaire daté (base `324d85bb`, 29 septembre 2026)
 
@@ -506,7 +506,7 @@ Méthode : les appelants viennent du **bytecode** (pool de constantes de chaque 
 
 ### A4.2.1 `MinosApplication` (456 lignes)
 
-Membres publics : 12 constantes, `open(Path)`, `builder(Path)`, `close()`, **36 méthodes d'instance** (35 accesseurs et la fabrique `indexerRegistry(String)`), et le `Builder` (22 mutateurs et `build()`). Le constructeur (24 paramètres) est package-private, appelé par le seul `MinosApplicationAssembler`. Colonne « domaine » : regroupement proposé (§ A4.3.3).
+Membres publics : 12 constantes, `open(Path)`, `builder(Path)`, `close()`, **36 méthodes d'instance hors `close()`** (35 accesseurs, dont 32 méthodes de services, et la fabrique `indexerRegistry(String)`), et le `Builder` (22 mutateurs et `build()`). Le constructeur (24 paramètres) est package-private, appelé par le seul `MinosApplicationAssembler`. Colonne « domaine » : regroupement proposé (§ A4.3.3).
 
 | Accesseur | Type retourné | Domaine | Appelants de production (module : classes) | Appelants de test (module : nb de classes) |
 |---|---|---|---|---|
@@ -549,7 +549,7 @@ Membres publics : 12 constantes, `open(Path)`, `builder(Path)`, `close()`, **36 
 
 Trois accesseurs n'ont aucun appelant de production (`storageBackendId()`, `semanticVectorStore()`, `runtimeObservationStore()`) ; ils sont nommés par des tests et, pour le dernier, par un script (§ A4.2.5). Aucun n'est retiré par ce lot (règle 5 : même surface, mêmes instances).
 
-Les 32 accesseurs des domaines stockage, indexation, requêtes et sémantique sont appelés par **13 classes de production** (api 4, application 3, cli 4, mcp 1, nexus 1) et **23 classes de test** (api 4, app 4 dont les **deux caractérisations A2**, bootstrap 5, cli 6, mcp 3, nexus 1).
+Les 32 méthodes de services des domaines stockage, indexation, requêtes et sémantique (`indexerRegistry(String)`, fabrique, comprise) sont appelés par **13 classes de production** (api 4, application 3, cli 4, mcp 1, nexus 1) et **23 classes de test** (api 4, app 4 dont les **deux caractérisations A2**, bootstrap 5, cli 6, mcp 3, nexus 1).
 
 ### A4.2.2 `LocalProjectArchitectureQuery` (145 lignes) — 9 constructeurs
 
@@ -618,7 +618,7 @@ Scripts qui affirment des chaînes des fichiers touchés, à préserver à asser
 | `scripts/quality/check-remote-distributed-consistency.py` | `MinosCli.java` | `RemoteIndexCommand.NAME`, `remoteIndexCommand.run` | aucune (le répartiteur `run` ne change pas) |
 | `scripts/docs/product-facts.py` (CI) | `MinosCli.java` | bloc `private static final String USAGE = """…""".stripTrailing();` (liste des commandes) | aucune |
 | `scripts/m15/run-final.ps1` | `MinosApplication.java` ; `MinosMcpTools.java` | `public final class MinosApplication` ; absence de `MinosCli` | aucune |
-| `scripts/history/m15/run-s5.ps1` (gelé) | `LocalProjectArchitectureQuery.java` | `ProjectResolver`, `projectResolver.resolve(` ; absence de `UUID.fromString(` et de deux anciens messages | conservées : le champ `projectResolver` reste |
+| `scripts/history/m15/run-s5.ps1` (archivé, non exécuté ; sans contrainte) | `LocalProjectArchitectureQuery.java` | `ProjectResolver`, `projectResolver.resolve(` ; absence de `UUID.fromString(` et de deux anciens messages | sans contrainte (le champ `projectResolver` reste d'ailleurs) |
 
 `scripts/quality/check-jacoco.py` n'a aucune portée sur `com/minos/architecture`, `com/minos/cli/MinosCli` ni `com/minos/application/MinosApplication`.
 
@@ -711,7 +711,9 @@ Chaque appel refait : (1) la résolution du projet dans le registre ; (2) le cha
 
 Conclusion : **pas de cache** dans A4.
 
-## A4.4 Points à arbitrer
+**Correction de la formulation de l'audit.** « `LocalProjectArchitectureQuery` recalcule la découverte, le snapshot et la topologie à chaque appel » est inexact pour le snapshot : `FileSymbolSnapshotStore` (`storage.local.store`) et `PostgresCodeKnowledgeSnapshotStore` (`storage.postgresql`) gardent la vue du snapshot actif en cache, sous la clé identifiant + `sha256` du pointeur actif, relu à chaque appel. Seuls la découverte (parcours de l'arborescence) et les analyses (topologie, dépendances, concentration, centralité, technologies) sont recalculés.
+
+## A4.4 Points soumis à arbitrage (jalon 1)
 
 1. **`MinosApplication` : option A (façades, 32 ruptures) ou option B (regroupement interne, aucune rupture).** Recommandation : **B** (§ A4.3.3).
 2. **Cache de `LocalProjectArchitectureQuery`** : recommandation **non** (§ A4.3.4) ; constat de performance consigné en § A4.8.
@@ -720,17 +722,40 @@ Conclusion : **pas de cache** dans A4.
 5. **`LazyAutonomousIndexOperations`** (renvoyé à « A4 » par la liste du lot A3) : code mort de `minos-cli`, sans appelant ni test, sans lien avec les constructeurs. Recommandation : hors lot, renvoyé à Q10 (l'audit l'y cite déjà).
 6. **Nom de la fabrique** `LocalProjectArchitectureQuery.defaults(...)` (convention `ProviderPlatformService.defaults`).
 
-## A4.5 Décisions
+## A4.5 Décisions (arbitrage de l'orchestrateur, 29 septembre 2026)
 
-(à remplir après arbitrage)
+| # | Point | Décision | Mise en œuvre |
+|---|---|---|---|
+| 1 | `MinosApplication` | **option B**, regroupement interne sans rupture ; porteurs package-private immuables qui ne créent aucune instance ; constructeur ramené à une dizaine de paramètres ; invariants d'identité couverts par un test ; option A consignée comme écartée | `98df6d4c` ; `MinosApplicationWiringTest` (`2d0a06e4`) ; ADR 0045 § 2 |
+| 2 | Cache | **non** ; constat de performance renvoyé à A6 ; formulation de l'audit corrigée | § A4.3.4, § A4.8, ADR 0045 § 3 |
+| 3 | `MinosCli.builder` | mutateurs publics = exactement ce qu'ouvraient les constructeurs publics (`builder`, `projectOperations`, `architectureQuery`, `impactQuery`, `build`) ; les autres package-private | `b89f20c5` ; `MinosCliSurfaceTest` |
+| 4 | Constructeurs publics retirés | paragraphe dans `java-api.md` § Ruptures et ligne en tête de PR | commit de docs de l'étape e |
+| 5 | `LazyAutonomousIndexOperations` | hors lot, renvoi Q10 | § A4.8 |
+| 6 | Nom de la fabrique | `defaults(...)` | `08ea7a76` |
+
+Ligne pour l'en-tête de PR : « Ruptures (A4, ADR 0045) : 5 constructeurs publics retirés — `LocalProjectArchitectureQuery` ×3 → `LocalProjectArchitectureQuery.defaults(...)`, `MinosCli` ×2 → `MinosCli.builder(...)...build()` ; aucune signature de `com.minos.api` ni de `MinosApplication` ne change (voir `docs/user/java-api.md` § Ruptures). »
 
 ## A4.6 Journal
 
 - 2026-09-29 — impl-archi, jalon 1 : worktree `a4-surfaces` sur `324d85bb`, compilation complète (`test-compile`, 14 modules) verte. Inventaire tiré du bytecode (§ A4.2), conception (§ A4.3), analyse du cache (non prouvable), six points soumis (§ A4.4). ADR 0045 en `Proposed`. Aucun code touché.
 
+- 2026-09-29 — impl-archi : `970273b2` (docs) — ce suivi et l'ADR 0045 (Proposed). Gates docs verts.
+- 2026-09-29 — impl-archi, jalon 2 étape a (garde-fous) : `LocalProjectArchitectureQuerySurfaceTest` (minos-application) et `MinosCliSurfaceTest` (minos-cli) écrits d'abord et exécutés sur la base `324d85bb` : **6 tests sur 6 rouges** (LPAQ : `expected: <1> but was: <9>`, `static factories: []`, `NoSuchMethodException` sur `defaults` ; MinosCli : `expected: <1> but was: <10>`, deux `ClassNotFoundException: com.minos.cli.MinosCli$Builder`). **Écart** : ils ne sont pas commités seuls, un commit rouge enfreignant « chaque commit garde les gates verts » ; chacun entre dans le commit de la refonte qu'il garde (b, c), la preuve rouge est ce journal (journal Maven conservé hors dépôt).
+- 2026-09-29 — impl-archi, étape b (`08ea7a76`) : `LocalProjectArchitectureQuery` — constructeur privé `(ProjectResolver, CodeKnowledgeSnapshotStore, ProjectDiscoveryService)` et `defaults(ProjectRegistry, CodeKnowledgeSnapshotStore, ProjectDiscoveryService)` ; 8 constructeurs supprimés ; analyseurs sans état en champs initialisés en ligne. Valeurs par défaut vérifiées argument par argument : `MinosApplication` passe sa propre découverte ; `LocalProjectArchitectureQueryTest` passe `new ProjectDiscoveryService()` (ce qu'injectait l'ancien constructeur à 2 arguments) ; `new ProjectResolver(registry)` et les analyseurs neufs comme avant ; messages `registry`, `snapshotStore`, `discoveryService` inchangés (testés). Garde-fou vert ; tests d'architecture, `MinosApplicationTest`, A2 (17) verts.
+- 2026-09-29 — impl-archi, étape c (`b89f20c5`) : `MinosCli.builder(ProjectSymbolQuery)`, `private MinosCli(Builder)` (corps du constructeur canonique inchangé), `public static final class Builder` (constructeur privé). 10 constructeurs supprimés ; 5 appelants migrés dans le commit. `MinosCliRunner.run` : `autonomousIndex` passé deux fois (`autonomousOperations` et `resumeStatus`), `hostedControlPlaneService().ifPresent(...)` au lieu de `orElse(null)`, ordre d'évaluation des collaborateurs inchangé ; `statelessHelpCli` : `home(Path.of("."))` conservé. `symbolQuery` nul : même `NullPointerException("symbolQuery")`, levée par `builder(null)`. `MinosCliBuilderTest` : les 15 commandes facultatives « not configured » sans collaborateur (même message, code 1), `doctor` exige opérations et `home`, `git-activity` exige opérations et Git, rejet de `null` par chaque mutateur. 128 tests de minos-cli, A2 et `ScipRelatedTestSnapshotIntegrationTest` verts ; `check-remote-distributed-consistency`, `product-facts --check`, `check-mnd`, `check-post-mne` verts.
+- 2026-09-29 — impl-archi, étape d, test (`2d0a06e4`) : `MinosApplicationWiringTest` (minos-bootstrap) fige avant la refonte les identités de câblage : `AdvancedImpactService` reçoit `impactQuery()` et `programGraphService()`, `SecurityAnalysisService` reçoit `programGraphService()`, `SemanticIndexService` et `HybridSearchService` partagent le même `ProjectResolver`, chaîne sémantique et magasins exposés. Ces collaborateurs n'ont pas d'accesseur : lecture des champs privés par réflexion dans le test (classpath, pas de JPMS), aucune visibilité de production élargie. Vert sur la tête d'alors.
+- 2026-09-29 — impl-archi, étape d (`98df6d4c`) : `MinosApplication` option B — records package-private `Stores` (6 magasins + rétention) et `Indexing` (10 collaborateurs), records privés `Queries` (9 services) et `Semantic` (4) ; constructeur 24 → 9 paramètres ; `storageBackend.id()` toujours consulté avant la validation des magasins, `requireNonNull` dans l'ordre et avec les messages d'avant, copie défensive des descripteurs toujours faite par le constructeur (champ dédié), services dérivés créés dans le même ordre. `javap -public` identique à `324d85bb` à l'ordre près (51 membres) ; `Builder` intact. Deux mutants (résolveur distinct pour la recherche hybride ; requête d'impact distincte pour l'analyse avancée) rendent `MinosApplicationWiringTest` rouge (2 échecs), puis retirés. `check-runtime-dynamic`, `check-hosted-control-plane`, `check-semantic-retrieval`, `check-p0-p2`, `check-module-boundaries` verts.
+- 2026-09-29 — impl-archi, étape e (docs) : ADR 0045 Accepted ; `java-api.md` § Ruptures (5 constructeurs publics et leurs remplaçants) ; ce suivi (décisions, V-A4-01, V-A4-02). `docs/developer/public-surfaces.md` ne décrit aucun des constructeurs retirés et liste des accesseurs de `MinosApplication` inchangés : pas de mise à jour.
+
 ## A4.7 Constats verif-archi
 
-(aucun à ce stade)
+« 970273b2 (docs : inventaire, conception, ADR 0045 Proposed) — inspecté par verif-archi. Ajout pur après la L483 (partie A3 intacte), index ADR au format, aucun numéro de jalon dans un nom de fichier. 23 gates verts, golden identiques, comptes/helpers/éclatés inchangés, 7 témoins rouges. Inventaire recoupé indépendamment par le bytecode : constructeurs appelés (LPAQ n° 1-2 ; MinosCli n° 1, 4, 9, 10), 6 + 6 morts, 36 lignes d'accesseurs et totaux 13 classes main / 23 classes test identiques. »
+
+| # | Commit | Constat | Sévérité | Résolution |
+|---|---|---|---|---|
+| V-A4-01 | `970273b2` | L'ADR 0045 (contexte et conséquences) écrit « 36 méthodes d'instance publiques » ; `javap` en compte 37 (35 accesseurs, `indexerRegistry(String)`, `close()`). | remarque | **résolu** (étape e) : « 36 méthodes d'instance publiques hors `close()` » et « 32 méthodes de services » (`indexerRegistry` est une fabrique), dans l'ADR et au § A4.2.1. |
+| V-A4-02 | `970273b2` | § A4.2.5 classe `scripts/history/m15/run-s5.ps1` comme « gelé » ; il est archivé (ADR 0043), non exécuté, et lit déjà un fichier supprimé par A3. | remarque | **résolu** (étape e) : « archivé, non exécuté ; sans contrainte ». |
+| — | (à venir) | Points annoncés par verif-archi pour le jalon 2 : `MinosCli.Builder` public (sinon ses mutateurs publics sont inatteignables) ; `ProjectResolver` partagé observé sans élargir de visibilité. | — | `MinosCli.Builder` est `public static final` (vérifié par `MinosCliSurfaceTest`) ; le résolveur partagé est lu dans les champs privés `projects` de `SemanticIndexService` et `HybridSearchService` par réflexion de test (`MinosApplicationWiringTest`), aucune visibilité de production changée. |
 
 ## A4.8 À traiter plus tard (hors périmètre)
 
@@ -740,4 +765,5 @@ Conclusion : **pas de cache** dans A4.
 | impl-archi (jalon 1) | Performance de `LocalProjectArchitectureQuery` : chaque appel reparcourt l'arborescence du projet (découverte) et recalcule topologie et dépendances. Un cache n'est pas prouvable sur la découverte (arborescence vivante sans génération) ; seule une mémoïsation des analyses, clé (descripteur du snapshot, `ProjectDiscovery`), l'est. À décider après mesure (part du parcours contre part des analyses sur un gros dépôt). | A6 (mémoire et scalabilité) |
 | impl-archi (jalon 1) | Couplage réel à `MinosApplication` : les surfaces (`Local*Api`, `MinosApplicationMcpBackend`, `LocalAutonomousIndexOperations`, `NexusSemanticSignalService`…) reçoivent l'application entière pour n'en utiliser que quelques services. Les faire dépendre de ports étroits touche les constructeurs publics de `minos-api`. | A4 (suite), rupture documentée |
 | impl-archi (jalon 1) | `docs/developer/architecture.md` : le diagramme relie `MinosCli` à `LocalProjectArchitectureQuery`, `LocalProjectSymbolQuery` et `LocalProjectImpactQuery` ; `MinosCli` ne connaît que les ports. | docs |
-| lot A3 (SPRINT-2-SUIVI V19) | `minos-cli/LazyAutonomousIndexOperations` n'est câblé nulle part en production (point 5 de § A4.4). | Q10 |
+| lot A3 (SPRINT-2-SUIVI V19) | `minos-cli/LazyAutonomousIndexOperations` n'est câblé nulle part en production (point 5 de § A4.4, décision 5 de § A4.5). | Q10 |
+| impl-archi (jalon 2) | `MinosApplication.java` mélange Javadoc anglaise (classe, `open`, `Builder`, porteurs ajoutés par A4) et française (`providerCatalog`, `scipArtifactImporter`, `compositionRoot`, champ `composer`), antérieur à A4 ; A4 n'ajoute que de l'anglais, langue majoritaire du fichier. | hygiène docs |
