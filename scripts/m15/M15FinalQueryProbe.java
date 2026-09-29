@@ -1,4 +1,4 @@
-import com.minos.cli.LocalProjectSymbolQuery;
+import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.storage.local.registry.LocalProjectRegistry;

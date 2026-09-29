@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;

@@ -1,6 +1,6 @@
 package com.minos.context;
 
-import com.minos.cli.LocalProjectSymbolQuery;
+import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;

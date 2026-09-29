@@ -1,6 +1,6 @@
 package com.minos.adapter.scip;
 
-import com.minos.cli.LocalProjectSymbolQuery;
+import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;

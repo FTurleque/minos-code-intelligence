@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectOperations;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

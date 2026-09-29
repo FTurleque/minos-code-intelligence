@@ -1,6 +1,6 @@
 package com.minos.adapter.scip;
 
-import com.minos.cli.LocalProjectSymbolQuery;
+import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.cli.MinosCli;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.orchestration.ScipSymbolSnapshotReport;

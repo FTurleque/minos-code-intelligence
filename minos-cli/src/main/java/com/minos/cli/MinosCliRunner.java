@@ -1,5 +1,9 @@
 package com.minos.cli;
 
+import com.minos.application.LocalProjectOperations;
+import com.minos.application.LocalProjectSymbolQuery;
+import com.minos.application.ProjectOperations;
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.application.MinosApplication;
 import com.minos.application.MinosHome;
 import com.minos.application.ProviderPlatformService;

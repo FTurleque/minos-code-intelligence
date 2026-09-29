@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectOperations;
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.application.dynamic.RuntimeIntelligenceService;
