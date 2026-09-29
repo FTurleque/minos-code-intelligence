@@ -10,7 +10,7 @@
 
 | Jalon | Contenu | Statut | Commits |
 |---|---|---|---|
-| 1 | Inventaire, table de correspondance prévue, ADR 0044, contrôle « aucun package éclaté » en cliquet, A7, auto-test, branchement CI | en cours | voir § 6 |
+| 1 | Inventaire, table de correspondance prévue, ADR 0044, contrôle « aucun package éclaté » en cliquet, A7, auto-test, branchement CI | livré, en attente de verif-archi | `073f4a43`, `26e63775` |
 | 2 et suivants | Déplacements et renommages package par package, retrait des entrées tolérées, relogement des tests, suppression des alias CLI | à venir | — |
 
 ## 2. Inventaire daté (base `10486cb7`, 29 septembre 2026)
@@ -307,6 +307,8 @@ Points d'entrée dont le FQN ne change pas : `com.minos.cli.MinosLauncher` (`doc
 ## 6. Journal
 
 - 2026-09-29 — impl-archi, jalon 1 : worktree `a3-packages` sur `10486cb7`, gates de base verts (`check-module-boundaries.py` SUCCESS 14 modules / 498 sources, `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py`). Inventaire recalculé (§ 2), identique à celui de l'orchestrateur (14 packages, 45 tests). Accès package-private relevés dans le bytecode (§ 2.3). Décisions vérifiées (§ 3.1), cinq points soumis (§ 3.2).
+- 2026-09-29 — impl-archi : `073f4a43` (docs) — ce suivi et l'ADR 0044, ajouté à l'index des ADR. Gates docs verts.
+- 2026-09-29 — impl-archi : `26e63775` (build) — `check-module-boundaries.py` : règle A3 « un package, un module » (production éclatée et test en package étranger) en cliquet (`TOLERATED_SPLIT_PACKAGES` 14, `TOLERATED_FOREIGN_TESTS` 45, entrée périmée ou élargie = échec) et règle A7 (`MODULES` confronté aux `<modules>` du POM racine, profils compris). Aucune règle existante assouplie ; ligne de succès : `packagePolicy=A3-ADR-0044, reactor=root-pom-modules` ajoutés. Auto-test `scripts/architecture/test_check_module_boundaries.py` (13 cas, vert) branché dans le job `invariants` de `pr-ci.yml` après le script ; quatre mutations du script (règle des tests neutralisée, règle de production neutralisée, A7 neutralisé, détection des entrées périmées neutralisée) toutes rouges. **Preuve rouge** sur l'arbre de `10486cb7` avec cliquet vide : `M21 MODULE BOUNDARY CONSISTENCY FAILED`, 59 violations (14 packages éclatés + 45 tests en package étranger), sortie conservée ; A7 rejoué sur l'arbre réel : `MODULES` privé de `minos-bootstrap` → rouge, `MODULES` augmenté de `minos-intellij` (Gradle, hors reactor) → rouge. Reproduction : charger le script par `importlib`, remplacer les deux listes de tolérance par des listes vides dans les valeurs par défaut de `check_package_ownership`, puis appeler `main()`. Verts sur la tête : `check-module-boundaries.py` (14 modules, 498 sources, 34 packages), `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py` (95 scripts), `check-workflow-pins.py`, les sept `scripts/remediation/check-*.py` du job `invariants`.
 
 ## 7. Constats verif-archi
 
