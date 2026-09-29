@@ -91,49 +91,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
 # fails, so every commit that folds a package removes its entries. Both lists end empty, then disappear.
 TOLERATED_SPLIT_PACKAGES: dict[str, frozenset[str]] = {
 }
-TOLERATED_FOREIGN_TESTS: frozenset[str] = frozenset({
-    "minos-bootstrap/src/test/java/com/minos/application/MinosApplicationTest.java",
-    "minos-bootstrap/src/test/java/com/minos/application/ProgramGraphPerformanceQualificationTest.java",
-    "minos-bootstrap/src/test/java/com/minos/application/ProjectIndexStateReconcilerTest.java",
-    "minos-bootstrap/src/test/java/com/minos/application/ProjectInspectionSnapshotConsistencyTest.java",
-    "minos-bootstrap/src/test/java/com/minos/application/ProjectResolverTest.java",
-    "minos-bootstrap/src/test/java/com/minos/application/ProviderPlatformDiagnosticRedactionTest.java",
-    "minos-bootstrap/src/test/java/com/minos/architecture/ArchitectureJavaFixtureMeasurementTest.java",
-    "minos-bootstrap/src/test/java/com/minos/architecture/LocalProjectArchitectureQueryTest.java",
-    "minos-bootstrap/src/test/java/com/minos/impact/LocalProjectImpactQueryTest.java",
-    "minos-bootstrap/src/test/java/com/minos/incremental/IncrementalIndexingCoordinatorTest.java",
-    "minos-bootstrap/src/test/java/com/minos/incremental/IncrementalIndexingDiagnosticRedactionTest.java",
-    "minos-bootstrap/src/test/java/com/minos/incremental/ProjectFingerprintSnapshotAlignmentServiceTest.java",
-    "minos-bootstrap/src/test/java/com/minos/incremental/ProjectFingerprintSnapshotRealFixtureTest.java",
-    "minos-bootstrap/src/test/java/com/minos/orchestration/FileAuthoritativeSnapshotRecoveryTest.java",
-    "minos-bootstrap/src/test/java/com/minos/orchestration/ResumeAfterHardKillIntegrationTest.java",
-    "minos-bootstrap/src/test/java/com/minos/orchestration/ResumeCrashFixtureMain.java",
-    "minos-bootstrap/src/test/java/com/minos/program/analysis/FileProgramGraphProviderTest.java",
-    "minos-bootstrap/src/test/java/com/minos/program/analysis/ProgramGraphAnalysisTest.java",
-    "minos-bootstrap/src/test/java/com/minos/program/analysis/ProgramGraphServiceConcurrencyTest.java",
-    "minos-bootstrap/src/test/java/com/minos/semantic/M23SemanticProviderConfigurationTest.java",
-    "minos-bootstrap/src/test/java/com/minos/semantic/SemanticHybridIntelligenceTest.java",
-    "minos-bootstrap/src/test/java/com/minos/semantic/SemanticSyncConsistencyTest.java",
-    "minos-bootstrap/src/test/java/com/minos/workspace/WorkspaceIntelligenceServiceTest.java",
-    "minos-app/src/test/java/com/minos/adapter/scip/M17ProviderPlatformTest.java",
-    "minos-app/src/test/java/com/minos/adapter/scip/M24PolyglotProviderTest.java",
-    "minos-app/src/test/java/com/minos/adapter/scip/ScipIndexerCatalogTest.java",
-    "minos-app/src/test/java/com/minos/adapter/scip/ScipPersistentSnapshotExperiment.java",
-    "minos-app/src/test/java/com/minos/adapter/scip/ScipRelatedTestSnapshotIntegrationTest.java",
-    "minos-app/src/test/java/com/minos/adapter/scip/ScipSymbolSnapshotImporterTest.java",
-    "minos-app/src/test/java/com/minos/application/M17ProviderSurfaceIntegrationTest.java",
-    "minos-app/src/test/java/com/minos/application/ProviderCatalogPortTest.java",
-    "minos-app/src/test/java/com/minos/application/SharedMinosApplicationIntegrationTest.java",
-    "minos-app/src/test/java/com/minos/architecture/ArchitectureRealFixtureMeasurementTest.java",
-    "minos-app/src/test/java/com/minos/context/CodeSearchBenchmark.java",
-    "minos-app/src/test/java/com/minos/impact/ImpactAnalysisRealFixtureTest.java",
-    "minos-app/src/test/java/com/minos/incremental/IncrementalIndexingRealFixtureTest.java",
-    "minos-app/src/test/java/com/minos/mcp/MinosMcpServerIntegrationTest.java",
-    "minos-app/src/test/java/com/minos/query/DependencyDerivationServiceTest.java",
-    "minos-app/src/test/java/com/minos/query/RelatedTestDerivationServiceTest.java",
-    "minos-app/src/test/java/com/minos/query/RelationshipQueryServiceTest.java",
-    "minos-app/src/test/java/com/minos/query/SymbolQueryServiceTest.java",
-})
+TOLERATED_FOREIGN_TESTS: frozenset[str] = frozenset()
 
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 PACKAGE = re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)

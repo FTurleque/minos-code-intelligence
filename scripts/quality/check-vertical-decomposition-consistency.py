@@ -51,11 +51,11 @@ def main() -> int:
             "JavaSourceProgramGraphDecompositionTest.java"
         )
         performance_test = read(
-            "minos-bootstrap/src/test/java/com/minos/application/"
+            "minos-bootstrap/src/test/java/com/minos/bootstrap/application/"
             "ProgramGraphPerformanceQualificationTest.java"
         )
         application_test = read(
-            "minos-bootstrap/src/test/java/com/minos/application/MinosApplicationTest.java"
+            "minos-bootstrap/src/test/java/com/minos/bootstrap/application/MinosApplicationTest.java"
         )
         api_contract_test = read(
             "minos-api/src/test/java/com/minos/api/AdvancedCodeIntelligenceApiContractTest.java"

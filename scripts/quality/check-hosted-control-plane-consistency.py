@@ -138,7 +138,7 @@ def main() -> int:
             "TeamCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/TeamCommandTest.java"),
             "LocalMinosTeamApiTest.java": read("minos-api/src/test/java/com/minos/api/LocalMinosTeamApiTest.java"),
             "MinosApplicationMcpBackendM27Test.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosApplicationMcpBackendM27Test.java"),
-            "SharedMinosApplicationIntegrationTest.java": read("minos-app/src/test/java/com/minos/application/SharedMinosApplicationIntegrationTest.java"),
+            "SharedMinosApplicationIntegrationTest.java": read("minos-app/src/test/java/com/minos/app/application/SharedMinosApplicationIntegrationTest.java"),
         }
         require("FileHostedControlPlaneStoreTest.java", tests["FileHostedControlPlaneStoreTest.java"],
                 "persistsOnlyCiphertextAndRoundTripsTenantState", "rejectsTamperingBeforePlaintextDeserialization",

@@ -257,7 +257,7 @@ def main() -> int:
 
         for test in (
             "minos-engine/src/test/java/com/minos/discovery/M24PolyglotDiscoveryTest.java",
-            "minos-app/src/test/java/com/minos/adapter/scip/M24PolyglotProviderTest.java",
+            "minos-app/src/test/java/com/minos/app/adapter/scip/M24PolyglotProviderTest.java",
             "minos-provider-scip/src/test/java/com/minos/adapter/scip/M24PolyglotIdentityProvenanceTest.java",
             "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/M24PolyglotProcessPlanFactoryTest.java",
             "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManagerTest.java",
