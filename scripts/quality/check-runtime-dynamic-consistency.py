@@ -38,10 +38,10 @@ def forbid(relative: str, text: str, *values: str) -> None:
 
 def main() -> int:
     try:
-        model = read("minos-domain/src/main/java/com/minos/dynamic/RuntimeObservationSession.java")
-        reference = read("minos-domain/src/main/java/com/minos/dynamic/RuntimeSymbolReference.java")
-        resolution = read("minos-domain/src/main/java/com/minos/dynamic/RuntimeSymbolResolution.java")
-        correlation = read("minos-domain/src/main/java/com/minos/dynamic/CorrelatedRuntimeObservation.java")
+        model = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationSession.java")
+        reference = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeSymbolReference.java")
+        resolution = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeSymbolResolution.java")
+        correlation = read("minos-engine/src/main/java/com/minos/dynamic/CorrelatedRuntimeObservation.java")
         port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
         codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
         service = read("minos-application/src/main/java/com/minos/dynamic/RuntimeIntelligenceService.java")
@@ -118,7 +118,7 @@ def main() -> int:
                       "runtimeIntelligenceService().symbolReport")
 
         tests = {
-            "RuntimeObservationModelTest.java": read("minos-domain/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
+            "RuntimeObservationModelTest.java": read("minos-engine/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
             "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreTest.java"),
             "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreSymlinkTest.java"),
             "RuntimeIntelligenceServiceTest.java": read("minos-bootstrap/src/test/java/com/minos/dynamic/RuntimeIntelligenceServiceTest.java"),

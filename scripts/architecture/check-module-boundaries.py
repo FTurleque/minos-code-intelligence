@@ -91,7 +91,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
 # fails, so every commit that folds a package removes its entries. Both lists end empty, then disappear.
 TOLERATED_SPLIT_PACKAGES: dict[str, frozenset[str]] = {
     "com.minos.cli": frozenset({"minos-app", "minos-cli"}),
-    "com.minos.dynamic": frozenset({"minos-application", "minos-domain", "minos-engine"}),
+    "com.minos.dynamic": frozenset({"minos-application", "minos-engine"}),
     "com.minos.integration.nexus": frozenset({"minos-app", "minos-nexus"}),
     "com.minos.semantic": frozenset({"minos-application", "minos-domain"}),
     "com.minos.storage": frozenset({"minos-application", "minos-engine"}),
