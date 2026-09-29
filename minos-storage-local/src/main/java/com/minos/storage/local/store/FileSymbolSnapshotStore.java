@@ -47,7 +47,6 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     private final SnapshotIntegrityService integrityService;
     private final SnapshotRetentionService retentionService;
     private final SnapshotCodec codecV1;
-    private final SnapshotCodec codecV2;
     private final int maxQueryCacheEntries;
     private final long maxQueryCacheWeightBytes;
     private final int maxActiveQueryRetries;
@@ -103,7 +102,6 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         this.integrityService = new SnapshotIntegrityService();
         this.retentionService = new SnapshotRetentionService(snapshotRepository);
         this.codecV1 = new SnapshotCodecV1();
-        this.codecV2 = new SnapshotCodecV2();
         this.maxQueryCacheEntries = maxQueryCacheEntries;
         this.maxQueryCacheWeightBytes = maxQueryCacheWeightBytes;
         this.maxActiveQueryRetries = maxActiveQueryRetries;
@@ -118,7 +116,8 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         List<Symbol> orderedSymbols = orderedById(symbols, Symbol::id, "symbols");
         SymbolSnapshot legacy = new SymbolSnapshot(projectId, snapshotId, orderedSymbols);
         rejectDuplicateIds(orderedSymbols, Symbol::id, "symbol");
-        publishSnapshot(new CodeKnowledgeSnapshot(projectId, snapshotId, orderedSymbols, List.of(), List.of()), codecV1);
+        CodeKnowledgeSnapshot symbolsOnly = new CodeKnowledgeSnapshot(projectId, snapshotId, orderedSymbols, List.of(), List.of());
+        publishSnapshot(symbolsOnly, new KnowledgeSnapshotCodecs.Selection(codecV1, codecV1.requirePersistable(symbolsOnly)));
         return legacy;
     }
 
@@ -143,7 +142,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         rejectDuplicateIds(orderedSymbols, Symbol::id, "symbol");
         rejectDuplicateIds(orderedOccurrences, SymbolOccurrence::id, "occurrence");
         rejectDuplicateIds(orderedRelationships, Relationship::id, "relationship");
-        publishSnapshot(snapshot, codecV2);
+        publishSnapshot(snapshot, KnowledgeSnapshotCodecs.select(snapshot));
         return snapshot;
     }
 
@@ -289,10 +288,18 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         synchronized (cacheLock) { queryViewBuilds++; }
     }
 
-    private void publishSnapshot(CodeKnowledgeSnapshot snapshot, SnapshotCodec codec) throws IOException {
+    private void publishSnapshot(CodeKnowledgeSnapshot snapshot, KnowledgeSnapshotCodecs.Selection selection)
+            throws IOException {
+        // Codec and exact size are chosen, and an oversized snapshot refused, before any I/O: no temporary
+        // file, no partial file, no pointer change (A6).
+        SnapshotCodec codec = selection.codec();
+        long encodedBytes = selection.encodedBytes();
         Path temporarySnapshot = snapshotRepository.createTemporarySnapshot(snapshot.projectId());
         try {
             SnapshotCodec.SnapshotEncoding encoding = codec.write(temporarySnapshot, snapshot);
+            if (Files.size(temporarySnapshot) != encodedBytes) {
+                throw new IOException("snapshot encoding length differs from its computed size");
+            }
             String fileName = "snapshot-" + integrityService.logicalIdHash(snapshot.snapshotId())
                     + "-" + encoding.sha256() + codec.fileExtension();
             // Publication and active-pointer promotion are one mutation transaction with respect to
@@ -342,8 +349,9 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
     private SnapshotCodec codecFor(int version) throws IOException {
         return switch (version) {
-            case ActiveSnapshotRepository.FORMAT_VERSION_V1 -> codecV1;
-            case ActiveSnapshotRepository.FORMAT_VERSION_V2 -> codecV2;
+            case ActiveSnapshotRepository.FORMAT_VERSION_V1,
+                 ActiveSnapshotRepository.FORMAT_VERSION_V2,
+                 ActiveSnapshotRepository.FORMAT_VERSION_V3 -> KnowledgeSnapshotCodecs.forVersion(version);
             default -> throw new IOException("unsupported active snapshot pointer version: " + version);
         };
     }

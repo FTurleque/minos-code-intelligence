@@ -784,3 +784,486 @@ Les cinq écarts déclarés au jalon 2 (§ A4.6 et rapport : pas de commit rouge
 | lot A3 (SPRINT-2-SUIVI V19) | `minos-cli/LazyAutonomousIndexOperations` n'est câblé nulle part en production (point 5 de § A4.4, décision 5 de § A4.5). | Q10 |
 | verif-archi (V-A4-05) | `MinosCliRunner.statelessHelpCli` câble `home(Path.of("."))` (et donc `doctor`), mais `doctor` n'est pas dans `STATELESS_HELP_COMMANDS` : ce collaborateur n'est jamais atteint. Préexistant ; A4 l'a conservé à l'identique. À supprimer ou à justifier. | hygiène minos-cli |
 | impl-archi (jalon 2) | `MinosApplication.java` mélange Javadoc anglaise (classe, `open`, `Builder`, porteurs ajoutés par A4) et française (`providerCatalog`, `scipArtifactImporter`, `compositionRoot`, champ `composer`), antérieur à A4 ; A4 n'ajoute que de l'anglais, langue majoritaire du fichier. | hygiène docs |
+
+# Lot 3 — A6 : mémoire et scalabilité
+
+> Branche : `archi/a6-scalabilite`, créée depuis la tête d'A4 (`d9ae1005`), worktree `minos-wt/a6-scalabilite`.
+> Constat : **A6** (`AUDIT-2026-09.md` § 3, statut PLAUSIBLE), plus le constat de performance renvoyé par A4 (`LocalProjectArchitectureQuery`, § A4.8).
+> Agents : `impl-archi` (implémentation), `verif-archi` (inspection de chaque commit). Aucun push, aucune PR ouverte par les agents.
+> Règles du lot : aucun changement de comportement (les deux tests de caractérisation A2 verts, les 12 golden de `minos-app/src/test/resources/characterization/` identiques octet pour octet, jamais régénérés) ; **aucun changement recevable sans mesure avant/après** ; ordre imposé : (1) alignement des plafonds, (2) chaînes en UTF-8 (nouvelle version de format), (3) bornes de la traversée d'impact, (4) normalisation de la recherche hybride à classement identique, (5) snapshot paginé ou mappé : ADR `Proposed` seulement.
+
+## A6.1 Tableau de bord
+
+| Jalon | Contenu | Statut | Commits |
+|---|---|---|---|
+| 1 | Corpus réel (ce dépôt indexé par scip-java géré), harnais `benchmarks/scalability/`, mesures avant, verdicts et recommandations ; aucune optimisation | livré, accepté par verif-archi, arbitré (§ A6.9) | `fb363253`, `d491519d` |
+| 2.1 | Étape 1 — plafond : taille encodée exacte, refus avant toute écriture (fichier et PostgreSQL) | livré, vérifié par verif-archi | `e23b5ded` ; V-A6-01 à 04 : `1acb68e8` |
+| 2.2 | Étape 2 — format V3 UTF-8 (fichier, pointeur, PostgreSQL), ADR 0046 ; exception `retention.golden` prouvée | livré, vérifié par verif-archi | `a68c560e`, `ebdc6969` (golden seul + preuve), `095c4c60` (banc), `5f0c2d53` (docs) |
+| 2.3 | Étape 3 — traversée d'impact : non faite, verdict consigné (§ A6.12) | consigné | `ea5132b6` |
+| 2.4 | Étape 4 — contenu normalisé mis en cache dans le corpus hybride, classement identique à l'octet (§ A6.13) | livré, vérifié par verif-archi | `1c54a3a4` (référence, avant), `bba7a91b` ; M3 : `e32bd9f6` |
+| 2.5 | Étape 5 — ADR 0047 `Proposed` : dédoublonnage des chaînes, table de chaînes, pagination ou mappage (§ A6.14) | livré, vérifié par verif-archi | `a3aa4baf` |
+| 2.6 | Correctifs de l'étape 4 (verif, bloquants) : V-A6-10 référence étendue, V-A6-09 republication, V-A6-11 poids du corpus (§ A6.15) | livré, vérifié par verif-archi | `eb001186`, `bf3bd9b0`, `0a92f97f`, `8c6ddef0` |
+| **Bilan** | Ce dépôt redevient indexable (V3, 194,6 Mo au lieu d'un refus à 355 Mo en V2) ; un snapshot trop grand est refusé sans rien écrire ; lecture à froid ≈ 2,5 fois plus rapide ; recherche hybride en mémoire 4 à 6 fois plus rapide, à classement identique à l'octet ; poids du corpus hybride redevenu un vrai majorant ; traversée d'impact non touchée ; seul golden modifié : `retention.golden` (suffixes sha, preuve) ; aucun gain mémoire revendiqué | lot terminé, accepté par verif-archi, aucun constat ouvert | — |
+
+## A6.2 Procédure de mesure
+
+**Corpus réel.** Ce dépôt à la révision `d9ae1005`, indexé par le runtime scip-java 0.13.1 géré par MINOS (`benchmarks/scalability/prepare-corpus.ps1`) : 883 documents, SCIP de **23 816 951 octets** (22,7 Mio), 40 112 symboles, 281 342 occurrences à la pré-analyse. Rejoué deux fois : même taille à un octet près. Trois écarts à la procédure produit, tous documentés dans le README du banc :
+
+- `minos index` n'a pas pu servir : le bac à sable AppContainer non élevé refuse `pwsh.exe` installé sous `Program Files` (« cannot grant AppContainer read access … without administrator privileges »). Le runner Windows géré (`scip-java-windows-runner.ps1`) est appelé directement, avec les mêmes arguments que `ScipJavaProcessPlanFactory`.
+- `mvnw`, `mvnw.cmd` et `.mvn` sont retirés de la copie : scip-java préfère `./mvnw`, qui n'est pas un exécutable Win32 (`CreateProcess error=193`).
+- `minos-app` construit dans le `target/` racine ; son `clean` efface `target/scip-targetroot`, où scip-java agrège tous les modules. Sans correctif, l'index ne contient que `minos-app` (39 documents, 1 040 831 octets, conservé comme point de ratio `minos-app-module`). La copie construit `minos-app` dans son propre `target/` (§ A6.8).
+
+SCIP complémentaires pour le ratio : `ariane-chatbot` (2,49 Mo) et `nexus-context-engine` (2,38 Mo), déjà présents sur le poste, et trois fixtures TypeScript suivies du dépôt.
+
+**Montée en échelle calibrée.** Deux familles de jeux, sans synthèse ex nihilo :
+
+- `file-fX` : tranche stable de fichiers du corpus réel (sélection par hachage du `fileId`, fraction X ; symboles, occurrences et relations de ces fichiers). Elle garde les distributions par fichier du corpus réel. Publiée dans le magasin fichier et mesurée par le chemin produit (`FileSymbolSnapshotStore`, cache de vues, `HybridSearchService` de `MinosApplication`).
+- `mem-kN` : le corpus entier (non persistable en V2, § A6.3.2) répliqué N fois, identifiants préfixés `r<i>~`, servi par un magasin en mémoire du banc. Il mesure ce que coûteraient les requêtes si le snapshot pouvait être chargé.
+
+**Harnais.** `minos-bootstrap/src/test/java/com/minos/bootstrap/scalability/SnapshotScalabilityBenchmark.java` (`main` des sources de test, nom hors des motifs d'inclusion de Surefire : il ne tourne pas dans `mvn verify`, comme `InMemoryBackendBenchmark` et `CodeSearchBenchmark`), `benchmarks/scalability/run-scalability-benchmark.ps1`, `scalability.json`, `README.md`. Les tailles sont obtenues par un recensement qui parcourt le snapshot dans l'ordre des champs du codec V2 ; il est vérifié contre l'encodeur réel (`censusMatchesEncoder=true` sur tous les jeux sous le plafond). Le tas est mesuré après trois `System.gc()` ; les parts de temps par échantillonnage JFR (Java et natif) du seul fil de mesure ; les allocations par `ThreadMXBean.getCurrentThreadAllocatedBytes`.
+
+**Environnement.** AMD Ryzen 7 5700G (16 fils logiques), 48 Go, Windows 10 19045, OpenJDK 24.0.1+9-30, G1, `-Xmx24g`. Préchauffage 3, 15 itérations (imports : 3 itérations, donc p95 = maximum ; chargements à froid : 5 ; architecture : 1 + 5). Données (corpus, `MINOS_HOME` jetable, résultats bruts) dans le scratch de la session, jamais dans le dépôt. Exécutions : `run1` (ratio, jeux `file-f*`, impact `mem-k1`) et `run2` (jeux `mem-k*`, architecture), § A6.6.
+
+## A6.3 Mesures avant (base `d9ae1005`)
+
+### A6.3.1 Ratio SCIP → snapshot V2 et composition
+
+| SCIP | Octets SCIP | Occurrences | Snapshot V2 | V2/SCIP | Part des chaînes | UTF-8/V2 | Table de chaînes/V2 | Tas du snapshot importé / V2 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| minos-full (ce dépôt) | 23 816 951 | 281 342 | 338 368 857 | **14,21** | 97,0 % | 0,550 | 0,194 | 0,48 |
+| minos-app-module | 1 040 831 | 13 050 | 13 859 114 | 13,32 | 97,1 % | 0,551 | 0,200 | 0,50 |
+| ariane-chatbot | 2 489 722 | 25 956 | 31 827 003 | 12,78 | 97,0 % | 0,551 | 0,206 | 0,50 |
+| nexus-context-engine | 2 376 589 | 23 275 | 26 696 018 | 11,23 | 97,0 % | 0,551 | 0,204 | 0,51 |
+| typescript-simple | 14 546 | 100 | 131 481 | 9,04 | 96,9 % | 0,551 | 0,234 | 0,55 |
+| typescript-modules | 10 611 | 67 | 108 253 | 10,20 | 96,9 % | 0,550 | 0,226 | 0,49 |
+| typescript-inheritance | 10 839 | 57 | 112 407 | 10,37 | 96,7 % | 0,552 | 0,222 | 0,47 |
+
+- Tous les corpus sont 100 % ASCII (aucun caractère non ASCII, aucun surrogate isolé) : l'UTF-8 ramène le fichier à **0,55×** ; la « table de chaînes » (chaque chaîne distincte stockée une fois, un index de 4 octets par occurrence de champ) à **0,19–0,23×**.
+- Composition des 338 Mo de `minos-full` : identifiants d'entités 23,8 %, `fileId` 20,7 %, références provider (symbole SCIP complet répété sur chaque occurrence) 16,1 %, `Origin` (4 chaînes répétées sur chaque entité) 10,2 %, noms d'énumérations écrits en toutes lettres 8,9 %, `projectId` (UUID en texte, répété) 7,5 %, textes de symboles 4,1 %, divers 5,8 %, octets fixes 3,0 %. La redondance, plus que l'UTF-16, fait la taille : 5 985 691 champs chaîne pour 439 400 chaînes distinctes.
+- 1 062 à 1 972 octets V2 par occurrence de la pré-analyse (1 203 pour `minos-full`). Le ratio dépend aussi de la longueur de `indexRunId`, recopié dans chaque `Origin` : les chiffres de verif-archi (12,45 ; 10,79 ; 8,51), obtenus avec un autre `indexRunId`, en diffèrent de 3 à 6 %.
+- Recoupement avec verif-archi (§ A6.7) : mêmes ordres de grandeur, même UTF-8 à 0,55×.
+- **Origin du produit (V-A6-03).** Le tableau ci-dessus a été mesuré avec l'`Origin` du banc d'alors (`indexRunId` de 22 à 34 caractères, sans version de fournisseur). `minos import-scip` écrit `indexRunId = "application-" + snapshotId` (41 caractères) et la version du fournisseur, recopiés sur chaque entité : de l'ordre de 50 octets V2 de plus par entité. Remesuré avec une requête d'import calquée sur le produit (banc corrigé, même commit que V-A6-01) : ce dépôt **355 045 885 octets, ratio 14,91**, nexus 11,58, typescript-simple 9,34, ariane 13,32 ; UTF-8/V2 inchangé (0,548 à 0,550). Seuil SCIP du plafond pour ce dépôt : **18,0 Mo** (et non 18,9) ; plage 18,0 à 28,7 Mo. Le refus de l'étape 1 calcule la taille sur le snapshot réellement ingéré, donc avec l'`Origin` réelle.
+
+### A6.3.2 Plafond : le dépôt ne peut pas s'indexer lui-même
+
+| Mesure (`minos-full`) | Médiane | p95 |
+|---|---:|---:|
+| Pré-analyse (`ScipIngestionLimits.preflight`) | 27 ms | 45 ms |
+| Décodage protobuf seul | 134 ms | 244 ms |
+| Import sans persistance (gel + sha256, décodage, ingestion) | 1 371 ms | 1 845 ms |
+| Import produit dans le magasin fichier | 3 743 ms, **refusé** | 3 830 ms |
+
+`importOutcome = REFUSED IOException: knowledge snapshot exceeds byte limit: 268436194/268435456`. Le SCIP (23,8 Mo) est à 4,4 % de la limite SCIP (512 Mio) ; le snapshot V2 (338 Mo) dépasse le plafond persisté (256 Mio) de 26 %. **63 % du temps de l'import refusé** est passé à écrire 256 Mio dans le fichier temporaire avant l'échec. Tranches : `file-f0.90` (292 Mo V2) est refusée aussi (2,4 s) ; `file-f0.50` (162 Mo) passe.
+
+Seuil SCIP au-delà duquel le snapshot V2 ne tient plus : 256 Mio / ratio, soit **18,9 Mo** pour ce dépôt, 21,0 Mo (ariane), 23,9 Mo (nexus), 25,9 à 29,7 Mo (TypeScript). En UTF-8, 34,3 Mo pour ce dépôt ; avec une table de chaînes, 97 Mo.
+
+### A6.3.3 Mémoire et cache de vues de requête
+
+| Jeu | V2 sur disque | Chargement à froid (médiane / p95) | dont index | Tas vue complète | Tas snapshot seul | Tas index | Vue / V2 | Mise en cache |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| file-f0.25 | 76 096 547 | 753 / 893 ms | 93 ms | 106 436 544 | 87 635 816 | 18 800 728 | 1,40 | **non** |
+| file-f0.50 | 162 226 063 | 1 459 / 1 549 ms | 123 ms | 226 007 584 | 186 554 424 | 39 453 160 | 1,39 | **non** |
+| mem-k1 (corpus entier) | (338 368 857, non persistable) | — | 251 / 506 ms (`run1` / `run2`) | — | 163 253 096 (importé) | 81 605 736 | — | — |
+| mem-k2 / mem-k3 | (682 439 968 / —) | — | 718–760 / 980 ms | — | — | 161 846 488 / 254 041 984 | — | — |
+
+- Un snapshot relu depuis le disque pèse **1,15× sa taille V2** en tas, un snapshot fraîchement ingéré **0,48×** : la lecture crée une instance `String` par champ (le `projectId`, les noms d'énumérations, les quatre chaînes d'`Origin` et les `fileId` sont dupliqués par entité), alors que l'ingestion partage ces instances. En tas, les chaînes ASCII sont déjà compactes (1 octet par caractère) : l'UTF-16 ne coûte rien en mémoire, seulement sur disque.
+- Le cache de vues estime le poids d'une vue à `max(comptages, 8 × taille du fichier)`. Le poids réel est de 1,4× la taille du fichier : l'estimation est **5,7 fois trop forte**. Conséquence : toute vue d'un snapshot de plus de 64 Mio persistés (512 Mio / 8) est refusée par le cache (`queryCacheEntriesAfterLoad = 0` dès `file-f0.25`, 76 Mo), et **chaque requête relit et redécode le snapshot entier** (0,75 s à 76 Mo, 1,46 s à 162 Mo). Le « cache de 512 Mo » de l'audit ne sert donc pas les gros projets. Même règle dans `PostgresCodeKnowledgeSnapshotStore` (amplification 8, plafond 512 Mio).
+
+### A6.3.4 Recherche hybride
+
+Chemin produit (`MinosApplication.hybridSearchService()`, magasin fichier, fournisseur sémantique désactivé), 4 requêtes, 15 itérations :
+
+| Jeu | Documents | Construction du corpus (1re recherche) | Requête (médiane / p95) | Allocation par requête | Part normalisation (JFR) | Part rechargement du snapshot |
+|---|---:|---:|---:|---:|---:|---:|
+| file-f0.25 | 19 115 | 112,7 s | 1 349–1 381 / ≤ 1 522 ms | 627 Mo | 3,0 % | 96,4 % |
+| file-f0.50 | 39 452 | 241,0 s | 3 075–3 172 / ≤ 3 574 ms | 1 338 Mo | 2,7 % | 96,8 % |
+
+- Une recherche hybride charge le snapshot **deux fois** : `HybridSearchService.search` puis `SemanticIndexService.status`, qui appelle `loadActiveKnowledge` même quand le fournisseur sémantique est désactivé, pour renvoyer l'identifiant du snapshot. Au-delà de 64 Mio persistés (§ A6.3.3), ce sont deux relectures complètes par requête : 3,1 s à 162 Mo contre 1,46 s pour un chargement.
+- La construction du corpus coûte environ 6 ms par document, linéairement (112,7 s pour 19 115 documents, 241 s pour 39 452, 467 à 515 s pour 81 095 en `mem-k1`, 1 005 s pour 161 307 en `mem-k2`) : `LocalSourceReader` relit le fichier source entier pour chaque extrait (son petit cache a été retiré pour la fraîcheur), alors que le commentaire de `SemanticDocumentFactory` affirme encore le contraire (§ A6.8).
+- Hors rechargement (magasin en mémoire du banc, `run2`), la normalisation domine :
+
+| Jeu | Documents | Construction du corpus | Requête (médiane / p95) | Allocation par requête | Part normalisation (JFR) | `containsTerm` | Reste de la recherche |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| mem-k1 | 81 095 | 467,1 s | 147–161 / ≤ 222 ms | 63–65 Mo | **81,5 %** | 0,7 % | 17,7 % |
+| mem-k2 | 161 307 | 1 005,2 s | **non mesurable** : corpus refusé par le cache | — | — | — | — |
+
+  À 161 307 documents, le poids estimé du corpus dépasse le plafond du cache de corpus (256 Mio) : `corpusCacheEntries = 0`, et **chaque requête reconstruit le corpus entier** (1re recherche : 1 062,6 s). La mesure a été arrêtée là (4 × 18 requêtes auraient pris une vingtaine d'heures). La limite annoncée de 250 000 documents n'est donc pas atteignable en pratique : au-delà d'environ 158 000 documents (256 Mio / 1 697 octets estimés par document sur ce corpus), la recherche hybride devient inutilisable. Ce poids estimé compte 2 octets par caractère (`Character.BYTES`) ; le tas réellement retenu par le corpus `mem-k1` est de 55,2 Mo pour 137,6 Mo estimés (2,5× de trop), de sorte que le refus arrive bien avant que le tas ne l'exige.
+
+  Chaque requête relance `normalize` sur le contenu de chaque document (minuscules, découpage en termes par point de code) : c'est l'essentiel du temps et des allocations. Mettre en cache le contenu normalisé dans `CachedCorpus` supprimerait ce travail sans toucher au calcul du score (même fonction pure, même contenu), donc à classement identique par construction ; coût : une chaîne normalisée par document, au plus la taille du contenu (poids estimé du corpus `mem-k1` : 137,6 Mo pour un plafond de 256 Mio).
+
+### A6.3.5 Analyse d'impact profonde
+
+`ImpactAnalysisService.analyze` appelé directement sur le snapshot en mémoire ; « coût fixe » = racine sans arête entrante (`maxDepth` 1, `maxResults` 1), donc la préparation seule (table des symboles, index des arêtes entrantes trié, limitations de base, tri final) ; trois racines de plus forte portée choisies parmi les 25 symboles les plus référencés.
+
+| Jeu | Relations | Coût fixe (médiane / p95) | Racine la plus large : portée à `maxDepth` 32 | `maxResults` 10 000 | `maxResults` 10 | Allocation |
+|---|---:|---:|---:|---:|---:|---:|
+| file-f0.25 | 3 713 | 3,5 / 4,1 ms | 15 symboles | 2,9 ms | 2,4 ms | 0,59 Mo |
+| file-f0.50 | 6 934 | 4,6 / 8,5 ms | 24 symboles | 4,4 ms | 4,2 ms | 1,3 Mo |
+| mem-k1 | 14 299 | 15,0 / 16,9 ms | 52 symboles | 17,3 ms | 15,6 ms | 3,3 Mo |
+| mem-k2 (`run3`) | 28 598 | 38,4 / 45,1 ms | 52 symboles | 40,6 ms | 43,7 ms | — |
+| mem-k3 (`run3`) | 42 897 | 68,5 / 81,6 ms | 52 symboles | 70,7 ms | 69,6 ms | — |
+
+Répartition JFR (racine la plus large, `maxResults` 10) : index des arêtes entrantes 64 à 77 % (`mem-k1` sur les deux exécutions, `mem-k2`, `mem-k3`), limitations de base 9 à 15 %, corps d'`analyze` (table des symboles, file de priorité, tri final) 14 à 26 %, construction des chemins 0,0 %. Le coût fixe croît linéairement avec le snapshot (15 → 38 → 68 ms pour 1, 2, 3 répliques) ; la portée, elle, ne bouge pas. Le graphe issu de scip-java est clairsemé (0,36 relation par symbole) ; la portée maximale observée est de 52 symboles à profondeur 32. La traversée est dans le bruit de mesure : **tout le coût est la préparation, refaite à chaque appel**, et elle croît avec la taille du snapshot, pas avec `maxResults`.
+
+### A6.3.6 `LocalProjectArchitectureQuery` (renvoi d'A4, § A4.8)
+
+Corpus entier (`mem-k1`, magasin en mémoire, snapshot chargé : `snapshotLoadActive` ≈ 0 ms), 1 + 5 itérations :
+
+| Mesure | Médiane | p95 |
+|---|---:|---:|
+| Découverte seule (`ProjectDiscoveryService.discover`, copie du dépôt sous `%TEMP%`) | 36 292 ms | 38 153 ms |
+| Découverte seule du worktree (`N:`, arborescence comparable, avec `fixtures/` et `minos-intellij/`) | 12 693 ms | 13 861 ms |
+| `getArchitectureOverview` | 40 154 ms | 41 068 ms |
+| `getArchitectureIntelligence` (découverte + 5 analyses) | 37 781 ms | 40 986 ms |
+
+Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR sur un appel : 3 250 échantillons natifs, tous dans la découverte (99,6 % dans le parcours des racines de modules, `discoverModuleRoots`), contre 257 échantillons Java dont 68 % dans les cinq analyses, soit de l'ordre de 0,5 s de calcul sur 38 s. La découverte est un parcours de fichiers limité par les entrées-sorties (2,9 fois plus lent sous `%TEMP%` que dans le worktree sur `N:`, pour une arborescence comparable ; cause non instruite : disque ou antivirus) ; les analyses pèsent de l'ordre de 1 %.
+
+## A6.4 Verdicts et recommandations
+
+| # | Constat de l'audit | Verdict | Chiffres | Recommandation |
+|---|---|---|---|---|
+| 1 | Plafond persisté (256 Mio) < limite SCIP (512 Mio) : échec tardif | **CONFIRMÉ, et plus grave** | Le seuil réel est un SCIP de 18,9 à 29,7 Mo selon le corpus (ratio 9,0 à 14,2), pas 256 ou 512 Mio ; **ce dépôt ne peut pas s'indexer** (338 Mo V2) ; l'échec arrive après 1,4 s d'ingestion et 2,4 s d'écriture inutile (63 % du temps) | **Faire, sous une autre forme que l'audit** : aucun critère fiable n'existe avant le décodage (ratio de 9,0 à 14,2 selon le corpus ; les occurrences de la pré-analyse sont un majorant des occurrences persistées, pas un minorant, l'ingestion pouvant en écarter ; un minorant par occurrence tiré des tailles minimales du codec, environ 200 octets, reste 5 à 10 fois sous l'observé (1 062 à 1 972 octets) et ne refuserait rien d'utile). Le seul contrôle exact et précoce est le calcul de la taille encodée à partir du snapshot ingéré, **avant toute écriture**, avec un message `PublicErrorMessages` clair (taille, plafond, sans chemin) ; il économise l'écriture de 256 Mio, pas l'ingestion. Le vrai levier est le point 2. |
+| 2 | Chaînes en UTF-16 : taille doublée | **CONFIRMÉ sur disque, INFIRMÉ en mémoire** | Chaînes = 97 % du fichier ; UTF-8 = 0,55× sur les sept corpus ; tas inchangé (chaînes compactes) | **Faire** (V3, lecture V1/V2 conservée) : ce dépôt redevient indexable (186 Mo) et le seuil SCIP passe à ~34 Mo. Contraintes de verif-archi intégrées (§ A6.7). Ne pas présenter la baisse du poids estimé du cache comme un gain mémoire. La table de chaînes (0,19×) est un gain bien supérieur mais un format plus profond : à instruire dans l'ADR du point 5. |
+| 3 | `maxResults` appliqué après une traversée complète | **INFIRMÉ en pratique** (vrai dans le code, sans coût mesurable) | Traversée ≈ 0 ; préparation = 100 % (15 ms sur le corpus entier), indépendante de `maxResults` ; portée ≤ 52 symboles | **Ne pas faire** : l'arrêt anticipé ne gagnerait rien de mesurable et changerait le rapport (limitations et marques de test posées pendant la traversée, § A6.7). Le coût réel est la reconstruction de l'index des arêtes entrantes à chaque appel : hors périmètre, § A6.8. |
+| 4 | `HybridSearchService` re-normalise tout le corpus à chaque requête | **CONFIRMÉ** (masqué dans le chemin produit au-delà de 64 Mio) | Snapshot en mémoire : normalisation 81,5 % d'une requête de 147–161 ms sur 81 095 documents, 63–65 Mo alloués ; chemin produit au-delà de 64 Mio : 2,7–3,0 %, le rechargement du snapshot fait 96–97 % | **Faire** : cache du contenu normalisé dans `CachedCorpus`, classement identique par construction (même fonction, même contenu), test d'équivalence scores et ordre, égalités exactes comprises ; pas d'index inversé (le bonus de phrase porte sur une sous-chaîne brute, § A6.7). Gain attendu ≈ 80 % du temps de requête quand le snapshot est en cache ou en mémoire ; quasi nul tant que le cache de vues refuse les gros snapshots, et sans objet au-delà d'environ 158 000 documents, où le corpus lui-même n'est plus mis en cache (§ A6.3.4, § A6.8). |
+| 5 | Snapshots chargés entièrement en mémoire, cache de 512 Mo | **CONFIRMÉ, avec une cause dominante différente** | Vue = 1,4× le fichier ; cache inopérant au-delà de 64 Mio persistés (estimation 5,7× trop forte) ; chaque requête relit alors tout (0,75–1,46 s, deux fois pour l'hybride) | **ADR (Proposed)** pour le snapshot paginé ou mappé et la table de chaînes, après le point 2. Avant toute refonte, deux corrections mesurables et bornées relèvent d'un autre lot (§ A6.8) : l'estimation du poids des vues (8× → mesurée) et le double chargement de `SemanticIndexService.status`. |
+| A4.8 | `LocalProjectArchitectureQuery` : chaque appel refait découverte et analyses | **CONFIRMÉ, mais la découverte fait tout** | Découverte 96 % (36,3 s sur 37,8 s ; 12,7 s sur `N:`), analyses de l'ordre de 1 % (≈ 0,5 s) | **Ne pas mémoïser les analyses** (gain ≤ 1–2 %) : la décision d'A4 (pas de cache) est confirmée par la mesure. Le coût est le parcours de découverte, non prouvable en cache (arborescence vivante) : sa performance relève d'un autre lot (§ A6.8). |
+
+## A6.5 Points soumis à arbitrage (jalon 1)
+
+1. **Point 1** : remplacer « refus précoce d'après la taille du SCIP » par « contrôle exact de la taille encodée avant écriture » (aucun critère fiable avant décodage) ; le faire après le point 2, qui déplace le seuil.
+2. **Point 2** : format V3 UTF-8 (pointeur actif compris, PostgreSQL compris), lecture V1/V2 conservée ; test d'ouverture d'un snapshot V2 écrit par le code d'avant.
+3. **Point 3** : ne pas faire.
+4. **Point 4** : cache du contenu normalisé dans `CachedCorpus` (pas d'index inversé), avec test d'équivalence ; à faire après la correction du poids des vues si l'on veut que le gain atteigne le chemin produit des gros projets.
+5. **Point 5** : ADR `Proposed` (snapshot paginé ou mappé, table de chaînes), sans implémentation.
+6. **Hors périmètre, à ouvrir ailleurs** (§ A6.8) : estimation du poids des vues du cache, double chargement par `SemanticIndexService.status`, relecture des sources par extrait, index d'impact reconstruit à chaque appel, `minos-app` qui construit dans le `target/` racine.
+
+## A6.6 Journal
+
+- 2026-09-29 — impl-archi, jalon 1 : worktree `a6-scalabilite` sur `d9ae1005`. Tentative `minos index` sur une copie du dépôt : refusée par le bac à sable AppContainer (`pwsh.exe` sous `Program Files`). Runner scip-java géré appelé directement : premier index à 39 documents (le `clean` de `minos-app` efface l'agrégat de scip-java), puis 883 documents après correctif de la copie. Procédure scriptée (`prepare-corpus.ps1`) et rejouée : 23 816 951 octets (±1).
+- 2026-09-29 — impl-archi : `run1` (ratio, `file-f*`, impact `mem-k1`) ; mesures hybrides `mem-k1` de `run1` écartées : `SemanticIndexService.status` y rechargeait la tranche `file-f0.50` restée active dans le magasin fichier (constat du § A6.3.4). Le harnais publie désormais un snapshot vide avant les jeux en mémoire. `run2` (jeux `mem-k*`, architecture) : complet pour `mem-k1` ; arrêté sur `mem-k2` après la première recherche hybride (corpus refusé par le cache, chaque requête le reconstruit en ~17 min). `run3` : impact et index sur `mem-k2` et `mem-k3` (73 s). La configuration par défaut du banc garde `mem-k1` seul ; `README` du banc pour le complément.
+- 2026-09-29 — impl-archi : `fb363253` (test) — harnais, lanceur, préparation du corpus, README ; `./mvnw -q -pl minos-bootstrap -am test` vert, le banc absent des rapports Surefire ; gates `check-module-boundaries`, `check-milestone-artifact-references`, `check-current-docs` verts. Commit de docs suivant : ce suivi. Aucune ligne de production modifiée.
+- 2026-09-29 — impl-archi, étape 1 (tests d'abord) : `PersistedSnapshotLimitTest` exécuté sur la base : **2 tests sur 2 rouges**. Le premier écrit 256 Mio en 2,3 s puis échoue sur `knowledge snapshot exceeds byte limit: 268443632/268435456`. Le second, dont le répertoire du projet est occupé par un fichier ordinaire, échoue sur `private storage path is not a directory: C:\Users\…` : une écriture était tentée avant tout refus, et ce message, qui porte un chemin absolu, aurait été remplacé par un repli générique à la frontière publique.
+- 2026-09-29 — impl-archi, étape 1 : commit `perf(archi)` (§ A6.10) ; `./mvnw -q -pl minos-storage-postgresql -am test -Dminos.postgresql.tests.required=true` vert (PostgreSQL sous Docker) ; gates `remediation/*`, `check-module-boundaries`, `check-milestone-artifact-references`, `check-current-docs` verts.
+- 2026-09-29 — impl-archi : V-A6-01 à 04 (commit `test(archi)`) : Javadoc du banc en français, prérequis du README, requête d'import du banc calquée sur `import-scip`, constante publique au lieu de la réflexion, taille V2 par `encodedSize` ; remesure des ratios (§ A6.3.1).
+- 2026-09-29 — impl-archi, étape 2 : `a68c560e` (V3). Au premier essai, `A2SurfaceCharacterizationTest.retentionEffectIsUnchanged` était rouge : les noms de fichier de `retention.golden` finissent par le sha256 du contenu. Arrêt et signalement ; arbitrage : voie 1 sous preuve stricte (§ A6.11). `ebdc6969` : golden seul, plus la preuve `RetentionFormatEquivalenceTest`. `095c4c60` : banc (taille V3 du vrai encodeur, publication décidée par le magasin). Fixtures V1/V2 : `git add` refusé sous Windows (« Filename too long ») pour les noms d'origine ; ils ont été remplacés par `snapshot.<extension>`, le test reconstitue le nom d'origine, octets inchangés. Tests : `-pl minos-storage-postgresql -am test -Dminos.postgresql.tests.required=true` vert ; tests A2 (12 + 5) et `RetentionFormatEquivalenceTest` verts ; gates verts.
+- 2026-09-29 — impl-archi, étape 3 : `ea5132b6` (docs), verdict « infirmé en pratique » (§ A6.12).
+- 2026-09-29 — impl-archi, étape 4 : `1c54a3a4`, référence du classement écrite par le `minos-application` de `d9ae1005` (identique à la base, `git diff --quiet`) et test vert sur ce commit ; `bba7a91b`, cache du contenu normalisé, avec la même référence verte à l'octet ; `e32bd9f6`, suggestion M3 de verif. `-pl minos-bootstrap -am test` vert, gates verts.
+- 2026-09-29 — impl-archi, étape 5 : ADR 0047 (`Proposed`), sans implémentation (§ A6.14). Constats V-A6-05 à 08 consignés (§ A6.7) ; ADR 0046 complété (retour arrière, asymétrie au ré-import, « snapshot de connaissance », commit volontairement rouge).
+- 2026-09-29 — impl-archi, fin de lot (tête `a3aa4baf`) : `./mvnw -B clean verify -Dminos.postgresql.tests.required=true` **vert**, 564 s, **1409 tests, 0 échec, 0 erreur, 46 ignorés** (PostgreSQL sous Docker). `check-jacoco.py` : seul `m24-polyglot-provider-platform` est rouge (préexistant sous Windows : `ManagedPolyglotScipRuntimeManager`) ; `persistence-cache-indexes` et `semantic-hybrid-retrieval` passent. 15 gates Python verts. `git diff --stat d9ae1005 -- minos-app/src/test/resources/characterization` : `retention.golden` seul, 3 lignes.
+- 2026-09-29 — impl-archi, correctifs de verif sur l'étape 4 :
+  - `eb001186` (V-A6-10) : référence étendue, régénérée avec le `HybridSearchService` de `d9ae1005`, fichier courant remis ensuite ; H3 et H4 rouges.
+  - `bf3bd9b0` (V-A6-09) : H2 rouge. Premier essai insuffisant (suffixe de nom), consigné au § A6.7.
+  - `0a92f97f` (V-A6-11) : estimateur corrigé ; poids de référence de la base relevés avec le code de `d9ae1005`.
+  - Tests ciblés, gates, clean verify et JaCoCo : ligne suivante.
+- 2026-09-29 — impl-archi, contrôle des correctifs (tête `0a92f97f` + docs) : `./mvnw -B clean verify -Dminos.postgresql.tests.required=true` **vert**, 623 s, **1411 tests, 0 échec, 0 erreur, 46 ignorés**. JaCoCo : seul `m24-polyglot-provider-platform` rouge (préexistant) ; `semantic-hybrid-retrieval` ligne 0,90, branche 0,71. 15 gates Python verts. Golden : `retention.golden` seul.
+
+## A6.7 Constats verif-archi
+
+| # | Commit | Constat | Gravité | Suite |
+|---|---|---|---|---|
+| V-A6-01 | `fb363253` | `SnapshotScalabilityBenchmark` mélangeait les langues de Javadoc (classe en français, membres en anglais). | à corriger | **Corrigé** : Javadoc et commentaires en français, sans effet sur le comportement. |
+| V-A6-02 | `fb363253` | Rejeu Windows seulement (`pwsh`, `mvnw.cmd`, `Get-CimInstance`, runner Windows) et `-Xmx24g` imposé. | remarque | **Documenté** : section « Prérequis » du README du banc (Windows, PowerShell 7, JDK 24, mémoire mesurée et conseillée) ; aucun correctif de code. |
+| V-A6-03 | `d491519d` | L'écart de 3 à 6 % avec les ratios de verif vient de l'`Origin` recopiée sur chaque entité (`indexRunId` et `providerVersion`) ; le produit écrit un `indexRunId` de 41 caractères et une version, donc un ratio plus haut et un seuil SCIP plus bas que 18,9 Mo. Calculer le plafond sur l'`Origin` réelle. | remarque | **Intégré** : requête d'import du banc calquée sur `import-scip` (`indexRunId`, `providerVersion`) ; remesure au § A6.3.1 (ratio 14,91, seuil 18,0 Mo) ; le refus de l'étape 1 porte sur le snapshot réellement ingéré. |
+| V-A6-04 | `fb363253` | Le banc lisait `MAX_PERSISTED_SNAPSHOT_BYTES` par réflexion, et son recensement n'était vérifié que contre V2 ; après V3, les tailles devront venir du vrai encodeur. | remarque | **Corrigé** : le banc lit `SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES` (public depuis l'étape 1) ; la taille V2 vient de `SnapshotCodecV2.encodedSize` (sans plafond) ; le recensement ne sert plus qu'à la composition et aux projections, les tailles de chaque format seront rapportées par leur vrai encodeur. |
+| — | contrôles | Contrôles `fb363253`/`d491519d` : banc absent de tous les rapports Surefire ; clean verify 1383/0/0/46 ; JaCoCo seulement m24 préexistant ; 23 gates verts, 12 golden identiques, 7 témoins rouges ; helpers 63/31/8 ; aucune donnée volumineuse ; suivi A3/A4 intact (+170/−0). Tas rejoué par verif : vue 1,50–1,52× V2, snapshot relu 1,23–1,25× (ariane, nexus), cohérent avec 1,39–1,40× et 1,15× du suivi ; ×8 reste 5,3 à 5,7 fois trop fort. | information | — |
+| V-A6-05 | `a68c560e` | Pris seul, ce commit est rouge (`retention.golden`) : c'est la conséquence du commit séparé imposé par l'arbitrage. | décision de l'orchestrateur | **Consigné** : pas de réécriture d'historique ; ADR 0046 § Conséquences (« pour un `git bisect`, traiter la paire `a68c560e` / `ebdc6969` comme une seule étape ») ; annoncé en tête de PR. |
+| V-A6-06 | `a68c560e` | Retour arrière mesuré par verif : un ancien binaire refuse proprement la lecture et la compaction (« unsupported active snapshot pointer version: 3 »), ne modifie aucun fichier, et se rétablit en republiant un import (pointeur v2 réécrit). | remarque | **Documenté** dans l'ADR 0046 § Conséquences. |
+| V-A6-07 | `a68c560e` | Magasin fichier : un ré-import du même `snapshotId` laisse le V2 de même préfixe comme historique, qui occupe un emplacement de rétention jusqu'à la compaction ; PostgreSQL conserve le V2. | remarque | **Documenté** dans l'ADR 0046 (asymétrie), non corrigé. |
+| V-A6-08 | `a68c560e` | `FileSymbolSnapshotStore.publish(UUID, String, Collection<Symbol>)` écrit toujours en V1 UTF-16 ; l'ADR doit dire « un nouveau snapshot de connaissance ». | remarque | **Corrigé** dans l'ADR 0046. La méthode n'a aucun appelant de production (vérifié : `ScipSymbolSnapshotImporter` et `ScipProjectSnapshotLifecycle` publient avec occurrences et relations) ; renvoyée au § A6.8. |
+| M3 | `a68c560e` | Suggestion : un aller-retour positif d'une chaîne non ASCII de plus de 8 Mio et d'au plus 8 Mi caractères, pour que la mutation « borne en caractères » soit prise par un test positif. | suggestion | **Fait** : `e32bd9f6` (8 Mi « é », 16 Mio en UTF-8, restitués exactement). |
+| — | contrôles étape 1 | Étape 1 vérifiée (`e23b5ded`, `1acb68e8`) : octets V1/V2 identiques après réécriture ; frontière exacte ; aucun effet de bord au refus ; A/B rejoué avant 3 492/3 211 ms et ≈256 Mio écrits, après 1 777/1 738 ms et 0 octet ; refus pendant l'ingestion écarté à raison. | information | — |
+| — | contrôles étape 2 | Étape 2 vérifiée (`a68c560e`…`5f0c2d53`) : golden masqué identique ; fixtures régénérées 8/8 identiques ; fixtures piégées de verif exactes ; mutations rouges ; anti-bombe OK ; PostgreSQL requis vert ; import de ce dépôt publié à 194 552 030 o ; lecture froide ariane 128–133 ms contre 314–328 ms ; tas identique ; clean verify 1407/0/0/46. | information | — |
+| — | contrôles étape 4 | Contrôles `044c7f34` : clean verify 1409/0/0/46 ; référence hybride régénérée par verif et identique à l'octet ; classement identique. | information | — |
+| V-A6-09 | `bba7a91b` | La mutation H2 (réutiliser les textes normalisés du corpus précédent du même projet, s'il a autant de documents) survit à `HybridRankingEquivalenceTest`, `SemanticHybridIntelligenceTest` et `MinosApplicationWiringTest` : l'équivalence ouvre une application neuve par mode et ne publie qu'un snapshot. | bloquant | **Corrigé** (`bf3bd9b0`) : `HybridCorpusRefreshTest` publie A, B puis C dans une même application (B et C : nouvel identifiant, même nombre de documents, termes différents ; C après synchronisation sémantique). À chaque étape, le classement est égal à celui d'une application neuve et différent de l'étape précédente. H2 est rouge. Première tentative (suffixe ajouté aux noms) : H2 survivait, car les termes des requêtes ne changeaient pas. Remplacée par un décalage du nom dans le vocabulaire. |
+| V-A6-10 | `1c54a3a4` | La référence n'exerce jamais le bonus de phrase seul (aucune ligne à 0,25 sur une requête à un terme ; saturation à 60 ; `clamp01` masque le bonus) : H3 (phrase bornée aux termes) et H4 (bonus supprimé) survivent. | à corriger | **Corrigé** (`eb001186`) : 8 requêtes qui ne trouvent le texte que comme sous-chaîne (`napsho`, `tore`, `ormaliz`…), plus le classement complet (limite 500) de « store » et « napsho » dans les deux modes. Référence régénérée avec le `HybridSearchService` de `d9ae1005` (6 080 lignes, sha256 `e20c3dc4…6d11f`). H3 et H4 sont rouges. |
+| V-A6-11 | `bba7a91b` | `estimateCorpusWeight` ne compte pas `normalizedContents`. En non-Latin-1, un `String` prend 2 octets par caractère et le rapport estimé/retenu tombe à 0,68–0,75 (1,20–1,29 à la base) : le plafond de 256 Mio pourrait retenir environ 1,5 fois plus de tas que prévu. | bloquant | **Corrigé** (`0a92f97f`) : chaque chaîne est comptée, texte normalisé compris, à 1 octet par caractère en Latin-1 et 2 sinon. `HybridCorpusWeightTest` : estimé ≥ retenu sur 7 corpus (rapports 1,06 à 1,31) ; un corpus ASCII ne pèse pas plus qu'à `d9ae1005`. Rouge avec l'estimateur de `bba7a91b`. Limite d'admission et mesures au § A6.15 ; § A6.13 et Javadoc corrigés. |
+| V-A6-12 | (préexistant) | Le cache de corpus est identifié par le seul `snapshotId`. Un même identifiant republié avec un autre contenu, ou une source modifiée, sert un corpus périmé ; c'était déjà le cas à `d9ae1005`. | remarque, hors lot | **Renvoyé** au § A6.8, avec la piste « sha du snapshot actif dans l'identité du corpus ». Non corrigé. |
+| V-A6-00 | (avant le jalon 1) | Mesures indépendantes de verif (ratio 12,45 / 10,79 / 8,51, UTF-8 ≈ 0,55×, lecture froide d'ariane 452 ms) et huit pièges pour la suite : pointeur actif encodé avec les mêmes `writeString`/`readString` (l'encodage doit dépendre de la version, pointeur compris) ; PostgreSQL décode toujours en V2 sans colonne de version, plafond dupliqué ; ré-import du même SCIP après changement de format (« already exists with different content ») ; `logicalIdHash` et `listSnapshotFiles` à ne pas changer ; poids du cache (8×) qui baisserait sans gain de tas ; surrogates isolés (V2 les conserve, `getBytes(UTF_8)` les remplace par `?`) ; hybride : bonus de phrase sur sous-chaîne brute et égalités de score ; impact : limitations et marque de test posées pendant la traversée. | information | Intégré : recoupement au § A6.3.1 (écarts de 3 à 6 % expliqués par `indexRunId`), poids du cache présenté comme poids estimé et non comme mémoire (§ A6.3.3), pièges reportés dans les recommandations (§ A6.4). |
+
+| — | contrôles finaux | Contrôles `eb001186` à `8c6ddef0` : clean verify de la tête (PostgreSQL requis) 1411/0/0/46 ; JaCoCo seulement m24 ; 23 gates verts, 7 témoins rouges, helpers 63/31/8 ; `retention.golden` seul golden modifié, prouvé ; `ImpactAnalysisService` intact ; suivi A3/A4 intact. Référence hybride régénérée par verif à `d9ae1005` : identique à l'octet (6 080 lignes, sha `e20c3dc4…6d11f`). Mutations rejouées par verif, toutes rouges : H1 (normalisation divergente), H2 (cache non invalidé), H3 (phrase bornée aux termes), H4 (bonus supprimé), W1 (estimateur de `bba7a91b`), W2 (texte normalisé non compté). Sonde de tas de verif : estimé/retenu 1,05 à 1,32, stable à l'échelle (1,26 à 39 000 documents) ; la hausse de la limite d'admission ASCII (158 k → 202 k documents) est légitime, le majorant valant document par document. **Verdict : feu vert pour la PR A6.** | information | — |
+| V-A6-13 | `0a92f97f` | `HybridCorpusWeightTest` mesure le tas (marge minimale 1,05–1,06 sur les chunks longs) ; l'estimateur suppose 40 octets d'en-tête par chaîne (oops compressés), soit environ 8 octets de moins par chaîne qu'avec un tas de 32 Gio ou plus (moins de 2 % d'un chunk long). | remarque | **Résolu** par l'orchestrateur : note ajoutée à la Javadoc de `stringWeight`. |
+
+**Statut du lot A6 : accepté par verif-archi, aucun constat ouvert** (V-A6-12, préexistant, est renvoyé au § A6.8).
+
+## A6.8 À traiter plus tard (hors périmètre)
+
+| Origine | Description | Renvoi |
+|---|---|---|
+| impl-archi (jalon 1) | Estimation du poids des vues de requête : `QUERY_VIEW_PERSISTED_AMPLIFICATION = 8` (fichier et PostgreSQL) contre 1,4 mesuré ; toute vue d'un snapshot de plus de 64 Mio persistés est refusée par le cache et chaque requête relit tout le snapshot. Correction bornée, mesurable, sans changement de résultat. | A6 suite ou lot perf |
+| impl-archi (jalon 1) | Cache de corpus hybride : poids estimé 2,5 fois trop fort (2 octets par caractère contre des chaînes compactes) ; au-delà d'environ 158 000 documents le corpus n'est plus mis en cache et chaque requête le reconstruit (17 min à 161 307 documents). | lot perf |
+| impl-archi (jalon 1) | `SemanticIndexService.status` appelle `loadActiveKnowledge` même fournisseur désactivé : une recherche hybride charge le snapshot deux fois. | lot perf |
+| impl-archi (jalon 1) | `LocalSourceReader` relit le fichier entier pour chaque extrait (≈ 6 ms par document de corpus hybride, 515 s pour ce dépôt) ; le commentaire de `SemanticDocumentFactory` (« a file is not reread once per symbol ») est devenu faux. | lot perf, docs |
+| impl-archi (jalon 1) | `ImpactAnalysisService` reconstruit la table des symboles et l'index trié des arêtes entrantes à chaque appel (100 % du coût mesuré). | lot perf |
+| impl-archi (jalon 1) | `minos-app` construit dans le `target/` racine : sur un dépôt organisé ainsi, scip-java perd tous les modules sauf le dernier (l'agrégat `target/scip-targetroot` est effacé par le `clean` du module). Vaut pour ce dépôt, et pour tout projet utilisateur de même forme. | provider scip-java |
+| impl-archi (jalon 1) | Découverte de projet (`ProjectDiscoveryService.discover`) : 12,7 s sur ce worktree, 36 s sous `%TEMP%`, dont 99,6 % des échantillons natifs dans `discoverModuleRoots` ; elle fait 96 % de chaque requête d'architecture (§ A6.3.6). Profil du parcours (répertoires `target/`, détecteurs par répertoire, règles d'ignorance) à instruire. | lot perf |
+| verif-archi (V-A6-08) | `FileSymbolSnapshotStore.publish(UUID, String, Collection<Symbol>)` (publication « symboles seuls », V1) n'a aucun appelant de production ; elle écrit encore en UTF-16. À retirer du port ou à justifier. | hygiène stockage |
+| verif-archi (V-A6-12) | Cache de corpus hybride identifié par le seul `snapshotId` : un même identifiant republié avec un autre contenu, ou une source modifiée, sert un corpus périmé (préexistant à `d9ae1005`). Piste : mettre le sha du snapshot actif, et une empreinte des sources lues, dans l'identité du corpus. | lot perf ou sémantique |
+| impl-archi (jalon 1) | `minos index` impossible sur un poste où PowerShell 7 est sous `Program Files` sans élévation (bac à sable AppContainer). | A1 / D1 |
+
+## A6.9 Arbitrages de l'orchestrateur (29 septembre 2026)
+
+| # | Point | Décision |
+|---|---|---|
+| 1 | Plafonds | **À faire, en premier.** Évaluer d'abord un refus pendant l'ingestion (borne inférieure monotone et exacte) ; sinon taille encodée exacte après ingestion, refus avant toute écriture, message `PublicErrorMessages`, fichier et PostgreSQL. Tests : rouge d'abord, frontière au plafond, taille calculée = taille écrite pour tout format. |
+| 2 | Format V3 UTF-8 | **À faire**, contrôlé en bloquant par verif : lecture V1/V2 conservée (fixtures écrites à `d9ae1005`, fichier et PostgreSQL), repli V2 pour les surrogates isolés, décodage strict borné en octets, pointeur actif compatible, payload PostgreSQL auto-décrit, ré-import du même SCIP sans « different content », `logicalIdHash`, noms, `listSnapshotFiles` et compaction inchangés ; ADR. |
+| 3 | Traversée d'impact | **Ne pas faire** (infirmé en pratique). |
+| 4 | Normalisation hybride | **À faire** : cache du contenu normalisé dans `CachedCorpus`, pas d'index inversé, test d'équivalence ; arrêt si le classement bouge. |
+| 5 | Snapshot paginé ou mappé | **ADR `Proposed`**, sans implémentation. |
+| — | § A6.8 | Hors lot, remonté à l'utilisateur. |
+
+## A6.10 Étape 1 — plafond : taille exacte, refus avant toute écriture
+
+**Refus pendant l'ingestion : évalué, écarté.**
+
+- La taille encodée est une propriété du codec du magasin : fichier V1/V2, PostgreSQL, bientôt V3 avec un repli V2 décidé sur le snapshot entier. L'importeur SCIP (`minos-provider-scip`) ne connaît que le port `CodeKnowledgeSnapshotStore`. Un adaptateur ne dépend pas d'un autre (`check-module-boundaries`) : il faudrait un nouveau port.
+- Le magasin de capture de l'importeur indexe les entités par identifiant et remplace une entité ré-émise. La somme courante n'est donc pas monotone sans suivre ces remplacements.
+- Le gain serait borné par l'ingestion elle-même. Or le travail perdu mesuré est surtout l'écriture : 2,1 à 3,1 s d'écriture inutile, contre 1,2 à 1,6 s pour tout l'import sans persistance (gel, sha256 et décodage compris).
+
+**Aucun critère n'est possible avant le décodage.** Le ratio V2/SCIP va de 9,0 à 14,2 selon le corpus (§ A6.3.1). Les comptes de la pré-analyse majorent les entités persistées au lieu de les minorer, l'ingestion pouvant en écarter. Tout refus avant l'ingestion pourrait rejeter un snapshot qui tient. Le Javadoc de `SnapshotCodec.requirePersistable` le dit.
+
+**Réalisation.**
+
+- `SnapshotBinaryCodecSupport` : les écrivains parcourent le snapshot contre un `EncodingSink`, flux réel (`StreamSink`) ou compteur (`CountingSink`). La taille annoncée et la taille écrite viennent du même parcours et ne peuvent pas diverger ; le compteur applique aussi le contrôle de longueur de chaîne de l'écrivain. Nouvelles méthodes : `encodedSymbolSnapshotV1Size`, `encodedKnowledgeSnapshotV2Size`, `requirePersistable(long)`.
+- `SnapshotCodec` : `encodedSize`, `requirePersistable` (défaut) et `MAX_PERSISTED_SNAPSHOT_BYTES`, qui reprend la constante de `SnapshotBinaryCodecSupport` (littéral exigé par `check-mne.py`, inchangé). `PostgresCodeKnowledgeSnapshotStore` n'a plus de copie du plafond : il reprend `SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES`.
+- `FileSymbolSnapshotStore.publishSnapshot` et `PostgresCodeKnowledgeSnapshotStore.publishSnapshot` appellent `requirePersistable` **avant** de créer le fichier temporaire ou le fichier de travail, puis vérifient que la taille écrite est la taille annoncée.
+- Message : `knowledge snapshot is too large to persist: <n> encoded bytes exceed the 268435456-byte limit (256 MiB); nothing was written`. Il ne porte que des tailles et passe `PublicErrorMessages.sanitize` inchangé (testé).
+
+**Tests.**
+
+- `PersistedSnapshotLimitTest` (3 tests) :
+  - un snapshot trop grand ne laisse aucun fichier ajouté ni modifié, et le snapshot actif reste inchangé ;
+  - le refus est décidé avant toute E/S : le répertoire du projet est occupé par un fichier ordinaire, et seul un refus décidé avant l'I/O passe ;
+  - frontière : un snapshot d'exactement 268 435 456 octets est publié (fichier de 268 435 456 octets), un octet de plus est refusé.
+- `SnapshotEncodedSizeTest` (4 tests) : taille annoncée = taille écrite en V1 et V2, sur un snapshot qui passe par chaque branche des codecs (`CodecFixtures`), un grand snapshot et un snapshot vide. `encodeToBytes` concorde ; une chaîne trop longue est refusée de la même façon.
+- `PostgresCodeKnowledgeSnapshotStoreTest.oversizedSnapshotIsRefusedBeforeAnyScratchFileOrRow` : aucun fichier de travail, aucune ligne insérée, snapshot actif inchangé, message identique.
+- Les snapshots de plus de 256 Mio partagent une seule chaîne de 8 millions de caractères (`PersistedSizeFixtures`) : ils ne coûtent que quelques mégaoctets de tas.
+
+**Mesures avant/après.** Pour « avant », le `minos-storage-local` de `d9ae1005` est recompilé et placé en tête du classpath du banc. 7 itérations ; deux paires A/B en ordre inversé, car l'écart d'une exécution à l'autre dépasse 30 %.
+
+| Mesure (médiane, paire 1 / paire 2) | Avant | Après |
+|---|---:|---:|
+| Import de ce dépôt (refusé) | 4 734 / 3 372 ms | **2 274 / 1 772 ms** |
+| dont temps après l'ingestion (import − import sans persistance) | 3 117 / 2 138 ms, 256 Mio écrits puis effacés | **660 / 379 ms, 0 octet écrit** |
+| Import publié, ariane-chatbot (31,8 Mo) | 552 / 420 ms | 398 / 408 ms |
+| Import publié, nexus-context-engine (26,7 Mo) | 429 / 313 ms | 324 / 306 ms |
+| Publication de la tranche `file-f0.50` (162 Mo) | 1 935 / 1 375 ms | 1 400 / 1 294 ms |
+
+- Le passage de comptage n'a pas de coût mesurable sur les imports qui passent : les écarts restent dans le bruit.
+- Le refus de ce dépôt arrive 1,6 à 2,5 s plus tôt et n'écrit plus rien. Les 379 à 660 ms restants sont le tri et le contrôle d'unicité du magasin, plus le comptage.
+- La taille est calculée sur le snapshot réellement ingéré, donc sur l'`Origin` du produit (`indexRunId`, `providerVersion`), jamais sur une estimation (V-A6-03).
+
+## A6.11 Étape 2 — format V3 UTF-8
+
+Décision : [ADR 0046](../adr/0046-format-de-snapshot-v3-chaines-utf8.md).
+
+**Réalisation** (`a68c560e`).
+
+- `SnapshotCodecV3` : même mise en page que V2, version 3, chaînes UTF-8 préfixées par leur longueur en octets.
+  - Écriture exacte : une chaîne avec un surrogate isolé est refusée, jamais remplacée par `?`.
+  - Lecture stricte (`CodingErrorAction.REPORT`), bornée à 3 × 8 Mi octets par chaîne avant toute lecture, par `readNBytes` sans pré-allocation.
+- `SnapshotBinaryCodecSupport` : les lecteurs passent par un `SnapshotInput` qui décode les chaînes selon le format ; les écrivains, par un `EncodingSink` paramétré par l'encodage. V1, V2 et V3 partagent ainsi un seul parcours.
+- `KnowledgeSnapshotCodecs` : politique commune au magasin fichier et à PostgreSQL.
+  - `select` : V3 par défaut ; V2 pour le snapshot entier dès qu'une chaîne contient un surrogate isolé ; taille exacte et refus au plafond calculés avant toute E/S.
+  - `forVersion` et `read` : lecture d'un payload dans le format que déclare son en-tête.
+- `ActiveSnapshotRepository` : version 3 acceptée. La mise en page du pointeur est inchangée depuis V2, donc les pointeurs V1/V2 gardent leurs octets.
+- PostgreSQL :
+  - `PostgresSnapshotPayloadCodec` passe par `KnowledgeSnapshotCodecs` ;
+  - le descripteur porte la version lue dans l'en-tête, et non plus un 2 écrit en dur ;
+  - ré-import sous le même identifiant avec d'autres octets : les deux payloads sont décodés et comparés comme contenus ; un V2 identique est conservé, un contenu différent reste refusé.
+- Inchangés : `logicalIdHash`, le schéma des noms, `listSnapshotFiles`, la compaction, le calcul d'intégrité (sha256 des octets), `CodeKnowledgeSnapshotBinaryCodec` (pont V2).
+
+**Fixtures de la base.**
+
+- `LegacySnapshotFixtureGenerator` et `LegacySnapshotContent` (sources de test, autonomes) se compilent contre le `minos-storage-local` de `d9ae1005`, compilé depuis `git archive d9ae1005`. `minos-domain` et `minos-engine` sont identiques à `d9ae1005` (`git diff --quiet d9ae1005 -- minos-domain minos-engine`).
+- Trois magasins : `v1-symbols`, `v2-well-formed`, `v2-lone-surrogate`. Chaînes piégées : accents, emoji (paire), CJK, NUL, U+FFFF, et un surrogate isolé dans la troisième variante.
+- L'écriture est déterministe : deux générations donnent des octets identiques (`diff -r`).
+- sha256 des fichiers de snapshot :
+  - `v1` : `ae66cfbfd0c3653a71dc8aca085806c7b673dfdee35ef150dc7877c8bd6912b2`
+  - `v2-well-formed` : `f29cf835e97ba31a88f1149db4c7b153306edc8ec06364c7855c25f64398aae3`
+  - `v2-lone-surrogate` : `49e434c3d070e9ea19cac719eb4378732cceab629af3baf926ad87e4120212a4`
+- sha256 des pointeurs :
+  - `v1` : `c369dea7…`
+  - `v2-well-formed` : `af0c2ea7…`
+  - `v2-lone-surrogate` : `99af981d…`
+- Stockés sous `src/test/resources/snapshot-formats/base-d9ae1005/` avec un nom court (limite de chemin de Git sous Windows), marqués `binary` dans `.gitattributes`. Les deux payloads V2 sont recopiés pour PostgreSQL.
+
+**Tests.**
+
+- `SnapshotFormatCompatibilityTest` :
+  - les stores V1 et V2 de la base s'ouvrent, leurs octets restent intacts et le descripteur porte la version 1 ou 2 ;
+  - un home V2 existant s'ouvre, puis un nouvel import est promu en V3 : pointeur 3, en-tête 3, checksum cohérent ; `listSnapshotFiles` voit les deux fichiers et la compaction garde le V2 comme historique valide ;
+  - le ré-import du même snapshot après le changement de format passe, avec des noms issus du même `logicalIdHash` ;
+  - un snapshot avec surrogate isolé est republié en V2, exact.
+- `SnapshotCodecV3Test` :
+  - aller-retour de toutes les chaînes piégées ;
+  - taille ASCII ≈ moitié de V2 ;
+  - surrogate isolé : `encodedSizeIfEncodable` vide, écriture V3 refusée, `select` → V2 ;
+  - UTF-8 mal formé (CESU-8, suite invalide) signalé ;
+  - bornes en octets : longueur excessive refusée, longueur au-delà du fichier → « truncated », sans allocation de 24 Mo ;
+  - chaque codec refuse la version de l'autre.
+- `SnapshotEncodedSizeTest` : taille V3 annoncée = taille écrite.
+- `PersistedSnapshotLimitTest` : frontière du plafond mesurée en V3 ; un snapshot qui tient en V3 mais que son surrogate isolé force en V2 est refusé sur sa taille V2.
+- `PostgresSnapshotFormatCompatibilityTest` :
+  - payload V2 de la base inséré tel quel : lu (descripteur 2) ;
+  - ré-import du même snapshot : le payload V2 est conservé octet pour octet ;
+  - contenu différent sous le même identifiant : toujours refusé ;
+  - nouvel import : payload V3 ;
+  - payload avec surrogate isolé : lu exactement et republié en V2.
+
+**Exception `retention.golden`** (arbitrage : voie 1 sous preuve stricte ; seul golden modifié du chantier, commit `ebdc6969` qui ne contient que ce fichier et sa preuve).
+
+- **Cause.** Le golden liste les noms `snapshot-<logicalIdHash>-<sha256 du contenu>.knowledge`. V3 change les octets, donc le suffixe.
+- **Preuve mécanique.** Dans l'ancien golden (`d9ae1005`) et le nouveau, on remplace chaque `-<64 hex>.knowledge` par `-<SHA>.knowledge`. Résultat :
+  - textes identiques octet pour octet, 4 312 octets chacun ;
+  - 8 noms de chaque côté ;
+  - seules les lignes 11, 14 et 17 diffèrent, et seulement par ces suffixes ;
+  - préfixes `logicalIdHash`, comptes de suppression (1 puis 2), snapshot actif (`a2-snapshot-4`) et ordre des lignes inchangés.
+- **Même contenu logique.** `RetentionFormatEquivalenceTest` rejoue l'import du scénario : même fixture, identité de projet figée, `indexRunId = "application-" + snapshotId`, `scip-typescript` 0.4.0. Pour chacun des 4 snapshots :
+  - le fichier V3 porte le sha du nouveau golden ;
+  - son modèle décodé, réencodé en V2, redonne à l'octet près le sha que `d9ae1005` avait écrit (ancien golden).
+
+  Le V2 étant déterministe, le modèle V3 est exactement celui que la base avait écrit.
+
+  | Snapshot | sha V2 écrit par la base | sha V3 |
+  |---|---|---|
+  | a2-snapshot-1 | `ae70a8e4…00ea` | `65c5b788…003a` |
+  | a2-snapshot-2 | `0aa1a3f1…0ce87d` | `cdc627e4…ab8f239c` |
+  | a2-snapshot-3 | `cf9fefcb…effcd00ec` | `43f45d5f…d9e65da6b30` |
+  | a2-snapshot-4 | `97f23527…5c9ff5c` | `57ba81ec…3f9c88839` |
+
+- **Autres golden.** Les 11 autres golden et `A2CompositionCharacterizationTest` sont verts et inchangés (`git diff --stat d9ae1005 -- minos-app/src/test/resources/characterization` : `retention.golden` seul, 3 lignes).
+- **Documentation.** ADR 0046 § Conséquences. `docs/user/` n'a pas de section qui décrive le stockage ou la rétention des snapshots locaux : rien à y ajouter.
+
+**Mesures avant/après.** Banc : `minos-storage-local` de `d9ae1005` en tête du classpath pour « avant », deux paires A/B en ordre inversé. Tailles données par le vrai encodeur (V-A6-04).
+
+| Mesure | V2 (avant) | V3 (après) |
+|---|---:|---:|
+| Import de ce dépôt | refusé (355 045 885 octets) | **publié, 194 552 030 octets** (0,548×) |
+| ariane-chatbot / nexus-context-engine | 33 157 453 / 27 515 826 | 18 198 069 / 15 120 767 (0,549 / 0,550) |
+| Tranche `file-f0.50` sur disque | 170 196 551 | 93 266 764 (0,548×) |
+| Lecture à froid de `file-f0.50` (médiane, deux paires) | 1 494 / 1 728 ms | **614 / 597 ms** |
+| Tas de `file-f0.50` : vue / snapshot seul | 238,7 / 199,2 Mo | 237,9 / 198,3 Mo |
+| Publication de `file-f0.50` | 1 394 / 1 283 ms | 1 098 / 1 035 ms |
+| Import publié : ariane / nexus | 354 / 288 ms | 305 / 296 ms |
+| Dépôt entier en V3 : publication, lecture à froid, construction des index | — | 2 209 ms, 1 655 ms, 395 ms |
+| Dépôt entier en V3 : tas vue / snapshot seul | — | 494,7 / 413,2 Mo, non mis en cache |
+
+- **Aucun gain mémoire.** Le tas réel est identique en V2 et en V3. Le poids **estimé** par le cache de vues (8 fois la taille du fichier) baisse de 45 %, et le cache admet donc des snapshots un peu plus gros ; le tas, lui, ne bouge pas.
+- Le dépôt entier (vue de 495 Mo en tas, poids estimé 1,56 Go) n'est toujours pas mis en cache ; § A6.8.
+- Seuil SCIP du plafond pour ce corpus, avec l'`Origin` du produit : de 18,0 à 32,9 Mo.
+
+## A6.12 Étape 3 — traversée d'impact : non faite (infirmé en pratique)
+
+Arbitrage : **ne pas faire**. Le constat de l'audit est exact dans le code : `ImpactAnalysisService.analyze` trie tous les candidats sélectionnés et n'applique `maxResults` qu'à la fin. Il est infirmé en pratique : la traversée n'a aucun coût mesurable, et l'arrêt anticipé risque de changer le rapport.
+
+**Chiffres** (§ A6.3.5, `run1` et `run3`, corpus réel et ses répliques).
+
+| Jeu | Relations | Coût fixe, racine sans arête entrante (médiane) | Racine la plus large, `maxDepth` 32 | `maxResults` 10 000 | `maxResults` 10 |
+|---|---:|---:|---:|---:|---:|
+| file-f0.25 | 3 713 | 3,5 ms | 15 symboles | 2,9 ms | 2,4 ms |
+| file-f0.50 | 6 934 | 4,6 ms | 24 symboles | 4,4 ms | 4,2 ms |
+| mem-k1 (dépôt entier) | 14 299 | 15,0 ms (`run2` : 16,6) | 52 symboles | 17,3 ms | 15,6 ms |
+| mem-k2 | 28 598 | 38,4 ms | 52 symboles | 40,6 ms | 43,7 ms |
+| mem-k3 | 42 897 | 68,5 ms | 52 symboles | 70,7 ms | 69,6 ms |
+
+- Avec ou sans `maxResults` petit, le temps est celui de la préparation, à la dispersion de mesure près.
+- JFR : l'index des arêtes entrantes pèse 64 à 77 %, les limitations de base 9 à 15 %, le corps d'`analyze` (table des symboles, file de priorité, tri final) 14 à 26 %, la construction des chemins 0 %.
+- Le coût croît avec la taille du snapshot (15, 38 puis 68 ms pour 1, 2 et 3 répliques), pas avec `maxResults`.
+- La portée maximale observée est de 52 symboles : le graphe issu de scip-java est clairsemé, 0,36 relation par symbole.
+
+**Risque sur le rapport.** Un arrêt dès `maxResults` candidats finalisés changerait le rapport produit, et donc celui d'`AdvancedImpactService`, qui s'appuie sur `ProjectImpactQuery`.
+
+- **Limitations posées pendant la traversée.** `MAX_DEPTH_REACHED` est ajoutée quand un nœud à la profondeur maximale a encore des arêtes vers des symboles non sélectionnés. `EXTERNAL_TARGETS_NOT_TRAVERSED` et `GENERATED_SYMBOLS_NOT_TRAVERSED` sont ajoutées dès qu'une arête mène à un symbole externe ou généré. Un arrêt anticipé les omettrait alors que la traversée complète les aurait posées.
+- **Marque de test.** `potentiallyImpactedTests` et le drapeau `testImpact` viennent de la meilleure arête `RELATED_TEST` vers chaque symbole. Cette arête peut partir d'un nœud finalisé *après* le symbole marqué : le candidat de test est découvert plus tard, par un chemin plus profond.
+- **Aucun gain mesurable.** Il n'y aurait donc rien à mettre en balance avec ce risque.
+
+**Levier réel, hors lot** (§ A6.8) : la table des symboles et l'index trié des arêtes entrantes sont reconstruits à chaque appel. Les construire une fois par snapshot, sur le modèle de la vue de requête, supprimerait l'essentiel du coût sans rien changer au parcours, donc sans risque pour le rapport. Ce levier demande sa propre mesure et son propre test d'équivalence.
+
+## A6.13 Étape 4 — normalisation hybride mise en cache
+
+**Réalisation** (`bba7a91b`).
+
+- `CachedCorpus` porte `normalizedContents`, un texte normalisé par document. Il est calculé une seule fois à la construction du corpus, par la même fonction `normalize` que le score appelait à chaque requête.
+- Même durée de vie que le corpus, donc mêmes péremptions : même identité (`snapshotId`, index sémantique), même éviction. Les deux péremptions déjà connues du cache de corpus (même `snapshotId` republié avec un autre contenu, sources modifiées) s'appliquent à l'identique, sans en ajouter.
+- `LexicalQuery.scoreNormalized` évalue le texte déjà normalisé ; `score(content)` délègue à `normalize` puis à `scoreNormalized`.
+- Pas d'index inversé : le bonus de phrase porte sur une sous-chaîne brute, qu'un index par termes perdrait.
+- ~~Le poids estimé du corpus ne compte pas les textes normalisés~~ : **erreur corrigée** (V-A6-11, § A6.15). Ne pas les compter faisait passer le poids estimé sous le tas réel pour les contenus non Latin-1, avec un rapport de 0,65 à 0,73. Le poids compte désormais toutes les chaînes à leur largeur réelle.
+
+**Équivalence du classement** (`1c54a3a4`, puis vert à l'octet après `bba7a91b`).
+
+- `HybridRankingEquivalenceTest` compare octet pour octet à `hybrid-ranking-d9ae1005.tsv`, produite par le même test avec le `minos-application` de `d9ae1005` (sha256 `a4a77406…45244`, épinglée en LF).
+- Corpus déterministe : 250 fichiers, 1 500 symboles, environ 3 300 documents.
+- Vocabulaire piégé pour la normalisation : casse, accents, ligature `ﬁ`, `İ` dont la minuscule change de longueur, sigma grec, CJK, emoji, chiffres exotiques, soulignés, ponctuation.
+- 30 requêtes, 60 résultats, en mode structuré et en mode sémantique (`local-hash`) : 3 300 lignes, avec la clé stable, les bits IEEE 754 de chaque score et le mode ; 1 489 égalités exactes départagées par `stableKey`.
+
+**Mesures avant/après** : ce dépôt en mémoire (`mem-k1`, 81 095 documents), 4 requêtes, préchauffage 3, 15 itérations ; `minos-application` de `d9ae1005` en tête du classpath pour « avant ». L'effet dépasse de loin l'écart d'une exécution à l'autre, d'où une seule paire.
+
+| Mesure | Avant | Après |
+|---|---:|---:|
+| Requête (médiane, quatre requêtes) | 133–148 ms | **23–37 ms** |
+| Requête (p95) | 164–212 ms | 28–45 ms |
+| Allocation par requête | 63–65 Mo | **2,1–4,6 Mo** |
+| Part de `normalize` (JFR) | 82,9 % | 0 % |
+| Tas retenu par le corpus | 55,2 Mo | 74,4 Mo (+19,2 Mo) |
+| Poids estimé du corpus | 137,6 Mo | 137,6 Mo à `bba7a91b`, puis 107,5 Mo après V-A6-11 (§ A6.15). « Toujours un majorant » était faux pour les contenus non Latin-1. |
+| Construction du corpus (1re recherche) | 506 s | 542 s (normalisation + dispersion des E/S) |
+
+**Portée dans le chemin produit** (dit honnêtement) : le gain est **nul** tant que le cache de vues refuse les snapshots de plus de 64 Mio persistés. Au-delà, chaque requête relit le snapshot, deux fois (§ A6.3.4), et ce rechargement fait 96–97 % du temps. Le gain est aussi sans objet au-delà d'environ 158 000 documents, où le corpus lui-même n'est plus mis en cache. Il porte sur les projets dont la vue est en cache, et sur tout chemin qui garde le snapshot en mémoire. Corrections renvoyées au § A6.8.
+
+## A6.14 Étape 5 — ADR 0047 (`Proposed`)
+
+[ADR 0047](../adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md), appuyé sur les mesures des § A6.3 et § A6.11, sans implémentation.
+
+Constats :
+- le tas d'un snapshot relu (413 Mo pour ce dépôt) est 2,5 fois celui du même snapshot ingéré (163 Mo), parce que le décodage recrée une chaîne par champ ;
+- une table de chaînes réduirait le fichier à environ 0,35 fois V3 ;
+- les gros projets ne sont pas en cache.
+
+Ordre proposé, chaque passage conditionné par une mesure sur le corpus réel :
+1. les corrections bornées du § A6.8 ;
+2. dédoublonnage des chaînes au décodage (pas de nouveau format) ;
+3. table de chaînes sur disque (format V4) si nécessaire ;
+4. snapshot paginé ou mappé seulement si le tas d'un projet cible reste hors budget, en chantier propre, précédé de l'inventaire des 25 classes de production qui consomment `CodeKnowledgeSnapshot`.
+
+## A6.15 Correctifs de l'étape 4 (V-A6-09 à 11)
+
+**V-A6-10, référence étendue** (`eb001186`).
+
+- 8 requêtes ne trouvent le texte que comme sous-chaîne d'un terme ; le score lexical vaut alors exactement 0,25, sans `clamp01`.
+- « store » et « napsho » sont classées en entier (limite 500) dans les deux modes.
+- Régénération par la procédure existante : `HybridSearchService` remplacé par `git show d9ae1005:…` (le `git diff --quiet d9ae1005 -- minos-application` le confirme), test lancé avec `-Dminos.hybridRanking.write=<fichier>`, puis fichier courant remis en place. Référence de 6 080 lignes, sha256 `e20c3dc48100b4c14f4c033c1b556dbfab3bb568b68782a4416888862ce6d11f`.
+- Code courant : identique à l'octet. Mutations H3 (`containsTerm` à la place de `contains` pour la phrase) et H4 (bonus supprimé) : rouges.
+
+**V-A6-09, republication dans une même application** (`bf3bd9b0`).
+
+- `HybridCorpusRefreshTest` publie A, B puis C dans une même application (voir § A6.7). Chaque classement est comparé à celui d'une application neuve sur le même état, et doit différer de l'étape précédente.
+- Mutation H2 (textes normalisés du corpus précédent réutilisés à taille égale) : rouge à la première republication. Le premier essai, qui ajoutait un suffixe aux noms, laissait survivre H2, parce que les termes des requêtes ne changeaient pas.
+
+**V-A6-11, poids du corpus** (`0a92f97f`).
+
+- `stringWeight` compte 40 octets plus 1 octet par caractère si la chaîne est entièrement Latin-1 (chaînes compactes de la JVM), 2 octets sinon. Le texte normalisé est compté.
+- Pour un corpus ASCII, le nouveau poids ne dépasse jamais l'ancien. Chaque document a au moins un identifiant de 73 caractères et un checksum de 64, qui passent de 2 octets à 1 octet par caractère. Cette économie couvre les 40 octets d'en-tête du texte normalisé, qui n'est jamais plus long que le contenu en ASCII.
+- `HybridCorpusWeightTest` : 120 fichiers, 1 200 symboles, environ 2 500 documents ; tas retenu après GC autour de la première recherche, snapshot et état sémantique déjà chargés.
+
+| Corpus | Base `d9ae1005` : estimé / retenu (rapport) | `bba7a91b` | Après correctif |
+|---|---:|---:|---:|
+| ASCII, lignes courtes | 3 268 704 / 1 561 080 (2,09) | 3 268 704 / 2 205 272 (1,48) | 2 885 224 / 2 204 600 (1,31) |
+| ASCII, chunks longs | 9 055 400 / 4 439 600 (2,04) | 9 055 400 / 7 978 744 (1,13) | 8 671 920 / 7 977 416 (1,09) |
+| Latin-1, courtes | 3 063 746 / 1 765 320 (1,74) | 3 063 746 / 2 630 560 (1,16) | 3 330 694 / 2 630 664 (1,27) |
+| Latin-1, longs | 7 434 820 / 6 129 952 (1,21) | 7 434 820 / 11 360 312 (**0,65**) | 12 061 681 / 11 361 280 (1,06) |
+| CJK, courtes | 2 777 146 / 1 579 632 (1,76) | 2 777 146 / 2 249 272 (1,23) | 2 953 156 / 2 249 024 (1,31) |
+| CJK, longs | 5 180 204 / 3 982 608 (1,30) | 5 180 204 / 7 055 488 (**0,73**) | 7 759 272 / 7 055 640 (1,10) |
+| Mixte, longs | 7 219 462 / 5 949 840 (1,21) | 7 219 462 / 10 996 712 (**0,66**) | 11 698 930 / 10 996 712 (1,06) |
+
+Le vocabulaire « Latin-1 » contient `œ` (U+0153), qui n'est pas Latin-1 : ses contenus sont stockés à 2 octets par caractère, et l'estimateur les compte ainsi.
+
+**Limite d'admission (documents ASCII)**, sur le corpus de ce dépôt (`mem-k1`, 81 095 documents, en mémoire) :
+
+| | Poids estimé | Octets par document | Limite d'admission (256 Mio) | Tas retenu | Estimé / retenu |
+|---|---:|---:|---:|---:|---:|
+| Base `d9ae1005` | 137 587 170 | 1 697 | ≈ 158 200 documents | 55,2 Mo | 2,49 |
+| `bba7a91b` | 137 587 216 | 1 697 | ≈ 158 200 documents | 74,4 Mo | 1,85 |
+| Après correctif | 107 482 154 | 1 325 | ≈ 202 500 documents | 74,7 Mo | 1,44 |
+
+La limite d'admission ne baisse pas : elle monte, et l'estimation reste un majorant du tas réel. Temps par requête après correctif : 31–40 ms en médiane, dans la dispersion de l'étape 4 (23–37 ms). Le plafond de 250 000 documents du budget sémantique reste la borne dure.

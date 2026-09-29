@@ -4,6 +4,8 @@ import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.io.PrivateLocalStorage;
+import com.minos.storage.local.store.KnowledgeSnapshotCodecs;
+import com.minos.storage.local.store.SnapshotCodec;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.InMemoryCodeKnowledgeStore;
@@ -34,7 +36,7 @@ import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
 final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotStore {
-    private static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
+    private static final long MAX_PERSISTED_SNAPSHOT_BYTES = SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES;
     private static final int MAX_ACTIVE_QUERY_RETRIES = 4;
     private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L;
     private static final int MAX_QUERY_CACHE_ENTRIES = 32;
@@ -131,12 +133,13 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
                     retry = true;
                 } else {
                     long payloadBytes = Files.size(value.payload());
-                    CodeKnowledgeSnapshot snapshot = decodeVerified(projectId, value);
+                    DecodedPayload decoded = decodeVerified(projectId, value);
+                    CodeKnowledgeSnapshot snapshot = decoded.snapshot();
                     long started = System.nanoTime();
                     InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot);
                     long buildNanos = System.nanoTime() - started;
                     SnapshotDescriptor descriptor = new SnapshotDescriptor(
-                            2,
+                            decoded.formatVersion(),
                             snapshot.snapshotId(),
                             "postgresql:" + snapshot.snapshotId(),
                             metadata.sha256(),
@@ -206,10 +209,17 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     }
 
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot) throws IOException {
+        // Codec and exact size are chosen, and an oversized snapshot refused, before any I/O: no scratch
+        // file, no row, no activation change (A6).
+        KnowledgeSnapshotCodecs.Selection selection = codec.select(snapshot);
+        long encodedBytes = selection.encodedBytes();
         Path payload = createScratchFile("snapshot-write-");
         try {
-            String sha = codec.encode(payload, snapshot).sha256();
+            String sha = codec.encode(selection, payload, snapshot).sha256();
             long payloadBytes = Files.size(payload);
+            if (payloadBytes != encodedBytes) {
+                throw new IOException("PostgreSQL knowledge snapshot encoding length differs from its computed size");
+            }
             if (payloadBytes < 1L || payloadBytes > MAX_PERSISTED_SNAPSHOT_BYTES) {
                 throw new IOException("PostgreSQL knowledge snapshot payload exceeds streaming limit");
             }
@@ -217,7 +227,9 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
                 connections.inTransaction(connection -> {
                     PostgresProjectMutationLock.acquire(connection, snapshot.projectId());
                     String existingSha = existingSnapshotSha(connection, snapshot);
-                    validateExistingSnapshot(snapshot, sha, existingSha);
+                    if (existingSha != null && !existingSha.equals(sha)) {
+                        requireSameContent(connection, snapshot, payload);
+                    }
                     if (existingSha == null) insertSnapshot(connection, snapshot, payload, payloadBytes, sha);
                     activateSnapshot(connection, snapshot);
                     return null;
@@ -243,15 +255,39 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         }
     }
 
-    private static void validateExistingSnapshot(
-            CodeKnowledgeSnapshot snapshot,
-            String expectedSha,
-            String existingSha
-    ) throws IOException {
-        if (existingSha != null && !existingSha.equals(expectedSha)) {
-            throw new IOException(
-                    "PostgreSQL snapshot identity already exists with different content: "
-                            + snapshot.snapshotId());
+    /**
+     * The same snapshot identity is already stored with other bytes. That is legitimate when only the format
+     * changed (a V2 payload re-imported after V3, ADR 0046): both payloads are decoded in their own format and
+     * compared as content. Any other difference is still an identity conflict.
+     */
+    private void requireSameContent(Connection connection, CodeKnowledgeSnapshot snapshot, Path encodedPayload)
+            throws SQLException, IOException {
+        Path existing = createScratchFile("snapshot-existing-");
+        try {
+            String existingSha;
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT payload, sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
+                statement.setObject(1, snapshot.projectId());
+                statement.setString(2, snapshot.snapshotId());
+                try (ResultSet result = statement.executeQuery()) {
+                    if (!result.next()) throw new IOException("PostgreSQL snapshot identity vanished during publication");
+                    try (InputStream input = result.getBinaryStream(1);
+                         OutputStream output = Files.newOutputStream(existing)) {
+                        copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
+                    }
+                    existingSha = result.getString(2);
+                }
+            }
+            if (!existingSha.equals(new com.minos.storage.local.store.SnapshotIntegrityService().checksum(existing))) {
+                throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
+            }
+            if (!codec.decode(existing).equals(codec.decode(encodedPayload))) {
+                throw new IOException(
+                        "PostgreSQL snapshot identity already exists with different content: "
+                                + snapshot.snapshotId());
+            }
+        } finally {
+            Files.deleteIfExists(existing);
         }
     }
 
@@ -367,21 +403,24 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         PrivateLocalStorage.verifyPrivateDirectory(scratchRoot);
     }
 
-    private CodeKnowledgeSnapshot decodeVerified(UUID projectId, Row row) throws IOException {
+    private DecodedPayload decodeVerified(UUID projectId, Row row) throws IOException {
         try {
             String actualSha = new com.minos.storage.local.store.SnapshotIntegrityService().checksum(row.payload());
             if (!row.sha256().equals(actualSha)) {
                 throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
             }
+            int formatVersion = codec.formatVersion(row.payload());
             CodeKnowledgeSnapshot snapshot = codec.decode(row.payload());
             if (!projectId.equals(snapshot.projectId()) || !row.snapshotId().equals(snapshot.snapshotId())) {
                 throw new IOException("PostgreSQL knowledge snapshot identity mismatch");
             }
-            return snapshot;
+            return new DecodedPayload(snapshot, formatVersion);
         } finally {
             Files.deleteIfExists(row.payload());
         }
     }
+
+    private record DecodedPayload(CodeKnowledgeSnapshot snapshot, int formatVersion) { }
 
     private static void copyBounded(InputStream input, OutputStream output, long maximum) throws IOException {
         byte[] buffer = new byte[8192];

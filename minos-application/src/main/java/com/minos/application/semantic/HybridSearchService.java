@@ -75,8 +75,9 @@ public final class HybridSearchService {
         LexicalQuery lexicalQuery = LexicalQuery.compile(request.query());
 
         List<HybridHit> hits = new ArrayList<>();
-        for (SemanticDocument document : corpus.documents()) {
-            double lexical = lexicalQuery.score(document.content());
+        for (int index = 0; index < corpus.documents().size(); index++) {
+            SemanticDocument document = corpus.documents().get(index);
+            double lexical = lexicalQuery.scoreNormalized(corpus.normalizedContents().get(index));
             double semantic = semanticScores.getOrDefault(document.stableKey(), 0.0);
             double graph = document.kind() == SemanticDocumentKind.SYMBOL && corpus.maxDegree() > 0
                     ? corpus.graphDegree().getOrDefault(document.sourceId(), 0) / (double) corpus.maxDegree() : 0.0;
@@ -108,8 +109,9 @@ public final class HybridSearchService {
         CachedCorpus corpus = corpus(project, snapshot, null, snapshot.snapshotId() + ":structured");
         LexicalQuery lexicalQuery = LexicalQuery.compile(query);
         List<HybridHit> hits = new ArrayList<>();
-        for (SemanticDocument document : corpus.documents()) {
-            double lexical = lexicalQuery.score(document.content());
+        for (int index = 0; index < corpus.documents().size(); index++) {
+            SemanticDocument document = corpus.documents().get(index);
+            double lexical = lexicalQuery.scoreNormalized(corpus.normalizedContents().get(index));
             if (lexical > 0.0) hits.add(new HybridHit(document, lexical, lexical, 0.0, 0.0, LEXICAL_SIGNAL,
                     List.of(new RankingSignal(LEXICAL_SIGNAL, lexical, InformationNature.DERIVED))));
         }
@@ -134,7 +136,11 @@ public final class HybridSearchService {
         List<SemanticDocument> documents = indexedDocuments != null ? List.copyOf(indexedDocuments) : documentFactory.build(project, snapshot);
         Map<String, Integer> graphDegree = Map.copyOf(symbolGraphDegree(snapshot.relationships()));
         int maxDegree = graphDegree.values().stream().mapToInt(Integer::intValue).max().orElse(0);
-        CachedCorpus next = new CachedCorpus(corpusIdentity, documents, graphDegree, maxDegree);
+        // Each document is normalized once, when its corpus is built, with the very function the scoring used
+        // to call on every query: the normalized text lives and dies with the corpus (same identity, same
+        // eviction), so ranking is unchanged by construction (A6).
+        List<String> normalizedContents = documents.stream().map(document -> normalize(document.content())).toList();
+        CachedCorpus next = new CachedCorpus(corpusIdentity, documents, normalizedContents, graphDegree, maxDegree);
         long weight = estimateCorpusWeight(next);
         synchronized (corpusCache) {
             WeightedCorpus raced = corpusCache.get(project.id());
@@ -182,9 +188,16 @@ public final class HybridSearchService {
         return degree;
     }
 
+    /**
+     * Upper bound of the heap a cached corpus retains; it decides cache admission. Every string counts, the
+     * normalized contents included, at the width the JVM actually stores: one byte per character when the
+     * string is Latin-1 (compact strings), two otherwise. An ASCII corpus therefore never weighs more than it
+     * did when every character counted two bytes, and a CJK or accented one is no longer under-estimated (A6).
+     */
     private static long estimateCorpusWeight(CachedCorpus corpus) {
         long weight = 4_096L;
-        for (SemanticDocument document : corpus.documents()) {
+        for (int index = 0; index < corpus.documents().size(); index++) {
+            SemanticDocument document = corpus.documents().get(index);
             weight = safeAdd(weight, 256L);
             weight = safeAdd(weight, stringWeight(document.id()));
             weight = safeAdd(weight, stringWeight(document.stableKey()));
@@ -192,6 +205,7 @@ public final class HybridSearchService {
             weight = safeAdd(weight, stringWeight(document.fileId()));
             weight = safeAdd(weight, stringWeight(document.content()));
             weight = safeAdd(weight, stringWeight(document.checksum()));
+            weight = safeAdd(weight, stringWeight(corpus.normalizedContents().get(index)));
         }
         for (String key : corpus.graphDegree().keySet()) {
             weight = safeAdd(weight, 64L);
@@ -200,8 +214,21 @@ public final class HybridSearchService {
         return weight;
     }
 
+    /**
+     * Object and array headers (40 bytes) plus the characters at their stored width. The 40 bytes assume
+     * compressed oops; on a heap of 32 GiB or more they grow by about 8 bytes per string, under 2 % of a long
+     * chunk, which the per-document margin measured by {@code HybridCorpusWeightTest} still absorbs.
+     */
     private static long stringWeight(String value) {
-        return value == null ? 0L : safeAdd(40L, (long) value.length() * Character.BYTES);
+        if (value == null) return 0L;
+        return safeAdd(40L, (long) value.length() * (isLatin1(value) ? Byte.BYTES : Character.BYTES));
+    }
+
+    private static boolean isLatin1(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            if (value.charAt(index) > 0xFF) return false;
+        }
+        return true;
     }
 
     private static long safeAdd(long left, long right) {
@@ -263,15 +290,27 @@ public final class HybridSearchService {
         return query;
     }
 
-    private record CachedCorpus(String identity, List<SemanticDocument> documents, Map<String, Integer> graphDegree, int maxDegree) {
-        CachedCorpus { documents = List.copyOf(documents); graphDegree = Map.copyOf(graphDegree); }
+    private record CachedCorpus(String identity, List<SemanticDocument> documents, List<String> normalizedContents,
+                                Map<String, Integer> graphDegree, int maxDegree) {
+        CachedCorpus {
+            documents = List.copyOf(documents);
+            normalizedContents = List.copyOf(normalizedContents);
+            if (normalizedContents.size() != documents.size()) {
+                throw new IllegalArgumentException("one normalized content per document is required");
+            }
+            graphDegree = Map.copyOf(graphDegree);
+        }
     }
     private record WeightedCorpus(CachedCorpus corpus, long weightBytes) { }
     private record LexicalQuery(Set<String> terms, String normalizedQuery) {
         static LexicalQuery compile(String query) { String normalized = normalize(requireQuery(query)); return new LexicalQuery(Set.copyOf(HybridSearchService.terms(normalized)), normalized); }
         double score(String content) {
+            return scoreNormalized(normalize(content));
+        }
+
+        /** Score of a content already passed through {@link HybridSearchService#normalize}. */
+        double scoreNormalized(String normalizedContent) {
             if (terms.isEmpty()) return 0.0;
-            String normalizedContent = normalize(content);
             int matched = 0;
             for (String term : terms) if (containsTerm(normalizedContent, term)) matched++;
             double overlap = matched / (double) terms.size();
