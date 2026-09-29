@@ -382,7 +382,7 @@ Points d'entrée dont le FQN ne change pas : `com.minos.cli.MinosLauncher` (`doc
 
 | # | Commit | Constat | Sévérité | Résolution |
 |---|---|---|---|---|
-| V-A3-09 | `fe2e988e` | `RuntimeIntelligenceServiceTest` (application) : U+FEFF brut dans le littéral du cas BOM, à la place de l'échappement d'origine ; seul BOM brut du code Java du dépôt. | à corriger | **résolu** (commit des constats du jalon 3, après `b56413bb`) : échappement rétabli, aucun U+FEFF brut restant dans les `*.java`. |
+| V-A3-09 | `fe2e988e` | `RuntimeIntelligenceServiceTest` (application) : U+FEFF brut dans le littéral du cas BOM, à la place de l'échappement d'origine ; seul BOM brut du code Java du dépôt. | à corriger | **résolu** au commit suivant `56682e0e` : ce commit annonçait la correction mais ne la contenait pas (l'échappement, passé par la ligne de commande, y avait été réinterprété en caractère brut) ; la correction est faite octet par octet, et un balayage des octets `EF BB BF` dans tous les `*.java` du dépôt ne trouve plus rien. |
 | V-A3-10 | `fe2e988e` | `check-runtime-dynamic-consistency.py` ne gèle plus que le test d'application. | remarque | **résolu** : `require_facts` ajouté sur `RuntimeIntelligenceFileAdaptersTest` et ses deux cas ; prouvé rouge par mutation. |
 | V-A3-11 | `30fdaa35` | m19 et m20 ne font rien de plus que pr-ci et ne sont pas requis ; leurs filtres de chemins ne voient plus le code déplacé. | remarque | groupe n du jalon 4 (filtres rétablis) ; retrait des deux workflows renvoyé au § 8. |
 

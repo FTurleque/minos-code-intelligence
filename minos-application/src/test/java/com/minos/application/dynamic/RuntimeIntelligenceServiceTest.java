@@ -128,7 +128,7 @@ class RuntimeIntelligenceServiceTest {
         RuntimeObservationEnvelopeCodec codec = new RuntimeObservationEnvelopeCodec();
 
         Path bom = root.resolve("bom.tsv");
-        Files.writeString(bom, "﻿" + valid, StandardCharsets.UTF_8);
+        Files.writeString(bom, "\ufeff" + valid, StandardCharsets.UTF_8);
         assertThrows(IOException.class, () -> codec.read(bom));
 
         Path traversal = root.resolve("traversal.tsv");
