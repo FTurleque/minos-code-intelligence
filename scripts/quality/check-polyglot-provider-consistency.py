@@ -95,8 +95,8 @@ def require_e2e_set(relative: str, text: str, expected: set[str]) -> None:
 def main() -> int:
     try:
         discovery_model_path = "minos-engine/src/main/java/com/minos/discovery/ProjectDiscovery.java"
-        discovery_plugins_path = "minos-application/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java"
-        discovery_service_path = "minos-application/src/main/java/com/minos/discovery/ProjectDiscoveryService.java"
+        discovery_plugins_path = "minos-engine/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java"
+        discovery_service_path = "minos-engine/src/main/java/com/minos/discovery/ProjectDiscoveryService.java"
         catalog_path = "minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIndexerCatalog.java"
         runtime_path = "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java"
         conformance_path = "minos-engine/src/main/java/com/minos/orchestration/ProviderConformanceKit.java"
@@ -256,7 +256,7 @@ def main() -> int:
             read(fixture)
 
         for test in (
-            "minos-application/src/test/java/com/minos/discovery/M24PolyglotDiscoveryTest.java",
+            "minos-engine/src/test/java/com/minos/discovery/M24PolyglotDiscoveryTest.java",
             "minos-app/src/test/java/com/minos/adapter/scip/M24PolyglotProviderTest.java",
             "minos-provider-scip/src/test/java/com/minos/adapter/scip/M24PolyglotIdentityProvenanceTest.java",
             "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/M24PolyglotProcessPlanFactoryTest.java",

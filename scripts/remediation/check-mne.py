@@ -39,7 +39,7 @@ def main() -> int:
         semantic_service = read("minos-application/src/main/java/com/minos/semantic/SemanticIndexService.java")
         semantic_store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java")
         scip = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIngestionLimits.java")
-        discovery = read("minos-application/src/main/java/com/minos/discovery/ProjectDiscoveryService.java")
+        discovery = read("minos-engine/src/main/java/com/minos/discovery/ProjectDiscoveryService.java")
         fingerprint = read("minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java")
         runtime_port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
         runtime_service = read("minos-application/src/main/java/com/minos/dynamic/RuntimeIntelligenceService.java")
