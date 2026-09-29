@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -43,17 +44,23 @@ class JsonEscapeGuardTest {
      * Signatures d'un échappement JSON écrit à la main. Elles sont volontairement étroites : elles
      * ne visent pas tout appel à {@code replace}.
      */
-    private static final Map<String, Pattern> ESCAPE_SIGNATURES = Map.of(
-            "commutateur sur le saut de page", Pattern.compile("case\\s+'\\\\f'"),
-            "sequence unicode construite", Pattern.compile("\"\\\\\\\\u(%04x)?\""),
-            "replace de la barre oblique inverse", Pattern.compile("replace\\(\\s*\"\\\\\\\\\"\\s*,"));
+    private static final Map<String, Pattern> ESCAPE_SIGNATURES = new LinkedHashMap<>();
+
+    static {
+        ESCAPE_SIGNATURES.put("commutateur sur le saut de page", Pattern.compile("case\\s+'\\\\f'"));
+        ESCAPE_SIGNATURES.put("sequence unicode construite", Pattern.compile("\"\\\\\\\\u(%04x)?\""));
+        ESCAPE_SIGNATURES.put("replace de la barre oblique inverse", Pattern.compile("replace\\(\\s*\"\\\\\\\\\"\\s*,"));
+    }
 
     /** Fichiers qui contiennent une signature sans écrire du JSON : {@code fichier -> raison}. */
-    private static final Map<String, String> ESCAPE_EXCEPTIONS = Map.of(
-            OUTPUT_DIRECTORY + "/ArchitectureResultRenderer.java",
-            "échappement Graphviz DOT (dotText), pas du JSON ; le JSON de ce renderer passe par DeterministicJson",
-            "minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java",
-            "échappement d'une classe de caractères d'expression régulière, pas du JSON");
+    private static final Map<String, String> ESCAPE_EXCEPTIONS = new LinkedHashMap<>();
+
+    static {
+        ESCAPE_EXCEPTIONS.put(OUTPUT_DIRECTORY + "/ArchitectureResultRenderer.java",
+                "échappement Graphviz DOT (dotText), pas du JSON ; le JSON de ce renderer passe par DeterministicJson");
+        ESCAPE_EXCEPTIONS.put("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java",
+                "échappement d'une classe de caractères d'expression régulière, pas du JSON");
+    }
 
     @Test
     void onlyDeterministicJsonEscapesJsonText() throws IOException {

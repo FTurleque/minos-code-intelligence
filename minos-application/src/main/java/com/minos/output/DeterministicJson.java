@@ -27,6 +27,9 @@ import java.util.Map;
  */
 public final class DeterministicJson {
 
+    private static final char LINE_SEPARATOR = 0x2028;
+    private static final char PARAGRAPH_SEPARATOR = 0x2029;
+
     private DeterministicJson() {
     }
 
@@ -70,8 +73,13 @@ public final class DeterministicJson {
     }
 
     private static String numberText(Number number) {
-        if (number instanceof Double || number instanceof Float) {
-            return number(number.doubleValue());
+        if (number instanceof Double doubleValue) {
+            return number(doubleValue);
+        }
+        if (number instanceof Float floatValue) {
+            // Not widened to double: 0.1f must stay 0.1 (Float.toString), not 0.10000000149011612.
+            if (!Float.isFinite(floatValue)) throw new NonFiniteNumberException();
+            return Float.toString(floatValue);
         }
         return number.toString();
     }
@@ -153,7 +161,7 @@ public final class DeterministicJson {
                             && Character.isLowSurrogate(value.charAt(index + 1))) {
                         output.appendCodePoint(Character.toCodePoint(character, value.charAt(++index)));
                     } else if (character < 0x20 || Character.isSurrogate(character)
-                            || character == ' ' || character == ' ') {
+                            || character == LINE_SEPARATOR || character == PARAGRAPH_SEPARATOR) {
                         output.append("\\u%04x".formatted((int) character));
                     } else {
                         output.append(character);

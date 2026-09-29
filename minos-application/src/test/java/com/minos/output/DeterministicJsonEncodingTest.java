@@ -100,4 +100,9 @@ class DeterministicJsonEncodingTest {
         assertEquals("{\"z\":1,\"a\":2,\"m\":3}", DeterministicJson.render(DeterministicJson.object("z", 1, "a", 2, "m", 3)));
         assertThrows(IllegalArgumentException.class, () -> DeterministicJson.object("odd"));
     }
+
+    @Test
+    void aFloatKeepsItsOwnShortestTextInsteadOfBeingWidenedToDouble() {
+        assertEquals("[0.1,1.1,3.4028235E38]", DeterministicJson.render(List.of(0.1f, 1.1f, Float.MAX_VALUE)));
+    }
 }
