@@ -1,6 +1,7 @@
-package com.minos.storage;
+package com.minos.application;
 
-import com.minos.application.MinosApplicationComposers;
+import com.minos.storage.StorageBackend;
+import com.minos.storage.StorageBackendConfiguration;
 
 import java.io.IOException;
 

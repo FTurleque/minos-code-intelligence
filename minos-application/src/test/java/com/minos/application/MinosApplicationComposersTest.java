@@ -10,7 +10,6 @@ import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
-import com.minos.storage.StorageBackends;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
