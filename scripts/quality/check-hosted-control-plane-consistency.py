@@ -53,8 +53,8 @@ def main() -> int:
         audit_chain = read("minos-application/src/main/java/com/minos/hosted/HostedAuditChain.java")
         membership_service = read("minos-application/src/main/java/com/minos/hosted/HostedMembershipService.java")
         workspace_service = read("minos-application/src/main/java/com/minos/hosted/HostedWorkspaceService.java")
-        key_provider = read("minos-storage-local/src/main/java/com/minos/store/EnvironmentHostedTenantKeyProvider.java")
-        store = read("minos-storage-local/src/main/java/com/minos/store/FileHostedControlPlaneStore.java")
+        key_provider = read("minos-storage-local/src/main/java/com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider.java")
+        store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileHostedControlPlaneStore.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         runtime_config = read(
             "minos-application/src/main/java/com/minos/application/MinosApplicationRuntimeConfiguration.java")
@@ -133,7 +133,7 @@ def main() -> int:
 
         tests = {
             "HostedModelTest.java": read("minos-domain/src/test/java/com/minos/hosted/HostedModelTest.java"),
-            "FileHostedControlPlaneStoreTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileHostedControlPlaneStoreTest.java"),
+            "FileHostedControlPlaneStoreTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileHostedControlPlaneStoreTest.java"),
             "HostedControlPlaneServiceTest.java": read("minos-application/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"),
             "TeamCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/TeamCommandTest.java"),
             "LocalMinosTeamApiTest.java": read("minos-api/src/test/java/com/minos/api/LocalMinosTeamApiTest.java"),

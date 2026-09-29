@@ -5,8 +5,8 @@ import com.minos.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexRunRetentionPolicy;
 import com.minos.orchestration.IndexRunRetentionService;
 import com.minos.orchestration.ProjectIndexState;
-import com.minos.store.SnapshotCompactionService;
-import com.minos.store.SnapshotRetentionPolicy;
+import com.minos.storage.local.store.SnapshotCompactionService;
+import com.minos.storage.local.store.SnapshotRetentionPolicy;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;

@@ -15,7 +15,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

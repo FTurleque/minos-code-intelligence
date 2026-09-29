@@ -87,7 +87,7 @@ def main() -> int:
             '"disabled".equals(provider)',
         )
 
-        store_path = "minos-storage-local/src/main/java/com/minos/store/FileSemanticVectorStore.java"
+        store_path = "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java"
         store = read(store_path)
         require(
             store_path,
@@ -105,7 +105,7 @@ def main() -> int:
         )
         forbid(store_path, store, "output.writeDouble(indexed.vector()")
 
-        store_test_path = "minos-storage-local/src/test/java/com/minos/store/FileSemanticVectorStoreTest.java"
+        store_test_path = "minos-storage-local/src/test/java/com/minos/storage/local/store/FileSemanticVectorStoreTest.java"
         store_test = read(store_test_path)
         require(
             store_test_path,

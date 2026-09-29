@@ -3,7 +3,7 @@ package com.minos.context;
 import com.minos.cli.LocalProjectSymbolQuery;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.registry.LocalProjectRegistry;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 
 import java.nio.file.Path;
 import java.util.Arrays;

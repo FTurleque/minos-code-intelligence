@@ -10,10 +10,10 @@ import com.minos.registry.InterProcessLocalProjectRegistry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.FileRuntimeObservationStore;
-import com.minos.store.FileSemanticVectorStore;
-import com.minos.store.FileSymbolSnapshotStore;
-import com.minos.store.ProjectMutationSemanticVectorStore;
+import com.minos.storage.local.store.FileRuntimeObservationStore;
+import com.minos.storage.local.store.FileSemanticVectorStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.ProjectMutationSemanticVectorStore;
 
 import java.io.IOException;
 import java.nio.file.Path;

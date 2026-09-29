@@ -5,7 +5,7 @@ import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.store.CodeKnowledgeSnapshot;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

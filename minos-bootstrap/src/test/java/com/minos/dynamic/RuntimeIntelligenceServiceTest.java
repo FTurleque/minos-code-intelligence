@@ -10,8 +10,8 @@ import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.store.FileRuntimeObservationStore;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileRuntimeObservationStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

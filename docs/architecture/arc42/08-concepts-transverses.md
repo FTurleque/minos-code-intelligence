@@ -3,7 +3,7 @@
 > Preuves : ADR-0001, ADR-0006, ADR-0008, ADR-0010, ADR-0014, ADR-0015, ADR-0017,
 > ADR-0023, ADR-0024, ADR-0029, ADR-0035, ADR-0037,
 > `minos-domain/src/main/java/com/minos/domain/Evidence.java`,
-> `minos-storage-local/src/main/java/com/minos/store/SnapshotIntegrityService.java`,
+> `minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotIntegrityService.java`,
 > `minos-application/src/main/java/com/minos/semantic/EmbeddingProvider.java`.
 
 ---

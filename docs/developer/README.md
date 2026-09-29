@@ -69,7 +69,8 @@ flowchart TB
 | `com.minos.domain` | symboles, relations, origine, preuves et critères |
 | `com.minos.program` | modèle provider-independent des graphes de programme M19 |
 | `com.minos.semantic` | documents, embeddings, recherche sémantique/hybride, provider learned local et budgets M20/M23 |
-| `com.minos.store` | snapshots, persistance locale et index reconstruisibles |
+| `com.minos.store` | ports et modèles de snapshots, index reconstruisibles (moteur) |
+| `com.minos.storage.local.store` | persistance locale des snapshots, vecteurs, observations runtime et plan de contrôle (adaptateur `minos-storage-local`) |
 | `com.minos.query` | requêtes symboles/relations/tests |
 | `com.minos.context` | recherche compacte, extraits et budgets |
 | `com.minos.architecture` | topologie, dépendances, centralité, technologies |

@@ -5,7 +5,7 @@ import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 
 import java.nio.file.Path;
 import java.util.Map;

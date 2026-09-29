@@ -369,7 +369,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
 
     private CodeKnowledgeSnapshot decodeVerified(UUID projectId, Row row) throws IOException {
         try {
-            String actualSha = new com.minos.store.SnapshotIntegrityService().checksum(row.payload());
+            String actualSha = new com.minos.storage.local.store.SnapshotIntegrityService().checksum(row.payload());
             if (!row.sha256().equals(actualSha)) {
                 throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
             }

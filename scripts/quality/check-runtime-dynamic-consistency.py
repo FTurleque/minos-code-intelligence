@@ -45,7 +45,7 @@ def main() -> int:
         port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
         codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
         service = read("minos-application/src/main/java/com/minos/dynamic/RuntimeIntelligenceService.java")
-        store = read("minos-storage-local/src/main/java/com/minos/store/FileRuntimeObservationStore.java")
+        store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
         bounded_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
         command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
@@ -119,8 +119,8 @@ def main() -> int:
 
         tests = {
             "RuntimeObservationModelTest.java": read("minos-domain/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
-            "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileRuntimeObservationStoreTest.java"),
-            "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileRuntimeObservationStoreSymlinkTest.java"),
+            "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreTest.java"),
+            "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreSymlinkTest.java"),
             "RuntimeIntelligenceServiceTest.java": read("minos-bootstrap/src/test/java/com/minos/dynamic/RuntimeIntelligenceServiceTest.java"),
             "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RuntimeCommandTest.java"),
             "MinosMcpToolsTest.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosMcpToolsTest.java"),

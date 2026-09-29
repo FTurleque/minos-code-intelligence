@@ -4,7 +4,7 @@ import com.minos.api.LocalMinosApi;
 import com.minos.api.MinosApi;
 import com.minos.cli.MinosLauncher;
 import com.minos.registry.LocalProjectRegistry;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

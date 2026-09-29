@@ -28,8 +28,8 @@ import com.minos.storage.LocalStorageBackend;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.EnvironmentHostedTenantKeyProvider;
-import com.minos.store.FileHostedControlPlaneStore;
+import com.minos.storage.local.store.EnvironmentHostedTenantKeyProvider;
+import com.minos.storage.local.store.FileHostedControlPlaneStore;
 
 import java.io.IOException;
 import java.nio.file.Path;

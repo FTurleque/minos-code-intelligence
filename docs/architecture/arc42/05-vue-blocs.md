@@ -94,7 +94,7 @@ C4Container
 - **Types clés** : `InMemoryCodeKnowledgeStore`, `SnapshotRepository`, `FileSemanticVectorStore`, `FileRuntimeObservationStore`, `FileHostedControlPlaneStore`.
 - **Interfaces** : implémente `CodeKnowledgeStore`, `SemanticVectorStore`, `RuntimeObservationStore`, `HostedControlPlaneStore`.
 - **Dépendances** : `minos-engine`.
-- **Sources** : `minos-storage-local/src/main/java/com/minos/store/`.
+- **Sources** : `minos-storage-local/src/main/java/com/minos/storage/local/` (sous-packages `store`, `registry`, `orchestration`, `incremental`).
 
 ### minos-provider-scip
 - **Responsabilité** : adapter SCIP — ingestion des artefacts `.scip`, normalisation vers le domaine MINOS, lifecycle des providers Java/TypeScript/polyglot.

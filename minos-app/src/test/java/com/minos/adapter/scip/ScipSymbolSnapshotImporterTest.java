@@ -13,7 +13,7 @@ import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.query.SymbolResult;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.scip_code.scip.Document;

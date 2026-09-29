@@ -5,7 +5,7 @@ import com.minos.orchestration.FileIndexStateStore;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

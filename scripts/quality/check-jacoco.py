@@ -14,8 +14,8 @@ SCOPES = {
     "domain-invariants": {"prefixes": ("com/minos/domain/",), "line": 0.80, "branch": 0.60},
     "persistence-cache-indexes": {
         "prefixes": (
-            "com/minos/store/FileSymbolSnapshotStore", "com/minos/store/ActiveSnapshotRepository",
-            "com/minos/store/SnapshotCodec", "com/minos/store/SnapshotIntegrityService",
+            "com/minos/storage/local/store/FileSymbolSnapshotStore", "com/minos/storage/local/store/ActiveSnapshotRepository",
+            "com/minos/storage/local/store/SnapshotCodec", "com/minos/storage/local/store/SnapshotIntegrityService",
             "com/minos/store/InMemoryCodeKnowledgeStore", "com/minos/store/SnapshotQueryView",
         ), "line": 0.50, "branch": 0.35,
     },
@@ -44,7 +44,7 @@ SCOPES = {
         "prefixes": ("com/minos/program/analysis/AdvancedImpactService", "com/minos/program/analysis/SecurityAnalysisService"),
         "line": 0.47, "branch": 0.27,
     },
-    "semantic-vector-store": {"prefixes": ("com/minos/store/FileSemanticVectorStore",), "line": 0.45, "branch": 0.20},
+    "semantic-vector-store": {"prefixes": ("com/minos/storage/local/store/FileSemanticVectorStore",), "line": 0.45, "branch": 0.20},
     "semantic-learned-provider": {"prefixes": ("com/minos/semantic/OllamaEmbeddingProvider",), "line": 0.52, "branch": 0.32},
     "semantic-hybrid-retrieval": {
         "prefixes": (
@@ -138,12 +138,12 @@ SCOPES = {
         "branch": 0.35,
     },
     "m26-runtime-dynamic-intelligence": {
-        "prefixes": ("com/minos/dynamic/", "com/minos/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
+        "prefixes": ("com/minos/dynamic/", "com/minos/storage/local/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
         "line": 0.55, "branch": 0.35,
     },
     "m27-team-hosted-control-plane": {
         "prefixes": (
-            "com/minos/hosted/", "com/minos/store/FileHostedControlPlaneStore", "com/minos/store/EnvironmentHostedTenantKeyProvider",
+            "com/minos/hosted/", "com/minos/storage/local/store/FileHostedControlPlaneStore", "com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider",
             "com/minos/cli/TeamCommand", "com/minos/api/LocalMinosTeamApi", "com/minos/output/HostedControlPlaneRenderer",
         ), "line": 0.45, "branch": 0.25,
     },

@@ -1,8 +1,8 @@
 package com.minos.storage.postgresql;
 
 import com.minos.store.CodeKnowledgeSnapshot;
-import com.minos.store.SnapshotCodec;
-import com.minos.store.SnapshotCodecV2;
+import com.minos.storage.local.store.SnapshotCodec;
+import com.minos.storage.local.store.SnapshotCodecV2;
 
 import java.io.IOException;
 import java.nio.file.Path;

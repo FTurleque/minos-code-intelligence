@@ -191,7 +191,7 @@ def main() -> int:
             "minos-intellij/src/main/java/com/minos/intellij/navigation/MinosLocation.java"
         )
         file_snapshots = read(
-            "minos-storage-local/src/main/java/com/minos/store/FileSymbolSnapshotStore.java"
+            "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java"
         )
         mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")

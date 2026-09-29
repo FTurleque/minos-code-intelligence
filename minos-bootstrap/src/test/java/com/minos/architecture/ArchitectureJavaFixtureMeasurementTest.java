@@ -16,7 +16,7 @@ import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
 import com.minos.store.CodeKnowledgeSnapshot;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

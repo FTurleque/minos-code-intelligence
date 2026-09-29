@@ -4,7 +4,7 @@ import com.minos.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
