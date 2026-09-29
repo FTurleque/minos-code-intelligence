@@ -93,8 +93,8 @@
         <plugins>
             <plugin>
                 <!--
-                  A1-3 / A2: test fixtures (LocalRemoteIndexingRuntimeFixtures) are published as a test-jar
-                  for the minos-cli tests, so the production jar keeps no public injection point.
+                  A1-3 / A2: test fixtures (LocalRemoteIndexingRuntimeFixtures, and ResumableRunFixtures for A4) are published
+                  as a test-jar for the minos-cli and minos-mcp tests, so the production jar keeps no public injection point.
                 -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>

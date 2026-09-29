@@ -30,5 +30,13 @@
             <version>${project.version}</version>
             <scope>runtime</scope>
         </dependency>
+        <dependency>
+            <!-- A4 / ADR 0045: shared test fixtures of the composition root (ResumableRunFixtures), as in minos-cli -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-bootstrap</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
