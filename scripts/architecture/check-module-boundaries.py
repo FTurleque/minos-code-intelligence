@@ -91,7 +91,6 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
 # fails, so every commit that folds a package removes its entries. Both lists end empty, then disappear.
 TOLERATED_SPLIT_PACKAGES: dict[str, frozenset[str]] = {
     "com.minos.cli": frozenset({"minos-app", "minos-cli"}),
-    "com.minos.dynamic": frozenset({"minos-application", "minos-engine"}),
     "com.minos.integration.nexus": frozenset({"minos-app", "minos-nexus"}),
     "com.minos.semantic": frozenset({"minos-application", "minos-domain"}),
     "com.minos.storage": frozenset({"minos-application", "minos-engine"}),
@@ -105,7 +104,6 @@ TOLERATED_FOREIGN_TESTS: frozenset[str] = frozenset({
     "minos-bootstrap/src/test/java/com/minos/application/ProviderPlatformDiagnosticRedactionTest.java",
     "minos-bootstrap/src/test/java/com/minos/architecture/ArchitectureJavaFixtureMeasurementTest.java",
     "minos-bootstrap/src/test/java/com/minos/architecture/LocalProjectArchitectureQueryTest.java",
-    "minos-bootstrap/src/test/java/com/minos/dynamic/RuntimeIntelligenceServiceTest.java",
     "minos-bootstrap/src/test/java/com/minos/impact/LocalProjectImpactQueryTest.java",
     "minos-bootstrap/src/test/java/com/minos/incremental/IncrementalIndexingCoordinatorTest.java",
     "minos-bootstrap/src/test/java/com/minos/incremental/IncrementalIndexingDiagnosticRedactionTest.java",

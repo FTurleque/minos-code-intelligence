@@ -43,8 +43,8 @@ def main() -> int:
         resolution = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeSymbolResolution.java")
         correlation = read("minos-engine/src/main/java/com/minos/dynamic/CorrelatedRuntimeObservation.java")
         port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
-        codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
-        service = read("minos-application/src/main/java/com/minos/dynamic/RuntimeIntelligenceService.java")
+        codec = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeObservationEnvelopeCodec.java")
+        service = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java")
         store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
         bounded_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
         command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
@@ -121,7 +121,7 @@ def main() -> int:
             "RuntimeObservationModelTest.java": read("minos-engine/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
             "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreTest.java"),
             "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreSymlinkTest.java"),
-            "RuntimeIntelligenceServiceTest.java": read("minos-bootstrap/src/test/java/com/minos/dynamic/RuntimeIntelligenceServiceTest.java"),
+            "RuntimeIntelligenceServiceTest.java": read("minos-application/src/test/java/com/minos/application/dynamic/RuntimeIntelligenceServiceTest.java"),
             "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RuntimeCommandTest.java"),
             "MinosMcpToolsTest.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosMcpToolsTest.java"),
         }

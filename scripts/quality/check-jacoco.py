@@ -138,7 +138,7 @@ SCOPES = {
         "branch": 0.35,
     },
     "m26-runtime-dynamic-intelligence": {
-        "prefixes": ("com/minos/dynamic/", "com/minos/storage/local/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
+        "prefixes": ("com/minos/dynamic/", "com/minos/application/dynamic/", "com/minos/storage/local/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
         "line": 0.55, "branch": 0.35,
     },
     "m27-team-hosted-control-plane": {

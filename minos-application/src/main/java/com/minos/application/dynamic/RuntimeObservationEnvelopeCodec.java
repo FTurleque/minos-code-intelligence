@@ -1,5 +1,10 @@
-package com.minos.dynamic;
+package com.minos.application.dynamic;
 
+import com.minos.dynamic.RuntimeObservation;
+import com.minos.dynamic.RuntimeObservationCompleteness;
+import com.minos.dynamic.RuntimeObservationSession;
+import com.minos.dynamic.RuntimeObservationType;
+import com.minos.dynamic.RuntimeSymbolReference;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedLineReader;
 import com.minos.io.FixedTsv;

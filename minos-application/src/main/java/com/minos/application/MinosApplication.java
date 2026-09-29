@@ -3,7 +3,7 @@ package com.minos.application;
 import com.minos.architecture.LocalProjectArchitectureQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.discovery.ProjectDiscoveryService;
-import com.minos.dynamic.RuntimeIntelligenceService;
+import com.minos.application.dynamic.RuntimeIntelligenceService;
 import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.git.GitIntelligence;
 import com.minos.hosted.HostedControlPlaneService;

@@ -1,7 +1,16 @@
-package com.minos.dynamic;
+package com.minos.application.dynamic;
 
 import com.minos.application.ProjectResolver;
 import com.minos.domain.Symbol;
+import com.minos.dynamic.CorrelatedRuntimeObservation;
+import com.minos.dynamic.CorrelatedRuntimeSession;
+import com.minos.dynamic.RuntimeObservation;
+import com.minos.dynamic.RuntimeObservationSession;
+import com.minos.dynamic.RuntimeObservationStore;
+import com.minos.dynamic.RuntimeObservationType;
+import com.minos.dynamic.RuntimeResolutionStatus;
+import com.minos.dynamic.RuntimeSymbolReference;
+import com.minos.dynamic.RuntimeSymbolResolution;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;

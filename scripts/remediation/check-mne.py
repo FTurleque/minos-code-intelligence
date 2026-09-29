@@ -42,7 +42,7 @@ def main() -> int:
         discovery = read("minos-engine/src/main/java/com/minos/discovery/ProjectDiscoveryService.java")
         fingerprint = read("minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java")
         runtime_port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
-        runtime_service = read("minos-application/src/main/java/com/minos/dynamic/RuntimeIntelligenceService.java")
+        runtime_service = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java")
         local_runtime = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
         postgres_runtime = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresRuntimeObservationStore.java")
         provider_api = read("minos-api/src/main/java/com/minos/api/LocalProviderPlatformApi.java")

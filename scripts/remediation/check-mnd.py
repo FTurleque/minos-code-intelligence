@@ -44,7 +44,7 @@ def main() -> int:
         windows_script = read("minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1")
         snapshots = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")
         retention = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java")
-        runtime_codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
+        runtime_codec = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeObservationEnvelopeCodec.java")
         graph_sidecar = read("minos-application/src/main/java/com/minos/program/analysis/FileProgramGraphProvider.java")
         hosted = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileHostedControlPlaneStore.java")
         local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")

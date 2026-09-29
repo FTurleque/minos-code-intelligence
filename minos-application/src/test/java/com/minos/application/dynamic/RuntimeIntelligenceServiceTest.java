@@ -1,17 +1,25 @@
-package com.minos.dynamic;
+package com.minos.application.dynamic;
 
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.PositionEncoding;
+import com.minos.domain.Relationship;
 import com.minos.domain.ResolutionStatus;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
-import com.minos.storage.local.registry.LocalProjectRegistry;
+import com.minos.domain.SymbolOccurrence;
+import com.minos.dynamic.CorrelatedRuntimeSession;
+import com.minos.dynamic.RuntimeObservationSession;
+import com.minos.dynamic.RuntimeObservationStore;
+import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.storage.local.store.FileRuntimeObservationStore;
-import com.minos.storage.local.store.FileSymbolSnapshotStore;
+import com.minos.registry.RegisteredWorkspace;
+import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.SnapshotQueryView;
+import com.minos.store.SymbolSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -22,14 +30,31 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Contrat de {@link RuntimeIntelligenceService} et de {@link RuntimeObservationEnvelopeCodec}, horloge figée.
+ *
+ * <p>Le service est construit par son constructeur à {@link Clock} (package-private) sur des doublures en
+ * mémoire des ports d'engine, qui reproduisent la sémantique des adaptateurs fichiers : projet résolu par
+ * nom, snapshot actif = dernier publié (symboles triés par identifiant), session immuable par identifiant
+ * (même empreinte → déjà présente, sinon refus), sessions listées par date d'import décroissante puis
+ * identifiant. La même intégration sur les adaptateurs fichiers réels est vérifiée dans minos-bootstrap
+ * ({@code RuntimeIntelligenceFileAdaptersTest}).</p>
+ */
 class RuntimeIntelligenceServiceTest {
 
     private static final Instant IMPORTED_AT = Instant.parse("2026-07-29T08:00:00Z");
@@ -77,7 +102,7 @@ class RuntimeIntelligenceServiceTest {
     void rejectsProjectAndSnapshotMisalignmentAndStaleSessionQueries(@TempDir Path root) throws Exception {
         Fixture fixture = fixture(root);
         RuntimeObservationEnvelopeCodec codec = new RuntimeObservationEnvelopeCodec();
-        Path wrongProject = writeEnvelope(root.resolve("wrong-project.tsv"), java.util.UUID.randomUUID(),
+        Path wrongProject = writeEnvelope(root.resolve("wrong-project.tsv"), UUID.randomUUID(),
                 "snapshot-1", "wrong-project");
         assertThrows(IllegalArgumentException.class,
                 () -> fixture.service().importSession("runtime-fixture", codec.read(wrongProject)));
@@ -103,7 +128,7 @@ class RuntimeIntelligenceServiceTest {
         RuntimeObservationEnvelopeCodec codec = new RuntimeObservationEnvelopeCodec();
 
         Path bom = root.resolve("bom.tsv");
-        Files.writeString(bom, "\ufeff" + valid, StandardCharsets.UTF_8);
+        Files.writeString(bom, "﻿" + valid, StandardCharsets.UTF_8);
         assertThrows(IOException.class, () -> codec.read(bom));
 
         Path traversal = root.resolve("traversal.tsv");
@@ -121,12 +146,12 @@ class RuntimeIntelligenceServiceTest {
 
     private static Fixture fixture(Path root) throws Exception {
         Path projectRoot = Files.createDirectories(root.resolve("project"));
-        LocalProjectRegistry registry = new LocalProjectRegistry(root.resolve("registry"));
+        InMemoryProjectRegistry registry = new InMemoryProjectRegistry();
         RegisteredProject project = registry.registerProject(projectRoot, "runtime-fixture");
-        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(root.resolve("snapshots"));
+        InMemorySnapshotStore snapshots = new InMemorySnapshotStore();
         snapshots.publish(project.id(), "snapshot-1", symbols(project));
         RuntimeIntelligenceService service = new RuntimeIntelligenceService(
-                registry, snapshots, new FileRuntimeObservationStore(root.resolve("runtime")),
+                registry, snapshots, new InMemoryRuntimeObservationStore(),
                 Clock.fixed(IMPORTED_AT, ZoneOffset.UTC));
         return new Fixture(project, snapshots, service);
     }
@@ -152,13 +177,13 @@ class RuntimeIntelligenceServiceTest {
                 false, false, Set.of());
     }
 
-    private static Path writeEnvelope(Path path, java.util.UUID projectId, String snapshotId, String sessionId)
+    private static Path writeEnvelope(Path path, UUID projectId, String snapshotId, String sessionId)
             throws IOException {
         Files.writeString(path, envelope(projectId, snapshotId, sessionId), StandardCharsets.UTF_8);
         return path;
     }
 
-    private static String envelope(java.util.UUID projectId, String snapshotId, String sessionId) {
+    private static String envelope(UUID projectId, String snapshotId, String sessionId) {
         return String.join("\n",
                 RuntimeObservationSession.FORMAT,
                 "session\t" + sessionId,
@@ -179,7 +204,128 @@ class RuntimeIntelligenceServiceTest {
 
     private record Fixture(
             RegisteredProject project,
-            FileSymbolSnapshotStore snapshots,
+            InMemorySnapshotStore snapshots,
             RuntimeIntelligenceService service
     ) { }
+
+    /** Registre en mémoire : seuls l'enregistrement et la résolution d'un projet sont utilisés ici. */
+    private static final class InMemoryProjectRegistry implements ProjectRegistry {
+        private final Map<UUID, RegisteredProject> projects = new HashMap<>();
+
+        @Override
+        public RegisteredProject registerProject(Path rootPath, String displayName) {
+            Instant now = Instant.parse("2026-07-29T07:00:00Z");
+            RegisteredProject project = new RegisteredProject(
+                    UUID.randomUUID(), rootPath, displayName, Optional.empty(), now, now);
+            projects.put(project.id(), project);
+            return project;
+        }
+
+        @Override
+        public Optional<RegisteredProject> findProject(UUID projectId) {
+            return Optional.ofNullable(projects.get(projectId));
+        }
+
+        @Override
+        public List<RegisteredProject> listProjects() {
+            return List.copyOf(projects.values());
+        }
+
+        @Override
+        public RegisteredWorkspace createWorkspace(String name) {
+            throw new UnsupportedOperationException("workspaces are not used by this test");
+        }
+
+        @Override
+        public RegisteredProject assignProjectToWorkspace(UUID projectId, UUID workspaceId) {
+            throw new UnsupportedOperationException("workspaces are not used by this test");
+        }
+
+        @Override
+        public RegisteredProject removeProjectFromWorkspace(UUID projectId) {
+            throw new UnsupportedOperationException("workspaces are not used by this test");
+        }
+
+        @Override
+        public Optional<RegisteredWorkspace> findWorkspace(UUID workspaceId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public List<RegisteredWorkspace> listWorkspaces() {
+            return List.of();
+        }
+    }
+
+    /** Snapshots en mémoire : le dernier publié devient actif, symboles triés par identifiant. */
+    private static final class InMemorySnapshotStore implements CodeKnowledgeSnapshotStore {
+        private final Map<UUID, CodeKnowledgeSnapshot> active = new HashMap<>();
+
+        @Override
+        public SymbolSnapshot publish(UUID projectId, String snapshotId, Collection<Symbol> symbols) {
+            List<Symbol> ordered = symbols.stream().sorted(Comparator.comparing(Symbol::id)).toList();
+            active.put(projectId, new CodeKnowledgeSnapshot(projectId, snapshotId, ordered, List.of(), List.of()));
+            return new SymbolSnapshot(projectId, snapshotId, ordered);
+        }
+
+        @Override
+        public CodeKnowledgeSnapshot publish(
+                UUID projectId, String snapshotId, Collection<Symbol> symbols,
+                Collection<SymbolOccurrence> occurrences, Collection<Relationship> relationships) {
+            throw new UnsupportedOperationException("occurrences and relationships are not used by this test");
+        }
+
+        @Override
+        public Optional<SymbolSnapshot> loadActive(UUID projectId) {
+            return loadActiveKnowledge(projectId).map(snapshot -> new SymbolSnapshot(
+                    snapshot.projectId(), snapshot.snapshotId(), snapshot.symbols()));
+        }
+
+        @Override
+        public Optional<CodeKnowledgeSnapshot> loadActiveKnowledge(UUID projectId) {
+            return Optional.ofNullable(active.get(projectId));
+        }
+
+        @Override
+        public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) {
+            throw new UnsupportedOperationException("query views are not used by this test");
+        }
+    }
+
+    /** Observations en mémoire : session immuable par identifiant, listée par import décroissant. */
+    private static final class InMemoryRuntimeObservationStore implements RuntimeObservationStore {
+        private final List<CorrelatedRuntimeSession> sessions = new ArrayList<>();
+
+        @Override
+        public SaveResult save(CorrelatedRuntimeSession session) throws IOException {
+            Optional<CorrelatedRuntimeSession> existing =
+                    find(session.session().projectId(), session.session().sessionId());
+            if (existing.isPresent()) {
+                if (!existing.orElseThrow().sourceSha256().equals(session.sourceSha256())) {
+                    throw new IOException("runtime session is immutable and already exists with different content: "
+                            + session.session().sessionId());
+                }
+                return new SaveResult(existing.orElseThrow(), true);
+            }
+            sessions.add(session);
+            return new SaveResult(session, false);
+        }
+
+        @Override
+        public Optional<CorrelatedRuntimeSession> find(UUID projectId, String sessionId) {
+            return sessions.stream()
+                    .filter(value -> value.session().projectId().equals(projectId)
+                            && value.session().sessionId().equals(sessionId))
+                    .findFirst();
+        }
+
+        @Override
+        public List<CorrelatedRuntimeSession> list(UUID projectId) {
+            return sessions.stream()
+                    .filter(value -> value.session().projectId().equals(projectId))
+                    .sorted(Comparator.comparing(CorrelatedRuntimeSession::importedAt).reversed()
+                            .thenComparing(value -> value.session().sessionId()))
+                    .toList();
+        }
+    }
 }
