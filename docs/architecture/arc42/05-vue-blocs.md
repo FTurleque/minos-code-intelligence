@@ -141,7 +141,7 @@ C4Container
 - **Sources** : `minos-mcp/src/main/java/com/minos/mcp/`.
 
 ### minos-app
-- **Responsabilité** : assemblage final (shaded JAR), point d'entrée NEXUS (`NexusExportBridgeMain`), route `minos mcp` (`McpBackendLaunchRoute` → router backend natif/Docker, `com.minos.app`) fournie à `MinosLauncher` par `META-INF/services` ([ADR 0044](../../adr/0044-un-package-un-module.md)).
+- **Responsabilité** : assemblage final (shaded JAR), point d'entrée NEXUS (`NexusExportBridgeMain`), route `minos mcp` (`McpLaunchRouteProvider` → router backend natif/Docker, `com.minos.app`) fournie à `MinosLauncher` par `META-INF/services` ([ADR 0044](../../adr/0044-un-package-un-module.md)).
 - **Dépendances** : tous les modules.
 - **Sources** : `minos-app/src/main/java/`.
 

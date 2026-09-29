@@ -1,6 +1,6 @@
 # 0044 — Un package, un module
 
-Status: Accepted (2026-09-29) — mise en œuvre en cours sur la branche `archi/a3-packages`, suivie dans [`ARCHI-SUIVI.md`](../audit/ARCHI-SUIVI.md).
+Status: Accepted (2026-09-29) — mis en œuvre ; historique et preuves dans [`ARCHI-SUIVI.md`](../audit/ARCHI-SUIVI.md).
 
 Complète l'audit [`AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md) (constats A3 et A7). Amende l'[ADR 0022](0022-maven-reactor-and-module-boundaries.md) sur l'emplacement de `discovery`, `incremental`, `orchestration` et `MinosVersion`. Prolonge l'[ADR 0042](0042-racine-de-composition.md), dont il garde toutes les frontières.
 
@@ -57,7 +57,7 @@ La correspondance classe par classe (ancien module et FQN → nouveau) est tenue
 - **aucun package éclaté** : un package déclaré par les sources de production de plus d'un module est une erreur ; un fichier de test déclaré dans un package dont la production appartient à un autre module est une erreur. Le message nomme le package et les modules.
 - **A7** : la liste des modules du script est confrontée aux `<modules>` du POM racine ; un module du reactor absent du script, ou un module du script absent du reactor, fait échouer le contrôle.
 
-La règle arrive en **cliquet** : une liste explicite des éclatements encore tolérés, égale à l'inventaire, qui échoue aussi sur toute entrée périmée ; chaque commit de repli retire ses entrées ; au dernier commit du lot la liste est vide, puis supprimée.
+La règle est **stricte** : aucun éclatement n'est toléré. Elle est arrivée en cliquet pendant la mise en œuvre (liste des éclatements tolérés, égale à l'inventaire, réduite commit par commit, périmée = échec), puis la liste, vide, a été supprimée avec son code. Le contrôle vérifie aussi que le répertoire d'un test déclare son package, comme pour la production. Appliquée à l'arbre de la base `10486cb7`, la règle finale échoue sur 59 violations (14 packages, 45 tests).
 
 ## Ruptures
 
@@ -81,7 +81,7 @@ Les packages renommés sont tous internes (adaptateurs, services applicatifs, cl
 | `com.minos.adapter.scip.ScipSymbolSnapshotRequest`/`Report` (engine) | `com.minos.orchestration` |
 | `com.minos.cli` (app, hors points d'entrée) | `com.minos.app` |
 
-Les quatre alias dépréciés de `minos-cli` disparaissent. `docs/user/java-api.md` reçoit la même liste, dans sa section des ruptures, au commit de chaque renommage.
+Les quatre alias dépréciés de `minos-cli` (`ProjectOperations`, `ProjectSymbolQuery`, `LocalProjectOperations`, `LocalProjectSymbolQuery`) disparaissent : ils ne faisaient que déléguer aux types de `com.minos.application` du même nom. `minos-cli` gagne un type public, le SPI `com.minos.cli.McpLaunchRoute` (route `minos mcp`, fournie par `minos-app`). `docs/user/java-api.md` porte la même liste dans sa section « Ruptures ».
 
 ## Amendement de l'ADR 0022
 
@@ -96,9 +96,10 @@ L'emplacement de chaque package est désormais donné par la *Table des décisio
 ## Conséquences
 
 - Chaque package a un propriétaire unique, lisible dans son nom ; la visibilité package ne traverse plus aucun jar, en production comme en test. La voie vers JPMS est ouverte (elle n'est pas prise ici).
-- **`minos-engine` grossit** (≈ 71 classes de production et une quarantaine de tests en plus). C'est le prix de « déplacer plutôt que renommer » : le constat A5 (« engine fourre-tout ») s'aggrave en volume, et son découpage éventuel (sous-modules ports / orchestration) devient plus pressant. A5 n'est pas traité ici.
+- **`minos-engine` grossit** : 92 → 161 fichiers de production (+69) et 26 → 70 fichiers de test (+44) ; `minos-application` passe de 155 à 105 fichiers de production, `minos-domain` de 55 à 36. C'est le prix de « déplacer plutôt que renommer » : le constat A5 (« engine fourre-tout ») s'aggrave en volume, et son découpage éventuel (sous-modules ports / orchestration) devient plus pressant. A5 n'est pas traité ici.
 - Les classes renommées qui journalisent par `System.getLogger(X.class.getName())` (huit classes de runtime-local) changent de nom de journal. Aucune configuration de journalisation du dépôt ni aucun golden n'en dépend.
-- Les scripts de contrôle qui citent des chemins ou des FQN sont mis à jour à assertion identique, seul le chemin change (liste : `ARCHI-SUIVI.md` § 5).
+- Les scripts de contrôle qui citent des chemins ou des FQN sont mis à jour à assertion identique, seul le chemin change (liste : `ARCHI-SUIVI.md` § 5). Les portées JaCoCo désignent les mêmes classes ; `DockerRuntimeBootstrap`, passé dans `minos-cli`, quitte la portée `m29-backend-routing` (rapport propre de `minos-app`) pour une portée à lui, `m29-docker-runtime-bootstrap`, aux mêmes seuils, sur le rapport agrégé.
+- `minos mcp` passe par un SPI : `MinosLauncher` (dans `minos-cli`, qui ne peut dépendre de `minos-mcp`) résout `McpLaunchRoute` dans le seul chargeur de classes de MINOS et échoue explicitement, sans chemin, à zéro ou plusieurs fournisseurs ; le JAR ombré en déclare exactement un (`com.minos.app.McpLaunchRouteProvider`).
 
 ## Limites connues
 

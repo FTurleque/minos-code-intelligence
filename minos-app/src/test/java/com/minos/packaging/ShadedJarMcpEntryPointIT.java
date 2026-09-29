@@ -26,13 +26,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ShadedJarMcpEntryPointIT {
 
     private static final String ROUTE_SERVICE = "META-INF/services/com.minos.cli.McpLaunchRoute";
-    private static final String PROVIDER = "com.minos.app.McpBackendLaunchRoute";
+    private static final String PROVIDER = "com.minos.app.McpLaunchRouteProvider";
 
     @Test
     void shadedJarDeclaresExactlyOneMcpEntryPoint() throws IOException {
         try (JarFile jar = new JarFile(shadedJar().toFile())) {
             assertEquals(List.of(PROVIDER), serviceLines(jar, ROUTE_SERVICE));
-            assertNotNull(jar.getJarEntry("com/minos/app/McpBackendLaunchRoute.class"));
+            assertNotNull(jar.getJarEntry("com/minos/app/McpLaunchRouteProvider.class"));
             assertNotNull(jar.getJarEntry("com/minos/cli/McpLaunchRoute.class"));
             assertNotNull(jar.getJarEntry("com/minos/cli/MinosLauncher.class"));
         }

@@ -3,10 +3,11 @@
 
 Each case builds a throw-away source tree (root pom.xml plus module directories) and runs one rule of
 the real script against it: a production package split across modules, a test declared in a package
-owned by another module, a reactor module missing from the governed list, a governed module missing
-from the reactor, the ratchet (tolerated, stale, widened and too-wide entries, paths that lie about
-their package) and a clean tree. main() is checked to run both rules (failing spies). The repository
-itself is checked by running the script directly, as the CI does just before this self-test.
+owned by another module, a split widened to a third module, a test whose path lies about its package,
+a reactor module missing from the governed list, a governed module missing from the reactor, and a clean
+tree. The rule is strict: no split is tolerated. main() is checked to run both rules (failing spies).
+The repository itself is checked by running the script directly, as the CI does just before this
+self-test.
 """
 
 from __future__ import annotations
@@ -71,8 +72,8 @@ class BoundaryTestCase(unittest.TestCase):
         # A test-only package owned by no production source is legitimate.
         self.tree.java("minos-b", "test", "com.example.fixtures", "Fixture")
 
-    def ownership(self, tolerated_split=None, tolerated_tests=frozenset()):
-        return check_package_ownership(self.tree.root, self.modules, tolerated_split or {}, tolerated_tests)
+    def ownership(self):
+        return check_package_ownership(self.tree.root, self.modules)
 
     def assertFailure(self, action, *fragments):
         with self.assertRaises(RuntimeError) as raised:
@@ -85,7 +86,7 @@ class BoundaryTestCase(unittest.TestCase):
 class CleanTreeTest(BoundaryTestCase):
     def test_clean_tree_passes_both_rules(self):
         check_reactor_modules(self.tree.root, self.modules)
-        self.assertEqual(self.ownership(), (2, 0, 0))
+        self.assertEqual(self.ownership(), 2)
 
 
 class SplitPackageTest(BoundaryTestCase):
@@ -101,50 +102,26 @@ class SplitPackageTest(BoundaryTestCase):
         source = self.tree.root / self.tree.java("minos-b", "main", "com.example.b", "Commented")
         source.write_text("/*\npackage com.example.a;\n*/\npackage com.example.b;\n\nclass Commented {\n}\n",
                           encoding="utf-8")
-        self.assertEqual(self.ownership(), (2, 0, 0))
+        self.assertEqual(self.ownership(), 2)
 
 
-class RatchetTest(BoundaryTestCase):
-    def test_tolerated_split_and_tolerated_test_pass(self):
-        self.tree.java("minos-b", "main", "com.example.a", "Intruder")
-        relative = self.tree.java("minos-b", "test", "com.example.b.more", "Unrelated")
-        self.tree.java("minos-a", "main", "com.example.b.more", "Owner")
-        self.assertEqual(
-            self.ownership({"com.example.a": frozenset({"minos-a", "minos-b"})}, frozenset({relative})),
-            (3, 1, 1))
-
-    def test_stale_split_entry_fails(self):
-        self.assertFailure(
-            lambda: self.ownership({"com.example.a": frozenset({"minos-a", "minos-b"})}),
-            "stale ratchet entry", "com.example.a")
-
-    def test_stale_test_entry_fails(self):
-        stale = "minos-b/src/test/java/com/example/b/BetaTest.java"
-        self.assertFailure(lambda: self.ownership(tolerated_tests=frozenset({stale})), "stale ratchet entry", stale)
-
-    def test_split_widened_beyond_its_tolerated_modules_fails(self):
+    def test_split_across_three_modules_names_all_of_them(self):
         self.tree = Tree(self.tree.root, ("minos-a", "minos-b", "minos-c"))
         self.modules = ("minos-a", "minos-b", "minos-c")
         self.tree.java("minos-b", "main", "com.example.a", "Intruder")
         self.tree.java("minos-c", "main", "com.example.a", "SecondIntruder")
-        self.assertFailure(
-            lambda: self.ownership({"com.example.a": frozenset({"minos-a", "minos-b"})}),
-            "minos-a, minos-b, minos-c", "the ratchet tolerates only minos-a, minos-b")
+        self.assertFailure(self.ownership, "package com.example.a", "3 modules", "minos-a, minos-b, minos-c")
 
-    def test_tolerance_wider_than_the_remaining_split_fails(self):
-        self.tree.java("minos-b", "main", "com.example.a", "Intruder")
-        self.assertFailure(
-            lambda: self.ownership({"com.example.a": frozenset({"minos-a", "minos-b", "minos-c"})}),
-            "package com.example.a", "minos-a, minos-b", "the ratchet tolerates only minos-a, minos-b, minos-c")
-
-    def test_tolerated_test_whose_path_does_not_state_its_package_fails(self):
-        # The foreign-test ratchet is keyed by path: a path that lies about the package must not pass.
+    def test_test_whose_path_does_not_state_its_package_fails(self):
         self.tree.java("minos-a", "main", "com.example.moved", "Owner")
         relative = self.tree.java("minos-b", "test", "com.example.b", "Liar")
-        source = self.tree.root / relative
-        source.write_text("package com.example.moved;\n\nclass Liar {\n}\n", encoding="utf-8")
-        self.assertFailure(lambda: self.ownership(tolerated_tests=frozenset({relative})),
-                           relative, "package/path mismatch")
+        lying_source = "\n".join(("package com.example.moved;", "", "class Liar {", "}", ""))
+        (self.tree.root / relative).write_text(lying_source, encoding="utf-8")
+        self.assertFailure(self.ownership, relative, "package/path mismatch")
+
+    def test_the_rule_has_no_tolerance_left(self):
+        for leftover in ("TOLERATED_SPLIT_PACKAGES", "TOLERATED_FOREIGN_TESTS"):
+            self.assertFalse(hasattr(_MODULE, leftover), leftover)
 
 
 class ReactorTest(BoundaryTestCase):
@@ -213,16 +190,6 @@ class MainWiringTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(calls, ["reactor", "ownership"])
         self.assertIn("spy ownership failed", error)
-
-
-class RepositoryPolicyTest(unittest.TestCase):
-    def test_ratchet_only_names_governed_modules(self):
-        governed = set(_MODULE.MODULES)
-        for package, modules in getattr(_MODULE, "TOLERATED_SPLIT_PACKAGES", {}).items():
-            self.assertTrue(len(modules) > 1, package)
-            self.assertLessEqual(set(modules), governed, package)
-        for relative in getattr(_MODULE, "TOLERATED_FOREIGN_TESTS", frozenset()):
-            self.assertIn(relative.split("/", 1)[0], governed, relative)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ import java.nio.file.Path;
  * {@link McpBackendRouter} (serveur MCP natif ou transport Docker), enregistré par
  * {@code META-INF/services/com.minos.cli.McpLaunchRoute} (ADR 0044).
  */
-public final class McpBackendLaunchRoute implements McpLaunchRoute {
+public final class McpLaunchRouteProvider implements McpLaunchRoute {
 
     @Override
     public int run(Path home) throws Exception {

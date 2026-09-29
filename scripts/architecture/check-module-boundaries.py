@@ -84,16 +84,10 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
 
 # A3 / ADR 0044 — one package, one module. A Java package belongs to exactly one module: no package is
 # declared by the production sources of two modules, and no test is declared in a package whose production
-# sources live in another module. Either would let package-private visibility cross a jar boundary.
-#
-# Ratchet while the A3 lot is in progress: the splits below are still tolerated. Each entry must match the
-# current state exactly (same module set, same test file); an entry that no longer matches is stale and
-# fails, so every commit that folds a package removes its entries. Both lists end empty, then disappear.
-TOLERATED_SPLIT_PACKAGES: dict[str, frozenset[str]] = {
-}
-TOLERATED_FOREIGN_TESTS: frozenset[str] = frozenset()
+# sources live in another module. Either would let package-private visibility cross a jar boundary. No split
+# is tolerated (see check_package_ownership).
 
-NS = {"m": "http://maven.apache.org/POM/4.0.0"}
+NS ={"m": "http://maven.apache.org/POM/4.0.0"}
 PACKAGE = re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
 ARTIFACT_TO_MODULE = {
     "minos-domain": "minos-domain",
@@ -432,16 +426,8 @@ def declared_package(source: Path) -> str:
     return match.group(1) if match else ""
 
 
-def check_package_ownership(
-        root: Path = ROOT,
-        modules: tuple[str, ...] = MODULES,
-        tolerated_split: dict[str, frozenset[str]] = TOLERATED_SPLIT_PACKAGES,
-        tolerated_tests: frozenset[str] = TOLERATED_FOREIGN_TESTS,
-) -> tuple[int, int, int]:
-    """A3 / ADR 0044 — one package, one module (see TOLERATED_SPLIT_PACKAGES for the ratchet).
-
-    Returns (packages, tolerated split packages, tolerated foreign tests) for the success line.
-    """
+def check_package_ownership(root: Path = ROOT, modules: tuple[str, ...] = MODULES) -> int:
+    """A3 / ADR 0044 — one package, one module. Returns the number of production packages."""
     owners: dict[str, set[str]] = {}
     for module in modules:
         source_root = root / module / "src" / "main" / "java"
@@ -450,21 +436,11 @@ def check_package_ownership(
                 owners.setdefault(declared_package(source), set()).add(module)
 
     violations: list[str] = []
-    split = {package: frozenset(owned) for package, owned in owners.items() if len(owned) > 1}
-    for package, owned in sorted(split.items()):
-        tolerated = tolerated_split.get(package)
-        if tolerated == owned:
-            continue
-        violation = (f"package {package} is declared by the production sources of {len(owned)} modules: "
-                     f"{', '.join(sorted(owned))}")
-        if tolerated is not None:
-            violation += f" (the ratchet tolerates only {', '.join(sorted(tolerated))}; update the ratchet)"
-        violations.append(violation)
-    for package in sorted(set(tolerated_split) - set(split)):
-        violations.append(f"stale ratchet entry: package {package} is no longer split, "
-                          "remove it from TOLERATED_SPLIT_PACKAGES")
+    for package, owned in sorted(owners.items()):
+        if len(owned) > 1:
+            violations.append(f"package {package} is declared by the production sources of {len(owned)} modules: "
+                              f"{', '.join(sorted(owned))}")
 
-    foreign: set[str] = set()
     for module in modules:
         source_root = root / module / "src" / "test" / "java"
         if not source_root.is_dir():
@@ -472,26 +448,20 @@ def check_package_ownership(
         for source in sorted(source_root.rglob("*.java")):
             package = declared_package(source)
             relative = source.relative_to(root).as_posix()
-            # A tolerated test is named by its path: the path must state its package, as for production.
+            # As for production sources, the directory of a test must state its package.
             if source.relative_to(source_root).parent != Path(*package.split(".")):
                 violations.append(f"test {relative} of {module}: package/path mismatch (package={package or '<default>'})")
                 continue
             package_owners = owners.get(package, set())
-            if not package_owners or module in package_owners:
-                continue
-            foreign.add(relative)
-            if relative not in tolerated_tests:
+            if package_owners and module not in package_owners:
                 violations.append(
                     f"test {relative} of {module} is declared in package {package}, whose production sources "
                     f"belong to {', '.join(sorted(package_owners))}")
-    for relative in sorted(set(tolerated_tests) - foreign):
-        violations.append(f"stale ratchet entry: test {relative} is no longer declared in a foreign package, "
-                          "remove it from TOLERATED_FOREIGN_TESTS")
 
     if violations:
         fail("A3 one-package-one-module violated (package-private visibility would cross a jar boundary): "
              + "; ".join(violations))
-    return len(owners), len(split), len(foreign)
+    return len(owners)
 
 
 def mermaid_id(module: str) -> str:
@@ -574,15 +544,12 @@ def main() -> int:
         check_dependency_policy(scoped)
         total, counts = check_java_layout()
         check_source_boundaries()
-        packages, tolerated_split, tolerated_tests = check_package_ownership()
+        packages = check_package_ownership()
         check_or_write_dependency_document(graph, write_doc)
         for module in MODULES:
             dependencies = ",".join(sorted(graph[module])) or "-"
             print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")
-        print(
-            f"A3 package ownership: packages={packages}, tolerated split packages={tolerated_split}, "
-            f"tolerated foreign-package tests={tolerated_tests}"
-        )
+        print(f"A3 package ownership: packages={packages}, each owned by exactly one module")
         print(
             f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "
             f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042, "
