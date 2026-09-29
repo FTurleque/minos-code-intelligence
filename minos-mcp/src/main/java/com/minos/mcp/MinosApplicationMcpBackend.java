@@ -31,6 +31,7 @@ import com.minos.application.semantic.HybridSearchService;
 import com.minos.application.semantic.SemanticSearchService;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -340,7 +341,7 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
             map.put("limitations", value.limitations());
             map.put("runtimeState", value.runtimeState());
             map.put("runtimeDiagnostics", value.runtimeDiagnostics());
-            return Map.copyOf(map);
+            return Collections.unmodifiableMap(map);
         }).toList();
     }
 
