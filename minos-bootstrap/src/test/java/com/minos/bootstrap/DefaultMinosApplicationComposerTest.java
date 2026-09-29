@@ -56,7 +56,7 @@ class DefaultMinosApplicationComposerTest {
         java.util.UUID runId = java.util.UUID.fromString("0f0f0f0f-0000-4000-8000-000000000001");
         com.minos.orchestration.ResumableRunMarkers markers =
                 new DefaultMinosApplicationComposer().resumableRunMarkers(home);
-        com.minos.runtime.FileResumableRunMarkers files = new com.minos.runtime.FileResumableRunMarkers(home);
+        com.minos.runtime.local.FileResumableRunMarkers files = new com.minos.runtime.local.FileResumableRunMarkers(home);
 
         assertEquals(java.util.Optional.of(files.runDirectory(runId)), markers.runDirectory(runId));
         try (MinosApplication application = MinosApplication.open(home)) {
@@ -71,10 +71,10 @@ class DefaultMinosApplicationComposerTest {
         Path home = temp.resolve("home");
         DefaultMinosApplicationComposer composer = new DefaultMinosApplicationComposer();
         com.minos.runtime.WorkerSandboxProbe probe = composer.workerSandboxProbe();
-        com.minos.runtime.WorkerSandboxBackend managedLocal =
-                com.minos.runtime.WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(home);
-        com.minos.runtime.WorkerSandboxSelection untrusted =
-                com.minos.runtime.WorkerSandboxBackends.selectForUntrustedCode(home);
+        com.minos.runtime.local.WorkerSandboxBackend managedLocal =
+                com.minos.runtime.local.WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(home);
+        com.minos.runtime.local.WorkerSandboxSelection untrusted =
+                com.minos.runtime.local.WorkerSandboxBackends.selectForUntrustedCode(home);
 
         assertEquals(new com.minos.runtime.WorkerSandboxProbe.ManagedLocalSandbox(
                 managedLocal.id(), managedLocal.supportsManagedLocalProvider()), probe.managedLocalProvider(home));
@@ -85,10 +85,10 @@ class DefaultMinosApplicationComposerTest {
         assertEquals(untrusted.rejectedBackendId(), assessed.rejectedBackendId());
         assertEquals(untrusted.rejectionReasons(), assessed.rejectionReasons());
         assertEquals(untrusted.supportsUntrustedCode() ? "" : untrusted.refusalReport(), assessed.refusalReport());
-        assertEquals(com.minos.runtime.WorkerSandboxSelection.Cause.REJECTED_BY_DECISION.name(),
+        assertEquals(com.minos.runtime.local.WorkerSandboxSelection.Cause.REJECTED_BY_DECISION.name(),
                 com.minos.runtime.WorkerSandboxProbe.CAUSE_REJECTED_BY_DECISION);
-        assertEquals(com.minos.runtime.CommandLocator.find("java"), composer.hostCommandLocator().find("java"));
-        assertEquals(com.minos.runtime.CommandLocator.invocation(Path.of("docker"), "version"),
+        assertEquals(com.minos.runtime.local.CommandLocator.find("java"), composer.hostCommandLocator().find("java"));
+        assertEquals(com.minos.runtime.local.CommandLocator.invocation(Path.of("docker"), "version"),
                 composer.hostCommandLocator().invocation(Path.of("docker"), "version"));
     }
 
@@ -100,8 +100,8 @@ class DefaultMinosApplicationComposerTest {
 
         new DefaultMinosApplicationComposer().projectPathMappings(home).save(mapping);
 
-        assertEquals(java.util.Optional.of(mapping), new com.minos.registry.ProjectPathMappingStore(home).loadOptional());
-        assertInstanceOf(com.minos.registry.ProjectPathMappingStore.class,
+        assertEquals(java.util.Optional.of(mapping), new com.minos.storage.local.registry.ProjectPathMappingStore(home).loadOptional());
+        assertInstanceOf(com.minos.storage.local.registry.ProjectPathMappingStore.class,
                 new DefaultMinosApplicationComposer().projectPathMappings(home));
     }
 }

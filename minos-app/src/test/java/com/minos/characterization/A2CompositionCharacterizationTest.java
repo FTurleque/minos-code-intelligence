@@ -4,11 +4,11 @@ import com.minos.application.MinosApplication;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.InMemoryIndexStateStore;
 import com.minos.runtime.ProviderRuntimeStatus;
-import com.minos.storage.LocalStorageBackend;
+import com.minos.storage.local.LocalStorageBackend;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
 import com.minos.storage.StorageBackendProvider;
-import com.minos.storage.StorageBackends;
+import com.minos.application.StorageBackends;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

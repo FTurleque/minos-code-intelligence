@@ -1,7 +1,7 @@
 package com.minos.cli;
 
-import com.minos.integration.nexus.NexusExportContract;
-import com.minos.integration.nexus.NexusExportService;
+import com.minos.nexus.NexusExportContract;
+import com.minos.nexus.NexusExportService;
 
 import java.io.IOException;
 import java.nio.file.Path;

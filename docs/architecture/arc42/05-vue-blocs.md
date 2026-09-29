@@ -19,7 +19,7 @@ C4Container
     Person(ai_agent, "Agent IA", "«Person»")
 
     System_Boundary(minos_sys, "MINOS Code Intelligence") {
-        Container(app, "minos-app", "«Container»\nJava 24 / Shaded JAR\nComposition root, MinosLauncher\nBackend router natif / Docker")
+        Container(app, "minos-app", "«Container»\nJava 24 / Shaded JAR\nAssemblage final, route MCP\nBackend router natif / Docker")
         Container(cli, "minos-cli", "«Container»\nJava 24\nSurface CLI stable — toutes les commandes")
         Container(mcp, "minos-mcp", "«Container»\nJava 24 / SDK MCP 2.0\nServeur MCP STDIO read-only")
         Container(api, "minos-api", "«Container»\nJava 24\nAPI Java publique versionnée")
@@ -70,31 +70,31 @@ C4Container
 
 ### minos-domain
 - **Responsabilité** : modèle de domaine pur, sans dépendance externe.
-- **Types clés** : `Symbol`, `Relationship`, `Evidence`, `SymbolLocation`, `ProgramGraph`, `SemanticDocument`, `RuntimeObservation`, `HostedTenantState`.
+- **Types clés** : `Symbol`, `Relationship`, `Evidence`, `SymbolLocation`, `ProgramGraph`, `SemanticDocument`.
 - **Interfaces** : aucune (modèle passif).
 - **Dépendances** : aucune.
-- **Sources** : `minos-domain/src/main/java/com/minos/domain/`, `com/minos/program/`, `com/minos/semantic/`, `com/minos/dynamic/`, `com/minos/hosted/`.
+- **Sources** : `minos-domain/src/main/java/com/minos/domain/`, `com/minos/program/`, `com/minos/semantic/`.
 
 ### minos-engine
-- **Responsabilité** : définit les ports (interfaces) du moteur et les services de requête provider-indépendants.
-- **Types clés** : `CodeKnowledgeStore` (port), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`.
-- **Interfaces** : `CodeKnowledgeStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`.
+- **Responsabilité** : définit les ports (interfaces) du moteur et les services provider-indépendants : requêtes, découverte de projet, planification incrémentale et orchestration de l'indexation (cycle de vie, exécution des runs, reprise) — [ADR 0044](../../adr/0044-un-package-un-module.md).
+- **Types clés** : `CodeKnowledgeStore` (port), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`, `ProjectDiscoveryService`, `IncrementalIndexingCoordinator`, `IndexingLifecycleService`, `IndexingRunExecutor`.
+- **Interfaces** : `CodeKnowledgeStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…).
 - **Dépendances** : `minos-domain`.
-- **Sources** : `minos-engine/src/main/java/com/minos/store/`, `com/minos/orchestration/`, `com/minos/query/`, `com/minos/discovery/`.
+- **Sources** : `minos-engine/src/main/java/com/minos/store/`, `com/minos/orchestration/`, `com/minos/query/`, `com/minos/discovery/`, `com/minos/incremental/`, `com/minos/hosted/` (modèle, ports et services du plan de contrôle d'équipe), `com/minos/dynamic/` (modèle et port des observations runtime).
 
 ### minos-runtime-local
 - **Responsabilité** : infrastructure générique d'exécution locale de processus providers (CommandLocator, ProcessIndexerExecutor).
 - **Types clés** : `CommandLocator`, `ProcessIndexerExecutor`, `ProviderRuntimeManager`.
 - **Interfaces** : `ProviderRuntimeManager` (impl de `IndexingRuntimePorts`).
 - **Dépendances** : `minos-engine`.
-- **Sources** : `minos-runtime-local/src/main/java/com/minos/runtime/`.
+- **Sources** : `minos-runtime-local/src/main/java/com/minos/runtime/local/`.
 
 ### minos-storage-local
 - **Responsabilité** : persistance locale des snapshots, vecteurs sémantiques, observations runtime, control plane tenant.
 - **Types clés** : `InMemoryCodeKnowledgeStore`, `SnapshotRepository`, `FileSemanticVectorStore`, `FileRuntimeObservationStore`, `FileHostedControlPlaneStore`.
 - **Interfaces** : implémente `CodeKnowledgeStore`, `SemanticVectorStore`, `RuntimeObservationStore`, `HostedControlPlaneStore`.
 - **Dépendances** : `minos-engine`.
-- **Sources** : `minos-storage-local/src/main/java/com/minos/store/`.
+- **Sources** : `minos-storage-local/src/main/java/com/minos/storage/local/` (sous-packages `store`, `registry`, `orchestration`, `incremental`).
 
 ### minos-provider-scip
 - **Responsabilité** : adapter SCIP — ingestion des artefacts `.scip`, normalisation vers le domaine MINOS, lifecycle des providers Java/TypeScript/polyglot.
@@ -108,13 +108,13 @@ C4Container
 - **Types clés** : `GitIntelligenceService`.
 - **Interfaces** : implémente le port Git de `minos-engine`.
 - **Dépendances** : `minos-engine`, `org.eclipse.jgit 7.6`.
-- **Sources** : `minos-integration-git/src/main/java/com/minos/git/`.
+- **Sources** : `minos-integration-git/src/main/java/com/minos/integration/git/`.
 
 ### minos-application
-- **Responsabilité** : services applicatifs partagés — architecture (`ArchitectureIntelligenceService`), impact (`ImpactAnalysisService`), recherche de code (`CodeSearchService`), indexation incrémentale, output, registry, workspace.
-- **Types clés** : `ArchitectureIntelligenceService`, `ImpactAnalysisService`, `CodeSearchService`, `IncrementalIndexingCoordinator`, `ProjectDiscoveryService`, `HybridContextBuilder`, `EmbeddingProvider`.
-- **Interfaces** : `EmbeddingProvider`, `ProgramGraphProvider`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…).
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage-local`, `minos-provider-scip`, `minos-integration-git`.
+- **Responsabilité** : services applicatifs partagés — architecture (`ArchitectureIntelligenceService`), impact (`ImpactAnalysisService`), recherche de code (`CodeSearchService`), output, workspace, sémantique, runtime dynamique ; ports seulement vers les adaptateurs (ADR 0042).
+- **Types clés** : `ArchitectureIntelligenceService`, `ImpactAnalysisService`, `CodeSearchService`, `HybridContextBuilder`, `EmbeddingProvider`.
+- **Interfaces** : `EmbeddingProvider`, `ProgramGraphProvider`.
+- **Dépendances** : `minos-domain`, `minos-engine`.
 - **Sources** : `minos-application/src/main/java/com/minos/`.
 
 ### minos-nexus
@@ -125,7 +125,7 @@ C4Container
 
 ### minos-cli
 - **Responsabilité** : surface CLI stable — dispatcher `MinosCli`, toutes les commandes (project, index, search, find-symbol, architecture, impact, runtime, team…).
-- **Types clés** : `MinosCli`, `MinosCliRunner`, `MinosLauncher` (dans `minos-app`).
+- **Types clés** : `MinosCli`, `MinosCliRunner`, `MinosLauncher` et `DockerRuntimeBootstrap` (points d'entrée de processus, noms stables), SPI `McpLaunchRoute` (route `minos mcp`, fournie par `minos-app`).
 - **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-integration-git`, `minos-storage-local`, `minos-provider-scip`, `minos-runtime-local`, `minos-nexus`.
 - **Sources** : `minos-cli/src/main/java/com/minos/cli/`.
 
@@ -141,7 +141,7 @@ C4Container
 - **Sources** : `minos-mcp/src/main/java/com/minos/mcp/`.
 
 ### minos-app
-- **Responsabilité** : composition root, points d'entrée (`MinosLauncher`, `NexusExportBridgeMain`), shaded JAR, router backend natif/Docker.
+- **Responsabilité** : assemblage final (shaded JAR), point d'entrée NEXUS (`NexusExportBridgeMain`), route `minos mcp` (`McpLaunchRouteProvider` → router backend natif/Docker, `com.minos.app`) fournie à `MinosLauncher` par `META-INF/services` ([ADR 0044](../../adr/0044-un-package-un-module.md)).
 - **Dépendances** : tous les modules.
 - **Sources** : `minos-app/src/main/java/`.
 

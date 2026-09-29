@@ -14,8 +14,8 @@ SCOPES = {
     "domain-invariants": {"prefixes": ("com/minos/domain/",), "line": 0.80, "branch": 0.60},
     "persistence-cache-indexes": {
         "prefixes": (
-            "com/minos/store/FileSymbolSnapshotStore", "com/minos/store/ActiveSnapshotRepository",
-            "com/minos/store/SnapshotCodec", "com/minos/store/SnapshotIntegrityService",
+            "com/minos/storage/local/store/FileSymbolSnapshotStore", "com/minos/storage/local/store/ActiveSnapshotRepository",
+            "com/minos/storage/local/store/SnapshotCodec", "com/minos/storage/local/store/SnapshotIntegrityService",
             "com/minos/store/InMemoryCodeKnowledgeStore", "com/minos/store/SnapshotQueryView",
         ), "line": 0.50, "branch": 0.35,
     },
@@ -44,13 +44,13 @@ SCOPES = {
         "prefixes": ("com/minos/program/analysis/AdvancedImpactService", "com/minos/program/analysis/SecurityAnalysisService"),
         "line": 0.47, "branch": 0.27,
     },
-    "semantic-vector-store": {"prefixes": ("com/minos/store/FileSemanticVectorStore",), "line": 0.45, "branch": 0.20},
-    "semantic-learned-provider": {"prefixes": ("com/minos/semantic/OllamaEmbeddingProvider",), "line": 0.52, "branch": 0.32},
+    "semantic-vector-store": {"prefixes": ("com/minos/storage/local/store/FileSemanticVectorStore",), "line": 0.45, "branch": 0.20},
+    "semantic-learned-provider": {"prefixes": ("com/minos/application/semantic/OllamaEmbeddingProvider",), "line": 0.52, "branch": 0.32},
     "semantic-hybrid-retrieval": {
         "prefixes": (
-            "com/minos/semantic/SemanticDocumentFactory", "com/minos/semantic/SemanticIndexService",
-            "com/minos/semantic/SemanticSearchService", "com/minos/semantic/HybridSearchService",
-            "com/minos/semantic/HybridContextBuilder", "com/minos/semantic/SemanticSearchEvaluator",
+            "com/minos/application/semantic/SemanticDocumentFactory", "com/minos/application/semantic/SemanticIndexService",
+            "com/minos/application/semantic/SemanticSearchService", "com/minos/application/semantic/HybridSearchService",
+            "com/minos/application/semantic/HybridContextBuilder", "com/minos/application/semantic/SemanticSearchEvaluator",
         ), "line": 0.50, "branch": 0.30,
     },
     "advanced-public-api": {
@@ -79,11 +79,11 @@ SCOPES = {
     },
     "m25-remote-distributed-indexing": {
         "prefixes": (
-            "com/minos/remote/", "com/minos/git/JGitRemoteRepositoryMaterializer", "com/minos/git/JGitCloneDeadline",
-            "com/minos/git/RemoteRepositoryCachePolicy", "com/minos/runtime/DistributedArtifactBundleStore",
-            "com/minos/runtime/DistributedArtifactCachePolicy", "com/minos/runtime/DistributedIndexerExecutor",
-            "com/minos/runtime/LocalIsolatedIndexWorker", "com/minos/runtime/WorkerSandboxBackend",
-            "com/minos/runtime/WorkerSandboxQualification", "com/minos/cli/LocalRemoteIndexOperations",
+            "com/minos/remote/", "com/minos/integration/git/JGitRemoteRepositoryMaterializer", "com/minos/integration/git/JGitCloneDeadline",
+            "com/minos/integration/git/RemoteRepositoryCachePolicy", "com/minos/runtime/local/DistributedArtifactBundleStore",
+            "com/minos/runtime/local/DistributedArtifactCachePolicy", "com/minos/runtime/local/DistributedIndexerExecutor",
+            "com/minos/runtime/local/LocalIsolatedIndexWorker", "com/minos/runtime/local/WorkerSandboxBackend",
+            "com/minos/runtime/local/WorkerSandboxQualification", "com/minos/cli/LocalRemoteIndexOperations",
             # A2 / ADR 0042: the M25 wiring LocalRemoteIndexOperations used to build moved here verbatim.
             "com/minos/bootstrap/LocalRemoteIndexingRuntime",
             "com/minos/cli/RemoteIndexCommand",
@@ -91,7 +91,7 @@ SCOPES = {
         "line": 0.70,
         "branch": 0.50,
         "prefixMinimums": {
-            "com/minos/git/JGitCloneDeadline": {"line": 0.48, "branch": 0.42},
+            "com/minos/integration/git/JGitCloneDeadline": {"line": 0.48, "branch": 0.42},
             # LocalRemoteIndexOperations owns the RemoteMaterialization release lifecycle (AUDIT-01):
             # a per-class floor stops that specific coverage from being able to hide behind the
             # rest of this scope's well-covered siblings while quietly regressing itself.
@@ -100,29 +100,29 @@ SCOPES = {
     },
     "provider-execution-trust-boundary": {
         "prefixes": (
-            "com/minos/runtime/ProcessIndexerExecutor", "com/minos/runtime/StrongProcessOwnershipIndexerExecutor",
-            "com/minos/runtime/LocalProviderWorkspace", "com/minos/runtime/ProviderWorkspaceFiles",
-            "com/minos/runtime/WorkerSandboxBackend", "com/minos/runtime/WorkerSandboxQualification",
-            "com/minos/runtime/WorkerSandboxBackends", "com/minos/runtime/WorkerResourceContainment",
-            "com/minos/runtime/CommandLocator", "com/minos/runtime/ProviderProcessEnvironment",
-            "com/minos/runtime/ProcessTreeTermination", "com/minos/runtime/ProviderResidueReclamation",
+            "com/minos/runtime/local/ProcessIndexerExecutor", "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor",
+            "com/minos/runtime/local/LocalProviderWorkspace", "com/minos/runtime/local/ProviderWorkspaceFiles",
+            "com/minos/runtime/local/WorkerSandboxBackend", "com/minos/runtime/local/WorkerSandboxQualification",
+            "com/minos/runtime/local/WorkerSandboxBackends", "com/minos/runtime/local/WorkerResourceContainment",
+            "com/minos/runtime/local/CommandLocator", "com/minos/runtime/local/ProviderProcessEnvironment",
+            "com/minos/runtime/local/ProcessTreeTermination", "com/minos/runtime/local/ProviderResidueReclamation",
         ),
         "line": 0.68,
         "branch": 0.48,
         "prefixMinimums": {
-            "com/minos/runtime/StrongProcessOwnershipIndexerExecutor": {"line": 0.35, "branch": 0.18},
-            "com/minos/runtime/ProviderProcessEnvironment": {"line": 0.70, "branch": 0.20},
+            "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor": {"line": 0.35, "branch": 0.18},
+            "com/minos/runtime/local/ProviderProcessEnvironment": {"line": 0.70, "branch": 0.20},
         },
     },
     "provider-write-quota-supervisor": {
-        "prefixes": ("com/minos/runtime/ProviderWriteQuotaSupervisor",),
+        "prefixes": ("com/minos/runtime/local/ProviderWriteQuotaSupervisor",),
         "line": 0.55,
         "branch": 0.35,
     },
     "provider-sandbox-linux": {
         "prefixes": (
-            "com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend",
-            "com/minos/runtime/LinuxCgroupJob",
+            "com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend",
+            "com/minos/runtime/local/LinuxCgroupJob",
         ),
         "platform": "linux",
         "line": 0.55,
@@ -130,41 +130,48 @@ SCOPES = {
     },
     "provider-sandbox-windows": {
         "prefixes": (
-            "com/minos/runtime/WindowsAppContainerWorkerSandboxBackend",
-            "com/minos/runtime/WindowsContainmentScript",
+            "com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend",
+            "com/minos/runtime/local/WindowsContainmentScript",
         ),
         "platform": "windows",
         "line": 0.55,
         "branch": 0.35,
     },
     "m26-runtime-dynamic-intelligence": {
-        "prefixes": ("com/minos/dynamic/", "com/minos/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
+        "prefixes": ("com/minos/dynamic/", "com/minos/application/dynamic/", "com/minos/storage/local/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
         "line": 0.55, "branch": 0.35,
     },
     "m27-team-hosted-control-plane": {
         "prefixes": (
-            "com/minos/hosted/", "com/minos/store/FileHostedControlPlaneStore", "com/minos/store/EnvironmentHostedTenantKeyProvider",
+            "com/minos/hosted/", "com/minos/storage/local/store/FileHostedControlPlaneStore", "com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider",
             "com/minos/cli/TeamCommand", "com/minos/api/LocalMinosTeamApi", "com/minos/output/HostedControlPlaneRenderer",
         ), "line": 0.45, "branch": 0.25,
     },
     "m29-backend-routing": {
         "prefixes": (
-            "com/minos/cli/McpBackend", "com/minos/cli/McpBackendConfiguration", "com/minos/cli/McpBackendConfigurationStore",
-            "com/minos/cli/McpBackendRouter", "com/minos/cli/DockerRuntimeBootstrap",
+            "com/minos/app/McpBackend", "com/minos/app/McpBackendConfiguration", "com/minos/app/McpBackendConfigurationStore",
+            "com/minos/app/McpBackendRouter",
         ),
         "report": "target/site/jacoco/jacoco.xml",
+        "line": 0.55, "branch": 0.30,
+    },
+    # A3 / ADR 0044: DockerRuntimeBootstrap moved from minos-app to minos-cli (same FQN) with its tests. minos-app's
+    # own report no longer contains it and the aggregate report does not carry minos-app's own test execution, so
+    # it keeps the m29 floors in a scope of its own on the aggregate report (where minos-cli's tests are counted).
+    "m29-docker-runtime-bootstrap": {
+        "prefixes": ("com/minos/cli/DockerRuntimeBootstrap",),
         "line": 0.55, "branch": 0.30,
     },
     "m30-storage-backend-selection": {
         "prefixes": (
             "com/minos/storage/StorageBackend", "com/minos/storage/StorageBackendConfiguration", "com/minos/storage/StorageBackendProvider",
-            "com/minos/storage/StorageBackends", "com/minos/storage/LocalStorageBackend", "com/minos/storage/MinosRuntimeSettings",
+            "com/minos/application/StorageBackends", "com/minos/storage/local/LocalStorageBackend", "com/minos/storage/MinosRuntimeSettings",
             # A2 / ADR 0042: the selection logic moved verbatim from StorageBackends to the composition root.
             "com/minos/bootstrap/StorageBackendSelection",
         ), "line": 0.52, "branch": 0.32,
     },
     "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.60, "branch": 0.40},
-    "nexus-export": {"prefixes": ("com/minos/integration/nexus/",), "line": 0.30, "branch": 0.12},
+    "nexus-export": {"prefixes": ("com/minos/nexus/", "com/minos/integration/nexus/"), "line": 0.30, "branch": 0.12},
     # The lifecycle orchestrator behind every indexing run (register -> execute providers -> stage
     # -> promote -> persist, with commit-uncertain recovery and failure rollback). It is exercised
     # almost entirely indirectly through IndexingLifecycleService's test suite rather than directly,

@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectOperations;
 import com.minos.orchestration.IndexingResumePolicy;
 import com.minos.output.SymbolOutputFormat;
 

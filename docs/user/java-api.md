@@ -271,3 +271,35 @@ classDiagram
 Les signatures publiques utilisent uniquement des types JDK et les DTOs des interfaces publiques. Un consommateur n’a pas besoin de dépendre directement des modèles SCIP, JGit, MCP ou des classes internes de domaine.
 
 Pour les détails d’architecture, voir [../developer/public-surfaces.md](../developer/public-surfaces.md).
+
+## Ruptures
+
+### Packages internes renommés : un package, un module ([ADR 0044](../adr/0044-un-package-un-module.md))
+
+Aucune signature de `com.minos.api` ne change : les contrats publics ne nomment que `com.minos.api.*` et
+`com.minos.application.MinosApplication`. Les points d'entrée de processus gardent leur nom
+(`com.minos.cli.MinosLauncher`, `com.minos.cli.DockerRuntimeBootstrap`,
+`com.minos.integration.nexus.NexusExportBridgeMain`, `com.minos.mcp.MinosMcpServer`).
+
+Seuls changent des packages internes : un code qui importait directement l'une de ces classes doit mettre
+à jour ses imports. Le nom simple des classes ne change pas.
+
+| Ancien package (module) | Nouveau package | Classes |
+|---|---|---|
+| `com.minos.adapter.scip` (`minos-engine`) | `com.minos.orchestration` | `ScipSymbolSnapshotRequest`, `ScipSymbolSnapshotReport` |
+| `com.minos.git` (`minos-integration-git`) | `com.minos.integration.git` | `GitIntelligenceService`, `JGitCloneDeadline`, `JGitRemoteGitClient`, `JGitRemoteRepositoryMaterializer`, `RemoteCloneBudget`, `RemoteRepositoryCachePolicy` (le port `com.minos.git.GitIntelligence` ne bouge pas) |
+| `com.minos.runtime` (`minos-runtime-local`) | `com.minos.runtime.local` | les 34 classes d'exécution locale (`CommandLocator`, `ProcessIndexerExecutor`, `WorkerSandboxBackends`, `LocalIsolatedIndexWorker`…) ; les ports d'engine (`ProviderRuntimeManager`, `ProviderRuntimeStatus`, `WorkerSandboxProbe`, `HostCommandLocator`) restent dans `com.minos.runtime` |
+| `com.minos.store` (`minos-storage-local`) | `com.minos.storage.local.store` | `ActiveSnapshotRepository`, `CodeKnowledgeSnapshotBinaryCodec`, `EnvironmentHostedTenantKeyProvider`, `FileHostedControlPlaneStore`, `FileRuntimeObservationStore`, `FileSemanticVectorStore`, `FileSymbolSnapshotStore`, `ProjectMutationSemanticVectorStore`, `SnapshotBinaryCodecSupport`, `SnapshotCodec`, `SnapshotCodecV1`, `SnapshotCodecV2`, `SnapshotCompactionService`, `SnapshotIntegrityService`, `SnapshotProjectLease`, `SnapshotRepository`, `SnapshotRetentionPolicy`, `SnapshotRetentionService` ; les ports et modèles d'engine (`CodeKnowledgeSnapshot`, `CodeKnowledgeSnapshotStore`, `InMemoryCodeKnowledgeStore`…) restent dans `com.minos.store` |
+| `com.minos.registry` (`minos-storage-local`) | `com.minos.storage.local.registry` | `LocalProjectRegistry`, `InterProcessLocalProjectRegistry`, `ProjectPathMappingStore` ; les ports d'engine (`ProjectRegistry`, `RegisteredProject`, `ProjectPathMappings`…) restent dans `com.minos.registry` |
+| `com.minos.storage` (`minos-storage-local`) | `com.minos.storage.local` | `LocalStorageBackend`, `LocalStorageRetentionService`, `SerializedRuntimeObservationStore` ; les ports d'engine (`StorageBackend`, `StorageBackendConfiguration`, `StorageBackendProvider`, `MinosRuntimeSettings`…) restent dans `com.minos.storage` |
+| `com.minos.orchestration` (`minos-storage-local`) | `com.minos.storage.local.orchestration` | `FileIndexStateStore`, `IndexRunRetentionPolicy`, `IndexRunRetentionService`, `ProjectIndexLease` ; les ports et modèles d'engine (`IndexStateStore`, `IndexingRun`, `ProjectIndexState`…) restent dans `com.minos.orchestration` |
+| `com.minos.incremental` (`minos-storage-local`) | `com.minos.storage.local.incremental` | `FileProjectFingerprintSnapshotStore` ; les ports, modèles et services d'engine (`ProjectFingerprintSnapshotStore`, `FileFingerprint`, `ProjectFingerprintService`…) restent dans `com.minos.incremental` |
+| `com.minos.dynamic` (`minos-application`) | `com.minos.application.dynamic` | `RuntimeIntelligenceService`, `RuntimeObservationEnvelopeCodec` ; le modèle et le port des observations runtime (`RuntimeObservationSession`, `RuntimeObservationStore`…) restent dans `com.minos.dynamic`, désormais dans `minos-engine` |
+| `com.minos.semantic` (`minos-application`) | `com.minos.application.semantic` | `EmbeddingProvider`, `HybridContextBuilder`, `HybridSearchService`, `LocalHashEmbeddingProvider`, `OllamaEmbeddingProvider`, `SemanticDocumentFactory`, `SemanticIndexBudget`, `SemanticIndexService`, `SemanticSearchEvaluator`, `SemanticSearchService` ; les types de domaine (`SemanticDocument`, `SemanticVector`, `SemanticVectorStore`…) restent dans `com.minos.semantic` |
+| `com.minos.storage` (`minos-application`) | `com.minos.application` | `StorageBackends` (façade `open(StorageBackendConfiguration)`, signature inchangée) ; les ports d'engine (`StorageBackend`, `StorageBackendConfiguration`…) restent dans `com.minos.storage` |
+| `com.minos.cli` (`minos-app`) | `com.minos.app` | `McpBackend`, `McpBackendConfiguration`, `McpBackendConfigurationStore`, `McpBackendRouter`, `DockerMcpTransport` ; `MinosLauncher` et `DockerRuntimeBootstrap` gardent `com.minos.cli` et passent dans le jar de `minos-cli`, qui déclare le SPI `com.minos.cli.McpLaunchRoute` (route `minos mcp`, fournie par `minos-app`) |
+| `com.minos.integration.nexus` (`minos-nexus`) | `com.minos.nexus` | `NexusExportContract`, `NexusExportService`, `NexusSemanticSignalContract`, `NexusSemanticSignalService` ; le contrat JSON versionné (ADR 0020) ne change pas, et `NexusExportBridgeMain` garde `com.minos.integration.nexus` |
+
+**Signatures publiques de `MinosApplication` touchées.** `MinosApplication` ne bouge pas, mais six de ses signatures publiques nomment des types renommés : les accesseurs `semanticIndexService()`, `semanticSearchService()`, `hybridSearchService()`, `hybridContextBuilder()` (désormais `com.minos.application.semantic.*`) et `runtimeIntelligenceService()` (désormais `com.minos.application.dynamic.RuntimeIntelligenceService`), ainsi que `MinosApplication.Builder.embeddingProvider(EmbeddingProvider)` (`com.minos.application.semantic.EmbeddingProvider`). Ce que chaque accesseur retourne est inchangé ; seul le package du type change. C'est une rupture de source et binaire pour un code qui appelle directement ces méthodes : il doit mettre à jour ses imports et être recompilé. Aucune signature de `com.minos.api` n'est concernée.
+
+**Alias supprimés.** Les quatre alias dépréciés de `minos-cli` — `com.minos.cli.ProjectOperations`, `com.minos.cli.ProjectSymbolQuery`, `com.minos.cli.LocalProjectOperations`, `com.minos.cli.LocalProjectSymbolQuery` — n'existent plus : ils ne faisaient que déléguer aux types de `com.minos.application` du même nom, à utiliser directement.

@@ -1,7 +1,7 @@
 package com.minos.application;
 
-import com.minos.semantic.LocalHashEmbeddingProvider;
-import com.minos.semantic.OllamaEmbeddingProvider;
+import com.minos.application.semantic.LocalHashEmbeddingProvider;
+import com.minos.application.semantic.OllamaEmbeddingProvider;
 import com.minos.storage.MinosRuntimeSettings;
 
 import java.net.URI;

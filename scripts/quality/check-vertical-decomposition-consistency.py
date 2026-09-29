@@ -8,9 +8,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ANALYSIS = ROOT / "minos-application/src/main/java/com/minos/program/analysis"
-HOSTED = ROOT / "minos-application/src/main/java/com/minos/hosted"
+HOSTED = ROOT / "minos-engine/src/main/java/com/minos/hosted"
 ENGINE_HOSTED = ROOT / "minos-engine/src/main/java/com/minos/hosted"
-RUNTIME = ROOT / "minos-runtime-local/src/main/java/com/minos/runtime"
+RUNTIME = ROOT / "minos-runtime-local/src/main/java/com/minos/runtime/local"
 
 
 def read(relative: str) -> str:
@@ -51,11 +51,11 @@ def main() -> int:
             "JavaSourceProgramGraphDecompositionTest.java"
         )
         performance_test = read(
-            "minos-bootstrap/src/test/java/com/minos/application/"
+            "minos-bootstrap/src/test/java/com/minos/bootstrap/application/"
             "ProgramGraphPerformanceQualificationTest.java"
         )
         application_test = read(
-            "minos-bootstrap/src/test/java/com/minos/application/MinosApplicationTest.java"
+            "minos-bootstrap/src/test/java/com/minos/bootstrap/application/MinosApplicationTest.java"
         )
         api_contract_test = read(
             "minos-api/src/test/java/com/minos/api/AdvancedCodeIntelligenceApiContractTest.java"
@@ -74,27 +74,27 @@ def main() -> int:
         jacoco = read("scripts/quality/check-jacoco.py")
 
         sandbox = read(
-            "minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxBackend.java"
+            "minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxBackend.java"
         )
         sandbox_qualification = read(
-            "minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxQualification.java"
+            "minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxQualification.java"
         )
         sandbox_test = read(
-            "minos-runtime-local/src/test/java/com/minos/runtime/WorkerSandboxQualificationTest.java"
+            "minos-runtime-local/src/test/java/com/minos/runtime/local/WorkerSandboxQualificationTest.java"
         )
         worker = read(
-            "minos-runtime-local/src/main/java/com/minos/runtime/LocalIsolatedIndexWorker.java"
+            "minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java"
         )
         remote_doc = read("docs/user/remote-indexing.md")
 
         hosted_facade = read(
-            "minos-application/src/main/java/com/minos/hosted/HostedControlPlaneService.java"
+            "minos-engine/src/main/java/com/minos/hosted/HostedControlPlaneService.java"
         )
         hosted_boundary = read(
-            "minos-application/src/main/java/com/minos/hosted/HostedProductionBoundary.java"
+            "minos-engine/src/main/java/com/minos/hosted/HostedProductionBoundary.java"
         )
         hosted_test = read(
-            "minos-application/src/test/java/com/minos/hosted/HostedProductionBoundaryTest.java"
+            "minos-engine/src/test/java/com/minos/hosted/HostedProductionBoundaryTest.java"
         )
 
         if len(facade.splitlines()) > 80:

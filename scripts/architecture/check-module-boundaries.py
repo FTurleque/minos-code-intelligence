@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Enforce MINOS source ownership, Maven dependency directions, and generated architecture facts."""
+"""Enforce MINOS source ownership, Maven dependency directions, and generated architecture facts.
+
+The governed module list is checked against the root reactor (A7), and every Java package belongs to
+exactly one module (A3 / ADR 0044). Self-test: scripts/architecture/test_check_module_boundaries.py.
+"""
 
 from __future__ import annotations
 
@@ -77,6 +81,11 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
         "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp"
     }),
 }
+
+# A3 / ADR 0044 — one package, one module. A Java package belongs to exactly one module: no package is
+# declared by the production sources of two modules, and no test is declared in a package whose production
+# sources live in another module. Either would let package-private visibility cross a jar boundary. No split
+# is tolerated (see check_package_ownership).
 
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 PACKAGE = re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
@@ -376,6 +385,85 @@ def check_java_layout() -> tuple[int, dict[str, int]]:
     return total, counts
 
 
+def reactor_modules(root: Path = ROOT) -> list[str]:
+    """Modules of the root reactor: <modules> of pom.xml, including those a <profile> would add."""
+    pom = root / "pom.xml"
+    if not pom.is_file():
+        fail("root pom.xml is missing: the module list cannot be checked against the reactor")
+    project = ET.parse(pom).getroot()
+    declared = project.findall("m:modules/m:module", NS) + project.findall("m:profiles/m:profile/m:modules/m:module", NS)
+    modules = [(element.text or "").strip().rstrip("/") for element in declared]
+    if not modules or any(not module for module in modules):
+        fail("root pom.xml declares no usable <modules>: the module list cannot be checked against the reactor")
+    return modules
+
+
+def check_reactor_modules(root: Path = ROOT, modules: tuple[str, ...] = MODULES) -> None:
+    """A7 — the governed module list must be exactly the reactor.
+
+    A module added to the reactor and forgotten here would escape every rule of this script, POM and
+    sources alike; a module listed here but gone from the reactor would be checked against stale files.
+    """
+    reactor = reactor_modules(root)
+    problems: list[str] = []
+    duplicated = sorted({module for module in modules if modules.count(module) > 1})
+    if duplicated:
+        problems.append(f"MODULES lists {', '.join(duplicated)} more than once")
+    missing = sorted(set(reactor) - set(modules))
+    if missing:
+        problems.append(
+            f"reactor module(s) {', '.join(missing)} declared in the root pom.xml <modules> are absent from MODULES "
+            "(an ungoverned module escapes every boundary rule)")
+    extra = sorted(set(modules) - set(reactor))
+    if extra:
+        problems.append(f"MODULES lists {', '.join(extra)}, absent from the root pom.xml <modules>")
+    if problems:
+        fail("A7 module list and Maven reactor diverge: " + "; ".join(problems))
+
+
+def declared_package(source: Path) -> str:
+    match = PACKAGE.search(COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8")))
+    return match.group(1) if match else ""
+
+
+def check_package_ownership(root: Path = ROOT, modules: tuple[str, ...] = MODULES) -> int:
+    """A3 / ADR 0044 — one package, one module. Returns the number of production packages."""
+    owners: dict[str, set[str]] = {}
+    for module in modules:
+        source_root = root / module / "src" / "main" / "java"
+        if source_root.is_dir():
+            for source in sorted(source_root.rglob("*.java")):
+                owners.setdefault(declared_package(source), set()).add(module)
+
+    violations: list[str] = []
+    for package, owned in sorted(owners.items()):
+        if len(owned) > 1:
+            violations.append(f"package {package} is declared by the production sources of {len(owned)} modules: "
+                              f"{', '.join(sorted(owned))}")
+
+    for module in modules:
+        source_root = root / module / "src" / "test" / "java"
+        if not source_root.is_dir():
+            continue
+        for source in sorted(source_root.rglob("*.java")):
+            package = declared_package(source)
+            relative = source.relative_to(root).as_posix()
+            # As for production sources, the directory of a test must state its package.
+            if source.relative_to(source_root).parent != Path(*package.split(".")):
+                violations.append(f"test {relative} of {module}: package/path mismatch (package={package or '<default>'})")
+                continue
+            package_owners = owners.get(package, set())
+            if package_owners and module not in package_owners:
+                violations.append(
+                    f"test {relative} of {module} is declared in package {package}, whose production sources "
+                    f"belong to {', '.join(sorted(package_owners))}")
+
+    if violations:
+        fail("A3 one-package-one-module violated (package-private visibility would cross a jar boundary): "
+             + "; ".join(violations))
+    return len(owners)
+
+
 def mermaid_id(module: str) -> str:
     return module.replace("-", "_")
 
@@ -446,6 +534,7 @@ def main() -> int:
             fail(f"unknown arguments: {', '.join(unknown)}")
         write_doc = "--write-doc" in arguments
 
+        check_reactor_modules()
         roots = {module: parse_pom(module) for module in MODULES}
         for module, root in roots.items():
             check_pom_layout(module, root)
@@ -455,13 +544,16 @@ def main() -> int:
         check_dependency_policy(scoped)
         total, counts = check_java_layout()
         check_source_boundaries()
+        packages = check_package_ownership()
         check_or_write_dependency_document(graph, write_doc)
         for module in MODULES:
             dependencies = ",".join(sorted(graph[module])) or "-"
             print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")
+        print(f"A3 package ownership: packages={packages}, each owned by exactly one module")
         print(
             f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "
-            f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042)"
+            f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042, "
+            f"packagePolicy=A3-ADR-0044, reactor=root-pom-modules)"
         )
         return 0
     except Exception as exception:

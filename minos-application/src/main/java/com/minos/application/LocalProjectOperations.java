@@ -1,8 +1,8 @@
 package com.minos.application;
 
-import com.minos.adapter.scip.ScipSymbolSnapshotReport;
+import com.minos.orchestration.ScipSymbolSnapshotReport;
 import com.minos.orchestration.ScipArtifactImporter;
-import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.io.BoundedFileDigest;
 import com.minos.io.DurableAtomicFile;

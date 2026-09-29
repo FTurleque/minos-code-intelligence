@@ -4,8 +4,8 @@ import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedLineReader;
 import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.runtime.BoundedProcessOutput;
-import com.minos.runtime.CommandLocator;
+import com.minos.runtime.local.BoundedProcessOutput;
+import com.minos.runtime.local.CommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 

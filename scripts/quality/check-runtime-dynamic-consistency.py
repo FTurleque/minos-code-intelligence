@@ -38,19 +38,19 @@ def forbid(relative: str, text: str, *values: str) -> None:
 
 def main() -> int:
     try:
-        model = read("minos-domain/src/main/java/com/minos/dynamic/RuntimeObservationSession.java")
-        reference = read("minos-domain/src/main/java/com/minos/dynamic/RuntimeSymbolReference.java")
-        resolution = read("minos-domain/src/main/java/com/minos/dynamic/RuntimeSymbolResolution.java")
-        correlation = read("minos-domain/src/main/java/com/minos/dynamic/CorrelatedRuntimeObservation.java")
+        model = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationSession.java")
+        reference = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeSymbolReference.java")
+        resolution = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeSymbolResolution.java")
+        correlation = read("minos-engine/src/main/java/com/minos/dynamic/CorrelatedRuntimeObservation.java")
         port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
-        codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
-        service = read("minos-application/src/main/java/com/minos/dynamic/RuntimeIntelligenceService.java")
-        store = read("minos-storage-local/src/main/java/com/minos/store/FileRuntimeObservationStore.java")
+        codec = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeObservationEnvelopeCodec.java")
+        service = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java")
+        store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
         bounded_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
         command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         app_assembler = read("minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
-        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/LocalStorageBackend.java")
+        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
         mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_schemas = read("minos-mcp/src/main/java/com/minos/mcp/McpToolSchemas.java")
         backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
@@ -118,10 +118,12 @@ def main() -> int:
                       "runtimeIntelligenceService().symbolReport")
 
         tests = {
-            "RuntimeObservationModelTest.java": read("minos-domain/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
-            "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileRuntimeObservationStoreTest.java"),
-            "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileRuntimeObservationStoreSymlinkTest.java"),
-            "RuntimeIntelligenceServiceTest.java": read("minos-bootstrap/src/test/java/com/minos/dynamic/RuntimeIntelligenceServiceTest.java"),
+            "RuntimeObservationModelTest.java": read("minos-engine/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
+            "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreTest.java"),
+            "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreSymlinkTest.java"),
+            "RuntimeIntelligenceServiceTest.java": read("minos-application/src/test/java/com/minos/application/dynamic/RuntimeIntelligenceServiceTest.java"),
+            # A3 / ADR 0044: the file-adapter half of the split runtime service test (real local stores).
+            "RuntimeIntelligenceFileAdaptersTest.java": read("minos-bootstrap/src/test/java/com/minos/bootstrap/RuntimeIntelligenceFileAdaptersTest.java"),
             "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RuntimeCommandTest.java"),
             "MinosMcpToolsTest.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosMcpToolsTest.java"),
         }
@@ -136,6 +138,9 @@ def main() -> int:
         require_facts("RuntimeIntelligenceServiceTest.java", tests["RuntimeIntelligenceServiceTest.java"],
                       "ReportsResolutionHotPathsAndSymbolFacts", "rejectsProjectAndSnapshotMisalignment",
                       "codecFailsClosedOnBomTraversalUnknownKindsAndNonPartialCompleteness")
+        require_facts("RuntimeIntelligenceFileAdaptersTest.java", tests["RuntimeIntelligenceFileAdaptersTest.java"],
+                      "importsStrictPartialEvidenceAndReportsResolutionHotPathsAndSymbolFacts",
+                      "rejectsProjectAndSnapshotMisalignmentAndStaleSessionQueries")
         require_facts("RuntimeCommandTest.java", tests["RuntimeCommandTest.java"],
                       "AcrossAllCliActions", "ActionSpecificRequiredOptionsAndBounds")
         require_facts("MinosMcpToolsTest.java", tests["MinosMcpToolsTest.java"],

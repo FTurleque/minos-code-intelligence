@@ -1,7 +1,7 @@
 package com.minos.bootstrap;
 
 import com.minos.orchestration.ResumableRunMarkers;
-import com.minos.runtime.FileResumableRunMarkers;
+import com.minos.runtime.local.FileResumableRunMarkers;
 
 import java.io.IOException;
 import java.nio.file.Path;

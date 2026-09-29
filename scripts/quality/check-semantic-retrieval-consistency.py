@@ -45,7 +45,7 @@ def require_pattern(relative: str, text: str, pattern: str, label: str) -> None:
 
 def main() -> int:
     try:
-        provider_path = "minos-application/src/main/java/com/minos/semantic/OllamaEmbeddingProvider.java"
+        provider_path = "minos-application/src/main/java/com/minos/application/semantic/OllamaEmbeddingProvider.java"
         provider = read(provider_path)
         require(
             provider_path,
@@ -87,7 +87,7 @@ def main() -> int:
             '"disabled".equals(provider)',
         )
 
-        store_path = "minos-storage-local/src/main/java/com/minos/store/FileSemanticVectorStore.java"
+        store_path = "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java"
         store = read(store_path)
         require(
             store_path,
@@ -105,7 +105,7 @@ def main() -> int:
         )
         forbid(store_path, store, "output.writeDouble(indexed.vector()")
 
-        store_test_path = "minos-storage-local/src/test/java/com/minos/store/FileSemanticVectorStoreTest.java"
+        store_test_path = "minos-storage-local/src/test/java/com/minos/storage/local/store/FileSemanticVectorStoreTest.java"
         store_test = read(store_test_path)
         require(
             store_test_path,
@@ -116,7 +116,7 @@ def main() -> int:
             "readsLegacyV1AndMigratesOnNextReplace",
         )
 
-        search_path = "minos-application/src/main/java/com/minos/semantic/SemanticSearchService.java"
+        search_path = "minos-application/src/main/java/com/minos/application/semantic/SemanticSearchService.java"
         search = read(search_path)
         require(
             search_path,
@@ -132,13 +132,13 @@ def main() -> int:
 
         # A2: provider limitations are carried by the EmbeddingProvider port; SemanticIndexService
         # appends provider.limitations() and never branches on a concrete provider class.
-        index_path = "minos-application/src/main/java/com/minos/semantic/SemanticIndexService.java"
+        index_path = "minos-application/src/main/java/com/minos/application/semantic/SemanticIndexService.java"
         index = read(index_path)
         require(index_path, index, "provider.limitations()")
         forbid(index_path, index, "instanceof LocalHashEmbeddingProvider", "instanceof OllamaEmbeddingProvider")
-        port_path = "minos-application/src/main/java/com/minos/semantic/EmbeddingProvider.java"
+        port_path = "minos-application/src/main/java/com/minos/application/semantic/EmbeddingProvider.java"
         require(port_path, read(port_path), "default List<String> limitations()")
-        local_hash_path = "minos-application/src/main/java/com/minos/semantic/LocalHashEmbeddingProvider.java"
+        local_hash_path = "minos-application/src/main/java/com/minos/application/semantic/LocalHashEmbeddingProvider.java"
         require(local_hash_path, read(local_hash_path), "LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL")
         require(
             provider_path,
@@ -181,7 +181,7 @@ def main() -> int:
             jacoco_path,
             jacoco,
             '"semantic-learned-provider"',
-            '"com/minos/semantic/OllamaEmbeddingProvider"',
+            '"com/minos/application/semantic/OllamaEmbeddingProvider"',
             '"semantic-vector-store"',
             '"semantic-hybrid-retrieval"',
         )

@@ -1,8 +1,10 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectOperations;
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
-import com.minos.dynamic.RuntimeIntelligenceService;
+import com.minos.application.dynamic.RuntimeIntelligenceService;
 import com.minos.git.GitIntelligence;
 import com.minos.hosted.HostedControlPlaneService;
 import com.minos.impact.ProjectImpactQuery;

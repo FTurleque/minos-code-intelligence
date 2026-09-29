@@ -127,7 +127,7 @@ def require_post226_trust_boundaries() -> None:
     strong_owned = read(
         "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/StrongOwnedProcessExecutors.java"
     )
-    command_locator = read("minos-runtime-local/src/main/java/com/minos/runtime/CommandLocator.java")
+    command_locator = read("minos-runtime-local/src/main/java/com/minos/runtime/local/CommandLocator.java")
     private_storage = read("minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java")
     confined_opener = read("minos-engine/src/main/java/com/minos/io/ConfinedFileOpener.java")
 
@@ -154,7 +154,7 @@ def main() -> int:
             "FingerprintConstrainedJavaProgramGraphProvider.java"
         )
         application_test = read(
-            "minos-bootstrap/src/test/java/com/minos/application/MinosApplicationTest.java"
+            "minos-bootstrap/src/test/java/com/minos/bootstrap/application/MinosApplicationTest.java"
         )
         api_test = read(
             "minos-api/src/test/java/com/minos/api/AdvancedCodeIntelligenceApiContractTest.java"
@@ -163,20 +163,20 @@ def main() -> int:
         generated_facts = read("docs/generated/product-facts.md")
         architecture = read("scripts/architecture/check-module-boundaries.py")
         public_surfaces = read("docs/developer/public-surfaces.md")
-        worker = read("minos-runtime-local/src/main/java/com/minos/runtime/LocalIsolatedIndexWorker.java")
-        sandbox = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxBackend.java")
+        worker = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java")
+        sandbox = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxBackend.java")
         worker_test = read(
-            "minos-runtime-local/src/test/java/com/minos/runtime/LocalIsolatedIndexWorkerTest.java"
+            "minos-runtime-local/src/test/java/com/minos/runtime/local/LocalIsolatedIndexWorkerTest.java"
         )
-        hosted = read("minos-application/src/main/java/com/minos/hosted/HostedControlPlaneService.java")
-        hosted_auth = read("minos-application/src/main/java/com/minos/hosted/HostedAuthorizationService.java")
-        hosted_audit = read("minos-application/src/main/java/com/minos/hosted/HostedAuditChain.java")
+        hosted = read("minos-engine/src/main/java/com/minos/hosted/HostedControlPlaneService.java")
+        hosted_auth = read("minos-engine/src/main/java/com/minos/hosted/HostedAuthorizationService.java")
+        hosted_audit = read("minos-engine/src/main/java/com/minos/hosted/HostedAuditChain.java")
         hosted_test = read(
-            "minos-application/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"
+            "minos-engine/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"
         )
         c0_research = read("docs/research/code-intelligence-architecture-analysis.md")
 
-        docker_transport = read("minos-app/src/main/java/com/minos/cli/DockerMcpTransport.java")
+        docker_transport = read("minos-app/src/main/java/com/minos/app/DockerMcpTransport.java")
         pg_connections = read(
             "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java"
         )
@@ -191,7 +191,7 @@ def main() -> int:
             "minos-intellij/src/main/java/com/minos/intellij/navigation/MinosLocation.java"
         )
         file_snapshots = read(
-            "minos-storage-local/src/main/java/com/minos/store/FileSymbolSnapshotStore.java"
+            "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java"
         )
         mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
@@ -288,7 +288,7 @@ def main() -> int:
         # production implementation, wired by minos-bootstrap, is still CommandLocator itself.
         require("DockerMcpTransport.java", docker_transport, "hostCommandLocator().find(\"docker\")")
         require("DockerMcpTransport.java", docker_transport, "hostCommandLocator().invocation(")
-        forbid("DockerMcpTransport.java", docker_transport, "import com.minos.runtime.CommandLocator;")
+        forbid("DockerMcpTransport.java", docker_transport, "import com.minos.runtime.local.CommandLocator;")
         host_commands = read("minos-bootstrap/src/main/java/com/minos/bootstrap/LocalHostCommandLocator.java")
         require("LocalHostCommandLocator.java", host_commands, "CommandLocator.find(command)")
         require("LocalHostCommandLocator.java", host_commands, "CommandLocator.invocation(executable, arguments)")

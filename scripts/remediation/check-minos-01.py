@@ -16,9 +16,9 @@ from windows_launcher import assemble, is_assembled_launcher  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 
-RUNTIME = "minos-runtime-local/src/main/java/com/minos/runtime"
-RUNTIME_TESTS = "minos-runtime-local/src/test/java/com/minos/runtime"
-WINDOWS_LAUNCHER = "minos-runtime-local/src/main/resources/com/minos/runtime/windows-appcontainer-sandbox-v4.ps1"
+RUNTIME = "minos-runtime-local/src/main/java/com/minos/runtime/local"
+RUNTIME_TESTS = "minos-runtime-local/src/test/java/com/minos/runtime/local"
+WINDOWS_LAUNCHER = "minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1"
 
 ADVERSARIAL_TESTS = {
     f"{RUNTIME_TESTS}/LinuxCgroupJobContainmentTest.java": (

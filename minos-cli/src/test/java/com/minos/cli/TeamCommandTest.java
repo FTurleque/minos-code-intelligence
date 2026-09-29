@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.application.LocalProjectOperations;
+import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.application.MinosApplication;
 import com.minos.hosted.HmacHostedIdentityProvider;
 import com.minos.hosted.HostedAuditSink;

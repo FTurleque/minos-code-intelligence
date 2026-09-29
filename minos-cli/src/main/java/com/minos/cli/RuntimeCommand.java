@@ -1,11 +1,11 @@
 package com.minos.cli;
 
-import com.minos.dynamic.RuntimeIntelligenceService;
-import com.minos.dynamic.RuntimeIntelligenceService.HotPath;
-import com.minos.dynamic.RuntimeIntelligenceService.RuntimeReport;
-import com.minos.dynamic.RuntimeIntelligenceService.SessionView;
-import com.minos.dynamic.RuntimeIntelligenceService.SymbolRuntimeReport;
-import com.minos.dynamic.RuntimeObservationEnvelopeCodec;
+import com.minos.application.dynamic.RuntimeIntelligenceService;
+import com.minos.application.dynamic.RuntimeIntelligenceService.HotPath;
+import com.minos.application.dynamic.RuntimeIntelligenceService.RuntimeReport;
+import com.minos.application.dynamic.RuntimeIntelligenceService.SessionView;
+import com.minos.application.dynamic.RuntimeIntelligenceService.SymbolRuntimeReport;
+import com.minos.application.dynamic.RuntimeObservationEnvelopeCodec;
 import com.minos.output.RuntimeIntelligenceRenderer;
 import com.minos.output.SymbolOutputFormat;
 

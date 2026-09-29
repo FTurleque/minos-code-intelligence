@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.RelationshipKind;

@@ -6,9 +6,9 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.runtime.ProviderRuntimeStatus;
-import com.minos.runtime.WorkerResourceContainment;
-import com.minos.runtime.WorkerSandboxBackend;
-import com.minos.runtime.WorkerSandboxQualification;
+import com.minos.runtime.local.WorkerResourceContainment;
+import com.minos.runtime.local.WorkerSandboxBackend;
+import com.minos.runtime.local.WorkerSandboxQualification;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

@@ -58,6 +58,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0041](0041-indexation-distante-de-code-non-fiable.md) | Indexation distante de code non fiable : quota d'écriture OS ou fermeture assumée | Accepted (option b : fermeture par décision) | Audit 2026-09, A1 |
 | [0042](0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Accepted (option c : module minos-bootstrap) | Audit 2026-09, A2 |
 | [0043](0043-retrait-des-artefacts-de-jalon.md) | Politique de retrait des scripts et workflows de jalon (permanent / gelé par assertion / archivé) | Accepted | Audit 2026-09, G3 |
+| [0044](0044-un-package-un-module.md) | Un package, un module : replier les packages éclatés par déplacement, renommer le côté interne | Accepted | Audit 2026-09, A3 (et A7) |
 
 ## Règle de rédaction
 

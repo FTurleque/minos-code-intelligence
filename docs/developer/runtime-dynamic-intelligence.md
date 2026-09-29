@@ -28,6 +28,8 @@ Le package `com.minos.dynamic` distingue :
 - `RuntimeSymbolResolution` : `RESOLVED`, `AMBIGUOUS` ou `UNRESOLVED`, avec candidats bornés ;
 - `CorrelatedRuntimeSession` : observation brute, corrélation, heure d’import et SHA-256 source.
 
+Ce modèle et le port `RuntimeObservationStore` vivent dans `minos-engine` ; l'import, la corrélation et les rapports (`RuntimeIntelligenceService`, `RuntimeObservationEnvelopeCodec`) sont des services applicatifs de `com.minos.application.dynamic` ([ADR 0044](../adr/0044-un-package-un-module.md)).
+
 `OBSERVED_PARTIAL` est une nature externe explicite. Elle ne remplace pas `InformationNature` des faits structurés et ne rend jamais une trace exhaustive. `observedSymbolRatio` mesure les identités statiques corrélées dans les sessions sélectionnées ; ce n’est pas une métrique universelle de couverture.
 
 ## Corrélation statique

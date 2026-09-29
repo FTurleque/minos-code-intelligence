@@ -1,6 +1,6 @@
 package com.minos.bootstrap;
 
-import com.minos.runtime.CommandLocator;
+import com.minos.runtime.local.CommandLocator;
 import com.minos.runtime.HostCommandLocator;
 
 import java.nio.file.Path;

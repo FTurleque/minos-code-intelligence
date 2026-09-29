@@ -3,7 +3,7 @@ package com.minos.adapter.scip.runtime;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexingRuntimePorts.IndexSnapshotStageRequest;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.scip_code.scip.Document;

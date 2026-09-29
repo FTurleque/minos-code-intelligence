@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
     paths:
       - 'minos-domain/**'
+      - 'minos-engine/**'
       - 'minos-application/**'
       - 'minos-api/**'
       - 'minos-mcp/**'

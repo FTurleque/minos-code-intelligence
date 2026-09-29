@@ -4,9 +4,9 @@ import com.minos.io.ConfinedFileOpener;
 import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
-import com.minos.runtime.CommandLocator;
-import com.minos.runtime.IndexerProcessPlan;
-import com.minos.runtime.IndexerProcessPlanFactory;
+import com.minos.runtime.local.CommandLocator;
+import com.minos.runtime.local.IndexerProcessPlan;
+import com.minos.runtime.local.IndexerProcessPlanFactory;
 import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
 

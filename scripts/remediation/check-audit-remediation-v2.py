@@ -119,7 +119,7 @@ def main() -> int:
             "requireCapacity",
         )
         require(
-            "minos-storage-local/src/main/java/com/minos/store/SnapshotBinaryCodecSupport.java",
+            "minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotBinaryCodecSupport.java",
             "BoundedInputStream",
             "BoundedOutputStream",
             "MAX_PERSISTED_SNAPSHOT_BYTES",
@@ -140,7 +140,7 @@ def main() -> int:
             "new String(input.readAllBytes(), StandardCharsets.UTF_8)",
         )
         require(
-            "minos-storage-local/src/main/java/com/minos/store/EnvironmentHostedTenantKeyProvider.java",
+            "minos-storage-local/src/main/java/com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider.java",
             "if (derived != null) Arrays.fill(derived, (byte) 0)",
             "Arrays.fill(master, (byte) 0)",
         )

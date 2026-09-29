@@ -9,11 +9,11 @@ import com.minos.program.ProgramGraphNode;
 import com.minos.program.analysis.AdvancedImpactService;
 import com.minos.program.analysis.ProgramGraphService;
 import com.minos.program.analysis.SecurityAnalysisService;
-import com.minos.semantic.HybridContextBuilder;
-import com.minos.semantic.HybridSearchService;
+import com.minos.application.semantic.HybridContextBuilder;
+import com.minos.application.semantic.HybridSearchService;
 import com.minos.semantic.SemanticDocument;
-import com.minos.semantic.SemanticIndexService;
-import com.minos.semantic.SemanticSearchService;
+import com.minos.application.semantic.SemanticIndexService;
+import com.minos.application.semantic.SemanticSearchService;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;

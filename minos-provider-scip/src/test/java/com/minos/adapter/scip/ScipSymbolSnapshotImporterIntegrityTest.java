@@ -1,6 +1,7 @@
 package com.minos.adapter.scip;
 
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

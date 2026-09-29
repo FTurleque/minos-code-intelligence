@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.output.CodeIntelligenceResultRenderer;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.query.UsageResult;

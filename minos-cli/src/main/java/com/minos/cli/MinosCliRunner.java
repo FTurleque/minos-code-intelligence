@@ -1,11 +1,15 @@
 package com.minos.cli;
 
+import com.minos.application.LocalProjectOperations;
+import com.minos.application.LocalProjectSymbolQuery;
+import com.minos.application.ProjectOperations;
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.application.MinosApplication;
 import com.minos.application.MinosHome;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.impact.ProjectImpactQuery;
-import com.minos.integration.nexus.NexusExportService;
+import com.minos.nexus.NexusExportService;
 
 import java.io.IOException;
 import java.lang.reflect.Proxy;

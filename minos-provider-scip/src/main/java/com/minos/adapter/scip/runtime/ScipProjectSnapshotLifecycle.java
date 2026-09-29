@@ -2,7 +2,7 @@ package com.minos.adapter.scip.runtime;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
-import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.io.FileTreeOperations;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
@@ -15,7 +15,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
