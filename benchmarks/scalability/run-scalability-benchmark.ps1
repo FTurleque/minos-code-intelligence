@@ -42,7 +42,9 @@ function Format-ScipArgument {
     param([Parameter(Mandatory = $true)] $Entry)
     $Path = Resolve-DatasetPath ([string] $Entry.path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
-    return "$($Entry.label)|$($Entry.provider)|$Path"
+    $Value = "$($Entry.label)|$($Entry.provider)|$Path"
+    if ($Entry.PSObject.Properties.Name -contains "providerVersion") { $Value += "|$($Entry.providerVersion)" }
+    return $Value
 }
 
 $Classpath = Join-Path $Output "classpath.txt"

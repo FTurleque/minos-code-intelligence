@@ -28,6 +28,7 @@ import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.registry.RegisteredProject;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.SnapshotCodec;
 import com.minos.storage.local.store.SnapshotCodecV2;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
@@ -48,7 +49,6 @@ import java.io.InputStream;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.ref.Reference;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -89,7 +89,6 @@ import java.util.function.Predicate;
 public final class SnapshotScalabilityBenchmark {
 
     private static final String SNAPSHOT_STORE_DIRECTORY = "symbol-snapshots";
-    private static final String CODEC_SUPPORT_CLASS = "com.minos.storage.local.store.SnapshotBinaryCodecSupport";
     private static final int HYBRID_LIMIT = 20;
     private static final int IMPACT_ROOT_CANDIDATES = 25;
     private static final int IMPACT_ROOTS = 3;
@@ -122,7 +121,7 @@ public final class SnapshotScalabilityBenchmark {
         if (base == null) throw new IllegalStateException("main SCIP input is required");
         CodeKnowledgeSnapshot full = base;
 
-        // Tier 1 - product path (file store, query-view cache): file-sampled slices of the real corpus.
+        // Niveau 1 - chemin produit (magasin fichier, cache de vues) : tranches de fichiers du corpus réel.
         for (double fraction : options.fractions()) {
             String dataset = String.format(Locale.ROOT, "file-f%.2f", fraction);
             CodeKnowledgeSnapshot slice = fraction >= 1.0 ? full : slice(full, fraction);
@@ -144,10 +143,10 @@ public final class SnapshotScalabilityBenchmark {
                     application.snapshotStore(), mainProject, active, options, dataset);
         }
 
-        // Tier 2 - in memory, without persistence: the full real corpus (not persistable in V2) and replicas.
-        // HybridSearchService asks SemanticIndexService.status for the project, which loads the active
-        // snapshot of the application's file store even when the semantic provider is disabled. An empty
-        // active snapshot keeps that load negligible, so tier 2 measures the search itself.
+        // Niveau 2 - en mémoire, sans persistance : le corpus réel entier (non persistable en V2) et ses
+        // répliques. HybridSearchService interroge SemanticIndexService.status, qui charge le snapshot actif
+        // du magasin fichier de l'application même fournisseur sémantique désactivé : un snapshot actif vide
+        // rend ce chargement négligeable, et le niveau 2 mesure la recherche elle-même.
         application.snapshotStore().publish(mainProject.id(), "scalability-reset", List.of(), List.of(), List.of());
         InMemorySnapshotStore memoryStore = new InMemorySnapshotStore();
         HybridSearchService memoryHybrid = new HybridSearchService(new ProjectResolver(application.projectRegistry()),
@@ -180,7 +179,7 @@ public final class SnapshotScalabilityBenchmark {
         }
     }
 
-    /** A failing section is recorded as a measurement and does not stop the others. */
+    /** Une section en échec est consignée comme une mesure et n'arrête pas les autres. */
     private static void guarded(String section, String dataset, CheckedRunnable action) {
         try {
             action.run();
@@ -246,8 +245,8 @@ public final class SnapshotScalabilityBenchmark {
         }
         Stats.of(decodeNanos).emit("ratio", dataset, "decode");
 
-        // Import into a capturing in-memory store: the whole product import (freeze + sha256, decode,
-        // ingestion) without the persistence step, whatever the snapshot size.
+        // Import dans un magasin de capture en mémoire : tout l'import produit (gel + sha256, décodage,
+        // ingestion) sans l'étape de persistance, quelle que soit la taille du snapshot.
         long heapBefore = settledHeap();
         CodeKnowledgeSnapshot snapshot = null;
         long[] captureNanos = new long[options.ratioIterations()];
@@ -282,7 +281,7 @@ public final class SnapshotScalabilityBenchmark {
         metric("ratio", dataset, "snapshotOverPreflightSymbols", ratio(snapshot.symbols().size(), preflight.symbols()));
         metric("ratio", dataset, "heapOverV2", ratio(heapWithSnapshot - heapBefore, census.v2Bytes()));
 
-        // Product import into the real file store: succeeds, or fails at publication (late refusal).
+        // Import produit dans le vrai magasin fichier : il réussit, ou échoue à la publication.
         long[] importNanos = new long[options.ratioIterations()];
         String outcome = "PUBLISHED";
         for (int index = 0; index < importNanos.length; index++) {
@@ -306,13 +305,20 @@ public final class SnapshotScalabilityBenchmark {
         return snapshot;
     }
 
+    /**
+     * Même forme que {@code minos import-scip} : l'{@code Origin} recopiée sur chaque entité porte
+     * {@code indexRunId = "application-" + snapshotId} (41 caractères pour un identifiant dérivé du SCIP) et la
+     * version du fournisseur ; elle pèse sur la taille. Seul le suffixe distingue les imports successifs.
+     */
     private static ScipSymbolSnapshotRequest importRequest(RegisteredProject project, String dataset, String suffix,
                                                            ScipInput input) {
-        return new ScipSymbolSnapshotRequest(project.id(), "scalability-" + dataset + "-" + suffix, null,
-                input.provider(), null, "scalability-" + dataset, Map.of(), "");
+        String snapshotId = "scip-" + suffix + "-" + Integer.toHexString(dataset.hashCode());
+        snapshotId = snapshotId + "0".repeat(Math.max(0, 29 - snapshotId.length()));
+        return new ScipSymbolSnapshotRequest(project.id(), snapshotId, null, input.provider(), input.providerVersion(),
+                "application-" + snapshotId, Map.of(), "");
     }
 
-    /** Heap of the query indexes built over a snapshot already held in memory. */
+    /** Tas des index de requête construits sur un snapshot déjà en mémoire. */
     private static void indexHeap(CodeKnowledgeSnapshot snapshot, String dataset) {
         long before = settledHeap();
         long started = System.nanoTime();
@@ -351,11 +357,8 @@ public final class SnapshotScalabilityBenchmark {
         }
     }
 
-    private static long persistedSnapshotLimit() throws ReflectiveOperationException {
-        // Single source of truth: the package-private codec constant, read rather than restated.
-        Field field = Class.forName(CODEC_SUPPORT_CLASS).getDeclaredField("MAX_PERSISTED_SNAPSHOT_BYTES");
-        field.setAccessible(true);
-        return field.getLong(null);
+    private static long persistedSnapshotLimit() {
+        return SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES;
     }
 
     // ---------------------------------------------------------------- publication
@@ -541,8 +544,8 @@ public final class SnapshotScalabilityBenchmark {
         var threads = (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
         metric("impact", dataset, "relationships", snapshot.relationships().size());
 
-        // Fixed cost: a root without incoming edges runs the per-call setup (symbol map, incoming index,
-        // baseline limitations, final sort) with an empty traversal.
+        // Coût fixe : une racine sans arête entrante exécute la préparation de chaque appel (table des
+        // symboles, index des arêtes entrantes, limitations de base, tri final) avec une traversée vide.
         if (leafRoot != null) {
             measureImpact(service, snapshot, new ImpactAnalysisRequest(leafRoot, 1, 1), options, threads, dataset, "setupOnly");
         }
@@ -718,7 +721,7 @@ public final class SnapshotScalabilityBenchmark {
         void run() throws IOException;
     }
 
-    /** Median and p95 (nearest rank) of a sample set. */
+    /** Médiane et p95 (rang le plus proche) d'un échantillon. */
     record Stats(long median, long p95, long min, long max, int count) {
         static Stats of(long[] samples) {
             long[] sorted = samples.clone();
@@ -744,10 +747,11 @@ public final class SnapshotScalabilityBenchmark {
     // ---------------------------------------------------------------- persisted-size census
 
     /**
-     * Walks a snapshot in the exact field order of the V2 codec ({@code SnapshotBinaryCodecSupport}) and
-     * counts fixed-size bytes and string slots. The V2 size it predicts is checked against the real encoder
-     * ({@link SnapshotCodecV2#encodeToBytes}) whenever the snapshot is under the persisted limit, which proves
-     * the walk matches the codec byte for byte.
+     * Parcourt un snapshot dans l'ordre des champs du codec V2 ({@code SnapshotBinaryCodecSupport}) et compte
+     * les octets fixes et les champs chaîne, pour en tirer la composition (part des chaînes, catégories) et
+     * des projections (UTF-8, table de chaînes). La taille V2 qu'il prédit est comparée à celle du vrai
+     * encodeur ({@link SnapshotCodecV2#encodedSize}) sur chaque jeu ; les tailles des autres formats ne sont
+     * rapportées que depuis leurs vrais encodeurs, jamais depuis ce recensement.
      */
     static final class Census {
         private long fixed;
@@ -781,7 +785,7 @@ public final class SnapshotScalabilityBenchmark {
             return fixed + 4L * slots + utf8;
         }
 
-        /** Same framing with a per-snapshot string table: each slot becomes a 4-byte index. */
+        /** Même cadrage avec une table de chaînes par snapshot : chaque champ chaîne devient un index de 4 octets. */
         long stringTableBytes() {
             return fixed + 4L * slots + 4L * distinct.size() + distinctUtf8;
         }
@@ -806,11 +810,11 @@ public final class SnapshotScalabilityBenchmark {
                 metric(section, dataset, "category." + entry.getKey() + ".shareOfV2", ratio(bytes, v2Bytes()));
             }
             try {
-                byte[] encoded = new SnapshotCodecV2().encodeToBytes(snapshot);
-                metric(section, dataset, "encodedV2Bytes", encoded.length);
-                metric(section, dataset, "censusMatchesEncoder", encoded.length == v2Bytes());
-            } catch (IOException overLimit) {
-                metric(section, dataset, "encodedV2Bytes", "REFUSED " + overLimit.getMessage());
+                long encoded = new SnapshotCodecV2().encodedSize(snapshot);
+                metric(section, dataset, "encodedV2Bytes", encoded);
+                metric(section, dataset, "censusMatchesEncoder", encoded == v2Bytes());
+            } catch (IOException refused) {
+                metric(section, dataset, "encodedV2Bytes", "REFUSED " + refused.getMessage());
             }
         }
 
@@ -958,8 +962,9 @@ public final class SnapshotScalabilityBenchmark {
     // ---------------------------------------------------------------- sampling profile (JFR)
 
     /**
-     * A stack category. Categories are tried in priority order and a sample belongs to the first one that
-     * matches any frame of its stack, so an enclosing method (for instance {@code analyze}) goes last.
+     * Catégorie de pile. Les catégories sont essayées par priorité : un échantillon appartient à la première
+     * qui reconnaît l'une des trames de sa pile ; une méthode englobante (par exemple {@code analyze}) passe
+     * donc en dernier.
      */
     record Category(String name, Predicate<RecordedFrame> matcher) {
         static Category method(String name, String type, String method) {
@@ -978,9 +983,9 @@ public final class SnapshotScalabilityBenchmark {
     }
 
     /**
-     * Java samples ({@code jdk.ExecutionSample}) and native samples ({@code jdk.NativeMethodSample}, a thread
-     * blocked in native code such as file I/O) of the measuring thread, per category. The work is repeated
-     * until the profiling window is filled, so that the sample count is meaningful.
+     * Échantillons Java ({@code jdk.ExecutionSample}) et natifs ({@code jdk.NativeMethodSample} : fil bloqué
+     * en code natif, entrées-sorties par exemple) du seul fil de mesure, par catégorie. Le travail est répété
+     * jusqu'à remplir la fenêtre d'échantillonnage, pour que le nombre d'échantillons ait un sens.
      */
     record Profile(long javaSamples, Map<String, Long> javaByCategory, long nativeSamples,
                    Map<String, Long> nativeByCategory, long wallNanos, int runs) {
@@ -1067,7 +1072,7 @@ public final class SnapshotScalabilityBenchmark {
 
     // ---------------------------------------------------------------- options
 
-    record ScipInput(String label, String provider, Path path, boolean main) {
+    record ScipInput(String label, String provider, Path path, String providerVersion, boolean main) {
     }
 
     record Options(Path home, Path sourceRoot, Path out, List<ScipInput> scipInputs, List<Double> fractions,
@@ -1112,11 +1117,12 @@ public final class SnapshotScalabilityBenchmark {
                     Set.of(optional(values, "sections", "memory,hybrid,impact,architecture").split(",")));
         }
 
-        /** {@code label|provider|path}. */
+        /** {@code libellé|fournisseur|chemin[|version du fournisseur]}. */
         private static ScipInput scipInput(String value, boolean main) {
-            String[] parts = value.split("\\|", 3);
-            if (parts.length != 3) throw new IllegalArgumentException("expected label|provider|path, got: " + value);
-            return new ScipInput(parts[0], parts[1], Path.of(parts[2]).toAbsolutePath().normalize(), main);
+            String[] parts = value.split("\\|", 4);
+            if (parts.length < 3) throw new IllegalArgumentException("expected label|provider|path[|version], got: " + value);
+            return new ScipInput(parts[0], parts[1], Path.of(parts[2]).toAbsolutePath().normalize(),
+                    parts.length == 4 ? parts[3] : null, main);
         }
 
         private static String required(Map<String, List<String>> values, String name) {
@@ -1138,9 +1144,9 @@ public final class SnapshotScalabilityBenchmark {
     // ---------------------------------------------------------------- slicing and in-memory store
 
     /**
-     * Keeps a stable, hash-selected fraction of the source files: their symbols, their occurrences and the
-     * relationships whose source symbol is kept. Sampling whole files keeps the per-file distributions of the
-     * real corpus.
+     * Garde une fraction stable des fichiers source, choisie par hachage : leurs symboles, leurs occurrences et
+     * les relations dont le symbole source est gardé. Échantillonner des fichiers entiers garde les
+     * distributions par fichier du corpus réel.
      */
     static CodeKnowledgeSnapshot slice(CodeKnowledgeSnapshot base, double fraction) {
         int threshold = (int) Math.round(fraction * 1_000);
@@ -1163,7 +1169,7 @@ public final class SnapshotScalabilityBenchmark {
                 base.snapshotId() + String.format(Locale.ROOT, "-f%.2f", fraction), symbols, occurrences, relationships);
     }
 
-    /** One active snapshot per project, held in memory: persistence is out of the measured path. */
+    /** Un snapshot actif par projet, tenu en mémoire : la persistance est hors du chemin mesuré. */
     static final class InMemorySnapshotStore implements CodeKnowledgeSnapshotStore {
         private static final String NO_FILE_SHA256 = "0".repeat(64);
         private final Map<UUID, CodeKnowledgeSnapshot> active = new HashMap<>();

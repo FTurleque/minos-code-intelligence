@@ -12,6 +12,18 @@ convention que `InMemoryBackendBenchmark` et `CodeSearchBenchmark`). Aucune donn
 écrite dans le dépôt : le corpus et les résultats vont dans des répertoires passés en paramètre, hors
 du dépôt (les scripts le vérifient).
 
+## Prérequis
+
+- Windows et PowerShell 7 (`pwsh`) : les deux scripts, le runner scip-java géré et `mvnw.cmd` sont
+  propres à Windows ; `run-scalability-benchmark.ps1` lit aussi le processeur et la mémoire par
+  `Get-CimInstance`. Aucun rejeu Linux n'est fourni.
+- JDK 24 dans le `PATH`, Git, et les outils scip-java gérés par MINOS pour préparer le corpus.
+- Mémoire : `scalability.json` lance la JVM avec `-Xmx24g`. Mesuré sur ce dépôt : le corpus entier
+  retient environ 300 Mo de tas (snapshot 163 Mo, index 82 Mo, corpus hybride 55 Mo), auxquels
+  s'ajoutent les vues relues des tranches et les pics d'allocation (jusqu'à 1,3 Go par recherche
+  hybride sur `file-f0.50`). Prévoir 32 Go de mémoire physique, ou baisser `-Xmx` et retirer de la
+  configuration les jeux les plus gros.
+
 ## 1. Corpus réel
 
 ```powershell
