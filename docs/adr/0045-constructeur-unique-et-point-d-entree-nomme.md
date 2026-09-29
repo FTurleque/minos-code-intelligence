@@ -8,7 +8,7 @@ Complète l'audit [`AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md) (constat A4). 
 
 Deux classes de surface empilaient des constructeurs télescopiques : `LocalProjectArchitectureQuery` en déclarait 9 et `MinosCli` 10. Chacun ajoutait un paramètre et déléguait au suivant avec une valeur par défaut (`null` pour `MinosCli`, un analyseur neuf pour `LocalProjectArchitectureQuery`). Le bytecode montrait que 6 des 9 constructeurs de la première et 6 des 10 de la seconde n'avaient aucun appelant : chaque besoin de câblage avait ajouté une surcharge, aucune n'avait jamais été retirée.
 
-`MinosApplication`, racine de composition (ADR 0042), expose 36 méthodes d'instance publiques hors `close()` : 35 accesseurs, dont 32 méthodes de services, et la fabrique `indexerRegistry(String)`. Ses services sont appelés par 13 classes de production et 23 classes de test réparties dans 7 modules. Elle est nommée par l'API publique (`Local*Api(MinosApplication)`), et ses accesseurs sont documentés comme signatures publiques (`docs/user/java-api.md` § Ruptures, lot A3).
+`MinosApplication`, racine de composition (ADR 0042), expose 36 méthodes d'instance publiques hors `close()` : 35 accesseurs (dont 31 de services) et la fabrique `indexerRegistry(String)`, soit 32 méthodes de services. Ses services sont appelés par 13 classes de production et 23 classes de test réparties dans 7 modules. Elle est nommée par l'API publique (`Local*Api(MinosApplication)`), et ses accesseurs sont documentés comme signatures publiques (`docs/user/java-api.md` § Ruptures, lot A3).
 
 L'audit relève aussi que `LocalProjectArchitectureQuery` recalcule tout à chaque appel, sans cache.
 
