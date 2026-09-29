@@ -72,6 +72,7 @@ flowchart TB
 | `com.minos.semantic` | documents, embeddings, recherche sémantique/hybride, provider learned local et budgets M20/M23 |
 | `com.minos.store` | ports et modèles de snapshots, index reconstruisibles (moteur) |
 | `com.minos.storage.local.store` | persistance locale des snapshots, vecteurs, observations runtime et plan de contrôle (adaptateur `minos-storage-local`) |
+| `com.minos.storage.local` | backend de stockage local, rétention persistante et observations runtime sérialisées (adaptateur `minos-storage-local`) |
 | `com.minos.query` | requêtes symboles/relations/tests |
 | `com.minos.context` | recherche compacte, extraits et budgets |
 | `com.minos.architecture` | topologie, dépendances, centralité, technologies |

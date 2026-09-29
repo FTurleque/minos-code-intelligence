@@ -158,7 +158,7 @@ SCOPES = {
     "m30-storage-backend-selection": {
         "prefixes": (
             "com/minos/storage/StorageBackend", "com/minos/storage/StorageBackendConfiguration", "com/minos/storage/StorageBackendProvider",
-            "com/minos/storage/StorageBackends", "com/minos/storage/LocalStorageBackend", "com/minos/storage/MinosRuntimeSettings",
+            "com/minos/storage/StorageBackends", "com/minos/storage/local/LocalStorageBackend", "com/minos/storage/MinosRuntimeSettings",
             # A2 / ADR 0042: the selection logic moved verbatim from StorageBackends to the composition root.
             "com/minos/bootstrap/StorageBackendSelection",
         ), "line": 0.52, "branch": 0.32,

@@ -1,4 +1,4 @@
-package com.minos.storage;
+package com.minos.storage.local;
 
 import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.incremental.FileProjectFingerprintSnapshotStore;
@@ -6,6 +6,8 @@ import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.io.DurableAtomicFile;
 import com.minos.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexStateStore;
+import com.minos.storage.StorageBackend;
+import com.minos.storage.StorageRetentionService;
 import com.minos.storage.local.registry.InterProcessLocalProjectRegistry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.semantic.SemanticVectorStore;

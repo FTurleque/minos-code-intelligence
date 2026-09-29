@@ -50,7 +50,7 @@ def main() -> int:
         command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         app_assembler = read("minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
-        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/LocalStorageBackend.java")
+        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
         mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_schemas = read("minos-mcp/src/main/java/com/minos/mcp/McpToolSchemas.java")
         backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")

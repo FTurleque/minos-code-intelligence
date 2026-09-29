@@ -1,6 +1,6 @@
 package com.minos.bootstrap;
 
-import com.minos.storage.LocalStorageBackend;
+import com.minos.storage.local.LocalStorageBackend;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
 import com.minos.storage.StorageBackendProvider;

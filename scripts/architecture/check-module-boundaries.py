@@ -98,7 +98,7 @@ TOLERATED_SPLIT_PACKAGES: dict[str, frozenset[str]] = {
     "com.minos.integration.nexus": frozenset({"minos-app", "minos-nexus"}),
     "com.minos.orchestration": frozenset({"minos-application", "minos-engine", "minos-storage-local"}),
     "com.minos.semantic": frozenset({"minos-application", "minos-domain"}),
-    "com.minos.storage": frozenset({"minos-application", "minos-engine", "minos-storage-local"}),
+    "com.minos.storage": frozenset({"minos-application", "minos-engine"}),
 }
 TOLERATED_FOREIGN_TESTS: frozenset[str] = frozenset({
     "minos-bootstrap/src/test/java/com/minos/application/MinosApplicationTest.java",

@@ -24,7 +24,7 @@ import com.minos.runtime.local.CompositeProviderRuntimeManager;
 import com.minos.runtime.HostCommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.WorkerSandboxProbe;
-import com.minos.storage.LocalStorageBackend;
+import com.minos.storage.local.LocalStorageBackend;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
 import com.minos.store.CodeKnowledgeSnapshotStore;

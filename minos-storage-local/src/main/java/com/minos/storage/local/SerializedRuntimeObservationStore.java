@@ -1,4 +1,4 @@
-package com.minos.storage;
+package com.minos.storage.local;
 
 import com.minos.dynamic.CorrelatedRuntimeSession;
 import com.minos.dynamic.RuntimeObservationStore;

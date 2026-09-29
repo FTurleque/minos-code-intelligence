@@ -101,7 +101,7 @@ def main() -> int:
         mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
         json = read("minos-application/src/main/java/com/minos/output/DeterministicJson.java")
-        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/LocalStorageBackend.java")
+        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
         postgres_storage = read(
             "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresStorageBackend.java")
         retention_policy = read("minos-engine/src/main/java/com/minos/storage/PersistentRetentionPolicy.java")
@@ -261,7 +261,7 @@ def main() -> int:
         require("LocalStorageBackend.java", local_storage,
                 "new LocalStorageRetentionService", "retentionService()")
         local_retention = read(
-            "minos-storage-local/src/main/java/com/minos/storage/LocalStorageRetentionService.java")
+            "minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageRetentionService.java")
         require("LocalStorageRetentionService.java", local_retention,
                 "compactWithActiveSnapshot", "CompactionResult::activeSnapshotId")
         require("PostgresStorageBackend.java", postgres_storage,

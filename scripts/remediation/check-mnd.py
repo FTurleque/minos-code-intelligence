@@ -47,7 +47,7 @@ def main() -> int:
         runtime_codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
         graph_sidecar = read("minos-application/src/main/java/com/minos/program/analysis/FileProgramGraphProvider.java")
         hosted = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileHostedControlPlaneStore.java")
-        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/LocalStorageBackend.java")
+        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
         semantic_budget = read("minos-application/src/main/java/com/minos/semantic/SemanticIndexBudget.java")
         postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java")
         graph_service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
