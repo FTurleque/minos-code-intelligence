@@ -1,7 +1,7 @@
 package com.minos.storage.local;
 
 import com.minos.dynamic.RuntimeObservationStore;
-import com.minos.incremental.FileProjectFingerprintSnapshotStore;
+import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.io.DurableAtomicFile;
 import com.minos.storage.local.orchestration.FileIndexStateStore;

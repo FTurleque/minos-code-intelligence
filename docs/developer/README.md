@@ -67,6 +67,7 @@ flowchart TB
 | `com.minos.orchestration` | négociation, lifecycle et promotion |
 | `com.minos.storage.local.orchestration` | état d'indexation persisté, bail projet inter-JVM et rétention des runs (adaptateur `minos-storage-local`) |
 | `com.minos.incremental` | fingerprints, invalidation, plans NONE/FULL/INCREMENTAL |
+| `com.minos.storage.local.incremental` | snapshots d'empreintes persistés (adaptateur `minos-storage-local`) |
 | `com.minos.adapter.scip` | lecture et normalisation SCIP |
 | `com.minos.domain` | symboles, relations, origine, preuves et critères |
 | `com.minos.program` | modèle provider-independent des graphes de programme M19 |

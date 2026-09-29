@@ -1,5 +1,10 @@
-package com.minos.incremental;
+package com.minos.storage.local.incremental;
 
+import com.minos.incremental.BuildDescriptorPolicy;
+import com.minos.incremental.FileFingerprint;
+import com.minos.incremental.ProjectFingerprint;
+import com.minos.incremental.ProjectFingerprintSnapshot;
+import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.CommitUncertainException;
 import com.minos.io.DurableAtomicFile;

@@ -1,6 +1,6 @@
 package com.minos.storage.local;
 
-import com.minos.incremental.FileProjectFingerprintSnapshotStore;
+import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.incremental.ProjectFingerprint;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexingRun;

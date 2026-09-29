@@ -9,6 +9,7 @@ import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingLifecycleService;
 import com.minos.orchestration.IndexingRequirements;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
+import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

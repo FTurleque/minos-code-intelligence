@@ -35,7 +35,17 @@ public record FileFingerprint(
         return value;
     }
 
-    static String requireSha256(String value) {
+    /**
+     * Règle de format sur disque partagée entre ce port et ses adaptateurs : une empreinte SHA-256 est
+     * exactement 64 caractères hexadécimaux, normalisés en minuscules ({@link Locale#ROOT}). Les
+     * adaptateurs qui relisent des empreintes persistées la valident par cette méthode. Publique pour
+     * qu'il n'en existe qu'une définition (ADR 0044) ; la modifier change ce qu'acceptent les empreintes
+     * déjà persistées.
+     *
+     * @throws NullPointerException si la valeur est absente
+     * @throws IllegalArgumentException si la valeur n'est pas une empreinte SHA-256 hexadécimale
+     */
+    public static String requireSha256(String value) {
         Objects.requireNonNull(value, "sha256");
         String normalized = value.toLowerCase(Locale.ROOT);
         if (!normalized.matches("[0-9a-f]{64}")) {

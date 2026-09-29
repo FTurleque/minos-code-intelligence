@@ -1,5 +1,6 @@
-package com.minos.incremental;
+package com.minos.storage.local.incremental;
 
+import com.minos.incremental.ProjectFingerprintService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
