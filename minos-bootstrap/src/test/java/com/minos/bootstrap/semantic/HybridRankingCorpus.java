@@ -35,6 +35,10 @@ import java.util.Set;
  * la minuscule change de longueur ({@code İ}), sigma grec, CJK, emoji (paires de substitution), chiffres
  * exotiques, soulignés, ponctuation. Les degrés de graphe sont répétés et beaucoup de documents partagent les
  * mêmes termes : les égalités exactes de score, départagées par {@code stableKey}, sont nombreuses.</p>
+ *
+ * <p>Certaines requêtes ne se trouvent dans le texte que comme sous-chaîne d'un terme ({@code napsho} dans
+ * {@code snapshot}) : seul le bonus de phrase les classe, sans saturation par {@code clamp01}. Quelques requêtes
+ * sont aussi classées en entier ({@link #FULL_LIMIT}), pas seulement sur leurs premiers résultats.</p>
  */
 final class HybridRankingCorpus {
 
@@ -44,7 +48,11 @@ final class HybridRankingCorpus {
             "snapshot store", "Snapshot_Store", "hybrid search", "normalize query", "publish pointer",
             "Été", "été naïve", "straße", "STRASSE", "İstanbul", "istanbul", "ΣΊΣΥΦΟΣ", "σίσυφος",
             "漢字", "検索 漢字", "😀", "x² ①", "Ⅻ", "user_id", "HTTP2", "v1.2.3", "foo-bar", "foo_bar",
-            "ﬁle", "Ǆemo", "store store store", "a", "ab", "query-normalize", "method big0");
+            "ﬁle", "Ǆemo", "store store store", "a", "ab", "query-normalize", "method big0",
+            "napsho", "tore", "ormaliz", "ashot_st", "ïve", "字検", "stanbul", "napsho tore");
+    /** Requêtes classées en entier, jusqu'à la limite maximale du service. */
+    static final List<String> FULL_QUERIES = List.of("store", "napsho");
+    static final int FULL_LIMIT = HybridSearchService.MAX_RESULTS;
 
     private static final String[] WORDS = {
             "snapshot", "store", "Snapshot_Store", "hybrid", "search", "normalize", "query", "publish",
@@ -59,10 +67,20 @@ final class HybridRankingCorpus {
     }
 
     /** Écrit les sources sous {@code root}, enregistre le projet et publie son snapshot. */
-    static void install(MinosApplication application, Path root) throws IOException {
+    static RegisteredProject install(MinosApplication application, Path root) throws IOException {
+        RegisteredProject project = application.projectRegistry().registerProject(root, PROJECT);
+        publish(application, root, project, "hybrid-ranking-snapshot", "");
+        return project;
+    }
+
+    /**
+     * Réécrit les sources (identiques d'une fois sur l'autre) et publie un snapshot du corpus. Un {@code salt}
+     * non vide change le nom de chaque symbole, donc le contenu de ses documents, sans changer leur nombre.
+     */
+    static void publish(MinosApplication application, Path root, RegisteredProject project, String snapshotId,
+                        String salt) throws IOException {
         Random random = new Random(0xA6L);
         List<Symbol> symbols = new ArrayList<>();
-        RegisteredProject project = application.projectRegistry().registerProject(root, PROJECT);
         String projectId = project.id().toString();
         for (int file = 0; file < FILES; file++) {
             String fileId = String.format(Locale.ROOT, "src/pkg%02d/File%03d.java", file % 17, file);
@@ -82,6 +100,7 @@ final class HybridRankingCorpus {
                 int line = 3 + index * 6;
                 String name = WORDS[random.nextInt(WORDS.length)].replaceAll("[^\\p{L}\\p{N}_]", "") + index;
                 if (name.length() == 1) name = "s" + name;
+                name = name + salt;
                 String id = "sym-" + file + "-" + index;
                 symbols.add(new Symbol(id, "key:" + fileId + "#" + name + "@" + index, SymbolIdentityQuality.CANONICAL,
                         projectId, "module-" + (file % 5), fileId, null,
@@ -102,15 +121,22 @@ final class HybridRankingCorpus {
                         ResolutionStatus.RESOLVED, InformationNature.FACTUAL, null, ORIGIN, List.of()));
             }
         }
-        application.snapshotStore().publish(project.id(), "hybrid-ranking-snapshot", symbols, List.of(), relationships);
+        application.snapshotStore().publish(project.id(), snapshotId, symbols, List.of(), relationships);
     }
 
     /** Classement complet de chaque requête, à l'octet près : une ligne par résultat. */
     static String rankings(MinosApplication application, String mode) throws IOException {
         StringBuilder out = new StringBuilder();
-        for (String query : QUERIES) {
+        ranking(application, mode, QUERIES, LIMIT, out);
+        ranking(application, mode + "-" + FULL_LIMIT, FULL_QUERIES, FULL_LIMIT, out);
+        return out.toString();
+    }
+
+    private static void ranking(MinosApplication application, String mode, List<String> queries, int limit,
+                                StringBuilder out) throws IOException {
+        for (String query : queries) {
             HybridSearchService.HybridResponse response = application.hybridSearchService()
-                    .search(PROJECT, new HybridSearchService.HybridRequest(query, LIMIT, 0.0));
+                    .search(PROJECT, new HybridSearchService.HybridRequest(query, limit, 0.0));
             int rank = 0;
             for (HybridSearchService.HybridHit hit : response.hits()) {
                 out.append(mode).append('\t').append(query).append('\t').append(++rank).append('\t')
@@ -120,7 +146,6 @@ final class HybridRankingCorpus {
                         .append(hit.rankingMode()).append('\n');
             }
         }
-        return out.toString();
     }
 
     /** Nombre de paires de résultats consécutifs à score exactement égal, départagées par la clé stable. */
