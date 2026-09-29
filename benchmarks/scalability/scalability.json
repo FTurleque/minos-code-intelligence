@@ -1,0 +1,28 @@
+{
+  "benchmark": "snapshot-scalability",
+  "mainClass": "com.minos.bootstrap.scalability.SnapshotScalabilityBenchmark",
+  "jvmArguments": ["-Xmx24g"],
+  "sourceRoot": "corpus:minos-src",
+  "mainScip": { "label": "minos-full", "provider": "scip-java", "path": "corpus:minos-full.scip" },
+  "ratioScips": [
+    { "label": "minos-app-module", "provider": "scip-java", "path": "corpus:minos-app-module.scip", "optional": true },
+    { "label": "ariane-chatbot", "provider": "scip-java", "path": "corpus:ariane-chatbot.scip", "optional": true },
+    { "label": "nexus-context-engine", "provider": "scip-java", "path": "corpus:nexus-context-engine.scip", "optional": true },
+    { "label": "typescript-simple", "provider": "scip-typescript", "path": "repo:fixtures/typescript/typescript-simple/.minos-m0/scip-typescript/index.scip" },
+    { "label": "typescript-modules", "provider": "scip-typescript", "path": "repo:fixtures/typescript/typescript-modules/.minos-m0/scip-typescript/index.scip" },
+    { "label": "typescript-inheritance", "provider": "scip-typescript", "path": "repo:fixtures/typescript/typescript-inheritance/.minos-m0/scip-typescript/index.scip" }
+  ],
+  "fractions": [0.25, 0.5, 0.9, 1.0],
+  "replicas": [1],
+  "queries": ["snapshot store", "ImpactAnalysisService", "hybrid search normalize query", "publish knowledge snapshot pointer"],
+  "architectureDatasets": ["mem-k1"],
+  "extraDiscoveryRoots": ["repo:"],
+  "warmup": 3,
+  "iterations": 15,
+  "ratioIterations": 3,
+  "loadIterations": 5,
+  "architectureWarmup": 1,
+  "architectureIterations": 5,
+  "profileMillis": 5000,
+  "sections": ["memory", "hybrid", "impact", "architecture"]
+}
