@@ -69,50 +69,33 @@ public final class MinosApplication implements AutoCloseable {
     private final StorageBackend storageBackend;
     private final String storageBackendId;
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final ProjectRegistry projectRegistry;
-    private final CodeKnowledgeSnapshotStore snapshotStore;
-    private final IndexStateStore indexStateStore;
-    private final ProjectFingerprintSnapshotStore fingerprintStore;
-    private final SemanticVectorStore semanticVectorStore;
-    private final RuntimeObservationStore runtimeObservationStore;
-    private final StorageRetentionService retentionService;
-    private final ProjectDiscoveryService discoveryService;
-    private final ProjectFingerprintService fingerprintService;
-    private final ProjectInvalidationService invalidationService;
-    private final IncrementalIndexingPlanner incrementalIndexingPlanner;
-    private final ProviderRuntimeManager providerRuntimeManager;
+    private final Stores stores;
+    private final Indexing indexing;
+    /** Defensive copy of {@code indexing.indexerDescriptors()}, taken by the constructor as before. */
     private final List<IndexerDescriptor> indexerDescriptors;
-    private final IndexerProviderCatalog providerCatalog;
-    private final ScipArtifactImporter scipArtifactImporter;
-    private final SnapshotStager snapshotStager;
-    private final SnapshotPromoter snapshotPromoter;
     private final GitIntelligence gitIntelligence;
-    private final ProjectInspectionService projectInspectionService;
-    private final ProjectQueryService projectQueryService;
-    private final ProjectArchitectureQuery architectureQuery;
-    private final ProjectImpactQuery impactQuery;
-    private final ProgramGraphService programGraphService;
-    private final AdvancedImpactService advancedImpactService;
-    private final SecurityAnalysisService securityAnalysisService;
-    private final SemanticIndexService semanticIndexService;
-    private final SemanticSearchService semanticSearchService;
-    private final HybridSearchService hybridSearchService;
-    private final HybridContextBuilder hybridContextBuilder;
-    private final WorkspaceIntelligenceService workspaceIntelligence;
-    private final RuntimeIntelligenceService runtimeIntelligenceService;
+    private final Queries queries;
+    private final Semantic semantic;
     private final Optional<HostedControlPlaneService> hostedControlPlaneService;
     private final MinosApplicationComposer compositionRoot;
 
-    MinosApplication(
-            Path home,
-            StorageBackend storageBackend,
+    /**
+     * Stores resolved by the assembler (builder override or selected backend), grouped by domain (ADR 0045).
+     * A plain carrier: no validation, no instance creation; the constructor validates in the historical order.
+     */
+    record Stores(
             ProjectRegistry projectRegistry,
             CodeKnowledgeSnapshotStore snapshotStore,
             IndexStateStore indexStateStore,
             ProjectFingerprintSnapshotStore fingerprintStore,
             SemanticVectorStore semanticVectorStore,
             RuntimeObservationStore runtimeObservationStore,
-            StorageRetentionService retentionService,
+            StorageRetentionService retentionService
+    ) {
+    }
+
+    /** Indexing collaborators resolved by the assembler, grouped by domain (ADR 0045); plain carrier like {@link Stores}. */
+    record Indexing(
             ProjectDiscoveryService discoveryService,
             ProjectFingerprintService fingerprintService,
             ProjectInvalidationService invalidationService,
@@ -122,7 +105,38 @@ public final class MinosApplication implements AutoCloseable {
             IndexerProviderCatalog providerCatalog,
             ScipArtifactImporter scipArtifactImporter,
             SnapshotStager snapshotStager,
-            SnapshotPromoter snapshotPromoter,
+            SnapshotPromoter snapshotPromoter
+    ) {
+    }
+
+    /** Query services derived by the constructor, in construction order. */
+    private record Queries(
+            ProjectInspectionService projectInspectionService,
+            ProjectQueryService projectQueryService,
+            ProjectArchitectureQuery architectureQuery,
+            ProjectImpactQuery impactQuery,
+            ProgramGraphService programGraphService,
+            AdvancedImpactService advancedImpactService,
+            SecurityAnalysisService securityAnalysisService,
+            WorkspaceIntelligenceService workspaceIntelligence,
+            RuntimeIntelligenceService runtimeIntelligenceService
+    ) {
+    }
+
+    /** Semantic and hybrid services derived by the constructor; index and hybrid search share one resolver. */
+    private record Semantic(
+            SemanticIndexService semanticIndexService,
+            SemanticSearchService semanticSearchService,
+            HybridSearchService hybridSearchService,
+            HybridContextBuilder hybridContextBuilder
+    ) {
+    }
+
+    MinosApplication(
+            Path home,
+            StorageBackend storageBackend,
+            Stores stores,
+            Indexing indexing,
             GitIntelligence gitIntelligence,
             List<ProgramGraphProvider> programGraphProviders,
             Optional<EmbeddingProvider> embeddingProvider,
@@ -132,47 +146,58 @@ public final class MinosApplication implements AutoCloseable {
         this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.storageBackend = Objects.requireNonNull(storageBackend, "storageBackend");
         this.storageBackendId = requireText(storageBackend.id(), "storageBackendId");
-        this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
-        this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
-        this.indexStateStore = Objects.requireNonNull(indexStateStore, "indexStateStore");
-        this.fingerprintStore = Objects.requireNonNull(fingerprintStore, "fingerprintStore");
-        this.semanticVectorStore = Objects.requireNonNull(semanticVectorStore, "semanticVectorStore");
-        this.runtimeObservationStore = Objects.requireNonNull(runtimeObservationStore, "runtimeObservationStore");
-        this.retentionService = Objects.requireNonNull(retentionService, "retentionService");
-        this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
-        this.fingerprintService = Objects.requireNonNull(fingerprintService, "fingerprintService");
-        this.invalidationService = Objects.requireNonNull(invalidationService, "invalidationService");
-        this.incrementalIndexingPlanner = Objects.requireNonNull(incrementalIndexingPlanner, "incrementalIndexingPlanner");
-        this.providerRuntimeManager = Objects.requireNonNull(providerRuntimeManager, "providerRuntimeManager");
-        this.indexerDescriptors = List.copyOf(Objects.requireNonNull(indexerDescriptors, "indexerDescriptors"));
-        this.providerCatalog = Objects.requireNonNull(providerCatalog, "providerCatalog");
-        this.scipArtifactImporter = Objects.requireNonNull(scipArtifactImporter, "scipArtifactImporter");
-        this.snapshotStager = Objects.requireNonNull(snapshotStager, "snapshotStager");
-        this.snapshotPromoter = Objects.requireNonNull(snapshotPromoter, "snapshotPromoter");
+        this.stores = Objects.requireNonNull(stores, "stores");
+        ProjectRegistry projectRegistry = Objects.requireNonNull(stores.projectRegistry(), "projectRegistry");
+        CodeKnowledgeSnapshotStore snapshotStore = Objects.requireNonNull(stores.snapshotStore(), "snapshotStore");
+        IndexStateStore indexStateStore = Objects.requireNonNull(stores.indexStateStore(), "indexStateStore");
+        Objects.requireNonNull(stores.fingerprintStore(), "fingerprintStore");
+        SemanticVectorStore semanticVectorStore =
+                Objects.requireNonNull(stores.semanticVectorStore(), "semanticVectorStore");
+        RuntimeObservationStore runtimeObservationStore =
+                Objects.requireNonNull(stores.runtimeObservationStore(), "runtimeObservationStore");
+        Objects.requireNonNull(stores.retentionService(), "retentionService");
+        this.indexing = Objects.requireNonNull(indexing, "indexing");
+        ProjectDiscoveryService discoveryService =
+                Objects.requireNonNull(indexing.discoveryService(), "discoveryService");
+        Objects.requireNonNull(indexing.fingerprintService(), "fingerprintService");
+        Objects.requireNonNull(indexing.invalidationService(), "invalidationService");
+        Objects.requireNonNull(indexing.incrementalIndexingPlanner(), "incrementalIndexingPlanner");
+        Objects.requireNonNull(indexing.providerRuntimeManager(), "providerRuntimeManager");
+        this.indexerDescriptors = List.copyOf(Objects.requireNonNull(indexing.indexerDescriptors(), "indexerDescriptors"));
+        Objects.requireNonNull(indexing.providerCatalog(), "providerCatalog");
+        Objects.requireNonNull(indexing.scipArtifactImporter(), "scipArtifactImporter");
+        Objects.requireNonNull(indexing.snapshotStager(), "snapshotStager");
+        Objects.requireNonNull(indexing.snapshotPromoter(), "snapshotPromoter");
         this.gitIntelligence = Objects.requireNonNull(gitIntelligence, "gitIntelligence");
         List<ProgramGraphProvider> graphProviders = List.copyOf(
                 Objects.requireNonNull(programGraphProviders, "programGraphProviders"));
         if (graphProviders.isEmpty()) throw new IllegalArgumentException("programGraphProviders must not be empty");
         Optional<EmbeddingProvider> semanticProvider = Objects.requireNonNull(embeddingProvider, "embeddingProvider");
 
-        this.projectInspectionService = new ProjectInspectionService(
+        ProjectInspectionService projectInspectionService = new ProjectInspectionService(
                 this.home, projectRegistry, snapshotStore, indexStateStore, discoveryService, this.indexerDescriptors);
-        this.projectQueryService = new ProjectQueryService(projectRegistry, snapshotStore);
-        this.architectureQuery = LocalProjectArchitectureQuery.defaults(projectRegistry, snapshotStore, discoveryService);
-        this.impactQuery = new LocalProjectImpactQuery(projectRegistry, snapshotStore);
-        this.programGraphService = new ProgramGraphService(projectRegistry, snapshotStore, graphProviders);
-        this.advancedImpactService = new AdvancedImpactService(this.impactQuery, this.programGraphService);
-        this.securityAnalysisService = new SecurityAnalysisService(this.programGraphService);
+        ProjectQueryService projectQueryService = new ProjectQueryService(projectRegistry, snapshotStore);
+        ProjectArchitectureQuery architectureQuery =
+                LocalProjectArchitectureQuery.defaults(projectRegistry, snapshotStore, discoveryService);
+        ProjectImpactQuery impactQuery = new LocalProjectImpactQuery(projectRegistry, snapshotStore);
+        ProgramGraphService programGraphService = new ProgramGraphService(projectRegistry, snapshotStore, graphProviders);
+        AdvancedImpactService advancedImpactService = new AdvancedImpactService(impactQuery, programGraphService);
+        SecurityAnalysisService securityAnalysisService = new SecurityAnalysisService(programGraphService);
         ProjectResolver resolver = new ProjectResolver(projectRegistry);
-        this.semanticIndexService = new SemanticIndexService(
+        SemanticIndexService semanticIndexService = new SemanticIndexService(
                 resolver, snapshotStore, semanticVectorStore, semanticProvider);
-        this.semanticSearchService = new SemanticSearchService(this.semanticIndexService);
-        this.hybridSearchService = new HybridSearchService(
-                resolver, snapshotStore, this.semanticIndexService, this.semanticSearchService);
-        this.hybridContextBuilder = new HybridContextBuilder(this.hybridSearchService);
-        this.workspaceIntelligence = new WorkspaceIntelligenceService(projectRegistry, snapshotStore);
-        this.runtimeIntelligenceService = new RuntimeIntelligenceService(
+        SemanticSearchService semanticSearchService = new SemanticSearchService(semanticIndexService);
+        HybridSearchService hybridSearchService = new HybridSearchService(
+                resolver, snapshotStore, semanticIndexService, semanticSearchService);
+        HybridContextBuilder hybridContextBuilder = new HybridContextBuilder(hybridSearchService);
+        WorkspaceIntelligenceService workspaceIntelligence = new WorkspaceIntelligenceService(projectRegistry, snapshotStore);
+        RuntimeIntelligenceService runtimeIntelligenceService = new RuntimeIntelligenceService(
                 projectRegistry, snapshotStore, runtimeObservationStore);
+        this.queries = new Queries(projectInspectionService, projectQueryService, architectureQuery, impactQuery,
+                programGraphService, advancedImpactService, securityAnalysisService, workspaceIntelligence,
+                runtimeIntelligenceService);
+        this.semantic = new Semantic(
+                semanticIndexService, semanticSearchService, hybridSearchService, hybridContextBuilder);
         this.hostedControlPlaneService = Objects.requireNonNull(
                 hostedControlPlaneService, "hostedControlPlaneService");
         this.compositionRoot = Objects.requireNonNull(compositionRoot, "compositionRoot");
@@ -219,42 +244,10 @@ public final class MinosApplication implements AutoCloseable {
     }
 
     public static Builder builder(Path home) { return new Builder(home); }
+
+    // Identity and composition.
     public Path home() { return home; }
     public String storageBackendId() { return storageBackendId; }
-    public ProjectRegistry projectRegistry() { return projectRegistry; }
-    public CodeKnowledgeSnapshotStore snapshotStore() { return snapshotStore; }
-    public IndexStateStore indexStateStore() { return indexStateStore; }
-    public ProjectFingerprintSnapshotStore fingerprintStore() { return fingerprintStore; }
-    public SemanticVectorStore semanticVectorStore() { return semanticVectorStore; }
-    public RuntimeObservationStore runtimeObservationStore() { return runtimeObservationStore; }
-    public StorageRetentionService retentionService() { return retentionService; }
-    public ProjectDiscoveryService discoveryService() { return discoveryService; }
-    public ProjectFingerprintService fingerprintService() { return fingerprintService; }
-    public ProjectInvalidationService invalidationService() { return invalidationService; }
-    public IncrementalIndexingPlanner incrementalIndexingPlanner() { return incrementalIndexingPlanner; }
-    public ProviderRuntimeManager providerRuntimeManager() { return providerRuntimeManager; }
-    public List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
-    /** Port du catalogue de providers ; consulté à la demande, jamais figé à la composition. */
-    public IndexerProviderCatalog providerCatalog() { return providerCatalog; }
-    /** Port d'import SCIP explicite (import-scip) ; l'adaptateur est instancié à chaque import. */
-    public ScipArtifactImporter scipArtifactImporter() { return scipArtifactImporter; }
-    public SnapshotStager snapshotStager() { return snapshotStager; }
-    public SnapshotPromoter snapshotPromoter() { return snapshotPromoter; }
-    public GitIntelligence gitIntelligence() { return gitIntelligence; }
-    public ProjectInspectionService projectInspectionService() { return projectInspectionService; }
-    public ProjectQueryService projectQueryService() { return projectQueryService; }
-    public ProjectArchitectureQuery architectureQuery() { return architectureQuery; }
-    public ProjectImpactQuery impactQuery() { return impactQuery; }
-    public ProgramGraphService programGraphService() { return programGraphService; }
-    public AdvancedImpactService advancedImpactService() { return advancedImpactService; }
-    public SecurityAnalysisService securityAnalysisService() { return securityAnalysisService; }
-    public SemanticIndexService semanticIndexService() { return semanticIndexService; }
-    public SemanticSearchService semanticSearchService() { return semanticSearchService; }
-    public HybridSearchService hybridSearchService() { return hybridSearchService; }
-    public HybridContextBuilder hybridContextBuilder() { return hybridContextBuilder; }
-    public WorkspaceIntelligenceService workspaceIntelligence() { return workspaceIntelligence; }
-    public RuntimeIntelligenceService runtimeIntelligenceService() { return runtimeIntelligenceService; }
-    public Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
 
     /**
      * Racine de composition qui a construit cette application (ADR 0042) : les surfaces lui demandent
@@ -262,17 +255,28 @@ public final class MinosApplication implements AutoCloseable {
      */
     public MinosApplicationComposer compositionRoot() { return compositionRoot; }
 
-    @Override
-    public void close() throws IOException {
-        if (!closed.compareAndSet(false, true)) return;
-        try {
-            storageBackend.close();
-        } catch (IOException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            throw new IOException("unable to close MINOS storage backend", exception);
-        }
-    }
+    // Storage (ADR 0045: grouped in Stores).
+    public ProjectRegistry projectRegistry() { return stores.projectRegistry(); }
+    public CodeKnowledgeSnapshotStore snapshotStore() { return stores.snapshotStore(); }
+    public IndexStateStore indexStateStore() { return stores.indexStateStore(); }
+    public ProjectFingerprintSnapshotStore fingerprintStore() { return stores.fingerprintStore(); }
+    public SemanticVectorStore semanticVectorStore() { return stores.semanticVectorStore(); }
+    public RuntimeObservationStore runtimeObservationStore() { return stores.runtimeObservationStore(); }
+    public StorageRetentionService retentionService() { return stores.retentionService(); }
+
+    // Indexing (ADR 0045: grouped in Indexing).
+    public ProjectDiscoveryService discoveryService() { return indexing.discoveryService(); }
+    public ProjectFingerprintService fingerprintService() { return indexing.fingerprintService(); }
+    public ProjectInvalidationService invalidationService() { return indexing.invalidationService(); }
+    public IncrementalIndexingPlanner incrementalIndexingPlanner() { return indexing.incrementalIndexingPlanner(); }
+    public ProviderRuntimeManager providerRuntimeManager() { return indexing.providerRuntimeManager(); }
+    public List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
+    /** Port du catalogue de providers ; consulté à la demande, jamais figé à la composition. */
+    public IndexerProviderCatalog providerCatalog() { return indexing.providerCatalog(); }
+    /** Port d'import SCIP explicite (import-scip) ; l'adaptateur est instancié à chaque import. */
+    public ScipArtifactImporter scipArtifactImporter() { return indexing.scipArtifactImporter(); }
+    public SnapshotStager snapshotStager() { return indexing.snapshotStager(); }
+    public SnapshotPromoter snapshotPromoter() { return indexing.snapshotPromoter(); }
 
     public IndexerRegistry indexerRegistry(String providerOverride) {
         IndexerRegistry registry = new IndexerRegistry();
@@ -287,6 +291,39 @@ public final class MinosApplication implements AutoCloseable {
                         "unknown provider override: " + providerOverride));
         registry.register(descriptor);
         return registry;
+    }
+
+    // Queries (ADR 0045: derived services grouped in Queries).
+    public GitIntelligence gitIntelligence() { return gitIntelligence; }
+    public ProjectInspectionService projectInspectionService() { return queries.projectInspectionService(); }
+    public ProjectQueryService projectQueryService() { return queries.projectQueryService(); }
+    public ProjectArchitectureQuery architectureQuery() { return queries.architectureQuery(); }
+    public ProjectImpactQuery impactQuery() { return queries.impactQuery(); }
+    public ProgramGraphService programGraphService() { return queries.programGraphService(); }
+    public AdvancedImpactService advancedImpactService() { return queries.advancedImpactService(); }
+    public SecurityAnalysisService securityAnalysisService() { return queries.securityAnalysisService(); }
+    public WorkspaceIntelligenceService workspaceIntelligence() { return queries.workspaceIntelligence(); }
+    public RuntimeIntelligenceService runtimeIntelligenceService() { return queries.runtimeIntelligenceService(); }
+
+    // Semantic and hybrid retrieval (ADR 0045: derived services grouped in Semantic).
+    public SemanticIndexService semanticIndexService() { return semantic.semanticIndexService(); }
+    public SemanticSearchService semanticSearchService() { return semantic.semanticSearchService(); }
+    public HybridSearchService hybridSearchService() { return semantic.hybridSearchService(); }
+    public HybridContextBuilder hybridContextBuilder() { return semantic.hybridContextBuilder(); }
+
+    // Hosted team control plane (opt-in).
+    public Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
+
+    @Override
+    public void close() throws IOException {
+        if (!closed.compareAndSet(false, true)) return;
+        try {
+            storageBackend.close();
+        } catch (IOException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IOException("unable to close MINOS storage backend", exception);
+        }
     }
 
     private static void closeBackendOnFailure(StorageBackend backend, Exception original) {
