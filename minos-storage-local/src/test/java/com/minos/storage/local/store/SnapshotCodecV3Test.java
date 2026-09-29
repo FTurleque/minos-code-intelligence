@@ -86,6 +86,22 @@ class SnapshotCodecV3Test {
     }
 
     @Test
+    void aNonAsciiStringOverEightMebibytesButWithinTheCharacterLimitRoundTripsExactly() throws Exception {
+        // 8 Mi caractères « é » : 16 Mio en UTF-8, au-dessus de 8 Mio mais sous la borne de 3 × 8 Mi octets.
+        String wide = "é".repeat(8 * 1024 * 1024);
+        UUID project = UUID.randomUUID();
+        CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(project, "wide",
+                List.of(PersistedSizeFixtures.symbol(project, 0, wide)), List.of(), List.of());
+        Path file = temporary.resolve("wide.knowledge");
+
+        new SnapshotCodecV3().write(file, snapshot);
+
+        assertTrue(Files.size(file) > 16L * 1024 * 1024, "the string alone takes 16 MiB in UTF-8");
+        assertEquals(snapshot, new SnapshotCodecV3().read(file));
+        assertEquals(new SnapshotCodecV3().encodedSize(snapshot), Files.size(file));
+    }
+
+    @Test
     void eachCodecRefusesTheOtherVersion() throws Exception {
         Path v3 = temporary.resolve("v3.knowledge");
         Path v2 = temporary.resolve("v2.knowledge");
