@@ -798,7 +798,8 @@ Les cinq écarts déclarés au jalon 2 (§ A4.6 et rapport : pas de commit rouge
 |---|---|---|---|
 | 1 | Corpus réel (ce dépôt indexé par scip-java géré), harnais `benchmarks/scalability/`, mesures avant, verdicts et recommandations ; aucune optimisation | livré, accepté par verif-archi, arbitré (§ A6.9) | `fb363253`, `d491519d` |
 | 2.1 | Étape 1 — plafond : taille encodée exacte, refus avant toute écriture (fichier et PostgreSQL) | livré | `e23b5ded` ; V-A6-01 à 04 : `1acb68e8` |
-| 2.2 | Étape 2 — format V3 UTF-8 (fichier, pointeur, PostgreSQL), ADR 0046 ; exception `retention.golden` prouvée | livré, en attente de verif (bloquant) | `a68c560e`, `ebdc6969` (golden seul + preuve), `095c4c60` (banc), commit de docs |
+| 2.2 | Étape 2 — format V3 UTF-8 (fichier, pointeur, PostgreSQL), ADR 0046 ; exception `retention.golden` prouvée | livré, en attente de verif (bloquant) | `a68c560e`, `ebdc6969` (golden seul + preuve), `095c4c60` (banc), `5f0c2d53` (docs) |
+| 2.3 | Étape 3 — traversée d'impact : non faite, verdict consigné (§ A6.12) | consigné | commit de docs |
 
 ## A6.2 Procédure de mesure
 
@@ -1118,3 +1119,30 @@ Décision : [ADR 0046](../adr/0046-format-de-snapshot-v3-chaines-utf8.md).
 - **Aucun gain mémoire.** Le tas réel est identique en V2 et en V3. Le poids **estimé** par le cache de vues (8 fois la taille du fichier) baisse de 45 %, et le cache admet donc des snapshots un peu plus gros ; le tas, lui, ne bouge pas.
 - Le dépôt entier (vue de 495 Mo en tas, poids estimé 1,56 Go) n'est toujours pas mis en cache ; § A6.8.
 - Seuil SCIP du plafond pour ce corpus, avec l'`Origin` du produit : de 18,0 à 32,9 Mo.
+
+## A6.12 Étape 3 — traversée d'impact : non faite (infirmé en pratique)
+
+Arbitrage : **ne pas faire**. Le constat de l'audit est exact dans le code : `ImpactAnalysisService.analyze` trie tous les candidats sélectionnés et n'applique `maxResults` qu'à la fin. Il est infirmé en pratique : la traversée n'a aucun coût mesurable, et l'arrêt anticipé risque de changer le rapport.
+
+**Chiffres** (§ A6.3.5, `run1` et `run3`, corpus réel et ses répliques).
+
+| Jeu | Relations | Coût fixe, racine sans arête entrante (médiane) | Racine la plus large, `maxDepth` 32 | `maxResults` 10 000 | `maxResults` 10 |
+|---|---:|---:|---:|---:|---:|
+| file-f0.25 | 3 713 | 3,5 ms | 15 symboles | 2,9 ms | 2,4 ms |
+| file-f0.50 | 6 934 | 4,6 ms | 24 symboles | 4,4 ms | 4,2 ms |
+| mem-k1 (dépôt entier) | 14 299 | 15,0 ms (`run2` : 16,6) | 52 symboles | 17,3 ms | 15,6 ms |
+| mem-k2 | 28 598 | 38,4 ms | 52 symboles | 40,6 ms | 43,7 ms |
+| mem-k3 | 42 897 | 68,5 ms | 52 symboles | 70,7 ms | 69,6 ms |
+
+- Avec ou sans `maxResults` petit, le temps est celui de la préparation, à la dispersion de mesure près.
+- JFR : l'index des arêtes entrantes pèse 64 à 77 %, les limitations de base 9 à 15 %, le corps d'`analyze` (table des symboles, file de priorité, tri final) 14 à 26 %, la construction des chemins 0 %.
+- Le coût croît avec la taille du snapshot (15, 38 puis 68 ms pour 1, 2 et 3 répliques), pas avec `maxResults`.
+- La portée maximale observée est de 52 symboles : le graphe issu de scip-java est clairsemé, 0,36 relation par symbole.
+
+**Risque sur le rapport.** Un arrêt dès `maxResults` candidats finalisés changerait le rapport produit, et donc celui d'`AdvancedImpactService`, qui s'appuie sur `ProjectImpactQuery`.
+
+- **Limitations posées pendant la traversée.** `MAX_DEPTH_REACHED` est ajoutée quand un nœud à la profondeur maximale a encore des arêtes vers des symboles non sélectionnés. `EXTERNAL_TARGETS_NOT_TRAVERSED` et `GENERATED_SYMBOLS_NOT_TRAVERSED` sont ajoutées dès qu'une arête mène à un symbole externe ou généré. Un arrêt anticipé les omettrait alors que la traversée complète les aurait posées.
+- **Marque de test.** `potentiallyImpactedTests` et le drapeau `testImpact` viennent de la meilleure arête `RELATED_TEST` vers chaque symbole. Cette arête peut partir d'un nœud finalisé *après* le symbole marqué : le candidat de test est découvert plus tard, par un chemin plus profond.
+- **Aucun gain mesurable.** Il n'y aurait donc rien à mettre en balance avec ce risque.
+
+**Levier réel, hors lot** (§ A6.8) : la table des symboles et l'index trié des arêtes entrantes sont reconstruits à chaque appel. Les construire une fois par snapshot, sur le modèle de la vue de requête, supprimerait l'essentiel du coût sans rien changer au parcours, donc sans risque pour le rapport. Ce levier demande sa propre mesure et son propre test d'équivalence.
