@@ -83,7 +83,8 @@ flowchart TB
 | `com.minos.integration.nexus` | projections versionnées vers NEXUS |
 | `com.minos.output` | rendus texte/JSON |
 | `com.minos.hosted` | identité, RBAC, espaces partagés, audit, rétention et frontières opérateur M27/M28 |
-| `com.minos.runtime` | worker local, bundles distribués et disposition d’isolation remote M25/M28 |
+| `com.minos.runtime` | ports d'exécution des providers (`ProviderRuntimeManager`, `WorkerSandboxProbe`, `HostCommandLocator`) |
+| `com.minos.runtime.local` | worker local, bundles distribués et disposition d’isolation remote M25/M28 (adaptateur `minos-runtime-local`) |
 
 ## Parcours de lecture conseillé
 

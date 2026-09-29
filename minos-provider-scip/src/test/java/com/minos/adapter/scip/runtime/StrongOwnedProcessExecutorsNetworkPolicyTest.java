@@ -1,7 +1,7 @@
 package com.minos.adapter.scip.runtime;
 
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
-import com.minos.runtime.IndexerProcessPlanFactory;
+import com.minos.runtime.local.IndexerProcessPlanFactory;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,7 +23,7 @@ class StrongOwnedProcessExecutorsNetworkPolicyTest {
     void networkAccessExistsOnlyWhenTheFactoryOptsInExplicitly() {
         IndexerProcessPlanFactory factory = new IndexerProcessPlanFactory() {
             @Override
-            public com.minos.runtime.IndexerProcessPlan create(
+            public com.minos.runtime.local.IndexerProcessPlan create(
                     com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest request,
                     java.nio.file.Path runDirectory
             ) {

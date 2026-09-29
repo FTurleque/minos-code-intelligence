@@ -50,14 +50,14 @@ def main() -> int:
         materializer = read("minos-integration-git/src/main/java/com/minos/integration/git/JGitRemoteRepositoryMaterializer.java")
         clone_budget = read("minos-integration-git/src/main/java/com/minos/integration/git/RemoteCloneBudget.java")
         git_client = read("minos-integration-git/src/main/java/com/minos/integration/git/JGitRemoteGitClient.java")
-        artifact_policy = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedArtifactCachePolicy.java")
+        artifact_policy = read("minos-runtime-local/src/main/java/com/minos/runtime/local/DistributedArtifactCachePolicy.java")
         artifact_limits = read("minos-engine/src/main/java/com/minos/orchestration/IndexArtifactLimits.java")
-        artifact_store = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedArtifactBundleStore.java")
-        local_worker = read("minos-runtime-local/src/main/java/com/minos/runtime/LocalIsolatedIndexWorker.java")
-        workspace_files = read("minos-runtime-local/src/main/java/com/minos/runtime/ProviderWorkspaceFiles.java")
-        sandbox_backend = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxBackend.java")
+        artifact_store = read("minos-runtime-local/src/main/java/com/minos/runtime/local/DistributedArtifactBundleStore.java")
+        local_worker = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java")
+        workspace_files = read("minos-runtime-local/src/main/java/com/minos/runtime/local/ProviderWorkspaceFiles.java")
+        sandbox_backend = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxBackend.java")
         ignore_rules = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
-        coordinator = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedIndexerExecutor.java")
+        coordinator = read("minos-runtime-local/src/main/java/com/minos/runtime/local/DistributedIndexerExecutor.java")
         autonomous = read("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java")
         remote_operations = read("minos-cli/src/main/java/com/minos/cli/LocalRemoteIndexOperations.java")
         # A2 / ADR 0042: the concrete M25 wiring moved verbatim to the composition root (minos-bootstrap).
@@ -132,8 +132,8 @@ def main() -> int:
                       "RemoteIndexingRuntime", "compositionRoot.remoteRepositoryMaterializer(",
                       "compositionRoot.remoteIndexingRuntime(", "force", "verified artifact evidence")
         forbid("LocalRemoteIndexOperations.java", remote_operations,
-               "import com.minos.runtime.DistributedArtifactBundleStore",
-               "import com.minos.runtime.DistributedIndexerExecutor",
+               "import com.minos.runtime.local.DistributedArtifactBundleStore",
+               "import com.minos.runtime.local.DistributedIndexerExecutor",
                "import com.minos.integration.git.JGitRemoteRepositoryMaterializer")
         require_facts("LocalRemoteIndexingRuntime.java", remote_runtime,
                       "new DistributedArtifactBundleStore(home)", "new DistributedIndexerExecutor(",
@@ -161,9 +161,9 @@ def main() -> int:
             "RemoteRepositoryRequestTest.java": read("minos-engine/src/test/java/com/minos/remote/RemoteRepositoryRequestTest.java"),
             "JGitRemoteRepositoryMaterializerTest.java": read("minos-integration-git/src/test/java/com/minos/integration/git/JGitRemoteRepositoryMaterializerTest.java"),
             "DistributedArtifactManifestTest.java": read("minos-engine/src/test/java/com/minos/remote/DistributedArtifactManifestTest.java"),
-            "DistributedArtifactBundleStoreTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/DistributedArtifactBundleStoreTest.java"),
-            "LocalIsolatedIndexWorkerTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/LocalIsolatedIndexWorkerTest.java"),
-            "ScopeSwapRejectionTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/ScopeSwapRejectionTest.java"),
+            "DistributedArtifactBundleStoreTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/local/DistributedArtifactBundleStoreTest.java"),
+            "LocalIsolatedIndexWorkerTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/local/LocalIsolatedIndexWorkerTest.java"),
+            "ScopeSwapRejectionTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/local/ScopeSwapRejectionTest.java"),
             "RemoteIndexCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RemoteIndexCommandTest.java"),
             "LocalRemoteIndexOperationsIntegrationTest.java": read("minos-cli/src/test/java/com/minos/cli/LocalRemoteIndexOperationsIntegrationTest.java"),
         }

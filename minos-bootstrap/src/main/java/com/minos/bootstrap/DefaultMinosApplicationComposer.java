@@ -20,7 +20,7 @@ import com.minos.registry.ProjectPathMappingStore;
 import com.minos.registry.ProjectPathMappings;
 import com.minos.remote.RemoteIndexingRuntime;
 import com.minos.remote.RemoteRepositoryMaterializer;
-import com.minos.runtime.CompositeProviderRuntimeManager;
+import com.minos.runtime.local.CompositeProviderRuntimeManager;
 import com.minos.runtime.HostCommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.WorkerSandboxProbe;

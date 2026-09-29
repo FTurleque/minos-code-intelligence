@@ -87,7 +87,7 @@ C4Container
 - **Types clés** : `CommandLocator`, `ProcessIndexerExecutor`, `ProviderRuntimeManager`.
 - **Interfaces** : `ProviderRuntimeManager` (impl de `IndexingRuntimePorts`).
 - **Dépendances** : `minos-engine`.
-- **Sources** : `minos-runtime-local/src/main/java/com/minos/runtime/`.
+- **Sources** : `minos-runtime-local/src/main/java/com/minos/runtime/local/`.
 
 ### minos-storage-local
 - **Responsabilité** : persistance locale des snapshots, vecteurs sémantiques, observations runtime, control plane tenant.

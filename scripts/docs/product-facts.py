@@ -196,13 +196,13 @@ def check_sandbox_claims_match_the_code() -> None:
     (bytes and entries); the developer page once said "at least SUPERVISED_HARD_KILL", which was
     false. Both the code and the pages are checked, so neither can drift alone.
     """
-    containment = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerResourceContainment.java")
+    containment = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerResourceContainment.java")
     unmet = require(
         r"public List<String> unmetRequirements\(\) \{(.*?)\n    \}", containment, "unmetRequirements body", re.S)
     for dimension in ("FILESYSTEM_WRITE_BYTES", "FILESYSTEM_WRITE_ENTRIES"):
         if f'requireOsEnforced(unmet, "{dimension}"' not in unmet:
             raise RuntimeError(f"untrusted-code qualification no longer requires OS_ENFORCED on {dimension}")
-    qualification = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxQualification.java")
+    qualification = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxQualification.java")
     if '"WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041"' not in qualification:
         raise RuntimeError("WorkerSandboxQualification must carry the ADR 0041 decision limitation")
 

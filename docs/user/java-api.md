@@ -288,3 +288,4 @@ Seuls changent des packages internes : un code qui importait directement l'une d
 |---|---|---|
 | `com.minos.adapter.scip` (`minos-engine`) | `com.minos.orchestration` | `ScipSymbolSnapshotRequest`, `ScipSymbolSnapshotReport` |
 | `com.minos.git` (`minos-integration-git`) | `com.minos.integration.git` | `GitIntelligenceService`, `JGitCloneDeadline`, `JGitRemoteGitClient`, `JGitRemoteRepositoryMaterializer`, `RemoteCloneBudget`, `RemoteRepositoryCachePolicy` (le port `com.minos.git.GitIntelligence` ne bouge pas) |
+| `com.minos.runtime` (`minos-runtime-local`) | `com.minos.runtime.local` | les 34 classes d'exécution locale (`CommandLocator`, `ProcessIndexerExecutor`, `WorkerSandboxBackends`, `LocalIsolatedIndexWorker`…) ; les ports d'engine (`ProviderRuntimeManager`, `ProviderRuntimeStatus`, `WorkerSandboxProbe`, `HostCommandLocator`) restent dans `com.minos.runtime` |
