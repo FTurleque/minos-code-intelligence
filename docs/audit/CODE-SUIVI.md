@@ -10,7 +10,7 @@
 
 | Lot | Contenu | Statut | Commits |
 |---|---|---|---|
-| 1 — Q6, Q7 | Inventaire, encodeur unique (`NaN`/`Infinity` refusés, échappement complet), un seul point d'échappement, ordre des clés stable, garde-fous, preuve inter-JVM | en cours | voir § 4 |
+| 1 — Q6, Q7 | Inventaire, encodeur unique (`NaN`/`Infinity` refusés, échappement complet), un seul point d'échappement, ordre des clés stable sur 11 sites, garde-fous, preuve inter-JVM | livré, en attente du verdict final de `verif-code` | `72b3f9b4` … `c74aef8b` (§ 4) |
 | 2 — Q11, Q19, Q20 | Un seul parseur d'arguments | à faire | — |
 | 3 — Q10, Q14 | Cycle de vie des ressources, exceptions avalées | à faire | — |
 | 4 — Q12, Q13 | Heuristiques et duplication | à faire | — |
@@ -89,7 +89,7 @@ Gates rejoués après chaque commit : `check-module-boundaries.py` (« modules=1
 | `ca4c1491` | Q6 : `GitActivityCommand` (`query`, `files`, `zones`) | idem |
 | `0814dcb8` | V-L1-01 (`Float` gardait son `toString`), V-L1-02 (U+2028/U+2029 en constantes), V-L1-03 (`Map.of` dans un test) | idem |
 | `a8165f3f` | Q6 : `capabilities` (`ProviderConformanceKit.sortedCopy`, `ProviderView`, `ProviderDto`) et `providerProfiles` MCP ; V-L1-04 | idem |
-| commit de garde | Q6 : `JsonOrderGuardTest`, retrait du masque d'ordre de `CharacterizationNormalizer`, 4 golden régénérés (ordre seul), ce journal | idem |
+| `c74aef8b` | Q6 : `JsonOrderGuardTest`, retrait du masque d'ordre de `CharacterizationNormalizer`, 4 golden régénérés (ordre seul), ce journal | idem |
 
 ## 5. Preuves
 
@@ -150,6 +150,10 @@ Mesure de départ de `verif-code` (base, 12 lancements de `renderWorkspaces`, `r
 - **API Java** (`ProviderDto`) : `capabilities` reste une `Map<String, String>` ; l'itération est désormais triée (avant : aléatoire).
 - **Plugin IntelliJ** (`MinosCliClient.gitActivity`, `MinosToolWindowPanel.loadGit`) : lit le JSON avec Gson et l'affiche indenté ; aucune lecture positionnelle, seul l'ordre d'affichage devient stable.
 - **CLI** : sortie `--format json` de `git-activity`, `runtime sessions`, `providers`, `team workspaces|members|audit` : mêmes clés et mêmes valeurs, ordre fixe.
+
+### 5.5 Fin de lot
+
+`./mvnw clean verify` complet dans le worktree : **BUILD SUCCESS**, 15 modules, 1439 tests exécutés, 0 échec, 46 ignorés (hypothèses `Assumptions` préexistantes, aucun `@Disabled` ajouté). `python scripts/quality/check-jacoco.py` : 26 portées PASS ; seule la portée `m24-polyglot-provider-platform` échoue (`ManagedPolyglotScipRuntimeManager` line=0.232 < 0.28), échec préexistant sous Windows sans rapport avec ce lot. Aucun script de `scripts/` n'assertait de littéral renommé (`jsonEscape`, `quote`, `Double.toString` : aucune occurrence) ; `check-post-mne.py`, `check-hosted-control-plane-consistency.py` et `check-semantic-retrieval-consistency.py` rejoués verts.
 
 ## 6. Constats de verif-code
 
