@@ -801,7 +801,8 @@ Les cinq écarts déclarés au jalon 2 (§ A4.6 et rapport : pas de commit rouge
 | 2.2 | Étape 2 — format V3 UTF-8 (fichier, pointeur, PostgreSQL), ADR 0046 ; exception `retention.golden` prouvée | livré, vérifié par verif-archi | `a68c560e`, `ebdc6969` (golden seul + preuve), `095c4c60` (banc), `5f0c2d53` (docs) |
 | 2.3 | Étape 3 — traversée d'impact : non faite, verdict consigné (§ A6.12) | consigné | `ea5132b6` |
 | 2.4 | Étape 4 — contenu normalisé mis en cache dans le corpus hybride, classement identique à l'octet (§ A6.13) | livré | `1c54a3a4` (référence, avant), `bba7a91b` ; M3 : `e32bd9f6` |
-| 2.5 | Étape 5 — ADR 0047 `Proposed` : dédoublonnage des chaînes, table de chaînes, pagination ou mappage (§ A6.14) | livré | commit de docs |
+| 2.5 | Étape 5 — ADR 0047 `Proposed` : dédoublonnage des chaînes, table de chaînes, pagination ou mappage (§ A6.14) | livré | `a3aa4baf` |
+| **Bilan** | Ce dépôt redevient indexable (V3, 194,6 Mo au lieu d'un refus à 355 Mo en V2) ; un snapshot trop grand est refusé sans rien écrire ; lecture à froid ≈ 2,5 fois plus rapide ; recherche hybride en mémoire 4 à 6 fois plus rapide, à classement identique à l'octet ; traversée d'impact non touchée ; seul golden modifié : `retention.golden` (suffixes sha, preuve) ; aucun gain mémoire revendiqué | lot terminé, en attente de verif | — |
 
 ## A6.2 Procédure de mesure
 
@@ -948,6 +949,7 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 - 2026-09-29 — impl-archi, étape 3 : `ea5132b6` (docs), verdict « infirmé en pratique » (§ A6.12).
 - 2026-09-29 — impl-archi, étape 4 : `1c54a3a4`, référence du classement écrite par le `minos-application` de `d9ae1005` (identique à la base, `git diff --quiet`) et test vert sur ce commit ; `bba7a91b`, cache du contenu normalisé, avec la même référence verte à l'octet ; `e32bd9f6`, suggestion M3 de verif. `-pl minos-bootstrap -am test` vert, gates verts.
 - 2026-09-29 — impl-archi, étape 5 : ADR 0047 (`Proposed`), sans implémentation (§ A6.14). Constats V-A6-05 à 08 consignés (§ A6.7) ; ADR 0046 complété (retour arrière, asymétrie au ré-import, « snapshot de connaissance », commit volontairement rouge).
+- 2026-09-29 — impl-archi, fin de lot (tête `a3aa4baf`) : `./mvnw -B clean verify -Dminos.postgresql.tests.required=true` **vert**, 564 s, **1409 tests, 0 échec, 0 erreur, 46 ignorés** (PostgreSQL sous Docker). `check-jacoco.py` : seul `m24-polyglot-provider-platform` est rouge (préexistant sous Windows : `ManagedPolyglotScipRuntimeManager`) ; `persistence-cache-indexes` et `semantic-hybrid-retrieval` passent. 15 gates Python verts. `git diff --stat d9ae1005 -- minos-app/src/test/resources/characterization` : `retention.golden` seul, 3 lignes.
 
 ## A6.7 Constats verif-archi
 
