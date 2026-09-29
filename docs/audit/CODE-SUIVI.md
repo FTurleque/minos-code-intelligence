@@ -79,21 +79,90 @@ La grep ne suffit pas (des `Map.copyOf` viennent de records, pas des renderers).
 
 ## 4. Journal par commit
 
-| Commit | Contenu | Gates (boundaries / current-docs / product-facts / milestone-refs) |
+Gates rejoués après chaque commit : `check-module-boundaries.py` (« modules=14, sources=499, packages=45 »), `check-current-docs.py` (SUCCESS), `product-facts.py --check` (SUCCESS), `check-milestone-artifact-references.py` (« scripts checked=95 ») — **mêmes chiffres que la base `02e490c3` à chaque commit**. Rejoués aussi, verts : `check-post-mne.py`, `check-hosted-control-plane-consistency.py`, `check-semantic-retrieval-consistency.py`, `check-polyglot-provider-consistency.py`, `check-advanced-provider-consistency.py`, `check-runtime-dynamic-consistency.py`.
+
+| Commit | Contenu | Gates |
 |---|---|---|
-| — | (rempli au fil des commits) | |
+| `72b3f9b4` | docs : ce suivi, inventaire et décisions | 499 / 45 / SUCCESS / SUCCESS / 95 |
+| `063ae8b4` | Q7 : `NaN`/`Infinity` refusés, échappement unique (`DeterministicJson.quote`), suppression de cinq copies, `DeterministicJson.object` (une copie en moins : `IdeIntelligenceCommand.object`), garde `JsonEscapeGuardTest` | idem |
+| `cd521fa3` | Q6 : `HostedControlPlaneRenderer` ×3 et `RuntimeIntelligenceRenderer.renderSessions` | idem |
+| `ca4c1491` | Q6 : `GitActivityCommand` (`query`, `files`, `zones`) | idem |
+| `0814dcb8` | V-L1-01 (`Float` gardait son `toString`), V-L1-02 (U+2028/U+2029 en constantes), V-L1-03 (`Map.of` dans un test) | idem |
+| `a8165f3f` | Q6 : `capabilities` (`ProviderConformanceKit.sortedCopy`, `ProviderView`, `ProviderDto`) et `providerProfiles` MCP ; V-L1-04 | idem |
+| commit de garde | Q6 : `JsonOrderGuardTest`, retrait du masque d'ordre de `CharacterizationNormalizer`, 4 golden régénérés (ordre seul), ce journal | idem |
 
 ## 5. Preuves
 
-(rempli au fil des commits : rouge → vert, comparaison des golden, mesures inter-JVM)
+### 5.1 Rouge → vert
+
+Chaque test a été joué **avant** le correctif sur le code d'origine (l'API neuve n'y était qu'une façade de l'ancien comportement, pour que le test compile), puis après. La sortie rouge est jointe au message du commit correspondant.
+
+| Défaut | Test | Rouge (code d'origine) | Vert |
+|---|---|---|---|
+| Q7 `NaN`/`Infinity`, substituts isolés, U+2028/9 | `DeterministicJsonEncodingTest` | 4 échecs sur 8 | 8/8 |
+| Q7 `Float` élargi en `double` (V-L1-01) | `…aFloatKeepsItsOwnShortestText…` | `<[0.10000000149011612,…]>` au lieu de `<[0.1,1.1,3.4028235E38]>` | 9/9 |
+| Q7 échappement Ollama | `OllamaEmbeddingProviderTest.requestBodyIsValidJson…` | `raw lone surrogate at 203` | vert |
+| Q7 échappement `team project-bind` | `TeamCommandTest.projectBindEscapesEveryCharacter…` | `raw control character U+0001 in the JSON` | vert |
+| Q7 un seul point d'échappement | `JsonEscapeGuardTest` | 9 signatures dans 5 fichiers (Ollama, 3 renderers, `TeamCommand`) | vert |
+| Q6 renderers hébergés / runtime | `RendererKeyOrderTest` | 4 lancements de JVM : 3, 3, 2, 2 échecs sur 4 | 3 lancements : 4/4 |
+| Q6 git-activity | `GitActivityCommandTest.jsonKeysComeOutInTheirDeclaredOrder…` | 3 lancements, 3 ordres différents (`[maxCommits, zoneDepth, maxFiles, since]`, `[maxFiles, since, maxCommits, zoneDepth]`) | 3 lancements verts |
+| Q6 `capabilities` / `counts` / profils MCP | `ProviderConformanceResultOrderTest` (2 échecs sur 3), `ProviderViewOrderTest`, `ProviderDtoOrderTest`, `ProviderProfilesKeyOrderTest` | 4 classes rouges, 2 lancements | verts |
+| Q6 aucune structure sans ordre | `JsonOrderGuardTest` | 11 sites de l'inventaire (avant leurs correctifs) | vert |
+
+### 5.2 Les 12 golden, avant / après
+
+Méthode : les 12 fichiers de la base (`02e490c3`) sont comparés à ceux du commit de garde ligne à ligne ; chaque ligne qui diffère est relue comme du JSON (les jetons de normalisation `:<host>` sont mis entre guillemets des deux côtés) puis comparée sous forme canonique (clés triées récursivement) ; les objets dont la **liste de clés** change d'ordre sont énumérés.
+
+**Ce qui bouge et pourquoi.** Jusqu'ici deux masques cachaient Q6 aux golden : `CharacterizationNormalizer.canonicalizeUnorderedMaps` triait les cinq familles de maps sans ordre (`capabilities`, `providerProfiles`, `query`/`files`/`zones` de git-activity, racine de `renderSessions`) avant l'écriture et la comparaison. Le masque est retiré (aucun test ne le testait directement) ; les golden portent désormais l'ordre réel du code. Ils ne peuvent bouger que là où un objet passe de « clés triées » à « ordre de déclaration » : `cli-git`, `cli-runtime`, `mcp`, `mcp-all-tools`. Les 8 autres ne dépendent d'aucun objet de ces familles dont l'ordre de déclaration diffère de l'ordre trié (`capabilities` reste trié).
+
+| Golden | Résultat | Détail |
+|---|---|---|
+| `api`, `cli-doctor`, `cli-json`, `cli-semantic`, `cli-text`, `java-program-graph`, `retention`, `team` | **identiques à l'octet** | (`cli-json` et `cli-text` portent `capabilities`, trié avant comme après) |
+| `cli-git` | ordre seul | 2 lignes : `query` (`[maxCommits, maxFiles, since, zoneDepth]` → `[since, maxCommits, maxFiles, zoneDepth]`), chaque élément de `files` (`[commitCount, lastChangedAt, lastCommitId, path, uniqueAuthorCount]` → `[path, commitCount, uniqueAuthorCount, lastChangedAt, lastCommitId]`), chaque élément de `zones` (`[commitTouches, distinctFileCount, lastChangedAt, zone]` → `[zone, commitTouches, distinctFileCount, lastChangedAt]`) |
+| `cli-runtime` | ordre seul | 1 ligne : racine de `renderSessions` (`[exhaustive, limitations, nature, sessions]` → `[nature, exhaustive, sessions, limitations]`) |
+| `mcp` | ordre seul | 2 lignes : chaque profil de `providerProfiles` (7 profils ; `[buildSystems, capabilities, conformanceScorePercent, id, languages, limitations, runtimeDiagnostics, runtimeState, version]` → `[id, version, languages, buildSystems, capabilities, conformanceScorePercent, limitations, runtimeState, runtimeDiagnostics]`) |
+| `mcp-all-tools` | ordre seul | 3 lignes : deux fois `providerProfiles` (7 profils) et la racine de `renderSessions` |
+
+Résultat du comparateur : « every difference is a key-order difference » — aucune ligne ne diffère au-delà de l'ordre (ni clé ajoutée ou retirée, ni valeur modifiée). Aucun `capabilities` n'apparaît dans les changements d'ordre : il était et reste trié.
+
+L'ordre des `Map`/`Set` des DTO Java (`api.golden`) reste trié par le rendu du test (`A2SurfaceCharacterizationTest.render`) : à ce niveau c'est un ensemble Java, pas un objet JSON ; l'ordre JSON est couvert par les golden `cli-*` et `mcp*`.
+
+### 5.3 Mesures inter-JVM
+
+Suite de caractérisation (`A2SurfaceCharacterizationTest`, 12 méthodes, golden comparés à l'octet, **ordre des clés non normalisé**), un lancement de JVM par ligne, `-DargLine` vérifié dans le rapport Surefire (`java.vm.compressedOopsMode` = « Zero based » avec `+UseCompressedOops`, absent avec `-UseCompressedOops`) :
+
+| Code | Lancement | Résultat |
+|---|---|---|
+| **corrigé** (commit de garde) | `-XX:+UseCompressedOops` | 12/12 vert |
+| **corrigé** | `-XX:-UseCompressedOops` | 12/12 vert |
+| **corrigé** | `-XX:+UseCompressedOops` (2e lancement) | 12/12 vert |
+| base `02e490c3` + normalisateur sans masque d'ordre | `-XX:+UseCompressedOops` | **6 échecs** : `cli-git`, `cli-json`, `cli-runtime`, `cli-text`, `mcp`, `mcp-all-tools` |
+| base + normalisateur sans masque | `-XX:-UseCompressedOops` | 6 échecs (mêmes golden) |
+| base + normalisateur sans masque | `-XX:+UseCompressedOops` (2e lancement) | 6 échecs (mêmes golden) |
+
+Sur le code d'origine, les sorties « actuelles » des trois lancements sont **trois séries différentes** (empreintes distinctes d'un lancement à l'autre, identiques à l'intérieur d'un même lancement) : c'est bien le sel de `ImmutableCollections`, tiré à chaque démarrage, qui change l'ordre. Sur le code corrigé, les trois lancements sont identiques au golden, sous les deux réglages de pointeurs. (`cli-json` et `cli-text` ne rougissent que sans le masque : ils portent `capabilities`.)
+
+Mesure de départ de `verif-code` (base, 12 lancements de `renderWorkspaces`, `renderMembers`, `renderAudit`, `renderSessions`) : **7 sorties distinctes**.
+
+### 5.4 Consommateurs
+
+- **MCP** (`providerProfiles`, `team_*`, `runtime_*`) : clients LLM/JSON-RPC qui lisent par clé ; l'ordre était déjà aléatoire, aucun ne pouvait s'y fier.
+- **API Java** (`ProviderDto`) : `capabilities` reste une `Map<String, String>` ; l'itération est désormais triée (avant : aléatoire).
+- **Plugin IntelliJ** (`MinosCliClient.gitActivity`, `MinosToolWindowPanel.loadGit`) : lit le JSON avec Gson et l'affiche indenté ; aucune lecture positionnelle, seul l'ordre d'affichage devient stable.
+- **CLI** : sortie `--format json` de `git-activity`, `runtime sessions`, `providers`, `team workspaces|members|audit` : mêmes clés et mêmes valeurs, ordre fixe.
 
 ## 6. Constats de verif-code
 
 | Id | Sévérité | Constat | Résolution |
 |---|---|---|---|
-| — | — | aucun à ce stade | — |
+| V-L1-01 | à corriger | `DeterministicJson.numberText` élargissait un `Float` fini en `double` (`0.1f` → `0.10000000149011612`) | `0814dcb8` : branche `Float` (refus des non-finis puis `Float.toString`) + test rouge/vert |
+| V-L1-02 | remarque | U+2028 et U+2029 écrits bruts dans la source de `DeterministicJson` | `0814dcb8` : constantes `LINE_SEPARATOR`/`PARAGRAPH_SEPARATOR` (`0x2028`/`0x2029`) |
+| V-L1-03 | remarque | `JsonEscapeGuardTest` itérait des `Map.of` (ordre du message d'échec variable) | `0814dcb8` : `LinkedHashMap` |
+| V-L1-04 | bloquant | `Map.copyOf` sur `providerProfiles` (9 clés) et `capabilities` (14 clés) restés ouverts | `a8165f3f` : `Collections.unmodifiableMap` et `ProviderConformanceKit.sortedCopy` |
 
 ## 7. À traiter plus tard
 
-- **Q13** : `CodeSearchRenderer`, `CodeIntelligenceResultRenderer`, `SymbolResultRenderer` écrivent encore leur JSON à la main (structure, virgules) ; seul leur échappement est unifié par le lot 1.
-- `ProviderConformanceKit.ConformanceResult.counts` : `Map.copyOf` d'un `EnumMap`, jamais rendu ; traité avec les autres `capabilities` pour ne pas laisser d'exception dans la garde.
+- **Q13** : `CodeSearchRenderer`, `CodeIntelligenceResultRenderer`, `SymbolResultRenderer` écrivent encore leur JSON à la main (structure, virgules) ; seul leur échappement est unifié par le lot 1. `McpToolSchemas` assemble des schémas JSON par concaténation de littéraux (constantes, sans donnée externe) ; à revoir avec Q13.
+- **Q13** : `ProviderConformanceKit.sortedCopy` est la seule implémentation de « copie triée » ; si une autre copie apparaît dans un module qui ne voit pas `minos-engine`, la remonter dans `minos-domain` plutôt que la dupliquer.
+- `PostgresJsonCodec` (Jackson) et les gabarits `McpToolSchemas` échappent hors de `DeterministicJson` : Jackson est une bibliothèque, pas une réécriture à la main ; laissé en l'état, déclaré ici pour que la règle « un seul point d'échappement » ne soit pas lue comme plus large qu'elle n'est.
+- **Sets à un élément** : la garde `JsonOrderGuardTest` n'examine `Set.of`/`Set.copyOf` que sur les renderers et la vue des providers ; les `Set.copyOf` des records du domaine ne sont pas rendus aujourd'hui, mais une garde par flux (type d'objet passé à `DeterministicJson.render`) serait plus sûre qu'une garde de source.

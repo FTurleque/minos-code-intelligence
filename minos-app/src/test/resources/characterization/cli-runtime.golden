@@ -113,7 +113,7 @@ exit: 0
 $ minos runtime sessions a2-char --format json
 exit: 0
 --- stdout
-{"exhaustive":false,"limitations":["absence of a session or observation is never proof of non-execution"],"nature":"OBSERVED_PARTIAL","sessions":[{"sessionId":"a2-session","snapshotId":"scip-7f41649a3cdad442a3235c0a","startedAt":"<instant>","endedAt":"<instant>","collectorId":"a2-fixture","collectorVersion":"1.0.0","environment":"test","completeness":"PARTIAL","observationCount":5,"resolvedReferences":5,"unresolvedReferences":1,"ambiguousReferences":0,"importedAt":"<instant>","sourceSha256":"ed5d6b3cfdf517391fbd13643c72f798f2df8d90b142f98af5e665663581c700","activeSnapshotAligned":true}]}
+{"nature":"OBSERVED_PARTIAL","exhaustive":false,"sessions":[{"sessionId":"a2-session","snapshotId":"scip-7f41649a3cdad442a3235c0a","startedAt":"<instant>","endedAt":"<instant>","collectorId":"a2-fixture","collectorVersion":"1.0.0","environment":"test","completeness":"PARTIAL","observationCount":5,"resolvedReferences":5,"unresolvedReferences":1,"ambiguousReferences":0,"importedAt":"<instant>","sourceSha256":"ed5d6b3cfdf517391fbd13643c72f798f2df8d90b142f98af5e665663581c700","activeSnapshotAligned":true}],"limitations":["absence of a session or observation is never proof of non-execution"]}
 
 --- stderr
 
