@@ -1,6 +1,7 @@
 package com.minos.storage.local.store;
 
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.domain.Symbol;
 import com.minos.store.CodeKnowledgeSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -61,7 +63,8 @@ class PersistedSnapshotLimitTest {
     void snapshotAtTheCeilingIsPersistedAndOneMoreByteIsRefused(@TempDir Path root) throws Exception {
         UUID projectId = UUID.randomUUID();
         FileSymbolSnapshotStore store = new FileSymbolSnapshotStore(root);
-        SnapshotCodec codec = new SnapshotCodecV2();
+        // ASCII content: the store writes it in V3 (ADR 0046), so the ceiling is measured in V3.
+        SnapshotCodec codec = new SnapshotCodecV3();
         long ceiling = SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES;
         CodeKnowledgeSnapshot overByOne = PersistedSizeFixtures.ofEncodedSize(projectId, "over-by-one", ceiling + 1L, codec);
         CodeKnowledgeSnapshot atCeiling = PersistedSizeFixtures.ofEncodedSize(projectId, "at-ceiling", ceiling, codec);
@@ -78,6 +81,25 @@ class PersistedSnapshotLimitTest {
                 .filter(path -> path.toString().endsWith(".knowledge")).toList();
         assertEquals(1, published.size());
         assertEquals(ceiling, Files.size(store.storageRoot().resolve(projectId.toString()).resolve(published.getFirst())));
+    }
+
+    @Test
+    void oversizedSnapshotKeptInV2ForAnUnpairedSurrogateIsRefusedOnItsV2Size(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        FileSymbolSnapshotStore store = new FileSymbolSnapshotStore(root);
+        // About 137 MB in V3 but 274 MB in V2; the unpaired surrogate forces V2, hence the refusal.
+        List<Symbol> symbols = new ArrayList<>(
+                PersistedSizeFixtures.withTail(projectId, "v2-only", 17, 1_000_000).symbols());
+        symbols.add(PersistedSizeFixtures.symbol(projectId, 99, "orphelin" + (char) 0xD800));
+        CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(projectId, "v2-only", symbols, List.of(), List.of());
+        long v2Size = new SnapshotCodecV2().encodedSize(snapshot);
+
+        IOException refused = assertThrows(IOException.class, () -> store.publish(projectId, "v2-only",
+                snapshot.symbols(), snapshot.occurrences(), snapshot.relationships()));
+
+        assertRefusalMessage(refused.getMessage());
+        assertTrue(refused.getMessage().contains(": " + v2Size + " encoded bytes"), refused.getMessage());
+        assertTrue(new SnapshotCodecV3().encodedSizeIfEncodable(snapshot).isEmpty());
     }
 
     static void assertRefusalMessage(String message) {

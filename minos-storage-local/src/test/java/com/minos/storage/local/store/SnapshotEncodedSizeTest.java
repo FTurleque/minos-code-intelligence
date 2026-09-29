@@ -12,7 +12,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/** The size a codec announces before writing is exactly the size it writes, for every format (A6). */
+/** La taille qu'un codec annonce avant d'écrire est exactement celle qu'il écrit, pour chaque format (A6). */
 class SnapshotEncodedSizeTest {
 
     @Test
@@ -22,6 +22,16 @@ class SnapshotEncodedSizeTest {
         assertExact(new SnapshotCodecV2(), PersistedSizeFixtures.withTail(projectId, "large", 2, 12_345),
                 root.resolve("b.knowledge"));
         assertExact(new SnapshotCodecV2(), new CodeKnowledgeSnapshot(projectId, "empty", List.of(), List.of(), List.of()),
+                root.resolve("c.knowledge"));
+    }
+
+    @Test
+    void v3AnnouncesExactlyTheBytesItWrites(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        assertExact(new SnapshotCodecV3(), LegacySnapshotContent.v2(), root.resolve("a.knowledge"));
+        assertExact(new SnapshotCodecV3(), PersistedSizeFixtures.withTail(projectId, "large", 2, 12_345),
+                root.resolve("b.knowledge"));
+        assertExact(new SnapshotCodecV3(), new CodeKnowledgeSnapshot(projectId, "empty", List.of(), List.of(), List.of()),
                 root.resolve("c.knowledge"));
     }
 

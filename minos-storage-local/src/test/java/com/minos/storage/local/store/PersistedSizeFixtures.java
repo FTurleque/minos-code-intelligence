@@ -29,10 +29,13 @@ final class PersistedSizeFixtures {
     private PersistedSizeFixtures() {
     }
 
-    /** Seventeen symbols carrying an 8-million-character signature: about 272 MB in V2, above 256 MiB. */
+    /**
+     * Thirty-four symbols carrying an 8-million-character ASCII signature: about 272 MB in V3 (UTF-8), the
+     * format a store picks for it, and 544 MB in V2 — above 256 MiB either way.
+     */
     static CodeKnowledgeSnapshot oversized(UUID projectId, String snapshotId) {
         List<Symbol> symbols = new ArrayList<>();
-        for (int index = 0; index < 17; index++) symbols.add(symbol(projectId, index, LARGE));
+        for (int index = 0; index < 34; index++) symbols.add(symbol(projectId, index, LARGE));
         return new CodeKnowledgeSnapshot(projectId, snapshotId, symbols, List.of(), List.of());
     }
 
@@ -61,7 +64,12 @@ final class PersistedSizeFixtures {
      */
     static CodeKnowledgeSnapshot ofEncodedSize(UUID projectId, String snapshotId, long target, SnapshotCodec codec)
             throws IOException {
-        for (int count = 0; count < 64; count++) {
+        // Each large symbol adds a fixed number of bytes: start just below the target instead of counting
+        // every size from zero (a UTF-8 size walks every character).
+        long empty = codec.encodedSize(withTail(projectId, snapshotId, 0, 0));
+        long perLarge = codec.encodedSize(withTail(projectId, snapshotId, 1, 0)) - empty;
+        int first = (int) Math.max(0L, (target - empty) / perLarge - 2L);
+        for (int count = first; count < first + 4; count++) {
             for (boolean paritySymbol : new boolean[] {false, true}) {
                 long base = codec.encodedSize(withTail(projectId, snapshotId, count, 0, paritySymbol));
                 long perChar = codec.encodedSize(withTail(projectId, snapshotId, count, 1, paritySymbol)) - base;

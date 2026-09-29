@@ -120,7 +120,7 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
         PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         store.publish(projectId, "small", List.of(symbol(projectId, "sym-a")), List.of(), List.of());
         String large = "s".repeat(8_000_000);
-        List<Symbol> symbols = IntStream.range(0, 17).mapToObj(index -> symbol(projectId, "big-" + index, large)).toList();
+        List<Symbol> symbols = IntStream.range(0, 34).mapToObj(index -> symbol(projectId, "big-" + index, large)).toList();
 
         IOException refused = assertThrows(IOException.class,
                 () -> store.publish(projectId, "oversized", symbols, List.of(), List.of()));

@@ -35,6 +35,11 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -49,7 +54,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Shared binary primitives used by the explicit v1/v2 snapshot codecs.
+ * Shared binary primitives used by the explicit v1/v2/v3 snapshot codecs.
  *
  * <p>The framing helpers ({@code readHeaderVersion}, {@code writeString}, {@code readString},
  * {@code readRequiredString}, {@code readCount}) are package-private rather than private because
@@ -61,6 +66,8 @@ final class SnapshotBinaryCodecSupport {
 
     static final int FORMAT_VERSION_V1 = 1;
     static final int FORMAT_VERSION_V2 = 2;
+    /** Same layout as V2; strings are UTF-8 (length in bytes) instead of UTF-16 code units (ADR 0046). */
+    static final int FORMAT_VERSION_V3 = 3;
 
     private static final int SNAPSHOT_MAGIC = 0x4D4E5359;
     private static final int MAX_SYMBOLS = 10_000_000;
@@ -70,6 +77,8 @@ final class SnapshotBinaryCodecSupport {
     private static final int MAX_ROLES = 1_000;
     private static final int MAX_EVIDENCE = 1_000_000;
     private static final int MAX_STRING_CHARS = 8 * 1024 * 1024;
+    /** A string of at most {@link #MAX_STRING_CHARS} UTF-16 code units encodes to at most three bytes per unit. */
+    private static final int MAX_STRING_UTF8_BYTES = 3 * MAX_STRING_CHARS;
     static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
     private static final HexFormat HEX = HexFormat.of();
     private static final String SYMBOL_SNAPSHOT_LABEL = "symbol snapshot";
@@ -90,7 +99,7 @@ final class SnapshotBinaryCodecSupport {
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
                      digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, SYMBOL_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
-            writeSymbolSnapshotV1Body(new StreamSink(output), snapshot);
+            writeSymbolSnapshotV1Body(new StreamSink(output, StringEncoding.UTF16_CHARS), snapshot);
         }
         requireSnapshotFileSize(file);
         return HEX.formatHex(digest.digest());
@@ -110,16 +119,67 @@ final class SnapshotBinaryCodecSupport {
 
     /** Exact length of {@link #writeSymbolSnapshotV1}'s output: the same traversal, counted instead of written. */
     static long encodedSymbolSnapshotV1Size(SymbolSnapshot snapshot) throws IOException {
-        CountingSink counter = new CountingSink();
+        CountingSink counter = new CountingSink(StringEncoding.UTF16_CHARS);
         writeSymbolSnapshotV1Body(counter, snapshot);
         return counter.bytes();
     }
 
     /** Exact length of {@link #writeKnowledgeSnapshotV2}'s output: the same traversal, counted instead of written. */
     static long encodedKnowledgeSnapshotV2Size(CodeKnowledgeSnapshot snapshot) throws IOException {
-        CountingSink counter = new CountingSink();
-        writeKnowledgeSnapshotV2Body(counter, snapshot);
+        CountingSink counter = new CountingSink(StringEncoding.UTF16_CHARS);
+        writeKnowledgeSnapshotBody(counter, snapshot, FORMAT_VERSION_V2);
         return counter.bytes();
+    }
+
+    /**
+     * Exact length of {@link #writeKnowledgeSnapshotV3}'s output, or {@code -1} when a string holds an unpaired
+     * surrogate: such a snapshot has no exact UTF-8 form and is written in V2, which preserves it.
+     */
+    static long encodedKnowledgeSnapshotV3Size(CodeKnowledgeSnapshot snapshot) throws IOException {
+        CountingSink counter = new CountingSink(StringEncoding.UTF8);
+        try {
+            writeKnowledgeSnapshotBody(counter, snapshot, FORMAT_VERSION_V3);
+        } catch (UnpairedSurrogateException unencodable) {
+            return -1L;
+        }
+        return counter.bytes();
+    }
+
+    static String writeKnowledgeSnapshotV3(Path file, CodeKnowledgeSnapshot snapshot) throws IOException {
+        MessageDigest digest = SnapshotIntegrityService.sha256Digest();
+        try (OutputStream fileOutput = Files.newOutputStream(file);
+             DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
+             BoundedOutputStream boundedOutput = new BoundedOutputStream(
+                     digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
+             DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
+            writeKnowledgeSnapshotBody(new StreamSink(output, StringEncoding.UTF8), snapshot, FORMAT_VERSION_V3);
+        }
+        requireSnapshotFileSize(file);
+        return HEX.formatHex(digest.digest());
+    }
+
+    static CodeKnowledgeSnapshot readKnowledgeSnapshotV3(Path file) throws IOException {
+        requireSnapshotFileSize(file);
+        try (BoundedInputStream boundedInput = new BoundedInputStream(
+                     Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS),
+                     MAX_PERSISTED_SNAPSHOT_BYTES,
+                     KNOWLEDGE_SNAPSHOT_LABEL);
+             DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
+            return readKnowledgeSnapshotBody(new SnapshotInput(input, StringEncoding.UTF8), FORMAT_VERSION_V3);
+        } catch (EOFException exception) {
+            throw new IOException("truncated knowledge snapshot", exception);
+        }
+    }
+
+    /** Format version declared by a snapshot file's header, whatever the format, without decoding the body. */
+    static int readFormatVersion(Path file) throws IOException {
+        requireSnapshotFileSize(file);
+        // Unbuffered: exactly the eight header bytes are read, never the body.
+        try (DataInputStream input = new DataInputStream(Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS))) {
+            return readHeaderVersion(input, SNAPSHOT_MAGIC, "snapshot");
+        } catch (EOFException exception) {
+            throw new IOException("truncated snapshot header", exception);
+        }
     }
 
     /**
@@ -141,7 +201,8 @@ final class SnapshotBinaryCodecSupport {
                      Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS),
                      MAX_PERSISTED_SNAPSHOT_BYTES,
                      SYMBOL_SNAPSHOT_LABEL);
-             DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
+             DataInputStream stream = new DataInputStream(new BufferedInputStream(boundedInput))) {
+            SnapshotInput input = new SnapshotInput(stream, StringEncoding.UTF16_CHARS);
             requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V1, SYMBOL_SNAPSHOT_LABEL);
             UUID projectId = new UUID(input.readLong(), input.readLong());
             String snapshotId = readRequiredString(input, "snapshotId");
@@ -180,7 +241,7 @@ final class SnapshotBinaryCodecSupport {
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
                      digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
-            writeKnowledgeSnapshotV2Body(new StreamSink(output), snapshot);
+            writeKnowledgeSnapshotBody(new StreamSink(output, StringEncoding.UTF16_CHARS), snapshot, FORMAT_VERSION_V2);
         }
         requireSnapshotFileSize(file);
         return HEX.formatHex(digest.digest());
@@ -191,7 +252,7 @@ final class SnapshotBinaryCodecSupport {
         try (BoundedOutputStream boundedOutput = new BoundedOutputStream(
                      baos, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
-            writeKnowledgeSnapshotV2Body(new StreamSink(output), snapshot);
+            writeKnowledgeSnapshotBody(new StreamSink(output, StringEncoding.UTF16_CHARS), snapshot, FORMAT_VERSION_V2);
         }
         byte[] payload = baos.toByteArray();
         if (payload.length > MAX_PERSISTED_SNAPSHOT_BYTES) {
@@ -200,9 +261,10 @@ final class SnapshotBinaryCodecSupport {
         return payload;
     }
 
-    private static void writeKnowledgeSnapshotV2Body(EncodingSink output, CodeKnowledgeSnapshot snapshot) throws IOException {
+    private static void writeKnowledgeSnapshotBody(EncodingSink output, CodeKnowledgeSnapshot snapshot, int version)
+            throws IOException {
         output.writeInt(SNAPSHOT_MAGIC);
-        output.writeInt(FORMAT_VERSION_V2);
+        output.writeInt(version);
         output.writeLong(snapshot.projectId().getMostSignificantBits());
         output.writeLong(snapshot.projectId().getLeastSignificantBits());
         writeString(output, snapshot.snapshotId());
@@ -227,7 +289,7 @@ final class SnapshotBinaryCodecSupport {
                      MAX_PERSISTED_SNAPSHOT_BYTES,
                      KNOWLEDGE_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
-            return readKnowledgeSnapshotV2Body(input);
+            return readKnowledgeSnapshotBody(new SnapshotInput(input, StringEncoding.UTF16_CHARS), FORMAT_VERSION_V2);
         } catch (EOFException exception) {
             throw new IOException("truncated knowledge snapshot", exception);
         }
@@ -242,14 +304,14 @@ final class SnapshotBinaryCodecSupport {
                      MAX_PERSISTED_SNAPSHOT_BYTES,
                      KNOWLEDGE_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
-            return readKnowledgeSnapshotV2Body(input);
+            return readKnowledgeSnapshotBody(new SnapshotInput(input, StringEncoding.UTF16_CHARS), FORMAT_VERSION_V2);
         } catch (EOFException exception) {
             throw new IOException("truncated knowledge snapshot", exception);
         }
     }
 
-    private static CodeKnowledgeSnapshot readKnowledgeSnapshotV2Body(DataInputStream input) throws IOException {
-        requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V2, KNOWLEDGE_SNAPSHOT_LABEL);
+    private static CodeKnowledgeSnapshot readKnowledgeSnapshotBody(SnapshotInput input, int version) throws IOException {
+        requireHeader(input, SNAPSHOT_MAGIC, version, KNOWLEDGE_SNAPSHOT_LABEL);
         UUID projectId = new UUID(input.readLong(), input.readLong());
         String snapshotId = readRequiredString(input, "snapshotId");
         int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");
@@ -320,7 +382,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static Symbol readSymbol(DataInputStream input) throws IOException {
+    private static Symbol readSymbol(SnapshotInput input) throws IOException {
         try {
             String id = readRequiredString(input, "symbol.id");
             String symbolKey = readRequiredString(input, "symbol.symbolKey");
@@ -401,7 +463,7 @@ final class SnapshotBinaryCodecSupport {
         writeProviderReferences(output, occurrence.providerReferences());
     }
 
-    private static SymbolOccurrence readOccurrence(DataInputStream input) throws IOException {
+    private static SymbolOccurrence readOccurrence(SnapshotInput input) throws IOException {
         try {
             String id = readRequiredString(input, "occurrence.id");
             String projectId = readRequiredString(input, "occurrence.projectId");
@@ -461,7 +523,7 @@ final class SnapshotBinaryCodecSupport {
         throw new IOException("unsupported symbol reference type: " + reference.getClass().getName());
     }
 
-    private static SymbolReference readSymbolReference(DataInputStream input) throws IOException {
+    private static SymbolReference readSymbolReference(SnapshotInput input) throws IOException {
         return switch (input.readUnsignedByte()) {
             case 1 -> new ResolvedSymbolReference(
                     readRequiredString(input, "resolvedSymbolReference.symbolId")
@@ -501,7 +563,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static Relationship readRelationship(DataInputStream input) throws IOException {
+    private static Relationship readRelationship(SnapshotInput input) throws IOException {
         try {
             String id = readRequiredString(input, "relationship.id");
             String projectId = readRequiredString(input, "relationship.projectId");
@@ -556,7 +618,7 @@ final class SnapshotBinaryCodecSupport {
         writeOptionalDouble(output, evidence.weight());
     }
 
-    private static Evidence readEvidence(DataInputStream input) throws IOException {
+    private static Evidence readEvidence(SnapshotInput input) throws IOException {
         return new Evidence(
                 readEnum(input, EvidenceType.class, "evidence.type"),
                 readRequiredString(input, "evidence.description"),
@@ -599,7 +661,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static CodeEntityRef readOptionalCodeEntityReference(DataInputStream input)
+    private static CodeEntityRef readOptionalCodeEntityReference(SnapshotInput input)
             throws IOException {
         return input.readBoolean() ? readCodeEntityReference(input) : null;
     }
@@ -612,7 +674,7 @@ final class SnapshotBinaryCodecSupport {
         writeString(output, reference.id());
     }
 
-    private static CodeEntityRef readCodeEntityReference(DataInputStream input) throws IOException {
+    private static CodeEntityRef readCodeEntityReference(SnapshotInput input) throws IOException {
         return new CodeEntityRef(
                 readEnum(input, CodeEntityType.class, "codeEntityRef.type"),
                 readRequiredString(input, "codeEntityRef.id")
@@ -627,7 +689,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static Double readOptionalDouble(DataInputStream input) throws IOException {
+    private static Double readOptionalDouble(SnapshotInput input) throws IOException {
         return input.readBoolean() ? input.readDouble() : null;
     }
 
@@ -646,7 +708,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static Set<ProviderReference> readProviderReferences(DataInputStream input)
+    private static Set<ProviderReference> readProviderReferences(SnapshotInput input)
             throws IOException {
         int referenceCount = readCount(input, MAX_REFERENCES, "provider reference count");
         Set<ProviderReference> references = new HashSet<>();
@@ -675,7 +737,7 @@ final class SnapshotBinaryCodecSupport {
         writeString(output, location.positionEncoding().name());
     }
 
-    private static SymbolLocation readLocation(DataInputStream input) throws IOException {
+    private static SymbolLocation readLocation(SnapshotInput input) throws IOException {
         if (!input.readBoolean()) {
             return null;
         }
@@ -697,7 +759,7 @@ final class SnapshotBinaryCodecSupport {
         writeString(output, origin.sourceType().name());
     }
 
-    private static Origin readOrigin(DataInputStream input) throws IOException {
+    private static Origin readOrigin(SnapshotInput input) throws IOException {
         return new Origin(
                 readRequiredString(input, "origin.providerId"),
                 readString(input),
@@ -708,12 +770,12 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static void requireHeader(
-            DataInputStream input,
+            SnapshotInput input,
             int expectedMagic,
             int expectedVersion,
             String name
     ) throws IOException {
-        int version = readHeaderVersion(input, expectedMagic, name);
+        int version = readHeaderVersion(input.stream(), expectedMagic, name);
         if (version != expectedVersion) {
             throw new IOException("unsupported " + name + " version: " + version);
         }
@@ -770,20 +832,34 @@ final class SnapshotBinaryCodecSupport {
         void writeString(String value) throws IOException;
     }
 
-    private record StreamSink(DataOutputStream output) implements EncodingSink {
+    private record StreamSink(DataOutputStream output, StringEncoding encoding) implements EncodingSink {
         @Override public void writeInt(int value) throws IOException { output.writeInt(value); }
         @Override public void writeLong(long value) throws IOException { output.writeLong(value); }
         @Override public void writeByte(int value) throws IOException { output.writeByte(value); }
         @Override public void writeBoolean(boolean value) throws IOException { output.writeBoolean(value); }
         @Override public void writeDouble(double value) throws IOException { output.writeDouble(value); }
         @Override public void writeString(String value) throws IOException {
-            SnapshotBinaryCodecSupport.writeString(output, value);
+            if (encoding == StringEncoding.UTF16_CHARS) {
+                SnapshotBinaryCodecSupport.writeString(output, value);
+                return;
+            }
+            if (value == null) {
+                output.writeInt(-1);
+                return;
+            }
+            requireWritableString(value);
+            byte[] bytes = utf8(value);
+            output.writeInt(bytes.length);
+            output.write(bytes);
         }
     }
 
     /** Counts the bytes {@link StreamSink} would write, with the same string checks, and writes nothing. */
     private static final class CountingSink implements EncodingSink {
+        private final StringEncoding encoding;
         private long bytes;
+
+        CountingSink(StringEncoding encoding) { this.encoding = encoding; }
 
         long bytes() { return bytes; }
 
@@ -796,7 +872,105 @@ final class SnapshotBinaryCodecSupport {
             bytes += Integer.BYTES;
             if (value == null) return;
             requireWritableString(value);
-            bytes += (long) Character.BYTES * value.length();
+            bytes += encoding == StringEncoding.UTF16_CHARS
+                    ? (long) Character.BYTES * value.length()
+                    : utf8Length(value);
+        }
+    }
+
+    /** How a format encodes its strings; everything else in the layout is shared. */
+    private enum StringEncoding { UTF16_CHARS, UTF8 }
+
+    /** A string that holds an unpaired surrogate: it has no exact UTF-8 form. */
+    private static final class UnpairedSurrogateException extends IOException {
+        UnpairedSurrogateException() {
+            super("string holds an unpaired surrogate and has no exact UTF-8 form");
+        }
+    }
+
+    /** Exact UTF-8 length; refuses an unpaired surrogate rather than let it degrade to a replacement byte. */
+    private static long utf8Length(String value) throws UnpairedSurrogateException {
+        long length = 0L;
+        for (int index = 0; index < value.length(); index++) {
+            char current = value.charAt(index);
+            if (current < 0x80) {
+                length += 1;
+            } else if (current < 0x800) {
+                length += 2;
+            } else if (Character.isHighSurrogate(current)) {
+                if (index + 1 >= value.length() || !Character.isLowSurrogate(value.charAt(index + 1))) {
+                    throw new UnpairedSurrogateException();
+                }
+                length += 4;
+                index++;
+            } else if (Character.isLowSurrogate(current)) {
+                throw new UnpairedSurrogateException();
+            } else {
+                length += 3;
+            }
+        }
+        return length;
+    }
+
+    /** Strict UTF-8 encoding: an unpaired surrogate is refused, never replaced by {@code '?'}. */
+    private static byte[] utf8(String value) throws UnpairedSurrogateException {
+        utf8Length(value);
+        return value.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Source of one decoding pass: primitive fields straight from the stream, strings decoded in the
+     * format's encoding. UTF-8 is decoded strictly (malformed input is reported, never replaced) and each
+     * string is bounded in bytes before being read.
+     */
+    private static final class SnapshotInput {
+        private final DataInputStream stream;
+        private final StringEncoding encoding;
+        private final CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+
+        SnapshotInput(DataInputStream stream, StringEncoding encoding) {
+            this.stream = stream;
+            this.encoding = encoding;
+        }
+
+        DataInputStream stream() { return stream; }
+        int readInt() throws IOException { return stream.readInt(); }
+        long readLong() throws IOException { return stream.readLong(); }
+        boolean readBoolean() throws IOException { return stream.readBoolean(); }
+        int readUnsignedByte() throws IOException { return stream.readUnsignedByte(); }
+        double readDouble() throws IOException { return stream.readDouble(); }
+        int read() throws IOException { return stream.read(); }
+
+        String readString() throws IOException {
+            if (encoding == StringEncoding.UTF16_CHARS) return SnapshotBinaryCodecSupport.readString(stream);
+            int length = stream.readInt();
+            if (length == -1) return null;
+            if (length < 0 || length > MAX_STRING_UTF8_BYTES) {
+                throw new IOException("invalid string length in knowledge snapshot: " + length);
+            }
+            byte[] bytes = stream.readNBytes(length);
+            if (bytes.length != length) throw new EOFException("truncated string in knowledge snapshot");
+            String value = decode(bytes);
+            if (value.length() > MAX_STRING_CHARS) throw new IOException("string exceeds snapshot limit");
+            return value;
+        }
+
+        private String decode(byte[] bytes) throws IOException {
+            boolean ascii = true;
+            for (byte current : bytes) {
+                if (current < 0) {
+                    ascii = false;
+                    break;
+                }
+            }
+            if (ascii) return new String(bytes, StandardCharsets.US_ASCII);
+            try {
+                return decoder.reset().decode(ByteBuffer.wrap(bytes)).toString();
+            } catch (CharacterCodingException malformed) {
+                throw new IOException("invalid UTF-8 string in knowledge snapshot", malformed);
+            }
         }
     }
 
@@ -813,6 +987,22 @@ final class SnapshotBinaryCodecSupport {
             value.append(input.readChar());
         }
         return value.toString();
+    }
+
+    private static String readString(SnapshotInput input) throws IOException {
+        return input.readString();
+    }
+
+    private static String readRequiredString(SnapshotInput input, String fieldName) throws IOException {
+        String value = input.readString();
+        if (value == null || value.isBlank()) {
+            throw new IOException(fieldName + " must not be blank");
+        }
+        return value;
+    }
+
+    private static int readCount(SnapshotInput input, int maximum, String name) throws IOException {
+        return readCount(input.stream(), maximum, name);
     }
 
     static String readRequiredString(DataInputStream input, String fieldName) throws IOException {
@@ -832,7 +1022,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static <E extends Enum<E>> E readEnum(
-            DataInputStream input,
+            SnapshotInput input,
             Class<E> enumType,
             String fieldName
     ) throws IOException {

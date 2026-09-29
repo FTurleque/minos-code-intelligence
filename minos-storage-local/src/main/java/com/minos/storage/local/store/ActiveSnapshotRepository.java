@@ -19,6 +19,11 @@ public final class ActiveSnapshotRepository {
 
     public static final int FORMAT_VERSION_V1 = 1;
     public static final int FORMAT_VERSION_V2 = 2;
+    /**
+     * A pointer to a V3 snapshot (ADR 0046). The pointer field names the snapshot format; from V2 on, the
+     * pointer layout is the same, so V1 and V2 pointers keep their exact bytes and stay readable.
+     */
+    public static final int FORMAT_VERSION_V3 = 3;
 
     private static final int POINTER_MAGIC = 0x4D4E4150;
     private static final int MAX_SYMBOLS = 10_000_000;
@@ -83,7 +88,7 @@ public final class ActiveSnapshotRepository {
                 Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)
         ))) {
             int version = SnapshotBinaryCodecSupport.readHeaderVersion(input, POINTER_MAGIC, "active snapshot pointer");
-            if (version != FORMAT_VERSION_V1 && version != FORMAT_VERSION_V2) {
+            if (version != FORMAT_VERSION_V1 && version != FORMAT_VERSION_V2 && version != FORMAT_VERSION_V3) {
                 throw new IOException("unsupported active snapshot pointer version: " + version);
             }
             SnapshotDescriptor pointer = new SnapshotDescriptor(
