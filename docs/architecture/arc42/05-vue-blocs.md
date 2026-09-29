@@ -76,11 +76,11 @@ C4Container
 - **Sources** : `minos-domain/src/main/java/com/minos/domain/`, `com/minos/program/`, `com/minos/semantic/`, `com/minos/dynamic/`, `com/minos/hosted/`.
 
 ### minos-engine
-- **Responsabilité** : définit les ports (interfaces) du moteur et les services de requête provider-indépendants.
-- **Types clés** : `CodeKnowledgeStore` (port), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`.
-- **Interfaces** : `CodeKnowledgeStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`.
+- **Responsabilité** : définit les ports (interfaces) du moteur et les services provider-indépendants : requêtes, découverte de projet, planification incrémentale et orchestration de l'indexation (cycle de vie, exécution des runs, reprise) — [ADR 0044](../../adr/0044-un-package-un-module.md).
+- **Types clés** : `CodeKnowledgeStore` (port), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`, `ProjectDiscoveryService`, `IncrementalIndexingCoordinator`, `IndexingLifecycleService`, `IndexingRunExecutor`.
+- **Interfaces** : `CodeKnowledgeStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…).
 - **Dépendances** : `minos-domain`.
-- **Sources** : `minos-engine/src/main/java/com/minos/store/`, `com/minos/orchestration/`, `com/minos/query/`, `com/minos/discovery/`.
+- **Sources** : `minos-engine/src/main/java/com/minos/store/`, `com/minos/orchestration/`, `com/minos/query/`, `com/minos/discovery/`, `com/minos/incremental/`.
 
 ### minos-runtime-local
 - **Responsabilité** : infrastructure générique d'exécution locale de processus providers (CommandLocator, ProcessIndexerExecutor).
@@ -111,10 +111,10 @@ C4Container
 - **Sources** : `minos-integration-git/src/main/java/com/minos/integration/git/`.
 
 ### minos-application
-- **Responsabilité** : services applicatifs partagés — architecture (`ArchitectureIntelligenceService`), impact (`ImpactAnalysisService`), recherche de code (`CodeSearchService`), indexation incrémentale, output, registry, workspace.
-- **Types clés** : `ArchitectureIntelligenceService`, `ImpactAnalysisService`, `CodeSearchService`, `IncrementalIndexingCoordinator`, `ProjectDiscoveryService`, `HybridContextBuilder`, `EmbeddingProvider`.
-- **Interfaces** : `EmbeddingProvider`, `ProgramGraphProvider`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…).
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage-local`, `minos-provider-scip`, `minos-integration-git`.
+- **Responsabilité** : services applicatifs partagés — architecture (`ArchitectureIntelligenceService`), impact (`ImpactAnalysisService`), recherche de code (`CodeSearchService`), output, workspace, sémantique, runtime dynamique ; ports seulement vers les adaptateurs (ADR 0042).
+- **Types clés** : `ArchitectureIntelligenceService`, `ImpactAnalysisService`, `CodeSearchService`, `HybridContextBuilder`, `EmbeddingProvider`.
+- **Interfaces** : `EmbeddingProvider`, `ProgramGraphProvider`.
+- **Dépendances** : `minos-domain`, `minos-engine`.
 - **Sources** : `minos-application/src/main/java/com/minos/`.
 
 ### minos-nexus
