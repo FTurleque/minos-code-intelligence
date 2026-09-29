@@ -124,7 +124,6 @@ TOLERATED_FOREIGN_TESTS: frozenset[str] = frozenset({
     "minos-bootstrap/src/test/java/com/minos/semantic/M23SemanticProviderConfigurationTest.java",
     "minos-bootstrap/src/test/java/com/minos/semantic/SemanticHybridIntelligenceTest.java",
     "minos-bootstrap/src/test/java/com/minos/semantic/SemanticSyncConsistencyTest.java",
-    "minos-bootstrap/src/test/java/com/minos/storage/postgresql/PostgresAuthoritativeSnapshotConsistencyTest.java",
     "minos-bootstrap/src/test/java/com/minos/workspace/WorkspaceIntelligenceServiceTest.java",
     "minos-app/src/test/java/com/minos/adapter/scip/M17ProviderPlatformTest.java",
     "minos-app/src/test/java/com/minos/adapter/scip/M24PolyglotProviderTest.java",
