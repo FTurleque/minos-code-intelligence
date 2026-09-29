@@ -43,7 +43,7 @@ Un accès package-private entre jars révélé par le repli se résout par dépl
 | `store`, `registry`, `storage`, `orchestration`, `incremental` (côté storage-local) | **renommés** `com.minos.storage.local.store`, `com.minos.storage.local.registry`, `com.minos.storage.local`, `com.minos.storage.local.orchestration`, `com.minos.storage.local.incremental` |
 | `git` | les 6 classes d'integration-git **renommées** `com.minos.integration.git` ; le port `GitIntelligence` reste dans engine |
 | `adapter.scip` | les 2 DTO d'engine (`ScipSymbolSnapshotRequest`, `ScipSymbolSnapshotReport`) **renommés** dans `com.minos.orchestration`, à côté du port `ScipArtifactImporter` ; provider-scip garde `com.minos.adapter.scip` |
-| `cli` | `com.minos.cli.MinosLauncher`, point d'entrée documenté, est **déplacé** dans `minos-cli` sans changer de nom ; sa route `mcp` passe par un SPI minimal déclaré dans `minos-cli`, fourni par `minos-app` (`META-INF/services`), chargé par le chargeur de classes de MINOS, en échec explicite à zéro ou plusieurs fournisseurs, ordre de routage inchangé. Les autres classes de `minos-app` sont **renommées** `com.minos.app` (sous réserve de l'arbitrage sur `DockerRuntimeBootstrap`, voir *Limites*) |
+| `cli` | `com.minos.cli.MinosLauncher`, point d'entrée documenté, est **déplacé** dans `minos-cli` sans changer de nom ; sa route `mcp` passe par un SPI minimal déclaré dans `minos-cli`, fourni par `minos-app` (`META-INF/services`), chargé par le chargeur de classes de MINOS, en échec explicite à zéro ou plusieurs fournisseurs, ordre de routage inchangé. `com.minos.cli.DockerRuntimeBootstrap`, point d'entrée des fichiers compose Docker (`entrypoint`), est lui aussi **déplacé** dans `minos-cli` sans changer de nom. Les cinq autres classes de `minos-app` (`McpBackend*`, `DockerMcpTransport`) sont **renommées** `com.minos.app` |
 | `integration.nexus` | `NexusExportBridgeMain`, point d'entrée de processus de NEXUS, reste dans `minos-app` sans changer de nom ; les 4 classes de `minos-nexus` sont **renommées** `com.minos.nexus` |
 | tests en package étranger | relogés dans un package de leur module, ou dans le module testé quand A2 le permet |
 | alias dépréciés de `minos-cli` | `ProjectOperations`, `ProjectSymbolQuery`, `LocalProjectOperations`, `LocalProjectSymbolQuery` **supprimés** ; leurs appelants utilisent les types de `com.minos.application` |
@@ -61,7 +61,7 @@ La règle arrive en **cliquet** : une liste explicite des éclatements encore to
 
 ## Ruptures
 
-Aucune signature publique de `minos-api` ne change : sur la base, les signatures publiques et protégées de `minos-api` (`javap -public`, types génériques compris) ne nomment que `com.minos.api.*` et `com.minos.application.MinosApplication`, qui ne bouge pas. Les points d'entrée de processus gardent leur nom : `com.minos.cli.MinosLauncher`, `com.minos.integration.nexus.NexusExportBridgeMain`, `com.minos.mcp.MinosMcpServer`, `com.minos.adapter.scip.runtime.StampManagedProviderMarkers`.
+Aucune signature publique de `minos-api` ne change : sur la base, les signatures publiques et protégées de `minos-api` (`javap -public`, types génériques compris) ne nomment que `com.minos.api.*` et `com.minos.application.MinosApplication`, qui ne bouge pas. Les points d'entrée de processus gardent leur nom : `com.minos.cli.MinosLauncher`, `com.minos.cli.DockerRuntimeBootstrap`, `com.minos.integration.nexus.NexusExportBridgeMain`, `com.minos.mcp.MinosMcpServer`, `com.minos.adapter.scip.runtime.StampManagedProviderMarkers`.
 
 Les packages renommés sont tous internes (adaptateurs, services applicatifs, classes d'assemblage). Un code Java qui les importait directement doit changer ses imports :
 
@@ -96,5 +96,6 @@ L'ADR 0022 plaçait dans `minos-application` « discovery local, incrémental, o
 
 ## Limites connues
 
-- L'arbitrage de trois points reste à rendre au moment où ils sont atteints (`ARCHI-SUIVI.md` § 3.2) : le déplacement plutôt que le renommage de `DockerRuntimeBootstrap` (point d'entrée des fichiers compose), l'élargissement à `public` de deux règles de format d'engine utilisées par storage-local, le relogement de `RuntimeIntelligenceServiceTest`.
+- Deux méthodes d'engine passent de package-private à `public` : `FileFingerprint.requireSha256` et `IndexingRun.portable`. Ce sont des règles de format sur disque partagées entre un port et ses adaptateurs ; storage-local les utilisait par la seule égalité des noms de package. Les copier aurait créé deux sources de vérité pour un même format ; elles sont donc exposées, et leur Javadoc le dit (arbitrage du 2026-09-29, `ARCHI-SUIVI.md` § 3.2).
+- `RuntimeIntelligenceServiceTest` est scindé : les cas qui dépendent de l'horloge rejoignent `minos-application` avec des doublures en mémoire des ports d'engine ; ceux qui ont besoin des adaptateurs fichiers restent dans `minos-bootstrap`, dans un package de bootstrap. Le constructeur à `Clock` reste package-private.
 - La règle raisonne sur la déclaration `package` des sources ; elle ne voit pas les ressources. Les ressources placées sous un chemin de package (`com/minos/runtime/**`) suivent leur classe par convention, pas par contrôle.
