@@ -87,7 +87,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
 # sources live in another module. Either would let package-private visibility cross a jar boundary. No split
 # is tolerated (see check_package_ownership).
 
-NS ={"m": "http://maven.apache.org/POM/4.0.0"}
+NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 PACKAGE = re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
 ARTIFACT_TO_MODULE = {
     "minos-domain": "minos-domain",

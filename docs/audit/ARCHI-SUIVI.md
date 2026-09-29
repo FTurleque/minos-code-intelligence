@@ -10,10 +10,10 @@
 
 | Jalon | Contenu | Statut | Commits |
 |---|---|---|---|
-| 1 | Inventaire, table de correspondance prévue, ADR 0044, contrôle « aucun package éclaté » en cliquet, A7, auto-test, branchement CI | livré, en attente de verif-archi | `073f4a43`, `26e63775` |
-| 2 | Renommages des adaptateurs : `adapter.scip` (a), `git` (b), runtime-local et `MinosVersion` (c1, c2), storage-local `store`/`registry`/`storage`/`orchestration` (d1–d4) ; `incremental` de storage-local reporté (voir journal) | livré, en attente de verif-archi | `883fb35d`, `d3fb624c`, `8c0eb0ef`, `92a27a36`, `3bdb7eea`, `a2f8a69b`, `57817bdd`, `814130ba` (+ docs `4c61e30f`, `5eefb2ec`, test `7c97bff9`) |
-| 3 | Replis de la couche application : `discovery`/`discovery.spi` (e1), `incremental`/`orchestration` (e2), tests relogés (e3), groupe d5 reporté, `hosted` (f), `dynamic` (g1, g2 avec scission du test), `semantic` (h), `StorageBackends` (i) | livré, en attente de verif-archi | `adeaee42`, `4b8f08a4`, `86cb9711`, `05d94082`, `a23179b9`, `ee446f23`, `fe2e988e`, `4009da25`, `a545a5a1` |
-| 4 | `cli` / `app` et SPI `mcp` (j), `nexus` (k), alias CLI (l), 41 tests étrangers (m), filtres m19/m20 (n), clôture : cliquet supprimé, règle stricte, ADR et docs finalisés (o) | livré, en attente de verif-archi | `b56413bb`, `56682e0e`, `59345b6f`, `cb4f0b58`, `751ba98d`, `b0586a93`, `0ef46b12`, puis le commit de clôture |
+| 1 | Inventaire, table de correspondance prévue, ADR 0044, contrôle « aucun package éclaté » en cliquet, A7, auto-test, branchement CI | livré, accepté par verif-archi | `073f4a43`, `26e63775` |
+| 2 | Renommages des adaptateurs : `adapter.scip` (a), `git` (b), runtime-local et `MinosVersion` (c1, c2), storage-local `store`/`registry`/`storage`/`orchestration` (d1–d4) ; `incremental` de storage-local reporté (voir journal) | livré, accepté par verif-archi | `883fb35d`, `d3fb624c`, `8c0eb0ef`, `92a27a36`, `3bdb7eea`, `a2f8a69b`, `57817bdd`, `814130ba` (+ docs `4c61e30f`, `5eefb2ec`, test `7c97bff9`) |
+| 3 | Replis de la couche application : `discovery`/`discovery.spi` (e1), `incremental`/`orchestration` (e2), tests relogés (e3), groupe d5 reporté, `hosted` (f), `dynamic` (g1, g2 avec scission du test), `semantic` (h), `StorageBackends` (i) | livré, accepté par verif-archi | `adeaee42`, `4b8f08a4`, `86cb9711`, `05d94082`, `a23179b9`, `ee446f23`, `fe2e988e`, `4009da25`, `a545a5a1` |
+| 4 | `cli` / `app` et SPI `mcp` (j), `nexus` (k), alias CLI (l), 41 tests étrangers (m), filtres m19/m20 (n), clôture : cliquet supprimé, règle stricte, ADR et docs finalisés (o) | livré, accepté par verif-archi | `b56413bb`, `56682e0e`, `59345b6f`, `cb4f0b58`, `751ba98d`, `b0586a93`, `0ef46b12`, `34642f4d` |
 | **Bilan** | 14 packages éclatés → 0 ; 45 tests en package étranger → 0 ; accès package-private entre jars → 0 ; 4 alias CLI supprimés ; A7 fermé | lot terminé | — |
 
 ## 2. Inventaire daté (base `10486cb7`, 29 septembre 2026)
@@ -433,9 +433,44 @@ Points d'entrée dont le FQN ne change pas : `com.minos.cli.MinosLauncher` (`doc
 
 | # | Commit | Constat | Sévérité | Résolution |
 |---|---|---|---|---|
-| V-A3-09 | `fe2e988e` | `RuntimeIntelligenceServiceTest` (application) : U+FEFF brut dans le littéral du cas BOM, à la place de l'échappement d'origine ; seul BOM brut du code Java du dépôt. | à corriger | **résolu** au commit suivant `56682e0e` : ce commit annonçait la correction mais ne la contenait pas (l'échappement, passé par la ligne de commande, y avait été réinterprété en caractère brut) ; la correction est faite octet par octet, et un balayage des octets `EF BB BF` dans tous les `*.java` du dépôt ne trouve plus rien. |
+| V-A3-09 | `fe2e988e` | `RuntimeIntelligenceServiceTest` (application) : U+FEFF brut dans le littéral du cas BOM, à la place de l'échappement d'origine ; seul BOM brut du code Java du dépôt. | à corriger | **résolu** à `59345b6f` : `56682e0e` annonçait la correction mais ne la contenait pas (l'échappement, passé par la ligne de commande, y avait été réinterprété en caractère brut) ; la correction est faite octet par octet, et un balayage des octets `EF BB BF` dans tous les `*.java` du dépôt ne trouve plus rien. |
 | V-A3-10 | `fe2e988e` | `check-runtime-dynamic-consistency.py` ne gèle plus que le test d'application. | remarque | **résolu** : `require_facts` ajouté sur `RuntimeIntelligenceFileAdaptersTest` et ses deux cas ; prouvé rouge par mutation. |
 | V-A3-11 | `30fdaa35` | m19 et m20 ne font rien de plus que pr-ci et ne sont pas requis ; leurs filtres de chemins ne voient plus le code déplacé. | remarque | **résolu** : filtres rétablis au groupe n du jalon 4 (`minos-engine/**`) ; retrait des deux workflows renvoyé au § 8. |
+
+### Jalon 4 et clôture
+
+« Jalon 4 et clôture (b56413bb → 34642f4d) — inspectés par verif-archi sur un clean verify complet. BUILD SUCCESS ; 1369/0/0/46 (base 1355 + 14 tests ajoutés, seuls écarts par classe de test) ; caractérisation A2 5/5 et 12/12 ; golden identiques (sha256) ; 22 gates verts. SPI `mcp` : chargeur explicite, échec sans chemin et code 1 à zéro ou plusieurs fournisseurs, routage avant `MinosApplication.open`, prouvés par mutation (chargeur de contexte, fournisseur multiple, ouverture avant la route : tous rouges). Jar ombré du clean build : descripteur `com.minos.cli.McpLaunchRoute` présent, `--help` et `--version` fonctionnent, `mcp` atteint le fournisseur (échec contrôlé du routeur, aucun magasin créé). `MinosLauncher` et `DockerRuntimeBootstrap` : noms qualifiés inchangés et résolubles. Portée m29 scindée sans assouplissement (même union de classes, mêmes seuils imposés à chaque moitié). Alias : ne faisaient que déléguer, aucun comportement perdu. Cliquet supprimé : règle stricte, auto-test probant (5 mutations rouges), preuve rouge sur 10486cb7 = 59 violations ; témoins rouges. Workflows m19/m20 : seuls les chemins changent. `java-api.md` : les 93 renommages, le SPI et les alias sont documentés. »
+
+| # | Commit | Constat | Sévérité | Résolution |
+|---|---|---|---|---|
+| V-A3-12 | `34642f4d` | `check-module-boundaries.py:90` : `NS ={` a perdu son espace (même régression que V-A3-03). | remarque | **résolu** par l'orchestrateur au commit de bilan (`NS = {`). |
+
+### Bilan du lot A3 (base `10486cb7` → tête)
+
+- Packages éclatés : 14 → 0. Tests en package étranger : 45 → 0. Accès package-private entre jars : 0.
+- 4 alias CLI supprimés. A7 fermé (liste des modules confrontée au reactor).
+- 93 classes renommées, toutes documentées ; points d'entrée de processus inchangés.
+- Seules visibilités élargies : `IndexingRun.portable` et `FileFingerprint.requireSha256`, justifiées.
+- Aucune duplication ajoutée ; aucun test perdu ; golden identiques octet pour octet du premier au dernier commit.
+- Portées JaCoCo : même appartenance classe par classe (m29 scindée sans assouplissement) ; mesure inchangée ou en hausse, hormis l'oscillation connue de m25.
+- Les 7 mutations témoins de verif-archi sont rouges, A2 compris.
+
+| Constat | Statut | Correction |
+|---|---|---|
+| V-A3-01 | résolu | `7c97bff9` |
+| V-A3-02 | résolu | `7c97bff9` |
+| V-A3-03 | résolu | `7c97bff9` |
+| V-A3-04 | résolu | `34642f4d` (ligne Status de l'ADR 0044) |
+| V-A3-05 | résolu | `7c97bff9` |
+| V-A3-06 | résolu | `5eefb2ec` |
+| V-A3-07 | clos | aléa de test sur m25, sans lien avec le lot |
+| V-A3-08 | reporté hors lot | § 8 |
+| V-A3-09 | résolu | `59345b6f` (`56682e0e` l'annonçait sans le contenir) |
+| V-A3-10 | résolu | `56682e0e` |
+| V-A3-11 | résolu | `0ef46b12` ; retrait de m19/m20 reporté au § 8 |
+| V-A3-12 | résolu | commit de bilan |
+
+**Statut du lot : accepté par verif-archi, aucun constat ouvert.**
 
 ## 8. À traiter plus tard (hors périmètre)
 
