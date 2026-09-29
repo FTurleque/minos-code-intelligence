@@ -168,11 +168,11 @@ def main() -> int:
         worker_test = read(
             "minos-runtime-local/src/test/java/com/minos/runtime/local/LocalIsolatedIndexWorkerTest.java"
         )
-        hosted = read("minos-application/src/main/java/com/minos/hosted/HostedControlPlaneService.java")
-        hosted_auth = read("minos-application/src/main/java/com/minos/hosted/HostedAuthorizationService.java")
-        hosted_audit = read("minos-application/src/main/java/com/minos/hosted/HostedAuditChain.java")
+        hosted = read("minos-engine/src/main/java/com/minos/hosted/HostedControlPlaneService.java")
+        hosted_auth = read("minos-engine/src/main/java/com/minos/hosted/HostedAuthorizationService.java")
+        hosted_audit = read("minos-engine/src/main/java/com/minos/hosted/HostedAuditChain.java")
         hosted_test = read(
-            "minos-application/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"
+            "minos-engine/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"
         )
         c0_research = read("docs/research/code-intelligence-architecture-analysis.md")
 

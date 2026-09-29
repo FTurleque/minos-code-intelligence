@@ -44,15 +44,15 @@ def tool_names(source: str) -> list[str]:
 
 def main() -> int:
     try:
-        role = read("minos-domain/src/main/java/com/minos/hosted/HostedRole.java")
-        state = read("minos-domain/src/main/java/com/minos/hosted/HostedTenantState.java")
-        workspace = read("minos-domain/src/main/java/com/minos/hosted/SharedWorkspace.java")
-        token = read("minos-application/src/main/java/com/minos/hosted/HmacHostedIdentityProvider.java")
-        service = read("minos-application/src/main/java/com/minos/hosted/HostedControlPlaneService.java")
-        authorization = read("minos-application/src/main/java/com/minos/hosted/HostedAuthorizationService.java")
-        audit_chain = read("minos-application/src/main/java/com/minos/hosted/HostedAuditChain.java")
-        membership_service = read("minos-application/src/main/java/com/minos/hosted/HostedMembershipService.java")
-        workspace_service = read("minos-application/src/main/java/com/minos/hosted/HostedWorkspaceService.java")
+        role = read("minos-engine/src/main/java/com/minos/hosted/HostedRole.java")
+        state = read("minos-engine/src/main/java/com/minos/hosted/HostedTenantState.java")
+        workspace = read("minos-engine/src/main/java/com/minos/hosted/SharedWorkspace.java")
+        token = read("minos-engine/src/main/java/com/minos/hosted/HmacHostedIdentityProvider.java")
+        service = read("minos-engine/src/main/java/com/minos/hosted/HostedControlPlaneService.java")
+        authorization = read("minos-engine/src/main/java/com/minos/hosted/HostedAuthorizationService.java")
+        audit_chain = read("minos-engine/src/main/java/com/minos/hosted/HostedAuditChain.java")
+        membership_service = read("minos-engine/src/main/java/com/minos/hosted/HostedMembershipService.java")
+        workspace_service = read("minos-engine/src/main/java/com/minos/hosted/HostedWorkspaceService.java")
         key_provider = read("minos-storage-local/src/main/java/com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider.java")
         store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileHostedControlPlaneStore.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
@@ -132,9 +132,9 @@ def main() -> int:
                 "MINOS team mode is disabled")
 
         tests = {
-            "HostedModelTest.java": read("minos-domain/src/test/java/com/minos/hosted/HostedModelTest.java"),
+            "HostedModelTest.java": read("minos-engine/src/test/java/com/minos/hosted/HostedModelTest.java"),
             "FileHostedControlPlaneStoreTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileHostedControlPlaneStoreTest.java"),
-            "HostedControlPlaneServiceTest.java": read("minos-application/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"),
+            "HostedControlPlaneServiceTest.java": read("minos-engine/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"),
             "TeamCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/TeamCommandTest.java"),
             "LocalMinosTeamApiTest.java": read("minos-api/src/test/java/com/minos/api/LocalMinosTeamApiTest.java"),
             "MinosApplicationMcpBackendM27Test.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosApplicationMcpBackendM27Test.java"),

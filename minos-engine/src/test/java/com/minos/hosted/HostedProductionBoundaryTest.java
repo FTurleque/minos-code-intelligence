@@ -72,7 +72,7 @@ class HostedProductionBoundaryTest {
 
     @Test
     void facadeStaysThinAndCohesiveServicesAreRealSourceFiles(@TempDir Path ignored) throws Exception {
-        Path sourceRoot = Path.of("minos-application/src/main/java/com/minos/hosted");
+        Path sourceRoot = Path.of("minos-engine/src/main/java/com/minos/hosted");
         String facade = Files.readString(sourceRoot.resolve("HostedControlPlaneService.java"));
         assertTrue(facade.lines().count() <= 260L, "hosted facade must remain thin");
         for (String component : List.of(
