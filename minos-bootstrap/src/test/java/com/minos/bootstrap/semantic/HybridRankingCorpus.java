@@ -69,16 +69,17 @@ final class HybridRankingCorpus {
     /** Écrit les sources sous {@code root}, enregistre le projet et publie son snapshot. */
     static RegisteredProject install(MinosApplication application, Path root) throws IOException {
         RegisteredProject project = application.projectRegistry().registerProject(root, PROJECT);
-        publish(application, root, project, "hybrid-ranking-snapshot", "");
+        publish(application, root, project, "hybrid-ranking-snapshot", 0);
         return project;
     }
 
     /**
-     * Réécrit les sources (identiques d'une fois sur l'autre) et publie un snapshot du corpus. Un {@code salt}
-     * non vide change le nom de chaque symbole, donc le contenu de ses documents, sans changer leur nombre.
+     * Réécrit les sources (identiques d'une fois sur l'autre) et publie un snapshot du corpus. Un
+     * {@code nameShift} non nul décale dans le vocabulaire le mot qui nomme chaque symbole : les termes de ses
+     * documents changent, donc leurs scores, sans que leur nombre change.
      */
     static void publish(MinosApplication application, Path root, RegisteredProject project, String snapshotId,
-                        String salt) throws IOException {
+                        int nameShift) throws IOException {
         Random random = new Random(0xA6L);
         List<Symbol> symbols = new ArrayList<>();
         String projectId = project.id().toString();
@@ -98,9 +99,8 @@ final class HybridRankingCorpus {
             Files.write(source, lines, StandardCharsets.UTF_8);
             for (int index = 0; index < SYMBOLS_PER_FILE; index++) {
                 int line = 3 + index * 6;
-                String name = WORDS[random.nextInt(WORDS.length)].replaceAll("[^\\p{L}\\p{N}_]", "") + index;
+                String name = WORDS[(random.nextInt(WORDS.length) + nameShift) % WORDS.length].replaceAll("[^\\p{L}\\p{N}_]", "") + index;
                 if (name.length() == 1) name = "s" + name;
-                name = name + salt;
                 String id = "sym-" + file + "-" + index;
                 symbols.add(new Symbol(id, "key:" + fileId + "#" + name + "@" + index, SymbolIdentityQuality.CANONICAL,
                         projectId, "module-" + (file % 5), fileId, null,
