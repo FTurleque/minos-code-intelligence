@@ -1,4 +1,4 @@
-package com.minos.git;
+package com.minos.integration.git;
 
 import org.eclipse.jgit.transport.http.HttpConnection;
 import org.eclipse.jgit.transport.http.HttpConnectionFactory;

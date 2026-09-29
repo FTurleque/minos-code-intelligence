@@ -1,4 +1,4 @@
-package com.minos.git;
+package com.minos.integration.git;
 
 import java.time.Duration;
 

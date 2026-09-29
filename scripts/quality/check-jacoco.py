@@ -79,8 +79,8 @@ SCOPES = {
     },
     "m25-remote-distributed-indexing": {
         "prefixes": (
-            "com/minos/remote/", "com/minos/git/JGitRemoteRepositoryMaterializer", "com/minos/git/JGitCloneDeadline",
-            "com/minos/git/RemoteRepositoryCachePolicy", "com/minos/runtime/DistributedArtifactBundleStore",
+            "com/minos/remote/", "com/minos/integration/git/JGitRemoteRepositoryMaterializer", "com/minos/integration/git/JGitCloneDeadline",
+            "com/minos/integration/git/RemoteRepositoryCachePolicy", "com/minos/runtime/DistributedArtifactBundleStore",
             "com/minos/runtime/DistributedArtifactCachePolicy", "com/minos/runtime/DistributedIndexerExecutor",
             "com/minos/runtime/LocalIsolatedIndexWorker", "com/minos/runtime/WorkerSandboxBackend",
             "com/minos/runtime/WorkerSandboxQualification", "com/minos/cli/LocalRemoteIndexOperations",
@@ -91,7 +91,7 @@ SCOPES = {
         "line": 0.70,
         "branch": 0.50,
         "prefixMinimums": {
-            "com/minos/git/JGitCloneDeadline": {"line": 0.48, "branch": 0.42},
+            "com/minos/integration/git/JGitCloneDeadline": {"line": 0.48, "branch": 0.42},
             # LocalRemoteIndexOperations owns the RemoteMaterialization release lifecycle (AUDIT-01):
             # a per-class floor stops that specific coverage from being able to hide behind the
             # rest of this scope's well-covered siblings while quietly regressing itself.

@@ -287,3 +287,4 @@ Seuls changent des packages internes : un code qui importait directement l'une d
 | Ancien package (module) | Nouveau package | Classes |
 |---|---|---|
 | `com.minos.adapter.scip` (`minos-engine`) | `com.minos.orchestration` | `ScipSymbolSnapshotRequest`, `ScipSymbolSnapshotReport` |
+| `com.minos.git` (`minos-integration-git`) | `com.minos.integration.git` | `GitIntelligenceService`, `JGitCloneDeadline`, `JGitRemoteGitClient`, `JGitRemoteRepositoryMaterializer`, `RemoteCloneBudget`, `RemoteRepositoryCachePolicy` (le port `com.minos.git.GitIntelligence` ne bouge pas) |

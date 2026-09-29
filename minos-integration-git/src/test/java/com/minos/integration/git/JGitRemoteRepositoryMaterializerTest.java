@@ -1,4 +1,4 @@
-package com.minos.git;
+package com.minos.integration.git;
 
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;

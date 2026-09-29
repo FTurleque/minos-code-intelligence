@@ -1,5 +1,6 @@
-package com.minos.git;
+package com.minos.integration.git;
 
+import com.minos.git.GitIntelligence;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;

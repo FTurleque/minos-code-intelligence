@@ -1,4 +1,4 @@
-package com.minos.git;
+package com.minos.integration.git;
 
 import org.eclipse.jgit.api.Git;
 import org.junit.jupiter.api.Test;

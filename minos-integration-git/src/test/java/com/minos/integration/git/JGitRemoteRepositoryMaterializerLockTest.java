@@ -1,4 +1,4 @@
-package com.minos.git;
+package com.minos.integration.git;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

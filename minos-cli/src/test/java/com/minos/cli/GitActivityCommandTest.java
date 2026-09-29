@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.git.GitIntelligenceService;
+import com.minos.integration.git.GitIntelligenceService;
 import com.minos.output.SymbolOutputFormat;
 import org.junit.jupiter.api.Test;
 

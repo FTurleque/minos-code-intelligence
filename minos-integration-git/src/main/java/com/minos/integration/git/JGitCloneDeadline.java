@@ -1,4 +1,4 @@
-package com.minos.git;
+package com.minos.integration.git;
 
 import org.eclipse.jgit.transport.Transport;
 import org.eclipse.jgit.transport.TransportHttp;

@@ -46,10 +46,10 @@ def main() -> int:
         request = read("minos-engine/src/main/java/com/minos/remote/RemoteRepositoryRequest.java")
         manifest = read("minos-engine/src/main/java/com/minos/remote/DistributedArtifactManifest.java")
         worker_contract = read("minos-engine/src/main/java/com/minos/remote/DistributedIndexing.java")
-        cache_policy = read("minos-integration-git/src/main/java/com/minos/git/RemoteRepositoryCachePolicy.java")
-        materializer = read("minos-integration-git/src/main/java/com/minos/git/JGitRemoteRepositoryMaterializer.java")
-        clone_budget = read("minos-integration-git/src/main/java/com/minos/git/RemoteCloneBudget.java")
-        git_client = read("minos-integration-git/src/main/java/com/minos/git/JGitRemoteGitClient.java")
+        cache_policy = read("minos-integration-git/src/main/java/com/minos/integration/git/RemoteRepositoryCachePolicy.java")
+        materializer = read("minos-integration-git/src/main/java/com/minos/integration/git/JGitRemoteRepositoryMaterializer.java")
+        clone_budget = read("minos-integration-git/src/main/java/com/minos/integration/git/RemoteCloneBudget.java")
+        git_client = read("minos-integration-git/src/main/java/com/minos/integration/git/JGitRemoteGitClient.java")
         artifact_policy = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedArtifactCachePolicy.java")
         artifact_limits = read("minos-engine/src/main/java/com/minos/orchestration/IndexArtifactLimits.java")
         artifact_store = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedArtifactBundleStore.java")
@@ -134,7 +134,7 @@ def main() -> int:
         forbid("LocalRemoteIndexOperations.java", remote_operations,
                "import com.minos.runtime.DistributedArtifactBundleStore",
                "import com.minos.runtime.DistributedIndexerExecutor",
-               "import com.minos.git.JGitRemoteRepositoryMaterializer")
+               "import com.minos.integration.git.JGitRemoteRepositoryMaterializer")
         require_facts("LocalRemoteIndexingRuntime.java", remote_runtime,
                       "new DistributedArtifactBundleStore(home)", "new DistributedIndexerExecutor(",
                       "new LocalIsolatedIndexWorker(", "WorkerSandboxBackends.selectForUntrustedCode(home)",
@@ -159,7 +159,7 @@ def main() -> int:
 
         tests = {
             "RemoteRepositoryRequestTest.java": read("minos-engine/src/test/java/com/minos/remote/RemoteRepositoryRequestTest.java"),
-            "JGitRemoteRepositoryMaterializerTest.java": read("minos-integration-git/src/test/java/com/minos/git/JGitRemoteRepositoryMaterializerTest.java"),
+            "JGitRemoteRepositoryMaterializerTest.java": read("minos-integration-git/src/test/java/com/minos/integration/git/JGitRemoteRepositoryMaterializerTest.java"),
             "DistributedArtifactManifestTest.java": read("minos-engine/src/test/java/com/minos/remote/DistributedArtifactManifestTest.java"),
             "DistributedArtifactBundleStoreTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/DistributedArtifactBundleStoreTest.java"),
             "LocalIsolatedIndexWorkerTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/LocalIsolatedIndexWorkerTest.java"),

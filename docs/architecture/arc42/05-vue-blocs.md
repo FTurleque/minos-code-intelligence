@@ -108,7 +108,7 @@ C4Container
 - **Types clés** : `GitIntelligenceService`.
 - **Interfaces** : implémente le port Git de `minos-engine`.
 - **Dépendances** : `minos-engine`, `org.eclipse.jgit 7.6`.
-- **Sources** : `minos-integration-git/src/main/java/com/minos/git/`.
+- **Sources** : `minos-integration-git/src/main/java/com/minos/integration/git/`.
 
 ### minos-application
 - **Responsabilité** : services applicatifs partagés — architecture (`ArchitectureIntelligenceService`), impact (`ImpactAnalysisService`), recherche de code (`CodeSearchService`), indexation incrémentale, output, registry, workspace.

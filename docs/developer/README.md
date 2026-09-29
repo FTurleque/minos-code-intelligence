@@ -77,7 +77,8 @@ flowchart TB
 | `com.minos.api` | contrats Java publics versionnés |
 | `com.minos.cli` | exposition CLI stable |
 | `com.minos.mcp` | exposition MCP STDIO read-only |
-| `com.minos.git` | faits Git via JGit |
+| `com.minos.git` | port Git du moteur (`GitIntelligence`) |
+| `com.minos.integration.git` | faits Git via JGit (adaptateur `minos-integration-git`) |
 | `com.minos.workspace` | intelligence cross-repository |
 | `com.minos.integration.nexus` | projections versionnées vers NEXUS |
 | `com.minos.output` | rendus texte/JSON |

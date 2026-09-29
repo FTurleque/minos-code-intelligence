@@ -1,4 +1,4 @@
-package com.minos.git;
+package com.minos.integration.git;
 
 import com.minos.remote.RemoteRepositoryRequest;
 import com.minos.remote.RemoteRepositoryRequest.RemoteHost;
