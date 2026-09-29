@@ -12,3 +12,6 @@ minos-app/src/test/resources/characterization/*.golden text eol=lf
 
 # A6 snapshot-format fixtures are raw bytes written by an earlier MINOS: never convert them.
 **/src/test/resources/snapshot-formats/** binary
+
+# A6 hybrid-ranking reference: compared byte for byte by HybridRankingEquivalenceTest, pinned to LF.
+minos-bootstrap/src/test/resources/hybrid-ranking/*.tsv text eol=lf
