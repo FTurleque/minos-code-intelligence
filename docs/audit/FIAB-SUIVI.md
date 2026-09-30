@@ -10,7 +10,7 @@
 
 | Lot | Contenu | Statut | Commits |
 |---|---|---|---|
-| 1 — R4, R5, R7 | Promotion reprise bornée aux cibles courantes, rétention d'un run reprenable (parcours tronqué, run concurrent, durée de vie), réparation « snapshot stable » alignée | en cours | § 4 |
+| 1 — R4, R5, R7 | Promotion reprise bornée aux cibles courantes, rétention d'un run reprenable (parcours tronqué, run concurrent, durée de vie), réparation « snapshot stable » alignée | livré, en attente du verdict final de `verif-fiab` | `cdeac459` … (§ 4) |
 | 2 — P1, Q3, Q4 | Un seul régime de verrous ; lecture d'état sans bail exclusif | à faire | — |
 | 3 — R2, R3 | Propriété des cgroups indépendante de l'horloge murale | à faire | — |
 | 4 — Q5, R6 | Interruption de bout en bout, confinement du chemin d'artefact | à faire | — |
@@ -124,7 +124,7 @@ Un test existant a été remplacé parce qu'il figeait le défaut : `resumableRu
 
 ### 5.2 Tests de concurrence (rejoués 50 fois)
 
-À compléter.
+Un seul test de concurrence dans ce lot : `RunDirectoryRetentionTest.anInFlightRunOfAnotherIndexationSurvivesEveryConcurrentPruneWhileItIsBeingWritten`. Deux threads (un « run en cours d'une autre indexation » qui écrit 20 artefacts dans son répertoire marqué, une « seconde indexation » qui enchaîne 20 `prune` sous pression de budget et parcours tronqué) sont lancés sur une `CyclicBarrier` et attendus par `Future.get` ; aucun `Thread.sleep`, aucune attente calibrée. Le test boucle lui-même sur **50 tours** (constante `CONCURRENCY_ROUNDS`, répertoire et barrière neufs à chaque tour). Rejeu de l'exécution complète de la classe par 50 lancements Maven successifs (`-Dsurefire.rerunFailingTestsCount=0`, script `replay.sh` du scratchpad, arbre `fiab-base` sur le commit `eb0b65cb`) : **50 passages sur 50, 0 échec**, soit 2 500 tours de barrière sans échec. Les autres tests du lot (R4, R7, `RunDirectoryHoldTest`, bornes de rétention) sont déterministes et mono-thread : ils n'ont aucune synchronisation à prouver.
 
 ### 5.3 Comptes AVANT / APRÈS
 
@@ -144,11 +144,25 @@ Sites qui décident qu'un répertoire de run est supprimable : `RunDirectoryRete
 
 Règles de durée de vie d'un répertoire de run : **2 avant** (7 j ordinaire / 24 h marqué, deux branches indépendantes de `prune`), **1 après** (`Policy.lifetime`, appelée par `prune` ; aucune autre durée n'y est comparée). Les trois constantes de 24 h de l'écart (f) de l'ADR restent alignées à la main (un test de chaque côté en affirme la valeur) ; ce n'est pas ce lot.
 
-Calcul d'une clé de cible : `checkpointFor` et `IndexingResumePlanner.reusable` recalculaient chacun `IndexingRun.targetKey` ; `targetKey`/`executionKey` sont désormais les seuls appelants.
+Calcul d'une clé de cible : `checkpointFor` en construisait deux à la main (cible courante, exécution du run) ; R4 en avait besoin d'une troisième fois. `targetKey` et `executionKey` (dans `IndexingResumePlanner`) sont désormais les seuls appelants de `IndexingRun.targetKey`, partagés par `checkpointFor` et `stagedSnapshotCoversThePlan` : le nombre de copies du calcul n'a pas augmenté.
 
 ### 5.4 Fin de lot
 
-À compléter.
+`./mvnw clean verify` complet dans le worktree (journal dans le scratchpad, pas dans `target/`) sur `d5e808ec` : **BUILD SUCCESS**, 15 modules, 11 min 40, **1 686 tests exécutés, 0 échec, 0 erreur, 46 ignorés** (hypothèses `Assumptions` préexistantes, aucun `@Disabled` ajouté ; 1 671 à la base, +15 : `RunDirectoryHoldTest` 4, `RunDirectoryRetentionTest` +7 (8 ajoutés, 1 remplacé), `IndexingResumeTest` +2, `InterruptedRunRecoveryTest` +2).
+
+| Gate | Base `017e339d` | Fin de lot |
+|---|---|---|
+| `check-module-boundaries.py` | `modules=14, sources=504, packages=45` | identique |
+| `check-current-docs.py`, `product-facts.py --check` | SUCCESS | SUCCESS |
+| `check-milestone-artifact-references.py` | `scripts checked=95` | `scripts checked=95` |
+| `check-minos-01.py`, `check-post-mne.py` | SUCCESS | SUCCESS |
+| `check-jacoco.py` | 26 PASS, seule rouge `m24-polyglot-provider-platform` (line 0,228 < 0,28, préexistante, Windows) | 26 PASS, **même unique rouge**, mêmes chiffres |
+| `critical-orchestration` (line / branch) | 0,888 / 0,759 | 0,891 / 0,773 |
+| `resume-orchestration` (line / branch) | 0,903 / 0,782 | 0,906 / 0,787 |
+
+Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD -- minos-app/src/test/resources scripts` vide) ; aucun script de `scripts/` assoupli.
+
+**Linux.** WSL Ubuntu (Java 24), module `minos-engine` (paquet `com.minos.orchestration`, 119 tests) et `minos-runtime-local` (`RunDirectoryRetentionTest` 16 dont 1 ignoré : la jonction NTFS, propre à Windows ; `FileResumableRunMarkersTest` 3) : verts. Le `clean verify` complet et le rejeu des 50 lancements n'ont été faits que sous Windows.
 
 ## 6. Constats de verif-fiab
 
