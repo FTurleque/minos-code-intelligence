@@ -541,14 +541,14 @@ final class IndexingRunExecutor {
         boolean interruption = isInterruption(failure);
         try {
             if (interruption) {
-                IndexingRun interrupted = interruptedRun(context, completedAt);
+                IndexingRun interrupted = interruptedRun(context, completedAt, "");
                 if (!context.committed && interrupted.offersResume()) {
                     return persistInterruption(context, interrupted, failure, completedAt);
                 }
             }
             return persistFailure(context, failure, completedAt);
         } finally {
-            if (flagRaised || interruption) Thread.currentThread().interrupt();
+            if (flagRaised || interruption || context.interruptedWhilePersisting) Thread.currentThread().interrupt();
         }
     }
 
@@ -566,7 +566,7 @@ final class IndexingRunExecutor {
     }
 
     /** The run as it would be left by an interruption now; whether it is offered for resume is its own rule. */
-    private static IndexingRun interruptedRun(RunContext context, Instant completedAt) {
+    private static IndexingRun interruptedRun(RunContext context, Instant completedAt, String note) {
         return new IndexingRun(
                 context.runId,
                 context.projectId,
@@ -580,7 +580,7 @@ final class IndexingRunExecutor {
                 context.previous.activeSnapshotId(),
                 Optional.of("indexing run interrupted by thread interruption; resumable targets="
                         + context.checkpointCount() + "/" + context.totalTargets()
-                        + context.staged.map(id -> ", staged snapshot retained").orElse("")),
+                        + context.staged.map(id -> ", staged snapshot retained").orElse("") + note),
                 IndexingRun.CURRENT_FORMAT_VERSION,
                 context.trace);
     }
@@ -589,17 +589,17 @@ final class IndexingRunExecutor {
             RunContext context, IndexingRun interrupted, Exception failure, Instant completedAt) {
         IndexStateStore stateStore = context.ports.stateStore();
         try {
-            context.ports.markers().mark(context.runId);
+            holdAgainstRetention(context);
         } catch (IOException | RuntimeException markerFailure) {
             AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
             failure.addSuppressed(markerFailure);
             return persistFailure(context, failure, completedAt);
         }
-        persist(() -> stateStore.saveRun(interrupted), failure);
+        boolean written = persist(context, () -> stateStore.saveRun(interrupted), failure);
         Availability availability = context.previous.activeSnapshotId().isPresent()
                 ? Availability.STALE
                 : Availability.FAILED;
-        persist(() -> stateStore.saveProjectState(new ProjectIndexState(
+        written &= persist(context, () -> stateStore.saveProjectState(new ProjectIndexState(
                 context.projectId,
                 availability,
                 context.previous.activeSnapshotId(),
@@ -607,7 +607,30 @@ final class IndexingRunExecutor {
                 completedAt,
                 Optional.of("indexing run interrupted; resumable run offered"),
                 Optional.of(context.runId))), failure);
-        return interrupted;
+        // What the caller is told is what the store holds: a state that could not be written is said so, and the
+        // next run reconciles it (its checkpoints and its marker are on disk).
+        return written ? interrupted : interruptedRun(context, completedAt, UNWRITTEN_INTERRUPTION_NOTE);
+    }
+
+    /** {@link #persist} and {@link #holdAgainstRetention} write again at most this many times under interruption. */
+    private static final int PERSISTENCE_ATTEMPTS_UNDER_INTERRUPTION = 3;
+    private static final String UNWRITTEN_INTERRUPTION_NOTE =
+            "; the interrupted state could not be written, the next indexing reconciles it";
+
+    /**
+     * Holds the run directory against retention for the interrupted run. A second interruption closes the marker's
+     * file channel like any other write (V-L4-02): the hold is made again, flag cleared, a bounded number of times.
+     */
+    private static void holdAgainstRetention(RunContext context) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            context.interruptedWhilePersisting |= Thread.interrupted();
+            try {
+                context.ports.markers().mark(context.runId);
+                return;
+            } catch (IOException failure) {
+                if (attempt >= PERSISTENCE_ATTEMPTS_UNDER_INTERRUPTION || !isInterruption(failure)) throw failure;
+            }
+        }
     }
 
     private static IndexingRun persistFailure(RunContext context, Exception failure, Instant completedAt) {
@@ -619,6 +642,7 @@ final class IndexingRunExecutor {
         } else {
             persistUncommittedFailure(context, failed, message, completedAt, failure);
         }
+        context.interruptedWhilePersisting |= Thread.interrupted();
         AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
         return failed;
     }
@@ -657,14 +681,14 @@ final class IndexingRunExecutor {
             Exception original
     ) {
         IndexStateStore stateStore = context.ports.stateStore();
-        persist(() -> stateStore.saveProjectState(new ProjectIndexState(
+        persist(context, () -> stateStore.saveProjectState(new ProjectIndexState(
                 context.projectId,
                 Availability.READY,
                 activeAfter,
                 Optional.of(context.runId),
                 completedAt,
                 Optional.of("active snapshot committed; run metadata recovery required: " + message))), original);
-        persist(() -> stateStore.saveRun(failed), original);
+        persist(context, () -> stateStore.saveRun(failed), original);
     }
 
     private static void persistUncommittedFailure(
@@ -675,11 +699,11 @@ final class IndexingRunExecutor {
             Exception original
     ) {
         IndexStateStore stateStore = context.ports.stateStore();
-        persist(() -> stateStore.saveRun(failed), original);
+        persist(context, () -> stateStore.saveRun(failed), original);
         Availability availability = context.previous.activeSnapshotId().isPresent()
                 ? Availability.STALE
                 : Availability.FAILED;
-        persist(() -> stateStore.saveProjectState(new ProjectIndexState(
+        persist(context, () -> stateStore.saveProjectState(new ProjectIndexState(
                 context.projectId,
                 availability,
                 context.previous.activeSnapshotId(),
@@ -770,8 +794,25 @@ final class IndexingRunExecutor {
                 IndexingRun.CURRENT_FORMAT_VERSION, context.trace);
     }
 
-    private static void persist(Runnable action, Exception original) {
-        try { action.run(); } catch (RuntimeException failure) { original.addSuppressed(failure); }
+    /**
+     * One write of the terminal state. A write that fails because the thread was interrupted again (the file
+     * channel closes on the raised flag, V-L4-02) is made again with the flag cleared, a bounded number of times;
+     * any other failure, and the last one, is kept as suppressed on the original failure and reported as
+     * {@code false}. A flag cleared on the way is replayed when the terminal outcome is over.
+     */
+    private static boolean persist(RunContext context, Runnable action, Exception original) {
+        for (int attempt = 1; ; attempt++) {
+            context.interruptedWhilePersisting |= Thread.interrupted();
+            try {
+                action.run();
+                return true;
+            } catch (RuntimeException failure) {
+                if (attempt >= PERSISTENCE_ATTEMPTS_UNDER_INTERRUPTION || !isInterruption(failure)) {
+                    original.addSuppressed(failure);
+                    return false;
+                }
+            }
+        }
     }
 
     private static String portable(Path path) { return path == null ? "" : path.normalize().toString().replace('\\', '/'); }
@@ -846,6 +887,7 @@ final class IndexingRunExecutor {
         private Phase phase = Phase.PROVIDER_EXECUTION;
         private boolean committed;
         private boolean durabilityAcknowledgementPending;
+        private boolean interruptedWhilePersisting;
         private int withheldCheckpoints;
 
         private RunContext(
