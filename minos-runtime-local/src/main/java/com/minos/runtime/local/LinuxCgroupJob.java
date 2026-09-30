@@ -192,20 +192,25 @@ final class LinuxCgroupJob implements AutoCloseable {
      * <p>This sweep does not journal what it leaves intact; {@link #reclaimAndReportStaleJobs} does.</p>
      */
     static StaleSweep reclaimStaleJobs(Path root) throws IOException {
+        return reclaimStaleJobs(root, SweepContext.system());
+    }
+
+    /** Package-private variant with injectable ownership evidence, removal and bound, for deterministic tests. */
+    static StaleSweep reclaimStaleJobs(Path root, SweepContext context) throws IOException {
         List<String> reclaimed = new ArrayList<>();
         List<Residue> leftIntact = new ArrayList<>();
         try (java.util.stream.Stream<Path> children = Files.list(root)) {
-            for (Path child : children.limit(MAX_STALE_JOB_SWEEP).toList()) {
+            for (Path child : children.limit(context.maximumEntries()).toList()) {
                 if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) continue;
                 String name = String.valueOf(child.getFileName());
                 if (!name.startsWith("minos-")) continue;
                 if (CONTROLLER_DIRECTORY.equals(name)) continue;
-                CgroupJobOwnership.Verdict verdict = reclaimStaleJob(child, name);
+                CgroupJobOwnership.Verdict verdict = reclaimStaleJob(child, name, context);
                 if (verdict.reclaim()) reclaimed.add(name);
                 else leftIntact.add(new Residue(name, verdict.reason()));
             }
         }
-        return new StaleSweep(List.copyOf(reclaimed), List.copyOf(leftIntact));
+        return new StaleSweep(List.copyOf(reclaimed), List.copyOf(leftIntact), 0);
     }
 
     /**
@@ -219,7 +224,12 @@ final class LinuxCgroupJob implements AutoCloseable {
      * is bounded to {@link #MAX_REPORTED_RESIDUES} named residues; the others are counted.</p>
      */
     static StaleSweep reclaimAndReportStaleJobs(Path root) throws IOException {
-        StaleSweep sweep = reclaimStaleJobs(root);
+        return reclaimAndReportStaleJobs(root, SweepContext.system());
+    }
+
+    /** Package-private variant with injectable ownership evidence, removal and bound, for deterministic tests. */
+    static StaleSweep reclaimAndReportStaleJobs(Path root, SweepContext context) throws IOException {
+        StaleSweep sweep = reclaimStaleJobs(root, context);
         if (!sweep.residues().isEmpty()) {
             LOGGER.log(System.Logger.Level.WARNING, residueReport(root, sweep.residues()));
         }
@@ -246,21 +256,21 @@ final class LinuxCgroupJob implements AutoCloseable {
     }
 
     /** Applies the ownership decision to one discovered cgroup and reclaims it when the decision says so. */
-    private static CgroupJobOwnership.Verdict reclaimStaleJob(Path child, String name) {
+    private static CgroupJobOwnership.Verdict reclaimStaleJob(Path child, String name, SweepContext context) {
         LinuxCgroupJob stale = new LinuxCgroupJob(child);
         Optional<CgroupJobOwnership.Mark> mark = CgroupJobOwnership.Mark.parse(name);
         CgroupJobOwnership.Verdict verdict = CgroupJobOwnership.decide(
-                mark, CgroupJobOwnership.CURRENT, CgroupJobOwnership.OwnerLookup.SYSTEM, stale::aliveProcesses);
+                mark, context.self(), context.owners().apply(child), stale::aliveProcesses);
         if (!verdict.reclaim()) {
             // Reported once, together with every other residue, by reclaimAndReportStaleJobs.
             return verdict;
         }
         LOGGER.log(System.Logger.Level.DEBUG, "MINOS reclaims stale cgroup " + name + ": " + verdict.reason());
         if (stale.aliveProcesses() > 0L) {
-            stale.kill();
+            stale.kill(context.killPolls(), context.killPollMillis());
         }
         try {
-            Files.deleteIfExists(child);
+            context.removal().remove(child);
         } catch (IOException exception) {
             LOGGER.log(System.Logger.Level.WARNING, "MINOS could not remove already-empty stale cgroup " + name
                     + ": " + describeFailure(exception, child.getParent()));
@@ -268,8 +278,46 @@ final class LinuxCgroupJob implements AutoCloseable {
         return verdict;
     }
 
+    /** Removes a cgroup directory; the kernel refuses while a process or a child cgroup remains in it. */
+    @FunctionalInterface
+    interface CgroupRemoval {
+
+        CgroupRemoval KERNEL = Files::deleteIfExists;
+
+        void remove(Path cgroup) throws IOException;
+    }
+
+    /**
+     * Everything a sweep consults besides the directory it walks: the mark of the sweeping process, how
+     * the process table is read for a given cgroup, how a cgroup is removed and how many entries are
+     * examined. {@link #system()} is the production wiring; tests inject each part so that the decision
+     * is exercised on any host.
+     */
+    record SweepContext(
+            CgroupJobOwnership.Mark self,
+            java.util.function.Function<Path, CgroupJobOwnership.OwnerLookup> owners,
+            CgroupRemoval removal,
+            long maximumEntries,
+            int killPolls,
+            long killPollMillis) {
+
+        SweepContext {
+            Objects.requireNonNull(self, "self");
+            Objects.requireNonNull(owners, "owners");
+            Objects.requireNonNull(removal, "removal");
+            if (maximumEntries < 1L) throw new IllegalArgumentException("maximumEntries must be positive");
+            if (killPolls < 1) throw new IllegalArgumentException("killPolls must be positive");
+            if (killPollMillis < 0L) throw new IllegalArgumentException("killPollMillis must not be negative");
+        }
+
+        static SweepContext system() {
+            return new SweepContext(CgroupJobOwnership.CURRENT, CgroupJobOwnership.OwnerLookup::system,
+                    CgroupRemoval.KERNEL, MAX_STALE_JOB_SWEEP, MAX_KILL_POLLS, KILL_POLL_MILLIS);
+        }
+    }
+
     /** Outcome of one stale sweep, by cgroup name (never a path), for diagnostics and tests. */
-    record StaleSweep(List<String> reclaimed, List<Residue> residues) {
+    record StaleSweep(List<String> reclaimed, List<Residue> residues, int notExamined) {
         StaleSweep {
             reclaimed = List.copyOf(reclaimed);
             residues = List.copyOf(residues);

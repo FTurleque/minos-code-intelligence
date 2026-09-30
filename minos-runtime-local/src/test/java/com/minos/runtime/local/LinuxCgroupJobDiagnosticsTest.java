@@ -1,6 +1,5 @@
 package com.minos.runtime.local;
 
-import com.minos.runtime.local.CgroupJobOwnership.Mark;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -14,6 +13,14 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
+import static com.minos.runtime.local.CgroupSweepFixtures.KERNEL_LIKE;
+import static com.minos.runtime.local.CgroupSweepFixtures.OWNER;
+import static com.minos.runtime.local.CgroupSweepFixtures.SELF;
+import static com.minos.runtime.local.CgroupSweepFixtures.cgroup;
+import static com.minos.runtime.local.CgroupSweepFixtures.contextWithPlainRemoval;
+import static com.minos.runtime.local.CgroupSweepFixtures.context;
+import static com.minos.runtime.local.CgroupSweepFixtures.nobodyIsAlive;
+import static com.minos.runtime.local.CgroupSweepFixtures.onlyAlive;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -33,66 +40,103 @@ class LinuxCgroupJobDiagnosticsTest {
     @Test
     void everyResidueLeftIntactIsReportedInOneWarningPerQualification(@TempDir Path root) throws Exception {
         String unmarked = "minos-legacy-live";
-        String otherInstance = Mark.of(ProcessHandle.current(), "0f1e2d3c").markedName("minos-provider-other");
-        long pid = ProcessHandle.current().pid();
-        long start = ProcessHandle.current().info().startInstant().orElseThrow().toEpochMilli();
-        String legacyMark = "minos-provider-legacy.own-" + pid + "-" + (start + 60_000L) + "-0e1d2c3b";
+        String otherInstance = OWNER.markedName("minos-provider-other");
+        String legacyMark = "minos-provider-legacy.own-" + OWNER.pid() + "-1700000160000-0e1d2c3b";
         for (String name : List.of(unmarked, otherInstance, legacyMark)) {
-            populated(root, name);
+            cgroup(root, name, "424242\n");
         }
-        Path empty = Files.createDirectory(root.resolve("minos-empty-unmarked"));
-        Files.writeString(empty.resolve(LinuxCgroupJob.PROCS_FILE), "", StandardCharsets.UTF_8);
+        cgroup(root, "minos-empty-unmarked", "");
 
         List<LogRecord> records = new ArrayList<>();
-        LinuxCgroupJob.StaleSweep sweep = capture(records, () -> LinuxCgroupJob.reclaimAndReportStaleJobs(root));
+        LinuxCgroupJob.StaleSweep sweep = capture(records, () -> LinuxCgroupJob.reclaimAndReportStaleJobs(
+                root, context(onlyAlive(OWNER.pid(), OWNER.start()))));
 
         assertEquals(3, sweep.residues().size(), String.valueOf(sweep));
         assertEquals(List.of("minos-empty-unmarked"), sweep.reclaimed());
-        // A temporary directory is never "already empty" for rmdir: its reclamation logs its own deletion
-        // failure, which is not a residue report.
         List<LogRecord> reports = records.stream()
-                .filter(r -> sweep.leftIntact().stream().anyMatch(r.getMessage()::contains))
+                .filter(r -> r.getLevel() == Level.WARNING)
                 .toList();
         assertEquals(1, reports.size(), "exactly one aggregated report per qualification: " + messages(records));
-        assertEquals(Level.WARNING, reports.getFirst().getLevel(), messages(reports));
         String warning = reports.getFirst().getMessage();
         for (LinuxCgroupJob.Residue residue : sweep.residues()) {
             assertTrue(warning.contains(residue.name() + " (" + residue.reason() + ")"),
                     "the WARNING must name each residue with its reason: " + warning);
         }
-        assertTrue(warning.contains("3 "), warning);
+        assertTrue(warning.contains("left 3 cgroup(s) intact"), warning);
         assertFalse(warning.contains("minos-empty-unmarked"), "a reclaimed cgroup is not a residue: " + warning);
         assertNoAbsolutePath(records, root);
     }
 
     @Test
-    void aSweepThatLeavesNothingBehindReportsNothing(@TempDir Path root) throws Exception {
-        Path empty = Files.createDirectory(root.resolve("minos-empty-unmarked"));
-        Files.writeString(empty.resolve(LinuxCgroupJob.PROCS_FILE), "", StandardCharsets.UTF_8);
+    void aSweepThatLeavesNothingBehindReportsNoResidue(@TempDir Path root) throws Exception {
+        cgroup(root, "minos-empty-unmarked", "");
 
         List<LogRecord> records = new ArrayList<>();
-        LinuxCgroupJob.StaleSweep sweep = capture(records, () -> LinuxCgroupJob.reclaimAndReportStaleJobs(root));
+        LinuxCgroupJob.StaleSweep sweep = capture(records, () -> LinuxCgroupJob.reclaimAndReportStaleJobs(
+                root, context(nobodyIsAlive())));
 
         assertEquals(List.of("minos-empty-unmarked"), sweep.reclaimed());
         assertEquals(List.of(), sweep.residues());
-        assertTrue(records.stream().noneMatch(r -> r.getLevel().intValue() >= Level.WARNING.intValue()
-                        && !r.getMessage().contains("could not remove")),
-                "no residue, no report: " + messages(records));
+        assertTrue(records.stream().noneMatch(r -> r.getLevel().intValue() >= Level.WARNING.intValue()),
+                "no residue, no warning: " + messages(records));
+    }
+
+    /** A sweep that kills or removes something says so, by name and never by path: the operator sees what it did. */
+    @Test
+    void whatASweepReclaimsIsJournaledAtInfoWithoutAnAbsolutePath(@TempDir Path root) throws Exception {
+        cgroup(root, "minos-empty-unmarked", "");
+        cgroup(root, OWNER.markedName("minos-orphan"), "");
+
+        List<LogRecord> records = new ArrayList<>();
+        LinuxCgroupJob.StaleSweep sweep = capture(records, () -> LinuxCgroupJob.reclaimAndReportStaleJobs(
+                root, context(nobodyIsAlive())));
+
+        assertEquals(2, sweep.reclaimed().size(), sweep.toString());
+        List<LogRecord> summaries = records.stream().filter(r -> r.getLevel() == Level.INFO).toList();
+        assertEquals(1, summaries.size(), "one summary per qualification: " + messages(records));
+        assertTrue(summaries.getFirst().getMessage().contains("reclaimed 2 stale cgroup(s)"), messages(summaries));
+        for (String name : sweep.reclaimed()) {
+            assertTrue(summaries.getFirst().getMessage().contains(name), messages(summaries));
+        }
+        assertNoAbsolutePath(records, root);
     }
 
     @Test
-    void aDeletionFailureIsReportedByNameWithoutAnAbsolutePath(@TempDir Path root) throws Exception {
+    void aDeletionFailureIsReportedAsAResidueByNameWithoutAnAbsolutePath(@TempDir Path root) throws Exception {
         Path stale = Files.createDirectory(root.resolve("minos-empty-with-residue"));
         Files.writeString(stale.resolve(LinuxCgroupJob.PROCS_FILE), "", StandardCharsets.UTF_8);
         Files.writeString(stale.resolve("unexpected-residue"), "x", StandardCharsets.UTF_8);
 
         List<LogRecord> records = new ArrayList<>();
-        capture(records, () -> LinuxCgroupJob.reclaimAndReportStaleJobs(root));
+        LinuxCgroupJob.StaleSweep sweep = capture(records, () -> LinuxCgroupJob.reclaimAndReportStaleJobs(
+                root, contextWithPlainRemoval(nobodyIsAlive())));
 
-        assertTrue(records.stream().anyMatch(r -> r.getLevel() == Level.WARNING
-                        && r.getMessage().contains("could not remove")
-                        && r.getMessage().contains("minos-empty-with-residue")),
-                "the deletion failure is reported with the cgroup name: " + messages(records));
+        assertEquals(List.of(), sweep.reclaimed(), "what could not be removed was not reclaimed");
+        List<LogRecord> warnings = records.stream().filter(r -> r.getLevel() == Level.WARNING).toList();
+        assertEquals(1, warnings.size(), "one aggregated report, no second per-cgroup line: " + messages(records));
+        assertTrue(warnings.getFirst().getMessage().contains("minos-empty-with-residue")
+                        && warnings.getFirst().getMessage().contains("could not remove"),
+                "the failed removal is reported with the cgroup name: " + messages(records));
+        assertTrue(warnings.getFirst().getMessage().contains("left 1 cgroup(s) intact"), messages(warnings));
+        assertNoAbsolutePath(records, root);
+    }
+
+    /** A sweep cut short by its bound names how many entries it never looked at: they may be residues too. */
+    @Test
+    void theWarningCountsTheEntriesTheBoundedSweepDidNotExamine(@TempDir Path root) throws Exception {
+        for (int index = 0; index < 5; index++) cgroup(root, "minos-empty-" + index, "");
+        LinuxCgroupJob.SweepContext bounded = new LinuxCgroupJob.SweepContext(
+                SELF, path -> nobodyIsAlive(), KERNEL_LIKE, 3L, 2, 0L);
+
+        List<LogRecord> records = new ArrayList<>();
+        LinuxCgroupJob.StaleSweep sweep = capture(records,
+                () -> LinuxCgroupJob.reclaimAndReportStaleJobs(root, bounded));
+
+        assertEquals(2, sweep.notExamined());
+        assertEquals(List.of(), sweep.residues(), "nothing left in place among what was examined");
+        List<LogRecord> warnings = records.stream().filter(r -> r.getLevel() == Level.WARNING).toList();
+        assertEquals(1, warnings.size(), "an incomplete sweep is reported even without a residue: " + messages(records));
+        assertTrue(warnings.getFirst().getMessage().contains("2 entries were not examined"), messages(warnings));
         assertNoAbsolutePath(records, root);
     }
 
@@ -133,11 +177,6 @@ class LinuxCgroupJobDiagnosticsTest {
                         && r.getMessage().contains("does not expose memory/pids/cpu")),
                 messages(notApplied));
         assertNoAbsolutePath(notApplied, root);
-    }
-
-    private static void populated(Path root, String name) throws Exception {
-        Path cgroup = Files.createDirectory(root.resolve(name));
-        Files.writeString(cgroup.resolve(LinuxCgroupJob.PROCS_FILE), "424242\n", StandardCharsets.UTF_8);
     }
 
     /** Fails when a record, or any failure attached to it (causes, suppressed), mentions an absolute path. */

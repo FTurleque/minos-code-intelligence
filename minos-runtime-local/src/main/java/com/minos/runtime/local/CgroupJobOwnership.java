@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -56,6 +57,7 @@ final class CgroupJobOwnership {
     private static final long MAX_PID = 9_999_999_999L;
 
     private static final Pattern TOKEN = Pattern.compile("[0-9a-f]{8}");
+    private static final Pattern NAMESPACE_LINK = Pattern.compile("^[a-z_]+:\\[(?<inode>[0-9]{1,19})\\]$");
     private static final Pattern MARKED_NAME = Pattern.compile(
             "^(?<job>[A-Za-z0-9][A-Za-z0-9._-]*)\\.own-(?<pid>[0-9]{1,10})-"
                     + "(?:t(?<ticks>[0-9]{1,19})|(?<legacy>[0-9]{1,19}))-(?<token>[0-9a-f]{8})$");
@@ -74,30 +76,93 @@ final class CgroupJobOwnership {
         LEGACY_WALL_CLOCK
     }
 
-    /** Owner PID, owner start ({@code 0} when unknown) in the given clock, and per-JVM instance token. */
-    record Mark(long pid, long start, StartClock clock, String token) {
+    /**
+     * Identity of the PID and time namespaces a process lives in, as the inode numbers of
+     * {@code /proc/<pid>/ns/pid} and {@code /proc/<pid>/ns/time}. A PID, and the start ticks read for it,
+     * only mean something inside the namespaces they were observed in.
+     *
+     * @param pid  inode of the PID namespace; {@code 0} when unknown
+     * @param time inode of the time namespace; {@code 0} when the kernel has none (before Linux 5.6) or it
+     *             cannot be read
+     */
+    record Namespaces(long pid, long time) {
+
+        /** No namespace identity: what a mark written before namespaces were stamped carries. */
+        static final Namespaces UNKNOWN = new Namespaces(0L, 0L);
+
+        Namespaces {
+            if (pid < 0L || time < 0L) throw new IllegalArgumentException("namespace inode must not be negative");
+        }
+
+        /** True when the PID namespace is identified; a mark or a process without it proves nothing. */
+        boolean known() {
+            return pid > 0L;
+        }
+
+        /** Reads the namespaces of a process; {@link #UNKNOWN} when its PID namespace cannot be read. */
+        static Namespaces read(Path proc, long pid) {
+            Path namespaces = proc.resolve(Long.toString(pid)).resolve("ns");
+            OptionalLong pidNamespace = inode(namespaces.resolve("pid"));
+            if (pidNamespace.isEmpty()) return UNKNOWN;
+            return new Namespaces(pidNamespace.getAsLong(), inode(namespaces.resolve("time")).orElse(0L));
+        }
+
+        private static OptionalLong inode(Path link) {
+            try {
+                return parseInode(Files.readSymbolicLink(link).toString());
+            } catch (IOException | RuntimeException unreadable) {
+                return OptionalLong.empty();
+            }
+        }
+
+        /** Extracts the inode of a namespace link target such as {@code pid:[4026531836]}. */
+        static OptionalLong parseInode(String target) {
+            if (target == null) return OptionalLong.empty();
+            Matcher matcher = NAMESPACE_LINK.matcher(target);
+            if (!matcher.matches()) return OptionalLong.empty();
+            try {
+                long inode = Long.parseLong(matcher.group("inode"));
+                return inode > 0L ? OptionalLong.of(inode) : OptionalLong.empty();
+            } catch (NumberFormatException overflow) {
+                return OptionalLong.empty();
+            }
+        }
+    }
+
+    /**
+     * Owner PID, owner start ({@code 0} when unknown) in the given clock, the namespaces the owner lived
+     * in, and per-JVM instance token.
+     */
+    record Mark(long pid, long start, StartClock clock, Namespaces namespaces, String token) {
 
         Mark {
             if (pid <= 0L || pid > MAX_PID) throw new IllegalArgumentException("owner pid is out of range");
             if (start < 0L) throw new IllegalArgumentException("start must not be negative");
             Objects.requireNonNull(clock, "clock");
+            Objects.requireNonNull(namespaces, "namespaces");
             if (!TOKEN.matcher(Objects.requireNonNull(token, "token")).matches()) {
                 throw new IllegalArgumentException("instance token must be eight lowercase hex digits");
             }
         }
 
-        /** A current-format mark: the owner start is expressed in kernel clock ticks since boot. */
+        /** A current-format mark without namespace identity: start expressed in kernel ticks since boot. */
         Mark(long pid, long startTicks, String token) {
-            this(pid, startTicks, StartClock.BOOT_TICKS, token);
+            this(pid, startTicks, StartClock.BOOT_TICKS, Namespaces.UNKNOWN, token);
         }
 
         /** A mark in the previous, wall-clock format; MINOS only parses such marks, it never writes them. */
         static Mark legacyWallClock(long pid, long startEpochMillis, String token) {
-            return new Mark(pid, startEpochMillis, StartClock.LEGACY_WALL_CLOCK, token);
+            return new Mark(pid, startEpochMillis, StartClock.LEGACY_WALL_CLOCK, Namespaces.UNKNOWN, token);
+        }
+
+        /** The same mark stamped with the namespaces its owner lives in. */
+        Mark withNamespaces(Namespaces owned) {
+            return new Mark(pid, start, clock, owned, token);
         }
 
         static Mark of(ProcessHandle owner, String token) {
-            return new Mark(owner.pid(), startTicks(PROC, owner.pid()).orElse(0L), token);
+            return new Mark(owner.pid(), startTicks(PROC, owner.pid()).orElse(0L), token)
+                    .withNamespaces(Namespaces.read(PROC, owner.pid()));
         }
 
         static String newToken() {
@@ -168,26 +233,92 @@ final class CgroupJobOwnership {
         }
     }
 
-    /** A live process found for an owner PID, with its kernel start ticks (empty when unknown). */
-    record LiveProcess(long pid, OptionalLong startTicks) {
-        LiveProcess {
+    /**
+     * What the process table says about an owner PID.
+     *
+     * @param presence   {@link Presence#GONE} only when the table was proven readable and has no such process
+     * @param startTicks kernel start ticks of the process when {@code presence} is {@link Presence#PRESENT}
+     * @param reason     why the table could not answer, when {@code presence} is {@link Presence#UNVERIFIABLE}
+     */
+    record OwnerStatus(Presence presence, OptionalLong startTicks, String reason) {
+
+        enum Presence { GONE, PRESENT, UNVERIFIABLE }
+
+        OwnerStatus {
+            Objects.requireNonNull(presence, "presence");
             Objects.requireNonNull(startTicks, "startTicks");
+            Objects.requireNonNull(reason, "reason");
+        }
+
+        static OwnerStatus gone() {
+            return new OwnerStatus(Presence.GONE, OptionalLong.empty(), "");
+        }
+
+        static OwnerStatus present(OptionalLong startTicks) {
+            return new OwnerStatus(Presence.PRESENT, startTicks, "");
+        }
+
+        static OwnerStatus present(long startTicks) {
+            return present(OptionalLong.of(startTicks));
+        }
+
+        static OwnerStatus unverifiable(String reason) {
+            return new OwnerStatus(Presence.UNVERIFIABLE, OptionalLong.empty(), reason);
         }
     }
 
-    /** Resolves whether a PID currently designates a live process; a seam for host-independent tests. */
+    /** Resolves what the process table says about a PID; a seam for host-independent tests. */
     @FunctionalInterface
     interface OwnerLookup {
 
-        OwnerLookup SYSTEM = pid -> ProcessHandle.of(pid)
-                .filter(ProcessHandle::isAlive)
-                .map(handle -> new LiveProcess(pid, startTicks(PROC, pid)));
+        /** The process table of this host, as seen for the cgroup at {@code cgroup}. */
+        static OwnerLookup system(Path cgroup) {
+            Objects.requireNonNull(cgroup, "cgroup");
+            return pid -> ProcessHandle.of(pid)
+                    .filter(ProcessHandle::isAlive)
+                    .map(handle -> OwnerStatus.present(startTicks(PROC, pid)))
+                    .orElseGet(OwnerStatus::gone);
+        }
 
-        /** Empty when no live process currently carries the PID. */
-        Optional<LiveProcess> find(long pid);
+        OwnerStatus find(long pid);
     }
 
-    enum Decision { RECLAIM, LEAVE }
+    /**
+     * A process table read from a {@code /proc} directory.
+     *
+     * @param proc        the process table directory ({@code /proc}; a temporary directory in tests)
+     * @param ownPid      PID of this process in the PID namespace it lives in
+     * @param sameAccount whether the processes of the cgroup owner are visible to this account even when
+     *                    the table hides those of other accounts
+     */
+    record ProcessTable(Path proc, long ownPid, BooleanSupplier sameAccount) implements OwnerLookup {
+
+        ProcessTable {
+            Objects.requireNonNull(proc, "proc");
+            Objects.requireNonNull(sameAccount, "sameAccount");
+        }
+
+        @Override
+        public OwnerStatus find(long pid) {
+            try {
+                String stat = Files.readString(
+                        proc.resolve(Long.toString(pid)).resolve("stat"), StandardCharsets.ISO_8859_1);
+                return OwnerStatus.present(parseStartTicks(stat));
+            } catch (IOException | RuntimeException unreadable) {
+                return OwnerStatus.gone();
+            }
+        }
+    }
+
+    /** What the sweep does with a discovered cgroup. */
+    enum Decision {
+        /** The owner is proven dead: kill what is left in the cgroup, then remove it. */
+        RECLAIM,
+        /** The cgroup holds no process: remove it, never kill anything in it. */
+        REMOVE_EMPTY,
+        /** No positive proof of ownership by a dead process: leave the cgroup intact and report it. */
+        LEAVE
+    }
 
     /** Outcome of the sweep decision with the reason MINOS logs for it (never contains a path). */
     record Verdict(Decision decision, String reason) {
@@ -196,7 +327,13 @@ final class CgroupJobOwnership {
             Objects.requireNonNull(reason, "reason");
         }
 
+        /** True when the sweep removes the cgroup (killing first only when {@link #kills()}). */
         boolean reclaim() {
+            return decision != Decision.LEAVE;
+        }
+
+        /** True only when the owner is proven dead; an empty cgroup is removed, never killed. */
+        boolean kills() {
             return decision == Decision.RECLAIM;
         }
     }
@@ -229,8 +366,8 @@ final class CgroupJobOwnership {
         if (owner.token().equals(self.token())) {
             return new Verdict(Decision.LEAVE, "cgroup belongs to this MINOS instance");
         }
-        Optional<LiveProcess> live = owners.find(owner.pid());
-        if (live.isEmpty()) {
+        OwnerStatus status = owners.find(owner.pid());
+        if (status.presence() != OwnerStatus.Presence.PRESENT) {
             return new Verdict(Decision.RECLAIM, "owner pid " + owner.pid() + " is no longer alive");
         }
         if (owner.clock() == StartClock.LEGACY_WALL_CLOCK) {
@@ -241,7 +378,7 @@ final class CgroupJobOwnership {
             return new Verdict(Decision.LEAVE, "owner pid " + owner.pid()
                     + " is alive and the mark carries no start ticks to rule out pid reuse");
         }
-        OptionalLong liveTicks = live.orElseThrow().startTicks();
+        OptionalLong liveTicks = status.startTicks();
         if (liveTicks.isEmpty()) {
             return new Verdict(Decision.LEAVE, "owner pid " + owner.pid()
                     + " is alive and its start ticks are unavailable to rule out pid reuse");
