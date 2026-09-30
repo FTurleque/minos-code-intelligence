@@ -34,6 +34,7 @@ import java.util.UUID;
  */
 public final class ProjectIndexStateReconciler {
     private static final int MAX_RECONCILIATION_ATTEMPTS = 8;
+    private static final String PROJECT_ID = "projectId";
 
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final IndexStateStore stateStore;
@@ -44,7 +45,7 @@ public final class ProjectIndexStateReconciler {
     }
 
     public Reconciliation reconcile(UUID projectId) throws IOException {
-        return reconcile(Objects.requireNonNull(projectId, "projectId"), false, Mode.PERSIST);
+        return reconcile(Objects.requireNonNull(projectId, PROJECT_ID), false, Mode.PERSIST);
     }
 
     /**
@@ -55,7 +56,7 @@ public final class ProjectIndexStateReconciler {
      * {@code INDEXING} by a dead run is repaired in memory like any other lagging state.
      */
     public Reconciliation observe(UUID projectId) throws IOException {
-        return reconcile(Objects.requireNonNull(projectId, "projectId"), false, Mode.PLAN);
+        return reconcile(Objects.requireNonNull(projectId, PROJECT_ID), false, Mode.PLAN);
     }
 
     /**
@@ -65,7 +66,7 @@ public final class ProjectIndexStateReconciler {
      * recovers it under the lease), whereas a plan must anticipate that recovery.
      */
     public Reconciliation observeStatus(UUID projectId) throws IOException {
-        return reconcile(Objects.requireNonNull(projectId, "projectId"), false, Mode.STATUS);
+        return reconcile(Objects.requireNonNull(projectId, PROJECT_ID), false, Mode.STATUS);
     }
 
     /** What a pass may do: {@code PERSIST} repairs durably under the lease, the other two never write. */
@@ -82,11 +83,7 @@ public final class ProjectIndexStateReconciler {
             if (!sameSnapshot(activeBefore, activeAfter)) continue;
 
             if (activeAfter.isEmpty()) {
-                if (persisted.flatMap(ProjectIndexState::activeSnapshotId).isPresent()) {
-                    throw new IOException(
-                            "project index state references an active snapshot but the snapshot store has none for project "
-                                    + projectId);
-                }
+                requireNoPersistedActiveSnapshot(persisted, projectId);
                 return new Reconciliation(activeAfter, persisted, repaired);
             }
 
@@ -95,35 +92,13 @@ public final class ProjectIndexStateReconciler {
                 return new Reconciliation(activeAfter, persisted, repaired);
             }
 
-            if (mode == Mode.PERSIST && !leaseHeld) {
-                try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(projectId)) {
-                    return reconcile(projectId, true, Mode.PERSIST);
-                } catch (RuntimeException failure) {
-                    throw new IOException("failed to acquire project lifecycle lease for metadata reconciliation: "
-                            + projectId, failure);
-                }
-            }
+            if (mode == Mode.PERSIST && !leaseHeld) return reconcileUnderLease(projectId);
 
             if (mode == Mode.STATUS && inProgress(persisted)) {
                 return new Reconciliation(activeAfter, persisted, false);
             }
 
-            Optional<IndexingRun> matchingRun = loadRuns(projectId).stream()
-                    .filter(run -> run.status() == IndexingRun.Status.SUCCEEDED)
-                    .filter(run -> run.activeSnapshotAfter().filter(authoritativeSnapshotId::equals).isPresent())
-                    .max(Comparator.comparing(run -> run.completedAt().orElse(run.createdAt())));
-            Instant updatedAt = matchingRun.flatMap(IndexingRun::completedAt)
-                    .or(() -> persisted.map(ProjectIndexState::updatedAt))
-                    .orElseGet(Instant::now);
-            Optional<UUID> latestRunId = matchingRun.map(IndexingRun::id)
-                    .or(() -> persisted.flatMap(ProjectIndexState::latestRunId));
-            ProjectIndexState repair = new ProjectIndexState(
-                    projectId,
-                    ProjectIndexState.Availability.READY,
-                    Optional.of(authoritativeSnapshotId),
-                    latestRunId,
-                    updatedAt,
-                    Optional.of("reconciled from authoritative active snapshot after incomplete metadata commit"));
+            ProjectIndexState repair = repairedState(projectId, authoritativeSnapshotId, persisted);
             if (mode != Mode.PERSIST) {
                 return new Reconciliation(activeAfter, Optional.of(repair), true);
             }
@@ -140,6 +115,44 @@ public final class ProjectIndexStateReconciler {
 
         throw new IOException("active snapshot or project metadata changed repeatedly while reconciling project "
                 + projectId);
+    }
+
+    private static void requireNoPersistedActiveSnapshot(Optional<ProjectIndexState> persisted, UUID projectId)
+            throws IOException {
+        if (persisted.flatMap(ProjectIndexState::activeSnapshotId).isPresent()) {
+            throw new IOException(
+                    "project index state references an active snapshot but the snapshot store has none for project "
+                            + projectId);
+        }
+    }
+
+    private Reconciliation reconcileUnderLease(UUID projectId) throws IOException {
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(projectId)) {
+            return reconcile(projectId, true, Mode.PERSIST);
+        } catch (RuntimeException failure) {
+            throw new IOException("failed to acquire project lifecycle lease for metadata reconciliation: "
+                    + projectId, failure);
+        }
+    }
+
+    private ProjectIndexState repairedState(
+            UUID projectId, String authoritativeSnapshotId, Optional<ProjectIndexState> persisted) throws IOException {
+        Optional<IndexingRun> matchingRun = loadRuns(projectId).stream()
+                .filter(run -> run.status() == IndexingRun.Status.SUCCEEDED)
+                .filter(run -> run.activeSnapshotAfter().filter(authoritativeSnapshotId::equals).isPresent())
+                .max(Comparator.comparing(run -> run.completedAt().orElse(run.createdAt())));
+        Instant updatedAt = matchingRun.flatMap(IndexingRun::completedAt)
+                .or(() -> persisted.map(ProjectIndexState::updatedAt))
+                .orElseGet(Instant::now);
+        Optional<UUID> latestRunId = matchingRun.map(IndexingRun::id)
+                .or(() -> persisted.flatMap(ProjectIndexState::latestRunId));
+        return new ProjectIndexState(
+                projectId,
+                ProjectIndexState.Availability.READY,
+                Optional.of(authoritativeSnapshotId),
+                latestRunId,
+                updatedAt,
+                Optional.of("reconciled from authoritative active snapshot after incomplete metadata commit"));
     }
 
     private Optional<CodeKnowledgeSnapshot> loadActive(UUID projectId) throws IOException {

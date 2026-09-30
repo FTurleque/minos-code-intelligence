@@ -296,6 +296,26 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         }
     }
 
+    /** The file the active pointer names, or {@code null} when none is published; a dangling pointer fails. */
+    private String activeFileName(Path projectDirectory) throws IOException {
+        Path activePointer = projectDirectory.resolve(ACTIVE_FILE);
+        if (!regularFileExists(activePointer, "active fingerprint pointer")) return null;
+        ActivePointer pointer = readPointer(activePointer);
+        Path activeFile = resolveFile(projectDirectory, pointer.fileName());
+        if (!regularFileExists(activeFile, "active fingerprint snapshot")) {
+            throw new IOException("active fingerprint snapshot file is missing: " + activeFile);
+        }
+        return pointer.fileName();
+    }
+
+    private static Set<String> protectedPrefixes(Set<String> protectedSnapshotIds) {
+        Set<String> prefixes = new HashSet<>();
+        for (String snapshotId : protectedSnapshotIds) {
+            prefixes.add("fingerprint-" + Sha256.hex(requireText(snapshotId, "protectedSnapshotId")) + "-");
+        }
+        return prefixes;
+    }
+
     private FingerprintRetentionResult compactLocked(
             UUID projectId,
             Set<String> additionallyProtectedSnapshotIds,
@@ -304,21 +324,8 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         Path projectDirectory = existingProjectDirectory(projectId);
         if (projectDirectory == null) return new FingerprintRetentionResult(0, 0);
 
-        String activeFileName = null;
-        Path activePointer = projectDirectory.resolve(ACTIVE_FILE);
-        if (regularFileExists(activePointer, "active fingerprint pointer")) {
-            ActivePointer pointer = readPointer(activePointer);
-            Path activeFile = resolveFile(projectDirectory, pointer.fileName());
-            if (!regularFileExists(activeFile, "active fingerprint snapshot")) {
-                throw new IOException("active fingerprint snapshot file is missing: " + activeFile);
-            }
-            activeFileName = pointer.fileName();
-        }
-
-        Set<String> protectedPrefixes = new HashSet<>();
-        for (String snapshotId : additionallyProtectedSnapshotIds) {
-            protectedPrefixes.add("fingerprint-" + Sha256.hex(requireText(snapshotId, "protectedSnapshotId")) + "-");
-        }
+        String activeFileName = activeFileName(projectDirectory);
+        Set<String> protectedPrefixes = protectedPrefixes(additionallyProtectedSnapshotIds);
         Comparator<FingerprintFile> oldestFirst = Comparator
                 .comparing(FingerprintFile::lastModified)
                 .thenComparing(FingerprintFile::fileName);
