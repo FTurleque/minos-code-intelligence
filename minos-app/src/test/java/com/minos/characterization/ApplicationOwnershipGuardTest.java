@@ -27,11 +27,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * ou la référence de méthode {@code MinosApplication::open}) qui n'est ni
  * <ul>
  *   <li>l'en-tête d'un {@code try}-avec-ressources, qui la ferme sur tous les chemins ;</li>
- *   <li>dans un fichier de la liste des propriétaires ci-dessous, dont la raison est écrite, et dont la preuve de
- *       fermeture (un fragment de source) doit exister : un propriétaire qui cesse de fermer fait échouer la garde.</li>
+ *   <li>l'une des créations déclarées d'un fichier propriétaire ci-dessous : leur NOMBRE est figé (une création de
+ *       plus dans un propriétaire est un site nouveau, donc refusée), et les fragments de code qui la ferment ou la
+ *       câblent doivent exister dans le code, commentaires retirés (fermeture mise en commentaire = garde rouge).</li>
  * </ul>
- * Une nouvelle surface qui ouvrirait l'application sans la fermer fait donc rougir la suite. Ajouter une entrée à
- * la liste est une décision de revue, pas un contournement.
+ * Une nouvelle surface qui ouvrirait l'application sans la fermer fait donc rougir la suite. Ajouter ou modifier une
+ * entrée est une décision de revue, pas un contournement.
  */
 class ApplicationOwnershipGuardTest {
 
@@ -42,48 +43,47 @@ class ApplicationOwnershipGuardTest {
     private static final Pattern RESOURCE_HEADER = Pattern.compile(
             "\\btry\\s*\\(\\s*(?:final\\s+)?MinosApplication\\s+\\w+\\s*=\\s*$");
 
-    /** Fichier de production -> pourquoi il peut créer une application sans try-avec-ressources. */
-    private static final Map<String, String> OWNERS = new LinkedHashMap<>();
-
     /**
-     * Fichier de production -> fragments de source qui prouvent que l'application est fermée. Pour le routeur MCP et
-     * le lanceur, le second fragment verrouille le câblage de production (l'ouverture réelle est injectée dans la
-     * méthode qui ferme) : aucun test ne peut ouvrir une vraie application avec un magasin espion.
+     * Un fichier de production qui crée une application sans try-avec-ressources : combien de créations il déclare,
+     * pourquoi, et les fragments de code qui prouvent qu'elle est fermée (ou, pour le routeur MCP et le lanceur,
+     * que l'ouverture réelle est injectée dans la méthode qui ferme : une vraie application ne s'ouvre pas avec un
+     * magasin espion, le câblage de production n'est verrouillé que par ce fragment).
      */
-    private static final Map<String, List<String>> CLOSING_EVIDENCE = new LinkedHashMap<>();
+    private record Owner(int creations, String reason, List<String> proof) { }
+
+    private static final Map<String, Owner> OWNERS = new LinkedHashMap<>();
+
+    /** Fichiers qui reçoivent l'application ouverte par {@code MinosApiSupport} : ils la ferment, sans la créer. */
+    private static final Map<String, List<String>> CLOSERS = new LinkedHashMap<>();
 
     static {
         OWNERS.put("minos-application/src/main/java/com/minos/application/LocalProjectOperations.java",
-                "constructeur (Path) : possède l'application, close() la ferme");
+                new Owner(1, "constructeur (Path) : possède l'application, close() la ferme",
+                        List.of("this(MinosApplication.open(home), true)", "ownedApplication.close()")));
         OWNERS.put("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java",
-                "constructeur (Path) : possède l'application, close() la ferme");
+                new Owner(1, "constructeur (Path) : possède l'application, close() la ferme",
+                        List.of("this(MinosApplication.open(minosHome), UnaryOperator.identity(), true)",
+                                "ownedApplication.close()")));
         OWNERS.put("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java",
-                "constructeur (Path) : possède l'application, close() la ferme");
+                new Owner(1, "constructeur (Path) : possède l'application, close() la ferme",
+                        List.of("this.ownedApplication = MinosApplication.open(normalizedHome)",
+                                "ownedApplication.close()")));
         OWNERS.put("minos-api/src/main/java/com/minos/api/MinosApiSupport.java",
-                "openApplication : l'application ouverte est possédée par la façade qui l'appelle (trois fichiers ci-dessous)");
+                new Owner(1, "openApplication : l'application ouverte est possédée par la façade qui l'appelle (CLOSERS)",
+                        List.of("static MinosApplication openApplication(")));
         OWNERS.put("minos-app/src/main/java/com/minos/app/McpBackendRouter.java",
-                "référence MinosApplication::open injectée dans serving(), qui ferme dans un try-avec-ressources");
+                new Owner(1, "référence MinosApplication::open injectée dans serving(), qui ferme dans un try-avec-ressources",
+                        List.of("try (MinosApplication application = opener.open(home))",
+                                "this(serving(MinosApplication::open, MinosMcpServer::run),")));
         OWNERS.put("minos-cli/src/main/java/com/minos/cli/MinosLauncher.java",
-                "référence MinosApplication::open injectée dans launch(), qui ferme dans un try-avec-ressources");
+                new Owner(1, "référence MinosApplication::open injectée dans launch(), qui ferme dans un try-avec-ressources",
+                        List.of("try (MinosApplication application = opener.open(home))",
+                                "MinosApplication::open, MinosLauncher::run));")));
 
-        CLOSING_EVIDENCE.put("minos-application/src/main/java/com/minos/application/LocalProjectOperations.java",
-                List.of("ownedApplication.close()"));
-        CLOSING_EVIDENCE.put("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java",
-                List.of("ownedApplication.close()"));
-        CLOSING_EVIDENCE.put("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java",
-                List.of("ownedApplication.close()"));
-        CLOSING_EVIDENCE.put("minos-api/src/main/java/com/minos/api/LocalMinosApi.java",
-                List.of("if (!ownsApplication) return;"));
-        CLOSING_EVIDENCE.put("minos-api/src/main/java/com/minos/api/LocalMinosMultiRepositoryApi.java",
-                List.of("if (!ownsApplication) return;"));
-        CLOSING_EVIDENCE.put("minos-api/src/main/java/com/minos/api/LocalProviderPlatformApi.java",
-                List.of("if (!ownsApplication) return;"));
-        CLOSING_EVIDENCE.put("minos-app/src/main/java/com/minos/app/McpBackendRouter.java",
-                List.of("try (MinosApplication application = opener.open(home))",
-                        "this(serving(MinosApplication::open, MinosMcpServer::run),"));
-        CLOSING_EVIDENCE.put("minos-cli/src/main/java/com/minos/cli/MinosLauncher.java",
-                List.of("try (MinosApplication application = opener.open(home))",
-                        "MinosApplication::open, MinosLauncher::run));"));
+        for (String facade : List.of("LocalMinosApi", "LocalMinosMultiRepositoryApi", "LocalProviderPlatformApi")) {
+            CLOSERS.put("minos-api/src/main/java/com/minos/api/" + facade + ".java",
+                    List.of("openApplication(home", "if (!ownsApplication) return;", "application.close()"));
+        }
     }
 
     @Test
@@ -91,13 +91,19 @@ class ApplicationOwnershipGuardTest {
         List<String> offenders = new ArrayList<>();
         for (Path file : productionSources(modules())) {
             String relative = relative(file);
-            if (OWNERS.containsKey(relative)) continue;
             String code = codeOnly(Files.readString(file, StandardCharsets.UTF_8));
+            Owner owner = OWNERS.get(relative);
+            int creations = 0;
             Matcher creation = CREATION.matcher(code);
             while (creation.find()) {
-                if (!RESOURCE_HEADER.matcher(statementBefore(code, creation.start())).find()) {
+                creations++;
+                if (owner == null && !RESOURCE_HEADER.matcher(statementBefore(code, creation.start())).find()) {
                     offenders.add(relative + " : " + creation.group().strip() + " hors d'un try-avec-ressources");
                 }
+            }
+            if (owner != null && creations != owner.creations()) {
+                offenders.add(relative + " : " + creations + " création(s) au lieu des " + owner.creations()
+                        + " déclarée(s) : un site nouveau dans un propriétaire n'est pas couvert");
             }
         }
         assertEquals(List.of(), offenders,
@@ -105,24 +111,25 @@ class ApplicationOwnershipGuardTest {
     }
 
     @Test
-    void everyDeclaredOwnerStillCreatesAnApplicationAndStillClosesIt() throws IOException {
+    void everyDeclaredOwnerStillClosesItsApplication() throws IOException {
         List<String> stale = new ArrayList<>();
-        for (String owner : OWNERS.keySet()) {
-            String code = codeOnly(Files.readString(ROOT.resolve(owner), StandardCharsets.UTF_8));
-            if (!CREATION.matcher(code).find() && !code.contains("openApplication(")) {
-                stale.add(owner + " : ne crée plus d'application, retirer l'entrée");
-            }
+        for (Map.Entry<String, Owner> owner : OWNERS.entrySet()) {
+            requireFragments(owner.getKey(), owner.getValue().proof(), stale);
         }
-        for (Map.Entry<String, List<String>> evidence : CLOSING_EVIDENCE.entrySet()) {
-            String source = Files.readString(ROOT.resolve(evidence.getKey()), StandardCharsets.UTF_8)
-                    .replaceAll("\\s+", " ");
-            for (String fragment : evidence.getValue()) {
-                if (!source.contains(fragment)) {
-                    stale.add(evidence.getKey() + " : la preuve de fermeture « " + fragment + " » a disparu");
-                }
-            }
+        for (Map.Entry<String, List<String>> closer : CLOSERS.entrySet()) {
+            requireFragments(closer.getKey(), closer.getValue(), stale);
         }
         assertEquals(List.of(), stale);
+    }
+
+    /** Chaque fragment doit exister dans le code du fichier : commentaires retirés, espaces normalisés. */
+    private static void requireFragments(String file, List<String> fragments, List<String> stale) throws IOException {
+        String code = codeOnly(Files.readString(ROOT.resolve(file), StandardCharsets.UTF_8)).replaceAll("\\s+", " ");
+        for (String fragment : fragments) {
+            if (!code.contains(fragment)) {
+                stale.add(file + " : la preuve de fermeture « " + fragment + " » a disparu du code");
+            }
+        }
     }
 
     /** Le texte de l'instruction en cours, du dernier « ; », « { » ou « } » jusqu'à {@code position}. */
