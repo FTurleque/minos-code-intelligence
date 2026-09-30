@@ -305,11 +305,13 @@ final class RunDirectoryRetention {
                 }
             });
         } catch (IOException | RuntimeException exception) {
-            if (unreadableEntryMakesRunReclaimable(exception instanceof IOException io ? io : null, marked)) {
-                reclaimFirst[0] = true;
-            }
+            reclaimFirst[0] |= isReclaimable(exception, marked);
         }
         return new Entry(run, lastModified, bytes[0], reclaimFirst[0], resumableSince);
+    }
+
+    private static boolean isReclaimable(Exception failure, boolean marked) {
+        return unreadableEntryMakesRunReclaimable(failure instanceof IOException io ? io : null, marked);
     }
 
     /** Best effort: a date that cannot be rewritten only leaves the run for the next passes to re-date. */
