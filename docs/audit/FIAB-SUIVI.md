@@ -183,7 +183,11 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 
 | Id | Sévérité | Constat | Résolution |
 |---|---|---|---|
-| V-L2-01 | à corriger | le raccourci « état en vol rapporté tel quel » de `observe` (91a23b22) s'appliquait aussi au plan du `--dry-run` : après un crash entre la promotion et l'écriture de l'état, le dry-run annonçait `NONE` (état `INDEXING`/ancien snapshot) alors que le run réel, qui répare sous bail, planifie `FULL_REQUIRED [BASELINE_INDEX_MISMATCH]` | **résolu** (commit suivant `0003d80e`) : deux points d'entrée en lecture, `observe` (plan : calcule toujours la réparation en mémoire, comportement d'origine) et `observeStatus` (statut : rapporte l'état en vol tel quel, utilisé par `ProjectInspectionService.view`) ; test rouge rejoué sur `44aca82a` (`expected: <true> but was: <false>`), `observeForADryRunPlanStillComputesTheRepairOfAnInProgressStateLeftByADeadRun` |
+| V-L2-01 | à corriger | le raccourci « état en vol rapporté tel quel » de `observe` (91a23b22) s'appliquait aussi au plan du `--dry-run` : après un crash entre la promotion et l'écriture de l'état, le dry-run annonçait `NONE` (état `INDEXING`/ancien snapshot) alors que le run réel, qui répare sous bail, planifie `FULL_REQUIRED [BASELINE_INDEX_MISMATCH]` | **résolu `55d4091d`** : deux points d'entrée en lecture, `observe` (plan : calcule toujours la réparation en mémoire, comportement d'origine) et `observeStatus` (statut : rapporte l'état en vol tel quel, utilisé par `ProjectInspectionService.view`) ; test rouge rejoué sur `44aca82a` (`expected: <true> but was: <false>`), `observeForADryRunPlanStillComputesTheRepairOfAnInProgressStateLeftByADeadRun` |
+| V-L2-02 | remarque | l'ordre de prise écrit dans les Javadoc de `IndexStateStore.acquireProjectLease` et de `ProjectIndexLease` omettait le verrou de rétention L3 | **résolu** (commit suivant) : L3 ajouté aux deux Javadoc ; l'ordre L1 < L3 < L2 < L4 < M est désormais le même aux quatre endroits et dans l'ADR 0039 (l) |
+| V-L2-03 | remarque | la règle (b) « toute mutation sous L1 » n'est appliquée par aucun test ni garde : `compact` appelé sans L1 n'est pas attrapé (sonde de verif-fiab : `OverlappingFileLockException` de L3 sur les threads de cycle de vie) | **accepté, documenté § 7** : Q4 non reproductible, la rétention ne prend pas L1 ; son unique appelant le tient ; la fusion L3 → L1 est la suite indiquée si un scénario atteignable apparaît |
+| V-L2-04 | remarque | `FileIndexStateStore` (constructeur, `migrateLegacyRuns`) et `findRun` (`migrateLegacyRun`) migrent des fichiers de run du format historique sans bail : le processus qui répond au statut peut donc écrire | **documenté § 7** : préexistant, limité au format historique, idempotent (remplacement atomique, `NoSuchFile` toléré) ; hors périmètre du lot |
+| V-L2-05 | remarque | la nouvelle tentative de `DurableAtomicFile` retarde d'environ une seconde l'échec d'un refus d'accès réel, sous L1 ou L2 | **accepté** : bornée, Windows seulement, § 7 |
 
 ## 7. À traiter plus tard
 
@@ -201,6 +205,8 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 - **(lot 2) Un état `INDEXING` abandonné reste visible en lecture.** Une lecture ne répare plus : après un crash entre la promotion et l'écriture de l'état, le statut répond `INDEXING` (avec le bon snapshot actif) jusqu'au prochain run, qui récupère sous bail. Avant, la première lecture qui trouvait le bail libre réparait. Acceptable (le snapshot actif rapporté est juste), à reconsidérer si un client a besoin de la fin d'un run abandonné.
 - **(lot 2) Bail de mutation strié à l'échelle de la JVM.** `SnapshotProjectLease` partage 64 verrous JVM entre tous les projets et tous les `MINOS_HOME` du processus : deux projets qui tombent sur la même bande s'attendent. Sans conséquence avec un projet actif à la fois ; à revoir pour un processus qui indexerait plusieurs projets en parallèle.
 - **(lot 2) Nouvelle tentative de remplacement : bornée à environ une seconde.** Un lecteur qui tiendrait une cible ouverte plus longtemps ferait échouer le remplacement (erreur de l'écrivain, inchangée dans son type). Les lectures de ces fichiers durent quelques millisecondes.
+- **(lot 2) Migrations de runs du format historique sans bail.** Le constructeur de `FileIndexStateStore` (`migrateLegacyRuns`, `migrateRunLocators`) et `findRun` (`migrateLegacyRun`) déplacent ou suppriment des `runs/<id>.properties` du format d'origine : tout processus qui ouvre le store, y compris celui qui répond à un statut, peut donc écrire, sans L1. Préexistant, idempotent, limité aux données historiques ; la règle « une lecture ne mute rien » ne le couvre pas. À encadrer (migration à l'ouverture sous L1, ou à l'écriture seulement) dans un lot dédié (V-L2-04).
+- **(lot 2) La règle (b) de l'ordre n'est vérifiée par aucun garde.** Un futur appelant de `LocalStorageRetentionService.compact` sans L1 ne serait pas attrapé (V-L2-03) ; un test d'architecture, ou la fusion de L3 dans L1, le ferait.
 
 ## 8. Lot 2 — P1, Q3, Q4 : un seul régime de verrous
 
@@ -309,7 +315,7 @@ Mécanismes d'exclusion de la famille « un projet » : **6** (L1, L2, L3, L4, M
 | `49e3fdfb` | Q4 : test de non-reproduction (empreinte préparée, snapshot structurel préparé, ordre de prise) ; aucun correctif | idem |
 | `44aca82a` | documentation : ordre de prise dans les Javadoc et l'ADR 0039 (l), ce journal, preuves (avec correction de l'emplacement périmé du bail dans l'ADR) | idem |
 | `0003d80e` | preuves de fin de lot (rejeux, `clean verify`, Linux) | idem |
-| (commit suivant) | V-L2-01 : `observeStatus` (lecture de statut) distinct de `observe` (plan du dry-run) | idem |
+| `55d4091d` | V-L2-01 : `observeStatus` (lecture de statut) distinct de `observe` (plan du dry-run) | idem |
 
 ### 8.9 Preuves
 
@@ -338,8 +344,8 @@ Garde-fous verts avant et après (ils ne devaient pas bouger) : `statusBeforeThe
 | Classe | Synchronisation | Rejeux sur le commit | Résultat |
 |---|---|---|---|
 | `FileProjectFingerprintSnapshotStoreConcurrencyTest` (3 tests, 10 tours chacun par exécution) | `CyclicBarrier(2)` par tour, `Future.get` | `7e1b2903` (code de production final de Q3) | **50 passages sur 50**, 0 échec (30 tours par exécution : 1 500 tours) |
-| `ProjectStateReadUnderConcurrentWriteTest` (200 publications par exécution) | `CyclicBarrier(2)`, drapeau `writerDone`, relecture finale après l'arrêt de l'écrivain | `49e3fdfb` (code de production final de P1) | **50 sur 50**, 0 échec (200 publications lues en boucle par exécution : 10 000 publications, y compris l'échec Windows de l'écrivain qui n'apparaît plus) |
-| `ProjectStatusReadIsLeaseFreeTest` (le bail est tenu par le thread de test, la lecture sur un autre thread) | bail tenu pendant l'appel, `Future.get` | `49e3fdfb` | **50 sur 50** (rejoué avec le précédent) |
+| `ProjectStateReadUnderConcurrentWriteTest` (200 publications par exécution) | `CyclicBarrier(2)`, drapeau `writerDone`, relecture finale après l'arrêt de l'écrivain | `49e3fdfb` puis `55d4091d` (code de production final de P1, après V-L2-01) | **50 sur 50** sur chacun, 0 échec (200 publications lues en boucle par exécution : 10 000 publications, l'échec Windows de l'écrivain n'apparaît plus) |
+| `ProjectStatusReadIsLeaseFreeTest` (le bail est tenu par le thread de test, la lecture sur un autre thread) | bail tenu pendant l'appel, `Future.get` | `49e3fdfb` puis `55d4091d` | **50 sur 50** sur chacun (rejoués avec le précédent, et avec `ProjectIndexStateReconcilerTest` au second) |
 
 ### 8.10 Q4 : non reproductible, non corrigé
 
@@ -381,7 +387,7 @@ Aucun cycle : l'ordre L1 < L3 < L2 < L4 < M est total et respecté par chaque ar
 
 ### 8.12 Fin de lot
 
-`./mvnw clean verify` complet dans un arbre dédié (journal dans le scratchpad, pas dans `target/`) sur `44aca82a` (les commits suivants ne changent que de la Javadoc et ce fichier) : **BUILD SUCCESS**, 15 modules, 14 min 40, **1 707 tests exécutés, 0 échec, 0 erreur, 46 ignorés** (les mêmes hypothèses `Assumptions` qu'à la base ; aucun `@Disabled` ajouté) ; 1 691 à la base du lot, +16 : `FileProjectFingerprintSnapshotStoreConcurrencyTest` 3, `DurableAtomicFileTest` +4, `ProjectStateReadUnderConcurrentWriteTest` 1, `ProjectStatusReadIsLeaseFreeTest` 3, `ProjectIndexStateReconcilerTest` +2, `LocalStorageRetentionPreparedSnapshotTest` 3.
+`./mvnw clean verify` complet dans un arbre dédié (journal dans le scratchpad, pas dans `target/`) : sur `44aca82a` puis, après V-L2-01, sur `55d4091d` (les commits suivants ne changent que de la Javadoc et ce fichier) : **BUILD SUCCESS** les deux fois, 15 modules, 12 min 57 pour le second, **1 708 tests exécutés, 0 échec, 0 erreur, 46 ignorés** (les mêmes hypothèses `Assumptions` qu'à la base ; aucun `@Disabled` ajouté) ; 1 691 à la base du lot, +17 : `FileProjectFingerprintSnapshotStoreConcurrencyTest` 3, `DurableAtomicFileTest` +4, `ProjectStateReadUnderConcurrentWriteTest` 1, `ProjectStatusReadIsLeaseFreeTest` 3, `ProjectIndexStateReconcilerTest` +3, `LocalStorageRetentionPreparedSnapshotTest` 3.
 
 | Gate | Base `bcdadd23` | Fin de lot |
 |---|---|---|
