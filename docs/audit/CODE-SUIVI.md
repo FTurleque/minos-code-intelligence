@@ -13,7 +13,7 @@
 | 1 — Q6, Q7 | Inventaire, encodeur unique (`NaN`/`Infinity` refusés, échappement complet), un seul point d'échappement, ordre des clés stable sur 11 sites, garde-fous, preuve inter-JVM | livré, en attente du verdict final de `verif-code` | `72b3f9b4` … `c74aef8b` (§ 4) |
 | 2 — Q11, Q19, Q20 | Un seul parseur d'arguments (`CliOptions`), garde de `team`, `--help` avant `MINOS_HOME`, `--dry-run` sans effet de bord, `--no-resume` | livré, en attente du verdict final de `verif-code` | `fcbcacd4` … `6debba27` (§ 10) |
 | 3 — Q10, Q14 | Application fermée sur tous les chemins (routeur MCP, lanceur), code mort supprimé, garde de propriété, quatre exceptions avalées journalisées | livré, en attente du verdict final de `verif-code` | `eedd3bf8` … `748115f8` (§ 16) |
-| 4 — Q12, Q13 | Heuristiques de tests liés (suffixe, répertoires), duplication (`requireText`, `sha256`, JSON à la main, mapping DTO, `LogCapture`) | en cours | `b9d57a3b` … (§ 22) |
+| 4 — Q12, Q13 | Heuristiques de tests liés (suffixe, répertoires), duplication (`requireText`, `sha256`, JSON à la main, mapping DTO, `LogCapture`), gardes | livré, en attente du verdict final de `verif-code` | `b9d57a3b` … `05228456` (§ 22) |
 
 ## 2. Inventaire daté (base `02e490c3`, 29 septembre 2026)
 
@@ -649,6 +649,10 @@ Production (`*/src/main/*`) : 103 fichiers touchés, +786 / −1 368 lignes.
 ### 23.3 Preuves par mutation (garde)
 
 Cinq mutations posées ensemble puis annulées (`lot4-guard-mutations.log`) : `requireText` recréé dans `CliJson`, `MessageDigest.getInstance("SHA-256")` dans `MinosLauncher`, `new StringBuilder("{")` dans `SymbolResultRenderer`, second `put("normalizedSymbolCount"` dans `ProjectCommand`, `LogCapture` recréé dans `minos-cli` : **5 tests rouges sur 8**, fichier fautif dans le message. `verif-code` en a rejoué six (dont un troisième `record ProjectView`) : 6 rouges. Une copie **renommée** (`requireNonBlank` dans `MinosMcpTools`) n'était pas vue par la garde d'origine (V-L4-09) ; la garde structurelle `noMethodIsAJustRenamedRequireText` la tue (`lot4-guard-renamed-mutation.log`).
+
+### 23.4 Fin de lot
+
+`./mvnw clean verify` complet dans le worktree (journal dans le scratchpad, pas dans `target/`) sur `a65d99ff` : **BUILD SUCCESS**, 15 modules, 10 min 58, **1 671 tests exécutés, 0 échec, 0 erreur, 46 ignorés** (hypothèses `Assumptions` préexistantes, aucun `@Disabled` ajouté ; 1 562 tests à la fin du lot 3, +109 : `RelatedTestHeuristicsTest` 67, caractérisations des copies divergentes 12, `PreconditionsTest` 4, `Sha256Test` 5, `RendererJsonCharacterizationTest` 6, `ProjectJsonTest` 5, `DuplicationGuardTest` 9…). Un premier `clean verify` sur `bc5cceb8` (avant V-L4-09) avait donné 1 670 tests, 0 échec. `python scripts/quality/check-jacoco.py` : 26 portées vertes, **seule rouge : `m24-polyglot-provider-platform`** (`ManagedPolyglotScipRuntimeManager` line 0,228 < 0,28), préexistante et propre à Windows. Gates : boundaries `modules=14, sources=504, packages=45` (+5 sources de production : `Preconditions`, `Sha256`, `JsonShapes`, `ProjectSummary`, `ProjectJson`), current-docs, product-facts, milestone-artifact-references (95), `check-post-mne.py` : verts. Golden : les 12 de `characterization/` **inchangés** (`git diff fc213702..HEAD -- minos-app/src/test/resources scripts` vide) ; aucun script de `scripts/` assoupli.
 
 ## 24. Constats de verif-code (lot 4)
 
