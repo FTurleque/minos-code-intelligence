@@ -64,6 +64,25 @@ class ProjectListDamagedRegistryIntegrationTest {
     }
 
     @Test
+    void aHostileValueInADamagedFileNeverReachesTheTerminal() throws Exception {
+        Path home = Files.createDirectories(temp.resolve("home"));
+        assertEquals(0, run(home, PROJECT, "add", Files.createDirectories(temp.resolve("only")).toString()).exit());
+        String id = firstIdentifier(run(home, PROJECT, LIST, FORMAT, JSON).output());
+        Path file = home.resolve("registry").resolve("projects").resolve(id + ".properties");
+        Files.writeString(file, Files.readString(file, StandardCharsets.UTF_8)
+                .replaceAll("createdAt=.*", "createdAt=\u001b[2Jevil\u0007"), StandardCharsets.UTF_8);
+
+        Result text = run(home, PROJECT, LIST);
+        Result json = run(home, PROJECT, LIST, FORMAT, JSON);
+
+        assertEquals(PARTIAL, text.exit());
+        assertEquals(PARTIAL, json.exit());
+        for (String stream : new String[]{text.output(), text.error(), json.output(), json.error()}) {
+            assertTrue(stream.chars().noneMatch(value -> Character.isISOControl(value) && value != '\n' && value != '\t'), stream);
+        }
+    }
+
+    @Test
     void theHealthyProjectsOfADamagedRegistryStayInspectableByIdentifier() throws Exception {
         Path home = Files.createDirectories(temp.resolve("home"));
         for (String name : new String[]{"alpha", "beta"}) {

@@ -94,6 +94,15 @@ class LocalProjectRegistryInventoryTest {
     }
 
     @Test
+    void aValueCarryingTerminalControlsNeverReachesTheReason() throws IOException {
+        ProjectRegistry.Inventory inventory = assertOnlyTheFirstEntryIsDegraded(file -> rewrite(file,
+                text -> text.replaceAll(CREATED_AT, "createdAt=\u001b[2Jevil\u0007")));
+
+        assertTrue(inventory.unreadable().getFirst().reason().chars().noneMatch(Character::isISOControl),
+                "a damaged file cannot write escape sequences to the terminal");
+    }
+
+    @Test
     void anImpossibleUpdatedAtDegradesOnlyItsEntry() throws IOException {
         assertOnlyTheFirstEntryIsDegraded(file -> rewrite(file, text -> text.replaceAll("updatedAt=.*", "updatedAt=2026-13-99")));
     }
