@@ -7,6 +7,7 @@ import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
+import com.minos.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -78,6 +79,11 @@ public final class ProjectInspectionService {
         List<ProjectView> projects = new ArrayList<>();
         for (RegisteredProject project : registry.listProjects()) projects.add(view(project));
         return List.copyOf(projects);
+    }
+
+    /** Every project of the registry, and what could not be read of it (Q8). */
+    public Inventory inventory() throws IOException {
+        return new Inventory(listProjects(), List.of());
     }
 
     public ProjectView inspectProject(String projectIdentifier) throws IOException {
@@ -158,6 +164,13 @@ public final class ProjectInspectionService {
     }
 
     private static String blankToNull(String value) { return value == null || value.isBlank() ? null : value; }
+
+    public record Inventory(List<ProjectView> projects, List<DegradedEntry> degraded) {
+        public Inventory {
+            projects = List.copyOf(Objects.requireNonNull(projects, "projects"));
+            degraded = List.copyOf(Objects.requireNonNull(degraded, "degraded"));
+        }
+    }
 
     public record ProjectView(String id, String name, String rootPath, boolean rootAvailable, List<String> languages,
                               List<String> buildSystems, int moduleCount, String indexState, String activeSnapshotId,

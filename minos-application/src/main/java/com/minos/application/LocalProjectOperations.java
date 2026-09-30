@@ -60,8 +60,11 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     @Override public ProjectView addProject(Path rootPath, String displayName) throws IOException {
         return projectView(inspectionService.view(registry.registerProject(rootPath, displayName)));
     }
-    @Override public List<ProjectView> listProjects() throws IOException {
-        return inspectionService.listProjects().stream().map(LocalProjectOperations::projectView).toList();
+    @Override public List<ProjectView> listProjects() throws IOException { return inventory().projects(); }
+    @Override public ProjectInventory inventory() throws IOException {
+        ProjectInspectionService.Inventory inventory = inspectionService.inventory();
+        return new ProjectInventory(
+                inventory.projects().stream().map(LocalProjectOperations::projectView).toList(), inventory.degraded());
     }
     @Override public ProjectView inspectProject(String projectIdentifier) throws IOException {
         return projectView(inspectionService.inspectProject(projectIdentifier));

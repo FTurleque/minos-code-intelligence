@@ -45,6 +45,16 @@ public interface ProjectRegistry {
 
     List<RegisteredProject> listProjects() throws IOException;
 
+    /**
+     * The registry as an inventory: every readable project, and one {@link DegradedEntry} per entry that could
+     * not be read. Unlike {@link #listProjects()}, which fails as a whole on the first unreadable entry, this
+     * view isolates the damage to its entry and never hides it (Q8). A registry that cannot be listed at all
+     * still fails with an {@link IOException}: there is then nothing to report entry by entry.
+     */
+    default Inventory inventory() throws IOException {
+        return new Inventory(listProjects(), List.of());
+    }
+
     List<RegisteredWorkspace> listWorkspaces() throws IOException;
 
     /**
@@ -53,6 +63,13 @@ public interface ProjectRegistry {
      */
     default boolean deleteProject(UUID projectId) throws IOException {
         throw new UnsupportedOperationException("project deletion is not supported by this registry");
+    }
+
+    record Inventory(List<RegisteredProject> projects, List<DegradedEntry> unreadable) {
+        public Inventory {
+            projects = List.copyOf(java.util.Objects.requireNonNull(projects, "projects"));
+            unreadable = List.copyOf(java.util.Objects.requireNonNull(unreadable, "unreadable"));
+        }
     }
 
     record RegistrationResult(RegisteredProject project, boolean createdByThisCall) {

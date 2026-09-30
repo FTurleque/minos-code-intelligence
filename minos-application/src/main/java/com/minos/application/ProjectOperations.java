@@ -1,5 +1,7 @@
 package com.minos.application;
 
+import com.minos.registry.DegradedEntry;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
@@ -13,6 +15,14 @@ public interface ProjectOperations {
     ProjectView addProject(Path rootPath, String displayName) throws IOException;
 
     List<ProjectView> listProjects() throws IOException;
+
+    /**
+     * Every project, and one {@link DegradedEntry} per entry that could not be read or fully assembled: the
+     * damaged entries are also rows of {@link ProjectInventory#projects()}, in the state {@code UNREADABLE}.
+     */
+    default ProjectInventory inventory() throws IOException {
+        return new ProjectInventory(listProjects(), List.of());
+    }
 
     ProjectView inspectProject(String projectIdentifier) throws IOException;
 
@@ -47,6 +57,13 @@ public interface ProjectOperations {
             buildSystems = List.copyOf(Objects.requireNonNull(buildSystems, "buildSystems"));
             if (moduleCount < 0) throw new IllegalArgumentException("moduleCount must not be negative");
             requireText(indexState, "indexState");
+        }
+    }
+
+    record ProjectInventory(List<ProjectView> projects, List<DegradedEntry> degraded) {
+        public ProjectInventory {
+            projects = List.copyOf(Objects.requireNonNull(projects, "projects"));
+            degraded = List.copyOf(Objects.requireNonNull(degraded, "degraded"));
         }
     }
 
