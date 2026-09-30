@@ -19,18 +19,40 @@ import java.util.regex.Pattern;
 
 /**
  * Ownership mark carried by every cgroup MINOS creates, and the pure decision that tells a stale-job
- * sweep whether a discovered cgroup belongs to a dead MINOS process and may therefore be reclaimed.
+ * sweep what to do with a discovered cgroup: remove it when it is empty, kill and remove it when its
+ * owner is PROVEN dead, and otherwise leave it alone.
+ *
+ * <h2>The default conclusion: when in doubt, do not reclaim</h2>
+ *
+ * <p>A residue left behind costs memory and {@code pids} of the delegated root, and it is reported with its
+ * reason. A live process killed is audit S3 coming back. So the asymmetry is absolute: every branch that
+ * kills needs a POSITIVE proof that the owner is dead, and whenever that proof is unavailable, partial or
+ * ambiguous the conclusion is {@link Decision#LEAVE}. Unavailable or ambiguous means, among others: the
+ * wall clock moved (it is not an input at all); {@code /proc} cannot be read, is partial, belongs to another
+ * PID namespace or hides other accounts; {@code /proc/<pid>/stat} cannot be read, is cut or malformed, or has
+ * no field 22; the PID exists but its start is unknown; the owner lives in another PID or time namespace; the
+ * mark carries no namespace stamp; the cgroup is unmarked and populated. The only positive proofs are a
+ * process table that was shown to work and has no such PID, and two complete, comparable start-tick values
+ * that differ for a PID that exists. A cgroup that holds no process is removed, never killed.</p>
  *
  * <p>cgroup v2 refuses arbitrary files inside a cgroup directory, so the mark lives in the directory
  * name itself: it is created atomically with the cgroup, disappears with it, survives a crash of its
  * owner and needs no side channel a second MINOS instance would have to locate and trust.</p>
  *
- * <p>Format: {@code <job>.own-<pid>-t<startTicks>-<token>} where {@code pid} is the owning MINOS
- * process, {@code startTicks} its start time in clock ticks since boot as the kernel reports it in
- * field 22 of {@code /proc/<pid>/stat} ({@code 0} when unknown) and {@code token} an eight-hex-digit
- * instance token generated once per JVM. The start ticks distinguish a live owner from an unrelated
- * process that reused its PID; the token lets a JVM recognize its own cgroups without consulting the
- * process table.</p>
+ * <p>Format: {@code <job>.own-<pid>-t<startTicks>-n<pidNamespace>_<timeNamespace>-<token>} where
+ * {@code pid} is the owning MINOS process, {@code startTicks} its start time in clock ticks since boot as
+ * the kernel reports it in field 22 of {@code /proc/<pid>/stat} ({@code 0} when unknown), the two namespace
+ * numbers the inodes of {@code /proc/<pid>/ns/pid} and {@code ns/time} of the owner (the stamp is omitted when
+ * the PID namespace cannot be read) and {@code token} an eight-hex-digit instance token generated once per
+ * JVM. The start ticks distinguish a live owner from an unrelated process that reused its PID; the token
+ * lets a JVM recognize its own cgroups without consulting the process table.</p>
+ *
+ * <p>A PID, and the start ticks read for it, only mean something inside the namespaces they were observed
+ * in. A sweeper in another PID namespace reads another process table, where the owner's PID looks absent or
+ * designates another process; a sweeper in another time namespace reads start ticks shifted by the boot-time
+ * offset of its namespace. Both would conclude a death that did not happen. The stamp is how the sweeper
+ * knows it is not in that situation: a mark whose namespaces differ from its own, or that carries none, is
+ * left alone.</p>
  *
  * <p>The start ticks are counted on the boot clock, which a wall-clock step (NTP, {@code date -s})
  * never moves, and are fixed at process creation: every reader obtains the same value for the same
@@ -38,19 +60,26 @@ import java.util.regex.Pattern;
  * {@code <job>.own-<pid>-<startEpochMillis>-<token>}, derived the start from the wall clock
  * ({@code ProcessHandle.Info.startInstant}, based on {@code btime}): two JVMs on either side of a clock
  * step computed different instants for the SAME process and a sweep concluded to a PID reuse, killing
- * a live MINOS (audit R2). Such legacy marks are still recognized, but only a dead owner PID reclaims
- * them: a live owner is never killed on a start-instant difference.</p>
+ * a live MINOS (audit R2). Such legacy marks are still recognized, but never reclaimed: a wall-clock
+ * instant and no namespaces prove nothing.</p>
  *
- * <p>The {@code t} prefix makes the current format unrecognizable to the previous parser, which reads
- * it as an unmarked name and therefore never reclaims a populated cgroup of a newer MINOS.</p>
+ * <p>The {@code t} prefix and the namespace stamp make the current format unrecognizable to the previous
+ * parsers, which read it as an unmarked name and therefore never reclaim a populated cgroup of a newer
+ * MINOS.</p>
  */
 final class CgroupJobOwnership {
 
     static final String MARK_SEPARATOR = ".own-";
     /** Distinguishes boot-tick marks from legacy wall-clock marks; the previous parser rejects it. */
     static final String TICKS_PREFIX = "t";
-    /** Upper bound of {@link Mark#suffix()}: separator, 10-digit pid, {@code t}, 19-digit ticks, 8-char token. */
-    static final int MAX_SUFFIX_LENGTH = MARK_SEPARATOR.length() + 10 + 1 + TICKS_PREFIX.length() + 19 + 1 + 8;
+    /** Introduces the namespace stamp: {@code -n<pidNamespace>_<timeNamespace>}. */
+    private static final String NAMESPACE_PREFIX = "-n";
+    /**
+     * Upper bound of {@link Mark#suffix()}: separator, 10-digit pid, {@code t}, 19-digit ticks, {@code -n},
+     * two 19-digit namespace inodes joined by {@code _}, 8-char token.
+     */
+    static final int MAX_SUFFIX_LENGTH = MARK_SEPARATOR.length() + 10 + 1 + TICKS_PREFIX.length() + 19
+            + NAMESPACE_PREFIX.length() + 19 + 1 + 19 + 1 + 8;
     /** The kernel process table; {@code /proc/<pid>/stat} carries the start time in clock ticks. */
     static final Path PROC = Path.of("/proc");
     /** 1-based index of {@code starttime} in {@code /proc/<pid>/stat}. */
@@ -63,7 +92,8 @@ final class CgroupJobOwnership {
     private static final Pattern NAMESPACE_LINK = Pattern.compile("^[a-z_]+:\\[(?<inode>[0-9]{1,19})\\]$");
     private static final Pattern MARKED_NAME = Pattern.compile(
             "^(?<job>[A-Za-z0-9][A-Za-z0-9._-]*)\\.own-(?<pid>[0-9]{1,10})-"
-                    + "(?:t(?<ticks>[0-9]{1,19})|(?<legacy>[0-9]{1,19}))-(?<token>[0-9a-f]{8})$");
+                    + "(?:t(?<ticks>[0-9]{1,19})(?:-n(?<pidns>[1-9][0-9]{0,18})_(?<timens>[0-9]{1,19}))?"
+                    + "|(?<legacy>[0-9]{1,19}))-(?<token>[0-9a-f]{8})$");
 
     /** The mark of the running MINOS process, fixed for the lifetime of the JVM. */
     static final Mark CURRENT = Mark.of(ProcessHandle.current(), Mark.newToken());
@@ -180,16 +210,22 @@ final class CgroupJobOwnership {
                 long pid = Long.parseLong(matcher.group("pid"));
                 String token = matcher.group("token");
                 String ticks = matcher.group("ticks");
-                return Optional.of(ticks != null
-                        ? new Mark(pid, Long.parseLong(ticks), token)
-                        : legacyWallClock(pid, Long.parseLong(matcher.group("legacy")), token));
+                if (ticks == null) return Optional.of(legacyWallClock(pid, Long.parseLong(matcher.group("legacy")), token));
+                String pidNamespace = matcher.group("pidns");
+                Namespaces stamp = pidNamespace == null
+                        ? Namespaces.UNKNOWN
+                        : new Namespaces(Long.parseLong(pidNamespace), Long.parseLong(matcher.group("timens")));
+                return Optional.of(new Mark(pid, Long.parseLong(ticks), token).withNamespaces(stamp));
             } catch (IllegalArgumentException malformed) {
                 return Optional.empty();
             }
         }
 
         String suffix() {
-            String startPart = clock == StartClock.BOOT_TICKS ? TICKS_PREFIX + start : Long.toString(start);
+            String startPart = clock == StartClock.BOOT_TICKS
+                    ? TICKS_PREFIX + start + (namespaces.known()
+                            ? NAMESPACE_PREFIX + namespaces.pid() + "_" + namespaces.time() : "")
+                    : Long.toString(start);
             return MARK_SEPARATOR + pid + "-" + startPart + "-" + token;
         }
 
@@ -411,17 +447,26 @@ final class CgroupJobOwnership {
     }
 
     /**
-     * Decides whether a discovered {@code minos-*} cgroup may be reclaimed.
-     *
-     * <p>A PID reuse is only ever concluded from two kernel start-tick values that differ, both read
-     * on the boot clock; the wall clock never takes part in the decision. Whenever the owner PID is
-     * alive and a reuse cannot be proven that way, the cgroup is left intact.</p>
+     * Decides what to do with a discovered {@code minos-*} cgroup. The conclusion is {@link Decision#LEAVE}
+     * unless one of these holds (see the class documentation: when in doubt, do not reclaim):
+     * <ul>
+     *   <li>the cgroup is unmarked and holds no process in it or below it: {@link Decision#REMOVE_EMPTY},
+     *       which never kills;</li>
+     *   <li>the owner lives in the same PID and time namespaces as the sweeper and the process table,
+     *       proven readable, has no such PID: {@link Decision#RECLAIM};</li>
+     *   <li>same namespaces, the PID exists and its complete start ticks differ from the mark's: the PID was
+     *       reused, {@link Decision#RECLAIM}.</li>
+     * </ul>
+     * Everything else is left intact: this sweeper's own cgroups, a live owner, a legacy or unstamped mark, an
+     * owner of another namespace, an owner the process table cannot verify, a PID whose start is unknown, an
+     * unmarked cgroup that holds a process. The wall clock never takes part in the decision.
      *
      * @param mark           the ownership mark parsed from the directory name, empty for unmarked names
      * @param self           the mark of the sweeping MINOS process
      * @param owners         process-table lookup for the owner PID
-     * @param aliveProcesses number of processes currently inside the cgroup, read lazily and only when the
-     *                       decision needs it; may throw a containment failure the caller propagates
+     * @param aliveProcesses number of processes currently inside the cgroup and the cgroups below it, read
+     *                       lazily and only when the decision needs it; may throw a containment failure the
+     *                       caller propagates
      */
     static Verdict decide(Optional<Mark> mark, Mark self, OwnerLookup owners, LongSupplier aliveProcesses) {
         Objects.requireNonNull(mark, "mark");
@@ -438,6 +483,22 @@ final class CgroupJobOwnership {
         if (owner.token().equals(self.token())) {
             return new Verdict(Decision.LEAVE, "cgroup belongs to this MINOS instance");
         }
+        if (owner.clock() == StartClock.LEGACY_WALL_CLOCK) {
+            return new Verdict(Decision.LEAVE, "legacy mark of owner pid " + owner.pid() + " carries a wall-clock"
+                    + " start instant and no namespaces, which prove nothing about the owner");
+        }
+        if (!self.namespaces().known()) {
+            return new Verdict(Decision.LEAVE, "the PID namespace of this process cannot be identified, so owner pid "
+                    + owner.pid() + " cannot be shown to live in it");
+        }
+        if (!owner.namespaces().known()) {
+            return new Verdict(Decision.LEAVE, "the mark of owner pid " + owner.pid() + " carries no namespace stamp"
+                    + " (written by an earlier build), so its pid cannot be looked up here");
+        }
+        if (!owner.namespaces().equals(self.namespaces())) {
+            return new Verdict(Decision.LEAVE, "owner pid " + owner.pid() + " lives in another PID or time namespace:"
+                    + " its pid and start ticks mean nothing here");
+        }
         OwnerStatus status = owners.find(owner.pid());
         if (status.presence() == OwnerStatus.Presence.UNVERIFIABLE) {
             return new Verdict(Decision.LEAVE, "owner pid " + owner.pid() + " cannot be verified: "
@@ -446,10 +507,6 @@ final class CgroupJobOwnership {
         if (status.presence() == OwnerStatus.Presence.GONE) {
             return new Verdict(Decision.RECLAIM, "owner pid " + owner.pid()
                     + " is absent from a process table proven readable, it is no longer alive");
-        }
-        if (owner.clock() == StartClock.LEGACY_WALL_CLOCK) {
-            return new Verdict(Decision.LEAVE, "owner pid " + owner.pid() + " is alive and its legacy mark"
-                    + " carries a wall-clock start instant, which cannot prove a pid reuse");
         }
         if (owner.start() == 0L) {
             return new Verdict(Decision.LEAVE, "owner pid " + owner.pid()
