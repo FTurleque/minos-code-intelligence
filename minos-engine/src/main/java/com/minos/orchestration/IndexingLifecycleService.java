@@ -193,7 +193,7 @@ public final class IndexingLifecycleService {
      * Récupère l'état du projet sous le bail exclusif de cycle de vie. C'est une <em>mutation</em>, pas une
      * lecture : elle finalise chaque run laissé RUNNING par un propriétaire mort, réécrit l'état, et attend
      * le bail (de façon bornée) si une indexation est en cours. Une lecture de statut ne doit pas l'appeler :
-     * elle passe par {@code ProjectIndexStateReconciler.observe}, qui ne prend aucun bail et n'écrit rien
+     * elle passe par {@code ProjectIndexStateReconciler.observeStatus}, qui ne prend aucun bail et n'écrit rien
      * (lot 2, P1). Son seul appelant est le coordinateur incrémental, qui tient déjà le bail.
      */
     public ProjectIndexState recoverProjectState(UUID id) {

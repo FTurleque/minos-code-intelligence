@@ -68,7 +68,7 @@ class ProjectStateReadUnderConcurrentWriteTest {
                 boolean finalRead;
                 do {
                     finalRead = writerDone.get();
-                    ProjectIndexState state = reader.observe(projectId).projectState().orElseThrow();
+                    ProjectIndexState state = reader.observeStatus(projectId).projectState().orElseThrow();
                     int sequence = sequenceOf(state);
                     assertEquals(sequence % 2 == 0 ? ProjectIndexState.Availability.READY
                                     : ProjectIndexState.Availability.INDEXING, state.availability(),

@@ -85,7 +85,7 @@ class ProjectIndexStateReconcilerTest {
     }
 
     @Test
-    void observeReportsAnInFlightRunUnchangedEvenWhenItsSnapshotIsAlreadyPromoted() throws Exception {
+    void observeStatusReportsAnInFlightRunUnchangedEvenWhenItsSnapshotIsAlreadyPromoted() throws Exception {
         UUID projectId = UUID.randomUUID();
         FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(tmp.resolve("snapshots-in-flight"));
         snapshots.publish(projectId, "snapshot-new", List.of(), List.of(), List.of());
@@ -94,13 +94,34 @@ class ProjectIndexStateReconcilerTest {
         durable.saveProjectState(indexing);
 
         ProjectIndexStateReconciler.Reconciliation observed =
-                new ProjectIndexStateReconciler(snapshots, durable).observe(projectId);
+                new ProjectIndexStateReconciler(snapshots, durable).observeStatus(projectId);
 
         assertFalse(observed.repaired(), "a reader cannot tell an in-flight run from an abandoned one");
         assertEquals(indexing, observed.projectState().orElseThrow(), "the state its owner published");
         assertEquals("snapshot-new", observed.activeSnapshot().orElseThrow().snapshotId(),
                 "the snapshot is the authoritative one, ahead of the published state");
         assertEquals(indexing, durable.findProjectState(projectId).orElseThrow(), "nothing was written");
+    }
+
+    @Test
+    void observeForADryRunPlanStillComputesTheRepairOfAnInProgressStateLeftByADeadRun() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(tmp.resolve("snapshots-dry-run"));
+        snapshots.publish(projectId, "snapshot-new", List.of(), List.of(), List.of());
+        FileIndexStateStore durable = new FileIndexStateStore(tmp.resolve("state-dry-run"));
+        ProjectIndexState indexing = state(projectId, ProjectIndexState.Availability.INDEXING, "snapshot-old");
+        durable.saveProjectState(indexing);
+        ProjectIndexStateReconciler reconciler = new ProjectIndexStateReconciler(snapshots, durable);
+
+        ProjectIndexStateReconciler.Reconciliation planned = reconciler.observe(projectId);
+
+        assertTrue(planned.repaired(), "the plan anticipates the recovery the real run performs under the lease");
+        assertEquals(ProjectIndexState.Availability.READY, planned.projectState().orElseThrow().availability());
+        assertEquals(Optional.of("snapshot-new"), planned.projectState().orElseThrow().activeSnapshotId());
+        assertEquals(indexing, durable.findProjectState(projectId).orElseThrow(), "the dry run wrote nothing");
+        assertEquals(planned.projectState().orElseThrow().availability(),
+                reconciler.reconcile(projectId).projectState().orElseThrow().availability(),
+                "the dry run and the real run start from the same state");
     }
 
     @Test
