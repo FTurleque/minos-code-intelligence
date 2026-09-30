@@ -3,7 +3,10 @@ package com.minos.runtime.local;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -276,20 +279,37 @@ final class CgroupJobOwnership {
     @FunctionalInterface
     interface OwnerLookup {
 
-        /** The process table of this host, as seen for the cgroup at {@code cgroup}. */
+        /**
+         * The process table of this host, as seen for the cgroup at {@code cgroup}: the owner of a cgroup
+         * is an account, and whether this account can see its processes depends on that account.
+         */
         static OwnerLookup system(Path cgroup) {
             Objects.requireNonNull(cgroup, "cgroup");
-            return pid -> ProcessHandle.of(pid)
-                    .filter(ProcessHandle::isAlive)
-                    .map(handle -> OwnerStatus.present(startTicks(PROC, pid)))
-                    .orElseGet(OwnerStatus::gone);
+            return new ProcessTable(PROC, ProcessHandle.current().pid(), () -> sameAccount(PROC, cgroup));
         }
 
         OwnerStatus find(long pid);
     }
 
+    /** True when the cgroup was created by the account this process runs as; false when that cannot be told. */
+    static boolean sameAccount(Path proc, Path cgroup) {
+        try {
+            return Files.getOwner(cgroup, LinkOption.NOFOLLOW_LINKS).equals(Files.getOwner(proc.resolve("self")));
+        } catch (IOException | RuntimeException unknown) {
+            return false;
+        }
+    }
+
     /**
-     * A process table read from a {@code /proc} directory.
+     * A process table read from a {@code /proc} directory, answering only what it can prove.
+     *
+     * <p>"This PID is gone" is a claim about the table, and it is made only about a table that has been
+     * shown to work: {@code self/stat} is readable and describes this very process, so the table is
+     * readable and belongs to this PID namespace; the entry of the PID is reported absent by the file
+     * system itself (and not by a read that failed for another reason: no descriptor left, no permission);
+     * and the table does not hide other accounts' processes, or the owner is this account, whose processes
+     * it always shows. The JDK's {@code ProcessHandle.of} makes none of these checks: it answers "no such
+     * process" whenever its own read of {@code /proc/<pid>/stat} fails, for a live process too.</p>
      *
      * @param proc        the process table directory ({@code /proc}; a temporary directory in tests)
      * @param ownPid      PID of this process in the PID namespace it lives in
@@ -305,13 +325,60 @@ final class CgroupJobOwnership {
 
         @Override
         public OwnerStatus find(long pid) {
+            String self;
             try {
-                String stat = Files.readString(
-                        proc.resolve(Long.toString(pid)).resolve("stat"), StandardCharsets.ISO_8859_1);
-                return OwnerStatus.present(parseStartTicks(stat));
+                self = Files.readString(proc.resolve("self").resolve("stat"), StandardCharsets.ISO_8859_1);
             } catch (IOException | RuntimeException unreadable) {
-                return OwnerStatus.gone();
+                return OwnerStatus.unverifiable("the process table cannot be read ("
+                        + unreadable.getClass().getSimpleName() + ")");
             }
+            if (!self.startsWith(ownPid + " ")) {
+                return OwnerStatus.unverifiable("the process table is not the one of this PID namespace");
+            }
+            Path entry = proc.resolve(Long.toString(pid));
+            String stat;
+            try {
+                stat = Files.readString(entry.resolve("stat"), StandardCharsets.ISO_8859_1);
+            } catch (NoSuchFileException absent) {
+                if (!Files.notExists(entry, LinkOption.NOFOLLOW_LINKS)) {
+                    return OwnerStatus.unverifiable("the process entry exists but its stat is missing");
+                }
+                return goneUnlessHidden();
+            } catch (IOException | RuntimeException unreadable) {
+                return OwnerStatus.unverifiable("the process stat cannot be read ("
+                        + unreadable.getClass().getSimpleName() + ")");
+            }
+            return OwnerStatus.present(parseStartTicks(stat));
+        }
+
+        private OwnerStatus goneUnlessHidden() {
+            if (hidesOtherAccounts() && !sameAccount.getAsBoolean()) {
+                return OwnerStatus.unverifiable("the process table hides the processes of other accounts"
+                        + " (hidepid) and the owner may be one");
+            }
+            return OwnerStatus.gone();
+        }
+
+        /** True unless the mount options show the table hides nothing; unreadable mount options are doubt. */
+        private boolean hidesOtherAccounts() {
+            List<String> mounts;
+            try {
+                mounts = Files.readAllLines(proc.resolve("self").resolve("mountinfo"), StandardCharsets.ISO_8859_1);
+            } catch (IOException | RuntimeException unreadable) {
+                return true;
+            }
+            for (String mount : mounts) {
+                int separator = mount.indexOf(" - ");
+                if (separator < 0) continue;
+                String[] filesystem = mount.substring(separator + 3).split(" ");
+                if (filesystem.length < 3 || !"proc".equals(filesystem[0])) continue;
+                for (String option : filesystem[2].split(",")) {
+                    if (!option.startsWith("hidepid=")) continue;
+                    String value = option.substring("hidepid=".length());
+                    if (!"0".equals(value) && !"off".equals(value)) return true;
+                }
+            }
+            return false;
         }
     }
 
@@ -363,7 +430,7 @@ final class CgroupJobOwnership {
         Objects.requireNonNull(aliveProcesses, "aliveProcesses");
         if (mark.isEmpty()) {
             long alive = aliveProcesses.getAsLong();
-            if (alive == 0L) return new Verdict(Decision.RECLAIM, "unmarked cgroup holds no process");
+            if (alive == 0L) return new Verdict(Decision.REMOVE_EMPTY, "unmarked cgroup holds no process");
             return new Verdict(Decision.LEAVE, "unmarked cgroup still holds " + alive
                     + " process(es) and its owner cannot be identified");
         }
@@ -372,8 +439,13 @@ final class CgroupJobOwnership {
             return new Verdict(Decision.LEAVE, "cgroup belongs to this MINOS instance");
         }
         OwnerStatus status = owners.find(owner.pid());
-        if (status.presence() != OwnerStatus.Presence.PRESENT) {
-            return new Verdict(Decision.RECLAIM, "owner pid " + owner.pid() + " is no longer alive");
+        if (status.presence() == OwnerStatus.Presence.UNVERIFIABLE) {
+            return new Verdict(Decision.LEAVE, "owner pid " + owner.pid() + " cannot be verified: "
+                    + status.reason());
+        }
+        if (status.presence() == OwnerStatus.Presence.GONE) {
+            return new Verdict(Decision.RECLAIM, "owner pid " + owner.pid()
+                    + " is absent from a process table proven readable, it is no longer alive");
         }
         if (owner.clock() == StartClock.LEGACY_WALL_CLOCK) {
             return new Verdict(Decision.LEAVE, "owner pid " + owner.pid() + " is alive and its legacy mark"

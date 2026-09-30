@@ -266,7 +266,9 @@ final class LinuxCgroupJob implements AutoCloseable {
             return verdict;
         }
         LOGGER.log(System.Logger.Level.DEBUG, "MINOS reclaims stale cgroup " + name + ": " + verdict.reason());
-        if (stale.aliveProcesses() > 0L) {
+        // Only an owner proven dead authorizes a kill. An empty cgroup is removed and nothing else: the
+        // membership that found it empty is a moment, and whoever joins it afterwards is not proven dead.
+        if (verdict.kills() && stale.aliveProcesses() > 0L) {
             stale.kill(context.killPolls(), context.killPollMillis());
         }
         try {
