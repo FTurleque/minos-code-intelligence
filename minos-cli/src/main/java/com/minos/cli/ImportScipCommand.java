@@ -5,18 +5,16 @@ import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /** Import manuel explicite d'un artefact SCIP. */
 public final class ImportScipCommand {
 
     public static final String NAME = "import-scip";
-    private static final Set<String> OPTIONS = Set.of(
-            "--file", "--provider", "--provider-version", "--module", "--snapshot", "--format");
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec()
+            .text("--file", "--provider", "--provider-version", "--module", "--snapshot", "--format");
     private static final String USAGE = """
             Usage: minos import-scip <project> --file <index.scip> --provider <id> [options]
 
@@ -118,39 +116,17 @@ public final class ImportScipCommand {
                 throw new IllegalArgumentException("expected <project>");
             }
             String project = CliCommandSupport.operand(arguments[0], "project");
-            Path file = null;
-            String provider = null;
-            String providerVersion = null;
-            String module = null;
-            String snapshot = null;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Set<String> seen = new HashSet<>();
-            for (int i = 1; i < arguments.length; i++) {
-                String option = arguments[i];
-                if (!OPTIONS.contains(option) || !seen.add(option)) {
-                    throw new IllegalArgumentException("unknown or duplicate option: " + option);
-                }
-                if (++i >= arguments.length || arguments[i] == null || arguments[i].isBlank()) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                String value = arguments[i];
-                switch (option) {
-                    case "--file" -> file = Path.of(value);
-                    case "--provider" -> provider = value;
-                    case "--provider-version" -> providerVersion = value;
-                    case "--module" -> module = value;
-                    case "--snapshot" -> snapshot = value;
-                    case "--format" -> format = SymbolOutputFormat.parse(value);
-                    default -> throw new IllegalStateException("unhandled option: " + option);
-                }
-            }
+            CliOptions options = OPTIONS.parse(arguments, 1);
+            String file = options.text("--file");
             if (file == null) {
                 throw new IllegalArgumentException("--file is required");
             }
+            String provider = options.text("--provider");
             if (provider == null || provider.isBlank()) {
                 throw new IllegalArgumentException("--provider is required");
             }
-            return new Options(project, file, provider, providerVersion, module, snapshot, format);
+            return new Options(project, Path.of(file), provider, options.text("--provider-version"),
+                    options.text("--module"), options.text("--snapshot"), options.format());
         }
     }
 }

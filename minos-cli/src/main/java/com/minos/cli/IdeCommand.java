@@ -37,8 +37,10 @@ public final class IdeCommand {
             Usage: minos ide handshake [--format <text|json>]
             """.stripTrailing();
 
+    private static final CliOptions.Spec HANDSHAKE_OPTIONS = CliOptions.spec().text("--format");
+
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
+        if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
@@ -77,17 +79,9 @@ public final class IdeCommand {
         return USAGE;
     }
 
+    /** The handshake answers JSON unless {@code --format text} is given. */
     private static SymbolOutputFormat parseFormat(String[] arguments) {
-        if (arguments.length == 1) {
-            return SymbolOutputFormat.JSON;
-        }
-        if (arguments.length != 3 || !"--format".equals(arguments[1])) {
-            throw new IllegalArgumentException("only --format is supported after handshake");
-        }
-        return SymbolOutputFormat.parse(arguments[2]);
-    }
-
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
+        String format = HANDSHAKE_OPTIONS.parse(arguments, 1).text("--format");
+        return format == null ? SymbolOutputFormat.JSON : SymbolOutputFormat.parse(format);
     }
 }

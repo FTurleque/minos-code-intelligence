@@ -90,6 +90,11 @@ final class CliCommandSupport {
                 (options, exception) -> label + " failed: " + failureMessage(exception), body);
     }
 
+    /** Failure line {@code <label> failed: <message>} reporting the originating cause of nested runtime wrappers. */
+    static <O> FailureReporter<O> reportingCause(String label) {
+        return (options, exception) -> label + " failed: " + failureMessage(unwrapRuntime(exception));
+    }
+
     static boolean isHelp(String value) {
         return "--help".equals(value) || "-h".equals(value);
     }

@@ -32,6 +32,13 @@ public final class GitActivityCommand {
               --format <text|json>      Output format (default: text)
             """.stripTrailing();
 
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec()
+            .text("--format")
+            .integer("--days", 1, 3650)
+            .integer("--max-commits", 1, 10_000)
+            .integer("--max-files", 1, 10_000)
+            .integer("--zone-depth", 1, 8);
+
     private final ProjectOperations projects;
     private final GitIntelligence git;
 
@@ -169,50 +176,13 @@ public final class GitActivityCommand {
             SymbolOutputFormat format
     ) {
         private static Options parse(String[] arguments) {
-            if (arguments.length < 1 || arguments[0] == null || arguments[0].isBlank() || arguments[0].startsWith("-")) {
+            if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
-            String project = arguments[0];
-            int days = 30;
-            int maxCommits = 500;
-            int maxFiles = 500;
-            int zoneDepth = 2;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Set<String> seen = new java.util.HashSet<>();
-            for (int index = 1; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (!Set.of("--days", "--max-commits", "--max-files", "--zone-depth", "--format").contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if (++index >= arguments.length || arguments[index] == null || arguments[index].isBlank()) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                String value = arguments[index];
-                switch (option) {
-                    case "--days" -> days = boundedInt(value, option, 1, 3650);
-                    case "--max-commits" -> maxCommits = boundedInt(value, option, 1, 10_000);
-                    case "--max-files" -> maxFiles = boundedInt(value, option, 1, 10_000);
-                    case "--zone-depth" -> zoneDepth = boundedInt(value, option, 1, 8);
-                    case "--format" -> format = SymbolOutputFormat.parse(value);
-                    default -> throw new IllegalStateException("unhandled option " + option);
-                }
-            }
-            return new Options(project, days, maxCommits, maxFiles, zoneDepth, format);
-        }
-
-        private static int boundedInt(String value, String option, int minimum, int maximum) {
-            try {
-                int parsed = Integer.parseInt(value);
-                if (parsed < minimum || parsed > maximum) {
-                    throw new IllegalArgumentException(option + " must be between " + minimum + " and " + maximum);
-                }
-                return parsed;
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException(option + " must be an integer");
-            }
+            String project = CliCommandSupport.operand(arguments[0], "project");
+            CliOptions options = OPTIONS.parse(arguments, 1);
+            return new Options(project, options.integer("--days", 30), options.integer("--max-commits", 500),
+                    options.integer("--max-files", 500), options.integer("--zone-depth", 2), options.format());
         }
     }
 }

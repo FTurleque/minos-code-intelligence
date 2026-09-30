@@ -8,13 +8,11 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 /** Commandes stables d'administration du registre projet. */
 public final class ProjectCommand {
@@ -39,6 +37,9 @@ public final class ProjectCommand {
               minos index-status <project> [--format <text|json>]
             """.stripTrailing();
 
+    private static final CliOptions.Spec FORMAT_ONLY = CliOptions.spec().text("--format");
+    private static final CliOptions.Spec ADD_OPTIONS = CliOptions.spec().text("--name", "--format");
+
     private final ProjectOperations operations;
     private final IndexResumeStatusSource resumeStatus;
 
@@ -53,7 +54,7 @@ public final class ProjectCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
+        if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
@@ -69,43 +70,21 @@ public final class ProjectCommand {
     }
 
     public int runInspectAlias(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(INSPECT_USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.singleProject(arguments);
-        } catch (IllegalArgumentException exception) {
-            return commandUsageError(exception, INSPECT_USAGE, error);
-        }
-        try {
-            ProjectOperations.ProjectView project = operations.inspectProject(options.project());
-            output.append(renderProject(project, options.format())).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            return executionError("inspect", exception, error);
-        }
+        return CliCommandSupport.run(arguments, output, error, INSPECT_USAGE, Options::singleProject,
+                CliCommandSupport.reportingCause("inspect"), options -> {
+                    ProjectOperations.ProjectView project = operations.inspectProject(options.project());
+                    output.append(renderProject(project, options.format())).append('\n');
+                    return FindSymbolCommand.SUCCESS;
+                });
     }
 
     public int runIndexStatus(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(STATUS_USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.singleProject(arguments);
-        } catch (IllegalArgumentException exception) {
-            return commandUsageError(exception, STATUS_USAGE, error);
-        }
-        try {
-            ProjectOperations.ProjectView project = operations.inspectProject(options.project());
-            output.append(renderIndexStatus(project, options.format())).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            return executionError("index-status", exception, error);
-        }
+        return CliCommandSupport.run(arguments, output, error, STATUS_USAGE, Options::singleProject,
+                CliCommandSupport.reportingCause("index-status"), options -> {
+                    ProjectOperations.ProjectView project = operations.inspectProject(options.project());
+                    output.append(renderIndexStatus(project, options.format())).append('\n');
+                    return FindSymbolCommand.SUCCESS;
+                });
     }
 
     public static String usage() {
@@ -113,43 +92,22 @@ public final class ProjectCommand {
     }
 
     private int runAdd(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(ADD_USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        AddOptions options;
-        try {
-            options = AddOptions.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            return commandUsageError(exception, ADD_USAGE, error);
-        }
-        try {
-            ProjectOperations.ProjectView project = operations.addProject(options.path(), options.name());
-            output.append(renderProject(project, options.format())).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            return executionError("project add", exception, error);
-        }
+        return CliCommandSupport.run(arguments, output, error, ADD_USAGE, AddOptions::parse,
+                CliCommandSupport.reportingCause("project add"), options -> {
+                    ProjectOperations.ProjectView project = operations.addProject(options.path(), options.name());
+                    output.append(renderProject(project, options.format())).append('\n');
+                    return FindSymbolCommand.SUCCESS;
+                });
     }
 
     private int runList(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(LIST_USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        SymbolOutputFormat format;
-        try {
-            format = parseFormatOnly(arguments);
-        } catch (IllegalArgumentException exception) {
-            return commandUsageError(exception, LIST_USAGE, error);
-        }
-        try {
-            List<ProjectOperations.ProjectView> projects = operations.listProjects();
-            output.append(renderProjects(projects, format)).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            return executionError("project list", exception, error);
-        }
+        return CliCommandSupport.run(arguments, output, error, LIST_USAGE,
+                listArguments -> FORMAT_ONLY.parse(listArguments, 0).format(),
+                CliCommandSupport.reportingCause("project list"), format -> {
+                    List<ProjectOperations.ProjectView> projects = operations.listProjects();
+                    output.append(renderProjects(projects, format)).append('\n');
+                    return FindSymbolCommand.SUCCESS;
+                });
     }
 
     private static String renderProjects(List<ProjectOperations.ProjectView> projects, SymbolOutputFormat format) {
@@ -243,32 +201,9 @@ public final class ProjectCommand {
         return map;
     }
 
-    private static SymbolOutputFormat parseFormatOnly(String[] arguments) {
-        if (arguments.length == 0) {
-            return SymbolOutputFormat.TEXT;
-        }
-        if (arguments.length != 2 || !"--format".equals(arguments[0])) {
-            throw new IllegalArgumentException("only --format is supported");
-        }
-        return SymbolOutputFormat.parse(arguments[1]);
-    }
-
     private static int usageError(String message, Appendable error) throws IOException {
         error.append("error: ").append(message).append('\n').append(USAGE).append('\n');
         return FindSymbolCommand.USAGE_ERROR;
-    }
-
-    private static int commandUsageError(IllegalArgumentException exception, String usage, Appendable error)
-            throws IOException {
-        error.append("error: ").append(exception.getMessage()).append('\n');
-        error.append(usage).append('\n');
-        return FindSymbolCommand.USAGE_ERROR;
-    }
-
-    private static int executionError(String command, Exception exception, Appendable error) throws IOException {
-        error.append("error: ").append(command).append(" failed: ")
-                .append(CliCommandSupport.failureMessage(CliCommandSupport.unwrapRuntime(exception))).append('\n');
-        return FindSymbolCommand.EXECUTION_ERROR;
     }
 
     private static String nullable(String value) {
@@ -279,24 +214,13 @@ public final class ProjectCommand {
         return java.util.Arrays.copyOfRange(values, from, values.length);
     }
 
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
-    }
-
     private record Options(String project, SymbolOutputFormat format) {
         private static Options singleProject(String[] arguments) {
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
             String project = CliCommandSupport.operand(arguments[0], "project");
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            if (arguments.length > 1) {
-                if (arguments.length != 3 || !"--format".equals(arguments[1])) {
-                    throw new IllegalArgumentException("unexpected arguments");
-                }
-                format = SymbolOutputFormat.parse(arguments[2]);
-            }
-            return new Options(project, format);
+            return new Options(project, FORMAT_ONLY.parse(arguments, 1).format());
         }
     }
 
@@ -305,29 +229,9 @@ public final class ProjectCommand {
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <path>");
             }
-            String rawPath = CliCommandSupport.operand(arguments[0], "path");
-            Path path = Path.of(rawPath);
-            String name = defaultName(path);
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Set<String> seen = new HashSet<>();
-            for (int index = 1; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (!Set.of("--name", "--format").contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if (++index >= arguments.length || arguments[index] == null || arguments[index].isBlank()) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                if ("--name".equals(option)) {
-                    name = arguments[index];
-                } else {
-                    format = SymbolOutputFormat.parse(arguments[index]);
-                }
-            }
-            return new AddOptions(path, name, format);
+            Path path = Path.of(CliCommandSupport.operand(arguments[0], "path"));
+            CliOptions options = ADD_OPTIONS.parse(arguments, 1);
+            return new AddOptions(path, options.text("--name", defaultName(path)), options.format());
         }
 
         private static String defaultName(Path path) {
