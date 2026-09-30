@@ -27,6 +27,8 @@ import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Compatibility facade for local versioned snapshot persistence and active query views.
  *
@@ -399,10 +401,6 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         ReentrantLock[] locks = new ReentrantLock[BUILD_LOCK_STRIPES];
         for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
         return locks;
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(fieldName + " must not be blank");
     }
 
     private enum PointerState { MATCH, CHANGED, MISSING }

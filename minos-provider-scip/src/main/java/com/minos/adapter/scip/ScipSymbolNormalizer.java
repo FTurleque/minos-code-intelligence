@@ -16,6 +16,8 @@ import java.util.HexFormat;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Normalisation des symboles SCIP vers le domaine MINOS.
  *
@@ -225,11 +227,5 @@ final class ScipSymbolNormalizer {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
     }
 }

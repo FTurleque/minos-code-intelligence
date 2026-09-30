@@ -3,6 +3,8 @@ package com.minos.adapter.scip;
 import java.nio.file.Path;
 import java.util.Map;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Contexte MINOS nécessaire pour normaliser un index SCIP.
  */
@@ -79,11 +81,5 @@ record ScipIngestionRequest(
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
     }
 }

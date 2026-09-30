@@ -40,6 +40,8 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Persistance locale, versionnée et vérifiée des snapshots d'empreintes M7.
  *
@@ -692,13 +694,6 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     private static void update(MessageDigest digest, String value) {
         digest.update(value.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 
     private record ActivePointer(

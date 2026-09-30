@@ -41,6 +41,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Atomic, bounded and checksum-verified local persistence for M26 runtime sessions. */
 public final class FileRuntimeObservationStore implements RuntimeObservationStore {
 
@@ -501,10 +503,6 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
             Objects.requireNonNull(sessionId, "sessionId");
             Objects.requireNonNull(importedAt, "importedAt");
         }
-    }
-
-    private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " must not be blank");
     }
 
     private static void rejectUnsafeProjectEntry(Path project) throws IOException {

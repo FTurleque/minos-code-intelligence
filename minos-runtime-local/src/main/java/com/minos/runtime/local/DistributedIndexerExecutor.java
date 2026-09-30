@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Worker-backed executor that accepts only a verified artifact matching the exact request.
  *
@@ -189,12 +191,5 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
     private static String portableScope(Path projectRelativeRoot) {
         String portable = projectRelativeRoot.toString().replace('\\', '/');
         return ".".equals(portable) ? "" : portable;
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 }
