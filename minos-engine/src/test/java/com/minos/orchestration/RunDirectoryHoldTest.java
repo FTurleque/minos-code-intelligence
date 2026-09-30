@@ -95,7 +95,9 @@ class RunDirectoryHoldTest {
             @Override public void mark(UUID runId) throws IOException {
                 throw new IOException("marker directory is not writable");
             }
-            @Override public void unmark(UUID runId) { }
+            @Override public void unmark(UUID runId) {
+                // Nothing to lift: this marker store never wrote a mark.
+            }
             @Override public Optional<Path> runDirectory(UUID runId) {
                 return Optional.of(fixture.home.resolve("runs").resolve(runId.toString()));
             }
