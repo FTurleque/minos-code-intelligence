@@ -89,11 +89,6 @@ public final class MinosCli {
         int run(String[] arguments, Appendable output, Appendable error) throws IOException;
     }
 
-    @FunctionalInterface
-    private interface CommandHandler<C> {
-        int run(C command, String[] arguments, Appendable output, Appendable error) throws IOException;
-    }
-
     /**
      * Seul point d'entrée (ADR 0045). Seules les requêtes de symboles sont obligatoires ; un collaborateur
      * non fourni laisse sa commande « not configured in this CLI bootstrap ».
@@ -117,63 +112,83 @@ public final class MinosCli {
         RuntimeIntelligenceService runtimeIntelligenceService = builder.runtimeIntelligenceService;
         HostedControlPlaneService hostedControlPlaneService = builder.hostedControlPlaneService;
         IndexResumeStatusSource resumeStatus = builder.resumeStatus;
-        register(IdeCommand.NAME, IdeCommand.usage() + "\n\n" + IdeIntelligenceCommand.usage(),
-                new IdeCommand(), IdeCommand::run);
+        IdeCommand ideCommand = new IdeCommand();
         ProjectCommand projectCommand = projectOperations == null ? null : new ProjectCommand(projectOperations,
                 resumeStatus == null ? projectId -> java.util.Optional.empty() : resumeStatus);
-        register(ProjectCommand.NAME, ProjectCommand.usage(), projectCommand, ProjectCommand::run);
-        register("inspect", ProjectCommand.inspectUsage(), projectCommand, ProjectCommand::runInspectAlias);
-        register(IndexCommand.NAME, IndexCommand.usage(),
-                projectOperations == null ? null : new IndexCommand(projectOperations, autonomousOperations),
-                IndexCommand::run);
-        register(ImportScipCommand.NAME, ImportScipCommand.usage(),
-                projectOperations == null ? null : new ImportScipCommand(projectOperations), ImportScipCommand::run);
-        register("index-status", ProjectCommand.indexStatusUsage(), projectCommand, ProjectCommand::runIndexStatus);
-        register(ToolsCommand.NAME, ToolsCommand.usage(),
-                autonomousOperations == null ? null : new ToolsCommand(autonomousOperations), ToolsCommand::run);
-        register(DoctorCommand.NAME, DoctorCommand.usage(),
-                autonomousOperations == null || home == null ? null : new DoctorCommand(home, autonomousOperations),
-                DoctorCommand::run);
-        register(ProviderCommand.NAME, ProviderCommand.usage(),
-                providerPlatformService == null ? null : new ProviderCommand(providerPlatformService),
-                ProviderCommand::run);
-        register(ArchitectureCommand.NAME, ArchitectureCommand.usage(),
-                architectureQuery == null ? null : new ArchitectureCommand(architectureQuery), ArchitectureCommand::run);
-        register(ImpactCommand.NAME, ImpactCommand.usage(),
-                impactQuery == null ? null : new ImpactCommand(impactQuery), ImpactCommand::run);
-        register(GitActivityCommand.NAME, GitActivityCommand.usage(),
-                projectOperations == null || gitIntelligenceService == null
-                        ? null : new GitActivityCommand(projectOperations, gitIntelligenceService),
-                GitActivityCommand::run);
-        register(NexusExportCommand.NAME, NexusExportCommand.usage(), nexusExportCommand, NexusExportCommand::run);
-        register(RemoteIndexCommand.NAME, RemoteIndexCommand.usage(),
-                remoteIndexOperations == null ? null : new RemoteIndexCommand(remoteIndexOperations),
-                RemoteIndexCommand::run);
-        register(RuntimeCommand.NAME, RuntimeCommand.usage(),
-                runtimeIntelligenceService == null ? null : new RuntimeCommand(runtimeIntelligenceService),
-                RuntimeCommand::run);
-        register(TeamCommand.NAME, TeamCommand.usage(),
-                hostedControlPlaneService == null ? null : new TeamCommand(
-                        hostedControlPlaneService, () -> System.getenv(TeamCommand.TOKEN_ENVIRONMENT_VARIABLE)),
-                TeamCommand::run);
-        register(FindSymbolCommand.NAME, FindSymbolCommand.usage(), new FindSymbolCommand(symbolQuery),
-                FindSymbolCommand::run);
-        register(SearchCodeCommand.NAME, SearchCodeCommand.usage(), new SearchCodeCommand(symbolQuery),
-                SearchCodeCommand::run);
-        register(GetSourceCommand.NAME, GetSourceCommand.usage(), new GetSourceCommand(symbolQuery),
-                GetSourceCommand::run);
-        register(FindUsagesCommand.NAME, FindUsagesCommand.usage(), new FindUsagesCommand(symbolQuery),
-                FindUsagesCommand::run);
+        IndexCommand indexCommand = projectOperations == null ? null
+                : new IndexCommand(projectOperations, autonomousOperations);
+        ImportScipCommand importScipCommand = projectOperations == null ? null : new ImportScipCommand(projectOperations);
+        ToolsCommand toolsCommand = autonomousOperations == null ? null : new ToolsCommand(autonomousOperations);
+        DoctorCommand doctorCommand = autonomousOperations == null || home == null
+                ? null : new DoctorCommand(home, autonomousOperations);
+        ProviderCommand providerCommand = providerPlatformService == null
+                ? null : new ProviderCommand(providerPlatformService);
+        ArchitectureCommand architectureCommand = architectureQuery == null
+                ? null : new ArchitectureCommand(architectureQuery);
+        ImpactCommand impactCommand = impactQuery == null ? null : new ImpactCommand(impactQuery);
+        GitActivityCommand gitActivityCommand = projectOperations == null || gitIntelligenceService == null
+                ? null : new GitActivityCommand(projectOperations, gitIntelligenceService);
+        RemoteIndexCommand remoteIndexCommand = remoteIndexOperations == null
+                ? null : new RemoteIndexCommand(remoteIndexOperations);
+        RuntimeCommand runtimeCommand = runtimeIntelligenceService == null
+                ? null : new RuntimeCommand(runtimeIntelligenceService);
+        TeamCommand teamCommand = hostedControlPlaneService == null ? null : new TeamCommand(
+                hostedControlPlaneService, () -> System.getenv(TeamCommand.TOKEN_ENVIRONMENT_VARIABLE));
+        FindSymbolCommand findSymbolCommand = new FindSymbolCommand(symbolQuery);
+        SearchCodeCommand searchCodeCommand = new SearchCodeCommand(symbolQuery);
+        GetSourceCommand getSourceCommand = new GetSourceCommand(symbolQuery);
+        FindUsagesCommand findUsagesCommand = new FindUsagesCommand(symbolQuery);
+
+        register(IdeCommand.NAME, IdeCommand.usage() + "\n\n" + IdeIntelligenceCommand.usage(), true,
+                (arguments, output, error) -> ideCommand.run(arguments, output, error));
+        register(ProjectCommand.NAME, ProjectCommand.usage(), projectCommand != null,
+                (arguments, output, error) -> projectCommand.run(arguments, output, error));
+        register("inspect", ProjectCommand.inspectUsage(), projectCommand != null,
+                (arguments, output, error) -> projectCommand.runInspectAlias(arguments, output, error));
+        register(IndexCommand.NAME, IndexCommand.usage(), indexCommand != null,
+                (arguments, output, error) -> indexCommand.run(arguments, output, error));
+        register(ImportScipCommand.NAME, ImportScipCommand.usage(), importScipCommand != null,
+                (arguments, output, error) -> importScipCommand.run(arguments, output, error));
+        register("index-status", ProjectCommand.indexStatusUsage(), projectCommand != null,
+                (arguments, output, error) -> projectCommand.runIndexStatus(arguments, output, error));
+        register(ToolsCommand.NAME, ToolsCommand.usage(), toolsCommand != null,
+                (arguments, output, error) -> toolsCommand.run(arguments, output, error));
+        register(DoctorCommand.NAME, DoctorCommand.usage(), doctorCommand != null,
+                (arguments, output, error) -> doctorCommand.run(arguments, output, error));
+        register(ProviderCommand.NAME, ProviderCommand.usage(), providerCommand != null,
+                (arguments, output, error) -> providerCommand.run(arguments, output, error));
+        register(ArchitectureCommand.NAME, ArchitectureCommand.usage(), architectureCommand != null,
+                (arguments, output, error) -> architectureCommand.run(arguments, output, error));
+        register(ImpactCommand.NAME, ImpactCommand.usage(), impactCommand != null,
+                (arguments, output, error) -> impactCommand.run(arguments, output, error));
+        register(GitActivityCommand.NAME, GitActivityCommand.usage(), gitActivityCommand != null,
+                (arguments, output, error) -> gitActivityCommand.run(arguments, output, error));
+        register(NexusExportCommand.NAME, NexusExportCommand.usage(), nexusExportCommand != null,
+                (arguments, output, error) -> nexusExportCommand.run(arguments, output, error));
+        register(RemoteIndexCommand.NAME, RemoteIndexCommand.usage(), remoteIndexCommand != null,
+                (arguments, output, error) -> remoteIndexCommand.run(arguments, output, error));
+        register(RuntimeCommand.NAME, RuntimeCommand.usage(), runtimeCommand != null,
+                (arguments, output, error) -> runtimeCommand.run(arguments, output, error));
+        register(TeamCommand.NAME, TeamCommand.usage(), teamCommand != null,
+                (arguments, output, error) -> teamCommand.run(arguments, output, error));
+        register(FindSymbolCommand.NAME, FindSymbolCommand.usage(), true,
+                (arguments, output, error) -> findSymbolCommand.run(arguments, output, error));
+        register(SearchCodeCommand.NAME, SearchCodeCommand.usage(), true,
+                (arguments, output, error) -> searchCodeCommand.run(arguments, output, error));
+        register(GetSourceCommand.NAME, GetSourceCommand.usage(), true,
+                (arguments, output, error) -> getSourceCommand.run(arguments, output, error));
+        register(FindUsagesCommand.NAME, FindUsagesCommand.usage(), true,
+                (arguments, output, error) -> findUsagesCommand.run(arguments, output, error));
         for (RelationshipCommand.Operation operation : RelationshipCommand.Operation.values()) {
-            register(operation.commandName(), RelationshipCommand.usage(operation),
-                    new RelationshipCommand(operation, symbolQuery), RelationshipCommand::run);
+            RelationshipCommand relationshipCommand = new RelationshipCommand(operation, symbolQuery);
+            register(operation.commandName(), RelationshipCommand.usage(operation), true,
+                    (arguments, output, error) -> relationshipCommand.run(arguments, output, error));
         }
     }
 
-    private <C> void register(String name, String usage, C command, CommandHandler<C> handler) {
-        routes.put(name, new Route(usage, command == null
-                ? (arguments, output, error) -> unavailable(name, error)
-                : (arguments, output, error) -> handler.run(command, arguments, output, error)));
+    /** Adds the route of one command; a command whose collaborator is not wired answers "not configured". */
+    private void register(String name, String usage, boolean configured, Handler handler) {
+        routes.put(name, new Route(usage, configured ? handler : (arguments, output, error) -> unavailable(name, error)));
     }
 
     /** The names of every top-level command, in declaration order. */
