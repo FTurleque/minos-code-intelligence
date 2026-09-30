@@ -99,7 +99,8 @@ Règles de durée de vie d'un répertoire de run : **AVANT : 2** (7 j ordinaire,
 | `cb681858` | docs : preuves de fin de lot (premier `clean verify`) | idem |
 | `7b63257b` | V-L1-01 (date dans le futur re-datée), V-L1-02 (vrai parcours tronqué dans le test de borne) | idem |
 | `6851f615` | V-L1-03 (répertoire vide retiré avec le marqueur) | idem |
-| (commit suivant) | ADR 0039 (k) : 24 h / 7 j, date future ; constats de verif-fiab | idem |
+| `52a5d8f2` | ADR 0039 (k) : 24 h / 7 j, date future ; constats de verif-fiab | idem |
+| (commit suivant) | preuves de fin de lot au commit final | idem |
 
 Gates rejoués à chaque commit : `check-module-boundaries.py` (« modules=14, sources=504, packages=45 »), `check-current-docs.py` (SUCCESS), `product-facts.py --check` (SUCCESS), `check-milestone-artifact-references.py` (« scripts checked=95 »), `check-minos-01.py` et `check-post-mne.py` (SUCCESS : ils affirment des littéraux de `RunDirectoryRetention`). **Mêmes chiffres que la base** : aucune classe de production ajoutée ni retirée.
 
@@ -128,7 +129,7 @@ Un test existant a été remplacé parce qu'il figeait le défaut : `resumableRu
 
 ### 5.2 Tests de concurrence (rejoués 50 fois)
 
-Un seul test de concurrence dans ce lot : `RunDirectoryRetentionTest.anInFlightRunOfAnotherIndexationSurvivesEveryConcurrentPruneWhileItIsBeingWritten`. Deux threads (un « run en cours d'une autre indexation » qui écrit 20 artefacts dans son répertoire marqué, une « seconde indexation » qui enchaîne 20 `prune` sous pression de budget et parcours tronqué) sont lancés sur une `CyclicBarrier` et attendus par `Future.get` ; aucun `Thread.sleep`, aucune attente calibrée. Le test boucle lui-même sur **50 tours** (constante `CONCURRENCY_ROUNDS`, répertoire et barrière neufs à chaque tour). Rejeu de l'exécution complète de la classe par 50 lancements Maven successifs (`-Dsurefire.rerunFailingTestsCount=0`, script `replay.sh` du scratchpad, arbre `fiab-base` sur le commit `eb0b65cb`) : **50 passages sur 50, 0 échec**, soit 2 500 tours de barrière sans échec. Les autres tests du lot (R4, R7, `RunDirectoryHoldTest`, bornes de rétention) sont déterministes et mono-thread : ils n'ont aucune synchronisation à prouver.
+Un seul test de concurrence dans ce lot : `RunDirectoryRetentionTest.anInFlightRunOfAnotherIndexationSurvivesEveryConcurrentPruneWhileItIsBeingWritten`. Deux threads (un « run en cours d'une autre indexation » qui écrit 20 artefacts dans son répertoire marqué, une « seconde indexation » qui enchaîne 20 `prune` sous pression de budget et parcours tronqué) sont lancés sur une `CyclicBarrier` et attendus par `Future.get` ; aucun `Thread.sleep`, aucune attente calibrée. Le test boucle lui-même sur **50 tours** (constante `CONCURRENCY_ROUNDS`, répertoire et barrière neufs à chaque tour). Rejeu de l'exécution complète de la classe par 50 lancements Maven successifs (`-Dsurefire.rerunFailingTestsCount=0`, script `replay.sh` du scratchpad, arbre `fiab-base`) : **50 passages sur 50, 0 échec**, soit 2 500 tours de barrière sans échec, sur `eb0b65cb` (première version) puis de nouveau **50 sur 50** sur `6851f615` (après V-L1-01 et V-L1-03, qui touchent la rétention et le marqueur). Les autres tests du lot (R4, R7, `RunDirectoryHoldTest`, bornes de rétention) sont déterministes et mono-thread : ils n'ont aucune synchronisation à prouver.
 
 ### 5.3 Comptes AVANT / APRÈS
 
@@ -152,7 +153,7 @@ Calcul d'une clé de cible : `checkpointFor` en construisait deux à la main (ci
 
 ### 5.4 Fin de lot
 
-`./mvnw clean verify` complet dans le worktree (journal dans le scratchpad, pas dans `target/`) sur `d5e808ec` : **BUILD SUCCESS**, 15 modules, 11 min 40, **1 686 tests exécutés, 0 échec, 0 erreur, 46 ignorés** (hypothèses `Assumptions` préexistantes, aucun `@Disabled` ajouté ; 1 671 à la base, +15 : `RunDirectoryHoldTest` 4, `RunDirectoryRetentionTest` +7 (8 ajoutés, 1 remplacé), `IndexingResumeTest` +2, `InterruptedRunRecoveryTest` +2).
+`./mvnw clean verify` complet dans le worktree (journal dans le scratchpad, pas dans `target/`) sur `52a5d8f2` (code identique à `6851f615`, seule la documentation diffère) : **BUILD SUCCESS**, 15 modules, 12 min 06, **1 691 tests exécutés, 0 échec, 0 erreur, 46 ignorés** (hypothèses `Assumptions` préexistantes, aucun `@Disabled` ajouté ; 1 671 à la base, +20 : `RunDirectoryHoldTest` 4, `RunDirectoryRetentionTest` +10 (11 ajoutés, 1 remplacé), `FileResumableRunMarkersTest` +2, `IndexingResumeTest` +2, `InterruptedRunRecoveryTest` +2). Un premier `clean verify` sur `d5e808ec` (avant les constats de verif-fiab) avait donné 1 686 tests, 0 échec.
 
 | Gate | Base `017e339d` | Fin de lot |
 |---|---|---|
@@ -166,7 +167,7 @@ Calcul d'une clé de cible : `checkpointFor` en construisait deux à la main (ci
 
 Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD -- minos-app/src/test/resources scripts` vide) ; aucun script de `scripts/` assoupli.
 
-**Linux.** WSL Ubuntu (Java 24), module `minos-engine` (paquet `com.minos.orchestration`, 119 tests) et `minos-runtime-local` (`RunDirectoryRetentionTest` 16 dont 1 ignoré : la jonction NTFS, propre à Windows ; `FileResumableRunMarkersTest` 3) : verts. Le `clean verify` complet et le rejeu des 50 lancements n'ont été faits que sous Windows.
+**Linux.** WSL Ubuntu (Java 24), module `minos-engine` (paquet `com.minos.orchestration`, 119 tests) et `minos-runtime-local` (`RunDirectoryRetentionTest` 19 dont 1 ignoré : la jonction NTFS, propre à Windows ; `FileResumableRunMarkersTest` 5), rejoués sur le code final : verts. Le `clean verify` complet et le rejeu des 50 lancements n'ont été faits que sous Windows.
 
 ## 6. Constats de verif-fiab
 
