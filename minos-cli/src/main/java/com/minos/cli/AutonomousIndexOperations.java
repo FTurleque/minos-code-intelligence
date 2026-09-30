@@ -6,6 +6,8 @@ import com.minos.orchestration.IndexingResumePolicy;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** CLI port for autonomous indexing and provider runtime administration. */
 public interface AutonomousIndexOperations {
 
@@ -120,12 +122,6 @@ public interface AutonomousIndexOperations {
                 String diagnostic
         ) {
             this(plan, runId, status, activeSnapshotId, fingerprintPromoted, diagnostic, null);
-        }
-    }
-
-    private static void requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
         }
     }
 }

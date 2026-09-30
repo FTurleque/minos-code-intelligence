@@ -3,6 +3,8 @@ package com.minos.nexus;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Versioned, transport-neutral contract exported by MINOS for NEXUS consumption.
  *
@@ -135,12 +137,6 @@ public final class NexusExportContract {
             Objects.requireNonNull(origin, "origin");
             evidence = immutable(evidence);
             requireOptionalProbability(confidence, "confidence");
-        }
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
         }
     }
 

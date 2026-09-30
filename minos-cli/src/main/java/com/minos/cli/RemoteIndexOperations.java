@@ -6,6 +6,8 @@ import com.minos.remote.RemoteRepositoryRequest;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** CLI port for opt-in immutable remote materialization and worker-backed indexing. */
 public interface RemoteIndexOperations {
 
@@ -87,12 +89,6 @@ public interface RemoteIndexOperations {
             if (artifacts.isEmpty()) {
                 throw new IllegalArgumentException("remote indexing must expose artifact evidence");
             }
-        }
-    }
-
-    private static void requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
         }
     }
 }
