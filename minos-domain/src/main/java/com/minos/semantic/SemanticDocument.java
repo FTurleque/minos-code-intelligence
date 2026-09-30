@@ -2,6 +2,8 @@ package com.minos.semantic;
 
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Provider-independent, reconstructible semantic indexing unit. */
 public record SemanticDocument(
         String id,
@@ -31,11 +33,5 @@ public record SemanticDocument(
         }
         content = Objects.requireNonNull(content, "content");
         requireText(checksum, "checksum");
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
     }
 }
