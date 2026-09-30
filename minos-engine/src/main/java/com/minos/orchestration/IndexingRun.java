@@ -1,13 +1,12 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.io.Sha256;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -142,13 +141,13 @@ public record IndexingRun(
         String id = requireText(indexerId, "indexerId");
         String version = requireText(providerVersion, "providerVersion");
         String scope = portable(Objects.requireNonNull(projectRelativeRoot, "projectRelativeRoot"));
-        MessageDigest digest = sha256();
+        MessageDigest digest = Sha256.newDigest();
         digest.update(id.getBytes(StandardCharsets.UTF_8));
         digest.update((byte) 0);
         digest.update(version.getBytes(StandardCharsets.UTF_8));
         digest.update((byte) 0);
         digest.update(scope.getBytes(StandardCharsets.UTF_8));
-        return HexFormat.of().formatHex(digest.digest());
+        return Sha256.hex(digest);
     }
 
     private static Optional<String> normalizeText(Optional<String> value, String label) {
@@ -169,14 +168,6 @@ public record IndexingRun(
      */
     public static String portable(Path path) {
         return path.normalize().toString().replace('\\', '/');
-    }
-
-    private static MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
     }
 
     /**

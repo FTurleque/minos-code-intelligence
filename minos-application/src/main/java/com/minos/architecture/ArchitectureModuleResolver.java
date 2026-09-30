@@ -4,14 +4,11 @@ import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscovery.DiscoveredModule;
 import com.minos.discovery.ProjectDiscovery.SourceRoot;
 import com.minos.domain.Symbol;
+import com.minos.io.Sha256;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -97,7 +94,7 @@ final class ArchitectureModuleResolver {
     }
 
     static String moduleId(String projectId, Path modulePath) {
-        return "module:" + sha256(requireText(projectId, "projectId")
+        return "module:" + Sha256.hex(requireText(projectId, "projectId")
                 + "\u001F" + portable(Objects.requireNonNull(modulePath, "modulePath")));
     }
 
@@ -128,15 +125,6 @@ final class ArchitectureModuleResolver {
 
     static String portable(Path path) {
         return path.toString().replace('\\', '/');
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
     }
 
     record Assignment(

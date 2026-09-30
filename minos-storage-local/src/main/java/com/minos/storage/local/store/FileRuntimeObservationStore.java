@@ -12,6 +12,7 @@ import com.minos.dynamic.RuntimeSymbolReference;
 import com.minos.dynamic.RuntimeSymbolResolution;
 import com.minos.io.BoundedFileLease;
 import com.minos.io.DurableAtomicFile;
+import com.minos.io.Sha256;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -29,7 +30,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -467,7 +467,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
 
     private static String sha256(Path file) throws IOException {
         requireRegularSessionFile(file);
-        MessageDigest digest = sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         try (var input = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
             byte[] buffer = new byte[64 * 1024];
             int read;
@@ -475,7 +475,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
                 if (read > 0) digest.update(buffer, 0, read);
             }
         }
-        return HexFormat.of().formatHex(digest.digest());
+        return Sha256.hex(digest);
     }
 
     private static void requireRegularSessionFile(Path file) throws IOException {
@@ -485,15 +485,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     }
 
     private static String digest(byte[] bytes) {
-        return HexFormat.of().formatHex(sha256Digest().digest(bytes));
-    }
-
-    private static MessageDigest sha256Digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
+        return HexFormat.of().formatHex(Sha256.newDigest().digest(bytes));
     }
 
     private record SessionMetadata(Path file, String snapshotId, String sessionId, Instant importedAt) {

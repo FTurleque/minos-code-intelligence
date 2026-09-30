@@ -3,6 +3,7 @@ package com.minos.adapter.scip.runtime;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.FileTreeOperations;
+import com.minos.io.Sha256;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.local.BoundedProcessOutput;
 import com.minos.runtime.local.CommandLocator;
@@ -23,11 +24,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -325,7 +324,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             try (InputStream ignored = response.body()) { }
             throw new IOException("scip-dotnet pinned nupkg download failed with HTTP " + response.statusCode());
         }
-        MessageDigest digest = sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         long total = 0L;
         try (InputStream input = response.body(); OutputStream output = Files.newOutputStream(target)) {
             byte[] buffer = new byte[64 * 1024];
@@ -342,7 +341,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             Files.deleteIfExists(target);
             throw exception;
         }
-        String actual = HexFormat.of().formatHex(digest.digest());
+        String actual = Sha256.hex(digest);
         if (!DOTNET_PACKAGE_SHA256.equals(actual)) {
             Files.deleteIfExists(target);
             throw new IOException("scip-dotnet nupkg SHA-256 mismatch: " + actual);
@@ -404,7 +403,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     }
 
     private static String directoryDigest(Path directory) throws IOException {
-        MessageDigest digest = sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         List<Path> files = new ArrayList<>();
         int traversed = 0;
         try (var paths = Files.walk(directory)) {
@@ -450,15 +449,10 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             totalBytes += observed;
             digest.update((byte) 0xff);
         }
-        return HexFormat.of().formatHex(digest.digest());
+        return Sha256.hex(digest);
     }
 
     private static String portable(Path path) { return path.toString().replace('\\', '/'); }
-
-    private static MessageDigest sha256Digest() {
-        try { return MessageDigest.getInstance("SHA-256"); }
-        catch (NoSuchAlgorithmException exception) { throw new IllegalStateException("SHA-256 is unavailable", exception); }
-    }
 
     private static Optional<Integer> majorVersion(String output) {
         if (output == null) return Optional.empty();

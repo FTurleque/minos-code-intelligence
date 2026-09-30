@@ -2,6 +2,7 @@ package com.minos.program.analysis;
 
 import com.minos.io.BoundedInputStream;
 import com.minos.domain.Symbol;
+import com.minos.io.Sha256;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
 
@@ -14,9 +15,7 @@ import java.nio.file.OpenOption;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -100,27 +99,23 @@ final class JavaSourceWorkspace {
             CodeKnowledgeSnapshot snapshot,
             Discovery discovery
     ) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            update(digest, snapshot.snapshotId());
-            update(digest, discovery.limitation() == null ? "USABLE" : discovery.limitation());
-            for (String fileId : discovery.requestedFileIds()) {
-                update(digest, fileId);
-            }
-            for (SourceFile source : discovery.sources()) {
-                update(digest, source.fileId());
-                updateBounded(digest, source.path(), MAX_SOURCE_BYTES, "Java source fingerprint");
-            }
-            Optional<Path> config = securityConfig(project.rootPath());
-            if (config.isPresent()) {
-                update(digest, JavaSourceProgramGraphProvider.SECURITY_CONFIG);
-                updateBounded(digest, config.orElseThrow(), MAX_SECURITY_CONFIG_BYTES,
-                        "Java security config fingerprint", LinkOption.NOFOLLOW_LINKS);
-            }
-            return HexFormat.of().formatHex(digest.digest());
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        MessageDigest digest = Sha256.newDigest();
+        update(digest, snapshot.snapshotId());
+        update(digest, discovery.limitation() == null ? "USABLE" : discovery.limitation());
+        for (String fileId : discovery.requestedFileIds()) {
+            update(digest, fileId);
         }
+        for (SourceFile source : discovery.sources()) {
+            update(digest, source.fileId());
+            updateBounded(digest, source.path(), MAX_SOURCE_BYTES, "Java source fingerprint");
+        }
+        Optional<Path> config = securityConfig(project.rootPath());
+        if (config.isPresent()) {
+            update(digest, JavaSourceProgramGraphProvider.SECURITY_CONFIG);
+            updateBounded(digest, config.orElseThrow(), MAX_SECURITY_CONFIG_BYTES,
+                    "Java security config fingerprint", LinkOption.NOFOLLOW_LINKS);
+        }
+        return Sha256.hex(digest);
     }
 
     static Optional<Path> securityConfig(Path projectRoot) throws IOException {

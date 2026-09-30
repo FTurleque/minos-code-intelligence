@@ -2,6 +2,7 @@ package com.minos.orchestration;
 
 import com.minos.incremental.ProjectFingerprintService;
 import com.minos.io.BoundedInputStream;
+import com.minos.io.Sha256;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,8 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -48,7 +47,7 @@ final class ExecutionCheckpoints {
         if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new Unavailable("artifact digest unavailable: not a regular file");
         }
-        MessageDigest digest = sha256();
+        MessageDigest digest = Sha256.newDigest();
         byte[] buffer = new byte[64 * 1024];
         long bytes = 0L;
         try (InputStream raw = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS);
@@ -65,7 +64,7 @@ final class ExecutionCheckpoints {
             throw new Unavailable("artifact digest unavailable: " + failure.getClass().getSimpleName());
         }
         if (bytes < 1L) throw new Unavailable("artifact digest unavailable: empty artifact");
-        ArtifactDigest computed = new ArtifactDigest(bytes, HexFormat.of().formatHex(digest.digest()));
+        ArtifactDigest computed = new ArtifactDigest(bytes, Sha256.hex(digest));
         verifySidecar(path, computed.sha256());
         return computed;
     }
@@ -94,14 +93,6 @@ final class ExecutionCheckpoints {
         String recorded = content.substring(0, SHA256_HEX_LENGTH).toLowerCase(Locale.ROOT);
         if (!recorded.equals(computedSha256)) {
             throw new Unavailable("artifact digest sidecar disagrees with artifact bytes");
-        }
-    }
-
-    private static MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
         }
     }
 

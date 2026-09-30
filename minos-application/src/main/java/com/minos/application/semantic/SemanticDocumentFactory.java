@@ -5,18 +5,15 @@ import com.minos.context.SourceExcerpt;
 import com.minos.context.TokenEstimator;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolLocation;
+import com.minos.io.Sha256;
 import com.minos.registry.RegisteredProject;
 import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.store.CodeKnowledgeSnapshot;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -119,8 +116,8 @@ public final class SemanticDocumentFactory {
             int endLine,
             String content
     ) {
-        String checksum = sha256(kind.name() + HASH_SEPARATOR + stableKey + HASH_SEPARATOR + content);
-        String id = "semantic:" + sha256(snapshotId + HASH_SEPARATOR + stableKey + HASH_SEPARATOR + checksum);
+        String checksum = Sha256.hex(kind.name() + HASH_SEPARATOR + stableKey + HASH_SEPARATOR + content);
+        String id = "semantic:" + Sha256.hex(snapshotId + HASH_SEPARATOR + stableKey + HASH_SEPARATOR + checksum);
         return new SemanticDocument(id, stableKey, projectId, snapshotId, kind, sourceId,
                 fileId, startLine, endLine, content, checksum);
     }
@@ -177,15 +174,6 @@ public final class SemanticDocumentFactory {
     private static String bounded(String value, int maxTokens) {
         String text = Objects.requireNonNull(value, "value");
         return TokenEstimator.estimate(text) <= maxTokens ? text : TokenEstimator.truncate(text, maxTokens);
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
     }
 
     private static String textOr(String value, String fallback) {

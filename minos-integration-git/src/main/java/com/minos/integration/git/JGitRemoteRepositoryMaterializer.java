@@ -3,6 +3,7 @@ package com.minos.integration.git;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
 import com.minos.io.PrivateLocalStorage;
+import com.minos.io.Sha256;
 import com.minos.io.SharedCacheLeaseRegistry;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryRequest;
@@ -25,14 +26,11 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributeView;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -394,22 +392,13 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     }
 
     private static String cacheKey(RemoteRepositoryRequest request) {
-        return sha256(String.join("\n",
+        return Sha256.hex(String.join("\n",
                 request.host().name(), request.canonicalRepositoryUri(), request.reference(), request.expectedCommit(),
                 portableSubdirectory(request.projectSubdirectory()), request.fetchNetworkPolicy().name()));
     }
 
     private static String portableSubdirectory(Path path) {
         return path.toString().isEmpty() ? "." : path.toString().replace('\\', '/');
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
     }
 
     private void deleteCacheTree(Path target) throws IOException {

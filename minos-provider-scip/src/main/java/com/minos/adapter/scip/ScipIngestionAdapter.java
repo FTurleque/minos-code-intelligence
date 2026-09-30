@@ -12,6 +12,7 @@ import com.minos.domain.SymbolLocation;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolReference;
 import com.minos.domain.UnresolvedSymbolReference;
+import com.minos.io.Sha256;
 import com.minos.query.DependencyDerivationService;
 import com.minos.query.RelatedTestDerivationService;
 import com.minos.store.CodeKnowledgeStore;
@@ -20,13 +21,9 @@ import org.scip_code.scip.Index;
 import org.scip_code.scip.Occurrence;
 import org.scip_code.scip.SymbolInformation;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -341,7 +338,7 @@ final class ScipIngestionAdapter {
         if (explicit != null && !explicit.isBlank()) {
             return explicit;
         }
-        return "file:" + sha256(request.projectId() + "\u001F" + request.projectRelativePath(relativePath));
+        return "file:" + Sha256.hex(request.projectId() + "\u001F" + request.projectRelativePath(relativePath));
     }
 
     private String occurrenceId(
@@ -358,7 +355,7 @@ final class ScipIngestionAdapter {
                 Integer.toString(location.endColumn()),
                 rawSymbol
         );
-        return "occ:" + sha256(material);
+        return "occ:" + Sha256.hex(material);
     }
 
     private Origin origin(ScipIngestionRequest request) {
@@ -373,15 +370,6 @@ final class ScipIngestionAdapter {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
     }
 
     private static final class RelationshipAccumulator {

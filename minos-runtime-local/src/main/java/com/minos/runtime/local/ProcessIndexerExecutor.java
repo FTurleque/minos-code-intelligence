@@ -2,6 +2,7 @@ package com.minos.runtime.local;
 
 import com.minos.io.BoundedInputStream;
 import com.minos.io.DurableAtomicFile;
+import com.minos.io.Sha256;
 import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
@@ -21,10 +22,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -375,12 +374,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
     }
 
     private static String sha256Bounded(Path artifact) throws IOException {
-        MessageDigest digest;
-        try {
-            digest = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
+        MessageDigest digest = Sha256.newDigest();
         byte[] buffer = new byte[64 * 1024];
         try (InputStream raw = Files.newInputStream(artifact, LinkOption.NOFOLLOW_LINKS);
              BoundedInputStream input = new BoundedInputStream(
@@ -390,7 +384,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
                 if (read > 0) digest.update(buffer, 0, read);
             }
         }
-        return HexFormat.of().formatHex(digest.digest());
+        return Sha256.hex(digest);
     }
 
     /** Resolves and bounds the MINOS-owned run directory this execution may write to. */
@@ -489,12 +483,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
 
     private static String scopeHash(Path relativeRoot) {
         String portable = relativeRoot.normalize().toString().replace('\\', '/');
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(portable.getBytes(StandardCharsets.UTF_8))).substring(0, 16);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
+        return Sha256.hex(portable).substring(0, 16);
     }
 
     private static void archiveFailedArtifact(Path generatedArtifact, Path runDirectory) throws IOException {

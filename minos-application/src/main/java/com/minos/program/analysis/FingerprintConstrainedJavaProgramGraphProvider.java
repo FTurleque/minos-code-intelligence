@@ -4,6 +4,7 @@ import com.minos.domain.Symbol;
 import com.minos.incremental.FileFingerprint;
 import com.minos.incremental.ProjectFingerprintSnapshot;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
+import com.minos.io.Sha256;
 import com.minos.program.ProgramGraph;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -15,8 +16,6 @@ import java.nio.file.LinkOption;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -185,25 +184,21 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
     private static String sha256Exact(Path file, long expectedBytes, String label, OpenOption... options)
             throws IOException {
         if (expectedBytes < 0L) throw new IOException(label + " has a negative expected size");
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            long total = 0L;
-            try (InputStream input = Files.newInputStream(file, options)) {
-                byte[] buffer = new byte[64 * 1024];
-                int read;
-                while ((read = input.read(buffer)) >= 0) {
-                    if (read == 0) continue;
-                    try { total = Math.addExact(total, read); }
-                    catch (ArithmeticException exception) { throw new IOException(label + " byte counter overflow", exception); }
-                    if (total > expectedBytes) throw new IOException(label + " grew while being fingerprinted");
-                    digest.update(buffer, 0, read);
-                }
+        MessageDigest digest = Sha256.newDigest();
+        long total = 0L;
+        try (InputStream input = Files.newInputStream(file, options)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                if (read == 0) continue;
+                try { total = Math.addExact(total, read); }
+                catch (ArithmeticException exception) { throw new IOException(label + " byte counter overflow", exception); }
+                if (total > expectedBytes) throw new IOException(label + " grew while being fingerprinted");
+                digest.update(buffer, 0, read);
             }
-            if (total != expectedBytes) throw new IOException(label + " changed size while being fingerprinted");
-            return HexFormat.of().formatHex(digest.digest());
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
+        if (total != expectedBytes) throw new IOException(label + " changed size while being fingerprinted");
+        return Sha256.hex(digest);
     }
 
     private record CachedFingerprint(String snapshotId, ProjectFingerprintSnapshot snapshot, long weightBytes) { }

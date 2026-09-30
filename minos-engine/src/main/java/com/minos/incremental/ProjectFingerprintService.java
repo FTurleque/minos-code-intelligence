@@ -3,6 +3,7 @@ package com.minos.incremental;
 import com.minos.discovery.ProjectIgnorePolicy;
 import com.minos.io.ConfinedFileOpener;
 import com.minos.io.FileTreeOperations;
+import com.minos.io.Sha256;
 import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
@@ -16,10 +17,8 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -297,7 +296,7 @@ public final class ProjectFingerprintService {
     }
 
     private static String aggregateHash(List<FileFingerprint> files) {
-        MessageDigest digest = sha256();
+        MessageDigest digest = Sha256.newDigest();
         for (FileFingerprint file : files) {
             update(digest, file.relativePath());
             digest.update((byte) 0);
@@ -306,7 +305,7 @@ public final class ProjectFingerprintService {
             update(digest, file.sha256());
             digest.update((byte) '\n');
         }
-        return HexFormat.of().formatHex(digest.digest());
+        return Sha256.hex(digest);
     }
 
     private static HashedFile hashFile(
@@ -314,7 +313,7 @@ public final class ProjectFingerprintService {
             Path relative,
             SourceBudgetPolicy.Tracker budget
     ) throws IOException {
-        MessageDigest digest = sha256();
+        MessageDigest digest = Sha256.newDigest();
         byte[] buffer = new byte[8192];
         long bytes = 0L;
         // The tree walk is only discovery. Re-open the relative path through the confinement
@@ -334,15 +333,7 @@ public final class ProjectFingerprintService {
                 }
             }
         }
-        return new HashedFile(HexFormat.of().formatHex(digest.digest()), bytes);
-    }
-
-    private static MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
+        return new HashedFile(Sha256.hex(digest), bytes);
     }
 
     private static void update(MessageDigest digest, String value) {

@@ -8,6 +8,7 @@ import com.minos.dynamic.RuntimeSymbolReference;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedLineReader;
 import com.minos.io.FixedTsv;
+import com.minos.io.Sha256;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -18,11 +19,9 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,7 +37,7 @@ public final class RuntimeObservationEnvelopeCodec {
         if (path == null || Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("runtime observation input must be a regular non-symlink file");
         }
-        MessageDigest digest = digest();
+        MessageDigest digest = Sha256.newDigest();
         String[] metadata = new String[METADATA_LINES];
         List<RuntimeObservation> observations = new ArrayList<>();
         long sourceBytes;
@@ -93,19 +92,8 @@ public final class RuntimeObservationEnvelopeCodec {
         RuntimeObservationSession session = new RuntimeObservationSession(
                 RuntimeObservationSession.FORMAT, sessionId, projectId, snapshotId,
                 startedAt, endedAt, collector[1], collector[2], environment, completeness, observations);
-        return new DecodedSession(session, sha256(digest), sourceBytes);
-    }
-
-    private static MessageDigest digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
-    }
-
-    private static String sha256(MessageDigest digest) {
-        return HexFormat.of().formatHex(java.util.Objects.requireNonNull(digest, "digest").digest());
+        String sha256 = Sha256.hex(digest);
+        return new DecodedSession(session, sha256, sourceBytes);
     }
 
     private static RuntimeObservation parseObservation(String line, int lineNumber) throws IOException {

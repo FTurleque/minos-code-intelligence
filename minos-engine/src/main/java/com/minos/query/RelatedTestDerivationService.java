@@ -13,16 +13,13 @@ import com.minos.domain.ResolutionStatus;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolOccurrence;
+import com.minos.io.Sha256;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -515,13 +512,7 @@ public final class RelatedTestDerivationService {
         String material = String.join("\u001F",
                 key.projectId(), key.testSymbolId(), key.productionSymbolId(),
                 RelationshipKind.RELATED_TEST.name());
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return "rel:" + HexFormat.of().formatHex(
-                    digest.digest(material.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
+        return "rel:" + Sha256.hex(material);
     }
 
     private record ScopedSymbolId(String projectId, String symbolId) {

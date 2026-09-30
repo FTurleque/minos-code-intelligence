@@ -8,11 +8,8 @@ import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
+import com.minos.io.Sha256;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.Set;
 
@@ -127,10 +124,10 @@ final class ScipSymbolNormalizer {
 
         String symbolKey = switch (identityQuality) {
             case CANONICAL -> throw new IllegalStateException("Canonical SCIP identity is not implemented in M0 baseline");
-            case STRUCTURAL_FALLBACK -> "minos:structural:" + sha256(identityMaterial);
-            case PROVIDER_SCOPED_FALLBACK -> "minos:provider:" + sha256(identityMaterial);
+            case STRUCTURAL_FALLBACK -> "minos:structural:" + Sha256.hex(identityMaterial);
+            case PROVIDER_SCOPED_FALLBACK -> "minos:provider:" + Sha256.hex(identityMaterial);
         };
-        String id = "sym:" + sha256(projectId + "\u001F" + symbolKey);
+        String id = "sym:" + Sha256.hex(projectId + "\u001F" + symbolKey);
 
         Origin origin = new Origin(
                 providerId,
@@ -214,15 +211,6 @@ final class ScipSymbolNormalizer {
                 fact.signature(),
                 locationPart
         );
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
     }
 
     private static String blankToNull(String value) {

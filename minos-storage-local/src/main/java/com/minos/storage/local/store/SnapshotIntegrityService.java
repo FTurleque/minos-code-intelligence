@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.io.Sha256;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.SnapshotDescriptor;
 import java.io.IOException;
@@ -10,7 +11,6 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.UUID;
@@ -25,7 +25,7 @@ public final class SnapshotIntegrityService {
         if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("snapshot checksum source must be a regular file");
         }
-        MessageDigest digest = sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         try (InputStream input = new DigestInputStream(
                 Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS), digest)) {
             input.transferTo(OutputStream.nullOutputStream());
@@ -36,7 +36,7 @@ public final class SnapshotIntegrityService {
     /** Preserves the historical snapshot-id hashing used in published file names. */
     public String logicalIdHash(String value) {
         Objects.requireNonNull(value, "value");
-        MessageDigest digest = sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         for (int index = 0; index < value.length(); index++) {
             char current = value.charAt(index);
             digest.update((byte) (current >>> 8));
@@ -77,11 +77,4 @@ public final class SnapshotIntegrityService {
         }
     }
 
-    static MessageDigest sha256Digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
-    }
 }
