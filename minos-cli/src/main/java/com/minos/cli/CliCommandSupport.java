@@ -99,8 +99,13 @@ final class CliCommandSupport {
         return "--help".equals(value) || "-h".equals(value);
     }
 
+    /** Whether {@code value} can be an operand: not blank and not starting with a dash (it would be an option). */
+    static boolean isOperand(String value) {
+        return value != null && !value.isBlank() && !value.startsWith("-");
+    }
+
     static String operand(String value, String name) {
-        if (value == null || value.isBlank() || value.startsWith("-")) {
+        if (!isOperand(value)) {
             throw new IllegalArgumentException("invalid <" + name + "> operand");
         }
         return value;

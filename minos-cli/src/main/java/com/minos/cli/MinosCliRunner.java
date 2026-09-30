@@ -27,6 +27,12 @@ public final class MinosCliRunner {
 
     private static final String SEMANTIC_COMMAND = "semantic";
     private static final String HYBRID_COMMAND = "hybrid";
+    private static final String MCP_COMMAND = "mcp";
+    private static final String MCP_USAGE = """
+            Usage: minos mcp
+
+            Starts the MINOS MCP server on standard input/output. It takes no option.
+            """.stripTrailing();
 
     /**
      * A CLI wired with collaborators that fail on first use. Its route table ({@link MinosCli#commandNames()})
@@ -82,22 +88,26 @@ public final class MinosCliRunner {
         return cli.resumeStatus(autonomousIndex).build().run(arguments, output, error);
     }
 
+    /**
+     * A help request is a help token that is the last of at most three arguments, after a known command:
+     * {@code minos <command> --help} and {@code minos <command> <operation-or-operand> --help}
+     * (for instance {@code tools install --help}, {@code team audit --help}). It is answered before
+     * {@code MINOS_HOME} is opened, whatever the command.
+     */
     static boolean isStatelessHelpRequest(String[] arguments) {
         Objects.requireNonNull(arguments, "arguments");
         if (isHelp(arguments)) return true;
         if (arguments.length == 2 && isHelpToken(arguments[1])) {
-            return STATELESS_HELP_CLI.hasCommand(arguments[0]) || isRetrievalCommand(arguments[0]);
-        }
-        if (arguments.length == 3
-                && isRetrievalCommand(arguments[0])
-                && "status".equals(arguments[1])
-                && isHelpToken(arguments[2])) {
-            return true;
+            return isKnownCommand(arguments[0]);
         }
         return arguments.length == 3
-                && ProjectCommand.NAME.equals(arguments[0])
-                && Set.of("add", "list", "inspect").contains(arguments[1])
-                && isHelpToken(arguments[2]);
+                && isHelpToken(arguments[2])
+                && isKnownCommand(arguments[0])
+                && CliCommandSupport.isOperand(arguments[1]);
+    }
+
+    private static boolean isKnownCommand(String name) {
+        return STATELESS_HELP_CLI.hasCommand(name) || isRetrievalCommand(name) || MCP_COMMAND.equals(name);
     }
 
     static int runStatelessHelp(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -107,14 +117,28 @@ public final class MinosCliRunner {
         if (!isStatelessHelpRequest(arguments)) {
             throw new IllegalArgumentException("arguments are not a stateless CLI help request");
         }
-        if ((arguments.length == 2 || arguments.length == 3) && isRetrievalCommand(arguments[0])) {
-            output.append(RetrievalStatusCommand.usage(retrievalMode(arguments[0]))).append('\n');
+        String command = arguments[0];
+        if (isRetrievalCommand(command)) {
+            output.append(RetrievalStatusCommand.usage(retrievalMode(command))).append('\n');
             return FindSymbolCommand.SUCCESS;
+        }
+        if (MCP_COMMAND.equals(command)) {
+            output.append(MCP_USAGE).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
+        // project add|list|inspect --help keeps its own usage; any other operation shows the command's usage.
+        boolean projectOperation = arguments.length == 3 && ProjectCommand.NAME.equals(command)
+                && Set.of("add", "list", "inspect").contains(arguments[1]);
+        if (arguments.length == 3 && !projectOperation) {
+            return STATELESS_HELP_CLI.run(new String[]{command, arguments[2]}, output, error);
         }
         return STATELESS_HELP_CLI.run(arguments, output, error);
     }
 
-    /** Names of every command that answers {@code --help} without opening {@code MINOS_HOME}. */
+    /**
+     * Names of the commands of the CLI that answer {@code --help} without opening {@code MINOS_HOME}
+     * ({@code mcp}, a launcher command that is not part of the CLI usage, answers it too).
+     */
     static Set<String> statelessHelpCommands() {
         Set<String> names = new java.util.LinkedHashSet<>(STATELESS_HELP_CLI.commandNames());
         names.add(SEMANTIC_COMMAND);
