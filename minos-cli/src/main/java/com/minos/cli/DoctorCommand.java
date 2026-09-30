@@ -124,7 +124,7 @@ public final class DoctorCommand {
             // Remote indexing being closed by decision (ADR 0041) is a fact to expose, not an action to require.
             boolean ready = providers.stream()
                     .filter(AutonomousIndexOperations.ProviderView::requiredByDefault)
-                    .allMatch(provider -> "READY".equals(provider.state()));
+                    .noneMatch(ToolsCommand::blocksReadiness);
             if (format == SymbolOutputFormat.JSON) {
                 renderJson(output, providers, commands, privateStorage, sandbox, ready);
             } else {

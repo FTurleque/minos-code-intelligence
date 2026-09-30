@@ -87,6 +87,8 @@ Il distingue notamment :
 - les actions nécessaires pour rendre un provider utilisable ;
 - la sandbox worker (section `workerSandbox`, texte et JSON) : backend retenu pour les providers locaux gérés, disponibilité de l'indexation distante de code non fiable (`remoteIndexing: AVAILABLE|UNAVAILABLE`) et, si elle est indisponible, la **cause** — `NO_OS_BACKEND_AVAILABLE` (prérequis opérateur manquant, nommé par code) ou `REJECTED_BY_DECISION` (backend OS écarté, dimensions non OS-enforced, décision `ADR 0041`). Cette section ne contient jamais de chemin. Une indexation distante indisponible ne change pas le verdict `READY` : ce n'est pas une action requise.
 
+Le verdict de `doctor` (`READY` ou `ACTION_REQUIRED`, code 0 ou 1) est le même que celui de `minos tools verify` : un provider requis qui n'est ni `READY` ni `UNSUPPORTED_BY_BACKEND` bloque ; `UNSUPPORTED_BY_BACKEND` (capacité volontairement absente du backend sélectionné, par exemple le plan Docker) est affiché tel quel, jamais présenté comme `READY`, mais ne rend pas l'installation « action requise » ([disposition des sandboxes](../developer/remote-worker-sandbox-disposition.md)).
+
 Depuis la maintenance 1.0.1, le runtime Windows packagé est également contrôlé lors de la construction par `jdeps`, `java --list-modules` et un vrai handshake MCP. Le fait que `doctor` ou `--version` fonctionne ne remplace donc pas les gates spécifiques du binaire de release.
 
 ### `tools`
