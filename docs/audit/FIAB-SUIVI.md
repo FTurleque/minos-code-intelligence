@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 1 — R4, R5, R7 | Promotion reprise bornée aux cibles courantes, rétention d'un run reprenable (parcours tronqué, run concurrent, durée de vie), réparation « snapshot stable » alignée | livré, en attente du verdict final de `verif-fiab` | `cdeac459` … (§ 4) |
 | 2 — P1, Q3, Q4 | Un seul régime de verrous ; lecture d'état sans bail exclusif (§ 8) | en cours (branche `fiab/p1-q3-q4-verrous`, depuis la branche du lot 1 `bcdadd23`) | § 8.8 |
-| 3 — R2, R3 | Propriété des cgroups : R2 et R3 déjà fermés sur `develop` (§ 9.1) ; le lot referme les trous restants de la décision « ce cgroup appartient à un MINOS mort » (§ 9.4) | en cours (branche `fiab/r2-r3-cgroups`, depuis la branche du lot 2, fusion `8670f2e2`) | § 9.7 |
+| 3 — R2, R3 | Propriété des cgroups : R2 et R3 déjà fermés sur `develop` (§ 9.1) ; le lot referme les trous restants de la décision « ce cgroup appartient à un MINOS mort » (§ 9.4) | livré, en attente du verdict final de `verif-fiab` (branche `fiab/r2-r3-cgroups`, depuis la branche du lot 2, fusion `8670f2e2`) | § 9.7 |
 | 4 — Q5, R6 | Interruption de bout en bout, confinement du chemin d'artefact | à faire | — |
 | 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) | à faire | — |
 
@@ -189,6 +189,17 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 | V-L2-04 | remarque | `FileIndexStateStore` (constructeur, `migrateLegacyRuns`) et `findRun` (`migrateLegacyRun`) migrent des fichiers de run du format historique sans bail : le processus qui répond au statut peut donc écrire | **documenté § 7** : préexistant, limité au format historique, idempotent (remplacement atomique, `NoSuchFile` toléré) ; hors périmètre du lot |
 | V-L2-05 | remarque | la nouvelle tentative de `DurableAtomicFile` retarde d'environ une seconde l'échec d'un refus d'accès réel, sous L1 ou L2 | **accepté** : bornée, Windows seulement, § 7 |
 
+### Lot 3
+
+| Id | Sévérité | Constat | Résolution |
+|---|---|---|---|
+| V-L3-01 | à corriger | R2 et R3 sont déjà fermés sur la base : aucun correctif de production sans test rouge sur un scénario réel | **résolu** : § 9.1 consigne `93ed7905` et `d6e5296d` comme fermant R2 et R3 (le scénario R2 était reproductible, rouge historique dans `RESIDUS-SPRINT-1-SUIVI.md`) ; chaque changement de production du lot suit un test rouge joué sur le comportement d'origine (`ecbde9b9`, avant tous les correctifs) |
+| V-L3-02 | bloquant | `parseStartTicks` accepte un champ 22 tronqué (987 pour 987654) : un propriétaire vivant est jugé « PID réutilisé » et son cgroup tué | **résolu `4b919467`** (= F2) : champ 22 cru seulement si l'enregistrement se termine par son saut de ligne et qu'un champ le suit ; tests des quatre coupes de la consigne |
+| V-L3-03 | à corriger | un propriétaire vivant d'un autre espace de PID est « absent » ou « réutilisé », son cgroup est tué (W6) ; tuerie réelle rejouée (`unshare --pid --mount-proc`) | **résolu `290514e5`** : option (a), la marque porte les inodes des espaces de PID et de temps ; toute marque d'un autre espace, sans estampille ou d'un format ancien est laissée ; tests de décision, de balayage et sur vrai cgroup (WSL) |
+| V-L3-04 | à corriger | une suppression ratée est comptée « récupérée » (« already-empty » faux) ; un cgroup imbriqué peuplé d'un propriétaire mort n'est ni tué ni rapporté | **résolu `2d2c2b5f`** : appartenance récursive, `cgroup.kill` qui atteint les sous-cgroupes, suppression du plus profond au plus haut, un cgroup non supprimé est un résidu nommé dans le WARNING agrégé |
+| V-L3-05 | remarque | le balayage plafonne en silence à 4 096 entrées | **résolu `2d2c2b5f`** : `StaleSweep.notExamined` et « N entries were not examined » dans le WARNING |
+| V-L3-06 | remarque | `ProcessOwnershipTracker` compare `startInstant` : pas R2 (même JVM, base `btime` figée une fois) | **vérifié, hors périmètre** : § 9.2, § 7 |
+
 ## 7. À traiter plus tard
 
 - **Publication atomique et rétention concurrente sous Windows (traité au lot 2, § 8.9, `7e1b2903`).** Un premier essai du test de concurrence, où le « fournisseur » publiait par `Files.move(ATOMIC_MOVE)` pendant que `prune` mesurait le même répertoire, a échoué sous Windows avec `FileSystemException … utilisé par un autre processus` : la lecture des attributs par la rétention entre en conflit avec le renommage. Hors périmètre (le test a été ramené à des écritures simples). À vérifier dans `DurableAtomicFile.replace`, qui n'a pas de nouvelle tentative : deux indexations de projets différents sur un même `MINOS_HOME` Windows peuvent-elles s'y gêner ?
@@ -208,6 +219,14 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 - **(lot 2) Migrations de runs du format historique sans bail.** Le constructeur de `FileIndexStateStore` (`migrateLegacyRuns`, `migrateRunLocators`) et `findRun` (`migrateLegacyRun`) déplacent ou suppriment des `runs/<id>.properties` du format d'origine : tout processus qui ouvre le store, y compris celui qui répond à un statut, peut donc écrire, sans L1. Préexistant, idempotent, limité aux données historiques ; la règle « une lecture ne mute rien » ne le couvre pas. À encadrer (migration à l'ouverture sous L1, ou à l'écriture seulement) dans un lot dédié (V-L2-04).
 - **(lot 2) La règle (b) de l'ordre n'est vérifiée par aucun garde.** Un futur appelant de `LocalStorageRetentionService.compact` sans L1 ne serait pas attrapé (V-L2-03) ; un test d'architecture, ou la fusion de L3 dans L1, le ferait.
 - **SonarCloud, PR 309 (Quality Gate passé, 4 issues)** : `S1186` (`RunDirectoryHoldTest`, méthode vide) et `S3776` (`RunDirectoryRetention.measure`, complexité 16 pour 15) corrigées dans le même lot. Restent : `S6539` (`IndexingRunExecutor`, 25 dépendances pour 20 autorisées : la classe est découpée par le chantier Architecture, pas ici) et `S9391` (`IndexingResumePlanner`, boucle à remplacer par un flux : purement stylistique). Non traitées pour ne pas élargir le périmètre.
+
+- **(lot 3) `AUDIT-2026-09.md` donne encore R2 et R3 pour ouverts.** Ils sont fermés (§ 9.1) ; le fichier porte des modifications non suivies de l'utilisateur dans le dépôt principal, je ne l'ai pas touché. À mettre à jour par l'orchestrateur, avec le statut des trous F1 à F6 fermés ici.
+- **(lot 3) Propriétaire d'un autre espace de PID *frère* (conteneurs partageant une racine).** Ses processus sont à 0 dans `cgroup.procs` : la lecture de l'appartenance échoue et la qualification rejette toute la racine (`invalid PID in cgroup.procs: 0`), sans rien tuer. Sûr, mais grossier : le sandbox Linux devient indisponible pour ce MINOS. Une amélioration serait de traiter ce cgroup en `LEAVE` nommé plutôt qu'en échec de racine ; non fait, la marque d'espace de noms rend déjà le cas inatteignable pour un cgroup marqué par ce format.
+- **(lot 3) Hôtes durcis avec `hidepid` et propriétaires d'un autre compte.** La règle de § 9.10 (propriétaire = compte du balayeur) est conservatrice : un cgroup d'un autre compte ne sera jamais récupéré sous `hidepid`. Partager une racine déléguée entre comptes est de toute façon hors du modèle de délégation documenté.
+- **(lot 3) `LinuxCgroupJob.close()` ne supprime pas les cgroups qu'un provider a créés sous son job** : le `kill()` les atteint, leur appartenance est vérifiée, mais la suppression du cgroup parent échoue (« unable to reclaim empty cgroup », échec fermé). Comportement inchangé ; `removeCgroupTree` pourrait servir à `close()`.
+- **(lot 3) Les trois copies de « détruire les descendants du `Process` lancé »** de `minos-provider-scip` (`ManagedPolyglotScipRuntimeManager`, `ManagedScipProviderRuntimeManager`, `ManagedScipPythonRuntimeManager`) et `ProcessOwnershipTracker.resolveSameProcess` (instant de démarrage de `ProcessHandle.Info`, même JVM) : pas exposés à R2, hors du chantier ; à rapprocher de `ProcessTreeTermination` par le chantier Architecture.
+- **(lot 3) `relocateSelf`** (S3 : déplacer tout le processus MINOS dans `minos-controller`) : effet de bord global inchangé.
+- **(lot 3) Les cgroups marqués par les builds `develop` antérieurs** à ce lot survivant à leur propriétaire restent à supprimer à la main (§ 9.10) ; à clore quand aucun de ces builds n'existe plus.
 
 ## 8. Lot 2 — P1, Q3, Q4 : un seul régime de verrous
 
@@ -457,13 +476,13 @@ Sont des « doutes » qui concluent à LEAVE, chacun avec un test : horloge mura
 | Id | Constat | Preuve |
 |---|---|---|
 | F1 | `OwnerLookup.SYSTEM` conclut « propriétaire mort » quand `ProcessHandle.of(pid)` est vide. Or le JDK renvoie vide dès que sa propre lecture de `/proc/<pid>/stat` échoue : descripteurs de fichiers épuisés (EMFILE), `hidepid`, `/proc` partiel. Un MINOS voisin **vivant** est alors « mort » : son cgroup est tué (S3) | expérience réelle sous WSL (`FdExhaust.java`, noyau 6.18, Java 24.0.1, `ulimit -n 128`) : avant épuisement `ProcessHandle.of(self)` présent ; **pendant l'épuisement `ProcessHandle.of(self)` et `ProcessHandle.of(1)` sont vides** alors que les deux processus sont vivants ; après libération, présent |
-| F2 | `parseStartTicks` accepte une lecture tronquée dont le champ 22 est le dernier jeton : `…18 12` (coupé de `123456`) donne 12 ; le PID est jugé « réutilisé » et le cgroup est tué. Même défaut côté écriture de la marque (`Mark.of`) | test sur le code d'origine (§ 9.6) |
+| F2 | `parseStartTicks` accepte une lecture tronquée dont le champ 22 est le dernier jeton : `…18 12` (coupé de `123456`) donne 12 ; le PID est jugé « réutilisé » et le cgroup est tué. Même défaut côté écriture de la marque (`Mark.of`) | test sur le comportement d'origine (§ 9.8) |
 | F3 | TOCTOU dans `reclaimStaleJob` : verdict « cgroup non marqué sans processus » puis relecture `aliveProcesses()` ; un MINOS plus ancien qui démarre un job dans l'intervalle voit son processus tué sans aucune preuve d'appartenance | test de décision : le verdict d'un non marqué vide autorise aujourd'hui `kill` |
 | F4 | `Files.list(root).limit(4096)` : au-delà, les entrées ne sont ni examinées ni signalées (R3 dit « un résidu non récupérable remonte ») | test à borne réduite |
 | F5 | une suppression qui échoue est comptée `reclaimed` (le cgroup existe encore) et n'est journalisée qu'en avertissement par entrée, hors du rapport agrégé | le test existant `emptyStaleCgroupDeletionFailureDoesNotDisableContainment` fige « reclaimed » pour un cgroup resté en place |
 | F6 | un `cgroup.kill` de récupération n'est journalisé qu'en DEBUG : l'opérateur ne voit jamais qu'un balayage a tué des processus | test de capture du journal |
 
-Hors périmètre, consigné § 7 : espace de noms de temps (W6 du sprint 1), inscription de l'espace de PID dans la marque, `relocateSelf`.
+Ajoutés en cours de lot sur constat de `verif-fiab` (V-L3-03, W6 du sprint 1) : l'inscription des espaces de noms PID et temps dans la marque (§ 9.10). Hors périmètre, consigné § 7 : `relocateSelf`.
 
 ### 9.5 Comptes AVANT (base `8670f2e2`)
 
@@ -476,3 +495,67 @@ Tests de la zone avant le lot : 62 (`CgroupJobOwnershipTest` 18, `LinuxCgroupSta
 ### 9.6 Ce qui s'exécute où
 
 Outillage de ce lot (scratchpad, non versionné) : un script lancé en root sous WSL crée une racine `/sys/fs/cgroup/minos-lot3` (contrôleurs `+memory +pids +cpu`, enfant `minos-controller`, propriété du compte 1000), y place son shell puis lance Maven sous le compte `fturleque` avec `MINOS_SANDBOX_CGROUP_ROOT`. Les tests qui tuent réellement un `sleep` dans un vrai cgroup **s'exécutent donc** sous WSL, contrairement à ce que laissait craindre « uid 1000 non root ». Ils ne s'exécutent nulle part ailleurs en local (Windows les ignore) ; la CI Linux de GitHub a une racine déléguée par `scripts/ci/delegate-linux-cgroup.sh`. La répartition exacte de fin de lot est au § 9.9.
+
+### 9.7 Journal par commit (lot 3)
+
+| Commit | Contenu | Gates |
+|---|---|---|
+| `57c6eb56` | docs : R2 et R3 déjà fermés, inventaire des branches qui tuent, F1 à F6 (§ 9.1 à 9.6) | 504 / 45 / SUCCESS / SUCCESS / 95 |
+| `ecbde9b9` | tests rouges, avec des façades du comportement d'origine pour les types neufs (`OwnerStatus`, `ProcessTable`, `Namespaces`, `SweepContext`, `CgroupRemoval`, `Decision.REMOVE_EMPTY`, `StaleSweep.notExamined`) ; les tests qui s'appuyaient sur la table des processus de l'hôte passent par un contexte de balayage injecté | idem |
+| `4b919467` | F2 / V-L3-02 : un `stat` tronqué n'est jamais des ticks | idem |
+| `eeee841c` | F1, F3 : « propriétaire mort » exige une table prouvée lisible (`ProcessTable`, `hidepid`, espace de PID) ; un cgroup vide n'est jamais tué (`REMOVE_EMPTY`) | idem |
+| `290514e5` | V-L3-03 / W6 : la marque porte les espaces de noms PID et temps ; Javadoc de la règle par défaut | idem |
+| `2d2c2b5f` | F4, F5, F6, V-L3-04 : balayage qui compte, cgroup imbriqué, suppression ratée, INFO | idem |
+| (commit suivant) | documentation utilisateur de la marque, preuves de fin de lot, constats | idem |
+
+Gates rejoués à chaque commit : `check-module-boundaries.py` (`modules=14, sources=504, packages=45`), `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py` (`scripts checked=95`), `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py` : **identiques à la base** ; aucune classe de production ajoutée (les types neufs sont imbriqués).
+
+### 9.8 Preuves
+
+**Rouge → vert.** Chaque test a été joué sur le comportement d'origine (les façades du commit `ecbde9b9` le reproduisent ; sortie rouge dans le message de ce commit) puis après le correctif.
+
+| Défaut | Test | Rouge | Vert |
+|---|---|---|---|
+| F2 stat tronqué | `CgroupJobOwnershipTest.aTruncatedProcStatNeverYieldsStartTicks`, `…OfALiveOwnerLeavesItsCgroupIntact` ; `ProcessTableTest.aTruncatedStatOfAPresentProcess…` | `expected: <OptionalLong.empty> but was: <OptionalLong[987]>` ; `LEAVE` attendu, `RECLAIM` obtenu | `CgroupJobOwnershipTest` 28/28 |
+| F1 table illisible prise pour une mort | `OwnerLookupDescriptorExhaustionTest` (JVM fille, `ulimit -n 160`, vrai noyau) | `LIVE_SELF=GONE`, `LIVE_INIT=GONE` (WSL) | non `GONE` |
+| F1 (décision) | `anOwnerTheProcessTableCannotVerifyIsNeverReclaimed`, `ProcessTableTest` (16) : table illisible, d'un autre espace de PID, `stat` illisible, entrée sans `stat`, `hidepid` | `GONE` / `RECLAIM` au lieu de `UNVERIFIABLE` / `LEAVE` | 16/16 Windows (14 exécutés, 2 faute de liens symboliques), 16/16 WSL |
+| F3 cgroup vide tué | `anEmptyUnmarkedCgroupIsNeverKilled`, `anUnmarkedCgroupIsRemovedWhenEmptyAndLeftWhenItHoldsAnyProcess` | `expected: <false> but was: <true>` ; `RECLAIM` au lieu de `REMOVE_EMPTY` | vert |
+| V-L3-03 espaces de noms | `aMarkOfAnotherPidNamespaceIsNeverReclaimed`, `…TimeNamespace…`, `aMarkWithoutNamespaceStampIsNeverReclaimed`, `aSweeperWhoseOwnNamespacesCannotBeReadReclaimsNothing`, `aLegacyMarkIsNeverReclaimed…` ; `LinuxCgroupStaleRecoveryTest.aJobOfAnotherPidNamespaceIsNeverKilled` ; WSL réel : `aJobStampedWithAnotherPidNamespaceIsNeverKilled`, `…TimeNamespace…` | `LEAVE` attendu, `RECLAIM` obtenu ; WSL : un vrai `sleep` est tué (`expected: <true> but was: <false>`) | vert ; le `sleep` survit |
+| V-L3-04 imbriqué | `aDeadOwnersProcessesInANestedCgroupAreKilled`, `anUnmarkedCgroupWithProcessesInANestedCgroupIsLeftIntact` ; WSL réel `aDeadOwnersNestedCgroupIsKilledAndRemovedWithIt` | aucun kill ; WSL : le `sleep` imbriqué survit, « reclaimed » annoncé | vert ; tué, cgroup et enfant supprimés |
+| F5 suppression ratée | `aRemovalThatFailsLeavesAResidueNotAReclaim`, `aDeletionFailureIsReportedAsAResidue…` | `reclaimed=[minos-empty-with-residue]` pour un cgroup resté en place | vert ; un seul WARNING, sans chemin |
+| F4 parcours borné | `aSweepBoundedBelowTheEntryCountSaysWhatItDidNotExamine`, `theWarningCountsTheEntriesTheBoundedSweepDidNotExamine` | `expected: <2> but was: <0>` | vert |
+| F6 journal | `whatASweepReclaimsIsJournaledAtInfoWithoutAnAbsolutePath` | aucun INFO | vert |
+
+**F1, la preuve par niveaux.** L'expérience `FdExhaust.java` (WSL, noyau 6.18, Java 24.0.1) montre le JDK répondant « aucun processus » pour l'appelant et pour `init` pendant l'épuisement des descripteurs ; le test de JVM fille la rejoue dans la suite ; `decide` concluait `RECLAIM` sur « absent » (test existant) ; et la récupération d'un propriétaire mort tue réellement un `sleep` dans un vrai cgroup (tests d'isolation WSL). Le maillon manquant, une tuerie réelle de bout en bout sous EMFILE, n'est pas déterministe : le même épuisement fait aussi échouer la lecture de `cgroup.procs` qui suit (le balayage échoue alors fermé, sans tuer). Il faut un épuisement intermittent, ce que la production produit et qu'un test ne doit pas simuler. Je ne le présente donc pas comme démontré de bout en bout : c'est un défaut de la décision (« absent » conclu d'un échec de lecture), prouvé comme tel.
+
+**R2 sous injection de l'horloge.** Déjà couvert et conservé : pas de ±1 h, ±2001 ms sur l'instant des marques anciennes, jamais `RECLAIM` ; une marque ancienne n'est désormais plus jamais récupérée. L'instant mural n'est une entrée d'aucune décision inter-processus.
+
+**Rejeux ×50.** Il n'y a pas de test de concurrence dans ce lot (aucun thread, aucune barrière). Les tests qui touchent le noyau ou lancent une JVM fille ont quand même été rejoués 50 fois sous WSL (racine déléguée réelle, une invocation Maven par rejeu, `-Dsurefire.rerunFailingTestsCount=0`) : `LinuxCgroupJobOwnershipIsolationTest` (10), `OwnerLookupDescriptorExhaustionTest` (1), `ProcessTableTest` (16) sur le code final `2d2c2b5f` : **50 passages sur 50, 0 échec**. Aucun `Thread.sleep` de synchronisation ajouté ; le seul sommeil de production est l'attente bornée de `cgroup.kill`, préexistante.
+
+**Comptes AVANT / APRÈS.**
+
+| Mesure | Avant (`8670f2e2`) | Après |
+|---|---|---|
+| Endroits qui décident « ce processus (ou ce cgroup) nous appartient et peut être tué » (`minos-runtime-local`) | 4 | **4** : `CgroupJobOwnership.decide`, `ProcessOwnershipTracker.resolveSameProcess`, `ProcessTreeTermination.terminateTree`, `LinuxCgroupJob.kill`/`close` |
+| … dont ceux qui décident d'après l'identité d'un processus tiers | 1 (`decide`) | **1** (`decide`) ; `ProcessTable` est une source de preuve, pas un second décideur |
+| Lecteurs de `/proc/<pid>/stat` | 2 (`startTicks`, `ProcessHandle.of` dans `SYSTEM`) | 2 (`startTicks`, `ProcessTable.find`, qui passe par `parseStartTicks` : un seul analyseur) ; `ProcessHandle.of` n'entre plus dans aucune décision de tuer |
+| Branches de `decide` qui tuent sans preuve positive de mort | 4 (F1, F2, F3, espaces de noms) | **0** |
+| Sources d'instants murales dans une décision inter-processus | 0 | 0 |
+
+**Gates de fin de lot** (Windows, `clean verify` de `2d2c2b5f`) : `BUILD SUCCESS`, 15 modules, 19 min 44, **1 750 tests, 0 échec, 0 erreur, 53 ignorés** (hypothèses `Assumptions`, dont 22 de la zone cgroup qui ne s'exécutent que sous Linux) ; boundaries `modules=14, sources=504, packages=45`, current-docs, product-facts SUCCESS, `scripts checked=95` ; `check-jacoco.py` : 26 portées PASS, seule rouge `m24-polyglot-provider-platform` (line 0,619 / branch 0,375 agrégés, préexistante sous Windows, mêmes chiffres qu'à la base), `provider-sandbox-linux` SKIPPED sous Windows ; `critical-orchestration` 0,891 / 0,773 et `resume-orchestration` 0,906 / 0,787, inchangés. Golden : les 12 de `characterization/` inchangés (`git diff 8670f2e2..HEAD -- minos-app/src/test/resources scripts` vide). Journal : `lot3-verify-windows-d.log` du scratchpad.
+
+### 9.9 Répartition Windows / Linux / non exécuté
+
+- **Windows seulement (vérifié là, sans Linux)** : toute la logique de décision (`CgroupJobOwnershipTest` 28, `ProcessTableTest` 14 sur 16, `LinuxCgroupStaleRecoveryTest` 18, `LinuxCgroupJobDiagnosticsTest` 7, `LinuxCgroupJobFailClosedTest` 9), par injection de la table des processus, de la suppression, des bornes et de la marque du balayeur : aucun test ne dépend de ce que l'hôte sait faire. Les deux tests de lecture des liens `/proc/<pid>/ns/*` ignorent faute de liens symboliques.
+- **Linux, vrai noyau, racine cgroup v2 déléguée par un script root (WSL, noyau 6.18, compte 1000)** : les mêmes tests plus `LinuxCgroupJobOwnershipIsolationTest` (10, des `sleep` réellement tués ou épargnés), `ProcessTableTest` 16/16 (liens d'espaces de noms réels, vraie table `/proc`), `OwnerLookupDescriptorExhaustionTest` (JVM fille, descripteurs épuisés) ; module `minos-runtime-local` complet : 268 tests, 0 échec, 16 ignorés (Windows seulement) ; `minos-engine` 455, 7 ignorés.
+- **Sous Linux sans racine déléguée** (un développeur ordinaire, une CI sans `delegate-linux-cgroup.sh`) : les tests d'isolation s'ignorent (`assumeTrue`) ; le test de JVM fille, lui, s'exécute.
+- **Non exécuté nulle part** : une vraie table `/proc` montée avec `hidepid=2` (il faut remonter `/proc` ; la règle est testée par injection du contenu de `mountinfo`) ; un vrai propriétaire d'un autre espace de PID *frère* (conteneurs distincts partageant une racine) : ses processus apparaissent à 0 dans `cgroup.procs`, cas testé par injection (`membersOfAnotherPidNamespaceAreNeverKilled`) ; un noyau sans espace de temps (avant 5.6) : `time` vaut 0 des deux côtés, testé par injection ; `jacoco` de `provider-sandbox-linux` (non rejoué sous WSL pour ce lot).
+
+### 9.10 Décisions
+
+- **Pas de 2ᵉ mécanisme de marque, pas de 2ᵉ lecteur de `/proc`** : la marque de `93ed7905` est étendue (estampille d'espaces de noms), `parseStartTicks` reste le seul analyseur.
+- **Format de la marque.** `…-t<ticks>-n<ns pid>_<ns temps>-<jeton>`. L'ancien analyseur de la release et celui du build « ticks sans espaces » lisent le nouveau nom comme non marqué : ils ne tuent jamais un cgroup peuplé (tests sur les deux expressions reprises verbatim). Un build antérieur peut supprimer un cgroup encore vide au nouveau format (fenêtre de démarrage d'un job, déjà décrite au sprint 1, W5) : il ne tue rien.
+- **Coût assumé de la règle par défaut.** Les cgroups marqués par un build `develop` antérieur (instant mural, ou ticks sans espaces) ne sont plus jamais récupérés automatiquement, même à propriétaire mort : rien n'y prouve l'espace de noms. Ils sont signalés (WARNING agrégé, nom et raison) et la documentation utilisateur dit comment les supprimer. Aucune version publiée n'écrit ces marques.
+- **`hidepid`.** Une table qui masque les processus d'autres comptes ne prouve l'absence d'un propriétaire que si ce propriétaire est le compte du balayeur (propriétaire du répertoire du cgroup = propriétaire de `/proc/self`). Sinon, `UNVERIFIABLE` : résidu signalé, jamais tué.
+- **Appartenance lue récursivement** (le cgroup et ceux en dessous, bornes 16 niveaux et 1 024 cgroups, dépassement = échec fermé comme une lecture impossible) : la frontière d'un job inclut les cgroups qu'il a créés. Conséquence sur un job vivant : `aliveProcesses()` et la vérification de `kill()` couvrent aussi ses sous-cgroupes ; `close()` ne les supprime pas (inchangé, voir § 7).
+- **Un cgroup « récupéré » qu'on n'a pas pu supprimer est un résidu**, pas une récupération ; il n'y a plus de journal par cgroup hors du rapport agrégé.
