@@ -11,7 +11,7 @@
 | Lot | Contenu | Statut | Commits |
 |---|---|---|---|
 | 1 — Q6, Q7 | Inventaire, encodeur unique (`NaN`/`Infinity` refusés, échappement complet), un seul point d'échappement, ordre des clés stable sur 11 sites, garde-fous, preuve inter-JVM | livré, en attente du verdict final de `verif-code` | `72b3f9b4` … `c74aef8b` (§ 4) |
-| 2 — Q11, Q19, Q20 | Un seul parseur d'arguments (`CliOptions`), garde de `team`, `--help` avant `MINOS_HOME`, `--dry-run` sans effet de bord, `--no-resume` | livré, en attente du verdict final de `verif-code` | `fcbcacd4` … `d2d1d66f` (§ 10) |
+| 2 — Q11, Q19, Q20 | Un seul parseur d'arguments (`CliOptions`), garde de `team`, `--help` avant `MINOS_HOME`, `--dry-run` sans effet de bord, `--no-resume` | livré, en attente du verdict final de `verif-code` | `fcbcacd4` … `6debba27` (§ 10) |
 | 3 — Q10, Q14 | Cycle de vie des ressources, exceptions avalées | à faire | — |
 | 4 — Q12, Q13 | Heuristiques et duplication | à faire | — |
 
@@ -278,6 +278,8 @@ Gates rejoués après chaque commit : `check-module-boundaries.py`, `check-curre
 | `d9c8b920` | Q20 : `--no-resume` = run complet ; `--dry-run` refuse les drapeaux de reprise | `NoResumeIndexingTest` 1/2, `IndexCommandResumeFlagsTest` 1 |
 | `68fe989f` | gardes de source du parseur unique + couverture de toute commande (Q19 étendu) | 3 mutations tuées |
 | `d2d1d66f` | `--help` des sous-opérations et de `mcp` (V-L2-06, V-L2-07) | `StableCliHelpTest` 2/2 rouges |
+| `1108ec2c` | ce suivi complété (journal, preuves, constats), `docs/user/cli.md` | — |
+| `6debba27` | imports inutiles retirés (aucun changement de comportement) | — |
 
 ## 11. Preuves
 
@@ -317,6 +319,10 @@ Hors sonde, mesurés par tests : `providers -x` 1 → 2, `find-symbol p --help` 
 | `startsWith("--limit")` + `Integer.parseInt` dans `ProviderCommand` ; `toLowerCase()` sans `Locale` | `CliParsingGuardTest` 2 et 1 rouges |
 
 Les sorties des mutations sont dans le scratchpad de la session (`lot2-mutation*.log`).
+
+### 11.4 Fin de lot
+
+`./mvnw clean verify` complet dans le worktree (journal dans le scratchpad, pas dans `target/`) : **BUILD SUCCESS**, 15 modules, 12 min 54, **1528 tests exécutés, 0 échec, 0 erreur, 46 ignorés** (hypothèses `Assumptions` préexistantes, aucun `@Disabled` ajouté ; 1439 tests à la fin du lot 1, +89 : `CliOptionsTest` 17, les `*ArgumentRulesTest`, `TeamOperationGuardTest`, `TeamCommandDispatchGuardTest`, `CliParsingGuardTest`, `StableCliHelpTest`, `ProviderVerdictConsistencyTest`, `IndexDryRunSideEffectsTest`, `NoResumeIndexingTest`…). Rejoué une seconde fois sur le SHA final (`6debba27`, qui ne diffère de `1108ec2c` que par des imports retirés) : même résultat. `python scripts/quality/check-jacoco.py` : 26 portées vertes, **seule rouge : `m24-polyglot-provider-platform`** (`ManagedPolyglotScipRuntimeManager` 0,232 < 0,28), préexistante et propre à Windows. Gates : boundaries `modules=14, sources=500, packages=45` (+1 : `CliOptions.java`), current-docs, product-facts, milestone-artifact-references (95), `check-post-mne.py` : verts. Golden : les 12 de `characterization/` **inchangés** (`A2SurfaceCharacterizationTest` 12/12, aucune sortie JSON ne change dans ce lot).
 
 ## 12. Constats de verif-code (lot 2)
 
