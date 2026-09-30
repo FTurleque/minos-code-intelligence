@@ -22,6 +22,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Compose un contexte de code structuré en respectant les budgets M4.
  */
@@ -267,12 +269,6 @@ public final class CodeSearchService {
             total += TokenEstimator.estimate(value);
         }
         return total;
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
     }
 
     private record EntityDepth(CodeEntityRef entity, int depth) {

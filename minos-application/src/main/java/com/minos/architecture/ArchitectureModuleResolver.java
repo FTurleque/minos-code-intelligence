@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Résout de manière déterministe un symbole local vers le module découvert qui
  * le contient. Cette logique est partagée par les vues de topologie et les
@@ -135,13 +137,6 @@ final class ArchitectureModuleResolver {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available", exception);
         }
-    }
-
-    private static String requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
-        return value;
     }
 
     record Assignment(

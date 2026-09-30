@@ -6,6 +6,8 @@ import com.minos.domain.InformationNature;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Namespace ou package observé dans un module de la topologie MINOS.
  *
@@ -34,12 +36,6 @@ public record ArchitectureNamespace(
         evidence = List.copyOf(Objects.requireNonNull(evidence, "evidence"));
         if (nature != InformationNature.FACTUAL && evidence.isEmpty()) {
             throw new IllegalArgumentException("derived architecture namespace requires evidence");
-        }
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
         }
     }
 }

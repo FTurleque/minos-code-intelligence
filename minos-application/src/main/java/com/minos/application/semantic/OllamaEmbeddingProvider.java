@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Local learned embedding provider backed by an explicitly configured trusted Ollama endpoint.
  *
@@ -44,7 +46,7 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
 
     public OllamaEmbeddingProvider(URI endpoint, String model, int dimensions, Duration timeout) {
         this.endpoint = validateEndpoint(Objects.requireNonNull(endpoint, "endpoint"));
-        this.model = requireText(model, "model");
+        this.model = requireText(model, "model").trim();
         if (dimensions < 32 || dimensions > 16_384) {
             throw new IllegalArgumentException("dimensions must be between 32 and 16384");
         }
@@ -146,7 +148,7 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
 
     static String requestBody(String model, String input) {
         return DeterministicJson.render(DeterministicJson.object(
-                "model", requireText(model, "model"),
+                "model", requireText(model, "model").trim(),
                 "input", Objects.requireNonNull(input, "input"),
                 "truncate", true));
     }
@@ -175,10 +177,5 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
             if (bytes.length > MAX_RESPONSE_BYTES) throw new IOException("Ollama response exceeds safety limit");
             return new String(bytes, StandardCharsets.UTF_8);
         }
-    }
-
-    private static String requireText(String value, String name) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
-        return value.trim();
     }
 }

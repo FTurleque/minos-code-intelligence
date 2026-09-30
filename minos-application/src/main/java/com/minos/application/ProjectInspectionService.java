@@ -27,6 +27,8 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Shared read-only project/index view used by transport adapters. */
 public final class ProjectInspectionService {
 
@@ -154,9 +156,6 @@ public final class ProjectInspectionService {
     }
 
     private static String blankToNull(String value) { return value == null || value.isBlank() ? null : value; }
-    private static void requireText(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
-    }
 
     public record ProjectView(String id, String name, String rootPath, boolean rootAvailable, List<String> languages,
                               List<String> buildSystems, int moduleCount, String indexState, String activeSnapshotId,

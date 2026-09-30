@@ -49,6 +49,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Long-lived composition root for one MINOS home and one selected storage backend. */
 public final class MinosApplication implements AutoCloseable {
 
@@ -229,11 +231,6 @@ public final class MinosApplication implements AutoCloseable {
             if (!buildInvoked) closeBackendOnFailure(backend, exception);
             throw exception;
         }
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
-        return value;
     }
 
     /** Stable production composition seam retained as a regression-checkable invariant. */

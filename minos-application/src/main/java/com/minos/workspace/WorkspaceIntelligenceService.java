@@ -20,6 +20,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** M12 multi-repository intelligence over workspaces and active knowledge snapshots. */
 public final class WorkspaceIntelligenceService {
     private static final int MAX_RELATIONSHIPS = 10_000;
@@ -132,7 +134,6 @@ public final class WorkspaceIntelligenceService {
                 workspace.createdAt().toString(), workspace.updatedAt().toString());
     }
 
-    private static void requireText(String value, String field) { if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " must not be blank"); }
     private static void requireLimit(int value) { if (value < 1 || value > MAX_RELATIONSHIPS) throw new IllegalArgumentException("maxRelationships must be between 1 and " + MAX_RELATIONSHIPS); }
 
     public record WorkspaceView(String id, String name, List<String> projectIds, String createdAt, String updatedAt) {
