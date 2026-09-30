@@ -613,6 +613,8 @@ Gates rejoués après chaque commit : `check-module-boundaries.py`, `check-curre
 | `ffe9c6cd` | `LogCapture` dans le test-jar de l'engine | boundaries inchangé |
 | `d8662fec` | fournisseur de clés de test unique ; V-L4-04, V-L4-06 | — |
 | `642eaec5` | garde `DuplicationGuardTest` | 5 mutations tuées |
+| `bc5cceb8` | ce suivi : décisions Q13, journal, comptes, constats | — |
+| `05228456` | V-L4-09 : 9 copies de `requireText` sous un autre nom (`validateText`, `requireFileId`, `requireLabel`, `requireProvider`, `requireBoundary`, + blocs de tête de 4 validations plus larges) ; garde structurelle ; V-L4-10 (Javadoc) | mutation `requireNonBlank` tuée |
 
 ## 23. Preuves
 
@@ -646,7 +648,7 @@ Production (`*/src/main/*`) : 103 fichiers touchés, +786 / −1 368 lignes.
 
 ### 23.3 Preuves par mutation (garde)
 
-Cinq mutations posées ensemble puis annulées (`lot4-guard-mutations.log`) : `requireText` recréé dans `CliJson`, `MessageDigest.getInstance("SHA-256")` dans `MinosLauncher`, `new StringBuilder("{")` dans `SymbolResultRenderer`, second `put("normalizedSymbolCount"` dans `ProjectCommand`, `LogCapture` recréé dans `minos-cli` : **5 tests rouges sur 8**, fichier fautif dans le message.
+Cinq mutations posées ensemble puis annulées (`lot4-guard-mutations.log`) : `requireText` recréé dans `CliJson`, `MessageDigest.getInstance("SHA-256")` dans `MinosLauncher`, `new StringBuilder("{")` dans `SymbolResultRenderer`, second `put("normalizedSymbolCount"` dans `ProjectCommand`, `LogCapture` recréé dans `minos-cli` : **5 tests rouges sur 8**, fichier fautif dans le message. `verif-code` en a rejoué six (dont un troisième `record ProjectView`) : 6 rouges. Une copie **renommée** (`requireNonBlank` dans `MinosMcpTools`) n'était pas vue par la garde d'origine (V-L4-09) ; la garde structurelle `noMethodIsAJustRenamedRequireText` la tue (`lot4-guard-renamed-mutation.log`).
 
 ## 24. Constats de verif-code (lot 4)
 
@@ -660,10 +662,13 @@ Cinq mutations posées ensemble puis annulées (`lot4-guard-mutations.log`) : `r
 | V-L4-06 | remarque | `FileRuntimeObservationStore.digest(byte[])` non migré | `d8662fec` |
 | V-L4-07 | remarque | les branches TEXT des 3 renderers gardent 3 copies de `addTextLocation`/`addTextOrigin` | déclaré § 25 |
 | V-L4-08 | remarque | `LocalProjectOperations.projectView` reste la 3e copie de la forme de `ProjectView` | déclaré § 21.4 / § 25 |
+| V-L4-09 | à corriger | des copies de `requireText` sous un autre nom (`InMemoryCodeKnowledgeStore.validateText` ×12 appels, `requireFileId`, `requireLabel`, `requireProvider`, `requireBoundary`) échappaient à la garde, qui cherchait le nom ; une mutation `requireNonBlank` ne la faisait pas rougir | `05228456` : les cinq supprimées, le bloc de tête de `StorageBackendConfiguration`, `CommandLocator`, `SnapshotProjectLease` et `ProjectRegistryLimits.requireName` (API publique, signature inchangée) devient `requireText` ; garde structurelle (corps entier = contrôle de texte blanc, quel que soit le nom) ; mutation rejouée rouge |
+| V-L4-10 | à corriger | une ligne de Javadoc en français dans `SharedCacheLeaseRegistry` (fichier anglais) | `05228456` |
+| V-L4-11 | remarque | `Sha256` documenté en français dans un paquet (`com.minos.io`) dont d'autres fichiers sont en anglais | conforme à la règle (la langue est celle du fichier, sans mélange) |
 
 ## 25. À traiter plus tard (lot 4)
 
-- **Autres helpers « bloc + throw »** de nom différent (`requireName`, `requireLabel`, `requireToken`, `blankToNull`, `validateText`… : ~62 selon l'inventaire large de `verif-code`) : hors du chiffre de l'audit (`requireText`), non tous équivalents ; à reprendre helper par helper avec caractérisation si l'on veut aller au bout de `Preconditions`.
+- **Autres helpers « bloc + throw »** de nom différent (`requireToken`, `blankToNull`, validations à message fixe ou à contrôle supplémentaire… : ~50 selon l'inventaire large de `verif-code`, après les 9 traités par V-L4-09) : hors du chiffre de l'audit (`requireText`), non tous équivalents ; la garde ne refuse que les copies dont le corps entier est le contrôle de texte blanc ; le reste est à reprendre helper par helper avec caractérisation. `minos-intellij` : `requireText` ×2 et `requireToken` (plugin Gradle).
 - **Mise en forme TEXT** des 3 renderers (`addTextLocation`, `addTextOrigin`, `field`) : 3 copies restantes (V-L4-07).
 - **`ProjectView` ×2 et `LocalProjectOperations.projectView`** : à fusionner quand une évolution d'API publique le permettra (changer le type de retour de `ProjectInspectionService` ou de `ProjectOperations` est observable par `minos-mcp` / `minos-api` / `minos-cli`).
 - **`ProjectDto`/`IndexImportDto`** (API) et `providerProfiles` (MCP) : mapping par constructeur ou sous-ensemble, non fusionnés (§ 21.4).
