@@ -20,6 +20,8 @@ public final class GetSourceCommand {
               -h, --help               Show this help
             """.stripTrailing();
 
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--format");
+
     private final ProjectSymbolQuery query;
 
     public GetSourceCommand(ProjectSymbolQuery query) {
@@ -27,27 +29,11 @@ public final class GetSourceCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n')
-                    .append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-        try {
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             SourceExcerpt source = query.getSource(options.projectId(), options.fileId());
             output.append(CodeSearchRenderer.renderSource(source, options.format())).append('\n');
             return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: get-source failed: ")
-                    .append(CliCommandSupport.failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        });
     }
 
     public static String usage() {
@@ -61,14 +47,7 @@ public final class GetSourceCommand {
             }
             String project = CliCommandSupport.operand(arguments[0], "project");
             String fileId = CliCommandSupport.operand(arguments[1], "file-id");
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            if (arguments.length > 2) {
-                if (arguments.length != 4 || !"--format".equals(arguments[2])) {
-                    throw new IllegalArgumentException("unknown option: " + arguments[2]);
-                }
-                format = SymbolOutputFormat.parse(arguments[3]);
-            }
-            return new Options(project, fileId, format);
+            return new Options(project, fileId, OPTIONS.parse(arguments, 2).format());
         }
     }
 }

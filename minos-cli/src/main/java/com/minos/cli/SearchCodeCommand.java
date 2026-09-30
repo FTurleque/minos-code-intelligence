@@ -3,16 +3,12 @@ package com.minos.cli;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.context.CodeSearchResponse;
-import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.output.CodeSearchRenderer;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Locale;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Recherche structurée et contextuelle M4.
@@ -23,11 +19,15 @@ public final class SearchCodeCommand {
 
     private static final int DEFAULT_LIMIT = 5;
     private static final int MAX_LIMIT = 20;
-    private static final Set<String> SUPPORTED_OPTIONS = Set.of(
-            "--qualified-name", "--kind", "--module", "--limit", "--depth",
-            "--usages", "--relationships", "--context-lines", "--max-tokens",
-            "--no-source", "--format"
-    );
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec()
+            .text("--qualified-name", "--kind", "--module", "--format")
+            .flag("--no-source")
+            .integer("--limit", 1, MAX_LIMIT)
+            .integer("--depth", 0, CodeSearchCriteria.MAX_DEPTH)
+            .integer("--usages", 0, CodeSearchCriteria.MAX_ITEMS_PER_NODE)
+            .integer("--relationships", 0, CodeSearchCriteria.MAX_ITEMS_PER_NODE)
+            .integer("--context-lines", 0, CodeSearchCriteria.MAX_CONTEXT_LINES)
+            .integer("--max-tokens", CodeSearchCriteria.MIN_TOKEN_BUDGET, CodeSearchCriteria.MAX_TOKEN_BUDGET);
     private static final String USAGE = """
             Usage: minos search <project> <query> [options]
 
@@ -78,87 +78,22 @@ public final class SearchCodeCommand {
             }
             String project = CliCommandSupport.operand(arguments[0], "project");
             String text = CliCommandSupport.operand(arguments[1], "query");
-            String qualifiedName = null;
-            String module = null;
-            SymbolKind kind = null;
-            int limit = DEFAULT_LIMIT;
-            int depth = 1;
-            int usages = 3;
-            int relationships = 10;
-            int contextLines = 2;
-            int maxTokens = 4_000;
-            boolean includeSource = true;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Set<String> seen = new HashSet<>();
-
-            for (int index = 2; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (option == null || !SUPPORTED_OPTIONS.contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if ("--no-source".equals(option)) {
-                    includeSource = false;
-                    continue;
-                }
-                if (++index >= arguments.length || arguments[index] == null
-                        || arguments[index].isBlank() || arguments[index].startsWith("--")) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                String value = arguments[index];
-                switch (option) {
-                    case "--qualified-name" -> qualifiedName = value;
-                    case "--kind" -> kind = parseKind(value);
-                    case "--module" -> module = value;
-                    case "--limit" -> limit = bounded(value, option, 1, MAX_LIMIT);
-                    case "--depth" -> depth = bounded(
-                            value, option, 0, CodeSearchCriteria.MAX_DEPTH);
-                    case "--usages" -> usages = bounded(
-                            value, option, 0, CodeSearchCriteria.MAX_ITEMS_PER_NODE);
-                    case "--relationships" -> relationships = bounded(
-                            value, option, 0, CodeSearchCriteria.MAX_ITEMS_PER_NODE);
-                    case "--context-lines" -> contextLines = bounded(
-                            value, option, 0, CodeSearchCriteria.MAX_CONTEXT_LINES);
-                    case "--max-tokens" -> maxTokens = bounded(
-                            value, option, CodeSearchCriteria.MIN_TOKEN_BUDGET,
-                            CodeSearchCriteria.MAX_TOKEN_BUDGET);
-                    case "--format" -> format = SymbolOutputFormat.parse(value);
-                    default -> throw new IllegalStateException("unhandled option: " + option);
-                }
-            }
+            CliOptions options = OPTIONS.parse(arguments, 2);
             return new Options(
                     project,
                     new CodeSearchCriteria(
-                            new SymbolSearchCriteria(text, qualifiedName, kind, module, limit),
-                            depth, usages, relationships, contextLines, maxTokens, includeSource
+                            new SymbolSearchCriteria(text, options.text("--qualified-name"),
+                                    CliCommandSupport.symbolKind(options.text("--kind")), options.text("--module"),
+                                    options.integer("--limit", DEFAULT_LIMIT)),
+                            options.integer("--depth", 1),
+                            options.integer("--usages", 3),
+                            options.integer("--relationships", 10),
+                            options.integer("--context-lines", 2),
+                            options.integer("--max-tokens", 4_000),
+                            !options.has("--no-source")
                     ),
-                    format
+                    options.format()
             );
-        }
-
-
-        private static SymbolKind parseKind(String value) {
-            try {
-                return SymbolKind.valueOf(value.toUpperCase(Locale.ROOT).replace('-', '_'));
-            } catch (IllegalArgumentException exception) {
-                throw new IllegalArgumentException("unsupported symbol kind: " + value, exception);
-            }
-        }
-
-        private static int bounded(String raw, String option, int minimum, int maximum) {
-            try {
-                int value = Integer.parseInt(raw);
-                if (value < minimum || value > maximum) {
-                    throw new IllegalArgumentException(
-                            option + " must be between " + minimum + " and " + maximum);
-                }
-                return value;
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("invalid value for " + option + ": " + raw,
-                        exception);
-            }
         }
     }
 }

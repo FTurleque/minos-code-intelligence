@@ -1,9 +1,12 @@
 package com.minos.cli;
 
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.domain.SymbolKind;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Shared fail-closed skeleton for the option-parsing MINOS commands.
@@ -98,15 +101,15 @@ final class CliCommandSupport {
         return value;
     }
 
-    static int parseLimit(String value, int maximum) {
+    /** The symbol kind named by a {@code --kind} value (case-insensitive, {@code -} for {@code _}); {@code null} when absent. */
+    static SymbolKind symbolKind(String value) {
+        if (value == null) {
+            return null;
+        }
         try {
-            int limit = Integer.parseInt(value);
-            if (limit < 1 || limit > maximum) {
-                throw new IllegalArgumentException("limit must be between 1 and " + maximum);
-            }
-            return limit;
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("invalid limit: " + value, exception);
+            return SymbolKind.valueOf(value.toUpperCase(Locale.ROOT).replace('-', '_'));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("unsupported symbol kind: " + value, exception);
         }
     }
 

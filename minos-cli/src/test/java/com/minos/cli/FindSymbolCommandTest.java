@@ -110,11 +110,11 @@ class FindSymbolCommandTest {
                 ),
                 new InvalidArguments(
                         new String[]{"project-1", "Greeting", "--limit", "0"},
-                        "limit must be between 1 and 1000"
+                        "--limit must be between 1 and 1000"
                 ),
                 new InvalidArguments(
                         new String[]{"project-1", "Greeting", "--limit", "many"},
-                        "invalid limit: many"
+                        "--limit must be an integer"
                 ),
                 new InvalidArguments(
                         new String[]{"project-1", "Greeting", "--kind", "service"},

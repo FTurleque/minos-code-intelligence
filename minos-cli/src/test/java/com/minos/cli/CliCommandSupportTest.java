@@ -148,21 +148,6 @@ class CliCommandSupportTest {
     }
 
     @Test
-    void parseLimitEnforcesTheInclusiveRangeAndReportsNonNumericInput() {
-        assertEquals(1, CliCommandSupport.parseLimit("1", 1000));
-        assertEquals(1000, CliCommandSupport.parseLimit("1000", 1000));
-        assertEquals("limit must be between 1 and 1000",
-                assertThrows(IllegalArgumentException.class,
-                        () -> CliCommandSupport.parseLimit("0", 1000)).getMessage());
-        assertEquals("limit must be between 1 and 1000",
-                assertThrows(IllegalArgumentException.class,
-                        () -> CliCommandSupport.parseLimit("1001", 1000)).getMessage());
-        assertEquals("invalid limit: abc",
-                assertThrows(IllegalArgumentException.class,
-                        () -> CliCommandSupport.parseLimit("abc", 1000)).getMessage());
-    }
-
-    @Test
     void isHelpAcceptsOnlyTheTwoDocumentedFlags() {
         assertTrue(CliCommandSupport.isHelp("--help"));
         assertTrue(CliCommandSupport.isHelp("-h"));
