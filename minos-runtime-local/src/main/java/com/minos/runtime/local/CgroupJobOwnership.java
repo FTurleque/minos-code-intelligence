@@ -215,16 +215,21 @@ final class CgroupJobOwnership {
      *
      * <p>Field 2 ({@code comm}) is enclosed in parentheses but may itself contain spaces and
      * parentheses, so the fields are counted after the LAST closing parenthesis.</p>
+     *
+     * <p>The value is trusted only when the record is complete: it ends with its newline and a field
+     * follows field 22. A read cut inside field 22 leaves a shorter number that is still a number, and a
+     * shorter number reads as a different start, that is as a PID reuse. Anything less than a complete
+     * record is unknown, and unknown never proves an owner dead.</p>
      */
     static OptionalLong parseStartTicks(String stat) {
-        if (stat == null) return OptionalLong.empty();
+        if (stat == null || !stat.endsWith("\n")) return OptionalLong.empty();
         int commEnd = stat.lastIndexOf(')');
         if (commEnd < 0) return OptionalLong.empty();
         String remainder = stat.substring(commEnd + 1).trim();
         if (remainder.isEmpty()) return OptionalLong.empty();
         String[] fields = remainder.split("\\s+");
         int index = STARTTIME_FIELD - FIRST_FIELD_AFTER_COMM;
-        if (fields.length <= index) return OptionalLong.empty();
+        if (fields.length <= index + 1) return OptionalLong.empty();
         try {
             long ticks = Long.parseLong(fields[index]);
             return ticks > 0L ? OptionalLong.of(ticks) : OptionalLong.empty();
