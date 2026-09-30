@@ -74,6 +74,18 @@ class ArtifactConfinementTest {
     }
 
     @Test
+    void aDirectoryOnTheWayThatIsALinkIsRefusedEvenWhenItLeadsInsideTheRunDirectory(@TempDir Path temp)
+            throws IOException {
+        // V-L4-03: "no link on the way" is the whole guarantee, not only for the last component.
+        assumeTrue(canLink(temp), "symbolic links are not available here");
+        Path runDirectory = Files.createDirectories(temp.resolve("run"));
+        Path real = write(runDirectory.resolve("provider").resolve("scope").resolve("index.scip"));
+        Path linkedDirectory = Files.createSymbolicLink(runDirectory.resolve("shortcut"), real.getParent());
+
+        assertEquals(Reason.LINKED, reasonOf(runDirectory, linkedDirectory.resolve("index.scip")));
+    }
+
+    @Test
     void anEscapeNeverCarriesAPath(@TempDir Path temp) throws IOException {
         Path runDirectory = Files.createDirectories(temp.resolve("run"));
         Path outside = write(temp.resolve("outside").resolve("index.scip"));

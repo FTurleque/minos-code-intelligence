@@ -12,9 +12,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.function.BiFunction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -69,6 +71,51 @@ class IndexingArtifactConfinementTest {
     }
 
     @Test
+    void anArtifactReplacedByALinkWhileLaterProvidersRanIsRefusedBeforeStaging(@TempDir Path temp) throws Exception {
+        // V-L4-03: the first scope's artifact was confined when its provider returned; the provider of the second
+        // scope then runs, and the directory of the first artifact is swapped for a link to a copy outside.
+        assumeTrue(symbolicLinksAvailable(temp), "symbolic links are not available here");
+        Fixture fixture = new Fixture(temp);
+        Path outside = outsideArtifact(fixture);
+        IndexerExecutor swapsTheFirstArtifactsDirectory = new Fixture.Executor(fixture, 99) {
+            private Path firstDirectory;
+
+            @Override
+            public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                IndexingArtifact artifact = super.execute(request);
+                if (firstDirectory == null) {
+                    firstDirectory = artifact.finalArtifact().getParent();
+                } else {
+                    deleteTree(firstDirectory);
+                    Files.createSymbolicLink(firstDirectory, outside.getParent());
+                }
+                return artifact;
+            }
+        };
+
+        IndexingRun run = fixture.lifecycle(swapsTheFirstArtifactsDirectory, T0).execute(
+                fixture.projectId, fixture.root, fixture.discovery(), IndexingResumeTest.negotiation());
+
+        assertEquals(IndexingRun.Status.FAILED, run.status(), "an artifact swapped for a link is refused");
+        assertTrue(run.message().orElseThrow().contains("symbolic link"), run.message().orElse(""));
+        assertTrue(fixture.stager.requests.isEmpty(), "nothing swapped in is staged");
+    }
+
+    @Test
+    void anArtifactThatNeverBecomesReadableFailsTheRunWithoutItsPath(@TempDir Path temp) throws Exception {
+        Fixture fixture = new Fixture(temp);
+        BiFunction<Path, IndexingExecutionRequest, Path> neverWritten =
+                (runDirectory, request) -> runDirectory.resolve("never-written.scip");
+
+        IndexingRun run = execute(fixture, neverWritten);
+
+        assertEquals(IndexingRun.Status.FAILED, run.status());
+        assertTrue(run.message().orElseThrow().contains("missing or unreadable"), run.message().orElse(""));
+        assertFalse(run.message().orElseThrow().contains(temp.getFileName().toString()),
+                "the message of a run carries no absolute path: " + run.message().orElse(""));
+    }
+
+    @Test
     void anArtifactInsideTheRunDirectoryIsStillAccepted(@TempDir Path temp) throws Exception {
         Fixture fixture = new Fixture(temp);
         BiFunction<Path, IndexingExecutionRequest, Path> inside = (runDirectory, request) -> {
@@ -106,6 +153,12 @@ class IndexingArtifactConfinementTest {
                 IndexingResumeTest.negotiation());
 
         assertEquals(IndexingRun.Status.SUCCEEDED, run.status(), String.valueOf(run.message()));
+    }
+
+    private static void deleteTree(Path directory) throws IOException {
+        try (var paths = Files.walk(directory)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path);
+        }
     }
 
     private static Path outsideArtifact(Fixture fixture) throws IOException {
