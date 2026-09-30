@@ -13,7 +13,7 @@
 | 1 — Q6, Q7 | Inventaire, encodeur unique (`NaN`/`Infinity` refusés, échappement complet), un seul point d'échappement, ordre des clés stable sur 11 sites, garde-fous, preuve inter-JVM | livré, en attente du verdict final de `verif-code` | `72b3f9b4` … `c74aef8b` (§ 4) |
 | 2 — Q11, Q19, Q20 | Un seul parseur d'arguments (`CliOptions`), garde de `team`, `--help` avant `MINOS_HOME`, `--dry-run` sans effet de bord, `--no-resume` | livré, en attente du verdict final de `verif-code` | `fcbcacd4` … `6debba27` (§ 10) |
 | 3 — Q10, Q14 | Application fermée sur tous les chemins (routeur MCP, lanceur), code mort supprimé, garde de propriété, quatre exceptions avalées journalisées | livré, en attente du verdict final de `verif-code` | `eedd3bf8` … `748115f8` (§ 16) |
-| 4 — Q12, Q13 | Heuristiques et duplication | à faire | — |
+| 4 — Q12, Q13 | Heuristiques de tests liés (suffixe, répertoires), duplication (`requireText`, `sha256`, JSON à la main, mapping DTO, `LogCapture`) | en cours | `b9d57a3b` … (§ 22) |
 
 ## 2. Inventaire daté (base `02e490c3`, 29 septembre 2026)
 
@@ -474,3 +474,95 @@ Une première version de `visibleFile` journalisait toute exception : mesurée s
 - **Historique** : `scripts/history/m15/run-s3.ps1` (jamais joué, chemin `minos-app\…\MinosLauncher.java` périmé depuis A3) exige `MinosApplication application = MinosApplication.open(home);` et `MinosMcpServer.run(application);` dans le lanceur : déjà faux avant ce lot, aucun gate ne le lit. `scripts/history/m16` et `m21` (sondes hors build) ouvrent sans fermer.
 - **Q13 (helpers de test)** : `LogCapture` existe en trois exemplaires de test (`minos-cli`, `minos-engine/testsupport`, `minos-storage-local`) faute de test-jar partagé ; à mutualiser avec Q13 si un module de support de test apparaît.
 - **Bruit du fichier hérité corrompu** : la trace (dix au plus) se répète à chaque ouverture tant que le fichier reste dans `runs/` ; une purge ou une mise en quarantaine automatique changerait le flux, elle est laissée à une décision produit.
+
+---
+
+# Lot 4 — Q12, Q13 : heuristiques de tests liés et duplication
+
+> Branche : `code/q12-q13-duplication` (depuis `code/q10-q14-cycle-de-vie`, `fc213702`), worktree `minos-wt/code-q12`. Agents : `impl-code`, `verif-code`. Aucun push, aucune PR.
+> Constats : **Q12** (`RelatedTestDerivationService` : suffixe `it` sans frontière de mot, tout répertoire `/test/` pris pour un répertoire de tests), **Q13** (`requireText`, `sha256`, JSON écrit à la main, mapping DTO, `ProjectView`, `LogCapture`), `AUDIT-2026-09.md` § 10.
+> Règle d'or de Q13 : le nombre d'occurrences de chaque helper baisse **strictement**, l'ancienne implémentation disparaît dans le même commit, et le helper commun ne crée **jamais** une dépendance refusée par `check-module-boundaries.py` (A2 / ADR 0042, 0044) ; le script n'est pas modifié.
+
+## 20. Q12 — heuristiques de tests liés
+
+### 20.1 Cible relocalisée
+
+`minos-engine/src/main/java/com/minos/query/RelatedTestDerivationService.java` (l'audit visait le module d'avant A3). Deux défauts, lus au code de `fc213702` :
+
+| Défaut | Code d'origine | Effet |
+|---|---|---|
+| suffixe sans frontière de mot | `(?i)(?:tests?\|spec(?:ification)?s?\|it)$` appliqué au nom du symbole de test | un symbole de test nommé `Audit`, `Commit`, `Limit`, `Permit`, `Visit`, `Latest`, `Contest`… était rattaché à `Aud`, `Comm`, `Lim`, `Perm`, `Vis`, `La`, `Con` |
+| répertoire de tests par présence du mot | `"/" + chemin` contient `/test/`, `/tests/` ou `/__tests__/` | `src/main/java/com/acme/test/Support.java` (paquet de production) était un symbole de test : jamais cible d'un test, et ancre de test à tort ; `src/it/java` n'était pas reconnu |
+
+`latest/` et `contest/` ne déclenchaient déjà pas `/test/` (le mot est précédé d'une lettre) ; ils sont verrouillés par test.
+
+### 20.2 Décisions
+
+- **Suffixe** : retiré à une frontière de mot uniquement. (a) derrière un séparateur `_`, `-` ou `.` (`audit_it`, `foo-test`, `Foo.spec`), sans tenir compte de la casse ; (b) en casse de chameau : `Test`, `Tests`, `Spec`, `Specs`, `Specification(s)` (mot capitalisé, quel que soit le caractère qui précède : `IOTest` → `IO`), et `IT`/`It` derrière une **minuscule ou un chiffre** (`FooIT`, `Http2IT`, `FooIt`). La fin d'un mot en minuscules (`Audit`, `Commit`, `Latest`) n'est jamais un suffixe ; un mot en capitales (`AUDIT`) non plus.
+- **`IT` et `It`** : la convention du dépôt est `*IT.java` (Failsafe : `minos-app/src/test/java/com/minos/packaging/ShadedJar*IT.java`, aucun `*It`, aucun répertoire `src/it`). `It` reste accepté : c'est un mot de casse de chameau et la règle d'origine le retirait ; le retirer aurait fait perdre `FooIt` sans rien gagner (le défaut est la minuscule finale, pas la casse `It`).
+- **Répertoires de tests** (`isTestPath`) : source sets `src/test`, `src/it`, `src/integrationTest`, `src/integration-test` à toute profondeur (modules) ; `__tests__` ; `test/` ou `tests/` à la racine (Ant, pytest, Cargo) et, hors sources JVM, à toute profondeur (`packages/x/test/…`, monorepos JS) ; pour une source JVM (`.java .kt .kts .scala .groovy`), un `test/` non racine est un **paquet** (`com/acme/test/Support.java`) ; tout ce qui est sous `src/main` est de la production ; les fichiers `*.test.*` / `*.spec.*` restent des tests. Le service ne voit pas les poms du projet analysé : la « convention du projet » est celle des outils (Maven, Gradle, Ant, npm, Cargo, pytest), relevée ici dans les poms et l'arborescence du dépôt (`src/test/java` partout, Failsafe dans `minos-app`).
+- **Non touché** : la dérivation à partir du nom du fichier (`stripTestFileSuffix`, séparateur obligatoire, déjà correct), les préfixes `TestFoo` / `ITFoo` (jamais gérés : ce serait un gain, pas un correctif).
+
+### 20.3 Mesure avant / après
+
+Harnais **non commité** (`RelatedTestsMeasure`, scratchpad `lot4/`) : il lit `src/main/java` et `src/test/java` de tous les modules `minos-*` **de l'arbre de base `fc213702`** (`git archive`, pour que l'entrée soit identique avant et après), crée un symbole par type de premier niveau (520 fichiers de production, 454 de test, 976 symboles) et appelle `RelatedTestDerivationService.derive` avec les classes de la base (copiées avant toute modification) puis celles du correctif. Deux modes : **complet** (une référence résolue est simulée pour tout identifiant d'un fichier de test égal au nom simple d'un type de production unique : 2 771 occurrences, approximation d'un index SCIP) et **nommage seul** (aucune occurrence : ne reste que l'heuristique de Q12). Résultats bruts : `lot4-related-tests-{before,after}[-naming].tsv`.
+
+| Mesure | Avant | Après | Gagnés | Perdus | Inchangés |
+|---|---|---|---|---|---|
+| couples test → production, mode complet | 2 774 | 2 774 | **0** | **0** | 2 774 |
+| couples test → production, nommage seul | 174 | 174 | **0** | **0** | 174 |
+| classement `isTestPath` de tous les fichiers du dépôt (1 585) | 488 tests / 1 097 autres | idem | 0 | 0 | 1 585 |
+| noms de types dont le radical change (972 noms distincts) | | | | | 2 (`JavaParsedUnit`, `ProviderConformanceKit` : noms de **production** qui auraient été tronqués s'ils avaient été côté test) |
+
+**Lecture** : sur ce dépôt, l'ancienne règle ne produisait aucune association fausse (aucun type de test ne se termine en `it`/`test` en minuscules, aucun paquet de production ne s'appelle `test`) : le correctif est **neutre** ici — 0 couple gagné, 0 perdu, 2 774 inchangés — et la mesure sert de preuve d'absence de régression. Il n'y a donc aucune association perdue à justifier sur ce dépôt.
+
+**Effet sur les cas visés** (tests rouges sur le code d'origine, `RelatedTestHeuristicsTest`, 22 échecs avant, 0 après) :
+
+| Cas | Avant | Après |
+|---|---|---|
+| test `Audit`, `Commit`, `Limit`, `Permit`, `Submit`, `Visit`, `Latest`, `Contest`, `Protest`, `AUDIT` | rattaché à `Aud`, `Comm`, `Lim`, `Perm`, `Subm`, `Vis`, `La`, `Con`, `Pro`, `AUD` | aucun rattachement (10 faux positifs supprimés) |
+| `AuditTest`, `CommitTest`, `LimitTest`, `AuditTests`, `CommitIT`, `LimitIT`, `AuditSpec(s)`, `AuditSpecification`, `LatestTest`, `ContestTest`, `HttpClientIT`, `Http2IT`, `IOUtilTest`, `Audit_test`, `audit-it`, `Audit.spec` | rattaché à `Audit`… | inchangé (17 cas verrouillés) |
+| `AuditTest` avec `Audit` **et** `Aud` en production | `Audit` et `Aud` | `Audit` seul |
+| `src/main/java/com/acme/test/Support.java` (production) | symbole de test | production : peut être la cible de `SupportTest` (gagné) et n'est plus une ancre de test |
+| `src/it/java/…`, `src/integrationTest/…`, `src/integration-test/…` | non reconnus | tests (gagné, 4 chemins) |
+| `latest/`, `contest/`, `attest/`, `testing/`, `test-support/`, `src/Test.java` | production | production (verrouillé) |
+
+### 20.4 Pertes acceptées et déclarées
+
+| Perte | Raison |
+|---|---|
+| `FOOTEST`, `FooTEST`, `HTTPIT`, `SQLIT` (mot collé tout en capitales) ne sont plus reliés à `FOO`/`Foo`/`HTTP`/`SQL` (V-L4-01) | indiscernable de `AUDIT` → `AUD` : la garde `AUDIT`/`AUD` impose l'arbitrage ; `fooTest`, `Foo_TEST`, `foo_TEST` restent reliés |
+| une source JVM sous un `test/` ou `tests/` **non racine** (agencement Ant multi-module `svc/test/FooTest.java`) n'est plus classée test (V-L4-02) | `com/acme/test/Support.java` est un paquet de production ; sans lire l'arborescence du projet on ne peut pas distinguer les deux ; 0 occurrence dans ce dépôt (1 585 chemins, 0 différence) ; `svc/src/test/…` et `test/…` racine restent reconnus |
+| noms tout en minuscules sans séparateur (`usertest`) ne sont plus tronqués | pas de frontière de mot ; jamais rencontré |
+
+## 21. Q13 — duplication : inventaire daté (base `fc213702`, 30 septembre 2026)
+
+Les comptes de l'audit sont périmés (`requireText` « ×15 », `sha256` « ×4 ») : le dépôt en compte plus du double. Ils sont produits par un script reproductible (`lot4/counts.py`, scratchpad ; regex sur les sources de production hors commentaires) et rejoués à chaque étape.
+
+### 21.1 Comptes avant
+
+| Helper | Comptes avant | Détail |
+|---|---|---|
+| `requireText` | **63** définitions en production (modules Maven) + 2 dans `minos-intellij` (Gradle, hors réacteur) | domain 9, engine 15, application 22, api 4, cli 2, nexus 1, provider-scip 4, runtime-local 1, storage-local 4, storage-postgresql 1 ; intellij 2 (`MinosCliClient`, `MinosM21Client`) ; 293 appels |
+| `sha256` | **22** méthodes nommées `sha256` en production ; **31** `MessageDigest.getInstance("SHA-256")` avec 31 `catch (NoSuchAlgorithmException)` | 11 copies « texte UTF-8 → hexadécimal » à l'identique (6 en « is not available », 5 en « is unavailable »), 3 copies de la fabrique de `MessageDigest`, le reste inclus dans des calculs propres (empreinte de fichiers, identifiants) ; 12 sites de test |
+| JSON écrit à la main | **3** renderers (`CodeSearchRenderer`, `CodeIntelligenceResultRenderer`, `SymbolResultRenderer`) : 794 lignes, 31 méthodes d'écriture (`stringField`, `numberField`, `booleanField`, `trimComma`, `appendLocation` ×3, `appendOrigin` ×3…), 25 ouvertures d'objet `{` hors encodeur | + 2 littéraux `{"status":"REVOKED"}` / `{"status":"UNBOUND"}` (`TeamCommand`) ; `LockedNpmPackage` écrit un `package.json` npm ; `McpToolSchemas` (gabarits constants, hors périmètre depuis le lot 1) |
+| mapping DTO API / MCP / CLI | résultat d'import : 2 blocs de 13 clés identiques (`ImportScipCommand.render`, `IndexCommand.renderImport`) + le DTO `IndexImportDto` de l'API ; vue projet : `ProjectCommand.projectMap` (12 clés) et `MinosApplicationMcpBackend.projectStructure` (12 clés dans le même ordre) ; statut d'index : `ProjectCommand.renderIndexStatus` et `MinosApplicationMcpBackend.indexStatus` (11 clés identiques) + `LocalMinosApi.project` (3 des 4 champs de reprise) | mesuré par `lot4/dup_keys.py` (suites de ≥ 4 clés identiques entre fichiers) ; les autres coïncidences sont des faux positifs (`DoctorCommand`/`ToolsCommand` : mêmes 4 premières clés, valeurs différentes ; `providerProfiles` MCP est un sous-ensemble de `ProviderCommand.map`, diagnostics bruts contre publics) |
+| `ProjectView` | **2** enregistrements identiques (12 composants) : `ProjectInspectionService.ProjectView` et `ProjectOperations.ProjectView` + la conversion `LocalProjectOperations.projectView` | l'un est consommé par `minos-mcp` (`MinosApplicationMcpBackend`) et un test de `minos-bootstrap`, l'autre par `minos-api`, `minos-cli` et 12 de ses tests |
+| `LogCapture` | **3** copies de test (`minos-cli`, `minos-engine/…/testsupport`, `minos-storage-local`) | identiques au modificateur d'accès près (`public` dans l'engine) |
+
+### 21.2 Où placer chaque helper : graphe des dépendances et règles
+
+Dépendances directes autorisées (`ALLOWED_DEPENDENCIES`) : `domain` ∅ ; `engine` → domain ; `runtime-local`, `storage-local`, `integration-git` → engine ; `provider-scip` → domain, engine, runtime-local, storage-local ; `application` → domain, engine ; `nexus` → domain, application, bootstrap ; `cli` → domain, engine, application, nexus, bootstrap ; `api` → domain, engine, application, bootstrap ; `mcp` → application, bootstrap. Un adaptateur ne dépend jamais de `application`, `bootstrap`, `app` ni d'une surface. Le script ne contrôle que les dépendances **directes** des poms et les noms d'adaptateurs dans les sources ; les modules qui atteignent `domain` ou `engine` par transitivité le font déjà (`minos-mcp` importe `com.minos.domain`, `minos-nexus` importe `com.minos.store`).
+
+| Helper | Lieu retenu | Pourquoi |
+|---|---|---|
+| `requireText` | `minos-domain`, `com.minos.domain.Preconditions` | `minos-domain` porte 9 copies et doit rester sans dépendance interne : c'est le seul module vu par **tous** les appelants |
+| `sha256` (texte, octets, fabrique de `MessageDigest`) | `minos-engine`, `com.minos.io.Sha256` | tous les appelants sont dans un module qui voit l'engine (`nexus` par `application`, comme pour `com.minos.store`) ; aucun appelant dans `domain`, qui reste minimal |
+| JSON des 3 renderers, littéraux `TeamCommand` | `DeterministicJson` (`minos-application`, même paquet `com.minos.output`) | les trois renderers sont déjà dans ce paquet ; `TeamCommand` (`cli`) dépend de `application` |
+| `LockedNpmPackage` (`package.json`) | **deux implémentations conservées** | `minos-provider-scip` est un adaptateur : il ne peut pas dépendre de `minos-application`, où vit `DeterministicJson` (règle A2, ADR 0042) ; déplacer l'encodeur vers `domain`/`engine` élargirait le lot à une API publique ; les valeurs sont des constantes du catalogue |
+| `LogCapture` | test-jar de `minos-engine` (`com.minos.testsupport`), consommé en portée `test` par `storage-local` et `cli` | ces deux modules dépendent déjà de l'engine ; la dépendance en portée `test` sur le même artefact ne crée aucune arête nouvelle (le script garde la portée la plus forte d'un module déclaré deux fois) |
+| `ProjectView` | **deux enregistrements conservés** | voir § 21.3 |
+
+### 21.3 `ProjectView` et mapping projet : règle de l'API publique
+
+Les deux enregistrements sont des types **publics** de types publics, et chacun est référencé par un autre module : `ProjectInspectionService.ProjectView` par `minos-mcp` (`MinosApplicationMcpBackend`, l. 87 et 107) et un test de `minos-bootstrap`, `ProjectOperations.ProjectView` par `minos-api` (`LocalMinosApi.project`), `minos-cli` (`ProjectCommand`, `GitActivityCommand`) et 12 de ses tests. En supprimer un change le type de retour de méthodes publiques observées par un autre module : la règle du lot (« dédupliqué seulement si l'API publique n'en est pas changée ») s'y oppose. **Les deux enregistrements sont conservés**, ainsi que la conversion `LocalProjectOperations.projectView`. Conséquence : la vue projet ne peut pas être partagée telle quelle entre la CLI (`ProjectOperations.ProjectView`) et le MCP (`ProjectInspectionService.ProjectView`) ; le mapping projet est traité au § 21.5 sans toucher à ces types.
