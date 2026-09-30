@@ -258,17 +258,21 @@ final class AuthoritativeProjectStateReconciler {
             if (committed) {
                 stateStore.saveRun(terminalRecovery(run, active.snapshotId(), observedAt, Status.SUCCEEDED,
                         "recovered abandoned indexing run: staged snapshot was already authoritative after lifecycle lease reacquisition"));
+                unmarkQuietly(markers, run.id());
                 continue;
             }
-            Optional<String> markerFailure = offersResume(run) ? markResumable(markers, run.id()) : Optional.of("");
+            Optional<String> markerFailure = run.offersResume() ? markResumable(markers, run.id()) : Optional.of("");
             if (markerFailure.isEmpty()) {
                 if (resumable.isPresent()) supersede(stateStore, markers, resumable.orElseThrow(), run.id(), observedAt);
                 resumable = Optional.of(run.id());
                 stateStore.saveRun(terminalRecovery(run, active.snapshotId(), observedAt, Status.INTERRUPTED,
                         "interrupted indexing run recovered after exclusive lifecycle lease reacquisition; resumable"
-                                + " targets=" + checkpointCount(run) + "/" + run.executions().size()
+                                + " targets=" + run.checkpointCount() + "/" + run.executions().size()
                                 + run.stagedSnapshotId().map(id -> ", staged snapshot retained").orElse("")));
             } else {
+                // A run that was held against retention while it ran (R5) and is not offered for resume
+                // is terminal now: its hold is lifted with it.
+                unmarkQuietly(markers, run.id());
                 stateStore.saveRun(terminalRecovery(run, active.snapshotId(), observedAt, Status.FAILED,
                         "recovered abandoned indexing run after exclusive lifecycle lease reacquisition"
                                 + markerFailure.orElseThrow()));
@@ -276,16 +280,6 @@ final class AuthoritativeProjectStateReconciler {
         }
         Optional<IndexingRun> latest = stateStore.listRuns(projectId).stream().max(RUN_ORDER);
         return new Recovery(running.size(), latest, resumable);
-    }
-
-    /** ADR 0039 §2: a run is offered for resume only when written in the current format. */
-    private static boolean offersResume(IndexingRun run) {
-        return run.runFormatVersion() == IndexingRun.CURRENT_FORMAT_VERSION
-                && (checkpointCount(run) > 0 || run.stagedSnapshotId().isPresent());
-    }
-
-    private static int checkpointCount(IndexingRun run) {
-        return (int) run.executions().stream().filter(execution -> execution.checkpoint().isPresent()).count();
     }
 
     /**

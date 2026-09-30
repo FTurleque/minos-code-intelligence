@@ -86,6 +86,7 @@ final class IndexingRunExecutor {
             // NO_RESUME, or a refused resume) supersedes the offered one so the project offers at most one.
             previous.resumableRunId().ifPresent(resumable -> AuthoritativeProjectStateReconciler.supersede(
                     stateStore, markers, resumable, context.runId, createdAt));
+            holdRunDirectory(context);
             publishInProgress(context, mode, "provider execution started: mode=" + mode + ", scopes=" + targets.size());
             executeProviders(context, root, targets, mode, changedFiles);
             stageSnapshot(context, mode);
@@ -93,6 +94,22 @@ final class IndexingRunExecutor {
             return persistSuccess(context, mode, clock.instant());
         } catch (Exception failure) {
             return persistTerminalFailure(context, failure, clock.instant());
+        }
+    }
+
+    /**
+     * R5: retains the run directory against the retention of every other indexation, this process
+     * or another, from before the first provider until the run ends. The marker is the only thing
+     * another process can see; without it a concurrent indexation over budget could delete the
+     * artifacts this run already produced. A marker that cannot be written only removes the
+     * protection, never the run; a resumed run renews the hold its interruption left.
+     */
+    private static void holdRunDirectory(RunContext context) {
+        try {
+            context.ports.markers().mark(context.runId);
+        } catch (IOException | RuntimeException failure) {
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not hold the run directory of indexing run "
+                    + context.runId + " against retention: " + failure.getClass().getSimpleName());
         }
     }
 
@@ -129,6 +146,7 @@ final class IndexingRunExecutor {
         boolean stagedSnapshotKnown = run.phase() == Phase.PROMOTION && run.stagedSnapshotId().isPresent();
         boolean promoteOnly = stagedSnapshotKnown && resume.stagedSnapshotCoversThePlan();
         try {
+            holdRunDirectory(context);
             publishInProgress(context, mode, "indexing run resumed: attempt=" + resume.attempt()
                     + ", mode=" + mode + ", " + resume.reused().size() + "/" + targets.size() + " targets reused"
                     + (promoteOnly ? ", promoting the staged snapshot directly" : "")
@@ -494,7 +512,7 @@ final class IndexingRunExecutor {
                 Optional.of("active snapshot is current: mode=" + mode
                         + (context.durabilityAcknowledgementPending
                         ? "; durability acknowledgement pending" : ""))));
-        if (context.resumed) AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
+        AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
         return succeeded;
     }
 
@@ -514,8 +532,9 @@ final class IndexingRunExecutor {
     private static IndexingRun persistTerminalFailure(RunContext context, Exception failure, Instant completedAt) {
         if (isInterruption(failure)) {
             Thread.currentThread().interrupt();
-            if (!context.committed && (context.checkpointCount() > 0 || context.staged.isPresent())) {
-                return persistInterruption(context, failure, completedAt);
+            IndexingRun interrupted = interruptedRun(context, completedAt);
+            if (!context.committed && interrupted.offersResume()) {
+                return persistInterruption(context, interrupted, failure, completedAt);
             }
         }
         return persistFailure(context, failure, completedAt);
@@ -529,16 +548,9 @@ final class IndexingRunExecutor {
         return false;
     }
 
-    private static IndexingRun persistInterruption(RunContext context, Exception failure, Instant completedAt) {
-        IndexStateStore stateStore = context.ports.stateStore();
-        try {
-            context.ports.markers().mark(context.runId);
-        } catch (IOException | RuntimeException markerFailure) {
-            AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
-            failure.addSuppressed(markerFailure);
-            return persistFailure(context, failure, completedAt);
-        }
-        IndexingRun interrupted = new IndexingRun(
+    /** The run as it would be left by an interruption now; whether it is offered for resume is its own rule. */
+    private static IndexingRun interruptedRun(RunContext context, Instant completedAt) {
+        return new IndexingRun(
                 context.runId,
                 context.projectId,
                 Status.INTERRUPTED,
@@ -554,6 +566,18 @@ final class IndexingRunExecutor {
                         + context.staged.map(id -> ", staged snapshot retained").orElse("")),
                 IndexingRun.CURRENT_FORMAT_VERSION,
                 context.trace);
+    }
+
+    private static IndexingRun persistInterruption(
+            RunContext context, IndexingRun interrupted, Exception failure, Instant completedAt) {
+        IndexStateStore stateStore = context.ports.stateStore();
+        try {
+            context.ports.markers().mark(context.runId);
+        } catch (IOException | RuntimeException markerFailure) {
+            AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
+            failure.addSuppressed(markerFailure);
+            return persistFailure(context, failure, completedAt);
+        }
         persist(() -> stateStore.saveRun(interrupted), failure);
         Availability availability = context.previous.activeSnapshotId().isPresent()
                 ? Availability.STALE
@@ -578,7 +602,7 @@ final class IndexingRunExecutor {
         } else {
             persistUncommittedFailure(context, failed, message, completedAt, failure);
         }
-        if (context.resumed) AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
+        AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
         return failed;
     }
 

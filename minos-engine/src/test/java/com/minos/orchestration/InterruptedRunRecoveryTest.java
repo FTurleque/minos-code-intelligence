@@ -85,6 +85,8 @@ class InterruptedRunRecoveryTest {
         assertEquals(ProjectIndexState.Availability.STALE, recovered.availability());
         assertEquals(Optional.empty(), recovered.resumableRunId());
         assertTrue(events.stream().noneMatch(event -> event.startsWith("mark:")));
+        assertTrue(events.contains("unmark:" + runId),
+                "R5: the hold a crashed run left behind is lifted when recovery finalizes it as failed");
     }
 
     @Test
@@ -128,6 +130,7 @@ class InterruptedRunRecoveryTest {
         assertEquals(ProjectIndexState.Availability.READY, recovered.availability());
         assertEquals(Optional.empty(), recovered.resumableRunId());
         assertTrue(events.stream().noneMatch(event -> event.startsWith("mark:")));
+        assertTrue(events.contains("unmark:" + runId), "R5: a recovered success no longer needs its hold");
     }
 
     @Test
@@ -339,7 +342,11 @@ class InterruptedRunRecoveryTest {
         }
 
         assertEquals(IndexingRun.Status.FAILED, run.status());
-        assertTrue(events.stream().noneMatch(event -> event.startsWith("mark:")));
+        // R5: the run was held against retention while it ran; a failed run offers nothing, so the hold
+        // is lifted with it and no marker outlives the run.
+        List<String> markerEvents = events.stream()
+                .filter(event -> event.startsWith("mark:") || event.startsWith("unmark:")).toList();
+        assertEquals("unmark:" + run.id(), markerEvents.getLast(), markerEvents.toString());
         assertEquals(Optional.empty(), store.findProjectState(projectId).orElseThrow().resumableRunId());
     }
 
