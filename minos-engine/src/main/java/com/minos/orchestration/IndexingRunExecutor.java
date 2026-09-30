@@ -187,17 +187,11 @@ final class IndexingRunExecutor {
             ExecutionCheckpoint checkpoint = target.execution().checkpoint().orElseThrow();
             String scope = portable(target.target().projectRelativeRoot());
             Path artifact = target.execution().finalArtifact();
-            // V16: containment is re-decided on the canonical path before a single byte is re-read.
-            if (Files.isSymbolicLink(artifact)) {
-                throw new ResumeAborted("resume aborted: artifact became a symbolic link (scope " + scope + ")");
-            }
+            // V16: containment is re-decided, physically, before a single byte is re-read (Q5: one decision).
             try {
-                if (!artifact.toRealPath().startsWith(runDirectory)) {
-                    throw new ResumeAborted("resume aborted: artifact left the run directory (scope " + scope + ")");
-                }
-            } catch (IOException failure) {
-                throw new ResumeAborted(
-                        "resume aborted: artifact cannot be resolved before staging (scope " + scope + ")", failure);
+                ArtifactConfinement.requireInside(runDirectory, artifact);
+            } catch (ArtifactConfinement.Escape escape) {
+                throw new ResumeAborted("resume aborted: " + escape.getMessage() + " (scope " + scope + ")", escape);
             }
             ExecutionCheckpoints.ArtifactDigest digest;
             try {
@@ -332,7 +326,7 @@ final class IndexingRunExecutor {
                 selection,
                 mode,
                 scopedChangedFiles)), "indexer execution artifact");
-        Path artifactPath = validateArtifact(selection, artifact, relative);
+        Path artifactPath = validateArtifact(context, executor, selection, artifact, relative);
         CheckpointOutcome checkpoint = checkpoint(
                 material, artifactPath, relative, selection.indexer().version(), mode, scopedChangedFiles,
                 context.ports.clock().instant());
@@ -726,14 +720,33 @@ final class IndexingRunExecutor {
     private static final int ARTIFACT_READABILITY_RETRY_ATTEMPTS = 10;
     private static final long ARTIFACT_READABILITY_RETRY_DELAY_MILLIS = 100L;
 
-    private static Path validateArtifact(IndexerNegotiationResult.IndexerSelection selection,
+    private static Path validateArtifact(RunContext context, IndexerExecutor executor,
+                                         IndexerNegotiationResult.IndexerSelection selection,
                                          IndexingArtifact artifact, Path expectedRoot) throws InterruptedException {
         if (artifact.language() != selection.language()) throw new IllegalStateException("executor returned an artifact for an unexpected language");
         if (!artifact.indexerId().equals(selection.indexer().id())) throw new IllegalStateException("executor returned an artifact for an unexpected indexer");
         if (!artifact.projectRelativeRoot().normalize().equals(expectedRoot.normalize())) throw new IllegalStateException("executor returned an artifact for an unexpected project scope");
         Path path = artifact.finalArtifact().toAbsolutePath().normalize();
         if (!awaitReadable(path)) throw new IllegalStateException("final index artifact is missing or unreadable: " + path);
+        requireInsideRunDirectory(context, executor, path);
         return path;
+    }
+
+    /**
+     * Q5: the artifact an executor returns stays in the run directory, physically (no {@code ..}, no link on the
+     * way), before any checkpoint or staging reads it. Without a known run directory there is nothing to confine
+     * to (and no resume is possible either); an executor with a store of its own is confined by that store.
+     */
+    private static void requireInsideRunDirectory(RunContext context, IndexerExecutor executor, Path artifact) {
+        if (!executor.artifactsLiveInRunDirectory()) return;
+        Optional<Path> runDirectory = context.ports.markers().runDirectory(context.runId);
+        if (runDirectory.isEmpty()) return;
+        try {
+            ArtifactConfinement.requireInside(runDirectory.orElseThrow(), artifact);
+        } catch (ArtifactConfinement.Escape escape) {
+            throw new IllegalStateException("executor returned an artifact that "
+                    + escape.reason().phrase(), escape);
+        }
     }
 
     /**

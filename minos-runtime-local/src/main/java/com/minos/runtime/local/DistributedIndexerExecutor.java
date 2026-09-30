@@ -62,6 +62,12 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
         return indexerId;
     }
 
+    /** The artifact lives in the verified bundle cache, not in the run directory: the store confines it. */
+    @Override
+    public boolean artifactsLiveInRunDirectory() {
+        return false;
+    }
+
     @Override
     public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
         Objects.requireNonNull(request, "request");

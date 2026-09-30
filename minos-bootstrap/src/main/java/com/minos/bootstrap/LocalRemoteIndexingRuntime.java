@@ -100,6 +100,11 @@ public final class LocalRemoteIndexingRuntime implements RemoteIndexingRuntime {
         }
 
         @Override
+        public boolean artifactsLiveInRunDirectory() {
+            return executor.artifactsLiveInRunDirectory();
+        }
+
+        @Override
         public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
             return executor.execute(request);
         }

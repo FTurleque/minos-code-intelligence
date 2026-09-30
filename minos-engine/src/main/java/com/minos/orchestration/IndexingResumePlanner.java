@@ -237,19 +237,16 @@ final class IndexingResumePlanner {
         }
 
         Path artifact = execution.finalArtifact();
-        // Containment is decided on canonical paths before a single byte is read (R1-6).
-        if (Files.isSymbolicLink(artifact)) throw new Refusal("artifact is a symbolic link");
-        if (!Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS)) throw new Refusal("artifact is missing");
-        Path real;
+        // Containment is decided, physically, before a single byte is read (R1-6): the one decision of
+        // the orchestration, shared with the executor's validation and the reverification (Q5).
         try {
-            real = artifact.toRealPath();
-        } catch (IOException failure) {
-            throw new Refusal("artifact cannot be resolved: " + failure.getClass().getSimpleName());
+            ArtifactConfinement.requireInside(runDirectory, artifact);
+        } catch (ArtifactConfinement.Escape escape) {
+            throw new Refusal(escape.getMessage());
         }
-        if (!real.startsWith(runDirectory)) throw new Refusal("artifact lies outside the run directory");
         long size;
         try {
-            size = Files.size(real);
+            size = Files.size(artifact);
         } catch (IOException failure) {
             throw new Refusal("artifact size cannot be read: " + failure.getClass().getSimpleName());
         }

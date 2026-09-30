@@ -39,7 +39,7 @@ class IndexingArtifactConfinementTest {
 
         IndexingRun run = execute(fixture, viaParentSegments);
 
-        assertRefusedWithoutStaging(fixture, run);
+        assertRefusedWithoutStaging(fixture, run, "lies outside the run directory");
     }
 
     @Test
@@ -52,7 +52,7 @@ class IndexingArtifactConfinementTest {
 
         IndexingRun run = execute(fixture, throughALeafLink);
 
-        assertRefusedWithoutStaging(fixture, run);
+        assertRefusedWithoutStaging(fixture, run, "symbolic link");
     }
 
     @Test
@@ -65,7 +65,7 @@ class IndexingArtifactConfinementTest {
 
         IndexingRun run = execute(fixture, throughAnAncestorLink);
 
-        assertRefusedWithoutStaging(fixture, run);
+        assertRefusedWithoutStaging(fixture, run, "lies outside the run directory");
     }
 
     @Test
@@ -85,6 +85,29 @@ class IndexingArtifactConfinementTest {
         assertEquals(IndexingRun.Status.SUCCEEDED, run.status(), String.valueOf(run.message()));
     }
 
+    @Test
+    void anExecutorWithAStoreOfItsOwnIsNotConfinedToTheRunDirectory(@TempDir Path temp) throws Exception {
+        // The distributed executor returns an artifact of its verified bundle cache, which is not under runs/<runId>/.
+        Fixture fixture = new Fixture(temp);
+        Path cached = outsideArtifact(fixture);
+        IndexerExecutor storeOwner = new Fixture.Executor(fixture, 99) {
+            @Override
+            public boolean artifactsLiveInRunDirectory() {
+                return false;
+            }
+
+            @Override
+            public IndexingArtifact execute(IndexingExecutionRequest request) {
+                return new IndexingArtifact(Language.TYPESCRIPT, PROVIDER, cached, request.projectRelativeRoot());
+            }
+        };
+
+        IndexingRun run = fixture.lifecycle(storeOwner, T0).execute(fixture.projectId, fixture.root,
+                IndexingResumeTest.negotiation());
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status(), String.valueOf(run.message()));
+    }
+
     private static Path outsideArtifact(Fixture fixture) throws IOException {
         Path directory = Files.createDirectories(fixture.home.resolve("outside"));
         return Files.writeString(directory.resolve("index.scip"), OUTSIDE_CONTENT);
@@ -95,8 +118,9 @@ class IndexingArtifactConfinementTest {
                                        BiFunction<Path, IndexingExecutionRequest, Path> artifactFor) throws Exception {
         IndexerExecutor executor = new Fixture.Executor(fixture, 99) {
             @Override
-            public IndexingArtifact execute(IndexingExecutionRequest request) {
-                Path runDirectory = fixture.markers.runDirectory(request.runId()).orElseThrow();
+            public IndexingArtifact execute(IndexingExecutionRequest request) throws IOException {
+                // The real marker port creates the run directory when it holds it, before the first provider.
+                Path runDirectory = Files.createDirectories(fixture.markers.runDirectory(request.runId()).orElseThrow());
                 return new IndexingArtifact(Language.TYPESCRIPT, PROVIDER, artifactFor.apply(runDirectory, request),
                         request.projectRelativeRoot());
             }
@@ -105,9 +129,9 @@ class IndexingArtifactConfinementTest {
                 IndexingResumeTest.negotiation());
     }
 
-    private static void assertRefusedWithoutStaging(Fixture fixture, IndexingRun run) {
+    private static void assertRefusedWithoutStaging(Fixture fixture, IndexingRun run, String expectedReason) {
         assertEquals(IndexingRun.Status.FAILED, run.status(), "an artifact outside the run directory is refused");
-        assertTrue(run.message().orElseThrow().contains("outside the run directory"), run.message().orElse(""));
+        assertTrue(run.message().orElseThrow().contains(expectedReason), run.message().orElse(""));
         assertTrue(run.executions().isEmpty(), "no checkpoint is taken on a refused artifact");
         assertTrue(fixture.stager.requests.isEmpty(), "nothing outside the run directory is staged");
     }
