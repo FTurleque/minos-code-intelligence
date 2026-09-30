@@ -29,6 +29,8 @@ import java.util.UUID;
 
 /** Local application adapter over the selected MINOS storage backend. */
 public final class LocalProjectOperations implements ProjectOperations, AutoCloseable {
+    private static final System.Logger LOGGER = System.getLogger(LocalProjectOperations.class.getName());
+
     private final MinosApplication ownedApplication;
     private final Path home;
     private final ProjectRegistry registry;
@@ -103,8 +105,12 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         try {
             writeHistory(project.id(), new IndexHistory(
                     effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
-        } catch (IOException ignored) {
-            // CLI history is secondary evidence. The active snapshot remains authoritative.
+        } catch (IOException failure) {
+            // CLI history is secondary evidence. The active snapshot remains authoritative, so the import
+            // still succeeds; the failure is journaled (class only: no path, no exception message).
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS could not write the CLI import history of project " + project.id()
+                            + "; the active snapshot stays authoritative: " + failure.getClass().getSimpleName());
         }
 
         return new IndexImportResult(project.id().toString(), report.snapshotId(), safeProviderId,
