@@ -24,6 +24,10 @@ public final class ImportScipCommand {
               --format <text|json>
             """.stripTrailing();
 
+    public static String usage() {
+        return USAGE;
+    }
+
     private final ProjectOperations operations;
 
     public ImportScipCommand(ProjectOperations operations) {

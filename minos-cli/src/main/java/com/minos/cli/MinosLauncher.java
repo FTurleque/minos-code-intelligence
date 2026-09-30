@@ -83,6 +83,6 @@ public final class MinosLauncher {
     }
 
     private static boolean isHelp(String[] arguments) {
-        return arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]));
+        return arguments.length == 1 && CliCommandSupport.isHelp(arguments[0]);
     }
 }

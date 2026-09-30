@@ -91,6 +91,16 @@ public final class ProjectCommand {
         return USAGE;
     }
 
+    /** Usage of the {@code inspect} alias. */
+    static String inspectUsage() {
+        return INSPECT_USAGE;
+    }
+
+    /** Usage of {@code index-status}. */
+    static String indexStatusUsage() {
+        return STATUS_USAGE;
+    }
+
     private int runAdd(String[] arguments, Appendable output, Appendable error) throws IOException {
         return CliCommandSupport.run(arguments, output, error, ADD_USAGE, AddOptions::parse,
                 CliCommandSupport.reportingCause("project add"), options -> {

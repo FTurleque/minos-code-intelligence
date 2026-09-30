@@ -28,35 +28,12 @@ public final class MinosCliRunner {
     private static final String SEMANTIC_COMMAND = "semantic";
     private static final String HYBRID_COMMAND = "hybrid";
 
-    private static final Set<String> STATELESS_HELP_COMMANDS = Set.of(
-            ProjectCommand.NAME,
-            "inspect",
-            "index-status",
-            IndexCommand.NAME,
-            ImportScipCommand.NAME,
-            ToolsCommand.NAME,
-            ProviderCommand.NAME,
-            SearchCodeCommand.NAME,
-            FindSymbolCommand.NAME,
-            GetSourceCommand.NAME,
-            FindUsagesCommand.NAME,
-            "find-implementations",
-            "find-callers",
-            "find-callees",
-            "dependencies",
-            "dependents",
-            "related-tests",
-            ArchitectureCommand.NAME,
-            ImpactCommand.NAME,
-            IdeCommand.NAME,
-            GitActivityCommand.NAME,
-            NexusExportCommand.NAME,
-            RemoteIndexCommand.NAME,
-            RuntimeCommand.NAME,
-            TeamCommand.NAME,
-            SEMANTIC_COMMAND,
-            HYBRID_COMMAND
-    );
+    /**
+     * A CLI wired with collaborators that fail on first use. Its route table ({@link MinosCli#commandNames()})
+     * is the list of the commands that answer {@code --help} before {@code MINOS_HOME} is opened; there is no
+     * second list to keep in step.
+     */
+    private static final MinosCli STATELESS_HELP_CLI = statelessHelpCli();
 
     private MinosCliRunner() { }
 
@@ -108,7 +85,9 @@ public final class MinosCliRunner {
     static boolean isStatelessHelpRequest(String[] arguments) {
         Objects.requireNonNull(arguments, "arguments");
         if (isHelp(arguments)) return true;
-        if (arguments.length == 2 && isHelpToken(arguments[1])) return STATELESS_HELP_COMMANDS.contains(arguments[0]);
+        if (arguments.length == 2 && isHelpToken(arguments[1])) {
+            return STATELESS_HELP_CLI.hasCommand(arguments[0]) || isRetrievalCommand(arguments[0]);
+        }
         if (arguments.length == 3
                 && isRetrievalCommand(arguments[0])
                 && "status".equals(arguments[1])
@@ -132,32 +111,15 @@ public final class MinosCliRunner {
             output.append(RetrievalStatusCommand.usage(retrievalMode(arguments[0]))).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
-        if (arguments.length == 2 && ProviderCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
-            output.append(ProviderCommand.usage()).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        if (arguments.length == 2 && GitActivityCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
-            output.append(GitActivityCommand.usage()).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        if (arguments.length == 2 && RemoteIndexCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
-            output.append(RemoteIndexCommand.usage()).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        if (arguments.length == 2 && RuntimeCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
-            output.append(RuntimeCommand.usage()).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        if (arguments.length == 2 && TeamCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
-            output.append(TeamCommand.usage()).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        if (arguments.length == 2 && IdeCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
-            output.append(IdeCommand.usage()).append('\n').append('\n')
-                    .append(IdeIntelligenceCommand.usage()).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        return statelessHelpCli().run(arguments, output, error);
+        return STATELESS_HELP_CLI.run(arguments, output, error);
+    }
+
+    /** Names of every command that answers {@code --help} without opening {@code MINOS_HOME}. */
+    static Set<String> statelessHelpCommands() {
+        Set<String> names = new java.util.LinkedHashSet<>(STATELESS_HELP_CLI.commandNames());
+        names.add(SEMANTIC_COMMAND);
+        names.add(HYBRID_COMMAND);
+        return java.util.Collections.unmodifiableSet(names);
     }
 
     static boolean isIdeHandshake(String[] arguments) {
@@ -234,7 +196,7 @@ public final class MinosCliRunner {
     }
 
     private static boolean isHelpToken(String argument) {
-        return "--help".equals(argument) || "-h".equals(argument);
+        return CliCommandSupport.isHelp(argument);
     }
 
     private static String[] slice(String[] values, int from) {

@@ -24,6 +24,10 @@ public final class ToolsCommand {
 
     private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--format").flag("--all");
 
+    public static String usage() {
+        return USAGE;
+    }
+
     private final AutonomousIndexOperations operations;
 
     public ToolsCommand(AutonomousIndexOperations operations) {

@@ -6,49 +6,77 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Q11 : {@code --help} est traité avant toute ouverture de {@code MINOS_HOME}, pour TOUTES les
+ * commandes. La liste des commandes n'est pas recopiée ici : elle vient de la table de routes de
+ * {@link MinosCli} (plus {@code semantic} et {@code hybrid}, traitées par le lanceur), de sorte
+ * qu'une commande ajoutée sans aide sans état fait échouer ce test.
+ */
 class StableCliHelpTest {
 
+    @TempDir Path root;
+
+    private void assertStatelessHelp(String... arguments) throws Exception {
+        Path home = root.resolve("absent-home-" + String.join("-", arguments).replaceAll("[^a-z-]", "_"));
+        StringBuilder output = new StringBuilder();
+        StringBuilder error = new StringBuilder();
+        String context = String.join(" ", arguments);
+        assertEquals(0, MinosLauncher.run(home, arguments, output, error), context + " -> " + error);
+        assertTrue(output.toString().startsWith("Usage:"), context + " -> " + output);
+        assertEquals("", error.toString(), context);
+        assertFalse(Files.exists(home), context + " opened MINOS_HOME");
+        assertTrue(MinosCliRunner.isStatelessHelpRequest(arguments), context);
+    }
+
     @Test
-    void commandHelpIsSuccessfulAndDoesNotCreateMinosHome(@TempDir Path root) throws Exception {
-        Path home = root.resolve("absent-home");
-        List<String[]> commands = List.of(
+    void everyCommandAnswersHelpWithoutOpeningMinosHome() throws Exception {
+        Set<String> commands = MinosCliRunner.statelessHelpCommands();
+        assertTrue(commands.contains("doctor"), "doctor must answer --help without opening MINOS_HOME");
+        for (String command : commands) {
+            assertStatelessHelp(command, "--help");
+            assertStatelessHelp(command, "-h");
+        }
+    }
+
+    @Test
+    void theTopLevelHelpAndTheSubCommandHelpsAreStatelessToo() throws Exception {
+        List<String[]> invocations = List.of(
                 new String[]{"--help"},
-                new String[]{"project", "--help"},
                 new String[]{"project", "add", "--help"},
                 new String[]{"project", "list", "--help"},
                 new String[]{"project", "inspect", "--help"},
-                new String[]{"inspect", "--help"},
-                new String[]{"index-status", "--help"},
-                new String[]{"index", "--help"},
-                new String[]{"import-scip", "--help"},
-                new String[]{"tools", "--help"},
-                new String[]{"providers", "--help"},
-                new String[]{"search", "--help"},
-                new String[]{"find-symbol", "--help"},
-                new String[]{"get-source", "--help"},
-                new String[]{"find-usages", "--help"},
-                new String[]{"find-implementations", "--help"},
-                new String[]{"find-callers", "--help"},
-                new String[]{"find-callees", "--help"},
-                new String[]{"dependencies", "--help"},
-                new String[]{"dependents", "--help"},
-                new String[]{"related-tests", "--help"},
-                new String[]{"architecture", "--help"},
-                new String[]{"impact", "--help"},
-                new String[]{"nexus-export", "--help"}
-        );
-
-        for (String[] command : commands) {
-            StringBuilder output = new StringBuilder();
-            StringBuilder error = new StringBuilder();
-            assertEquals(0, MinosLauncher.run(home, command, output, error), String.join(" ", command));
-            assertFalse(output.isEmpty(), String.join(" ", command));
-            assertEquals("", error.toString(), String.join(" ", command));
-            assertFalse(Files.exists(home), String.join(" ", command));
+                new String[]{"semantic", "status", "--help"},
+                new String[]{"hybrid", "status", "--help"});
+        for (String[] invocation : invocations) {
+            assertStatelessHelp(invocation);
         }
+    }
+
+    @Test
+    void doctorHelpShowsTheUsageInsteadOfRunningTheDiagnostic() throws Exception {
+        StringBuilder output = new StringBuilder();
+        assertEquals(0, MinosLauncher.run(root.resolve("home"), new String[]{"doctor", "--help"}, output,
+                new StringBuilder()));
+        assertEquals(DoctorCommand.usage() + "\n", output.toString());
+    }
+
+    @Test
+    void theCommandTableMatchesTheTopLevelUsage() {
+        for (String command : MinosCliRunner.statelessHelpCommands()) {
+            assertTrue(MinosCli.usage().contains(command), command + " is routed but missing from the usage");
+        }
+    }
+
+    @Test
+    void aHelpTokenAmongOtherArgumentsIsNotAHelpRequest() {
+        assertFalse(MinosCliRunner.isStatelessHelpRequest(new String[]{"find-symbol", "p", "--help"}));
+        assertFalse(MinosCliRunner.isStatelessHelpRequest(new String[]{"doctor", "--format", "--help"}));
+        assertFalse(MinosCliRunner.isStatelessHelpRequest(new String[]{"unknown-command", "--help"}));
     }
 }
