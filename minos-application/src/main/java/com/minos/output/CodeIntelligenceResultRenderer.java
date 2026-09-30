@@ -8,9 +8,11 @@ import com.minos.query.RelationshipResult;
 import com.minos.query.UsageResult;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.StringJoiner;
 
+import static com.minos.output.DeterministicJson.object;
 import static com.minos.output.DeterministicJson.quote;
 
 /**
@@ -96,149 +98,56 @@ public final class CodeIntelligenceResultRenderer {
     }
 
     private static String renderUsageJson(List<UsageResult> usages) {
-        StringBuilder output = new StringBuilder("{\"count\":")
-                .append(usages.size())
-                .append(",\"usages\":[");
-        for (int index = 0; index < usages.size(); index++) {
-            if (index > 0) {
-                output.append(',');
-            }
-            UsageResult usage = usages.get(index);
-            output.append('{');
-            stringField(output, "id", usage.id());
-            stringField(output, "projectId", usage.projectId());
-            stringField(output, "symbolId", usage.symbolId());
-            name(output, "location");
-            appendLocationJson(output, usage.location());
-            output.append(',');
-            name(output, "roles");
-            output.append('[');
-            List<String> roles = usage.roles().stream().sorted().map(Enum::name).toList();
-            for (int roleIndex = 0; roleIndex < roles.size(); roleIndex++) {
-                if (roleIndex > 0) {
-                    output.append(',');
-                }
-                output.append(quote(roles.get(roleIndex)));
-            }
-            output.append("],");
-            stringField(output, "resolutionStatus", usage.resolutionStatus().name());
-            name(output, "origin");
-            appendOriginJson(output, usage.origin());
-            output.append('}');
-        }
-        return output.append("]}").toString();
+        return DeterministicJson.render(object(
+                "count", usages.size(),
+                "usages", usages.stream().map(CodeIntelligenceResultRenderer::usageMap).toList()));
     }
 
     private static String renderRelationshipJson(List<RelationshipResult> relationships) {
-        StringBuilder output = new StringBuilder("{\"count\":")
-                .append(relationships.size())
-                .append(",\"relationships\":[");
-        for (int index = 0; index < relationships.size(); index++) {
-            if (index > 0) {
-                output.append(',');
-            }
-            RelationshipResult relationship = relationships.get(index);
-            output.append('{');
-            stringField(output, "id", relationship.id());
-            stringField(output, "projectId", relationship.projectId());
-            name(output, "source");
-            appendEntityJson(output, relationship.source());
-            output.append(',');
-            name(output, "target");
-            if (relationship.target() == null) {
-                output.append("null");
-            } else {
-                appendEntityJson(output, relationship.target());
-            }
-            output.append(',');
-            stringField(output, "unresolvedTarget", relationship.unresolvedTarget());
-            stringField(output, "kind", relationship.kind().name());
-            name(output, "location");
-            appendLocationJson(output, relationship.location());
-            output.append(',');
-            stringField(output, "resolutionStatus", relationship.resolutionStatus().name());
-            stringField(output, "nature", relationship.nature().name());
-            name(output, "confidence");
-            output.append(relationship.confidence() == null
-                    ? "null"
-                    : DeterministicJson.number(relationship.confidence())).append(',');
-            name(output, "origin");
-            appendOriginJson(output, relationship.origin());
-            output.append(',');
-            name(output, "evidence");
-            appendEvidenceJson(output, relationship.evidence());
-            output.append('}');
-        }
-        return output.append("]}").toString();
+        return DeterministicJson.render(object(
+                "count", relationships.size(),
+                "relationships", relationships.stream()
+                        .map(CodeIntelligenceResultRenderer::relationshipMap)
+                        .toList()));
     }
 
-    private static void appendEvidenceJson(StringBuilder output, List<Evidence> evidence) {
-        output.append('[');
-        for (int index = 0; index < evidence.size(); index++) {
-            if (index > 0) {
-                output.append(',');
-            }
-            Evidence item = evidence.get(index);
-            output.append('{');
-            stringField(output, "type", item.type().name());
-            stringField(output, "description", item.description());
-            name(output, "source");
-            appendNullableEntityJson(output, item.source());
-            output.append(',');
-            name(output, "target");
-            appendNullableEntityJson(output, item.target());
-            output.append(',');
-            name(output, "location");
-            appendLocationJson(output, item.location());
-            output.append(',');
-            name(output, "weight");
-            output.append(item.weight() == null ? "null" : DeterministicJson.number(item.weight()));
-            output.append('}');
-        }
-        output.append(']');
+    private static Map<String, Object> usageMap(UsageResult usage) {
+        return object(
+                "id", usage.id(),
+                "projectId", usage.projectId(),
+                "symbolId", usage.symbolId(),
+                "location", JsonShapes.location(usage.location()),
+                "roles", JsonShapes.roles(usage.roles()),
+                "resolutionStatus", usage.resolutionStatus().name(),
+                "origin", JsonShapes.origin(usage.origin()));
     }
 
-    private static void appendNullableEntityJson(StringBuilder output, CodeEntityRef reference) {
-        if (reference == null) {
-            output.append("null");
-        } else {
-            appendEntityJson(output, reference);
-        }
+    private static Map<String, Object> relationshipMap(RelationshipResult relationship) {
+        return object(
+                "id", relationship.id(),
+                "projectId", relationship.projectId(),
+                "source", JsonShapes.entity(relationship.source()),
+                "target", JsonShapes.entity(relationship.target()),
+                "unresolvedTarget", relationship.unresolvedTarget(),
+                "kind", relationship.kind().name(),
+                "location", JsonShapes.location(relationship.location()),
+                "resolutionStatus", relationship.resolutionStatus().name(),
+                "nature", relationship.nature().name(),
+                "confidence", relationship.confidence(),
+                "origin", JsonShapes.origin(relationship.origin()),
+                "evidence", relationship.evidence().stream()
+                        .map(CodeIntelligenceResultRenderer::evidenceMap)
+                        .toList());
     }
 
-    private static void appendEntityJson(StringBuilder output, CodeEntityRef reference) {
-        output.append('{');
-        stringField(output, "type", reference.type().name());
-        stringField(output, "id", reference.id());
-        output.setLength(output.length() - 1);
-        output.append('}');
-    }
-
-    private static void appendLocationJson(StringBuilder output, SymbolLocation location) {
-        if (location == null) {
-            output.append("null");
-            return;
-        }
-        output.append('{');
-        stringField(output, "fileId", location.fileId());
-        numberField(output, "startLine", location.startLine());
-        numberField(output, "startColumn", location.startColumn());
-        numberField(output, "endLine", location.endLine());
-        numberField(output, "endColumn", location.endColumn());
-        stringField(output, "positionEncoding", location.positionEncoding().name());
-        output.setLength(output.length() - 1);
-        output.append('}');
-    }
-
-    private static void appendOriginJson(StringBuilder output, Origin origin) {
-        output.append('{');
-        stringField(output, "providerId", origin.providerId());
-        stringField(output, "providerType", origin.providerType());
-        stringField(output, "providerVersion", origin.providerVersion());
-        stringField(output, "indexRunId", origin.indexRunId());
-        stringField(output, "sourceType", origin.sourceType().name());
-        output.setLength(output.length() - 1);
-        output.append('}');
+    private static Map<String, Object> evidenceMap(Evidence item) {
+        return object(
+                "type", item.type().name(),
+                "description", item.description(),
+                "source", JsonShapes.entity(item.source()),
+                "target", JsonShapes.entity(item.target()),
+                "location", JsonShapes.location(item.location()),
+                "weight", item.weight());
     }
 
     private static void appendLocationText(StringJoiner lines, SymbolLocation location) {
@@ -265,19 +174,5 @@ public final class CodeIntelligenceResultRenderer {
 
     private static void field(StringJoiner lines, int indent, String name, String value) {
         lines.add(" ".repeat(indent) + name + ": " + value);
-    }
-
-    private static void stringField(StringBuilder output, String name, String value) {
-        name(output, name);
-        output.append(value == null ? "null" : quote(value)).append(',');
-    }
-
-    private static void numberField(StringBuilder output, String name, int value) {
-        name(output, name);
-        output.append(value).append(',');
-    }
-
-    private static void name(StringBuilder output, String name) {
-        output.append(quote(name)).append(':');
     }
 }
