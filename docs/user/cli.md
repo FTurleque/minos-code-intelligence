@@ -140,9 +140,13 @@ Options structurantes :
 ```text
 --provider <id>       override de négociation
 --force-full          exécution FULL explicite
---dry-run             calculer le plan sans lancer le provider
+--dry-run             calculer le plan sans lancer le provider (n'écrit rien dans MINOS_HOME)
+--no-resume           ne rouvre jamais un run interrompu : le supplante et lance un index complet (implique --force-full)
+--resume-only         échoue sans créer de run si aucun run interrompu ne peut être repris
 --format <text|json>
 ```
+
+Un run interrompu (arrêt brutal, redémarrage) est repris par défaut ; `minos index-status <projet>` indique le run reprenable. `--dry-run` n'exécute rien : le combiner avec `--no-resume` ou `--resume-only` est une erreur d'usage (code 2).
 
 Exemples :
 

@@ -25,8 +25,10 @@ public final class IndexCommand {
             Autonomous indexing:
               --provider <id>               Override provider negotiation
               --force-full                  Force a complete provider execution
-              --dry-run                     Show discovery/runtime/plan without executing
-              --no-resume                   Never reopen an interrupted run; supersede it and run fully
+              --dry-run                     Show discovery/runtime/plan without executing (writes nothing;
+                                            not combinable with --no-resume/--resume-only, see `minos index-status`)
+              --no-resume                   Never reopen an interrupted run: supersede it and run a complete index
+                                            (implies --force-full)
               --resume-only                 Fail without creating a run unless an interrupted run can be resumed
               --format <text|json>          Output format (default: text)
 
@@ -257,6 +259,10 @@ public final class IndexCommand {
             String snapshot = options.text("--snapshot");
             if (noResume && resumeOnly) {
                 throw new IllegalArgumentException("--no-resume and --resume-only are mutually exclusive");
+            }
+            if (dryRun && (noResume || resumeOnly)) {
+                throw new IllegalArgumentException("--dry-run executes nothing, so it cannot be combined with "
+                        + "--no-resume/--resume-only (`minos index-status <project>` shows the run that could be resumed)");
             }
             if (scip != null) {
                 if (provider == null || provider.isBlank()) {

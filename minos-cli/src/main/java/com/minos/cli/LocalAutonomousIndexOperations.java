@@ -128,7 +128,10 @@ public final class LocalAutonomousIndexOperations
         Objects.requireNonNull(resumePolicy, "resumePolicy");
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
-            return executeLocked(projectIdentifier, providerOverride, forceFull, resumePolicy);
+            // ADR 0039 sec. 6: --no-resume forces a complete run (it supersedes the interrupted run and indexes
+            // everything), it is not only a resume policy: on an unchanged project it must not answer NO_CHANGES.
+            boolean complete = forceFull || resumePolicy == IndexingResumePolicy.NO_RESUME;
+            return executeLocked(projectIdentifier, providerOverride, complete, resumePolicy);
         }
     }
 
