@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Actionable diagnostic for one managed provider runtime. */
 public record ProviderRuntimeStatus(
         String providerId,
@@ -39,13 +41,6 @@ public record ProviderRuntimeStatus(
 
     public boolean ready() {
         return state == State.READY;
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 
     public enum State {

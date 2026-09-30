@@ -5,6 +5,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * État observable de l'index actif d'un projet.
  *
@@ -30,11 +32,11 @@ public record ProjectIndexState(
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(availability, "availability");
         activeSnapshotId = Objects.requireNonNull(activeSnapshotId, "activeSnapshotId")
-                .map(ProjectIndexState::requireText);
+                .map(value -> requireText(value, "text value"));
         latestRunId = Objects.requireNonNull(latestRunId, "latestRunId");
         Objects.requireNonNull(updatedAt, "updatedAt");
         detail = Objects.requireNonNull(detail, "detail")
-                .map(ProjectIndexState::requireText);
+                .map(value -> requireText(value, "text value"));
         resumableRunId = Objects.requireNonNull(resumableRunId, "resumableRunId");
 
         if ((availability == Availability.READY || availability == Availability.STALE)
@@ -68,13 +70,6 @@ public record ProjectIndexState(
                 observedAt,
                 Optional.empty()
         );
-    }
-
-    private static String requireText(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("text value must not be blank");
-        }
-        return value;
     }
 
     public enum Availability {

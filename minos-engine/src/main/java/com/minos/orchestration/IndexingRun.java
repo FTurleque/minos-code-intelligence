@@ -14,6 +14,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Trace immuable d'un run d'indexation projet.
  *
@@ -157,13 +159,6 @@ public record IndexingRun(
             }
             return text;
         });
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 
     /**

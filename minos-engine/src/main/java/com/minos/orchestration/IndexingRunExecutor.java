@@ -423,8 +423,13 @@ final class IndexingRunExecutor {
     private static void stageSnapshot(RunContext context, IndexingMode mode) throws Exception {
         context.phase = Phase.STAGING;
         context.ports.stateStore().saveRun(running(context, "staging project snapshot: mode=" + mode));
-        String stagedId = requireText(context.ports.stager().stage(new IndexSnapshotStageRequest(
-                context.runId, context.projectId, context.artifacts())), "stagedSnapshotId");
+        String stagedId = context.ports.stager().stage(new IndexSnapshotStageRequest(
+                context.runId, context.projectId, context.artifacts()));
+        if (stagedId == null || stagedId.isBlank()) {
+            // Etat interne invalide (le port de mise en scene a rendu un identifiant vide), pas un argument :
+            // IllegalStateException, dont le nom de classe figure dans le message du run persiste.
+            throw new IllegalStateException("stagedSnapshotId must not be blank");
+        }
         context.staged = Optional.of(stagedId);
         context.phase = Phase.PROMOTION;
         context.ports.stateStore().saveRun(running(context, "promoting staged snapshot: mode=" + mode));
@@ -707,11 +712,6 @@ final class IndexingRunExecutor {
     }
 
     private static String portable(Path path) { return path == null ? "" : path.normalize().toString().replace('\\', '/'); }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalStateException(label + " must not be blank");
-        return value;
-    }
 
     private static String failureMessage(Exception exception) {
         String message = exception.getMessage();

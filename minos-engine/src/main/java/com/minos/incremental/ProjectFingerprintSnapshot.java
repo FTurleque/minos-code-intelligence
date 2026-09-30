@@ -3,6 +3,8 @@ package com.minos.incremental;
 import java.util.Objects;
 import java.util.UUID;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Snapshot d'empreintes explicitement associé à un snapshot d'index MINOS.
  *
@@ -18,12 +20,5 @@ public record ProjectFingerprintSnapshot(
         Objects.requireNonNull(projectId, "projectId");
         indexSnapshotId = requireText(indexSnapshotId, "indexSnapshotId");
         Objects.requireNonNull(fingerprint, "fingerprint");
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 }

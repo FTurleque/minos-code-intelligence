@@ -5,6 +5,8 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import java.nio.file.Path;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Provider-neutral worker boundary used by M25 distributed execution adapters. */
 public final class DistributedIndexing {
 
@@ -60,12 +62,5 @@ public final class DistributedIndexing {
 
     public enum WorkerIsolation {
         PROCESS_EPHEMERAL_WORKSPACE
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 }

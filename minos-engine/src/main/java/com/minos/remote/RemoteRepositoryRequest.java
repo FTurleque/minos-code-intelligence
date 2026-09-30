@@ -8,6 +8,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Immutable, secret-free description of one remote source revision.
  *
@@ -149,13 +151,6 @@ public record RemoteRepositoryRequest(
             throw new IllegalArgumentException("projectSubdirectory must stay inside the repository");
         }
         return normalized;
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 
     public enum RemoteHost {
