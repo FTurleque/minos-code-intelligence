@@ -56,7 +56,7 @@ class NoResumeIndexingTest {
         };
     }
 
-    /** A Java project that is already indexed and unchanged since: its plan says there is nothing to index. */
+    /** Un projet Java déjà indexé et inchangé depuis : son plan dit qu'il n'y a rien à indexer. */
     private RegisteredProject indexedAndUnchanged(MinosApplication application) throws IOException {
         Path root = Files.createDirectories(temp.resolve("project"));
         Files.writeString(root.resolve("pom.xml"), """

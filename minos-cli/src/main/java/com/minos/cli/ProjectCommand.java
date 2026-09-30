@@ -91,12 +91,12 @@ public final class ProjectCommand {
         return USAGE;
     }
 
-    /** Usage of the {@code inspect} alias. */
+    /** Usage de l'alias {@code inspect}. */
     static String inspectUsage() {
         return INSPECT_USAGE;
     }
 
-    /** Usage of {@code index-status}. */
+    /** Usage de {@code index-status}. */
     static String indexStatusUsage() {
         return STATUS_USAGE;
     }

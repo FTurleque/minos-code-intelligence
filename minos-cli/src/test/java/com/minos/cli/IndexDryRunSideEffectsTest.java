@@ -25,7 +25,7 @@ class IndexDryRunSideEffectsTest {
 
     @TempDir Path temp;
 
-    /** Every entry of the tree under {@code root}: relative path -> "dir" or the SHA-256 of the file. */
+    /** Chaque entrée de l'arbre sous {@code root} : chemin relatif -> « dir » ou SHA-256 du fichier. */
     private static Map<String, String> tree(Path root) throws Exception {
         Map<String, String> entries = new TreeMap<>();
         try (Stream<Path> walk = Files.walk(root)) {

@@ -75,10 +75,10 @@ public final class MinosCli {
             """.stripTrailing();
 
     /**
-     * One route per top-level command: its usage and its handler. Every command has a route even when
-     * its collaborator is not configured (the handler then answers "not configured"), so that the
-     * names, the usages and {@code --help} do not depend on the wiring. Tests and the stateless help of
-     * {@link MinosCliRunner} enumerate this table instead of a copied list.
+     * Une route par commande de premier niveau : son usage et son gestionnaire. Toute commande a une route,
+     * même quand son collaborateur n'est pas câblé (le gestionnaire répond alors « not configured »), de sorte
+     * que les noms, les usages et {@code --help} ne dépendent pas du câblage. Les tests et l'aide sans état de
+     * {@link MinosCliRunner} énumèrent cette table au lieu d'une liste recopiée.
      */
     private final Map<String, Route> routes = new LinkedHashMap<>();
 
@@ -186,17 +186,17 @@ public final class MinosCli {
         }
     }
 
-    /** Adds the route of one command; a command whose collaborator is not wired answers "not configured". */
+    /** Ajoute la route d'une commande ; une commande dont le collaborateur n'est pas câblé répond « not configured ». */
     private void register(String name, String usage, boolean configured, Handler handler) {
         routes.put(name, new Route(usage, configured ? handler : (arguments, output, error) -> unavailable(name, error)));
     }
 
-    /** The names of every top-level command, in declaration order. */
+    /** Les noms de toutes les commandes de premier niveau, dans l'ordre de déclaration. */
     Set<String> commandNames() {
         return Collections.unmodifiableSet(routes.keySet());
     }
 
-    /** Whether {@code name} is a top-level command of this CLI. */
+    /** Indique si {@code name} est une commande de premier niveau de ce CLI. */
     boolean hasCommand(String name) {
         return routes.containsKey(name);
     }
@@ -221,7 +221,7 @@ public final class MinosCli {
             return FindSymbolCommand.USAGE_ERROR;
         }
         String[] commandArguments = Arrays.copyOfRange(arguments, 1, arguments.length);
-        // --help is answered from the route itself: it never depends on the wiring nor touches any service.
+        // --help est servi par la route elle-même : il ne dépend pas du câblage et ne touche aucun service.
         if (commandArguments.length == 1 && CliCommandSupport.isHelp(commandArguments[0])) {
             output.append(route.usage()).append('\n');
             return FindSymbolCommand.SUCCESS;

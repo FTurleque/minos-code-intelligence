@@ -54,13 +54,13 @@ public final class ToolsCommand {
     }
 
     /**
-     * The single readiness verdict shared by {@code tools verify} and {@code doctor}: a provider blocks
-     * unless it is {@code READY} or {@code UNSUPPORTED_BY_BACKEND}. The latter means the currently
-     * selected backend (e.g. the Docker MCP admin/indexing plane) never claims the stronger sandbox tier
-     * this provider would otherwise need -- not that the provider itself is broken. It is reported as
-     * such (never as {@code READY}) but must never block a verification or installation that does not
-     * depend on that tier (docs/developer/remote-worker-sandbox-disposition.md, "Invariant"). Every
-     * other non-READY state blocks.
+     * Le verdict de disponibilité unique de {@code tools verify} et de {@code doctor} : un provider bloque
+     * sauf s'il est {@code READY} ou {@code UNSUPPORTED_BY_BACKEND}. Ce dernier état dit que le backend
+     * sélectionné (par exemple le plan Docker MCP admin/indexation) ne revendique jamais le palier de
+     * sandbox plus fort dont ce provider aurait sinon besoin -- pas que le provider est cassé. Il est
+     * rapporté tel quel (jamais comme {@code READY}) mais ne doit jamais bloquer une vérification ou une
+     * installation qui ne dépend pas de ce palier (docs/developer/remote-worker-sandbox-disposition.md,
+     * « Invariant »). Tout autre état non prêt bloque.
      */
     static boolean blocksReadiness(AutonomousIndexOperations.ProviderView provider) {
         return !"READY".equals(provider.state()) && !"UNSUPPORTED_BY_BACKEND".equals(provider.state());

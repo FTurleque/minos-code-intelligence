@@ -33,7 +33,7 @@ class CliParsingGuardTest {
     private static final Path MAIN = moduleDirectory("src/main/java/com/minos/cli");
     private static final Path TEST = moduleDirectory("src/test/java/com/minos/cli");
 
-    /** The directory whether the tests run from the module or from the reactor root. */
+    /** Le répertoire, que les tests tournent depuis le module ou depuis la racine du réacteur. */
     private static Path moduleDirectory(String relative) {
         for (Path candidate : new Path[]{Path.of(relative), Path.of("minos-cli").resolve(relative)}) {
             if (Files.isDirectory(candidate)) return candidate;
@@ -57,7 +57,7 @@ class CliParsingGuardTest {
         }
     }
 
-    /** The code of a source: comments removed, literals kept (the patterns below look at literals). */
+    /** Le code d'un source : commentaires retirés, littéraux conservés (les motifs ci-dessous regardent les littéraux). */
     private static String code(Path file) throws IOException {
         String text = Files.readString(file, StandardCharsets.UTF_8);
         return text.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("//[^\\n]*", "");
@@ -121,7 +121,7 @@ class CliParsingGuardTest {
         assertTrue(Pattern.compile("\\.to(Lower|Upper)Case\\(\\s*\\)").matcher(handWritten).find());
     }
 
-    /** Names that a rules test names in {@code command("label", "<name> ...")} or in a {@code Operation} loop. */
+    /** Noms que nomme un test de règles dans {@code command("label", "<nom> ...")} ou dans une boucle sur {@code Operation}. */
     private static Set<String> commandsUnderRulesTests() throws IOException {
         Set<String> covered = new java.util.TreeSet<>();
         Pattern base = Pattern.compile("command\\(\\s*\"[^\"]*\"\\s*,\\s*\"([a-z][a-z-]*)[ \"]");

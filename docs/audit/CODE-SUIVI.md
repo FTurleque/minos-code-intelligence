@@ -336,6 +336,7 @@ Les sorties des mutations sont dans le scratchpad de la session (`lot2-mutation*
 | V-L2-06 | à corriger | `<commande> <sous-opération> --help` ouvrait `MINOS_HOME` | `d2d1d66f` : règle « dernier des trois arguments au plus » |
 | V-L2-07 | remarque | `mcp --help` ouvrait `MINOS_HOME` puis sortait 2 | `d2d1d66f` : `mcp --help` affiche « Usage: minos mcp » |
 | V-L2-08 | remarque | le message de `8a115de8` annonçait `check-post-mne` vert alors que le commit était rouge (`check-remote-distributed-consistency.py:147` exige `remoteIndexCommand.run`) | `28abcd71` (correction séparée, gate inchangée) ; leçon : rejouer `check-post-mne` **avant** chaque commit ; l'historique n'a pas été réécrit |
+| V-L2-09 | à corriger (réserve du verdict) | Javadoc écrite en anglais dans `MinosCli.java` et `ProjectCommand.java` (fichiers en français), et mélange de langues dans `ToolsCommand`, `CliParsingGuardTest`, `IndexDryRunSideEffectsTest`, `NoResumeIndexingTest` | réécrite en français dans la langue de chaque fichier (commit « docs(cli): Javadoc dans la langue du fichier ») ; balayage automatique des fichiers modifiés : plus aucun fichier à Javadoc mixte |
 
 ## 13. À traiter plus tard (lot 2)
 
