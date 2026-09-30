@@ -1,11 +1,10 @@
 package com.minos.hosted;
 
+import com.minos.testsupport.DerivedTenantKeys;
+
 import org.junit.jupiter.api.Test;
 
-import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -86,20 +85,7 @@ class HostedCredentialAtomicityTest {
 
     private static Fixture fixture(HostedAuditSink auditSink) {
         InMemoryStore store = new InMemoryStore();
-        HostedTenantKeyProvider keys = (tenantId, keyId, purpose) -> {
-            try {
-                byte[] value = MessageDigest.getInstance("SHA-256")
-                        .digest((tenantId + ":" + keyId + ":" + purpose)
-                                .getBytes(StandardCharsets.UTF_8));
-                return new SecretKeySpec(
-                        value,
-                        purpose == HostedTenantKeyProvider.Purpose.ENCRYPTION
-                                ? "AES"
-                                : "HmacSHA256");
-            } catch (Exception exception) {
-                throw new IllegalStateException(exception);
-            }
-        };
+        HostedTenantKeyProvider keys = DerivedTenantKeys.provider();
         SwitchableIdentityProvider identities = new SwitchableIdentityProvider(keys);
         UUID tenant = UUID.randomUUID();
         HostedControlPlaneService service = new HostedControlPlaneService(

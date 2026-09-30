@@ -34,7 +34,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -485,7 +484,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     }
 
     private static String digest(byte[] bytes) {
-        return HexFormat.of().formatHex(Sha256.newDigest().digest(bytes));
+        return Sha256.hex(bytes);
     }
 
     private record SessionMetadata(Path file, String snapshotId, String sessionId, Instant importedAt) {
