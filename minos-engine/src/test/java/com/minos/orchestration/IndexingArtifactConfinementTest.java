@@ -67,7 +67,7 @@ class IndexingArtifactConfinementTest {
 
         IndexingRun run = execute(fixture, throughAnAncestorLink);
 
-        assertRefusedWithoutStaging(fixture, run, "lies outside the run directory");
+        assertRefusedWithoutStaging(fixture, run, "symbolic link");
     }
 
     @Test

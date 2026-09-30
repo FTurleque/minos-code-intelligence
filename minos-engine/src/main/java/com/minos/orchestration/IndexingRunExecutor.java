@@ -182,7 +182,7 @@ final class IndexingRunExecutor {
      */
     private static void reverifyReusedArtifacts(RunContext context, List<ReusedTarget> reused) throws ResumeAborted {
         if (reused.isEmpty()) return;
-        Path runDirectory = canonicalRunDirectory(context);
+        Path runDirectory = existingRunDirectory(context);
         for (ReusedTarget target : reused) {
             ExecutionCheckpoint checkpoint = target.execution().checkpoint().orElseThrow();
             String scope = portable(target.target().projectRelativeRoot());
@@ -206,14 +206,14 @@ final class IndexingRunExecutor {
         }
     }
 
-    private static Path canonicalRunDirectory(RunContext context) throws ResumeAborted {
+    /** The run directory as the port names it ({@link ArtifactConfinement} resolves it itself). */
+    private static Path existingRunDirectory(RunContext context) throws ResumeAborted {
         Path runDirectory = context.ports.markers().runDirectory(context.runId)
                 .orElseThrow(() -> new ResumeAborted("resume aborted: run directory is unknown to this runtime"));
-        try {
-            return runDirectory.toRealPath();
-        } catch (IOException failure) {
-            throw new ResumeAborted("resume aborted: run directory disappeared before staging", failure);
+        if (!Files.isDirectory(runDirectory)) {
+            throw new ResumeAborted("resume aborted: run directory disappeared before staging");
         }
+        return runDirectory;
     }
 
     /**
@@ -443,6 +443,7 @@ final class IndexingRunExecutor {
     }
 
     private static void stageSnapshot(RunContext context, IndexingMode mode) throws Exception {
+        requireArtifactsStillInsideRunDirectory(context);
         context.phase = Phase.STAGING;
         context.ports.stateStore().saveRun(running(context, "staging project snapshot: mode=" + mode));
         String stagedId = context.ports.stager().stage(new IndexSnapshotStageRequest(
@@ -751,14 +752,14 @@ final class IndexingRunExecutor {
         if (!artifact.indexerId().equals(selection.indexer().id())) throw new IllegalStateException("executor returned an artifact for an unexpected indexer");
         if (!artifact.projectRelativeRoot().normalize().equals(expectedRoot.normalize())) throw new IllegalStateException("executor returned an artifact for an unexpected project scope");
         Path path = artifact.finalArtifact().toAbsolutePath().normalize();
-        if (!awaitReadable(path)) throw new IllegalStateException("final index artifact is missing or unreadable: " + path);
+        if (!awaitReadable(path)) throw new IllegalStateException("final index artifact is missing or unreadable");
         requireInsideRunDirectory(context, executor, path);
         return path;
     }
 
     /**
-     * Q5: the artifact an executor returns stays in the run directory, physically (no {@code ..}, no link on the
-     * way), before any checkpoint or staging reads it. Without a known run directory there is nothing to confine
+     * Q5: the artifact an executor returns stays in the run directory, physically (no {@code ..}, no link at any
+     * level of its path), before any checkpoint or staging reads it. Without a known run directory there is nothing to confine
      * to (and no resume is possible either); an executor with a store of its own is confined by that store.
      */
     private static void requireInsideRunDirectory(RunContext context, IndexerExecutor executor, Path artifact) {
@@ -770,6 +771,18 @@ final class IndexingRunExecutor {
         } catch (ArtifactConfinement.Escape escape) {
             throw new IllegalStateException("executor returned an artifact that "
                     + escape.reason().phrase(), escape);
+        }
+    }
+
+    /**
+     * V-L4-03: an artifact was confined when its provider returned, and the providers of the other scopes have run
+     * since. Every artifact, fresh or reused, is confined again right before the snapshot reads it: the same single
+     * decision, the same single place for the answer.
+     */
+    private static void requireArtifactsStillInsideRunDirectory(RunContext context) {
+        for (IndexingArtifact artifact : context.artifacts()) {
+            IndexerExecutor executor = context.ports.executors().get(artifact.indexerId());
+            if (executor != null) requireInsideRunDirectory(context, executor, artifact.finalArtifact());
         }
     }
 

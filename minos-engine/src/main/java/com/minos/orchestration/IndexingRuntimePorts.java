@@ -26,8 +26,9 @@ public final class IndexingRuntimePorts {
 
         /**
          * Whether the artifact this executor returns is written by MINOS under the run directory
-         * ({@code runs/<runId>/}). When it is, the orchestrator confines it there physically, with no
-         * link on the way, before any checkpoint or staging (Q5). An executor whose artifacts live in a
+         * ({@code runs/<runId>/}). When it is, the orchestrator confines it there physically, reaching it
+         * through no link at any level of its path, before any checkpoint and again before staging (Q5).
+         * An executor whose artifacts live in a
          * store of their own that it verifies itself, such as the distributed executor with its verified
          * bundle cache, answers {@code false}.
          */

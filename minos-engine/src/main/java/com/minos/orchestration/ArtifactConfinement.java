@@ -13,13 +13,14 @@ import java.util.Objects;
  * qu'un exécuteur vient de rendre ({@code validateArtifact}), celui qu'un plan de reprise veut
  * réutiliser et celui que la reprise revérifie juste avant la mise en snapshot passent tous ici.
  *
- * <p>La décision est physique, jamais textuelle. Le répertoire d'accueil de l'artefact est résolu
- * (liens et jonctions suivis) puis doit se trouver sous le répertoire de run lui-même résolu : un
- * segment {@code ..}, un répertoire ancêtre lié ou un alias (nom court Windows 8.3) sont tranchés sur
- * l'emplacement réel. Le dernier composant est ensuite ouvert par {@link ConfinedFileOpener}, la
- * primitive de confinement du dépôt (S5), qui refuse un lien symbolique, une jonction, un objet
- * spécial ou un fichier non régulier : un lien dont la cible retomberait dans le répertoire est refusé
- * comme les autres. Aucun message ne porte de chemin.</p>
+ * <p>La décision ne repose jamais sur une comparaison de chaînes. Le chemin de l'artefact est normalisé
+ * (un segment {@code ..} qui sort du répertoire le sort du préfixe) et doit se lire sous le répertoire de
+ * run, tel qu'il est écrit ou tel qu'il se résout (alias Windows 8.3, racine atteinte par un lien).
+ * Les composants qui restent sont ensuite parcourus par {@link ConfinedFileOpener}, la primitive de
+ * confinement du dépôt (S5) : chaque répertoire est descendu sans suivre de lien et le dernier composant
+ * est ouvert sans suivre de lien, si bien qu'un lien symbolique, une jonction ou un objet spécial est refusé
+ * <em>à n'importe quel niveau</em> du chemin, même quand sa cible retomberait dans le répertoire de run, et
+ * qu'un fichier non régulier est refusé. Aucun message ne porte de chemin.</p>
  */
 final class ArtifactConfinement {
 
@@ -68,19 +69,15 @@ final class ArtifactConfinement {
     static void requireInside(Path runDirectory, Path artifact) throws Escape {
         Objects.requireNonNull(runDirectory, "runDirectory");
         Path normalized = Objects.requireNonNull(artifact, "artifact").toAbsolutePath().normalize();
-        Path name = normalized.getFileName();
-        Path parent = normalized.getParent();
-        if (name == null || parent == null) throw new Escape(Reason.OUTSIDE, null);
         final Path realRoot;
         try {
             realRoot = runDirectory.toRealPath();
         } catch (IOException unresolvable) {
             throw new Escape(Reason.UNRESOLVABLE, unresolvable);
         }
+        Path relative = relativeToTheRunDirectory(normalized, runDirectory.toAbsolutePath().normalize(), realRoot);
+        if (relative == null) throw new Escape(Reason.OUTSIDE, null);
         try {
-            Path realParent = parent.toRealPath();
-            if (!realParent.startsWith(realRoot)) throw new Escape(Reason.OUTSIDE, null);
-            Path relative = realRoot.relativize(realParent.resolve(name));
             try (SeekableByteChannel ignored = ConfinedFileOpener.openConfinedRegularFile(realRoot, relative)) {
                 // L'ouverture est la preuve : aucun lien sur le chemin, un fichier physique régulier au bout.
             }
@@ -91,5 +88,16 @@ final class ArtifactConfinement {
         } catch (IOException unresolvable) {
             throw new Escape(Reason.UNRESOLVABLE, unresolvable);
         }
+    }
+
+    /**
+     * Le chemin de l'artefact relativement au répertoire de run, ou {@code null} quand il n'est pas dessous :
+     * d'abord tel que le répertoire est écrit, puis tel qu'il se résout (l'artefact peut être écrit avec le
+     * nom long là où le répertoire l'est avec un nom court). Jamais un lien n'est suivi pour y parvenir.
+     */
+    private static Path relativeToTheRunDirectory(Path artifact, Path lexicalRoot, Path realRoot) {
+        if (artifact.startsWith(lexicalRoot)) return lexicalRoot.relativize(artifact);
+        if (artifact.startsWith(realRoot)) return realRoot.relativize(artifact);
+        return null;
     }
 }

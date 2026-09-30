@@ -162,7 +162,7 @@ final class IndexingResumePlanner {
             throw new Refusal("resumable run was written in run format " + run.runFormatVersion()
                     + ", expected " + IndexingRun.CURRENT_FORMAT_VERSION);
         }
-        Path runDirectory = canonicalRunDirectory(port, runId);
+        Path runDirectory = existingRunDirectory(port, runId);
 
         List<ReusedTarget> reused = new ArrayList<>();
         List<IndexingExecutionTarget> remaining = new ArrayList<>();
@@ -179,17 +179,17 @@ final class IndexingResumePlanner {
         return new Outcome.Resume(run, attempt, reused, remaining);
     }
 
-    private static Path canonicalRunDirectory(ResumableRunMarkers port, UUID runId) throws Refusal {
+    /**
+     * The run directory as the port names it: {@link ArtifactConfinement} resolves it itself, and reads an
+     * artifact path written the same way as the directory (a short Windows name, say) without a second guess.
+     */
+    private static Path existingRunDirectory(ResumableRunMarkers port, UUID runId) throws Refusal {
         Path runDirectory = port.runDirectory(runId)
                 .orElseThrow(() -> new Refusal("run directory is unknown to this runtime"));
         if (!Files.isDirectory(runDirectory, LinkOption.NOFOLLOW_LINKS)) {
             throw new Refusal("run directory is missing");
         }
-        try {
-            return runDirectory.toRealPath();
-        } catch (IOException failure) {
-            throw new Refusal("run directory cannot be resolved: " + failure.getClass().getSimpleName());
-        }
+        return runDirectory;
     }
 
     private static Optional<IndexerExecution> checkpointFor(IndexingRun run, IndexingExecutionTarget target) {
