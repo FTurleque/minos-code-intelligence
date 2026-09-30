@@ -7,6 +7,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
@@ -31,11 +32,16 @@ import java.util.UUID;
  * Deletion itself is bounded per invocation; whatever does not fit is moved into a quarantine
  * directory inside the runs root with a constant-cost rename and finished by later invocations.</p>
  *
- * <p>A run directory carrying a {@code .resumable} marker (ADR 0039 §5) is an interrupted run offered
- * for resume: it is reclaimed last, only when the budget still requires it after every unmarked run,
- * or when its marker is older than {@link Policy#resumeTtl()}. The marker's own modification time
- * dates the interruption; the directory's time is not used for it because the marker and the
- * artifact digest sidecar are written into the run directory after the artifacts (R1-7).</p>
+ * <p>A run directory carrying a {@code .resumable} marker (ADR 0039 §5) is a run retained on purpose:
+ * either an interrupted run offered for resume, or a run still being produced by another indexation
+ * (the marker is written before its first provider and removed when the run ends). It is reclaimed
+ * last, only when the count or byte budget still requires it after every unmarked run, or when its
+ * lifetime is over. A truncated scan of {@code runs/} is not, by itself, a reason to reclaim it (R5).
+ * The single lifetime rule lives in {@link Policy#lifetime(boolean)}: a marked run never lives shorter
+ * than an ordinary run and never longer than {@code max(maxAge, resumeTtl)} after the later of its
+ * marker and its last write, so a marker can never pin {@code runs/} indefinitely. The marker's own
+ * modification time counts because the marker and the artifact digest sidecar are written into the
+ * run directory after the artifacts (R1-7).</p>
  *
  * <p>Nothing outside {@code runsRoot} is ever deleted and symbolic links are never followed.</p>
  */
@@ -43,7 +49,7 @@ final class RunDirectoryRetention {
 
     private static final System.Logger LOGGER = System.getLogger(RunDirectoryRetention.class.getName());
 
-    /** Aligned on the resume planner's TTL: a marker older than this no longer protects the run. */
+    /** Aligned on the resume planner's TTL: the least a marked run is kept (see {@link Policy#lifetime}). */
     static final Duration DEFAULT_RESUME_TTL = Duration.ofHours(24);
     static final Policy DEFAULT = new Policy(16, 4L * 1024L * 1024L * 1024L, Duration.ofDays(7), DEFAULT_RESUME_TTL);
     static final String QUARANTINE_DIRECTORY = ".quarantine";
@@ -101,12 +107,12 @@ final class RunDirectoryRetention {
         long retainedBytes = 0L;
         for (Entry entry : entries) retainedBytes = saturatingAdd(retainedBytes, entry.bytes());
         int retainedCount = entries.size();
-        Instant cutoff = now.minus(policy.maxAge());
-        Instant resumeCutoff = now.minus(policy.resumeTtl());
 
         for (Entry entry : entries) {
-            boolean expired = entry.ageReference().toInstant().isBefore(entry.resumable() ? resumeCutoff : cutoff);
-            boolean overCount = retainedCount > policy.maxEntries() || scan.truncated();
+            boolean expired = entry.ageReference().toInstant().isBefore(now.minus(policy.lifetime(entry.resumable())));
+            // A truncated listing means the retained set was not fully measured: it justifies reclaiming
+            // the unmarked residue that was observed, never a run held by a marker (R5).
+            boolean overCount = retainedCount > policy.maxEntries() || (scan.truncated() && !entry.resumable());
             boolean overBytes = retainedBytes > policy.maxBytes();
             if (!entry.reclaimFirst() && !expired && !overCount && !overBytes) continue;
             reclaim(root, entry.path(), budget);
@@ -255,6 +261,7 @@ final class RunDirectoryRetention {
             return new Entry(run, FileTime.from(Instant.EPOCH), 0L, true, Optional.empty());
         }
         Optional<FileTime> resumableSince = resumableSince(run);
+        boolean marked = resumableSince.isPresent();
         try {
             Files.walkFileTree(run, new SimpleFileVisitor<>() {
                 private FileVisitResult account(long size) {
@@ -284,12 +291,15 @@ final class RunDirectoryRetention {
 
                 @Override
                 public FileVisitResult visitFileFailed(Path file, IOException failure) {
+                    if (!unreadableEntryMakesRunReclaimable(failure, marked)) return FileVisitResult.CONTINUE;
                     reclaimFirst[0] = true;
                     return FileVisitResult.TERMINATE;
                 }
             });
         } catch (IOException | RuntimeException exception) {
-            reclaimFirst[0] = true;
+            if (unreadableEntryMakesRunReclaimable(exception instanceof IOException io ? io : null, marked)) {
+                reclaimFirst[0] = true;
+            }
         }
         return new Entry(run, lastModified, bytes[0], reclaimFirst[0], resumableSince);
     }
@@ -305,6 +315,16 @@ final class RunDirectoryRetention {
         } catch (IOException exception) {
             return Optional.empty();
         }
+    }
+
+    /**
+     * Whether an entry that could not be read makes its whole run reclaimable first. It does for
+     * unmarked residue (it can never be trusted to stay measurable). It does not for a run held by a
+     * marker, which another indexation may still be writing, nor for an entry that merely vanished
+     * between the listing and the read, as the temporaries of an atomic publication do.
+     */
+    static boolean unreadableEntryMakesRunReclaimable(IOException failure, boolean marked) {
+        return !marked && !(failure instanceof NoSuchFileException);
     }
 
     private static long saturatingAdd(long left, long right) {
@@ -334,6 +354,17 @@ final class RunDirectoryRetention {
             if (resumeTtl.isZero() || resumeTtl.isNegative()) {
                 throw new IllegalArgumentException("run retention resumeTtl must be positive");
             }
+        }
+
+        /**
+         * The one place that says how long a run directory lives, measured from its reference date.
+         * An ordinary run lives {@code maxAge}. A run held by a marker lives the longer of {@code maxAge}
+         * and {@code resumeTtl}: holding a run never shortens its life (R5, it used to fall from 7 days
+         * to 24 hours), and this is also the explicit upper bound after which even a held run is
+         * reclaimed, so a marker can never pin {@code runs/} indefinitely.
+         */
+        Duration lifetime(boolean marked) {
+            return marked && resumeTtl.compareTo(maxAge) > 0 ? resumeTtl : maxAge;
         }
 
         /** Compatibility constructor: the default resume TTL. */
@@ -376,9 +407,13 @@ final class RunDirectoryRetention {
             return resumableSince.isPresent();
         }
 
-        /** The time that decides both ordering and expiry: the marker's for a resumable run. */
+        /**
+         * The time that decides both ordering and expiry: the later of the directory's last write and,
+         * for a marked run, its marker's (the marker dates the interruption or the start of a run held
+         * by another indexation). It can therefore only extend a marked run's life, never cut it.
+         */
         private FileTime ageReference() {
-            return resumableSince.orElse(lastModified);
+            return resumableSince.filter(since -> since.compareTo(lastModified) > 0).orElse(lastModified);
         }
     }
 
