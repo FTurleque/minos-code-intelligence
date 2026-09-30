@@ -38,6 +38,7 @@ final class CliArgumentRules {
         private final List<String> flags = new ArrayList<>();
         private boolean operandsAfterOptions;
         private boolean refusalsOnly;
+        private String scope = "";
 
         private Command(String label, String base) {
             this.label = label;
@@ -64,6 +65,12 @@ final class CliArgumentRules {
 
         Command flag(String option) {
             flags.add(option);
+            return this;
+        }
+
+        /** Names the command family in the unknown/duplicate/unexpected messages, e.g. {@code "team "}. */
+        Command scope(String scope) {
+            this.scope = scope;
             return this;
         }
 
@@ -98,8 +105,8 @@ final class CliArgumentRules {
             String sample = option[1];
             expectUsage(command, "missing value for " + name, name);
             expectUsage(command, "missing value for " + name, name, "--x");
-            expectUsage(command, "duplicate option: " + name, name, sample, name, sample);
-            expectUsage(command, "unknown option: " + name.toUpperCase(Locale.ROOT),
+            expectUsage(command, "duplicate " + command.scope + "option: " + name, name, sample, name, sample);
+            expectUsage(command, "unknown " + command.scope + "option: " + name.toUpperCase(Locale.ROOT),
                     name.toUpperCase(Locale.ROOT), sample);
             if (option[2].equals("choice")) {
                 // The value of an enumerated option is case-insensitive (Locale.ROOT).
@@ -116,8 +123,8 @@ final class CliArgumentRules {
             String sample = Integer.toString((Integer) option[3]);
             expectUsage(command, "missing value for " + name, name);
             expectUsage(command, "missing value for " + name, name, "--x");
-            expectUsage(command, "duplicate option: " + name, name, sample, name, sample);
-            expectUsage(command, "unknown option: " + name.toUpperCase(Locale.ROOT),
+            expectUsage(command, "duplicate " + command.scope + "option: " + name, name, sample, name, sample);
+            expectUsage(command, "unknown " + command.scope + "option: " + name.toUpperCase(Locale.ROOT),
                     name.toUpperCase(Locale.ROOT), sample);
             expectUsage(command, name + " must be an integer", name, "abc");
             expectUsage(command, name + " must be an integer", name, "-x");
@@ -129,13 +136,13 @@ final class CliArgumentRules {
             assertAccepted(command, name, Integer.toString(maximum));
         }
         for (String flag : command.flags) {
-            expectUsage(command, "duplicate option: " + flag, flag, flag);
-            expectUsage(command, "unknown option: " + flag.toUpperCase(Locale.ROOT), flag.toUpperCase(Locale.ROOT));
+            expectUsage(command, "duplicate " + command.scope + "option: " + flag, flag, flag);
+            expectUsage(command, "unknown " + command.scope + "option: " + flag.toUpperCase(Locale.ROOT), flag.toUpperCase(Locale.ROOT));
         }
-        expectUsage(command, "unknown option: --bogus", "--bogus", "x");
-        expectUsage(command, "unknown option: -x", "-x");
+        expectUsage(command, "unknown " + command.scope + "option: --bogus", "--bogus", "x");
+        expectUsage(command, "unknown " + command.scope + "option: -x", "-x");
         if (!command.operandsAfterOptions) {
-            expectUsage(command, "unexpected argument: stray", "stray");
+            expectUsage(command, "unexpected " + command.scope + "argument: stray", "stray");
         }
     }
 

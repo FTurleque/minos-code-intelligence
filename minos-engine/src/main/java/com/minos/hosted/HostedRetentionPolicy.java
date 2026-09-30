@@ -8,15 +8,17 @@ public record HostedRetentionPolicy(
 ) {
     public static final int MIN_AUDIT_EVENTS = 100;
     public static final int MAX_AUDIT_EVENTS = 100_000;
+    public static final int MIN_RETENTION_DAYS = 1;
+    public static final int MAX_RETENTION_DAYS = 3_650;
 
     public HostedRetentionPolicy {
         if (maxAuditEvents < MIN_AUDIT_EVENTS || maxAuditEvents > MAX_AUDIT_EVENTS) {
             throw new IllegalArgumentException("maxAuditEvents must be between 100 and 100000");
         }
-        if (auditRetentionDays < 1 || auditRetentionDays > 3_650) {
+        if (auditRetentionDays < MIN_RETENTION_DAYS || auditRetentionDays > MAX_RETENTION_DAYS) {
             throw new IllegalArgumentException("auditRetentionDays must be between 1 and 3650");
         }
-        if (archivedWorkspaceRetentionDays < 1 || archivedWorkspaceRetentionDays > 3_650) {
+        if (archivedWorkspaceRetentionDays < MIN_RETENTION_DAYS || archivedWorkspaceRetentionDays > MAX_RETENTION_DAYS) {
             throw new IllegalArgumentException("archivedWorkspaceRetentionDays must be between 1 and 3650");
         }
     }

@@ -38,6 +38,13 @@ import java.util.Set;
  */
 final class CliOptions {
 
+    /** An option that the command refuses on purpose ({@link Spec#forbid}); its message is fixed text, never an echo of input. */
+    static final class ForbiddenOptionException extends IllegalArgumentException {
+        private ForbiddenOptionException(String message) {
+            super(message);
+        }
+    }
+
     /** Kind of a declared option. */
     enum Kind { FLAG, TEXT, INTEGER }
 
@@ -82,6 +89,13 @@ final class CliOptions {
         declaredAs(option, Kind.INTEGER);
         String value = values.get(option);
         return value == null ? fallback : Integer.parseInt(value);
+    }
+
+    /** The value of an integer option (already checked against its bounds), or {@code null} when absent. */
+    Integer optionalInteger(String option) {
+        declaredAs(option, Kind.INTEGER);
+        String value = values.get(option);
+        return value == null ? null : Integer.valueOf(value);
     }
 
     /** The value of {@code --format}, {@link SymbolOutputFormat#TEXT} when absent. */
@@ -168,7 +182,7 @@ final class CliOptions {
                     throw new IllegalArgumentException("argument at index " + index + " must not be null");
                 }
                 if (forbidden.containsKey(argument)) {
-                    throw new IllegalArgumentException(forbidden.get(argument));
+                    throw new ForbiddenOptionException(forbidden.get(argument));
                 }
                 if (!argument.startsWith("--")) {
                     if (argument.startsWith("-")) {
