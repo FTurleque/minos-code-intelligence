@@ -121,16 +121,19 @@ final class IndexingRunExecutor {
             context.record(reused.target(), new IndexingArtifact(execution.language(), execution.indexerId(),
                     execution.finalArtifact(), reused.target().projectRelativeRoot()), execution);
         }
-        // ADR 0039 §4: interrupted in PROMOTION with every artifact still valid, the known staged
-        // snapshot is promoted directly, without relaunching providers or staging. Interrupted in
-        // STAGING (no staged id yet), everything is reused and the snapshot is staged again.
-        boolean promoteOnly = resume.remaining().isEmpty()
-                && run.phase() == Phase.PROMOTION
-                && run.stagedSnapshotId().isPresent();
+        // ADR 0039 §4: interrupted in PROMOTION with every artifact still valid AND the reused targets
+        // being exactly those the staged snapshot was built from (R4), the known staged snapshot is
+        // promoted directly, without relaunching providers or staging. Otherwise -- interrupted in
+        // STAGING (no staged id yet), or the plan no longer matches the snapshot -- everything valid is
+        // reused and the snapshot is prepared again: it is never promoted as it stands.
+        boolean stagedSnapshotKnown = run.phase() == Phase.PROMOTION && run.stagedSnapshotId().isPresent();
+        boolean promoteOnly = stagedSnapshotKnown && resume.stagedSnapshotCoversThePlan();
         try {
             publishInProgress(context, mode, "indexing run resumed: attempt=" + resume.attempt()
                     + ", mode=" + mode + ", " + resume.reused().size() + "/" + targets.size() + " targets reused"
-                    + (promoteOnly ? ", promoting the staged snapshot directly" : ""));
+                    + (promoteOnly ? ", promoting the staged snapshot directly" : "")
+                    + (stagedSnapshotKnown && !promoteOnly
+                            ? ", staged snapshot discarded: its targets differ from the current plan" : ""));
             executeProviders(context, root, resume.remaining(), mode, changedFiles);
             reverifyReusedArtifacts(context, resume.reused());
             if (promoteOnly) {
