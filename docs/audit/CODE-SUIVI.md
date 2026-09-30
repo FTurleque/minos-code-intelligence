@@ -681,3 +681,4 @@ Cinq mutations posées ensemble puis annulées (`lot4-guard-mutations.log`) : `r
 - **Q12** : préfixes `TestFoo` / `ITFoo` (jamais gérés), suffixes `ITCase`/`TestCase` (Failsafe) ; classement des répertoires de tests **sans** lire le projet analysé (V-L4-02) ; une lecture des poms/`settings.gradle` permettrait de retrouver `svc/test/`.
 - **`minos-intellij`** : deux copies de `requireText` (plugin Gradle autonome).
 - **Historique** : `scripts/history/m21/check-m21-parity.py` (déjà signalé au lot 2) toujours cassé, non rejoué par `check-post-mne`.
+- **SonarCloud** : le commentaire du bot sur la PR #305 (lot 1) signale 6 nouvelles issues, Quality Gate passé ; non examinées ici, non bloquantes, hors du périmètre Q6/Q7. À relire depuis le tableau de bord SonarCloud de la PR.
