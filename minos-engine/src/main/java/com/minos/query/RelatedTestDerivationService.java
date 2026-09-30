@@ -56,8 +56,26 @@ public final class RelatedTestDerivationService {
             SymbolKind.TRAIT,
             SymbolKind.ENUM
     );
+
+    /**
+     * Suffixe de test d'un NOM de type ou de fonction, retiré à une frontière de mot uniquement :
+     * soit derrière un séparateur ({@code _}, {@code -}, {@code .}), sans tenir compte de la casse
+     * ({@code audit_it}), soit sur un mot en casse de chameau ({@code AuditTest}, {@code AuditSpec}). Le
+     * suffixe d'intégration est {@code IT} (convention Failsafe, {@code *IT.java}) ou {@code It} ; il
+     * doit suivre une minuscule ou un chiffre. La fin d'un mot en minuscules n'est jamais un suffixe :
+     * {@code Audit}, {@code Commit}, {@code Limit}, {@code Latest} et {@code Contest} restent entiers.
+     */
     private static final Pattern TEST_SUFFIX = Pattern.compile(
-            "(?i)(?:tests?|spec(?:ification)?s?|it)$"
+            "(?:[._-](?i:tests?|spec(?:ification)?s?|it)"
+                    + "|(?:Tests?|Spec(?:ification)?s?)"
+                    + "|(?<=[a-z0-9])I[Tt])$"
+    );
+    private static final Set<String> TEST_SOURCE_SETS = Set.of(
+            "test", "tests", "it", "integrationtest", "integration-test"
+    );
+    private static final Set<String> TEST_ROOT_DIRECTORIES = Set.of("test", "tests");
+    private static final Set<String> JVM_SOURCE_EXTENSIONS = Set.of(
+            ".java", ".kt", ".kts", ".scala", ".groovy"
     );
 
     public List<Relationship> derive(
@@ -418,16 +436,58 @@ public final class RelatedTestDerivationService {
         return symbol.fileId() != null && isTestPath(symbol.fileId());
     }
 
+    /**
+     * Reconnaît un chemin de test par la convention du projet, jamais par la seule présence du mot
+     * « test » dans le chemin :
+     * <ul>
+     *   <li>un source set {@code src/test}, {@code src/it}, {@code src/integrationTest} ou
+     *       {@code src/integration-test} (Maven, Gradle), à n'importe quelle profondeur (modules) ;</li>
+     *   <li>un répertoire {@code __tests__} (Jest) ;</li>
+     *   <li>un répertoire {@code test} ou {@code tests} : à la racine du projet pour toute
+     *       langue (agencement Ant, pytest, Cargo), et à toute profondeur pour les langues hors JVM
+     *       (monorepo {@code packages/x/test}) ; pour une source JVM, un répertoire {@code test}
+     *       plus profond est un PAQUET ({@code com/acme/test/Support.java}), pas un répertoire de test ;</li>
+     *   <li>un fichier {@code *.test.*} ou {@code *.spec.*}.</li>
+     * </ul>
+     * Tout ce qui se trouve sous {@code src/main} est de la production. Les noms comme {@code latest},
+     * {@code contest} ou {@code testing} ne sont jamais des répertoires de test.
+     */
     static boolean isTestPath(String fileId) {
         if (fileId == null || fileId.isBlank()) {
             return false;
         }
-        String normalized = "/" + fileId.replace('\\', '/').toLowerCase(Locale.ROOT);
-        return normalized.contains("/src/test/")
-                || normalized.contains("/test/")
-                || normalized.contains("/tests/")
-                || normalized.contains("/__tests__/")
-                || normalized.matches(".*\\.(?:test|spec)\\.[^/]+$");
+        String normalized = fileId.replace('\\', '/').toLowerCase(Locale.ROOT);
+        String[] segments = normalized.split("/");
+        int last = segments.length - 1;
+        String fileName = segments[last];
+        if (fileName.matches(".*\\.(?:test|spec)\\.[^/]+$")) {
+            return true;
+        }
+        boolean jvmSource = JVM_SOURCE_EXTENSIONS.stream().anyMatch(fileName::endsWith);
+        boolean firstDirectory = true;
+        for (int index = 0; index < last; index++) {
+            String segment = segments[index];
+            if (segment.isEmpty() || ".".equals(segment)) {
+                continue;
+            }
+            if ("src".equals(segment) && index + 1 < last) {
+                String sourceSet = segments[index + 1];
+                if ("main".equals(sourceSet)) {
+                    return false;
+                }
+                if (TEST_SOURCE_SETS.contains(sourceSet)) {
+                    return true;
+                }
+            }
+            if ("__tests__".equals(segment)) {
+                return true;
+            }
+            if (TEST_ROOT_DIRECTORIES.contains(segment) && (firstDirectory || !jvmSource)) {
+                return true;
+            }
+            firstDirectory = false;
+        }
+        return false;
     }
 
     private static Candidate candidate(
