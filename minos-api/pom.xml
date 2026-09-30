@@ -36,5 +36,13 @@
             <version>${project.version}</version>
             <scope>runtime</scope>
         </dependency>
+        <dependency>
+            <!-- Q10: test fixture of the composition root (a storage provider that counts closes), as in minos-cli and minos-mcp -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-bootstrap</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
