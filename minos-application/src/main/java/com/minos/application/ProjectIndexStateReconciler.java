@@ -105,12 +105,8 @@ public final class ProjectIndexStateReconciler {
             saveProjectState(repair, projectId);
             repaired = true;
 
-            Optional<ProjectIndexState> verifiedState = loadProjectState(projectId);
-            Optional<CodeKnowledgeSnapshot> verifiedActive = loadActive(projectId);
-            if (sameSnapshot(activeAfter, verifiedActive)
-                    && referencesSnapshot(verifiedState, authoritativeSnapshotId)) {
-                return new Reconciliation(verifiedActive, verifiedState, true);
-            }
+            Optional<Reconciliation> verified = verifiedRepair(projectId, activeAfter, authoritativeSnapshotId);
+            if (verified.isPresent()) return verified.get();
         }
 
         throw new IOException("active snapshot or project metadata changed repeatedly while reconciling project "
@@ -124,6 +120,18 @@ public final class ProjectIndexStateReconciler {
                     "project index state references an active snapshot but the snapshot store has none for project "
                             + projectId);
         }
+    }
+
+    /** The repair, once re-read and still matching the authoritative snapshot; empty when either moved meanwhile. */
+    private Optional<Reconciliation> verifiedRepair(
+            UUID projectId, Optional<CodeKnowledgeSnapshot> expectedActive, String authoritativeSnapshotId)
+            throws IOException {
+        Optional<ProjectIndexState> verifiedState = loadProjectState(projectId);
+        Optional<CodeKnowledgeSnapshot> verifiedActive = loadActive(projectId);
+        if (sameSnapshot(expectedActive, verifiedActive) && referencesSnapshot(verifiedState, authoritativeSnapshotId)) {
+            return Optional.of(new Reconciliation(verifiedActive, verifiedState, true));
+        }
+        return Optional.empty();
     }
 
     private Reconciliation reconcileUnderLease(UUID projectId) throws IOException {
