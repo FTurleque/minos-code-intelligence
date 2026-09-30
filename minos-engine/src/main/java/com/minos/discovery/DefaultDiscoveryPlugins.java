@@ -14,6 +14,7 @@ import com.minos.io.FileTreeOperations;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
@@ -203,7 +204,17 @@ public final class DefaultDiscoveryPlugins {
         Path relative = root.relativize(candidate);
         try (var ignored = ConfinedFileOpener.openConfinedRegularFile(root, relative)) {
             return !ignorePolicy.isIgnored(relative, false);
+        } catch (NoSuchFileException absent) {
+            // The normal case: most markers are absent from most directories. Silent, by design.
+            return false;
         } catch (IOException | SecurityException exception) {
+            // Discovery also probes directory entries and links, which the confined opener refuses: that is not
+            // a failure. Only a regular file that exists and cannot be opened (denied, I/O error, confinement
+            // refusal on its path) is an omission worth journaling. Either way the file counts as absent, so
+            // discovery never fails on it: the flow is unchanged, only the silence goes.
+            if (Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) {
+                ignorePolicy.reportUnreadable(relative, exception);
+            }
             return false;
         }
     }
