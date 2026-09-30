@@ -57,10 +57,8 @@ class JsonOrderGuardTest {
     private static final Map<String, String> MAP_COPY_EXCEPTIONS = new LinkedHashMap<>();
 
     static {
-        MAP_COPY_EXCEPTIONS.put("minos-cli/src/main/java/com/minos/cli/MinosCli.java",
-                "table de sous-commandes consultée par clé, jamais rendue");
-        MAP_COPY_EXCEPTIONS.put("minos-cli/src/main/java/com/minos/cli/IdeIntelligenceCommand.java",
-                "Options.values : table de recherche des options de la ligne de commande, jamais rendue");
+        // Aucune exception : MinosCli (table de routes en LinkedHashMap) et IdeIntelligenceCommand (analyseur commun
+        // CliOptions) n'utilisent plus Map.copyOf depuis le lot 2 (Q11) ; toute entrée ajoutée ici est une décision de revue.
     }
 
     @Test

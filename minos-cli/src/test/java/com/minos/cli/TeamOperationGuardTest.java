@@ -61,6 +61,22 @@ class TeamOperationGuardTest {
             Map.entry("--audit-days", "1"),
             Map.entry("--archived-workspace-days", "1"));
 
+    /**
+     * A malformed value per option whose parser checks a FORMAT (a UUID, a role): the expected usage message.
+     * Every other declared text option must be listed in {@link #FREE_TEXT}, so that a new option gets a
+     * conscious classification here.
+     */
+    private static final Map<String, String[]> MALFORMED = Map.of(
+            "--tenant", new String[]{"not-a-uuid", "tenant must be a UUID"},
+            "--workspace", new String[]{"not-a-uuid", "workspace must be a UUID"},
+            "--project", new String[]{"not-a-uuid", "project must be a UUID"},
+            "--role", new String[]{"bogus", "unsupported hosted role: bogus"});
+
+    /** Text options whose value is free (a name, an identifier): any non-blank value is syntactically valid. */
+    private static final java.util.Set<String> FREE_TEXT = java.util.Set.of(
+            "--name", "--key-id", "--owner", "--owner-name", "--snapshot", "--principal", "--display-name",
+            "--request-id");
+
     private static final Pattern OPERATION_LINE = Pattern.compile("^  ([a-z][a-z-]*)(?:\\s|$)");
     private static final Pattern BOUND = Pattern.compile("(--[a-z-]+) <(\\d+)\\.\\.(\\d+)>");
 
@@ -209,6 +225,22 @@ class TeamOperationGuardTest {
                 } else {
                     assertTrue(!store.calls.isEmpty() || tokenReads.get() > 0,
                             context + ": neither refused nor executed");
+                }
+            }
+        }
+    }
+
+    @Test
+    void everyTextOptionIsEitherFreeTextOrHasAFormatThatIsCheckedBeforeTheService() throws IOException {
+        for (String operation : TeamCommand.operations()) {
+            for (CliOptions.Declared option : TeamCommand.declaredOptions(operation)) {
+                if (option.kind() != CliOptions.Kind.TEXT) continue;
+                String name = option.name();
+                String[] malformed = MALFORMED.get(name);
+                assertTrue(malformed != null || FREE_TEXT.contains(name), operation + " declares the text option "
+                        + name + ": classify it in MALFORMED (a format is checked) or FREE_TEXT");
+                if (malformed != null) {
+                    assertUsageErrorBeforeTheService(with(operation, name, malformed[0]), malformed[1]);
                 }
             }
         }
