@@ -1,4 +1,4 @@
-# Suivi — chantier Fiabilité opérationnelle (lot 1 : R4, R5, R7 — intégrité de la reprise ; lot 2 : P1, Q3, Q4 — un seul régime de verrous, § 8 ; lot 3 : R2, R3 — propriété des cgroups, § 9 ; lot 4 : Q5, R6 — interruption et confinement, § 10)
+# Suivi — chantier Fiabilité opérationnelle (lot 1 : R4, R5, R7 — intégrité de la reprise ; lot 2 : P1, Q3, Q4 — un seul régime de verrous, § 8 ; lot 3 : R2, R3 — propriété des cgroups, § 9 ; lot 4 : Q5, R6 — interruption et confinement, § 10 ; lot 5 : Q8, Q9 — tolérance aux données abîmées, § 11)
 
 > Branche : `fiab/r4-r5-r7-reprise` (depuis `develop`, base `017e339d`, les branches `code/*` des PR #305 à #308 y sont déjà fusionnées), worktree `minos-wt/fiab-lot1`.
 > Constats : **R4** (promotion reprise sans égalité des cibles), **R5** (rétention d'un run reprenable, durée de vie du marqueur) et **R7** (réparation « snapshot stable » sans `resumableRunId` ni `supersede`), `AUDIT-2026-09.md` § R4, R5, R7 ; conception de référence : [ADR 0039](../adr/0039-reprise-indexation-apres-interruption.md).
@@ -14,7 +14,7 @@
 | 2 — P1, Q3, Q4 | Un seul régime de verrous ; lecture d'état sans bail exclusif (§ 8) | en cours (branche `fiab/p1-q3-q4-verrous`, depuis la branche du lot 1 `bcdadd23`) | § 8.8 |
 | 3 — R2, R3 | Propriété des cgroups : R2 et R3 déjà fermés sur `develop` (§ 9.1) ; le lot referme les trous restants de la décision « ce cgroup appartient à un MINOS mort » (§ 9.4) | livré, en attente du verdict final de `verif-fiab` (branche `fiab/r2-r3-cgroups`, depuis la branche du lot 2, fusion `8670f2e2`) | § 9.7 |
 | 4 — Q5, R6 | Interruption de bout en bout (le drapeau était rétabli avant d'écrire l'état), confinement du chemin d'artefact (PLAUSIBLE reproduit puis corrigé) | livré, `VERDICT-FINAL: ok` de `verif-fiab` (branche `fiab/q5-r6-interruption`, depuis la branche du lot 3 `cab6f74e`) | § 10.6 |
-| 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) | à faire | — |
+| 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) : Q8 ouvert à la base ; Q9 PLAUSIBLE, à prouver avant toute correction (§ 11) | en cours (branche `fiab/q8-q9-tolerance`, depuis la branche du lot 4 `40100dbf`) | § 11.6 |
 
 ## 2. Inventaire daté (base `017e339d`, 30 septembre 2026)
 
@@ -711,3 +711,64 @@ Gates rejoués après chaque commit : `check-module-boundaries.py` (`modules=14`
 ### 10.9 Constats de verif-fiab (lot 4)
 
 V-L4-01 à V-L4-05 et leur résolution : § 6, « Lot 4 ». Aucun constat ouvert à la fin du lot : `VERDICT-FINAL: ok` de `verif-fiab` sur `8bec5c6e` (`clean verify` rejoué de son côté : 1 773 tests, 0 échec, 9 min 57 ; rejeux ×50 indépendants sur les cinq classes du lot). Trois remarques non bloquantes, consignées : R-L4-A (littéraux dupliqués dans `IndexingArtifactConfinementTest`, factorisés en constantes), R-L4-B et R-L4-C (§ 7).
+
+## 11. Lot 5 — Q8, Q9 : une entrée abîmée dégrade cette entrée, pas l'inventaire
+
+> Branche `fiab/q8-q9-tolerance`, créée depuis la branche du lot 4 (`fiab/q5-r6-interruption`, `40100dbf`), worktree `minos-wt/fiab-lot5`. Constats : **Q8** (un seul fichier corrompu ou un répertoire illisible fait échouer tout `listProjects`) et **Q9** (PLAUSIBLE : une clé sémantique en double fait échouer toute l'indexation sémantique). Règles du lot : test rouge avant correctif ; la tolérance ne devient jamais du silence (chaque entrée dégradée est **comptée et affichée**, sans chemin absolu) ; Q9 se prouve atteignable par le chemin de production **avant** toute correction.
+
+### 11.1 Cibles relocalisées (base `40100dbf`)
+
+| Cible de l'audit | Emplacement réel |
+|---|---|
+| registre de projets, lecture d'une entrée | `minos-storage-local/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java` : `listProjects` (boucle sur `projects/*.properties`), `readProject` (`UUID.fromString`, `Instant.parse` deux fois, racines, `required`), `idFromPropertiesFile` ; enveloppé par `InterProcessLocalProjectRegistry` (même contrat, sous bail de fichier) |
+| port | `minos-engine/src/main/java/com/minos/registry/ProjectRegistry.java` (`listProjects() throws IOException`) |
+| historique (`cli-index-history/<projectId>.properties`) | `minos-application/src/main/java/com/minos/application/ProjectInspectionService.java` : `readHistory` (`BoundedProperties.load`, `required`, `Instant.parse`), appelée par `view` |
+| `visitFileFailed` (répertoire illisible) | `minos-engine/src/main/java/com/minos/discovery/ProjectDiscoveryService.java` (l. 151 : `throw exception`), appelée par `ProjectInspectionService.view` pour la racine de chaque projet |
+| `listProjects` de la commande | `minos-cli/.../ProjectCommand.runList` → `ProjectOperations.listProjects` → `LocalProjectOperations.listProjects` → `ProjectInspectionService.listProjects` (une boucle `view(project)` sans garde) ; aussi `LocalMinosApi.listProjects` (API Java) |
+| fabrique sémantique | `minos-application/src/main/java/com/minos/application/semantic/SemanticDocumentFactory.java` (l. 89-95, `IllegalStateException("duplicate semantic stable key")`), appelée par `SemanticIndexService` |
+
+### 11.2 Q8 : ce qui reste vrai à la base (lu dans les sources)
+
+Aucun commit postérieur à l'audit ne touche ces chemins. **Q8 est ouvert.** Les modes de défaillance d'un seul fichier abîmé, tous propagés hors de la boucle :
+
+- un `createdAt`/`updatedAt` invalide : `DateTimeParseException` (non contrôlée) ;
+- un `id` de contenu qui n'est pas un UUID : `IllegalArgumentException` ; un `id` de contenu différent du nom de fichier : `IOException` (« identity mismatch ») ;
+- une propriété requise absente ou vide : `IllegalStateException` ; les deux racines à la fois, une racine portable sans mapping, un fichier vide, tronqué, binaire, trop gros : `IOException` (`BoundedProperties`) ;
+- un nom de fichier `*.properties` qui n'est pas un UUID : `IOException` ;
+- un répertoire illisible sous la racine d'un projet (`visitFileFailed`) : `IOException`, qui fait échouer `ProjectInspectionService.listProjects` **pour tous les projets** ;
+- un historique dont `completedAt` est invalide : `DateTimeParseException`, même effet.
+
+Ce que la lecture découvre en plus : `propertyFiles` écarte **en silence** toute entrée `*.properties` qui n'est pas un fichier régulier (répertoire, lien pendant), donc un projet dont l'entrée a été remplacée disparaît sans trace.
+
+### 11.3 Comptes AVANT : qui lit ou valide une entrée de registre ou d'historique
+
+| # | Site | Tolérance |
+|---|---|---|
+| 1 | `LocalProjectRegistry.readProject` (entrée de projet) | aucune |
+| 2 | `LocalProjectRegistry.readWorkspaceMetadata` (entrée de workspace) | aucune |
+| 3 | `LocalProjectRegistry.idFromPropertiesFile` (nom de fichier) | aucune |
+| 4 | `ProjectInspectionService.readHistory` (historique) | aucune |
+| 5 | `PostgresProjectRegistry.readProject` (ligne SQL typée : `uuid`, `timestamptz`) | sans objet : aucune corruption de texte possible |
+
+**AVANT : 5 sites, 0 chemin tolérant.** L'objectif est **un** vocabulaire de dégradation (`DegradedEntry`) produit à deux endroits qui ne peuvent pas être confondus (une entrée de registre illisible ; un projet dont la vue ne peut être assemblée), pas une sixième variante de lecture : la lecture d'une entrée reste dans `readProject`.
+
+### 11.4 Q9 : ce que dit la lecture avant tout test
+
+Une clé en double n'existe que si deux symboles non externes d'un même instantané portent le même `symbolKey` (la clé d'un document SYMBOL est `symbol:<symbolKey>` ; celle d'un CHUNK `chunk:<symbolKey>:<début>:<fin>` ; celle d'un FILE `file:<fileId>`, une par entrée d'une table à clé unique). Or : (1) le **seul** producteur de symboles en production est `ScipSymbolNormalizer`, qui dérive `id = "sym:" + sha256(projectId + symbolKey)` ; deux symboles de même `symbolKey` ont donc le **même `id`** ; (2) `CodeKnowledgeSnapshot` refuse deux symboles de même `id` (`requireUniqueIds`), `FileSymbolSnapshotStore.publish` aussi (`rejectDuplicateIds`), et la mise en snapshot d'un run fusionne les symboles par `id` (`ScipProjectSnapshotLifecycle.putUnique`) ; un même symbole défini deux fois dans un index est dédupliqué par `id` à l'import (`ScipSymbolSnapshotImporter.CapturingStore`). Le scénario demandé (« deux documents de même clé ») demande donc un instantané que la production ne peut pas construire. **À prouver par des tests** : chaîne normaliseur → import → instantané → fabrique, sans appel direct de la fabrique avec des symboles fabriqués à la main.
+
+### 11.5 Chiffres de référence des gates (base `40100dbf`, avant le premier commit de code)
+
+| Gate | Résultat |
+|---|---|
+| `check-module-boundaries.py` | `modules=14, sources=505, packages=45` |
+| `check-current-docs.py`, `product-facts.py --check` | SUCCESS |
+| `check-milestone-artifact-references.py` | `scripts checked=95` |
+| `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py` | SUCCESS |
+| `check-jacoco.py` | référence : fin du lot 4 (`66fd1d17`, code identique), 26 portées PASS, seule rouge `m24-polyglot-provider-platform` (préexistante, Windows) ; `semantic-hybrid-retrieval` line 0,910 / branch 0,722 (la seule portée qui nomme une classe de ce lot, `SemanticDocumentFactory`) |
+| `./mvnw clean verify` (fin du lot 4) | BUILD SUCCESS, 1 773 tests, 0 échec, 53 ignorés |
+
+### 11.6 Journal par commit (lot 5)
+
+| Commit | Contenu | Gates |
+|---|---|---|
+| (ce commit) | docs : état réel de Q8 et Q9 à la base, inventaire, comptes AVANT | 505 / 45 / SUCCESS / SUCCESS / 95 |
