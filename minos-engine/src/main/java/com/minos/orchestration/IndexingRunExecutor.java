@@ -143,7 +143,7 @@ final class IndexingRunExecutor {
         // promoted directly, without relaunching providers or staging. Otherwise -- interrupted in
         // STAGING (no staged id yet), or the plan no longer matches the snapshot -- everything valid is
         // reused and the snapshot is prepared again: it is never promoted as it stands.
-        boolean stagedSnapshotKnown = run.phase() == Phase.PROMOTION && run.stagedSnapshotId().isPresent();
+        boolean stagedSnapshotKnown = resume.stagedSnapshotKnown();
         boolean promoteOnly = stagedSnapshotKnown && resume.stagedSnapshotCoversThePlan();
         try {
             holdRunDirectory(context);

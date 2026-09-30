@@ -85,6 +85,11 @@ final class IndexingResumePlanner {
                 if (reused.isEmpty()) throw new IllegalArgumentException("a resume reuses at least one target");
             }
 
+            /** Vrai quand la tentative interrompue avait déjà préparé un snapshot, en phase de promotion. */
+            boolean stagedSnapshotKnown() {
+                return run.phase() == IndexingRun.Phase.PROMOTION && run.stagedSnapshotId().isPresent();
+            }
+
             /**
              * Vrai seulement quand la reprise couvre <em>exactement</em> ce que le run interrompu avait mis
              * en snapshot : aucune cible à réexécuter, et l'ensemble des clés de cible des exécutions du

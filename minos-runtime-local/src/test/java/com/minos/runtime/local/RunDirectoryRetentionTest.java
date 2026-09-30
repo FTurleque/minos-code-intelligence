@@ -230,6 +230,8 @@ class RunDirectoryRetentionTest {
         assertTrue(Files.exists(marked), "a marked run is kept for the longer of the maximum age and the resume TTL");
         assertEquals(Duration.ofHours(24), policy.lifetime(true));
         assertEquals(Duration.ofHours(2), policy.lifetime(false));
+        assertEquals(Duration.ofHours(24), RunDirectoryRetention.DEFAULT.resumeTtl(),
+                "aligned by hand on the resume planner's TTL (ADR 0039, deviation f)");
     }
 
     @Test
