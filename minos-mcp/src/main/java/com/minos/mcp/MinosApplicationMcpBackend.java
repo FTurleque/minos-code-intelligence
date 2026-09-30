@@ -19,6 +19,7 @@ import com.minos.output.ArchitectureResultRenderer;
 import com.minos.output.CodeIntelligenceResultRenderer;
 import com.minos.output.CodeSearchRenderer;
 import com.minos.output.DeterministicJson;
+import com.minos.output.ProjectJson;
 import com.minos.output.ImpactResultRenderer;
 import com.minos.output.HostedControlPlaneRenderer;
 import com.minos.output.RuntimeIntelligenceRenderer;
@@ -36,7 +37,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -85,19 +85,7 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     @Override
     public String projectStructure(String project) throws Exception {
         ProjectInspectionService.ProjectView view = projects.inspectProject(project);
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", view.id());
-        map.put("name", view.name());
-        map.put("rootPath", view.rootPath());
-        map.put("rootAvailable", view.rootAvailable());
-        map.put("languages", view.languages());
-        map.put("buildSystems", view.buildSystems());
-        map.put("moduleCount", view.moduleCount());
-        map.put("indexState", view.indexState());
-        map.put("activeSnapshotId", view.activeSnapshotId());
-        map.put("lastSuccessfulIndexAt", view.lastSuccessfulIndexAt());
-        map.put("providerId", view.providerId());
-        map.put("providerVersion", view.providerVersion());
+        Map<String, Object> map = ProjectJson.project(view);
         map.put("providerProfiles", providerProfiles());
         return DeterministicJson.render(map);
     }
@@ -105,23 +93,9 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     @Override
     public String indexStatus(String project) throws Exception {
         ProjectInspectionService.ProjectView view = projects.inspectProject(project);
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("projectId", view.id());
-        map.put("projectName", view.name());
-        map.put("state", view.indexState());
-        map.put("activeSnapshotId", view.activeSnapshotId());
-        map.put("lastSuccessfulIndexAt", view.lastSuccessfulIndexAt());
-        map.put("providerId", view.providerId());
-        map.put("providerVersion", view.providerVersion());
         // ADR 0039 §6: the run offered for resume, without any artifact location.
-        Optional<ResumableRunSummary> resumable = ResumableRunSummary.of(
-                application.indexStateStore(), UUID.fromString(view.id()));
-        Instant now = Instant.now();
-        map.put("resumableRunId", resumable.map(summary -> summary.runId().toString()).orElse(null));
-        map.put("resumableRunPhase", resumable.map(summary -> summary.phase().name()).orElse(null));
-        map.put("resumableCheckpointAgeSeconds",
-                resumable.map(summary -> summary.checkpointAgeSeconds(now)).orElse(null));
-        map.put("resumableTargets", resumable.map(ResumableRunSummary::resumableTargets).orElse(null));
+        Map<String, Object> map = ProjectJson.indexStatus(
+                view, ResumableRunSummary.of(application.indexStateStore(), UUID.fromString(view.id())), Instant.now());
         map.put("providerProfiles", providerProfiles());
         return DeterministicJson.render(map);
     }

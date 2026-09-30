@@ -192,20 +192,7 @@ public final class IndexCommand {
             SymbolOutputFormat format,
             String diagnostic
     ) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("projectId", result.projectId());
-        map.put("snapshotId", result.snapshotId());
-        map.put("providerId", result.providerId());
-        map.put("providerVersion", result.providerVersion());
-        map.put("normalizedSymbolCount", result.normalizedSymbolCount());
-        map.put("occurrenceCount", result.occurrenceCount());
-        map.put("relationshipCount", result.relationshipCount());
-        map.put("relatedTestRelationshipCount", result.relatedTestRelationshipCount());
-        map.put("unresolvedOccurrenceCount", result.unresolvedOccurrenceCount());
-        map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
-        map.put("completedAt", result.completedAt());
-        map.put("commitStatus", result.commitStatus().name());
-        map.put("diagnostic", diagnostic);
+        Map<String, Object> map = CliCommandSupport.importResultMap(result, diagnostic);
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }

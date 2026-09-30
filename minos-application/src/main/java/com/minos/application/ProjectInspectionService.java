@@ -159,7 +159,8 @@ public final class ProjectInspectionService {
 
     public record ProjectView(String id, String name, String rootPath, boolean rootAvailable, List<String> languages,
                               List<String> buildSystems, int moduleCount, String indexState, String activeSnapshotId,
-                              String lastSuccessfulIndexAt, String providerId, String providerVersion) {
+                              String lastSuccessfulIndexAt, String providerId, String providerVersion)
+            implements ProjectSummary {
         public ProjectView {
             requireText(id, "id"); requireText(name, "name"); requireText(rootPath, "rootPath");
             languages = List.copyOf(Objects.requireNonNull(languages, "languages"));

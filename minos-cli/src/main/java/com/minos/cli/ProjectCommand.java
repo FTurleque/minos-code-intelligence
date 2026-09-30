@@ -2,6 +2,7 @@ package com.minos.cli;
 
 import com.minos.application.ProjectOperations;
 import com.minos.orchestration.ResumableRunSummary;
+import com.minos.output.ProjectJson;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
@@ -124,7 +125,7 @@ public final class ProjectCommand {
         if (format == SymbolOutputFormat.JSON) {
             Map<String, Object> root = new LinkedHashMap<>();
             root.put("count", projects.size());
-            root.put("projects", projects.stream().map(ProjectCommand::projectMap).toList());
+            root.put("projects", projects.stream().map(ProjectJson::project).toList());
             return CliJson.render(root);
         }
         if (projects.isEmpty()) {
@@ -139,7 +140,7 @@ public final class ProjectCommand {
 
     private static String renderProject(ProjectOperations.ProjectView project, SymbolOutputFormat format) {
         if (format == SymbolOutputFormat.JSON) {
-            return CliJson.render(projectMap(project));
+            return CliJson.render(ProjectJson.project(project));
         }
         return String.join("\n",
                 "id: " + project.id(),
@@ -160,19 +161,7 @@ public final class ProjectCommand {
     private String renderIndexStatus(ProjectOperations.ProjectView project, SymbolOutputFormat format) {
         Optional<ResumableRunSummary> resumable = resumeStatus.resumableRun(project.id());
         Instant now = Instant.now();
-        Map<String, Object> status = new LinkedHashMap<>();
-        status.put("projectId", project.id());
-        status.put("projectName", project.name());
-        status.put("state", project.indexState());
-        status.put("activeSnapshotId", project.activeSnapshotId());
-        status.put("lastSuccessfulIndexAt", project.lastSuccessfulIndexAt());
-        status.put("providerId", project.providerId());
-        status.put("providerVersion", project.providerVersion());
-        status.put("resumableRunId", resumable.map(summary -> summary.runId().toString()).orElse(null));
-        status.put("resumableRunPhase", resumable.map(summary -> summary.phase().name()).orElse(null));
-        status.put("resumableCheckpointAgeSeconds",
-                resumable.map(summary -> summary.checkpointAgeSeconds(now)).orElse(null));
-        status.put("resumableTargets", resumable.map(ResumableRunSummary::resumableTargets).orElse(null));
+        Map<String, Object> status = ProjectJson.indexStatus(project, resumable, now);
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(status);
         }
@@ -192,23 +181,6 @@ public final class ProjectCommand {
                         .map(summary -> summary.resumableTargets() + "/" + summary.completedExecutions())
                         .orElse("none")
         );
-    }
-
-    private static Map<String, Object> projectMap(ProjectOperations.ProjectView project) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", project.id());
-        map.put("name", project.name());
-        map.put("rootPath", project.rootPath());
-        map.put("rootAvailable", project.rootAvailable());
-        map.put("languages", project.languages());
-        map.put("buildSystems", project.buildSystems());
-        map.put("moduleCount", project.moduleCount());
-        map.put("indexState", project.indexState());
-        map.put("activeSnapshotId", project.activeSnapshotId());
-        map.put("lastSuccessfulIndexAt", project.lastSuccessfulIndexAt());
-        map.put("providerId", project.providerId());
-        map.put("providerVersion", project.providerVersion());
-        return map;
     }
 
     private static int usageError(String message, Appendable error) throws IOException {

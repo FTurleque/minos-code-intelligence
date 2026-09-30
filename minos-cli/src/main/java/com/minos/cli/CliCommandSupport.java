@@ -1,11 +1,14 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectOperations;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.domain.SymbolKind;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -30,6 +33,28 @@ final class CliCommandSupport {
     private static final String REDACTED_DIAGNOSTIC = "internal diagnostic redacted";
 
     private CliCommandSupport() {
+    }
+
+    /**
+     * The JSON object of an import outcome, shared by {@code import-scip} and {@code index}: the keys and their
+     * order are decided here once. {@code diagnostic} is the already redacted diagnostic.
+     */
+    static Map<String, Object> importResultMap(ProjectOperations.IndexImportResult result, String diagnostic) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("projectId", result.projectId());
+        map.put("snapshotId", result.snapshotId());
+        map.put("providerId", result.providerId());
+        map.put("providerVersion", result.providerVersion());
+        map.put("normalizedSymbolCount", result.normalizedSymbolCount());
+        map.put("occurrenceCount", result.occurrenceCount());
+        map.put("relationshipCount", result.relationshipCount());
+        map.put("relatedTestRelationshipCount", result.relatedTestRelationshipCount());
+        map.put("unresolvedOccurrenceCount", result.unresolvedOccurrenceCount());
+        map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
+        map.put("completedAt", result.completedAt());
+        map.put("commitStatus", result.commitStatus().name());
+        map.put("diagnostic", diagnostic);
+        return map;
     }
 
     @FunctionalInterface

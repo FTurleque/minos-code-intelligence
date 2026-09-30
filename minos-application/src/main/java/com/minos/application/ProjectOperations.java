@@ -38,7 +38,7 @@ public interface ProjectOperations {
             String lastSuccessfulIndexAt,
             String providerId,
             String providerVersion
-    ) {
+    ) implements ProjectSummary {
         public ProjectView {
             requireText(id, "id");
             requireText(name, "name");
