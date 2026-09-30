@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -110,6 +111,115 @@ class IndexingInterruptionTest {
         assertEquals(IndexingRun.Phase.STAGING, run.phase());
         assertOfferedForResume(fixture, run, 3);
         assertFalse(fixture.markers.unmarked.contains(run.id()), "the hold is kept: the run is still resumable");
+    }
+
+    @Test
+    void aSecondInterruptionWhileTheInterruptedStateIsBeingWrittenStillReachesTheStore(@TempDir Path temp)
+            throws Exception {
+        // V-L4-02: a service that is stopping can interrupt the thread twice. The second interruption lands
+        // on the write of the INTERRUPTED run itself; the write must be made again, flag cleared, and what
+        // the caller is told must be what the store holds.
+        Fixture fixture = new Fixture(temp);
+        FlagSensitiveStore store = new FlagSensitiveStore(fixture.store);
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(
+                List.of(interruptedAfterTwoTargets(fixture)), fixture.stager, fixture.promoter, store,
+                fixture.markers, ResumableArtifactPolicy.DEFAULT, Clock.fixed(T0, ZoneOffset.UTC));
+
+        IndexingRun run = executeReplayingTheFlag(fixture, lifecycle);
+
+        assertEquals(IndexingRun.Status.INTERRUPTED, run.status(), String.valueOf(run.message()));
+        assertTrue(store.secondInterruptionDelivered, "the test delivered its second interruption");
+        IndexingRun held = fixture.store.findRun(run.id()).orElseThrow();
+        assertEquals(IndexingRun.Status.INTERRUPTED, held.status(), "the store holds what the caller was told");
+        assertOfferedForResume(fixture, held, 2);
+    }
+
+    @Test
+    void aSecondInterruptionWhileTheMarkerIsBeingHeldStillOffersTheRunForResume(@TempDir Path temp)
+            throws Exception {
+        Fixture fixture = new Fixture(temp);
+        List<UUID> held = new ArrayList<>();
+        ResumableRunMarkers interruptedMarkers = new ResumableRunMarkers() {
+            private int calls;
+
+            @Override
+            public void mark(UUID runId) throws IOException {
+                // The first call holds the directory when the run starts; the second is the interruption's.
+                if (++calls == 2) Thread.currentThread().interrupt();
+                if (Thread.currentThread().isInterrupted()) throw new IOException("marker", new ClosedByInterruptException());
+                held.add(runId);
+            }
+
+            @Override public void unmark(UUID runId) { fixture.markers.unmark(runId); }
+
+            @Override public Optional<Path> runDirectory(UUID runId) { return fixture.markers.runDirectory(runId); }
+        };
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(
+                List.of(interruptedAfterTwoTargets(fixture)), fixture.stager, fixture.promoter, fixture.store,
+                interruptedMarkers, ResumableArtifactPolicy.DEFAULT, Clock.fixed(T0, ZoneOffset.UTC));
+
+        IndexingRun run = executeReplayingTheFlag(fixture, lifecycle);
+
+        assertEquals(IndexingRun.Status.INTERRUPTED, run.status(), String.valueOf(run.message()));
+        assertEquals(List.of(run.id(), run.id()), held, "the run directory is held again once the flag is cleared");
+        assertOfferedForResume(fixture, run, 2);
+    }
+
+    /** Deux cibles se terminent, la troisième est interrompue comme le ferait l'arrêt du service. */
+    private static IndexerExecutor interruptedAfterTwoTargets(Fixture fixture) {
+        return new Fixture.Executor(fixture, 99) {
+            @Override
+            public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                if (executed.size() >= 2) throw new InterruptedException("service is stopping");
+                return super.execute(request);
+            }
+        };
+    }
+
+    /**
+     * Un magasin qui se comporte comme un canal de fichier : avec le drapeau d'interruption levé, une écriture
+     * échoue en {@code ClosedByInterruptException}. La première écriture d'un run INTERRUPTED reçoit, juste
+     * avant, la seconde interruption.
+     */
+    private static final class FlagSensitiveStore implements IndexStateStore {
+        private final IndexStateStore delegate;
+        private boolean secondInterruptionDelivered;
+
+        private FlagSensitiveStore(IndexStateStore delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override public Optional<ProjectIndexState> findProjectState(UUID projectId) {
+            return delegate.findProjectState(projectId);
+        }
+
+        @Override public Optional<IndexingRun> findRun(UUID runId) { return delegate.findRun(runId); }
+
+        @Override public List<IndexingRun> listRuns(UUID projectId) { return delegate.listRuns(projectId); }
+
+        @Override public ProjectLease acquireProjectLease(UUID projectId) {
+            return delegate.acquireProjectLease(projectId);
+        }
+
+        @Override public void saveProjectState(ProjectIndexState state) {
+            failWhenInterrupted();
+            delegate.saveProjectState(state);
+        }
+
+        @Override public void saveRun(IndexingRun run) {
+            if (run.status() == IndexingRun.Status.INTERRUPTED && !secondInterruptionDelivered) {
+                secondInterruptionDelivered = true;
+                Thread.currentThread().interrupt();
+            }
+            failWhenInterrupted();
+            delegate.saveRun(run);
+        }
+
+        private static void failWhenInterrupted() {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new UncheckedIOException("write interrupted", new ClosedByInterruptException());
+            }
+        }
     }
 
     /** Exécute, puis constate que le drapeau d'interruption a été rétabli (et le rend au thread de test). */
