@@ -1,5 +1,6 @@
 package com.minos.storage.local.registry;
 
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
@@ -84,7 +85,7 @@ class LocalProjectRegistryInventoryTest {
         String text = entry.entry() + " " + entry.reason();
         assertFalse(text.contains(temp.toString()), text);
         assertFalse(text.contains(storage.toString()), text);
-        assertFalse(text.contains("\\") || text.contains("/"), text);
+        assertFalse(PublicErrorMessages.looksSensitive(text), text);
     }
 
     @Test
@@ -240,6 +241,21 @@ class LocalProjectRegistryInventoryTest {
         Files.writeString(projects, "not a directory");
 
         assertThrows(IOException.class, registry::inventory);
+    }
+
+    @Test
+    void aPendingInterruptionDegradesNoEntryAndIsLeftPendingForTheCaller() throws IOException {
+        registerThreeProjects();
+        Thread.currentThread().interrupt();
+        try {
+            ProjectRegistry.Inventory inventory = registry.inventory();
+
+            assertEquals(PROJECT_COUNT, inventory.projects().size());
+            assertTrue(inventory.unreadable().isEmpty(), "an interruption is not a damaged entry");
+            assertTrue(Thread.currentThread().isInterrupted(), "the interruption is still pending for the caller");
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test

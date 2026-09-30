@@ -105,6 +105,11 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
     }
 
     @Override
+    public Inventory inventory() throws IOException {
+        return withLock(delegate::inventory);
+    }
+
+    @Override
     public List<RegisteredWorkspace> listWorkspaces() throws IOException {
         return withLock(delegate::listWorkspaces);
     }
