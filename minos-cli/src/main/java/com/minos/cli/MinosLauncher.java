@@ -5,6 +5,7 @@ import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.runtime.MinosVersion;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
@@ -19,21 +20,51 @@ public final class MinosLauncher {
     private MinosLauncher() {
     }
 
+    /** Ouvre l'application d'un MINOS_HOME ; en production {@link MinosApplication#open}. */
+    @FunctionalInterface
+    interface ApplicationOpener {
+        MinosApplication open(Path home) throws IOException;
+    }
+
+    /** Exécute une ligne de commande sur une application ouverte ; en production {@link #run}. */
+    @FunctionalInterface
+    interface CommandRunner {
+        int run(MinosApplication application, String[] arguments, Appendable output, Appendable error)
+                throws IOException;
+    }
+
     public static void main(String[] arguments) {
+        System.exit(launch(arguments, System.getenv(), System.getProperties(), System.out, System.err,
+                MinosApplication::open, MinosLauncher::run));
+    }
+
+    /**
+     * Le processus, sans {@code System.exit} : rend le code de sortie. L'application ouverte pour une commande
+     * appartient à ce lanceur, qui la ferme sur tous les chemins de sortie (succès, code d'erreur, exception).
+     */
+    static int launch(
+            String[] arguments,
+            Map<String, String> environment,
+            Properties properties,
+            PrintStream out,
+            PrintStream err,
+            ApplicationOpener opener,
+            CommandRunner runner
+    ) {
         int exitCode;
         try {
             if (arguments.length == 1 && "--version".equals(arguments[0])) {
-                System.out.println("MINOS " + VERSION);
+                out.println("MINOS " + VERSION);
                 exitCode = FindSymbolCommand.SUCCESS;
             } else if (isHelp(arguments)) {
-                System.out.println(MinosCli.usage());
+                out.println(MinosCli.usage());
                 exitCode = FindSymbolCommand.SUCCESS;
             } else if (MinosCliRunner.isStatelessHelpRequest(arguments)) {
-                exitCode = MinosCliRunner.runStatelessHelp(arguments, System.out, System.err);
+                exitCode = MinosCliRunner.runStatelessHelp(arguments, out, err);
             } else if (MinosCliRunner.isIdeHandshake(arguments)) {
-                exitCode = MinosCliRunner.runIdeHandshake(arguments, System.out, System.err);
+                exitCode = MinosCliRunner.runIdeHandshake(arguments, out, err);
             } else {
-                Path home = resolveHome(System.getenv(), System.getProperties());
+                Path home = resolveHome(environment, properties);
                 if (arguments.length == 1 && "mcp".equals(arguments[0])) {
                     // Route before opening MinosApplication so Docker MCP does not touch native
                     // business stores. The registered entry point (minos-app's McpBackendRouter)
@@ -42,18 +73,19 @@ public final class MinosLauncher {
                     // minos-mcp, so the route is an SPI resolved in MINOS's own class loader.
                     exitCode = McpLaunchRoutes.resolve().run(home);
                 } else {
-                    MinosApplication application = MinosApplication.open(home);
-                    exitCode = run(application, arguments, System.out, System.err);
+                    try (MinosApplication application = opener.open(home)) {
+                        exitCode = runner.run(application, arguments, out, err);
+                    }
                 }
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             exitCode = FindSymbolCommand.EXECUTION_ERROR;
         } catch (Exception exception) {
-            System.err.println("error: MINOS bootstrap failed: " + failureMessage(exception));
+            err.println("error: MINOS bootstrap failed: " + failureMessage(exception));
             exitCode = FindSymbolCommand.EXECUTION_ERROR;
         }
-        System.exit(exitCode);
+        return exitCode;
     }
 
     public static int run(
