@@ -18,6 +18,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectIndexState.Availability;
 
 import java.io.IOException;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -162,8 +163,11 @@ final class IndexingRunExecutor {
             }
             return ResumedAttempt.completed(persistSuccess(context, mode, ports.clock().instant()));
         } catch (ResumeAborted aborted) {
-            persistTerminalFailure(context, aborted, ports.clock().instant());
-            return ResumedAttempt.aborted(aborted.getMessage());
+            IndexingRun terminal = persistTerminalFailure(context, aborted, ports.clock().instant());
+            // R6: an interruption that surfaces as an aborted resume is still an interruption. The run is
+            // left offered for resume; it never triggers the fallback to a new full run.
+            return isInterruption(aborted) ? ResumedAttempt.completed(terminal)
+                    : ResumedAttempt.aborted(aborted.getMessage());
         } catch (Exception failure) {
             return ResumedAttempt.completed(persistTerminalFailure(context, failure, ports.clock().instant()));
         }
@@ -192,13 +196,15 @@ final class IndexingRunExecutor {
                     throw new ResumeAborted("resume aborted: artifact left the run directory (scope " + scope + ")");
                 }
             } catch (IOException failure) {
-                throw new ResumeAborted("resume aborted: artifact cannot be resolved before staging (scope " + scope + ")");
+                throw new ResumeAborted(
+                        "resume aborted: artifact cannot be resolved before staging (scope " + scope + ")", failure);
             }
             ExecutionCheckpoints.ArtifactDigest digest;
             try {
                 digest = ExecutionCheckpoints.artifactDigest(artifact);
             } catch (ExecutionCheckpoints.Unavailable unavailable) {
-                throw new ResumeAborted("resume aborted: " + unavailable.getMessage() + " (scope " + scope + ")");
+                throw new ResumeAborted(
+                        "resume aborted: " + unavailable.getMessage() + " (scope " + scope + ")", unavailable);
             }
             if (digest.bytes() != checkpoint.artifactBytes() || !digest.sha256().equals(checkpoint.artifactSha256())) {
                 throw new ResumeAborted("resume aborted: artifact changed before staging (scope " + scope + ")");
@@ -212,7 +218,7 @@ final class IndexingRunExecutor {
         try {
             return runDirectory.toRealPath();
         } catch (IOException failure) {
-            throw new ResumeAborted("resume aborted: run directory disappeared before staging");
+            throw new ResumeAborted("resume aborted: run directory disappeared before staging", failure);
         }
     }
 
@@ -231,8 +237,9 @@ final class IndexingRunExecutor {
         } catch (CommitUncertainException uncertain) {
             throw uncertain;
         } catch (Exception failure) {
+            if (isInterruption(failure)) throw failure;
             throw new ResumeAborted("resume aborted: staged snapshot could not be promoted ("
-                    + failure.getClass().getSimpleName() + ")");
+                    + failure.getClass().getSimpleName() + ")", failure);
         }
     }
 
@@ -525,24 +532,40 @@ final class IndexingRunExecutor {
     }
 
     /**
-     * Terminal outcome of a run that did not complete. A thread interruption (R1-11) restores the
-     * interrupt flag and, when the run already owns a checkpoint or a staged snapshot, leaves an
-     * INTERRUPTED run offered for resume instead of a FAILED one.
+     * Terminal outcome of a run that did not complete. A thread interruption (R1-11) leaves an INTERRUPTED
+     * run offered for resume, instead of a FAILED one, when the run already owns a checkpoint or a staged
+     * snapshot.
+     *
+     * <p>The state is written with the interrupt flag <em>cleared</em> and the flag is replayed last, on
+     * every way out (Q5, R6): with the flag raised, every durable write goes through an interruptible file
+     * channel and fails with {@link ClosedByInterruptException}, so the INTERRUPTED run, its marker and the
+     * project state would never reach the disk and the run would be reported FAILED with its checkpoints
+     * thrown away. The flag is replayed when it was raised on entry as well, whatever the failure was.</p>
      */
     private static IndexingRun persistTerminalFailure(RunContext context, Exception failure, Instant completedAt) {
-        if (isInterruption(failure)) {
-            Thread.currentThread().interrupt();
-            IndexingRun interrupted = interruptedRun(context, completedAt);
-            if (!context.committed && interrupted.offersResume()) {
-                return persistInterruption(context, interrupted, failure, completedAt);
+        boolean flagRaised = Thread.interrupted();
+        boolean interruption = isInterruption(failure);
+        try {
+            if (interruption) {
+                IndexingRun interrupted = interruptedRun(context, completedAt);
+                if (!context.committed && interrupted.offersResume()) {
+                    return persistInterruption(context, interrupted, failure, completedAt);
+                }
             }
+            return persistFailure(context, failure, completedAt);
+        } finally {
+            if (flagRaised || interruption) Thread.currentThread().interrupt();
         }
-        return persistFailure(context, failure, completedAt);
     }
 
+    /**
+     * The only place that says "this failure is an interruption": an {@link InterruptedException}, or the
+     * {@link ClosedByInterruptException} an interrupted file channel raises, anywhere in the chain of causes.
+     * A failure that loses its cause on the way (R6) is therefore a bug at the place that loses it.
+     */
     private static boolean isInterruption(Throwable failure) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-            if (cause instanceof InterruptedException) return true;
+            if (cause instanceof InterruptedException || cause instanceof ClosedByInterruptException) return true;
             if (cause.getCause() == cause) break;
         }
         return false;
@@ -704,7 +727,7 @@ final class IndexingRunExecutor {
     private static final long ARTIFACT_READABILITY_RETRY_DELAY_MILLIS = 100L;
 
     private static Path validateArtifact(IndexerNegotiationResult.IndexerSelection selection,
-                                         IndexingArtifact artifact, Path expectedRoot) {
+                                         IndexingArtifact artifact, Path expectedRoot) throws InterruptedException {
         if (artifact.language() != selection.language()) throw new IllegalStateException("executor returned an artifact for an unexpected language");
         if (!artifact.indexerId().equals(selection.indexer().id())) throw new IllegalStateException("executor returned an artifact for an unexpected indexer");
         if (!artifact.projectRelativeRoot().normalize().equals(expectedRoot.normalize())) throw new IllegalStateException("executor returned an artifact for an unexpected project scope");
@@ -713,16 +736,16 @@ final class IndexingRunExecutor {
         return path;
     }
 
-    static boolean awaitReadable(Path path) {
+    /**
+     * Waits, bounded, for a freshly written artifact to become readable. An interruption is never
+     * folded into "the artifact is missing" (R6): it propagates, so that the run ends INTERRUPTED and
+     * resumable and not FAILED.
+     */
+    static boolean awaitReadable(Path path) throws InterruptedException {
         for (int attempt = 1; attempt <= ARTIFACT_READABILITY_RETRY_ATTEMPTS; attempt++) {
             if (Files.exists(path) && Files.isReadable(path)) return true;
             if (attempt == ARTIFACT_READABILITY_RETRY_ATTEMPTS) return false;
-            try {
-                Thread.sleep(ARTIFACT_READABILITY_RETRY_DELAY_MILLIS);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
+            Thread.sleep(ARTIFACT_READABILITY_RETRY_DELAY_MILLIS);
         }
         return false;
     }
@@ -786,6 +809,10 @@ final class IndexingRunExecutor {
 
         private ResumeAborted(String message) {
             super(message);
+        }
+
+        private ResumeAborted(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 

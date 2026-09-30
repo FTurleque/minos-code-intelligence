@@ -161,7 +161,9 @@ public final class DurableAtomicFile {
         LockSupport.parkNanos(REPLACE_PAUSE_STEP_NANOS * attempt);
         if (Thread.interrupted()) {
             Thread.currentThread().interrupt();
-            throw new IOException("interrupted while retrying an atomic replacement");
+            // R6: the interruption stays in the chain of causes, where the orchestration looks for it.
+            throw new IOException("interrupted while retrying an atomic replacement",
+                    new InterruptedException("interrupted while retrying an atomic replacement"));
         }
     }
 

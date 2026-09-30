@@ -16,7 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class IndexingRunExecutorTest {
 
     @Test
-    void awaitReadableRecoversFromAnArtifactThatBrieflyAppearsUnreadable(@TempDir Path temp) {
+    void awaitReadableRecoversFromAnArtifactThatBrieflyAppearsUnreadable(@TempDir Path temp)
+            throws InterruptedException {
         // A real-time antivirus scan can hold a transient handle on a just-written artifact for a
         // moment after the provider process that wrote it has already exited. This proves the
         // bounded retry survives exactly that window instead of failing the whole run on the first
@@ -39,7 +40,7 @@ class IndexingRunExecutorTest {
     }
 
     @Test
-    void awaitReadableFailsClosedWhenTheArtifactNeverAppears(@TempDir Path temp) {
+    void awaitReadableFailsClosedWhenTheArtifactNeverAppears(@TempDir Path temp) throws InterruptedException {
         Path artifact = temp.resolve("never-written.scip");
         assertFalse(IndexingRunExecutor.awaitReadable(artifact));
     }
