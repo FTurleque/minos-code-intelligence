@@ -2,18 +2,35 @@ package com.minos.io;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import static com.minos.domain.Preconditions.requireText;
 
-/** Shared fail-closed primitive for durable local control-plane file mutations. */
+/**
+ * Shared fail-closed primitive for durable local control-plane file mutations.
+ *
+ * <p>Readers of these files take no lease (a read never waits for a writer): a replacement is one
+ * atomic rename, so a reader sees the previous or the next content, never a torn one. On Windows
+ * that rename fails with a sharing violation or an access-denied error while a reader holds the
+ * target open; such a replacement is retried a bounded number of times, see
+ * {@link #REPLACE_ATTEMPTS_ON_WINDOWS}.</p>
+ */
 public final class DurableAtomicFile {
+
+    /** Attempts of one replacement on Windows; the pauses grow linearly, about one second in all. */
+    static final int REPLACE_ATTEMPTS_ON_WINDOWS = 20;
+    private static final long REPLACE_PAUSE_STEP_NANOS = TimeUnit.MILLISECONDS.toNanos(5);
 
     private DurableAtomicFile() {
     }
@@ -79,25 +96,72 @@ public final class DurableAtomicFile {
             String label,
             DirectorySync directorySync
     ) throws IOException {
+        move(source, target, replaceExisting, label, directorySync, Platform.SYSTEM);
+    }
+
+    static void move(
+            Path source,
+            Path target,
+            boolean replaceExisting,
+            String label,
+            DirectorySync directorySync,
+            Platform platform
+    ) throws IOException {
         Path from = Objects.requireNonNull(source, "source").toAbsolutePath().normalize();
         Path to = Objects.requireNonNull(target, "target").toAbsolutePath().normalize();
         Objects.requireNonNull(directorySync, "directorySync");
+        Objects.requireNonNull(platform, "platform");
         forceFile(from);
-        try {
-            if (replaceExisting) {
-                Files.move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } else {
-                Files.move(from, to, StandardCopyOption.ATOMIC_MOVE);
-            }
-        } catch (AtomicMoveNotSupportedException unsupported) {
-            throw new IOException("filesystem does not support required atomic " + label + ": " + to, unsupported);
-        }
+        atomicMove(from, to, replaceExisting, label, platform);
         try {
             directorySync.force(to.getParent());
         } catch (IOException failure) {
             throw new CommitUncertainException(
                     label + " committed but directory durability acknowledgement failed: " + to,
                     failure);
+        }
+    }
+
+    private static void atomicMove(
+            Path from,
+            Path to,
+            boolean replaceExisting,
+            String label,
+            Platform platform
+    ) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                if (replaceExisting) {
+                    platform.mover().move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } else {
+                    platform.mover().move(from, to, StandardCopyOption.ATOMIC_MOVE);
+                }
+                return;
+            } catch (AtomicMoveNotSupportedException unsupported) {
+                throw new IOException("filesystem does not support required atomic " + label + ": " + to, unsupported);
+            } catch (FileSystemException failure) {
+                boolean retry = replaceExisting && platform.windows()
+                        && heldOpenByAReader(failure) && attempt < REPLACE_ATTEMPTS_ON_WINDOWS;
+                if (!retry) throw failure;
+                platform.pause().pause(attempt);
+            }
+        }
+    }
+
+    /**
+     * The failures Windows reports when the target of a replacement is open in another reader: an
+     * access-denied error or a plain file-system failure (sharing violation). A missing source or
+     * target, a non-empty directory and every other specific failure are final.
+     */
+    private static boolean heldOpenByAReader(FileSystemException failure) {
+        return failure instanceof AccessDeniedException || failure.getClass() == FileSystemException.class;
+    }
+
+    private static void pauseBeforeReplaceRetry(int attempt) throws IOException {
+        LockSupport.parkNanos(REPLACE_PAUSE_STEP_NANOS * attempt);
+        if (Thread.interrupted()) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted while retrying an atomic replacement");
         }
     }
 
@@ -124,5 +188,21 @@ public final class DurableAtomicFile {
     @FunctionalInterface
     interface DirectorySync {
         void force(Path directory) throws IOException;
+    }
+
+    /** The platform-dependent steps of a move, replaceable so the retry policy is testable anywhere. */
+    record Platform(FileMover mover, boolean windows, ReplacePause pause) {
+        static final Platform SYSTEM = new Platform(
+                Files::move, DurableAtomicFile.windows(), DurableAtomicFile::pauseBeforeReplaceRetry);
+    }
+
+    @FunctionalInterface
+    interface FileMover {
+        void move(Path from, Path to, CopyOption... options) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface ReplacePause {
+        void pause(int attempt) throws IOException;
     }
 }
