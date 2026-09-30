@@ -10,6 +10,7 @@ import com.minos.io.CommitUncertainException;
 import com.minos.io.DurableAtomicFile;
 import com.minos.io.Sha256;
 import com.minos.source.SourceBudgetPolicy;
+import com.minos.storage.local.store.SnapshotProjectLease;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -43,11 +44,17 @@ import java.util.UUID;
 import static com.minos.domain.Preconditions.requireText;
 
 /**
- * Persistance locale, versionnée et vérifiée des snapshots d'empreintes M7.
+ * Local, versioned and verified persistence of the fingerprint snapshots.
  *
- * <p>La publication d'un snapshot et sa promotion active sont séparées. Un même
- * {@code projectId + indexSnapshotId} est immuable : une republication identique
- * est idempotente, une republication avec un autre contenu est refusée.</p>
+ * <p>Publication of a snapshot and its active promotion are separate. One
+ * {@code projectId + indexSnapshotId} is immutable: an identical republication is idempotent, a
+ * republication with another content is refused.</p>
+ *
+ * <p>Exclusion: publication, promotion and compaction are mutually exclusive for one project, in this
+ * process and across processes, under the project mutation lease shared with the structural
+ * snapshot store ({@link SnapshotProjectLease}). Reads take no lease: a published snapshot file is
+ * immutable and the active pointer is replaced atomically, so a reader sees either the previous or
+ * the next pointer, never a torn one.</p>
  */
 public final class FileProjectFingerprintSnapshotStore implements ProjectFingerprintSnapshotStore {
 
@@ -94,44 +101,66 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         );
         Path projectDirectory = projectDirectory(projectId);
         DurableAtomicFile.ensureDirectory(projectDirectory, "fingerprint project directory");
-        String idHash = Sha256.hex(indexSnapshotId);
         Path temporary = Files.createTempFile(projectDirectory, ".fingerprint-", ".tmp");
         try {
+            // The encoding is the expensive part and only touches this call's temporary file: it runs
+            // before the lease. The existence check and the publication must not be separated by
+            // another writer, so they run under it.
             String checksum = writeSnapshot(temporary, snapshot);
-            String fileName = snapshotFileName(idHash, checksum);
-            Path target = projectDirectory.resolve(fileName);
-            List<Path> existing = filesForIdHash(projectDirectory, idHash);
-            if (!existing.isEmpty()) {
-                if (existing.size() == 1 && existing.getFirst().getFileName().toString().equals(fileName)) {
-                    ProjectFingerprintSnapshot current = readVerifiedSnapshot(projectId, existing.getFirst());
-                    if (!current.equals(snapshot)) {
-                        throw new IOException("fingerprint snapshot checksum collision for index snapshot: "
-                                + indexSnapshotId);
-                    }
-                    return current;
-                }
-                throw new IOException("fingerprint snapshot already exists with different content for index snapshot: "
-                        + indexSnapshotId);
+            try (SnapshotProjectLease ignored = SnapshotProjectLease.acquire(storageRoot, projectId)) {
+                return publishLocked(snapshot, projectDirectory, temporary, checksum);
             }
-            try {
-                DurableAtomicFile.publish(temporary, target, "fingerprint snapshot publication");
-            } catch (CommitUncertainException uncertain) {
-                if (regularFileExists(target, "published fingerprint snapshot")) {
-                    ProjectFingerprintSnapshot visible = readVerifiedSnapshot(projectId, target);
-                    if (visible.equals(snapshot)) return visible;
-                }
-                throw uncertain;
-            }
-            return snapshot;
         } finally {
             Files.deleteIfExists(temporary);
         }
+    }
+
+    private ProjectFingerprintSnapshot publishLocked(
+            ProjectFingerprintSnapshot snapshot,
+            Path projectDirectory,
+            Path temporary,
+            String checksum
+    ) throws IOException {
+        UUID projectId = snapshot.projectId();
+        String indexSnapshotId = snapshot.indexSnapshotId();
+        String idHash = Sha256.hex(indexSnapshotId);
+        String fileName = snapshotFileName(idHash, checksum);
+        Path target = projectDirectory.resolve(fileName);
+        List<Path> existing = filesForIdHash(projectDirectory, idHash);
+        if (!existing.isEmpty()) {
+            if (existing.size() == 1 && existing.getFirst().getFileName().toString().equals(fileName)) {
+                ProjectFingerprintSnapshot current = readVerifiedSnapshot(projectId, existing.getFirst());
+                if (!current.equals(snapshot)) {
+                    throw new IOException("fingerprint snapshot checksum collision for index snapshot: "
+                            + indexSnapshotId);
+                }
+                return current;
+            }
+            throw new IOException("fingerprint snapshot already exists with different content for index snapshot: "
+                    + indexSnapshotId);
+        }
+        try {
+            DurableAtomicFile.publish(temporary, target, "fingerprint snapshot publication");
+        } catch (CommitUncertainException uncertain) {
+            if (regularFileExists(target, "published fingerprint snapshot")) {
+                ProjectFingerprintSnapshot visible = readVerifiedSnapshot(projectId, target);
+                if (visible.equals(snapshot)) return visible;
+            }
+            throw uncertain;
+        }
+        return snapshot;
     }
 
     @Override
     public void promote(UUID projectId, String indexSnapshotId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         indexSnapshotId = requireText(indexSnapshotId, "indexSnapshotId");
+        try (SnapshotProjectLease ignored = SnapshotProjectLease.acquire(storageRoot, projectId)) {
+            promoteLocked(projectId, indexSnapshotId);
+        }
+    }
+
+    private void promoteLocked(UUID projectId, String indexSnapshotId) throws IOException {
         Path projectDirectory = projectDirectory(projectId);
         List<Path> matches = filesForIdHash(projectDirectory, Sha256.hex(indexSnapshotId));
         if (matches.isEmpty()) {
@@ -247,8 +276,12 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         return storageRoot;
     }
 
-    /** Applies bounded historical retention while protecting active and caller-referenced ids. */
-    public synchronized FingerprintRetentionResult compact(
+    /**
+     * Applies bounded historical retention while protecting active and caller-referenced ids. It runs
+     * under the project mutation lease, so it never overlaps a publication or a promotion of the
+     * same project, whichever process performs it.
+     */
+    public FingerprintRetentionResult compact(
             UUID projectId,
             Set<String> additionallyProtectedSnapshotIds,
             int maxHistoricalSnapshots
@@ -258,6 +291,16 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         if (maxHistoricalSnapshots < 0) {
             throw new IllegalArgumentException("maxHistoricalSnapshots must not be negative");
         }
+        try (SnapshotProjectLease ignored = SnapshotProjectLease.acquire(storageRoot, projectId)) {
+            return compactLocked(projectId, additionallyProtectedSnapshotIds, maxHistoricalSnapshots);
+        }
+    }
+
+    private FingerprintRetentionResult compactLocked(
+            UUID projectId,
+            Set<String> additionallyProtectedSnapshotIds,
+            int maxHistoricalSnapshots
+    ) throws IOException {
         Path projectDirectory = existingProjectDirectory(projectId);
         if (projectDirectory == null) return new FingerprintRetentionResult(0, 0);
 
