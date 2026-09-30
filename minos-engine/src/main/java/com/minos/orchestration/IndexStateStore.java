@@ -29,6 +29,11 @@ public interface IndexStateStore {
      * Acquires exclusive ownership of one project's complete indexing lifecycle.
      * The lease must remain held from the authoritative-state check through
      * provider execution, snapshot promotion and metadata finalization.
+     *
+     * <p>This is the first lock of the project lock order (FIAB-SUIVI section 8.6, ADR 0039 (l)):
+     * the lifecycle lease, then the snapshot mutation lease, then the semantic sync lock, then the
+     * in-memory monitors. It is never acquired while a later lock of the order is held, and it is
+     * never acquired by a read: status reads take no lease and write nothing.</p>
      */
     default ProjectLease acquireProjectLease(UUID projectId) {
         Objects.requireNonNull(projectId, "projectId");

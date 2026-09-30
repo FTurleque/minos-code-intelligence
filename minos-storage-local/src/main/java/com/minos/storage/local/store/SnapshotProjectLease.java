@@ -21,9 +21,10 @@ import static com.minos.domain.Preconditions.requireText;
  * and a structural promotion can both hold different "project" locks and race.</p>
  *
  * <p>Lock order (lot 2, FIAB-SUIVI section 8.6): this lease ranks after the project lifecycle lease
- * ({@code IndexStateStore.acquireProjectLease}) and before the semantic sync lock. A holder of this
- * lease never acquires the lifecycle lease, and never acquires this lease a second time: the lease is
- * owner-thread and not reentrant, so a nested acquisition waits for its own thread until the deadline.</p>
+ * ({@code IndexStateStore.acquireProjectLease}) and the retention lock, and before the semantic sync
+ * lock. A holder of this lease never acquires the lifecycle lease, and never acquires this lease a
+ * second time: the lease is owner-thread and not reentrant, so a nested acquisition waits for its own
+ * thread until the deadline.</p>
  */
 public final class SnapshotProjectLease implements AutoCloseable {
     static final Duration DEFAULT_ACQUIRE_TIMEOUT = Duration.ofSeconds(10);
