@@ -301,7 +301,8 @@ Mécanismes d'exclusion de la famille « un projet » : **6** (L1, L2, L3, L4, M
 | `7e1b2903` | `DurableAtomicFile.replace` retenté sous Windows face à un lecteur qui tient la cible ouverte (conséquence de P1, § 8.9) ; test de lecture sous écriture concurrente | idem |
 | `91a23b22` | P1 : le statut lit par `observe` (aucun bail, aucune écriture), un état en vol est rapporté tel quel ; `projectState` devient `recoverProjectState` | idem |
 | `49e3fdfb` | Q4 : test de non-reproduction (empreinte préparée, snapshot structurel préparé, ordre de prise) ; aucun correctif | idem |
-| (commit suivant) | documentation : ordre de prise dans les Javadoc et l'ADR 0039 (l), ce journal, preuves | idem |
+| `44aca82a` | documentation : ordre de prise dans les Javadoc et l'ADR 0039 (l), ce journal, preuves (avec correction de l'emplacement périmé du bail dans l'ADR) | idem |
+| (commit suivant) | preuves de fin de lot (rejeux, `clean verify`, Linux) | idem |
 
 ### 8.9 Preuves
 
@@ -328,9 +329,9 @@ Garde-fous verts avant et après (ils ne devaient pas bouger) : `statusBeforeThe
 
 | Classe | Synchronisation | Rejeux sur le commit | Résultat |
 |---|---|---|---|
-| `FileProjectFingerprintSnapshotStoreConcurrencyTest` (3 tests, 10 tours chacun par exécution) | `CyclicBarrier(2)` par tour, `Future.get` | (à compléter) | (à compléter) |
-| `ProjectStateReadUnderConcurrentWriteTest` (200 publications par exécution) | `CyclicBarrier(2)`, drapeau `writerDone`, relecture finale après l'arrêt de l'écrivain | (à compléter) | (à compléter) |
-| `ProjectStatusReadIsLeaseFreeTest` (le bail est tenu par le thread de test, la lecture sur un autre thread) | bail tenu pendant l'appel, `Future.get` | (à compléter) | (à compléter) |
+| `FileProjectFingerprintSnapshotStoreConcurrencyTest` (3 tests, 10 tours chacun par exécution) | `CyclicBarrier(2)` par tour, `Future.get` | `7e1b2903` (code de production final de Q3) | **50 passages sur 50**, 0 échec (30 tours par exécution : 1 500 tours) |
+| `ProjectStateReadUnderConcurrentWriteTest` (200 publications par exécution) | `CyclicBarrier(2)`, drapeau `writerDone`, relecture finale après l'arrêt de l'écrivain | `49e3fdfb` (code de production final de P1) | **50 sur 50**, 0 échec (200 publications lues en boucle par exécution : 10 000 publications, y compris l'échec Windows de l'écrivain qui n'apparaît plus) |
+| `ProjectStatusReadIsLeaseFreeTest` (le bail est tenu par le thread de test, la lecture sur un autre thread) | bail tenu pendant l'appel, `Future.get` | `49e3fdfb` | **50 sur 50** (rejoué avec le précédent) |
 
 ### 8.10 Q4 : non reproductible, non corrigé
 
@@ -369,3 +370,21 @@ recoverProjectState : L1 ──► M                (mutation, appelée sous L1 
 ```
 
 Aucun cycle : l'ordre L1 < L3 < L2 < L4 < M est total et respecté par chaque arête ci-dessus ; aucun chemin ne prend un verrou de rang inférieur en tenant un de rang supérieur.
+
+### 8.12 Fin de lot
+
+`./mvnw clean verify` complet dans un arbre dédié (journal dans le scratchpad, pas dans `target/`) sur `44aca82a` (les commits suivants ne changent que de la Javadoc et ce fichier) : **BUILD SUCCESS**, 15 modules, 14 min 40, **1 707 tests exécutés, 0 échec, 0 erreur, 46 ignorés** (les mêmes hypothèses `Assumptions` qu'à la base ; aucun `@Disabled` ajouté) ; 1 691 à la base du lot, +16 : `FileProjectFingerprintSnapshotStoreConcurrencyTest` 3, `DurableAtomicFileTest` +4, `ProjectStateReadUnderConcurrentWriteTest` 1, `ProjectStatusReadIsLeaseFreeTest` 3, `ProjectIndexStateReconcilerTest` +2, `LocalStorageRetentionPreparedSnapshotTest` 3.
+
+| Gate | Base `bcdadd23` | Fin de lot |
+|---|---|---|
+| `check-module-boundaries.py` | `modules=14, sources=504, packages=45` | identique |
+| `check-current-docs.py`, `product-facts.py --check` | SUCCESS | SUCCESS |
+| `check-milestone-artifact-references.py` | `scripts checked=95` | `scripts checked=95` |
+| `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py` (littéraux de `SnapshotProjectLease.acquire`, `compactWithActiveSnapshot`, `CompactionResult::activeSnapshotId`) | SUCCESS | SUCCESS |
+| `check-jacoco.py` | 26 PASS, seule rouge `m24-polyglot-provider-platform` (line 0,228 < 0,28, préexistante, Windows) | 26 PASS, **même unique rouge**, mêmes chiffres |
+| `critical-orchestration` (line / branch) | 0,891 / 0,773 | 0,891 / 0,773 |
+| `resume-orchestration` (line / branch) | 0,906 / 0,787 | 0,906 / 0,787 |
+
+Golden : les 12 de `characterization/` **inchangés**, aucun script de `scripts/` modifié (`git diff bcdadd23..HEAD -- minos-app/src/test/resources scripts` vide).
+
+**Linux.** WSL Ubuntu (Java 24), tests du reactor `minos-engine` (455 tests, 7 ignorés), `minos-runtime-local` (226, 30 ignorés : Windows seulement) et `minos-storage-local` (177, 0 ignoré), sur `44aca82a` : **verts, 0 échec**, dont `FileProjectFingerprintSnapshotStoreConcurrencyTest` (3/3), `LocalStorageRetentionPreparedSnapshotTest` (3/3) et `DurableAtomicFileTest` (6/6, où la politique de nouvelle tentative est injectée et ne dépend pas du système). **Vérifié seulement sous Windows** : `minos-bootstrap` (les trois tests de P1, le test de lecture sous écriture concurrente, le rejeu ×50) — le module dépend de `minos-provider-scip`, dont une dépendance n'est pas dans le dépôt Maven local de WSL hors ligne ; le défaut Windows de `replace` (rename sur une cible ouverte) n'existe pas sous Linux, où la lecture concurrente est sans effet sur l'écrivain ; le rejeu ×50 n'a été fait que sous Windows.
