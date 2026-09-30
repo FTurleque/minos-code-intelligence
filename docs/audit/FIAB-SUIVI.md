@@ -1,4 +1,4 @@
-# Suivi — chantier Fiabilité opérationnelle (lot 1 : R4, R5, R7 — intégrité de la reprise ; lot 2 : P1, Q3, Q4 — un seul régime de verrous, § 8)
+# Suivi — chantier Fiabilité opérationnelle (lot 1 : R4, R5, R7 — intégrité de la reprise ; lot 2 : P1, Q3, Q4 — un seul régime de verrous, § 8 ; lot 3 : R2, R3 — propriété des cgroups, § 9)
 
 > Branche : `fiab/r4-r5-r7-reprise` (depuis `develop`, base `017e339d`, les branches `code/*` des PR #305 à #308 y sont déjà fusionnées), worktree `minos-wt/fiab-lot1`.
 > Constats : **R4** (promotion reprise sans égalité des cibles), **R5** (rétention d'un run reprenable, durée de vie du marqueur) et **R7** (réparation « snapshot stable » sans `resumableRunId` ni `supersede`), `AUDIT-2026-09.md` § R4, R5, R7 ; conception de référence : [ADR 0039](../adr/0039-reprise-indexation-apres-interruption.md).
@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 1 — R4, R5, R7 | Promotion reprise bornée aux cibles courantes, rétention d'un run reprenable (parcours tronqué, run concurrent, durée de vie), réparation « snapshot stable » alignée | livré, en attente du verdict final de `verif-fiab` | `cdeac459` … (§ 4) |
 | 2 — P1, Q3, Q4 | Un seul régime de verrous ; lecture d'état sans bail exclusif (§ 8) | en cours (branche `fiab/p1-q3-q4-verrous`, depuis la branche du lot 1 `bcdadd23`) | § 8.8 |
-| 3 — R2, R3 | Propriété des cgroups indépendante de l'horloge murale | à faire | — |
+| 3 — R2, R3 | Propriété des cgroups : R2 et R3 déjà fermés sur `develop` (§ 9.1) ; le lot referme les trous restants de la décision « ce cgroup appartient à un MINOS mort » (§ 9.4) | en cours (branche `fiab/r2-r3-cgroups`, depuis la branche du lot 2, fusion `8670f2e2`) | § 9.7 |
 | 4 — Q5, R6 | Interruption de bout en bout, confinement du chemin d'artefact | à faire | — |
 | 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) | à faire | — |
 
@@ -403,3 +403,76 @@ Aucun cycle : l'ordre L1 < L3 < L2 < L4 < M est total et respecté par chaque ar
 Golden : les 12 de `characterization/` **inchangés**, aucun script de `scripts/` modifié (`git diff bcdadd23..HEAD -- minos-app/src/test/resources scripts` vide).
 
 **Linux.** WSL Ubuntu (Java 24), tests du reactor `minos-engine` (455 tests, 7 ignorés), `minos-runtime-local` (226, 30 ignorés : Windows seulement) et `minos-storage-local` (177, 0 ignoré), sur `44aca82a` : **verts, 0 échec**, dont `FileProjectFingerprintSnapshotStoreConcurrencyTest` (3/3), `LocalStorageRetentionPreparedSnapshotTest` (3/3) et `DurableAtomicFileTest` (6/6, où la politique de nouvelle tentative est injectée et ne dépend pas du système). **Vérifié seulement sous Windows** : `minos-bootstrap` (les trois tests de P1, le test de lecture sous écriture concurrente, le rejeu ×50) — le module dépend de `minos-provider-scip`, dont une dépendance n'est pas dans le dépôt Maven local de WSL hors ligne ; le défaut Windows de `replace` (rename sur une cible ouverte) n'existe pas sous Linux, où la lecture concurrente est sans effet sur l'écrivain ; le rejeu ×50 n'a été fait que sous Windows.
+
+## 9. Lot 3 — R2, R3 : la propriété des cgroups
+
+> Branche `fiab/r2-r3-cgroups` (depuis la branche du lot 2, fusion `8670f2e2`), worktree `minos-wt/fiab-lot3`. Code de référence : `minos-runtime-local/src/main/java/com/minos/runtime/local/`. Inventaire daté du 30 septembre 2026.
+
+### 9.1 Constat préalable : R2 et R3 sont déjà fermés sur `develop`
+
+L'audit (`AUDIT-2026-09.md` § R2, R3) décrit un état antérieur au chantier « résidus du sprint 1 ». En relisant le code du worktree avant d'écrire un test, les deux correctifs demandés par l'énoncé du lot y sont déjà :
+
+| Constat | Ce que l'énoncé demande | Ce que le code fait déjà | Commits (ancêtres de `HEAD`) |
+|---|---|---|---|
+| R2 | décision indépendante de l'horloge murale, ticks de `/proc/<pid>/stat` champ 22 | marque `<job>.own-<pid>-t<startTicks>-<jeton>` ; `CgroupJobOwnership.decide` ne compare que des ticks de démarrage (horloge de boot) ; une marque ancienne (instant mural) ne récupère que si le PID propriétaire est mort, jamais sur un écart d'instant | `93ed7905` (marque en ticks), `0ee22e06` (note de mise à jour) |
+| R2 | test qui injecte l'horloge, sans toucher à celle de la machine | `CgroupJobOwnershipTest.aWallClockStepNeverMakesALiveOwnerLookReused` (pas de ±1 h et ±2001 ms) ; `LinuxCgroupStaleRecoveryTest.aWallClockStepNeverMakesALiveOwnerLookReused` (cgroups factices) ; `LinuxCgroupJobOwnershipIsolationTest.aWallClockStepDoesNotKillTheJobsOfALiveMinosInstance` (cgroup réel) | idem |
+| R3 | résultat du balayage exploité, résidu visible à niveau WARNING avec compteur | `qualifyRoot` appelle `reclaimAndReportStaleJobs`, qui journalise UN WARNING agrégé (« MINOS left N cgroup(s) intact … ») avec le nom et la raison de chaque résidu, borné à 32 noms | `d6e5296d` |
+| R3 | aucun chemin absolu dans les messages | `describeFailure`, `redactCause`, `RedactedCause`, `displayRoot` ; `LinuxCgroupJobDiagnosticsTest.assertNoAbsolutePath` sur chaque journal | `d6e5296d`, `82ea6c39` |
+
+Les rouges historiques (code d'origine) sont dans `RESIDUS-SPRINT-1-SUIVI.md` § 1 (R2 : test WSL où un `sleep` vivant était réellement tué ; R3 : 5 rouges Windows et 1 WSL). Je ne les refais pas : **R2 était reproductible et est fermé** ; ce lot ne réécrit donc ni la marque ni le WARNING.
+
+Conséquence sur la méthode : l'énoncé du lot pose la règle « en cas de doute, ne pas récupérer ». J'ai donc relu CHAQUE branche qui tue ou supprime (§ 9.2) avec la question « quelle est la preuve POSITIVE que le propriétaire est mort ? », et cherché ce que les correctifs précédents ne couvrent pas. Il y en a six (§ 9.4), dont un qui tue un processus vivant sur le code actuel, avec une preuve réelle sous Linux.
+
+`AUDIT-2026-09.md` (R2 et R3 encore listés ouverts) est à mettre à jour par l'orchestrateur : il porte des modifications non suivies de l'utilisateur dans le dépôt principal, je n'y touche pas.
+
+### 9.2 Cibles relocalisées et branches qui tuent ou suppriment
+
+| Cible de l'énoncé | Emplacement réel (`com.minos.runtime.local`) | Rôle |
+|---|---|---|
+| `CgroupJobOwnership` | `CgroupJobOwnership.java` (256 lignes) | marque + `decide` (SEUL endroit qui décide qu'un cgroup appartient à un MINOS mort), `OwnerLookup.SYSTEM`, `parseStartTicks`, `startTicks` |
+| `LinuxCgroupJob` (`qualifyRoot`, `reclaimStaleJobs`, `StaleSweep`) | `LinuxCgroupJob.java` (673 lignes) : `qualifyRoot` l. 129, `reclaimStaleJobs` l. 194, `reclaimAndReportStaleJobs` l. 221, `reclaimStaleJob` l. 249 | applique le verdict : `cgroup.kill` puis suppression |
+| `ProcessTreeTermination` | `ProcessTreeTermination.java` | exclusion de l'hôte (`destroyIfNotHost`), arrêt d'un arbre atteignable depuis un `Process` que MINOS a lancé ; ne décide rien par PID |
+| `StrongProcessOwnershipIndexerExecutor` | `StrongProcessOwnershipIndexerExecutor.java` | câblage : `createOwnershipOnly`, `kill()` de SON job ; aucune décision d'appartenance |
+| `WorkerSandboxBackends` | `WorkerSandboxBackends.java` | sélection de backend et journal des refus (codes seulement) ; aucune décision d'appartenance |
+| (découvert) | `ProcessOwnershipTracker.java` l. 196-206 | ré-acquisition d'un descendant mémorisé : PID + instant de démarrage (`ProcessHandle.Info`), sinon le handle d'origine ; même JVM, donc même base `btime` (le JDK la calcule une fois) : pas exposé à R2 |
+
+Branches qui suppriment ou tuent, et leur preuve actuelle (code lu, pas déduit de l'audit) :
+
+| # | Branche (`CgroupJobOwnership.decide` puis `LinuxCgroupJob.reclaimStaleJob`) | Preuve d'appartenance à un mort |
+|---|---|---|
+| a | cgroup non marqué, 0 processus : supprimé | lecture de `cgroup.procs` vide ; **puis `aliveProcesses() > 0` relit et `kill()` tue** (F3) |
+| b | marque lisible, PID propriétaire « absent » : tué et supprimé | `ProcessHandle.of(pid)` vide, pris pour « mort » (F1) |
+| c | marque en ticks, PID présent, ticks différents : tué et supprimé | deux lectures de `/proc/<pid>/stat` champ 22 ; une lecture tronquée n'est pas détectée (F2) |
+| d | marque ancienne (instant mural), PID absent : tué et supprimé | idem b (F1) |
+| e | tout le reste : laissé, compté en résidu | aucune preuve requise |
+
+### 9.3 La règle par défaut (écrite dans le code et reprise dans la PR)
+
+> **En cas de doute, ne pas récupérer.** Un résidu laissé derrière coûte de la mémoire et des `pids` de la racine déléguée, et il est journalisé en WARNING avec sa raison. Un processus vivant tué est S3 qui revient. La conclusion par défaut, quand la preuve d'appartenance à un propriétaire MORT est indisponible, partielle ou ambiguë, est : **LEAVE** (le cgroup reste intact, il est compté et signalé).
+
+Sont des « doutes » qui concluent à LEAVE, chacun avec un test : horloge murale décalée (l'instant n'entre pas dans la décision) ; `/proc` illisible, partiel ou qui cache d'autres comptes ; `/proc/<pid>/stat` illisible, tronqué, mal formé, sans champ 22 ; PID présent dont la réponse est ambiguë ; marque sans ticks ; marque d'un format ancien avec un PID vivant ; cgroup non marqué et peuplé ; propriétaire d'un autre espace de PID (membres de `cgroup.procs` à 0 : lecture refusée, rien n'est tué). Toute branche qui récupère exige une preuve POSITIVE : (i) **PID absent d'une table des processus prouvée lisible** (`/proc/self/stat` lu, répertoire `/proc/<pid>` réellement absent, aucun masquage `hidepid` d'un autre compte), ou (ii) **ticks complets et différents** pour un PID présent, ou (iii) cgroup **vide** (suppression seule, jamais de `cgroup.kill`).
+
+### 9.4 Les trous restants (chacun à prouver AVANT de corriger)
+
+| Id | Constat | Preuve |
+|---|---|---|
+| F1 | `OwnerLookup.SYSTEM` conclut « propriétaire mort » quand `ProcessHandle.of(pid)` est vide. Or le JDK renvoie vide dès que sa propre lecture de `/proc/<pid>/stat` échoue : descripteurs de fichiers épuisés (EMFILE), `hidepid`, `/proc` partiel. Un MINOS voisin **vivant** est alors « mort » : son cgroup est tué (S3) | expérience réelle sous WSL (`FdExhaust.java`, noyau 6.18, Java 24.0.1, `ulimit -n 128`) : avant épuisement `ProcessHandle.of(self)` présent ; **pendant l'épuisement `ProcessHandle.of(self)` et `ProcessHandle.of(1)` sont vides** alors que les deux processus sont vivants ; après libération, présent |
+| F2 | `parseStartTicks` accepte une lecture tronquée dont le champ 22 est le dernier jeton : `…18 12` (coupé de `123456`) donne 12 ; le PID est jugé « réutilisé » et le cgroup est tué. Même défaut côté écriture de la marque (`Mark.of`) | test sur le code d'origine (§ 9.6) |
+| F3 | TOCTOU dans `reclaimStaleJob` : verdict « cgroup non marqué sans processus » puis relecture `aliveProcesses()` ; un MINOS plus ancien qui démarre un job dans l'intervalle voit son processus tué sans aucune preuve d'appartenance | test de décision : le verdict d'un non marqué vide autorise aujourd'hui `kill` |
+| F4 | `Files.list(root).limit(4096)` : au-delà, les entrées ne sont ni examinées ni signalées (R3 dit « un résidu non récupérable remonte ») | test à borne réduite |
+| F5 | une suppression qui échoue est comptée `reclaimed` (le cgroup existe encore) et n'est journalisée qu'en avertissement par entrée, hors du rapport agrégé | le test existant `emptyStaleCgroupDeletionFailureDoesNotDisableContainment` fige « reclaimed » pour un cgroup resté en place |
+| F6 | un `cgroup.kill` de récupération n'est journalisé qu'en DEBUG : l'opérateur ne voit jamais qu'un balayage a tué des processus | test de capture du journal |
+
+Hors périmètre, consigné § 7 : espace de noms de temps (W6 du sprint 1), inscription de l'espace de PID dans la marque, `relocateSelf`.
+
+### 9.5 Comptes AVANT (base `8670f2e2`)
+
+Endroits qui décident « ce processus (ou ce cgroup) nous appartient et peut être tué », dans `minos-runtime-local` : **4** — `CgroupJobOwnership.decide` (cgroup d'un MINOS mort), `ProcessOwnershipTracker.resolveSameProcess` (descendant mémorisé), `ProcessTreeTermination.terminateTree` (arbre atteignable depuis un `Process` lancé par MINOS, avec son exclusion de l'hôte `destroyIfNotHost`), et `LinuxCgroupJob.kill`/`close` (SON job, par construction). Un seul d'entre eux décide d'après l'identité d'un processus tiers : `CgroupJobOwnership.decide`. Hors module : 3 copies de « détruire les descendants du `Process` lancé » dans `minos-provider-scip` (`ManagedPolyglotScipRuntimeManager`, `ManagedScipProviderRuntimeManager`, `ManagedScipPythonRuntimeManager`), non touchées (chantier Architecture). Sources d'instants de démarrage dérivés de l'horloge murale qui entrent dans une décision de tuer : **1** (`ProcessOwnershipTracker`, une seule JVM, base `btime` mémorisée par le JDK) ; dans une décision inter-processus : **0** (R2 fermé).
+
+Chiffres de référence des gates (base `8670f2e2`, avant le premier commit de code) : `check-module-boundaries.py` `modules=14, sources=504, packages=45` ; `check-current-docs.py`, `product-facts.py --check` SUCCESS ; `check-milestone-artifact-references.py` `scripts checked=95`. JaCoCo et `clean verify` : ceux de la fin du lot 2 (§ 8.12), le code de ce lot est celui de la base ; `provider-sandbox-linux` (qui couvre `LinuxCgroupJob`, pas `CgroupJobOwnership`) est SKIPPED sous Windows et rejoué sous WSL.
+
+Tests de la zone avant le lot : 62 (`CgroupJobOwnershipTest` 18, `LinuxCgroupStaleRecoveryTest` 8, `LinuxCgroupJobDiagnosticsTest` 5, `LinuxCgroupJobFailClosedTest` 9, `LinuxCgroupJobOwnershipIsolationTest` 7, `LinuxCgroupJobContainmentTest` 8, `ProcessTreeTerminationTest` 6, `ProcessOwnershipTrackerHostProtectionTest` 1) : **Windows 62 exécutés, 15 ignorés, 0 échec** ; **WSL avec une racine cgroup v2 réellement déléguée : 62 exécutés, 2 ignorés, 0 échec**.
+
+### 9.6 Ce qui s'exécute où
+
+Outillage de ce lot (scratchpad, non versionné) : un script lancé en root sous WSL crée une racine `/sys/fs/cgroup/minos-lot3` (contrôleurs `+memory +pids +cpu`, enfant `minos-controller`, propriété du compte 1000), y place son shell puis lance Maven sous le compte `fturleque` avec `MINOS_SANDBOX_CGROUP_ROOT`. Les tests qui tuent réellement un `sleep` dans un vrai cgroup **s'exécutent donc** sous WSL, contrairement à ce que laissait craindre « uid 1000 non root ». Ils ne s'exécutent nulle part ailleurs en local (Windows les ignore) ; la CI Linux de GitHub a une racine déléguée par `scripts/ci/delegate-linux-cgroup.sh`. La répartition exacte de fin de lot est au § 9.9.
