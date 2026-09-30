@@ -119,6 +119,8 @@ public final class IndexingRuntimePorts {
             }
         }
 
+        private static final System.Logger LOGGER = System.getLogger(ExecutionPathAuthorization.class.getName());
+
         public static Optional<ExecutionPathAuthorization> tryCapture(
                 Path registeredProjectRoot,
                 Path projectRoot
@@ -146,6 +148,12 @@ public final class IndexingRuntimePorts {
                 // Some protocol/contract tests intentionally construct requests for paths that are
                 // not materialized. Local process execution rejects an absent authorization before
                 // launch; non-process ports can continue to use the historical request contract.
+                // The cause is journaled because the launch refusal carries none (class only: no path,
+                // no exception message).
+                LOGGER.log(System.Logger.Level.WARNING,
+                        "MINOS could not capture the canonical identity of the provider execution roots; "
+                                + "a launch through the local process runtime will be refused: "
+                                + unavailable.getClass().getSimpleName());
                 return Optional.empty();
             }
         }
