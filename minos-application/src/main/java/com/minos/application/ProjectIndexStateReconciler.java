@@ -94,15 +94,11 @@ public final class ProjectIndexStateReconciler {
 
             if (mode == Mode.PERSIST && !leaseHeld) return reconcileUnderLease(projectId);
 
-            if (mode == Mode.STATUS && inProgress(persisted)) {
-                return new Reconciliation(activeAfter, persisted, false);
-            }
+            Optional<Reconciliation> readOnly =
+                    readOnlyAnswer(mode, projectId, activeAfter, persisted, authoritativeSnapshotId);
+            if (readOnly.isPresent()) return readOnly.get();
 
-            ProjectIndexState repair = repairedState(projectId, authoritativeSnapshotId, persisted);
-            if (mode != Mode.PERSIST) {
-                return new Reconciliation(activeAfter, Optional.of(repair), true);
-            }
-            saveProjectState(repair, projectId);
+            saveProjectState(repairedState(projectId, authoritativeSnapshotId, persisted), projectId);
             repaired = true;
 
             Optional<Reconciliation> verified = verifiedRepair(projectId, activeAfter, authoritativeSnapshotId);
@@ -120,6 +116,24 @@ public final class ProjectIndexStateReconciler {
                     "project index state references an active snapshot but the snapshot store has none for project "
                             + projectId);
         }
+    }
+
+    /**
+     * The answer of a pass that never writes, or empty for {@code PERSIST}, which repairs durably. A status
+     * read leaves an in-progress state as it is; a plan returns the repair it anticipates.
+     */
+    private Optional<Reconciliation> readOnlyAnswer(
+            Mode mode,
+            UUID projectId,
+            Optional<CodeKnowledgeSnapshot> active,
+            Optional<ProjectIndexState> persisted,
+            String authoritativeSnapshotId) throws IOException {
+        if (mode == Mode.PERSIST) return Optional.empty();
+        if (mode == Mode.STATUS && inProgress(persisted)) {
+            return Optional.of(new Reconciliation(active, persisted, false));
+        }
+        ProjectIndexState repair = repairedState(projectId, authoritativeSnapshotId, persisted);
+        return Optional.of(new Reconciliation(active, Optional.of(repair), true));
     }
 
     /** The repair, once re-read and still matching the authoritative snapshot; empty when either moved meanwhile. */
