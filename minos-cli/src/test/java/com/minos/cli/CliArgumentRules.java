@@ -37,6 +37,7 @@ final class CliArgumentRules {
         private final List<Object[]> integers = new ArrayList<>();
         private final List<String> flags = new ArrayList<>();
         private boolean operandsAfterOptions;
+        private boolean refusalsOnly;
 
         private Command(String label, String base) {
             this.label = label;
@@ -63,6 +64,12 @@ final class CliArgumentRules {
 
         Command flag(String option) {
             flags.add(option);
+            return this;
+        }
+
+        /** Only the refusals are checked: accepted forms would reach a real service with side effects (network, installation). */
+        Command refusalsOnly() {
+            refusalsOnly = true;
             return this;
         }
 
@@ -141,6 +148,9 @@ final class CliArgumentRules {
     }
 
     private void assertAccepted(Command command, String... extra) throws IOException {
+        if (command.refusalsOnly) {
+            return;
+        }
         Outcome outcome = run(command, extra);
         if (outcome.code == 2 || outcome.firstErrorLine.startsWith("error: missing value")
                 || outcome.firstErrorLine.startsWith("error: unknown option")) {

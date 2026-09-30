@@ -31,6 +31,8 @@ import java.util.function.Function;
 public final class DoctorCommand {
     public static final String NAME = "doctor";
     private static final String DECISION = "ADR 0041";
+    private static final String USAGE = "Usage: minos doctor [--format <text|json>]";
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--format");
 
     private final Path home;
     private final AutonomousIndexOperations operations;
@@ -111,31 +113,29 @@ public final class DoctorCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        SymbolOutputFormat format;
-        try {
-            format = parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n')
-                    .append("Usage: minos doctor [--format <text|json>]\n");
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-        List<AutonomousIndexOperations.ProviderView> providers = operations.providers();
-        Map<String, String> commands = new LinkedHashMap<>();
-        for (String command : List.of("java", "javac", "mvn", "node", "npm", "python", "docker")) {
-            commands.put(command, commandLocator.apply(command).map(Path::toString).orElse(null));
-        }
-        Map<String, String> privateStorage = privateStorageDiagnostics();
-        WorkerSandboxReport sandbox = Objects.requireNonNull(sandboxProbe.apply(home), "worker sandbox report");
-        // Remote indexing being closed by decision (ADR 0041) is a fact to expose, not an action to require.
-        boolean ready = providers.stream()
-                .filter(AutonomousIndexOperations.ProviderView::requiredByDefault)
-                .allMatch(provider -> "READY".equals(provider.state()));
-        if (format == SymbolOutputFormat.JSON) {
-            renderJson(output, providers, commands, privateStorage, sandbox, ready);
-        } else {
-            renderText(output, providers, commands, privateStorage, sandbox, ready);
-        }
-        return ready ? FindSymbolCommand.SUCCESS : FindSymbolCommand.EXECUTION_ERROR;
+        return CliCommandSupport.run(arguments, output, error, USAGE, DoctorCommand::parse, NAME, format -> {
+            List<AutonomousIndexOperations.ProviderView> providers = operations.providers();
+            Map<String, String> commands = new LinkedHashMap<>();
+            for (String command : List.of("java", "javac", "mvn", "node", "npm", "python", "docker")) {
+                commands.put(command, commandLocator.apply(command).map(Path::toString).orElse(null));
+            }
+            Map<String, String> privateStorage = privateStorageDiagnostics();
+            WorkerSandboxReport sandbox = Objects.requireNonNull(sandboxProbe.apply(home), "worker sandbox report");
+            // Remote indexing being closed by decision (ADR 0041) is a fact to expose, not an action to require.
+            boolean ready = providers.stream()
+                    .filter(AutonomousIndexOperations.ProviderView::requiredByDefault)
+                    .allMatch(provider -> "READY".equals(provider.state()));
+            if (format == SymbolOutputFormat.JSON) {
+                renderJson(output, providers, commands, privateStorage, sandbox, ready);
+            } else {
+                renderText(output, providers, commands, privateStorage, sandbox, ready);
+            }
+            return ready ? FindSymbolCommand.SUCCESS : FindSymbolCommand.EXECUTION_ERROR;
+        });
+    }
+
+    public static String usage() {
+        return USAGE;
     }
 
     private void renderJson(
@@ -252,9 +252,6 @@ public final class DoctorCommand {
     }
 
     private static SymbolOutputFormat parse(String[] arguments) {
-        if (arguments.length == 0) return SymbolOutputFormat.TEXT;
-        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) return SymbolOutputFormat.TEXT;
-        if (arguments.length == 2 && "--format".equals(arguments[0])) return SymbolOutputFormat.parse(arguments[1]);
-        throw new IllegalArgumentException("unexpected doctor arguments");
+        return OPTIONS.parse(arguments, 0).format();
     }
 }

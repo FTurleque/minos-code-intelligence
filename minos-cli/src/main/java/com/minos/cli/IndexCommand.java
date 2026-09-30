@@ -7,20 +7,18 @@ import com.minos.output.SymbolOutputFormat;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /** Commande d'indexation autonome M14 avec compatibilité d'import M9. */
 public final class IndexCommand {
 
     public static final String NAME = "index";
-    private static final Set<String> SUPPORTED_OPTIONS = Set.of(
-            "--provider", "--force-full", "--dry-run", "--format", "--no-resume", "--resume-only",
-            "--scip", "--provider-version", "--module", "--snapshot");
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec()
+            .text("--provider", "--format", "--scip", "--provider-version", "--module", "--snapshot")
+            .flag("--force-full", "--dry-run", "--no-resume", "--resume-only");
     private static final String USAGE = """
             Usage: minos index <project> [options]
 
@@ -246,56 +244,17 @@ public final class IndexCommand {
                 throw new IllegalArgumentException("expected <project>");
             }
             String project = CliCommandSupport.operand(arguments[0], "project");
-            String provider = null;
-            boolean forceFull = false;
-            boolean dryRun = false;
-            boolean noResume = false;
-            boolean resumeOnly = false;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Path scip = null;
-            String providerVersion = null;
-            String module = null;
-            String snapshot = null;
-            Set<String> seen = new HashSet<>();
-            for (int index = 1; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (option == null || !SUPPORTED_OPTIONS.contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if ("--force-full".equals(option)) {
-                    forceFull = true;
-                    continue;
-                }
-                if ("--dry-run".equals(option)) {
-                    dryRun = true;
-                    continue;
-                }
-                if ("--no-resume".equals(option)) {
-                    noResume = true;
-                    continue;
-                }
-                if ("--resume-only".equals(option)) {
-                    resumeOnly = true;
-                    continue;
-                }
-                if (++index >= arguments.length || arguments[index] == null || arguments[index].isBlank()
-                        || arguments[index].startsWith("--")) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                String value = arguments[index];
-                switch (option) {
-                    case "--provider" -> provider = value;
-                    case "--format" -> format = SymbolOutputFormat.parse(value);
-                    case "--scip" -> scip = Path.of(value);
-                    case "--provider-version" -> providerVersion = value;
-                    case "--module" -> module = value;
-                    case "--snapshot" -> snapshot = value;
-                    default -> throw new IllegalStateException("unhandled option: " + option);
-                }
-            }
+            CliOptions options = OPTIONS.parse(arguments, 1);
+            String provider = options.text("--provider");
+            boolean forceFull = options.has("--force-full");
+            boolean dryRun = options.has("--dry-run");
+            boolean noResume = options.has("--no-resume");
+            boolean resumeOnly = options.has("--resume-only");
+            String scipValue = options.text("--scip");
+            Path scip = scipValue == null ? null : Path.of(scipValue);
+            String providerVersion = options.text("--provider-version");
+            String module = options.text("--module");
+            String snapshot = options.text("--snapshot");
             if (noResume && resumeOnly) {
                 throw new IllegalArgumentException("--no-resume and --resume-only are mutually exclusive");
             }
@@ -312,8 +271,8 @@ public final class IndexCommand {
             }
             IndexingResumePolicy resumePolicy = noResume ? IndexingResumePolicy.NO_RESUME
                     : resumeOnly ? IndexingResumePolicy.RESUME_ONLY : IndexingResumePolicy.RESUME;
-            return new Options(project, provider, forceFull, dryRun, format, scip, providerVersion, module, snapshot,
-                    resumePolicy);
+            return new Options(project, provider, forceFull, dryRun, options.format(), scip, providerVersion, module,
+                    snapshot, resumePolicy);
         }
     }
 }

@@ -22,6 +22,8 @@ public final class ToolsCommand {
               install <provider>    Install or bootstrap a managed provider
             """.stripTrailing();
 
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--format").flag("--all");
+
     private final AutonomousIndexOperations operations;
 
     public ToolsCommand(AutonomousIndexOperations operations) {
@@ -93,35 +95,19 @@ public final class ToolsCommand {
                 throw new IllegalArgumentException("unknown tools action: " + action);
             }
             String provider = null;
-            boolean all = false;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            int index = 1;
+            int optionsFrom = 1;
             if ("install".equals(action)) {
-                if (index >= arguments.length || arguments[index].startsWith("-")) {
+                if (arguments.length < 2 || arguments[1] == null || arguments[1].startsWith("-")) {
                     throw new IllegalArgumentException("tools install requires <provider>");
                 }
-                provider = arguments[index++];
+                provider = arguments[1];
+                optionsFrom = 2;
             }
-            while (index < arguments.length) {
-                String option = arguments[index];
-                if ("--all".equals(option)) {
-                    if (!"verify".equals(action)) {
-                        throw new IllegalArgumentException("--all is only valid with tools verify");
-                    }
-                    if (all) {
-                        throw new IllegalArgumentException("--all may only be specified once");
-                    }
-                    all = true;
-                    index++;
-                    continue;
-                }
-                if (!"--format".equals(option) || index + 1 >= arguments.length) {
-                    throw new IllegalArgumentException("unexpected tools option: " + option);
-                }
-                format = SymbolOutputFormat.parse(arguments[index + 1]);
-                index += 2;
+            CliOptions options = OPTIONS.parse(arguments, optionsFrom);
+            if (options.has("--all") && !"verify".equals(action)) {
+                throw new IllegalArgumentException("--all is only valid with tools verify");
             }
-            return new Parsed(action, provider, all, format);
+            return new Parsed(action, provider, options.has("--all"), options.format());
         }
     }
 }
