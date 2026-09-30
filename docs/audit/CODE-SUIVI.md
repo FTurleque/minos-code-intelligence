@@ -11,7 +11,7 @@
 | Lot | Contenu | Statut | Commits |
 |---|---|---|---|
 | 1 — Q6, Q7 | Inventaire, encodeur unique (`NaN`/`Infinity` refusés, échappement complet), un seul point d'échappement, ordre des clés stable sur 11 sites, garde-fous, preuve inter-JVM | livré, en attente du verdict final de `verif-code` | `72b3f9b4` … `c74aef8b` (§ 4) |
-| 2 — Q11, Q19, Q20 | Un seul parseur d'arguments (`CliOptions`), garde de `team`, `--help` avant `MINOS_HOME`, `--dry-run` sans effet de bord, `--no-resume` | en cours (§ 8 à 11) | § 10 |
+| 2 — Q11, Q19, Q20 | Un seul parseur d'arguments (`CliOptions`), garde de `team`, `--help` avant `MINOS_HOME`, `--dry-run` sans effet de bord, `--no-resume` | livré, en attente du verdict final de `verif-code` | `fcbcacd4` … `d2d1d66f` (§ 10) |
 | 3 — Q10, Q14 | Cycle de vie des ressources, exceptions avalées | à faire | — |
 | 4 — Q12, Q13 | Heuristiques et duplication | à faire | — |
 
@@ -184,7 +184,7 @@ Mesure de départ de `verif-code` (base, 12 lancements de `renderWorkspaces`, `r
 
 | Cible de l'audit | Emplacement réel | Constat |
 |---|---|---|
-| parsing d'arguments « ~15 fois » | `minos-cli/src/main/java/com/minos/cli/` : **22 analyseurs écrits à la main** (mesure : `ArchitectureCommand`, `FindSymbolCommand`, `FindUsagesCommand`, `GetSourceCommand`, `GitActivityCommand`, `IdeCommand.parseFormat`, `IdeIntelligenceCommand.options`, `ImpactCommand`, `ImportScipCommand`, `IndexCommand`, `NexusExportCommand.parseRoot`, `ProjectCommand` ×3 (`parseFormatOnly`, `singleProject`, `AddOptions`), `ProviderCommand`, `RelationshipCommand`, `RemoteIndexCommand`, `RetrievalStatusCommand`, `RuntimeCommand`, `SearchCodeCommand`, `TeamCommand.parseOptions`, `ToolsCommand`, `DoctorCommand.parse`) | plus que les ~15 annoncés ; comptage de départ : 18 « missing value for », 14 « duplicate option », 12 ensembles `seen`, 47 tests de `--help` écrits à la main, 15 `startsWith("--")`, 2 `toLowerCase()` sans `Locale` (`ProviderCommand`, `RetrievalStatusCommand`) |
+| parsing d'arguments « ~15 fois » | `minos-cli/src/main/java/com/minos/cli/` : **23 analyseurs écrits à la main** (mesure : `ArchitectureCommand`, `FindSymbolCommand`, `FindUsagesCommand`, `GetSourceCommand`, `GitActivityCommand`, `IdeCommand.parseFormat`, `IdeIntelligenceCommand.options`, `ImpactCommand`, `ImportScipCommand`, `IndexCommand`, `NexusExportCommand.parseRoot`, `ProjectCommand` ×3 (`parseFormatOnly`, `singleProject`, `AddOptions`), `ProviderCommand`, `RelationshipCommand`, `RemoteIndexCommand`, `RetrievalStatusCommand`, `RuntimeCommand`, `SearchCodeCommand`, `TeamCommand.parseOptions`, `ToolsCommand`, `DoctorCommand.parse`) | plus que les ~15 annoncés (le « 22 » de `fcbcacd4` et `3cb7ecfd` était un décompte faux d'une unité) ; comptage de départ : 18 « missing value for », 14 « duplicate option », 12 ensembles `seen`, 47 tests de `--help` écrits à la main, 15 `startsWith("--")`, 2 `toLowerCase()` sans `Locale` (`ProviderCommand`, `RetrievalStatusCommand`) |
 | `TeamCommand` « 17 `rejectUnknown` » | `TeamCommand.java` | **déjà résolu avant ce lot** par `7b7a571b` (« résidus sprint 1 », Q19) : table unique `OPERATIONS`, `rejectUnknown` en une occurrence dans `execute`, `audit --limit` borné par `MIN/MAX_AUDIT_LIMIT` → exit 2, garde `TeamCommandTest.everyDeclaredOperationRejectsUnknownOptionsBeforeReachingTheService`. Reste à faire pour Q19 : la garde repose sur une liste d'arguments valides recopiée dans le test, ne teste que l'option inconnue, et n'a jamais été prouvée par mutation ; `parseOptions` reste un huitième parseur distinct |
 | `doctor --help` | `DoctorCommand.parse` : `--help` seul renvoie `TEXT` puis le diagnostic complet ; `MinosCliRunner.STATELESS_HELP_COMMANDS` ne contient pas `doctor` → `MINOS_HOME` ouvert (mesuré : sondes du § 8.3) | confirmé |
 | `doctor` / `tools verify` | `DoctorCommand.run` (`ready` : tout provider `requiredByDefault` doit être `READY`) contre `ToolsCommand.run` (`UNSUPPORTED_BY_BACKEND` exclu du calcul) | confirmé ; le contrat documenté est celui de `tools verify` (`docs/developer/remote-worker-sandbox-disposition.md:38`) |
@@ -241,12 +241,102 @@ Un seul analyseur, `minos-cli/src/main/java/com/minos/cli/CliOptions.java`, dans
 | `--help` / `-h` | argument **unique** : usage sur la sortie standard, code 0, **avant toute ouverture de `MINOS_HOME`**, pour toutes les commandes | Q11 |
 | Code de sortie | 2 = erreur d'usage détectée à l'analyse ; 1 = tout échec après l'analyse, y compris une `IllegalArgumentException` venue d'un service | Q11 |
 
-### 9.2 Changements observables assumés (durcissements)
+### 9.2 Changements observables assumés
 
-Cette liste est reprise dans le rapport et la description de PR.
+Rapport et description de PR reprennent cette liste. Les changements de **code de sortie** sont dans le tableau du § 11.2 (résultat de la sonde AVANT/APRÈS, pas une liste de mémoire).
 
-1. **Options répétées refusées** (code 2, `duplicate option`) là où elles étaient tolérées : `tools <action> --format a --format b`, `providers --format a --format b`, `semantic|hybrid status <p> --format a --format b`.
-2. **Valeur commençant par `--` refusée** là où elle était avalée : `architecture <p> --module --x`, `project add <chemin> --name --x`, `import-scip … --module --x` (et les autres options à valeur de `import-scip`, `git-activity`, `impact`, `ide *`).
-3. **Messages d'erreur** : uniformes (`missing value for --format` à la place de « unknown option: --format », « unexpected arguments », « only --format is supported », « unexpected doctor arguments », « expected --root <project-root> », « --format requires a value »…) ; bornes : `--limit must be between 1 and 1000` (au lieu de `limit must be…`), `--limit must be an integer` (au lieu de `invalid limit: x` / `invalid value for --limit: x`). Les codes de sortie ne changent pas.
-4. `doctor --help` affiche l'usage (code 0) sans ouvrir `MINOS_HOME` ni lancer le diagnostic.
-5. Les autres changements (sorties, codes, refus de formes d'invocation) sont ajoutés au fil des commits, § 10.
+1. **Options répétées refusées** (2, `duplicate option`) là où elles étaient tolérées : `tools <action> --format a --format b`, `providers --format a --format b`, `semantic|hybrid status <p> --format a --format b`.
+2. **Valeur commençant par `--` refusée** (2, `missing value for …`) là où elle était avalée : `architecture <p> --module --x`, `project add <chemin> --name --x`, `import-scip … --module|--snapshot|--provider-version --x`, valeurs de `git-activity`, `impact`, `ide *`.
+3. **`-x` en position d'option** : « unknown option: -x » (avant : opérande ou « unexpected argument ») ; par exemple `providers -x` (avant : identifiant de provider « -x », code 1 ; maintenant 2), `find-usages|<relation> <p> <s> -h` (V-L2-01 : message seulement).
+4. **Messages d'erreur uniformes** (codes inchangés) : `missing value for --format` à la place de « unknown option: --format » (`get-source`), « unexpected arguments » (`project inspect`, `inspect`, `index-status`), « only --format is supported » (`project list`), « unexpected doctor arguments », « unexpected tools option », « expected --root … », « --format requires a value » (`providers`, `semantic|hybrid status`), « only --format is supported after handshake » ; bornes `--limit must be between 1 and 1000` / `--limit must be an integer` (avant : `limit must be …`, `invalid limit: x`, `invalid value for --limit: x`, `audit limit must be …`, `token-hours must be …`) ; `import-scip` : « unknown or duplicate option » scindé.
+5. **`doctor --help`** affiche l'usage (0) sans ouvrir `MINOS_HOME` ni lancer le diagnostic ; **`<commande> <x> --help|-h`** (`tools install --help`, `team audit --help`, `runtime sessions --help`, `ide program-graph -h`, `find-symbol p --help`, `mcp --help`) sort 0 avec l'usage et sans créer `MINOS_HOME` (avant : erreur d'usage 2, ou `-h` pris pour un opérande, après création de `MINOS_HOME`).
+6. **`doctor` et `tools verify`** : même verdict, `UNSUPPORTED_BY_BACKEND` ne bloque plus `doctor` (0 / `READY` au lieu de 1 / `ACTION_REQUIRED`).
+7. **`ide <opération>`** : une erreur venue d'un service (projet inconnu…) sort **1** (avant 2, sans usage) ; les bornes hors plage (`--max-nodes 0`, `--minimum-score 2`…) restent 2, avec l'usage. Le plugin IntelliJ n'est pas concerné (`MinosCliClient.runJsonRaw` : tout code hors `{0}` est un échec, `{0,1}` pour `doctor`).
+8. **`index --dry-run`** n'écrit plus rien (ni bail `index-state/locks/indexing/<id>.lock`, ni `index-state/projects/<id>.properties`, ni réparation d'état).
+9. **`index --no-resume`** force un run complet (avant : `NO_CHANGES` sur un projet inchangé) ; **`index --dry-run --no-resume|--resume-only`** refusé (2) au lieu de l'ignorance silencieuse. `index <p> --dry-run --force-full` (forme du plugin IntelliJ) reste valide.
+10. **`doctor`** : un échec du diagnostic lui-même sort 1 avec `error: doctor failed: …` (avant : remontait au lanceur, `error: MINOS bootstrap failed: …`, déjà code 1).
+11. **`team … --token x`** : « bearer tokens are accepted only through MINOS_TEAM_TOKEN » est affiché tel quel (avant : « error: UsageException », le mot « bearer » déclenchait la redaction) ; `team retention-set --bogus x` dit « unknown team option » avant « missing required option ».
+
+## 10. Journal par commit (lot 2)
+
+Gates rejoués après chaque commit : `check-module-boundaries.py`, `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py`, plus `scripts/remediation/check-post-mne.py` (qui rejoue les gates de jalon actifs) ; boundaries `modules=14, sources=500, packages=45` à partir de `3cb7ecfd` (**+1 source : `CliOptions.java`**, seul fichier de production ajouté par le lot), les trois autres gates inchangés (`SUCCESS`, `SUCCESS`, `scripts checked=95`).
+
+| Commit | Contenu | Rouge (sortie jointe au message) |
+|---|---|---|
+| `fcbcacd4` | ce suivi : inventaire, matrice AVANT, règles | — |
+| `3cb7ecfd` | `CliOptions` + find-symbol, search, get-source, find-usages, 6 relations | `SymbolCommandsArgumentRulesTest` : search 13, relations 5, find-symbol 5, find-usages 5, get-source 4 |
+| `69d33300` | caractérisation des invocations valides des autres commandes (10 tests, verts sur la base) | — |
+| `98fb85a0` | architecture, impact, git-activity, project ×3, import-scip, providers, semantic/hybrid status, nexus-export, ide handshake | Analysis/Administration…RulesTest : import-scip 15, project list 7, ide handshake 7, impact 8… |
+| `118e7678` | index, tools, doctor, remote, runtime | `ExecutionCommandsArgumentRulesTest` : doctor 7, tools 7… |
+| `4ec07c18` | team sur `CliOptions` ; garde Q19 dérivée de la table et de l'usage ; preuve par mutation | `TeamCommandsArgumentRulesTest` : audit 5, token-issue 5, retention-set 7 |
+| `b14e0471` | `ide <opération>` : analyse séparée de l'exécution, IAE de service → 1 | `IdeIntelligenceCommandTest` 4/4 rouges |
+| `8a115de8` | `--help` avant `MINOS_HOME`, table de routes unique de `MinosCli` (**commit rouge sur `check-post-mne`, voir V-L2-08**) | « doctor --help created MINOS_HOME » |
+| `28abcd71` | correction : littéral `remoteIndexCommand.run` exigé par `check-remote-distributed-consistency.py` | — |
+| `77ed369c` | verdict commun `doctor` / `tools verify` | `ProviderVerdictConsistencyTest` 2/3 rouges |
+| `4d585a33` | `index --dry-run` sans effet de bord | `IndexDryRunSideEffectsTest` 2/2 rouges (bail + état) |
+| `a90710bc` | garde Q19 : opération hors table, valeurs mal formées (V-L2-03, V-L2-04) ; retrait de deux exceptions périmées de `JsonOrderGuardTest` | 4 mutations tuées |
+| `d9c8b920` | Q20 : `--no-resume` = run complet ; `--dry-run` refuse les drapeaux de reprise | `NoResumeIndexingTest` 1/2, `IndexCommandResumeFlagsTest` 1 |
+| `68fe989f` | gardes de source du parseur unique + couverture de toute commande (Q19 étendu) | 3 mutations tuées |
+| `d2d1d66f` | `--help` des sous-opérations et de `mcp` (V-L2-06, V-L2-07) | `StableCliHelpTest` 2/2 rouges |
+
+## 11. Preuves
+
+### 11.1 Rouge → vert, et comptages
+
+Comptage dans `minos-cli/src/main/java` (base `00ed1227` → fin de lot) : analyseurs d'options écrits à la main **23 → 0** (un seul : `CliOptions`) ; « missing value for » 18 → 2 (les deux sont dans `CliOptions`) ; définition du test d'aide `--help`/`-h` 47 occurrences → 1 (`CliCommandSupport.isHelp`) ; `startsWith("-…")` 18 → 6 (dont `CliOptions`, `CliCommandSupport.isOperand`, `IdeIntelligenceCommand.requirePositions` : exceptions nommées dans `CliParsingGuardTest`) ; ensembles `seen` de doublons 12 → 0 ; `toLowerCase()` sans `Locale` 2 → 0 ; `Integer.parseInt`/`Double.parseDouble` 8 → 4 (les quatre sont dans `CliOptions`, garde `CliParsingGuardTest`) ; lignes de production de `minos-cli` 6018 → 5734 malgré `CliOptions` et la table de routes (284 lignes en moins).
+
+Les tests de règles (`*ArgumentRulesTest`, toutes les commandes de premier niveau, dérivés par `CliArgumentRules` de la description de chaque commande) ont tous été joués **avant** la migration de leur groupe sur le code d'origine : rouge sortie dans le message de chaque commit (§ 10), vert après.
+
+### 11.2 Matrice APRÈS et changements de code de sortie (sonde AVANT/APRÈS)
+
+Même sonde que le § 8.3 rejouée en fin de lot : 338 cellules comparées ; **12 changements de code de sortie**, 93 changements de message seul, aucun autre écart.
+
+| Commande | Forme | Code AVANT → APRÈS | Raison |
+|---|---|---|---|
+| `architecture` | `--module --x` | 1 → 2 | valeur ressemblant à une option refusée |
+| `project add` | `--name --x` | 1 → 2 | idem |
+| `import-scip` | `--module --x` | 1 → 2 | idem |
+| `tools list` | `--format json --format json` | 0 → 2 | option répétée refusée |
+| `tools verify` | `--format json --format json` | 1 → 2 | idem (l'analyse précède le diagnostic) |
+| `providers` | `--format json --format json` | 0 → 2 | idem |
+| `semantic status`, `hybrid status` | `--format json --format json` | 1 → 2 | idem |
+| `doctor` | `--help` | 1 → 0 | usage, sans diagnostic ni `MINOS_HOME` |
+| `ide semantic-index-status`, `ide program-graph` (et toute opération `ide`) | `--format JSON` sur un projet inconnu | 2 → 1 | erreur de service = erreur d'exécution |
+
+Hors sonde, mesurés par tests : `providers -x` 1 → 2, `find-symbol p --help` (et `<commande> <x> --help`) 2 → 0, `index p --dry-run --no-resume|--resume-only` 0 → 2, `doctor` sur un provider requis `UNSUPPORTED_BY_BACKEND` 1 → 0, `index p --no-resume` sur un projet inchangé `NO_CHANGES` → run complet.
+
+### 11.3 Garde Q19 — preuve par mutation (temporaire, annulée à chaque fois)
+
+| Mutation | Résultat |
+|---|---|
+| 18e opération « audit-export » documentée avec `--limit <1..10000>` mais sans borne à l'analyse | `TeamOperationGuardTest` 2 rouges : « audit-export --limit 0 -> exit 1 error: audit limit must be between 1 and 10000 » |
+| analyse qui tolère ce qu'elle refuse (le défaut des 17 `rejectUnknown` oubliés) | `TeamOperationGuardTest` 4 rouges, `TeamCommandTest` 2 : « audit --limit 0 -> exit 0 » |
+| opération traitée hors de la table (`if ("ping".equals(arguments[0]))` dans `run`) | `TeamCommandDispatchGuardTest` 2 rouges (V-L2-03) |
+| `role()` lève une `IllegalStateException` ; `role()` accepte tout ; UUID jamais contrôlé | `TeamOperationGuardTest` 1 rouge chacune (+ `TeamCommandTest` 2 pour l'UUID) (V-L2-04) |
+| route « ghost » ajoutée à `MinosCli` | `CliParsingGuardTest.everyTopLevelCommand…` et `StableCliHelpTest.theCommandTableMatchesTheTopLevelUsage` rouges |
+| `startsWith("--limit")` + `Integer.parseInt` dans `ProviderCommand` ; `toLowerCase()` sans `Locale` | `CliParsingGuardTest` 2 et 1 rouges |
+
+Les sorties des mutations sont dans le scratchpad de la session (`lot2-mutation*.log`).
+
+## 12. Constats de verif-code (lot 2)
+
+| Id | Sévérité | Constat | Résolution |
+|---|---|---|---|
+| V-L2-01 | remarque | `-h` en position d'option : « unexpected argument: -h » → « unknown option: -h » (`find-usages`, relations), non listé au message de commit | listé au § 9.2 (3) |
+| V-L2-02 | remarque | le message de `98fb85a0` (« Aucun code de sortie ne change ») était inexact : 9 invocations changeaient de code | tableau AVANT → APRÈS du § 11.2 (mesuré, 12 codes) |
+| V-L2-03 | à corriger | une sous-commande gérée hors de `OPERATIONS` atteignait le service sans être vue de la garde | `a90710bc` : `TeamCommandDispatchGuardTest` (scan du code d'instance : service et jeton uniquement dans l'unique `invocation.run(service, this::token)`, jamais de comparaison à un littéral) ; vérifié par mutation par `verif-code` |
+| V-L2-04 | à corriger | valeurs mal formées (`--role bogus`, UUID) non verrouillées en code 2 | `a90710bc` : classement `MALFORMED` / `FREE_TEXT` de toute option texte ; vérifié par mutation |
+| V-L2-05 | remarque | la caractérisation « verte sur la base » contenait un échantillon invalide (`ide hybrid-context … --max-tokens 100`, déjà refusé par le domaine) que l'assertion lâche des commandes `ide` laissait passer ; corrigé en 200 par `b14e0471` sans le dire | reconnu ici : `CliValidInvocationsTest` reste vert sur la base pour tout le reste ; l'échantillon corrigé est valide sur la base aussi |
+| V-L2-06 | à corriger | `<commande> <sous-opération> --help` ouvrait `MINOS_HOME` | `d2d1d66f` : règle « dernier des trois arguments au plus » |
+| V-L2-07 | remarque | `mcp --help` ouvrait `MINOS_HOME` puis sortait 2 | `d2d1d66f` : `mcp --help` affiche « Usage: minos mcp » |
+| V-L2-08 | remarque | le message de `8a115de8` annonçait `check-post-mne` vert alors que le commit était rouge (`check-remote-distributed-consistency.py:147` exige `remoteIndexCommand.run`) | `28abcd71` (correction séparée, gate inchangée) ; leçon : rejouer `check-post-mne` **avant** chaque commit ; l'historique n'a pas été réécrit |
+
+## 13. À traiter plus tard (lot 2)
+
+- **Câblage eager du CLI** : `MinosCliRunner.run(MinosApplication…)` construit `LocalRemoteIndexOperations`, `ProviderPlatformService`… pour toute commande, même en lecture (`distributed-artifacts/.leases` est créé par `project list`) ; un câblage paresseux rendrait tout `MINOS_HOME` intact pour les commandes de lecture. Relevé par `IndexDryRunSideEffectsTest` (le test l'écarte par une première commande de lecture). Concerne le lot 3 (cycle de vie).
+- **Erreurs d'usage qui ouvrent `MINOS_HOME`** : seule l'aide est traitée sans état ; `find-symbol --bogus` ouvre `MINOS_HOME` avant de refuser l'option. L'analyse avant ouverture demanderait de séparer analyse et exécution au niveau du dispatcher (l'analyseur est déjà sans service).
+- **`RetrievalStatusCommand` et `DoctorCommand`** : l'`IOException` d'un service remonte hors de `run` (pas de code 1 avec `error:`), contrairement aux autres commandes ; comportement conservé (hors périmètre).
+- **`--help` au-delà de trois arguments** (`team member-grant --principal x --help`) reste une option inconnue (2) et ouvre `MINOS_HOME` ; un `--help` au milieu d'une ligne n'a jamais été un cas d'aide.
+- **Bornes MCP de `minos_team_audit`** (`McpToolSchemas.java:141`, `MinosMcpTools.java:417`) dupliquées hors de `MIN/MAX_AUDIT_LIMIT` : remarque W8 des résidus du sprint 1, toujours ouverte (zone `minos-mcp`).
+- **`scripts/history/m21/check-m21-parity.py`** ne résout plus ses chemins (« missing required file: minos-cli/…/IdeCommand.java » alors que le fichier existe) : gate d'historique cassée avant ce lot, non rejouée par `check-post-mne`.
+- **Sonde et guides** : la sonde `ArgumentMatrixProbe` (29 commandes × formes) n'est pas commitée ; `CliArgumentRules` en est la version permanente et déclarative.

@@ -432,6 +432,17 @@ Le binaire `app\minos.exe mcp` de la distribution Windows est désormais directe
 
 Ce runner ne crée aucun tag, ne publie aucune release et ne déclenche aucun GitHub Actions.
 
+## Règles des arguments
+
+Toutes les commandes partagent le même analyseur d'arguments :
+
+- un nom d'option est exact et sensible à la casse (`--Format` est inconnu) ; la valeur d'un choix (`--format JSON`, `--kind Class`, `--role viewer`) ne l'est pas ;
+- une option à valeur exige une valeur : une valeur absente, vide ou commençant par `--` est refusée (`missing value for --limit`) au lieu d'avaler l'option suivante ; une valeur commençant par un seul tiret est une valeur (`--limit -5` est signalé hors borne) ;
+- une option répétée est refusée (`duplicate option: --format`), qu'elle porte une valeur ou non ;
+- une option inconnue (`unknown option: --x`) ou un argument en trop (`unexpected argument: x`) est refusé ;
+- les bornes annoncées dans l'usage sont contrôlées avant tout accès aux données (`--limit must be between 1 and 10000`, code 2) ;
+- `--help` ou `-h`, seul après la commande ou après son opération (`minos tools install --help`, `minos team audit --help`), affiche l'usage et sort 0 sans ouvrir `MINOS_HOME`, y compris pour `doctor` et `mcp` ; ailleurs, `--help` est une option inconnue.
+
 ## Codes de sortie
 
 ```text
@@ -439,5 +450,7 @@ Ce runner ne crée aucun tag, ne publie aucune release et ne déclenche aucun Gi
 1  erreur d'exécution / diagnostic action requise
 2  erreur d'usage
 ```
+
+Le code 2 est réservé aux erreurs d'usage détectées à l'analyse des arguments, avant tout appel de service. Une erreur levée ensuite par un service (projet inconnu, par exemple) est une erreur d'exécution (code 1), y compris pour les opérations `ide`.
 
 En automatisation : utiliser `--format json` et tester le code de sortie avant de consommer stdout.
