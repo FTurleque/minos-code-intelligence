@@ -19,10 +19,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /** La décision unique de confinement d'un artefact au répertoire de run (Q5), cas par cas. */
 class ArtifactConfinementTest {
 
+    private static final String INDEX_FILE = "index.scip";
+
     @Test
     void aRegularFileUnderTheRunDirectoryIsInside(@TempDir Path temp) throws IOException {
         Path runDirectory = Files.createDirectories(temp.resolve("run"));
-        Path artifact = write(runDirectory.resolve("provider").resolve("scope").resolve("index.scip"));
+        Path artifact = write(runDirectory.resolve("provider").resolve("scope").resolve(INDEX_FILE));
 
         assertDoesNotThrow(() -> ArtifactConfinement.requireInside(runDirectory, artifact));
     }
@@ -30,8 +32,8 @@ class ArtifactConfinementTest {
     @Test
     void aPathThatNormalizesOutsideTheRunDirectoryIsOutside(@TempDir Path temp) throws IOException {
         Path runDirectory = Files.createDirectories(temp.resolve("run"));
-        Path outside = write(temp.resolve("outside").resolve("index.scip"));
-        Path viaParent = runDirectory.resolve("..").resolve("outside").resolve("index.scip");
+        Path outside = write(temp.resolve("outside").resolve(INDEX_FILE));
+        Path viaParent = runDirectory.resolve("..").resolve("outside").resolve(INDEX_FILE);
 
         assertEquals(Reason.OUTSIDE, reasonOf(runDirectory, viaParent));
         assertEquals(Reason.OUTSIDE, reasonOf(runDirectory, outside));
@@ -41,7 +43,7 @@ class ArtifactConfinementTest {
     void aSiblingDirectoryWhoseNameOnlyStartsLikeTheRunDirectoryIsOutside(@TempDir Path temp) throws IOException {
         // A textual prefix is not containment: "run-evil" starts with "run".
         Path runDirectory = Files.createDirectories(temp.resolve("run"));
-        Path sibling = write(temp.resolve("run-evil").resolve("index.scip"));
+        Path sibling = write(temp.resolve("run-evil").resolve(INDEX_FILE));
 
         assertEquals(Reason.OUTSIDE, reasonOf(runDirectory, sibling));
     }
@@ -58,7 +60,7 @@ class ArtifactConfinementTest {
 
     @Test
     void aMissingRunDirectoryCannotBeResolved(@TempDir Path temp) throws IOException {
-        Path artifact = write(temp.resolve("somewhere").resolve("index.scip"));
+        Path artifact = write(temp.resolve("somewhere").resolve(INDEX_FILE));
 
         assertEquals(Reason.UNRESOLVABLE, reasonOf(temp.resolve("no-such-run"), artifact));
     }
@@ -68,7 +70,7 @@ class ArtifactConfinementTest {
         assumeTrue(canLink(temp), "symbolic links are not available here");
         Path runDirectory = Files.createDirectories(temp.resolve("run"));
         Path real = write(runDirectory.resolve("real.scip"));
-        Path link = Files.createSymbolicLink(runDirectory.resolve("index.scip"), real);
+        Path link = Files.createSymbolicLink(runDirectory.resolve(INDEX_FILE), real);
 
         assertEquals(Reason.LINKED, reasonOf(runDirectory, link));
     }
@@ -79,16 +81,16 @@ class ArtifactConfinementTest {
         // V-L4-03: "no link on the way" is the whole guarantee, not only for the last component.
         assumeTrue(canLink(temp), "symbolic links are not available here");
         Path runDirectory = Files.createDirectories(temp.resolve("run"));
-        Path real = write(runDirectory.resolve("provider").resolve("scope").resolve("index.scip"));
+        Path real = write(runDirectory.resolve("provider").resolve("scope").resolve(INDEX_FILE));
         Path linkedDirectory = Files.createSymbolicLink(runDirectory.resolve("shortcut"), real.getParent());
 
-        assertEquals(Reason.LINKED, reasonOf(runDirectory, linkedDirectory.resolve("index.scip")));
+        assertEquals(Reason.LINKED, reasonOf(runDirectory, linkedDirectory.resolve(INDEX_FILE)));
     }
 
     @Test
     void anEscapeNeverCarriesAPath(@TempDir Path temp) throws IOException {
         Path runDirectory = Files.createDirectories(temp.resolve("run"));
-        Path outside = write(temp.resolve("outside").resolve("index.scip"));
+        Path outside = write(temp.resolve("outside").resolve(INDEX_FILE));
 
         Escape escape = assertThrows(Escape.class, () -> ArtifactConfinement.requireInside(runDirectory, outside));
 

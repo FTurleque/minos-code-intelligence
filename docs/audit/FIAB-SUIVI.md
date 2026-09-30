@@ -13,7 +13,7 @@
 | 1 — R4, R5, R7 | Promotion reprise bornée aux cibles courantes, rétention d'un run reprenable (parcours tronqué, run concurrent, durée de vie), réparation « snapshot stable » alignée | livré, en attente du verdict final de `verif-fiab` | `cdeac459` … (§ 4) |
 | 2 — P1, Q3, Q4 | Un seul régime de verrous ; lecture d'état sans bail exclusif (§ 8) | en cours (branche `fiab/p1-q3-q4-verrous`, depuis la branche du lot 1 `bcdadd23`) | § 8.8 |
 | 3 — R2, R3 | Propriété des cgroups : R2 et R3 déjà fermés sur `develop` (§ 9.1) ; le lot referme les trous restants de la décision « ce cgroup appartient à un MINOS mort » (§ 9.4) | livré, en attente du verdict final de `verif-fiab` (branche `fiab/r2-r3-cgroups`, depuis la branche du lot 2, fusion `8670f2e2`) | § 9.7 |
-| 4 — Q5, R6 | Interruption de bout en bout (le drapeau était rétabli avant d'écrire l'état), confinement du chemin d'artefact (PLAUSIBLE reproduit puis corrigé) | livré, en attente du verdict final de `verif-fiab` (branche `fiab/q5-r6-interruption`, depuis la branche du lot 3 `cab6f74e`) | § 10.6 |
+| 4 — Q5, R6 | Interruption de bout en bout (le drapeau était rétabli avant d'écrire l'état), confinement du chemin d'artefact (PLAUSIBLE reproduit puis corrigé) | livré, `VERDICT-FINAL: ok` de `verif-fiab` (branche `fiab/q5-r6-interruption`, depuis la branche du lot 3 `cab6f74e`) | § 10.6 |
 | 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) | à faire | — |
 
 ## 2. Inventaire daté (base `017e339d`, 30 septembre 2026)
@@ -247,6 +247,8 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 - **(lot 4) Les autres `catch (InterruptedException)` de `minos-runtime-local`** (`ProcessOwnershipTracker`, `ProviderWriteQuotaSupervisor`, `ProcessTreeTermination`, sandbox Windows) rétablissent le drapeau sans relancer : ils n'atteignent l'orchestrateur qu'en cause chaînée (vérifié pour le chemin d'un provider) et n'ont pas été modifiés.
 - **(lot 4) Confinement ignoré sans répertoire de run** (V-L4-04) : `ResumableRunMarkers.none()` ne connaît aucun répertoire de run ; c'est une décision (§ 10.4), valable tant que le câblage de production fournit toujours un répertoire. À reconsidérer si un port inerte apparaissait en production.
 - **(lot 4) Un répertoire de run nommé en nom LONG avec un artefact écrit en nom COURT (8.3) est refusé** (V-L4-05) : `ArtifactConfinement` lit le chemin sous le répertoire tel qu'il est écrit, puis sous sa forme résolue ; l'artefact écrit en nom long sous un répertoire en nom court est accepté, l'inverse non. `41be5596` acceptait les deux, `66fd1d17` (qui refuse tout lien à tout niveau) ne le peut plus sans deviner si un alias est un lien. Échec fermé (au pire une reprise refusée, donc un run complet), jamais observé : l'artefact et le marqueur dérivent du même `MINOS_HOME`. Les chemins persistés d'un run écrit avec un `MINOS_HOME` exprimé autrement (court/long) ne seraient plus reprenables.
+- **(lot 4) Les tests de liens symboliques se sautent (`assumeTrue`) sur un Windows sans privilège** (R-L4-B) : une CI Windows sans mode développeur ne les exécute pas ; le cas `..` et les tests de `ArtifactConfinementTest` sans lien, eux, s'exécutent toujours. Les liens ont été exécutés ici (Windows avec privilège, WSL) : 0 test sauté.
+- **(lot 4) Après une interruption, les appelants de l'exécuteur écrivent drapeau levé** (R-L4-C) : l'exécuteur rejoue le drapeau en sortant, et un appelant qui écrit ensuite (par exemple `LocalAutonomousIndexOperations` : `recoverPromotedRunIfNeeded`, la compaction de la rétention) peut échouer en `ClosedByInterruptException` (non sondé). Comportement d'avant le lot, hors périmètre : le run, lui, est déjà persisté. À traiter si un arrêt réel du service doit aussi nettoyer derrière lui.
 - **(lot 4) Rejeu ×50 sous Linux et interruption d'un provider externe réel sous sandbox** : non exécutés (le test simule le provider par un exécuteur) ; le test passe sous WSL en une exécution.
 
 ## 8. Lot 2 — P1, Q3, Q4 : un seul régime de verrous
@@ -650,7 +652,8 @@ Gates rejoués à chaque commit : `check-module-boundaries.py` (`modules=14, sou
 | `af85eab9` | refactor : un seul endroit efface le drapeau pour écrire | idem |
 | `3c71e622` | tests rouges : V-L4-03 (ancêtre lié vers l'intérieur, artefact frais échangé), V-L4-04 (message sans chemin) | idem |
 | `66fd1d17` | V-L4-03/04 : aucun lien à aucun niveau, chaque artefact reconfiné avant la mise en snapshot, message sans chemin | idem |
-| (commit suivant) | preuves de fin de lot, constats de verif-fiab | idem |
+| `8bec5c6e` | décisions, journal, preuves de fin de lot, constats | idem |
+| (commit suivant) | remarques non bloquantes du verdict final : constantes des tests, § 7 | idem |
 
 Gates rejoués après chaque commit : `check-module-boundaries.py` (`modules=14`, `sources=505` depuis `41be5596` : +1 classe de production, `ArtifactConfinement`, attendue ; `packages=45`), `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py` (`scripts checked=95`), `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py`, `check-remote-distributed-consistency.py` (le lot touche `DistributedIndexerExecutor`) : SUCCESS. Aucun script de `scripts/` ne nomme les méthodes touchées (grep fait avant chaque changement de nom).
 
@@ -707,4 +710,4 @@ Gates rejoués après chaque commit : `check-module-boundaries.py` (`modules=14`
 
 ### 10.9 Constats de verif-fiab (lot 4)
 
-V-L4-01 à V-L4-05 et leur résolution : § 6, « Lot 4 ». Aucun constat ouvert à la fin du lot (en attente du `VERDICT-FINAL`).
+V-L4-01 à V-L4-05 et leur résolution : § 6, « Lot 4 ». Aucun constat ouvert à la fin du lot : `VERDICT-FINAL: ok` de `verif-fiab` sur `8bec5c6e` (`clean verify` rejoué de son côté : 1 773 tests, 0 échec, 9 min 57 ; rejeux ×50 indépendants sur les cinq classes du lot). Trois remarques non bloquantes, consignées : R-L4-A (littéraux dupliqués dans `IndexingArtifactConfinementTest`, factorisés en constantes), R-L4-B et R-L4-C (§ 7).

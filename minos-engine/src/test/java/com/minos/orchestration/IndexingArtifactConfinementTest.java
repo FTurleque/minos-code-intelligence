@@ -30,6 +30,9 @@ class IndexingArtifactConfinementTest {
 
     private static final String PROVIDER = "scip-typescript";
     private static final Instant T0 = Instant.parse("2026-09-26T08:00:00Z");
+    private static final String INDEX_FILE = "index.scip";
+    private static final String SYMBOLIC_LINK = "symbolic link";
+    private static final String LINKS_UNAVAILABLE = "symbolic links are not available here";
     private static final String OUTSIDE_CONTENT = "scip:a file that is not in the run directory";
 
     @Test
@@ -46,20 +49,20 @@ class IndexingArtifactConfinementTest {
 
     @Test
     void anArtifactThatIsASymbolicLinkToAFileOutsideTheRunDirectoryIsRefused(@TempDir Path temp) throws Exception {
-        assumeTrue(symbolicLinksAvailable(temp), "symbolic links are not available here");
+        assumeTrue(symbolicLinksAvailable(temp), LINKS_UNAVAILABLE);
         Fixture fixture = new Fixture(temp);
         Path outside = outsideArtifact(fixture);
         BiFunction<Path, IndexingExecutionRequest, Path> throughALeafLink = (runDirectory, request) ->
-                link(runDirectory.resolve("index.scip"), outside);
+                link(runDirectory.resolve(INDEX_FILE), outside);
 
         IndexingRun run = execute(fixture, throughALeafLink);
 
-        assertRefusedWithoutStaging(fixture, run, "symbolic link");
+        assertRefusedWithoutStaging(fixture, run, SYMBOLIC_LINK);
     }
 
     @Test
     void anArtifactUnderADirectoryLinkedOutsideTheRunDirectoryIsRefused(@TempDir Path temp) throws Exception {
-        assumeTrue(symbolicLinksAvailable(temp), "symbolic links are not available here");
+        assumeTrue(symbolicLinksAvailable(temp), LINKS_UNAVAILABLE);
         Fixture fixture = new Fixture(temp);
         Path outside = outsideArtifact(fixture);
         BiFunction<Path, IndexingExecutionRequest, Path> throughAnAncestorLink = (runDirectory, request) ->
@@ -67,14 +70,14 @@ class IndexingArtifactConfinementTest {
 
         IndexingRun run = execute(fixture, throughAnAncestorLink);
 
-        assertRefusedWithoutStaging(fixture, run, "symbolic link");
+        assertRefusedWithoutStaging(fixture, run, SYMBOLIC_LINK);
     }
 
     @Test
     void anArtifactReplacedByALinkWhileLaterProvidersRanIsRefusedBeforeStaging(@TempDir Path temp) throws Exception {
         // V-L4-03: the first scope's artifact was confined when its provider returned; the provider of the second
         // scope then runs, and the directory of the first artifact is swapped for a link to a copy outside.
-        assumeTrue(symbolicLinksAvailable(temp), "symbolic links are not available here");
+        assumeTrue(symbolicLinksAvailable(temp), LINKS_UNAVAILABLE);
         Fixture fixture = new Fixture(temp);
         Path outside = outsideArtifact(fixture);
         IndexerExecutor swapsTheFirstArtifactsDirectory = new Fixture.Executor(fixture, 99) {
@@ -97,7 +100,7 @@ class IndexingArtifactConfinementTest {
                 fixture.projectId, fixture.root, fixture.discovery(), IndexingResumeTest.negotiation());
 
         assertEquals(IndexingRun.Status.FAILED, run.status(), "an artifact swapped for a link is refused");
-        assertTrue(run.message().orElseThrow().contains("symbolic link"), run.message().orElse(""));
+        assertTrue(run.message().orElseThrow().contains(SYMBOLIC_LINK), run.message().orElse(""));
         assertTrue(fixture.stager.requests.isEmpty(), "nothing swapped in is staged");
     }
 
@@ -121,7 +124,7 @@ class IndexingArtifactConfinementTest {
         BiFunction<Path, IndexingExecutionRequest, Path> inside = (runDirectory, request) -> {
             try {
                 Path directory = Files.createDirectories(runDirectory.resolve(PROVIDER).resolve("scope"));
-                return Files.writeString(directory.resolve("index.scip"), "scip:inside");
+                return Files.writeString(directory.resolve(INDEX_FILE), "scip:inside");
             } catch (IOException failure) {
                 throw new IllegalStateException(failure);
             }
@@ -163,7 +166,7 @@ class IndexingArtifactConfinementTest {
 
     private static Path outsideArtifact(Fixture fixture) throws IOException {
         Path directory = Files.createDirectories(fixture.home.resolve("outside"));
-        return Files.writeString(directory.resolve("index.scip"), OUTSIDE_CONTENT);
+        return Files.writeString(directory.resolve(INDEX_FILE), OUTSIDE_CONTENT);
     }
 
     /** Un seul cible, dont l'exécuteur rend le chemin calculé par {@code artifactFor(répertoire de run, requête)}. */
