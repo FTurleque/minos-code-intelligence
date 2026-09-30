@@ -40,6 +40,7 @@ import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static com.minos.domain.Preconditions.requireText;
 
@@ -67,6 +68,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static final long MAX_POINTER_BYTES = 512L * 1024L;
     private static final int MAX_INITIAL_LIST_CAPACITY = 16_384;
     private static final String ACTIVE_FILE = "active.pointer";
+    private static final String FILE_PREFIX = "fingerprint-";
     private static final BuildDescriptorPolicy CURRENT_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m24Defaults();
     private static final BuildDescriptorPolicy LEGACY_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m17Defaults();
     private static final HexFormat HEX = HexFormat.of();
@@ -296,6 +298,24 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         }
     }
 
+    /** The file the active pointer names, or {@code null} when none is published; a dangling pointer fails. */
+    private String activeFileName(Path projectDirectory) throws IOException {
+        Path activePointer = projectDirectory.resolve(ACTIVE_FILE);
+        if (!regularFileExists(activePointer, "active fingerprint pointer")) return null;
+        ActivePointer pointer = readPointer(activePointer);
+        Path activeFile = resolveFile(projectDirectory, pointer.fileName());
+        if (!regularFileExists(activeFile, "active fingerprint snapshot")) {
+            throw new IOException("active fingerprint snapshot file is missing: " + activeFile);
+        }
+        return pointer.fileName();
+    }
+
+    private static Set<String> protectedPrefixes(Set<String> protectedSnapshotIds) {
+        return protectedSnapshotIds.stream()
+                .map(snapshotId -> FILE_PREFIX + Sha256.hex(requireText(snapshotId, "protectedSnapshotId")) + "-")
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
     private FingerprintRetentionResult compactLocked(
             UUID projectId,
             Set<String> additionallyProtectedSnapshotIds,
@@ -304,21 +324,8 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         Path projectDirectory = existingProjectDirectory(projectId);
         if (projectDirectory == null) return new FingerprintRetentionResult(0, 0);
 
-        String activeFileName = null;
-        Path activePointer = projectDirectory.resolve(ACTIVE_FILE);
-        if (regularFileExists(activePointer, "active fingerprint pointer")) {
-            ActivePointer pointer = readPointer(activePointer);
-            Path activeFile = resolveFile(projectDirectory, pointer.fileName());
-            if (!regularFileExists(activeFile, "active fingerprint snapshot")) {
-                throw new IOException("active fingerprint snapshot file is missing: " + activeFile);
-            }
-            activeFileName = pointer.fileName();
-        }
-
-        Set<String> protectedPrefixes = new HashSet<>();
-        for (String snapshotId : additionallyProtectedSnapshotIds) {
-            protectedPrefixes.add("fingerprint-" + Sha256.hex(requireText(snapshotId, "protectedSnapshotId")) + "-");
-        }
+        String activeFileName = activeFileName(projectDirectory);
+        Set<String> protectedPrefixes = protectedPrefixes(additionallyProtectedSnapshotIds);
         Comparator<FingerprintFile> oldestFirst = Comparator
                 .comparing(FingerprintFile::lastModified)
                 .thenComparing(FingerprintFile::fileName);
@@ -556,7 +563,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static List<Path> filesForIdHash(Path projectDirectory, String idHash) throws IOException {
         if (!Files.exists(projectDirectory, LinkOption.NOFOLLOW_LINKS)) return List.of();
         requireProjectDirectory(projectDirectory);
-        String prefix = "fingerprint-" + idHash + "-";
+        String prefix = FILE_PREFIX + idHash + "-";
         List<Path> matches = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(projectDirectory)) {
             for (Path path : stream) {
@@ -624,10 +631,10 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static boolean isSnapshotFile(String name) {
-        if (!name.startsWith("fingerprint-") || !name.endsWith(".bin")) {
+        if (!name.startsWith(FILE_PREFIX) || !name.endsWith(".bin")) {
             return false;
         }
-        String body = name.substring("fingerprint-".length(), name.length() - ".bin".length());
+        String body = name.substring(FILE_PREFIX.length(), name.length() - ".bin".length());
         int separator = body.indexOf('-');
         return separator == 64
                 && body.length() == 64 + 1 + 64
@@ -651,7 +658,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static String snapshotFileName(String idHash, String checksum) {
-        return "fingerprint-" + idHash + "-" + checksum + ".bin";
+        return FILE_PREFIX + idHash + "-" + checksum + ".bin";
     }
 
     private static Path resolveFile(Path projectDirectory, String fileName) throws IOException {
