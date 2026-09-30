@@ -33,6 +33,29 @@ class IndexCommandResumeFlagsTest {
     }
 
     @Test
+    void aDryRunExecutesNothingSoItRefusesTheResumeFlagsInsteadOfIgnoringThem() throws Exception {
+        StubAutonomous autonomous = new StubAutonomous();
+        IndexCommand command = new IndexCommand(new StubProjects(), autonomous);
+
+        for (String flag : new String[]{"--no-resume", "--resume-only"}) {
+            StringBuilder output = new StringBuilder();
+            StringBuilder error = new StringBuilder();
+            int code = command.run(new String[]{"demo", "--dry-run", flag}, output, error);
+            assertEquals(FindSymbolCommand.USAGE_ERROR, code, flag);
+            assertTrue(error.toString().startsWith("error: --dry-run executes nothing, so it cannot be combined with "
+                    + "--no-resume/--resume-only"), error.toString());
+            assertEquals("", output.toString());
+        }
+        assertEquals(List.of(), autonomous.policies, "nothing may be executed");
+        assertEquals(0, autonomous.plans, "nothing may even be planned");
+
+        // A dry run with the flags that do apply to a plan is unchanged.
+        assertEquals(0, command.run(new String[]{"demo", "--dry-run", "--force-full"},
+                new StringBuilder(), new StringBuilder()));
+        assertEquals(1, autonomous.plans);
+    }
+
+    @Test
     void executionOutputExposesTheResumeOutcomeInTextAndJson() throws Exception {
         StubAutonomous autonomous = new StubAutonomous();
         IndexCommand command = new IndexCommand(new StubProjects(), autonomous);
@@ -85,8 +108,10 @@ class IndexCommandResumeFlagsTest {
         String refusal;
         boolean noTrace;
         boolean failResumeOnly;
+        int plans;
 
         @Override public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) {
+            plans++;
             return plan();
         }
 

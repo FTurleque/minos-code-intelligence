@@ -15,6 +15,8 @@ public final class ProviderCommand {
     public static final String NAME = "providers";
     private static final String USAGE = "Usage: minos providers [provider-id] [--format <text|json>]";
 
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--format").operands(1);
+
     private final ProviderPlatformService service;
 
     public ProviderCommand(ProviderPlatformService service) {
@@ -96,26 +98,8 @@ public final class ProviderCommand {
 
     private record Options(String providerId, SymbolOutputFormat format) {
         private static Options parse(String[] arguments) {
-            String providerId = null;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            for (int i = 0; i < arguments.length; i++) {
-                String argument = arguments[i];
-                if ("--format".equals(argument)) {
-                    if (++i >= arguments.length) throw new IllegalArgumentException("--format requires a value");
-                    format = switch (arguments[i].toLowerCase()) {
-                        case "text" -> SymbolOutputFormat.TEXT;
-                        case "json" -> SymbolOutputFormat.JSON;
-                        default -> throw new IllegalArgumentException("unsupported format: " + arguments[i]);
-                    };
-                } else if (argument.startsWith("--")) {
-                    throw new IllegalArgumentException("unknown option: " + argument);
-                } else if (providerId == null) {
-                    providerId = argument;
-                } else {
-                    throw new IllegalArgumentException("unexpected argument: " + argument);
-                }
-            }
-            return new Options(providerId, format);
+            CliOptions options = OPTIONS.parse(arguments, 0);
+            return new Options(options.operands().isEmpty() ? null : options.operands().getFirst(), options.format());
         }
     }
 }

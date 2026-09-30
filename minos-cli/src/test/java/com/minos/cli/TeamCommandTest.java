@@ -3,33 +3,24 @@ package com.minos.cli;
 import com.minos.application.LocalProjectOperations;
 import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.application.MinosApplication;
-import com.minos.hosted.HmacHostedIdentityProvider;
-import com.minos.hosted.HostedAuditSink;
-import com.minos.hosted.HostedControlPlaneService;
-import com.minos.hosted.HostedControlPlaneStore;
-import com.minos.hosted.HostedTenantKeyProvider;
-import com.minos.hosted.HostedTenantState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.Clock;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
-import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.minos.cli.TeamFixtures.SpyStore;
+
+import static com.minos.cli.TeamFixtures.bootstrap;
+import static com.minos.cli.TeamFixtures.extract;
+import static com.minos.cli.TeamFixtures.keys;
+import static com.minos.cli.TeamFixtures.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -102,68 +93,6 @@ class TeamCommandTest {
         assertEquals(2, code);
         assertTrue(error.toString().contains("unknown team option: --request_id"));
         assertEquals("", output.toString());
-    }
-
-    /**
-     * Valid arguments of every declared team operation. The key set must equal
-     * {@link TeamCommand#operations()}: a new operation fails this test until it is covered.
-     */
-    private static Map<String, List<String>> validArguments(String workspace, String project) {
-        Map<String, List<String>> arguments = new LinkedHashMap<>();
-        arguments.put("bootstrap", List.of("--tenant", UUID.randomUUID().toString(), "--name", "Other",
-                "--key-id", "key-b", "--owner", "bob", "--owner-name", "Bob"));
-        arguments.put("tenant", List.of());
-        arguments.put("workspaces", List.of());
-        arguments.put("workspace-show", List.of("--workspace", workspace));
-        arguments.put("workspace-create", List.of("--name", "Platform"));
-        arguments.put("workspace-archive", List.of("--workspace", workspace));
-        arguments.put("members", List.of());
-        arguments.put("member-grant", List.of("--principal", "bob", "--display-name", "Bob", "--role", "viewer"));
-        arguments.put("member-revoke", List.of("--principal", "bob"));
-        arguments.put("project-bind", List.of("--workspace", workspace, "--project", project, "--snapshot", "snap-1"));
-        arguments.put("project-unbind", List.of("--workspace", workspace, "--project", project));
-        arguments.put("token-issue", List.of("--principal", "alice", "--token-hours", "2"));
-        arguments.put("key-rotate", List.of("--key-id", "key-b", "--token-hours", "2"));
-        arguments.put("retention-plan", List.of());
-        arguments.put("retention-set", List.of("--max-audit-events", "100", "--audit-days", "1",
-                "--archived-workspace-days", "1"));
-        arguments.put("retention-apply", List.of());
-        arguments.put("audit", List.of("--limit", "5"));
-        return arguments;
-    }
-
-    @Test
-    void everyDeclaredOperationRejectsUnknownOptionsBeforeReachingTheService() throws Exception {
-        SpyStore store = new SpyStore();
-        AtomicReference<String> token = new AtomicReference<>();
-        AtomicInteger tokenReads = new AtomicInteger();
-        TeamCommand command = new TeamCommand(service(store), () -> {
-            tokenReads.incrementAndGet();
-            return token.get();
-        });
-        StringBuilder output = new StringBuilder();
-        StringBuilder error = new StringBuilder();
-        token.set(bootstrap(command, UUID.randomUUID(), output, error));
-        Map<String, List<String>> valid = validArguments(UUID.randomUUID().toString(), UUID.randomUUID().toString());
-        assertEquals(TeamCommand.operations(), valid.keySet(),
-                "every declared team operation must be covered by the validate-before-mutate guard");
-
-        for (String operation : TeamCommand.operations()) {
-            List<String> invocation = new ArrayList<>();
-            invocation.add(operation);
-            invocation.addAll(valid.get(operation));
-            invocation.addAll(List.of("--bogus", "x"));
-            store.calls.clear();
-            tokenReads.set(0);
-            output.setLength(0);
-            error.setLength(0);
-            int code = command.run(invocation.toArray(String[]::new), output, error);
-            assertEquals(2, code, operation);
-            assertTrue(error.toString().contains("unknown team option: --bogus"), operation);
-            assertEquals("", output.toString(), operation);
-            assertEquals(List.of(), store.calls, operation + " reached the service before rejecting --bogus");
-            assertEquals(0, tokenReads.get(), operation + " read the bearer token before rejecting --bogus");
-        }
     }
 
     @Test
@@ -292,63 +221,6 @@ class TeamCommandTest {
         error.setLength(0);
         assertEquals(0, command.run(arguments, output, error), arguments[0] + ": " + error);
         return output.toString();
-    }
-
-    private static String bootstrap(TeamCommand command, UUID tenant, StringBuilder output, StringBuilder error)
-            throws IOException {
-        assertEquals(0, command.run(new String[]{"bootstrap", "--tenant", tenant.toString(), "--name", "Acme",
-                "--key-id", "key-a", "--owner", "alice", "--owner-name", "Alice",
-                "--request-id", "req-bootstrap"}, output, error), error.toString());
-        return extract(output.toString(), "bearerToken");
-    }
-
-    private static HostedControlPlaneService service(SpyStore store) {
-        return new HostedControlPlaneService(store, new HmacHostedIdentityProvider(keys()), keys(),
-                (project, snapshot) -> { }, HostedAuditSink.embeddedNoop(), Clock.systemUTC());
-    }
-
-    /** In-memory store that records every persistence call: any entry proves the service was reached. */
-    private static final class SpyStore implements HostedControlPlaneStore {
-        private final Map<UUID, HostedTenantState> states = new HashMap<>();
-        private final List<String> calls = new ArrayList<>();
-        private IOException failure;
-
-        @Override
-        public void create(HostedTenantState state) throws IOException {
-            record("create");
-            states.put(state.tenantId(), state);
-        }
-
-        @Override
-        public Optional<HostedTenantState> find(UUID tenantId) throws IOException {
-            record("find");
-            return Optional.ofNullable(states.get(tenantId));
-        }
-
-        @Override
-        public void save(HostedTenantState state, long expectedVersion) throws IOException {
-            record("save");
-            states.put(state.tenantId(), state);
-        }
-
-        private void record(String call) throws IOException {
-            calls.add(call);
-            if (failure != null) throw failure;
-        }
-    }
-
-    private static HostedTenantKeyProvider keys() {
-        return (tenantId, keyId, purpose) -> {
-            byte[] bytes = new byte[32];
-            java.util.Arrays.fill(bytes, (byte) Objects.hash(tenantId, keyId, purpose));
-            return new SecretKeySpec(bytes, purpose == HostedTenantKeyProvider.Purpose.ENCRYPTION ? "AES" : "HmacSHA256");
-        };
-    }
-
-    private static String extract(String json, String field) {
-        var matcher = java.util.regex.Pattern.compile("\\\"" + field + "\\\":\\\"([^\\\"]+)\\\"").matcher(json);
-        assertTrue(matcher.find());
-        return matcher.group(1);
     }
 
     @Test

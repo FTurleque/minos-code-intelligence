@@ -16,11 +16,8 @@ import com.minos.application.semantic.SemanticIndexService;
 import com.minos.application.semantic.SemanticSearchService;
 
 import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 import static com.minos.output.DeterministicJson.object;
 
@@ -46,6 +43,19 @@ final class IdeIntelligenceCommand {
               hybrid-context <project> <query> [--max-documents N] [--max-tokens N] [--max-tokens-per-document N]
             """.stripTrailing();
 
+    private static final CliOptions.Spec FORMAT_ONLY = CliOptions.spec().text("--format");
+    private static final CliOptions.Spec PROGRAM_GRAPH_OPTIONS = CliOptions.spec().text("--format")
+            .integer("--max-nodes", 1, ProgramGraphService.PUBLIC_MAX_NODES)
+            .integer("--max-edges", 1, ProgramGraphService.PUBLIC_MAX_EDGES);
+    private static final CliOptions.Spec IMPACT_OPTIONS = CliOptions.spec().text("--format")
+            .integer("--max-depth").integer("--max-results");
+    private static final CliOptions.Spec SECURITY_OPTIONS = CliOptions.spec().text("--format", "--source-node")
+            .integer("--max-depth").integer("--max-results");
+    private static final CliOptions.Spec SEARCH_OPTIONS = CliOptions.spec().text("--format")
+            .integer("--limit").decimal("--minimum-score");
+    private static final CliOptions.Spec CONTEXT_OPTIONS = CliOptions.spec().text("--format")
+            .integer("--max-documents").integer("--max-tokens").integer("--max-tokens-per-document");
+
     private final MinosApplication application;
 
     IdeIntelligenceCommand(MinosApplication application) {
@@ -56,32 +66,24 @@ final class IdeIntelligenceCommand {
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
-        if (arguments.length == 0 || isHelp(arguments[0])) {
+        if (arguments.length == 0 || CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
 
+        // Analysis first: nothing below reaches a service, so a usage error (code 2) can never follow a call.
+        Invocation invocation;
         try {
-            Map<String, Object> result = switch (arguments[0]) {
-                case "program-graph" -> programGraph(arguments);
-                case "impact-v2" -> impactV2(arguments);
-                case "security-paths" -> securityPaths(arguments);
-                case "semantic-index-status" -> semanticIndexStatus(arguments);
-                case "semantic-index-sync" -> semanticIndexSync(arguments);
-                case "semantic-search" -> semanticSearch(arguments);
-                case "hybrid-search" -> hybridSearch(arguments);
-                case "hybrid-context" -> hybridContext(arguments);
-                default -> throw new UsageException("unknown IDE intelligence operation: " + arguments[0]);
-            };
-            output.append(CliJson.render(result)).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        } catch (UsageException exception) {
+            invocation = parse(arguments);
+        } catch (IllegalArgumentException exception) {
             error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
             return FindSymbolCommand.USAGE_ERROR;
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(message(exception)).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        } catch (IllegalStateException exception) {
+        }
+        // Execution: any failure, an IllegalArgumentException of a service included, is an execution error (code 1).
+        try {
+            output.append(CliJson.render(invocation.run())).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        } catch (IllegalArgumentException | IllegalStateException exception) {
             error.append("error: ").append(message(exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
@@ -91,88 +93,99 @@ final class IdeIntelligenceCommand {
         return USAGE;
     }
 
-    private Map<String, Object> programGraph(String[] arguments) throws IOException {
-        requirePositions(arguments, 2, "program-graph requires <project>");
-        Options options = options(arguments, 2, Set.of("--max-nodes", "--max-edges", "--format"));
-        requireJson(options);
-        int maxNodes = options.integer("--max-nodes", ProgramGraphService.DEFAULT_MAX_NODES);
-        int maxEdges = options.integer("--max-edges", ProgramGraphService.DEFAULT_MAX_EDGES);
-        return graph(application.programGraphService().getGraph(arguments[1], maxNodes, maxEdges));
+    /** The service call of one operation, built by the analysis and run only once every argument is validated. */
+    @FunctionalInterface
+    private interface Invocation {
+        Map<String, Object> run() throws IOException;
     }
 
-    private Map<String, Object> impactV2(String[] arguments) throws IOException {
+    private Invocation parse(String[] arguments) {
+        return switch (arguments[0]) {
+            case "program-graph" -> programGraph(arguments);
+            case "impact-v2" -> impactV2(arguments);
+            case "security-paths" -> securityPaths(arguments);
+            case "semantic-index-status" -> semanticIndexStatus(arguments);
+            case "semantic-index-sync" -> semanticIndexSync(arguments);
+            case "semantic-search" -> semanticSearch(arguments);
+            case "hybrid-search" -> hybridSearch(arguments);
+            case "hybrid-context" -> hybridContext(arguments);
+            default -> throw new IllegalArgumentException("unknown IDE intelligence operation: " + arguments[0]);
+        };
+    }
+
+    private Invocation programGraph(String[] arguments) {
+        requirePositions(arguments, 2, "program-graph requires <project>");
+        CliOptions options = analyse(PROGRAM_GRAPH_OPTIONS, arguments, 2);
+        int maxNodes = options.integer("--max-nodes", ProgramGraphService.DEFAULT_MAX_NODES);
+        int maxEdges = options.integer("--max-edges", ProgramGraphService.DEFAULT_MAX_EDGES);
+        return () -> graph(application.programGraphService().getGraph(arguments[1], maxNodes, maxEdges));
+    }
+
+    private Invocation impactV2(String[] arguments) {
         requirePositions(arguments, 3, "impact-v2 requires <project> <symbolId>");
-        Options options = options(arguments, 3, Set.of("--max-depth", "--max-results", "--format"));
-        requireJson(options);
+        CliOptions options = analyse(IMPACT_OPTIONS, arguments, 3);
         ImpactAnalysisRequest defaults = ImpactAnalysisRequest.defaults(arguments[2]);
         ImpactAnalysisRequest request = new ImpactAnalysisRequest(
                 arguments[2],
                 options.integer("--max-depth", defaults.maxDepth()),
                 options.integer("--max-results", defaults.maxResults()));
-        return impact(application.advancedImpactService().analyze(arguments[1], request));
+        return () -> impact(application.advancedImpactService().analyze(arguments[1], request));
     }
 
-    private Map<String, Object> securityPaths(String[] arguments) throws IOException {
+    private Invocation securityPaths(String[] arguments) {
         requirePositions(arguments, 2, "security-paths requires <project>");
-        Options options = options(arguments, 2, Set.of("--source-node", "--max-depth", "--max-results", "--format"));
-        requireJson(options);
+        CliOptions options = analyse(SECURITY_OPTIONS, arguments, 2);
         SecurityAnalysisService.SecurityRequest request = new SecurityAnalysisService.SecurityRequest(
-                options.text("--source-node", null),
+                options.text("--source-node"),
                 options.integer("--max-depth", 8),
                 options.integer("--max-results", 100));
-        return security(application.securityAnalysisService().analyze(arguments[1], request));
+        return () -> security(application.securityAnalysisService().analyze(arguments[1], request));
     }
 
-    private Map<String, Object> semanticIndexStatus(String[] arguments) throws IOException {
+    private Invocation semanticIndexStatus(String[] arguments) {
         requirePositions(arguments, 2, "semantic-index-status requires <project>");
-        Options options = options(arguments, 2, Set.of("--format"));
-        requireJson(options);
-        return semanticStatus(application.semanticIndexService().status(arguments[1]));
+        analyse(FORMAT_ONLY, arguments, 2);
+        return () -> semanticStatus(application.semanticIndexService().status(arguments[1]));
     }
 
-    private Map<String, Object> semanticIndexSync(String[] arguments) throws IOException {
+    private Invocation semanticIndexSync(String[] arguments) {
         requirePositions(arguments, 2, "semantic-index-sync requires <project>");
-        Options options = options(arguments, 2, Set.of("--format"));
-        requireJson(options);
-        return semanticUpdate(application.semanticIndexService().synchronize(arguments[1]));
+        analyse(FORMAT_ONLY, arguments, 2);
+        return () -> semanticUpdate(application.semanticIndexService().synchronize(arguments[1]));
     }
 
-    private Map<String, Object> semanticSearch(String[] arguments) throws IOException {
+    private Invocation semanticSearch(String[] arguments) {
         requirePositions(arguments, 3, "semantic-search requires <project> <query>");
-        Options options = options(arguments, 3, Set.of("--limit", "--minimum-score", "--format"));
-        requireJson(options);
+        CliOptions options = analyse(SEARCH_OPTIONS, arguments, 3);
         SemanticSearchService.SearchRequest defaults = SemanticSearchService.SearchRequest.defaults(arguments[2]);
         SemanticSearchService.SearchRequest request = new SemanticSearchService.SearchRequest(
                 arguments[2],
                 options.integer("--limit", defaults.limit()),
                 options.decimal("--minimum-score", defaults.minimumScore()));
-        return semantic(application.semanticSearchService().search(arguments[1], request));
+        return () -> semantic(application.semanticSearchService().search(arguments[1], request));
     }
 
-    private Map<String, Object> hybridSearch(String[] arguments) throws IOException {
+    private Invocation hybridSearch(String[] arguments) {
         requirePositions(arguments, 3, "hybrid-search requires <project> <query>");
-        Options options = options(arguments, 3, Set.of("--limit", "--minimum-score", "--format"));
-        requireJson(options);
+        CliOptions options = analyse(SEARCH_OPTIONS, arguments, 3);
         HybridSearchService.HybridRequest defaults = HybridSearchService.HybridRequest.defaults(arguments[2]);
         HybridSearchService.HybridRequest request = new HybridSearchService.HybridRequest(
                 arguments[2],
                 options.integer("--limit", defaults.limit()),
                 options.decimal("--minimum-score", defaults.minimumScore()));
-        return hybrid(application.hybridSearchService().search(arguments[1], request));
+        return () -> hybrid(application.hybridSearchService().search(arguments[1], request));
     }
 
-    private Map<String, Object> hybridContext(String[] arguments) throws IOException {
+    private Invocation hybridContext(String[] arguments) {
         requirePositions(arguments, 3, "hybrid-context requires <project> <query>");
-        Options options = options(arguments, 3,
-                Set.of("--max-documents", "--max-tokens", "--max-tokens-per-document", "--format"));
-        requireJson(options);
+        CliOptions options = analyse(CONTEXT_OPTIONS, arguments, 3);
         HybridContextBuilder.ContextRequest defaults = HybridContextBuilder.ContextRequest.defaults(arguments[2]);
         HybridContextBuilder.ContextRequest request = new HybridContextBuilder.ContextRequest(
                 arguments[2],
                 options.integer("--max-documents", defaults.maxDocuments()),
                 options.integer("--max-tokens", defaults.maxTokens()),
                 options.integer("--max-tokens-per-document", defaults.maxTokensPerDocument()));
-        return context(application.hybridContextBuilder().build(arguments[1], request));
+        return () -> context(application.hybridContextBuilder().build(arguments[1], request));
     }
 
     private static Map<String, Object> graph(ProgramGraph graph) {
@@ -360,80 +373,29 @@ final class IdeIntelligenceCommand {
         return object("type", value.type(), "score", value.score(), "nature", value.nature().name());
     }
 
-    private static Options options(String[] arguments, int from, Set<String> allowed) {
-        Map<String, String> values = new LinkedHashMap<>();
-        for (int index = from; index < arguments.length; index += 2) {
-            String name = arguments[index];
-            if (!name.startsWith("--") || !allowed.contains(name)) {
-                throw new UsageException("unsupported option: " + name);
-            }
-            if (index + 1 >= arguments.length) {
-                throw new UsageException("missing value for " + name);
-            }
-            if (values.put(name, arguments[index + 1]) != null) {
-                throw new UsageException("duplicate option: " + name);
-            }
+    /** Analyses the options of one operation; the only transport format is JSON. */
+    private static CliOptions analyse(CliOptions.Spec spec, String[] arguments, int from) {
+        CliOptions options = spec.parse(arguments, from);
+        if (!"json".equalsIgnoreCase(options.text("--format", "json"))) {
+            throw new IllegalArgumentException("IDE intelligence transport supports only --format json");
         }
-        return new Options(values);
+        return options;
     }
 
+    /**
+     * The positional arguments (project, symbol, query) may carry free text, so, unlike the other
+     * commands, only a value that looks like a long option ({@code --x}) is refused, not a leading single dash.
+     */
     private static void requirePositions(String[] arguments, int minimumLength, String failure) {
-        if (arguments.length < minimumLength) throw new UsageException(failure);
+        if (arguments.length < minimumLength) throw new IllegalArgumentException(failure);
         for (int index = 1; index < minimumLength; index++) {
             if (arguments[index] == null || arguments[index].isBlank() || arguments[index].startsWith("--")) {
-                throw new UsageException(failure);
+                throw new IllegalArgumentException(failure);
             }
         }
-    }
-
-    private static void requireJson(Options options) {
-        String format = options.text("--format", "json");
-        if (!"json".equalsIgnoreCase(format)) {
-            throw new UsageException("IDE intelligence transport supports only --format json");
-        }
-    }
-
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
     }
 
     private static String message(RuntimeException exception) {
         return CliCommandSupport.failureMessage(exception);
-    }
-
-    private record Options(Map<String, String> values) {
-        private Options {
-            values = Map.copyOf(values);
-        }
-
-        String text(String name, String defaultValue) {
-            return values.getOrDefault(name, defaultValue);
-        }
-
-        int integer(String name, int defaultValue) {
-            String value = values.get(name);
-            if (value == null) return defaultValue;
-            try {
-                return Integer.parseInt(value);
-            } catch (NumberFormatException exception) {
-                throw new UsageException(name + " must be an integer");
-            }
-        }
-
-        double decimal(String name, double defaultValue) {
-            String value = values.get(name);
-            if (value == null) return defaultValue;
-            try {
-                return Double.parseDouble(value);
-            } catch (NumberFormatException exception) {
-                throw new UsageException(name + " must be a number");
-            }
-        }
-    }
-
-    private static final class UsageException extends IllegalArgumentException {
-        private UsageException(String message) {
-            super(message);
-        }
     }
 }

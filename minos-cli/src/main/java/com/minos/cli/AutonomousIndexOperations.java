@@ -16,6 +16,8 @@ public interface AutonomousIndexOperations {
     /**
      * Executes with an explicit resume policy (ADR 0039 §6). Backends without resume control accept
      * only {@link IndexingResumePolicy#RESUME}, which is the default behaviour of {@link #execute}.
+     * {@link IndexingResumePolicy#NO_RESUME} is a complete run: it never reopens an interrupted run,
+     * supersedes it and indexes everything, as if {@code forceFull} were set.
      */
     default IndexExecutionView execute(
             String projectIdentifier,

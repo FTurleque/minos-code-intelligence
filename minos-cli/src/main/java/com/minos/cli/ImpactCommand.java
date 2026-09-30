@@ -7,9 +7,7 @@ import com.minos.output.ImpactResultRenderer;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
 
 /** CLI adapter for M8 impact analysis. */
 public final class ImpactCommand {
@@ -24,6 +22,11 @@ public final class ImpactCommand {
               --format <text|json>      Output format (default: text)
               -h, --help                Show this help
             """.stripTrailing();
+
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec()
+            .text("--format")
+            .integer("--depth", 1, 32)
+            .integer("--limit", 1, 10_000);
 
     private final ProjectImpactQuery query;
 
@@ -59,43 +62,9 @@ public final class ImpactCommand {
             }
             String project = CliCommandSupport.operand(arguments[0], "project");
             String symbol = CliCommandSupport.operand(arguments[1], "symbol-id");
-            int depth = 4;
-            int limit = 200;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Set<String> seen = new HashSet<>();
-            for (int index = 2; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (!Set.of("--depth", "--limit", "--format").contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if (++index >= arguments.length || arguments[index] == null || arguments[index].isBlank()) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                String value = arguments[index];
-                switch (option) {
-                    case "--depth" -> depth = integer(value, option, 1, 32);
-                    case "--limit" -> limit = integer(value, option, 1, 10_000);
-                    case "--format" -> format = SymbolOutputFormat.parse(value);
-                    default -> throw new IllegalStateException("unhandled option: " + option);
-                }
-            }
-            return new Options(project, symbol, depth, limit, format);
+            CliOptions options = OPTIONS.parse(arguments, 2);
+            return new Options(project, symbol, options.integer("--depth", 4), options.integer("--limit", 200),
+                    options.format());
         }
-
-        private static int integer(String value, String option, int minimum, int maximum) {
-            try {
-                int parsed = Integer.parseInt(value);
-                if (parsed < minimum || parsed > maximum) {
-                    throw new IllegalArgumentException(option + " must be between " + minimum + " and " + maximum);
-                }
-                return parsed;
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("invalid value for " + option + ": " + value, exception);
-            }
-        }
-
     }
 }

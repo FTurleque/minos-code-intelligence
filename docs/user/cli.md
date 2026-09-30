@@ -87,6 +87,8 @@ Il distingue notamment :
 - les actions nécessaires pour rendre un provider utilisable ;
 - la sandbox worker (section `workerSandbox`, texte et JSON) : backend retenu pour les providers locaux gérés, disponibilité de l'indexation distante de code non fiable (`remoteIndexing: AVAILABLE|UNAVAILABLE`) et, si elle est indisponible, la **cause** — `NO_OS_BACKEND_AVAILABLE` (prérequis opérateur manquant, nommé par code) ou `REJECTED_BY_DECISION` (backend OS écarté, dimensions non OS-enforced, décision `ADR 0041`). Cette section ne contient jamais de chemin. Une indexation distante indisponible ne change pas le verdict `READY` : ce n'est pas une action requise.
 
+Le verdict de `doctor` (`READY` ou `ACTION_REQUIRED`, code 0 ou 1) est le même que celui de `minos tools verify` : un provider requis qui n'est ni `READY` ni `UNSUPPORTED_BY_BACKEND` bloque ; `UNSUPPORTED_BY_BACKEND` (capacité volontairement absente du backend sélectionné, par exemple le plan Docker) est affiché tel quel, jamais présenté comme `READY`, mais ne rend pas l'installation « action requise » ([disposition des sandboxes](../developer/remote-worker-sandbox-disposition.md)).
+
 Depuis la maintenance 1.0.1, le runtime Windows packagé est également contrôlé lors de la construction par `jdeps`, `java --list-modules` et un vrai handshake MCP. Le fait que `doctor` ou `--version` fonctionne ne remplace donc pas les gates spécifiques du binaire de release.
 
 ### `tools`
@@ -138,9 +140,13 @@ Options structurantes :
 ```text
 --provider <id>       override de négociation
 --force-full          exécution FULL explicite
---dry-run             calculer le plan sans lancer le provider
+--dry-run             calculer le plan sans lancer le provider (n'écrit rien dans MINOS_HOME)
+--no-resume           ne rouvre jamais un run interrompu : le supplante et lance un index complet (implique --force-full)
+--resume-only         échoue sans créer de run si aucun run interrompu ne peut être repris
 --format <text|json>
 ```
+
+Un run interrompu (arrêt brutal, redémarrage) est repris par défaut ; `minos index-status <projet>` indique le run reprenable. `--dry-run` n'exécute rien : le combiner avec `--no-resume` ou `--resume-only` est une erreur d'usage (code 2).
 
 Exemples :
 
@@ -426,6 +432,17 @@ Le binaire `app\minos.exe mcp` de la distribution Windows est désormais directe
 
 Ce runner ne crée aucun tag, ne publie aucune release et ne déclenche aucun GitHub Actions.
 
+## Règles des arguments
+
+Toutes les commandes partagent le même analyseur d'arguments :
+
+- un nom d'option est exact et sensible à la casse (`--Format` est inconnu) ; la valeur d'un choix (`--format JSON`, `--kind Class`, `--role viewer`) ne l'est pas ;
+- une option à valeur exige une valeur : une valeur absente, vide ou commençant par `--` est refusée (`missing value for --limit`) au lieu d'avaler l'option suivante ; une valeur commençant par un seul tiret est une valeur (`--limit -5` est signalé hors borne) ;
+- une option répétée est refusée (`duplicate option: --format`), qu'elle porte une valeur ou non ;
+- une option inconnue (`unknown option: --x`) ou un argument en trop (`unexpected argument: x`) est refusé ;
+- les bornes annoncées dans l'usage sont contrôlées avant tout accès aux données (`--limit must be between 1 and 10000`, code 2) ;
+- `--help` ou `-h`, seul après la commande ou après son opération (`minos tools install --help`, `minos team audit --help`), affiche l'usage et sort 0 sans ouvrir `MINOS_HOME`, y compris pour `doctor` et `mcp` ; ailleurs, `--help` est une option inconnue.
+
 ## Codes de sortie
 
 ```text
@@ -433,5 +450,7 @@ Ce runner ne crée aucun tag, ne publie aucune release et ne déclenche aucun Gi
 1  erreur d'exécution / diagnostic action requise
 2  erreur d'usage
 ```
+
+Le code 2 est réservé aux erreurs d'usage détectées à l'analyse des arguments, avant tout appel de service. Une erreur levée ensuite par un service (projet inconnu, par exemple) est une erreur d'exécution (code 1), y compris pour les opérations `ide`.
 
 En automatisation : utiliser `--format json` et tester le code de sortie avant de consommer stdout.

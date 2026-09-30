@@ -1,9 +1,12 @@
 package com.minos.cli;
 
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.domain.SymbolKind;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Shared fail-closed skeleton for the option-parsing MINOS commands.
@@ -87,26 +90,36 @@ final class CliCommandSupport {
                 (options, exception) -> label + " failed: " + failureMessage(exception), body);
     }
 
+    /** Failure line {@code <label> failed: <message>} reporting the originating cause of nested runtime wrappers. */
+    static <O> FailureReporter<O> reportingCause(String label) {
+        return (options, exception) -> label + " failed: " + failureMessage(unwrapRuntime(exception));
+    }
+
     static boolean isHelp(String value) {
         return "--help".equals(value) || "-h".equals(value);
     }
 
+    /** Whether {@code value} can be an operand: not blank and not starting with a dash (it would be an option). */
+    static boolean isOperand(String value) {
+        return value != null && !value.isBlank() && !value.startsWith("-");
+    }
+
     static String operand(String value, String name) {
-        if (value == null || value.isBlank() || value.startsWith("-")) {
+        if (!isOperand(value)) {
             throw new IllegalArgumentException("invalid <" + name + "> operand");
         }
         return value;
     }
 
-    static int parseLimit(String value, int maximum) {
+    /** The symbol kind named by a {@code --kind} value (case-insensitive, {@code -} for {@code _}); {@code null} when absent. */
+    static SymbolKind symbolKind(String value) {
+        if (value == null) {
+            return null;
+        }
         try {
-            int limit = Integer.parseInt(value);
-            if (limit < 1 || limit > maximum) {
-                throw new IllegalArgumentException("limit must be between 1 and " + maximum);
-            }
-            return limit;
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("invalid limit: " + value, exception);
+            return SymbolKind.valueOf(value.toUpperCase(Locale.ROOT).replace('-', '_'));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("unsupported symbol kind: " + value, exception);
         }
     }
 

@@ -12,6 +12,10 @@ import com.minos.impact.ProjectImpactQuery;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 
 /** Dispatcher stable des commandes CLI MINOS. */
@@ -70,25 +74,20 @@ public final class MinosCli {
             Run `minos <command> --help` for command options.
             """.stripTrailing();
 
-    private final FindSymbolCommand findSymbolCommand;
-    private final SearchCodeCommand searchCodeCommand;
-    private final GetSourceCommand getSourceCommand;
-    private final FindUsagesCommand findUsagesCommand;
-    private final java.util.Map<String, RelationshipCommand> relationshipCommands;
-    private final ProjectCommand projectCommand;
-    private final IndexCommand indexCommand;
-    private final ImportScipCommand importScipCommand;
-    private final ToolsCommand toolsCommand;
-    private final DoctorCommand doctorCommand;
-    private final ProviderCommand providerCommand;
-    private final ArchitectureCommand architectureCommand;
-    private final ImpactCommand impactCommand;
-    private final IdeCommand ideCommand;
-    private final GitActivityCommand gitActivityCommand;
-    private final NexusExportCommand nexusExportCommand;
-    private final RemoteIndexCommand remoteIndexCommand;
-    private final RuntimeCommand runtimeCommand;
-    private final TeamCommand teamCommand;
+    /**
+     * Une route par commande de premier niveau : son usage et son gestionnaire. Toute commande a une route,
+     * même quand son collaborateur n'est pas câblé (le gestionnaire répond alors « not configured »), de sorte
+     * que les noms, les usages et {@code --help} ne dépendent pas du câblage. Les tests et l'aide sans état de
+     * {@link MinosCliRunner} énumèrent cette table au lieu d'une liste recopiée.
+     */
+    private final Map<String, Route> routes = new LinkedHashMap<>();
+
+    private record Route(String usage, Handler handler) { }
+
+    @FunctionalInterface
+    private interface Handler {
+        int run(String[] arguments, Appendable output, Appendable error) throws IOException;
+    }
 
     /**
      * Seul point d'entrée (ADR 0045). Seules les requêtes de symboles sont obligatoires ; un collaborateur
@@ -113,40 +112,100 @@ public final class MinosCli {
         RuntimeIntelligenceService runtimeIntelligenceService = builder.runtimeIntelligenceService;
         HostedControlPlaneService hostedControlPlaneService = builder.hostedControlPlaneService;
         IndexResumeStatusSource resumeStatus = builder.resumeStatus;
-        this.findSymbolCommand = new FindSymbolCommand(symbolQuery);
-        this.searchCodeCommand = new SearchCodeCommand(symbolQuery);
-        this.getSourceCommand = new GetSourceCommand(symbolQuery);
-        this.findUsagesCommand = new FindUsagesCommand(symbolQuery);
-        java.util.Map<String, RelationshipCommand> commands = new java.util.LinkedHashMap<>();
-        for (RelationshipCommand.Operation operation : RelationshipCommand.Operation.values()) {
-            commands.put(operation.commandName(), new RelationshipCommand(operation, symbolQuery));
-        }
-        this.relationshipCommands = java.util.Map.copyOf(commands);
-        this.projectCommand = projectOperations == null ? null : new ProjectCommand(projectOperations,
+        IdeCommand ideCommand = new IdeCommand();
+        ProjectCommand projectCommand = projectOperations == null ? null : new ProjectCommand(projectOperations,
                 resumeStatus == null ? projectId -> java.util.Optional.empty() : resumeStatus);
-        this.indexCommand = projectOperations == null ? null : new IndexCommand(projectOperations, autonomousOperations);
-        this.importScipCommand = projectOperations == null ? null : new ImportScipCommand(projectOperations);
-        this.toolsCommand = autonomousOperations == null ? null : new ToolsCommand(autonomousOperations);
-        this.doctorCommand = autonomousOperations == null || home == null ? null : new DoctorCommand(home, autonomousOperations);
-        this.providerCommand = providerPlatformService == null ? null : new ProviderCommand(providerPlatformService);
-        this.architectureCommand = architectureQuery == null ? null : new ArchitectureCommand(architectureQuery);
-        this.impactCommand = impactQuery == null ? null : new ImpactCommand(impactQuery);
-        this.ideCommand = new IdeCommand();
-        this.gitActivityCommand = projectOperations == null || gitIntelligenceService == null
-                ? null
-                : new GitActivityCommand(projectOperations, gitIntelligenceService);
-        this.nexusExportCommand = nexusExportCommand;
-        this.remoteIndexCommand = remoteIndexOperations == null ? null : new RemoteIndexCommand(remoteIndexOperations);
-        this.runtimeCommand = runtimeIntelligenceService == null ? null : new RuntimeCommand(runtimeIntelligenceService);
-        this.teamCommand = hostedControlPlaneService == null ? null : new TeamCommand(
+        IndexCommand indexCommand = projectOperations == null ? null
+                : new IndexCommand(projectOperations, autonomousOperations);
+        ImportScipCommand importScipCommand = projectOperations == null ? null : new ImportScipCommand(projectOperations);
+        ToolsCommand toolsCommand = autonomousOperations == null ? null : new ToolsCommand(autonomousOperations);
+        DoctorCommand doctorCommand = autonomousOperations == null || home == null
+                ? null : new DoctorCommand(home, autonomousOperations);
+        ProviderCommand providerCommand = providerPlatformService == null
+                ? null : new ProviderCommand(providerPlatformService);
+        ArchitectureCommand architectureCommand = architectureQuery == null
+                ? null : new ArchitectureCommand(architectureQuery);
+        ImpactCommand impactCommand = impactQuery == null ? null : new ImpactCommand(impactQuery);
+        GitActivityCommand gitActivityCommand = projectOperations == null || gitIntelligenceService == null
+                ? null : new GitActivityCommand(projectOperations, gitIntelligenceService);
+        RemoteIndexCommand remoteIndexCommand = remoteIndexOperations == null
+                ? null : new RemoteIndexCommand(remoteIndexOperations);
+        RuntimeCommand runtimeCommand = runtimeIntelligenceService == null
+                ? null : new RuntimeCommand(runtimeIntelligenceService);
+        TeamCommand teamCommand = hostedControlPlaneService == null ? null : new TeamCommand(
                 hostedControlPlaneService, () -> System.getenv(TeamCommand.TOKEN_ENVIRONMENT_VARIABLE));
+        FindSymbolCommand findSymbolCommand = new FindSymbolCommand(symbolQuery);
+        SearchCodeCommand searchCodeCommand = new SearchCodeCommand(symbolQuery);
+        GetSourceCommand getSourceCommand = new GetSourceCommand(symbolQuery);
+        FindUsagesCommand findUsagesCommand = new FindUsagesCommand(symbolQuery);
+
+        register(IdeCommand.NAME, IdeCommand.usage() + "\n\n" + IdeIntelligenceCommand.usage(), true,
+                (arguments, output, error) -> ideCommand.run(arguments, output, error));
+        register(ProjectCommand.NAME, ProjectCommand.usage(), projectCommand != null,
+                (arguments, output, error) -> projectCommand.run(arguments, output, error));
+        register("inspect", ProjectCommand.inspectUsage(), projectCommand != null,
+                (arguments, output, error) -> projectCommand.runInspectAlias(arguments, output, error));
+        register(IndexCommand.NAME, IndexCommand.usage(), indexCommand != null,
+                (arguments, output, error) -> indexCommand.run(arguments, output, error));
+        register(ImportScipCommand.NAME, ImportScipCommand.usage(), importScipCommand != null,
+                (arguments, output, error) -> importScipCommand.run(arguments, output, error));
+        register("index-status", ProjectCommand.indexStatusUsage(), projectCommand != null,
+                (arguments, output, error) -> projectCommand.runIndexStatus(arguments, output, error));
+        register(ToolsCommand.NAME, ToolsCommand.usage(), toolsCommand != null,
+                (arguments, output, error) -> toolsCommand.run(arguments, output, error));
+        register(DoctorCommand.NAME, DoctorCommand.usage(), doctorCommand != null,
+                (arguments, output, error) -> doctorCommand.run(arguments, output, error));
+        register(ProviderCommand.NAME, ProviderCommand.usage(), providerCommand != null,
+                (arguments, output, error) -> providerCommand.run(arguments, output, error));
+        register(ArchitectureCommand.NAME, ArchitectureCommand.usage(), architectureCommand != null,
+                (arguments, output, error) -> architectureCommand.run(arguments, output, error));
+        register(ImpactCommand.NAME, ImpactCommand.usage(), impactCommand != null,
+                (arguments, output, error) -> impactCommand.run(arguments, output, error));
+        register(GitActivityCommand.NAME, GitActivityCommand.usage(), gitActivityCommand != null,
+                (arguments, output, error) -> gitActivityCommand.run(arguments, output, error));
+        register(NexusExportCommand.NAME, NexusExportCommand.usage(), nexusExportCommand != null,
+                (arguments, output, error) -> nexusExportCommand.run(arguments, output, error));
+        register(RemoteIndexCommand.NAME, RemoteIndexCommand.usage(), remoteIndexCommand != null,
+                (arguments, output, error) -> remoteIndexCommand.run(arguments, output, error));
+        register(RuntimeCommand.NAME, RuntimeCommand.usage(), runtimeCommand != null,
+                (arguments, output, error) -> runtimeCommand.run(arguments, output, error));
+        register(TeamCommand.NAME, TeamCommand.usage(), teamCommand != null,
+                (arguments, output, error) -> teamCommand.run(arguments, output, error));
+        register(FindSymbolCommand.NAME, FindSymbolCommand.usage(), true,
+                (arguments, output, error) -> findSymbolCommand.run(arguments, output, error));
+        register(SearchCodeCommand.NAME, SearchCodeCommand.usage(), true,
+                (arguments, output, error) -> searchCodeCommand.run(arguments, output, error));
+        register(GetSourceCommand.NAME, GetSourceCommand.usage(), true,
+                (arguments, output, error) -> getSourceCommand.run(arguments, output, error));
+        register(FindUsagesCommand.NAME, FindUsagesCommand.usage(), true,
+                (arguments, output, error) -> findUsagesCommand.run(arguments, output, error));
+        for (RelationshipCommand.Operation operation : RelationshipCommand.Operation.values()) {
+            RelationshipCommand relationshipCommand = new RelationshipCommand(operation, symbolQuery);
+            register(operation.commandName(), RelationshipCommand.usage(operation), true,
+                    (arguments, output, error) -> relationshipCommand.run(arguments, output, error));
+        }
+    }
+
+    /** Ajoute la route d'une commande ; une commande dont le collaborateur n'est pas câblé répond « not configured ». */
+    private void register(String name, String usage, boolean configured, Handler handler) {
+        routes.put(name, new Route(usage, configured ? handler : (arguments, output, error) -> unavailable(name, error)));
+    }
+
+    /** Les noms de toutes les commandes de premier niveau, dans l'ordre de déclaration. */
+    Set<String> commandNames() {
+        return Collections.unmodifiableSet(routes.keySet());
+    }
+
+    /** Indique si {@code name} est une commande de premier niveau de ce CLI. */
+    boolean hasCommand(String name) {
+        return routes.containsKey(name);
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
-        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
+        if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
@@ -155,64 +214,19 @@ public final class MinosCli {
             return FindSymbolCommand.USAGE_ERROR;
         }
         String command = arguments[0];
+        Route route = routes.get(command);
+        if (route == null) {
+            error.append("error: unknown command: ").append(command).append('\n');
+            error.append(USAGE).append('\n');
+            return FindSymbolCommand.USAGE_ERROR;
+        }
         String[] commandArguments = Arrays.copyOfRange(arguments, 1, arguments.length);
-        if (IdeCommand.NAME.equals(command)) {
-            return ideCommand.run(commandArguments, output, error);
+        // --help est servi par la route elle-même : il ne dépend pas du câblage et ne touche aucun service.
+        if (commandArguments.length == 1 && CliCommandSupport.isHelp(commandArguments[0])) {
+            output.append(route.usage()).append('\n');
+            return FindSymbolCommand.SUCCESS;
         }
-        if (ProjectCommand.NAME.equals(command)) {
-            return projectCommand == null ? unavailable(command, error) : projectCommand.run(commandArguments, output, error);
-        }
-        if ("inspect".equals(command)) {
-            return projectCommand == null ? unavailable(command, error) : projectCommand.runInspectAlias(commandArguments, output, error);
-        }
-        if (IndexCommand.NAME.equals(command)) {
-            return indexCommand == null ? unavailable(command, error) : indexCommand.run(commandArguments, output, error);
-        }
-        if (ImportScipCommand.NAME.equals(command)) {
-            return importScipCommand == null ? unavailable(command, error) : importScipCommand.run(commandArguments, output, error);
-        }
-        if ("index-status".equals(command)) {
-            return projectCommand == null ? unavailable(command, error) : projectCommand.runIndexStatus(commandArguments, output, error);
-        }
-        if (ToolsCommand.NAME.equals(command)) {
-            return toolsCommand == null ? unavailable(command, error) : toolsCommand.run(commandArguments, output, error);
-        }
-        if (DoctorCommand.NAME.equals(command)) {
-            return doctorCommand == null ? unavailable(command, error) : doctorCommand.run(commandArguments, output, error);
-        }
-        if (ProviderCommand.NAME.equals(command)) {
-            return providerCommand == null ? unavailable(command, error) : providerCommand.run(commandArguments, output, error);
-        }
-        if (ArchitectureCommand.NAME.equals(command)) {
-            return architectureCommand == null ? unavailable(command, error) : architectureCommand.run(commandArguments, output, error);
-        }
-        if (ImpactCommand.NAME.equals(command)) {
-            return impactCommand == null ? unavailable(command, error) : impactCommand.run(commandArguments, output, error);
-        }
-        if (GitActivityCommand.NAME.equals(command)) {
-            return gitActivityCommand == null ? unavailable(command, error) : gitActivityCommand.run(commandArguments, output, error);
-        }
-        if (NexusExportCommand.NAME.equals(command)) {
-            return nexusExportCommand == null ? unavailable(command, error) : nexusExportCommand.run(commandArguments, output, error);
-        }
-        if (RemoteIndexCommand.NAME.equals(command)) {
-            return remoteIndexCommand == null ? unavailable(command, error) : remoteIndexCommand.run(commandArguments, output, error);
-        }
-        if (RuntimeCommand.NAME.equals(command)) {
-            return runtimeCommand == null ? unavailable(command, error) : runtimeCommand.run(commandArguments, output, error);
-        }
-        if (TeamCommand.NAME.equals(command)) {
-            return teamCommand == null ? unavailable(command, error) : teamCommand.run(commandArguments, output, error);
-        }
-        if (FindSymbolCommand.NAME.equals(command)) return findSymbolCommand.run(commandArguments, output, error);
-        if (SearchCodeCommand.NAME.equals(command)) return searchCodeCommand.run(commandArguments, output, error);
-        if (GetSourceCommand.NAME.equals(command)) return getSourceCommand.run(commandArguments, output, error);
-        if (FindUsagesCommand.NAME.equals(command)) return findUsagesCommand.run(commandArguments, output, error);
-        RelationshipCommand relationshipCommand = relationshipCommands.get(command);
-        if (relationshipCommand != null) return relationshipCommand.run(commandArguments, output, error);
-        error.append("error: unknown command: ").append(command).append('\n');
-        error.append(USAGE).append('\n');
-        return FindSymbolCommand.USAGE_ERROR;
+        return route.handler().run(commandArguments, output, error);
     }
 
     public static String usage() { return USAGE; }
