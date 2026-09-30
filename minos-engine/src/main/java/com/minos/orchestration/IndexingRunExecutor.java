@@ -537,7 +537,7 @@ final class IndexingRunExecutor {
      * thrown away. The flag is replayed when it was raised on entry as well, whatever the failure was.</p>
      */
     private static IndexingRun persistTerminalFailure(RunContext context, Exception failure, Instant completedAt) {
-        boolean flagRaised = Thread.interrupted();
+        context.clearInterruptFlagForWrite();
         boolean interruption = isInterruption(failure);
         try {
             if (interruption) {
@@ -548,7 +548,7 @@ final class IndexingRunExecutor {
             }
             return persistFailure(context, failure, completedAt);
         } finally {
-            if (flagRaised || interruption || context.interruptedWhilePersisting) Thread.currentThread().interrupt();
+            if (interruption || context.interruptedWhilePersisting) Thread.currentThread().interrupt();
         }
     }
 
@@ -623,7 +623,7 @@ final class IndexingRunExecutor {
      */
     private static void holdAgainstRetention(RunContext context) throws IOException {
         for (int attempt = 1; ; attempt++) {
-            context.interruptedWhilePersisting |= Thread.interrupted();
+            context.clearInterruptFlagForWrite();
             try {
                 context.ports.markers().mark(context.runId);
                 return;
@@ -642,7 +642,7 @@ final class IndexingRunExecutor {
         } else {
             persistUncommittedFailure(context, failed, message, completedAt, failure);
         }
-        context.interruptedWhilePersisting |= Thread.interrupted();
+        context.clearInterruptFlagForWrite();
         AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
         return failed;
     }
@@ -802,7 +802,7 @@ final class IndexingRunExecutor {
      */
     private static boolean persist(RunContext context, Runnable action, Exception original) {
         for (int attempt = 1; ; attempt++) {
-            context.interruptedWhilePersisting |= Thread.interrupted();
+            context.clearInterruptFlagForWrite();
             try {
                 action.run();
                 return true;
@@ -935,6 +935,14 @@ final class IndexingRunExecutor {
                 if (execution != null) executions.add(execution);
             }
             return List.copyOf(executions);
+        }
+
+        /**
+         * Clears a raised interrupt flag so the next write goes through (a raised flag closes the file channel), and
+         * remembers it: the flag is replayed when the terminal outcome is over.
+         */
+        private void clearInterruptFlagForWrite() {
+            interruptedWhilePersisting |= Thread.interrupted();
         }
 
         private int checkpointCount() {
