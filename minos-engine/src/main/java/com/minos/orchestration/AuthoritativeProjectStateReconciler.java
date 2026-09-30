@@ -129,7 +129,7 @@ final class AuthoritativeProjectStateReconciler {
                 detail,
                 exclusiveLeaseHeld);
         return recovery.orElseGet(() -> reconcileStableSnapshot(
-                projectId, activeAfter, persisted, promoter, stateStore, observedAt, detail));
+                projectId, activeAfter, persisted, promoter, stateStore, markers, observedAt, detail));
     }
 
     private static Optional<Decision> recoverIfRequired(
@@ -165,6 +165,7 @@ final class AuthoritativeProjectStateReconciler {
             ProjectIndexState persisted,
             SnapshotPromoter promoter,
             IndexStateStore stateStore,
+            ResumableRunMarkers markers,
             Instant observedAt,
             String detail
     ) {
@@ -177,13 +178,17 @@ final class AuthoritativeProjectStateReconciler {
             return Decision.resolved(persisted);
         }
 
+        // R7: the repaired project is READY, which never offers a resume. The offered run is ended by
+        // the same rule as in every other recovery path, not silently forgotten.
+        endResumeOffer(stateStore, markers, persisted.resumableRunId(), observedAt);
         ProjectIndexState repaired = new ProjectIndexState(
                 projectId,
                 ProjectIndexState.Availability.READY,
                 Optional.of(authoritativeId),
                 persisted.latestRunId(),
                 observedAt,
-                Optional.of(detail));
+                Optional.of(detail),
+                Optional.empty());
         stateStore.saveProjectState(repaired);
         return verifyRepair(projectId, active, promoter, stateStore);
     }
@@ -326,6 +331,21 @@ final class AuthoritativeProjectStateReconciler {
         unmarkQuietly(markers, run.id());
     }
 
+    /**
+     * V12, R7: a project that holds a current snapshot has nothing to resume. The run it offered is
+     * finalized and its marker removed instead of being left INTERRUPTED and marked. The one place
+     * that ends an offer for a current project, whichever recovery path made the project current.
+     */
+    private static void endResumeOffer(
+            IndexStateStore stateStore,
+            ResumableRunMarkers markers,
+            Optional<UUID> offeredRunId,
+            Instant observedAt
+    ) {
+        offeredRunId.ifPresent(id -> supersede(stateStore, markers, id,
+                "interrupted indexing run superseded: project already holds a current snapshot", observedAt));
+    }
+
     /** The marker only protects retention: a failure to remove it is reported, never propagated. */
     static void unmarkQuietly(ResumableRunMarkers markers, UUID runId) {
         try {
@@ -409,10 +429,7 @@ final class AuthoritativeProjectStateReconciler {
                 ? ProjectIndexState.Availability.READY
                 : ProjectIndexState.Availability.STALE;
         if (availability == ProjectIndexState.Availability.READY) {
-            // V12: a current project has nothing to resume; the offered run is finalized and its
-            // marker removed instead of being abandoned INTERRUPTED and marked.
-            resumableRunId.ifPresent(id -> supersede(stateStore, markers, id,
-                    "interrupted indexing run superseded: project already holds a current snapshot", observedAt));
+            endResumeOffer(stateStore, markers, resumableRunId, observedAt);
         }
         return new ProjectIndexState(
                 projectId,
