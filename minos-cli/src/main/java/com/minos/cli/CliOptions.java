@@ -46,7 +46,7 @@ final class CliOptions {
     }
 
     /** Kind of a declared option. */
-    enum Kind { FLAG, TEXT, INTEGER }
+    enum Kind { FLAG, TEXT, INTEGER, DECIMAL }
 
     /** One declared option, exposed so that guards can derive their probes from the declaration. */
     record Declared(String name, Kind kind, int minimum, int maximum) { }
@@ -98,6 +98,13 @@ final class CliOptions {
         return value == null ? null : Integer.valueOf(value);
     }
 
+    /** The value of a decimal option (a finite-or-not {@code double}, its range being the domain's to check), or {@code fallback}. */
+    double decimal(String option, double fallback) {
+        declaredAs(option, Kind.DECIMAL);
+        String value = values.get(option);
+        return value == null ? fallback : Double.parseDouble(value);
+    }
+
     /** The value of {@code --format}, {@link SymbolOutputFormat#TEXT} when absent. */
     SymbolOutputFormat format() {
         String value = text("--format");
@@ -145,6 +152,17 @@ final class CliOptions {
         Spec integer(String name, int minimum, int maximum) {
             if (minimum > maximum) throw new IllegalArgumentException("empty range for " + name);
             declare(new Declared(name, Kind.INTEGER, minimum, maximum));
+            return this;
+        }
+
+        /** An integer option whose range the domain object built from it checks (any {@code int} is accepted here). */
+        Spec integer(String name) {
+            return integer(name, Integer.MIN_VALUE, Integer.MAX_VALUE);
+        }
+
+        /** A decimal option ({@code --minimum-score 0.5}); its range is checked by the domain object built from it. */
+        Spec decimal(String... names) {
+            for (String name : names) declare(new Declared(name, Kind.DECIMAL, 0, 0));
             return this;
         }
 
@@ -214,11 +232,21 @@ final class CliOptions {
                 }
                 if (option.kind() == Kind.INTEGER) {
                     checkInteger(option, value);
+                } else if (option.kind() == Kind.DECIMAL) {
+                    checkDecimal(option, value);
                 }
                 values.put(argument, value);
             }
             return new CliOptions(this, Collections.unmodifiableMap(values), Collections.unmodifiableSet(flags),
                     List.copyOf(operands));
+        }
+
+        private static void checkDecimal(Declared option, String value) {
+            try {
+                Double.parseDouble(value);
+            } catch (NumberFormatException notANumber) {
+                throw new IllegalArgumentException(option.name() + " must be a number");
+            }
         }
 
         private static void checkInteger(Declared option, String value) {

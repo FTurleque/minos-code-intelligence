@@ -63,6 +63,17 @@ final class CliArgumentRules {
             return this;
         }
 
+        /** A decimal option and a valid sample (its range is the domain's to check, not the analysis'). */
+        Command decimal(String option, String sample) {
+            texts.add(new String[]{option, sample, "decimal"});
+            return this;
+        }
+
+        /** An integer option whose range the domain object checks: only its shape is checked at analysis. */
+        Command integerAnyRange(String option, int sample) {
+            return integer(option, Integer.MIN_VALUE, Integer.MAX_VALUE, sample);
+        }
+
         Command flag(String option) {
             flags.add(option);
             return this;
@@ -108,7 +119,10 @@ final class CliArgumentRules {
             expectUsage(command, "duplicate " + command.scope + "option: " + name, name, sample, name, sample);
             expectUsage(command, "unknown " + command.scope + "option: " + name.toUpperCase(Locale.ROOT),
                     name.toUpperCase(Locale.ROOT), sample);
-            if (option[2].equals("choice")) {
+            if (option[2].equals("decimal")) {
+                expectUsage(command, name + " must be a number", name, "abc");
+                assertAccepted(command, name, sample);
+            } else if (option[2].equals("choice")) {
                 // The value of an enumerated option is case-insensitive (Locale.ROOT).
                 assertAccepted(command, name, sample.toUpperCase(Locale.ROOT));
             } else {
@@ -128,6 +142,10 @@ final class CliArgumentRules {
                     name.toUpperCase(Locale.ROOT), sample);
             expectUsage(command, name + " must be an integer", name, "abc");
             expectUsage(command, name + " must be an integer", name, "-x");
+            if (minimum == Integer.MIN_VALUE && maximum == Integer.MAX_VALUE) {
+                assertAccepted(command, name, sample);
+                continue;
+            }
             expectUsage(command, name + " must be between " + minimum + " and " + maximum, name,
                     Integer.toString(minimum - 1));
             expectUsage(command, name + " must be between " + minimum + " and " + maximum, name,

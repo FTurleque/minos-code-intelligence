@@ -103,6 +103,19 @@ class CliOptionsTest {
     }
 
     @Test
+    void decimalAndUnboundedIntegerOptionsDelegateTheirRangeToTheDomain() {
+        CliOptions.Spec spec = CliOptions.spec().decimal("--minimum-score").integer("--limit");
+        CliOptions options = spec.parse(new String[]{"--minimum-score", "0.25", "--limit", "-3"}, 0);
+        assertEquals(0.25, options.decimal("--minimum-score", 0.0));
+        assertEquals(-3, options.integer("--limit", 0));
+        assertEquals(0.5, spec.parse(new String[0], 0).decimal("--minimum-score", 0.5));
+        assertEquals("--minimum-score must be a number", failure(spec, "--minimum-score", "abc"));
+        assertEquals("--limit must be an integer", failure(spec, "--limit", "1.5"));
+        assertEquals("missing value for --minimum-score", failure(spec, "--minimum-score", "--x"));
+        assertEquals("duplicate option: --minimum-score", failure(spec, "--minimum-score", "1", "--minimum-score", "1"));
+    }
+
+    @Test
     void aNullArgumentIsRefused() {
         assertEquals("argument at index 1 must not be null", failure(SPEC, "--dry-run", null));
     }

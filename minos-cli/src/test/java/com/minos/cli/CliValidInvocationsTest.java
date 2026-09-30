@@ -248,7 +248,7 @@ class CliValidInvocationsTest {
                 "ide semantic-index-sync p --format JSON",
                 "ide semantic-search p -leading-dash --limit 3 --minimum-score 0.5 --format json",
                 "ide hybrid-search p query --limit 3",
-                "ide hybrid-context p query --max-documents 2 --max-tokens 100 --max-tokens-per-document 50");
+                "ide hybrid-context p query --max-documents 2 --max-tokens 200 --max-tokens-per-document 50");
         for (String invocation : accepted) {
             StringBuilder output = new StringBuilder();
             StringBuilder error = new StringBuilder();
