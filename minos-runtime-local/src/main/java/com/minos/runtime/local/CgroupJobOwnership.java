@@ -87,13 +87,14 @@ final class CgroupJobOwnership {
     /** 1-based index of the first field after {@code comm} ({@code state}). */
     private static final int FIRST_FIELD_AFTER_COMM = 3;
     private static final long MAX_PID = 9_999_999_999L;
+    private static final String OWNER_PID = "owner pid ";
 
     private static final Pattern TOKEN = Pattern.compile("[0-9a-f]{8}");
-    private static final Pattern NAMESPACE_LINK = Pattern.compile("^[a-z_]+:\\[(?<inode>[0-9]{1,19})\\]$");
+    private static final Pattern NAMESPACE_LINK = Pattern.compile("^[a-z_]+:\\[(?<inode>\\d{1,19})\\]$");
     private static final Pattern MARKED_NAME = Pattern.compile(
-            "^(?<job>[A-Za-z0-9][A-Za-z0-9._-]*)\\.own-(?<pid>[0-9]{1,10})-"
-                    + "(?:t(?<ticks>[0-9]{1,19})(?:-n(?<pidns>[1-9][0-9]{0,18})_(?<timens>[0-9]{1,19}))?"
-                    + "|(?<legacy>[0-9]{1,19}))-(?<token>[0-9a-f]{8})$");
+            "^(?<job>[A-Za-z0-9][A-Za-z0-9._-]*)\\.own-(?<pid>\\d{1,10})-"
+                    + "(?:t(?<ticks>\\d{1,19})(?:-n(?<pidns>[1-9]\\d{0,18})_(?<timens>\\d{1,19}))?"
+                    + "|(?<legacy>\\d{1,19}))-(?<token>[0-9a-f]{8})$");
 
     /** The mark of the running MINOS process, fixed for the lifetime of the JVM. */
     static final Mark CURRENT = Mark.of(ProcessHandle.current(), Mark.newToken());
@@ -223,10 +224,13 @@ final class CgroupJobOwnership {
 
         String suffix() {
             String startPart = clock == StartClock.BOOT_TICKS
-                    ? TICKS_PREFIX + start + (namespaces.known()
-                            ? NAMESPACE_PREFIX + namespaces.pid() + "_" + namespaces.time() : "")
+                    ? TICKS_PREFIX + start + namespaceSuffix()
                     : Long.toString(start);
             return MARK_SEPARATOR + pid + "-" + startPart + "-" + token;
+        }
+
+        private String namespaceSuffix() {
+            return namespaces.known() ? NAMESPACE_PREFIX + namespaces.pid() + "_" + namespaces.time() : "";
         }
 
         /** Appends this mark to a validated single-segment job name. */
@@ -496,29 +500,29 @@ final class CgroupJobOwnership {
                     + " (written by an earlier build), so its pid cannot be looked up here");
         }
         if (!owner.namespaces().equals(self.namespaces())) {
-            return new Verdict(Decision.LEAVE, "owner pid " + owner.pid() + " lives in another PID or time namespace:"
+            return new Verdict(Decision.LEAVE, OWNER_PID + owner.pid() + " lives in another PID or time namespace:"
                     + " its pid and start ticks mean nothing here");
         }
         OwnerStatus status = owners.find(owner.pid());
         if (status.presence() == OwnerStatus.Presence.UNVERIFIABLE) {
-            return new Verdict(Decision.LEAVE, "owner pid " + owner.pid() + " cannot be verified: "
+            return new Verdict(Decision.LEAVE, OWNER_PID + owner.pid() + " cannot be verified: "
                     + status.reason());
         }
         if (status.presence() == OwnerStatus.Presence.GONE) {
-            return new Verdict(Decision.RECLAIM, "owner pid " + owner.pid()
+            return new Verdict(Decision.RECLAIM, OWNER_PID + owner.pid()
                     + " is absent from a process table proven readable, it is no longer alive");
         }
         if (owner.start() == 0L) {
-            return new Verdict(Decision.LEAVE, "owner pid " + owner.pid()
+            return new Verdict(Decision.LEAVE, OWNER_PID + owner.pid()
                     + " is alive and the mark carries no start ticks to rule out pid reuse");
         }
         OptionalLong liveTicks = status.startTicks();
         if (liveTicks.isEmpty()) {
-            return new Verdict(Decision.LEAVE, "owner pid " + owner.pid()
+            return new Verdict(Decision.LEAVE, OWNER_PID + owner.pid()
                     + " is alive and its start ticks are unavailable to rule out pid reuse");
         }
         if (liveTicks.getAsLong() != owner.start()) {
-            return new Verdict(Decision.RECLAIM, "owner pid " + owner.pid()
+            return new Verdict(Decision.RECLAIM, OWNER_PID + owner.pid()
                     + " was reused by another process (kernel start ticks " + liveTicks.getAsLong()
                     + " instead of " + owner.start() + ")");
         }

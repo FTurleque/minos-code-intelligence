@@ -91,7 +91,7 @@ class LinuxCgroupJobOwnershipIsolationTest {
 
     /** R2 on a real cgroup: the mark written by this JVM carries the kernel start ticks of its process. */
     @Test
-    void theMarkCarriesTheKernelStartTicksAndNamespacesOfItsOwner() throws Exception {
+    void theMarkCarriesTheKernelStartTicksAndNamespacesOfItsOwner() {
         Path root = requireDelegatedRoot();
         OptionalLong ticks = CgroupJobOwnership.startTicks(CgroupJobOwnership.PROC, ProcessHandle.current().pid());
 

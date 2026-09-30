@@ -82,9 +82,9 @@ class LinuxCgroupStaleRecoveryTest {
         Path stale = Files.createDirectory(root.resolve(OWNER.markedName("minos-live")));
         Files.writeString(stale.resolve(LinuxCgroupJob.PROCS_FILE), "424242\n", StandardCharsets.UTF_8);
 
-        IllegalStateException failure = assertThrows(
-                IllegalStateException.class,
-                () -> LinuxCgroupJob.reclaimStaleJobs(root, context(nobodyIsAlive())));
+        SweepContext sweepContext = context(nobodyIsAlive());
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> LinuxCgroupJob.reclaimStaleJobs(root, sweepContext));
 
         assertTrue(failure.getMessage().contains("cgroup.kill"));
         assertTrue(Files.exists(stale), "unverified live containment residue must remain visible");
@@ -168,9 +168,9 @@ class LinuxCgroupStaleRecoveryTest {
         Path stale = Files.createDirectory(root.resolve("minos-unknown"));
         Files.createDirectory(stale.resolve(LinuxCgroupJob.PROCS_FILE));
 
-        IllegalStateException failure = assertThrows(
-                IllegalStateException.class,
-                () -> LinuxCgroupJob.reclaimStaleJobs(root, context(nobodyIsAlive())));
+        SweepContext sweepContext = context(nobodyIsAlive());
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> LinuxCgroupJob.reclaimStaleJobs(root, sweepContext));
 
         assertTrue(failure.getMessage().contains("unable to read cgroup membership"));
         assertTrue(Files.exists(stale), "unknown membership must not be reported as reclaimed");
@@ -224,8 +224,9 @@ class LinuxCgroupStaleRecoveryTest {
     void membersOfAnotherPidNamespaceAreNeverKilled(@TempDir Path root) throws Exception {
         Path job = cgroup(root, OWNER.markedName("minos-provider-invisible"), "0\n");
 
+        SweepContext sweepContext = context(nobodyIsAlive());
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> LinuxCgroupJob.reclaimStaleJobs(root, context(nobodyIsAlive())));
+                () -> LinuxCgroupJob.reclaimStaleJobs(root, sweepContext));
 
         assertTrue(failure.getMessage().contains("unable to read cgroup membership"), failure.getMessage());
         assertEquals("0", killSwitch(job), "no kill was requested");
@@ -237,8 +238,9 @@ class LinuxCgroupStaleRecoveryTest {
         cgroup(job, "inner", "424242\n");
 
         // The fake cannot make the process die: the kill is attempted, then verified, and the verification fails.
+        SweepContext sweepContext = context(nobodyIsAlive());
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> LinuxCgroupJob.reclaimStaleJobs(root, context(nobodyIsAlive())));
+                () -> LinuxCgroupJob.reclaimStaleJobs(root, sweepContext));
 
         assertEquals("1", killSwitch(job), "the owner is dead: the kernel kill reaches the nested cgroup");
         assertTrue(failure.getMessage().contains("still contains 1 process(es)"), failure.getMessage());

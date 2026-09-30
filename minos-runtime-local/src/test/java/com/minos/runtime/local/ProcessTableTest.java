@@ -62,7 +62,7 @@ class ProcessTableTest {
     }
 
     @Test
-    void anUnreadableTableNeverProvesAnOwnerDead(@TempDir Path proc) throws Exception {
+    void anUnreadableTableNeverProvesAnOwnerDead(@TempDir Path proc) {
         // No entry for this process itself: the table is not readable, so its silence proves nothing.
         OwnerStatus status = table(proc, true).find(OWNER_PID);
 
@@ -202,7 +202,7 @@ class ProcessTableTest {
     /** Real kernel, real {@code /proc}: the answers the decision relies on. */
     @Test
     @EnabledOnOs(OS.LINUX)
-    void theRealProcessTableAnswersForALiveAndForAnAbsentProcess(@TempDir Path cgroup) throws Exception {
+    void theRealProcessTableAnswersForALiveAndForAnAbsentProcess(@TempDir Path cgroup) {
         OwnerLookup system = OwnerLookup.system(cgroup);
         long self = ProcessHandle.current().pid();
 
