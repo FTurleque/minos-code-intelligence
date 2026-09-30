@@ -10,6 +10,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Cross-JVM mutation lease shared by structural snapshot publication/promotion, semantic commit and
  * structural retention for one project.
@@ -70,9 +72,7 @@ final class SnapshotProjectLease implements AutoCloseable {
     }
 
     private static String requireSafeProjectId(String projectId) {
-        if (projectId == null || projectId.isBlank()) {
-            throw new IllegalArgumentException("projectId must not be blank");
-        }
+        requireText(projectId, "projectId");
         if (!projectId.matches("[A-Za-z0-9._-]{1,200}")) {
             throw new IllegalArgumentException("projectId contains unsafe lease path characters");
         }

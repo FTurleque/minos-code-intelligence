@@ -3,6 +3,8 @@ package com.minos.domain;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Déclaration adressable dans le modèle de connaissance MINOS.
  */
@@ -37,11 +39,5 @@ public record Symbol(
         Objects.requireNonNull(resolutionStatus, "resolutionStatus");
         Objects.requireNonNull(origin, "origin");
         providerReferences = providerReferences == null ? Set.of() : Set.copyOf(providerReferences);
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
     }
 }

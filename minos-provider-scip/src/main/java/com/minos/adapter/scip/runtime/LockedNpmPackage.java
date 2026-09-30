@@ -11,6 +11,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Repository-owned npm lockfile preparation for managed SCIP runtimes. */
 final class LockedNpmPackage {
     private static final long MAX_LOCKFILE_BYTES = 4L * 1024L * 1024L;
@@ -73,9 +75,5 @@ final class LockedNpmPackage {
         if (!json.contains("\"lockfileVersion\": 3")) {
             throw new IOException("managed npm lockfile must use lockfileVersion 3");
         }
-    }
-
-    private static void requireText(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
     }
 }

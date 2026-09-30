@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Storage selection and provider-neutral configuration resolved from durable MINOS settings. */
 public record StorageBackendConfiguration(
         String backend,
@@ -91,9 +93,7 @@ public record StorageBackendConfiguration(
     }
 
     private static String requireBackend(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("storage backend must not be blank");
-        }
+        requireText(value, "storage backend");
         String normalized = value.trim().toLowerCase(Locale.ROOT);
         if (!normalized.equals("local") && !normalized.equals("postgresql")) {
             throw new IllegalArgumentException("unsupported storage backend: " + value);

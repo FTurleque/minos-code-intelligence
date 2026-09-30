@@ -19,6 +19,8 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributeView;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Shared bounded filesystem primitives for ephemeral provider workspaces. */
 final class ProviderWorkspaceFiles {
 
@@ -34,7 +36,7 @@ final class ProviderWorkspaceFiles {
         Path source = Objects.requireNonNull(sourceRoot, "sourceRoot").toRealPath();
         Path target = Objects.requireNonNull(targetRoot, "targetRoot").toAbsolutePath().normalize();
         SourceBudgetPolicy policy = Objects.requireNonNull(budgetPolicy, "budgetPolicy");
-        String label = requireBoundary(boundary);
+        String label = requireText(boundary, "workspace boundary");
         if (!Files.isDirectory(source, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException(label + " source workspace is not a directory");
         }
@@ -89,7 +91,7 @@ final class ProviderWorkspaceFiles {
     static void deleteTree(Path allowedRoot, Path target, String boundary) throws IOException {
         Path root = Objects.requireNonNull(allowedRoot, "allowedRoot").toAbsolutePath().normalize();
         Path normalized = Objects.requireNonNull(target, "target").toAbsolutePath().normalize();
-        String label = requireBoundary(boundary);
+        String label = requireText(boundary, "workspace boundary");
         if (normalized.equals(root) || !normalized.startsWith(root)) {
             throw new IOException(label + " refuses to delete outside its workspace root");
         }
@@ -163,13 +165,6 @@ final class ProviderWorkspaceFiles {
         } catch (IOException | UnsupportedOperationException ignored) {
             // Non-DOS file systems do not need this Windows-specific cleanup.
         }
-    }
-
-    private static String requireBoundary(String boundary) {
-        if (boundary == null || boundary.isBlank()) {
-            throw new IllegalArgumentException("workspace boundary must not be blank");
-        }
-        return boundary;
     }
 
     private static String portable(Path path) {

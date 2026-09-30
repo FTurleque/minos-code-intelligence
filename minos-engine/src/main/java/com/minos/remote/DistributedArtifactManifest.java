@@ -9,6 +9,8 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Versioned, secret-free provenance envelope for one transported provider artifact. */
 public record DistributedArtifactManifest(
         String format,
@@ -105,13 +107,6 @@ public record DistributedArtifactManifest(
         }
         String portable = path.toString().replace('\\', '/');
         return ".".equals(portable) ? "" : portable;
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 
     private static void requireKnownFormat(String format) {

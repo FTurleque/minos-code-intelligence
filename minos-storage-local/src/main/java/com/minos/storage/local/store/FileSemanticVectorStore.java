@@ -31,6 +31,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Local versioned vector store. Rebuild from active snapshots is always authoritative. */
 public final class FileSemanticVectorStore implements SemanticVectorStore {
 
@@ -442,10 +444,6 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
 
     private static String nullable(String value) {
         return value.isEmpty() ? null : value;
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
     }
 
     private static long estimateWeight(IndexSnapshot snapshot) {

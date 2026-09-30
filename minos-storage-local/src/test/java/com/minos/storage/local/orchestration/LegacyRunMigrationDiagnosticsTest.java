@@ -2,6 +2,7 @@ package com.minos.storage.local.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexingRun;
+import com.minos.testsupport.LogCapture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

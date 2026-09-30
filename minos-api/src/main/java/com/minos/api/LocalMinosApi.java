@@ -45,6 +45,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Local M11 implementation backed by the already-qualified MINOS services.
  *
@@ -500,12 +502,6 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
             return Enum.valueOf(type, value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("unsupported " + field + ": " + value, exception);
-        }
-    }
-
-    private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(field + " must not be blank");
         }
     }
 

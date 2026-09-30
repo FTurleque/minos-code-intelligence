@@ -10,6 +10,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.Locale;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Shared fail-closed primitive for durable local control-plane file mutations. */
 public final class DurableAtomicFile {
 
@@ -27,7 +29,7 @@ public final class DurableAtomicFile {
      */
     public static void ensureDirectory(Path directory, String label) throws IOException {
         Path target = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
-        String operation = requireLabel(label);
+        String operation = requireText(label, "label");
         boolean existed = Files.isDirectory(target);
         Path parent = target.getParent();
         if (!existed && parent != null && !Files.isDirectory(parent)) {
@@ -46,18 +48,18 @@ public final class DurableAtomicFile {
 
     /** Publishes a new immutable file; an existing target is never replaced. */
     public static void publish(Path source, Path target, String label) throws IOException {
-        move(source, target, false, requireLabel(label), DurableAtomicFile::forceDirectory);
+        move(source, target, false, requireText(label, "label"), DurableAtomicFile::forceDirectory);
     }
 
     /** Replaces a control-plane file atomically and durably. */
     public static void replace(Path source, Path target, String label) throws IOException {
-        move(source, target, true, requireLabel(label), DurableAtomicFile::forceDirectory);
+        move(source, target, true, requireText(label, "label"), DurableAtomicFile::forceDirectory);
     }
 
     /** Deletes a file and makes the directory entry removal durable where supported. */
     public static boolean deleteIfExists(Path target, String label) throws IOException {
         Path normalized = Objects.requireNonNull(target, "target").toAbsolutePath().normalize();
-        String operation = requireLabel(label);
+        String operation = requireText(label, "label");
         boolean deleted = Files.deleteIfExists(normalized);
         if (!deleted) return false;
         try {
@@ -113,11 +115,6 @@ public final class DurableAtomicFile {
             throw new IOException("filesystem does not support required directory durability sync: " + directory,
                     unsupported);
         }
-    }
-
-    private static String requireLabel(String label) {
-        if (label == null || label.isBlank()) throw new IllegalArgumentException("label must not be blank");
-        return label;
     }
 
     private static boolean windows() {

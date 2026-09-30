@@ -64,6 +64,21 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
     }
 
     @Test
+    void refusesABlankSnapshotIdWithItsNameBeforeTouchingTheDatabase() throws Exception {
+        // Q13 : message historique de la copie PostgreSQL de requireText, conserve par la mutualisation.
+        UUID projectId = UUID.randomUUID();
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
+
+        IllegalArgumentException shortForm = assertThrows(IllegalArgumentException.class,
+                () -> store.publish(projectId, " ", List.of(symbol(projectId, "sym-a"))));
+        IllegalArgumentException longForm = assertThrows(IllegalArgumentException.class,
+                () -> store.publish(projectId, null, List.of(), List.of(), List.of()));
+
+        assertEquals("snapshotId must not be blank", shortForm.getMessage());
+        assertEquals("snapshotId must not be blank", longForm.getMessage());
+    }
+
+    @Test
     void isIdempotentForSameContent() throws Exception {
         UUID projectId = UUID.randomUUID();
         PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);

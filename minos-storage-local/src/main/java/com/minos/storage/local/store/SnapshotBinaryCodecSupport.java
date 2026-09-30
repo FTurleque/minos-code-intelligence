@@ -23,6 +23,7 @@ import com.minos.domain.SymbolReference;
 import com.minos.domain.UnresolvedSymbolReference;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedOutputStream;
+import com.minos.io.Sha256;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.SymbolSnapshot;
 
@@ -93,7 +94,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static String writeSymbolSnapshotV1(Path file, SymbolSnapshot snapshot) throws IOException {
-        MessageDigest digest = SnapshotIntegrityService.sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         try (OutputStream fileOutput = Files.newOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
@@ -146,7 +147,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static String writeKnowledgeSnapshotV3(Path file, CodeKnowledgeSnapshot snapshot) throws IOException {
-        MessageDigest digest = SnapshotIntegrityService.sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         try (OutputStream fileOutput = Files.newOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
@@ -235,7 +236,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static String writeKnowledgeSnapshotV2(Path file, CodeKnowledgeSnapshot snapshot) throws IOException {
-        MessageDigest digest = SnapshotIntegrityService.sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         try (OutputStream fileOutput = Files.newOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(

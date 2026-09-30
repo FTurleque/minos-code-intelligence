@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Description fournisseur-indépendante d'un indexeur enregistrable dans MINOS.
  */
@@ -49,13 +51,6 @@ public record IndexerDescriptor(
         Objects.requireNonNull(detectedBuildSystems, "detectedBuildSystems");
         return buildSystems.isEmpty()
                 || detectedBuildSystems.stream().anyMatch(buildSystems::contains);
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 
     private static <E extends Enum<E>> Set<E> immutableEnumSet(

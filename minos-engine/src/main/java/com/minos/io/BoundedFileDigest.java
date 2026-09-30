@@ -10,8 +10,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Set;
 
@@ -33,22 +31,14 @@ public final class BoundedFileDigest {
                 throw new IOException(label(boundary) + " size is outside the allowed range: "
                         + expectedBytes + "/" + maximumBytes);
             }
-            MessageDigest digest = sha256();
+            MessageDigest digest = Sha256.newDigest();
             BoundedInputStream bounded = new BoundedInputStream(
                     Channels.newInputStream(channel), expectedBytes, label(boundary) + " digest");
             new DigestInputStream(bounded, digest).transferTo(OutputStream.nullOutputStream());
             if (bounded.consumedBytes() != expectedBytes || channel.size() != expectedBytes) {
                 throw new IOException(label(boundary) + " changed while hashing");
             }
-            return HexFormat.of().formatHex(digest.digest());
-        }
-    }
-
-    private static MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
+            return Sha256.hex(digest);
         }
     }
 

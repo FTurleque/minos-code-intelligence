@@ -8,6 +8,7 @@ import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.CommitUncertainException;
 import com.minos.io.DurableAtomicFile;
+import com.minos.io.Sha256;
 import com.minos.source.SourceBudgetPolicy;
 
 import java.io.BufferedInputStream;
@@ -28,7 +29,6 @@ import java.nio.file.attribute.FileTime;
 import java.security.DigestInputStream;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -39,6 +39,8 @@ import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
+
+import static com.minos.domain.Preconditions.requireText;
 
 /**
  * Persistance locale, versionnée et vérifiée des snapshots d'empreintes M7.
@@ -92,7 +94,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         );
         Path projectDirectory = projectDirectory(projectId);
         DurableAtomicFile.ensureDirectory(projectDirectory, "fingerprint project directory");
-        String idHash = sha256(indexSnapshotId);
+        String idHash = Sha256.hex(indexSnapshotId);
         Path temporary = Files.createTempFile(projectDirectory, ".fingerprint-", ".tmp");
         try {
             String checksum = writeSnapshot(temporary, snapshot);
@@ -131,7 +133,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         Objects.requireNonNull(projectId, "projectId");
         indexSnapshotId = requireText(indexSnapshotId, "indexSnapshotId");
         Path projectDirectory = projectDirectory(projectId);
-        List<Path> matches = filesForIdHash(projectDirectory, sha256(indexSnapshotId));
+        List<Path> matches = filesForIdHash(projectDirectory, Sha256.hex(indexSnapshotId));
         if (matches.isEmpty()) {
             throw new IOException("fingerprint snapshot is not published for index snapshot: " + indexSnapshotId);
         }
@@ -177,7 +179,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         Objects.requireNonNull(projectId, "projectId");
         indexSnapshotId = requireText(indexSnapshotId, "indexSnapshotId");
         Path projectDirectory = projectDirectory(projectId);
-        List<Path> matches = filesForIdHash(projectDirectory, sha256(indexSnapshotId));
+        List<Path> matches = filesForIdHash(projectDirectory, Sha256.hex(indexSnapshotId));
         if (matches.isEmpty()) {
             return Optional.empty();
         }
@@ -272,7 +274,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
         Set<String> protectedPrefixes = new HashSet<>();
         for (String snapshotId : additionallyProtectedSnapshotIds) {
-            protectedPrefixes.add("fingerprint-" + sha256(requireText(snapshotId, "protectedSnapshotId")) + "-");
+            protectedPrefixes.add("fingerprint-" + Sha256.hex(requireText(snapshotId, "protectedSnapshotId")) + "-");
         }
         Comparator<FingerprintFile> oldestFirst = Comparator
                 .comparing(FingerprintFile::lastModified)
@@ -326,7 +328,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     private static String writeSnapshot(Path file, ProjectFingerprintSnapshot snapshot) throws IOException {
         validateSnapshotEncoding(snapshot);
-        MessageDigest digest = sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         try (OutputStream fileOutput = Files.newOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(digestOutput))) {
@@ -448,7 +450,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static String aggregateHash(List<FileFingerprint> files) {
-        MessageDigest digest = sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         for (FileFingerprint file : files) {
             update(digest, file.relativePath());
             digest.update((byte) 0);
@@ -666,7 +668,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     private static String checksum(Path file) throws IOException {
         requireBoundedRegularFile(file, "fingerprint snapshot", MAX_SNAPSHOT_BYTES);
-        MessageDigest digest = sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         try (InputStream fileInput = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
              BoundedInputStream boundedInput = new BoundedInputStream(
                      fileInput, MAX_SNAPSHOT_BYTES, "fingerprint snapshot checksum");
@@ -676,29 +678,8 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         return HEX.formatHex(digest.digest());
     }
 
-    private static String sha256(String value) {
-        MessageDigest digest = sha256Digest();
-        update(digest, value);
-        return HEX.formatHex(digest.digest());
-    }
-
-    private static MessageDigest sha256Digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
-    }
-
     private static void update(MessageDigest digest, String value) {
         digest.update(value.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 
     private record ActivePointer(

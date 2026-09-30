@@ -8,15 +8,12 @@ import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipKind;
+import com.minos.io.Sha256;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -147,16 +144,7 @@ public final class DependencyDerivationService {
                 key.unresolvedTarget() == null ? "" : key.unresolvedTarget(),
                 RelationshipKind.DEPENDS_ON.name()
         );
-        return "rel:" + sha256(material);
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
+        return "rel:" + Sha256.hex(material);
     }
 
     private record DependencyKey(

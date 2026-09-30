@@ -15,6 +15,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Résolution déterministe des exécutables externes sans passer par un shell implicite. */
 public final class CommandLocator {
 
@@ -233,9 +235,7 @@ public final class CommandLocator {
     }
 
     private static String requireCommand(String command) {
-        if (command == null || command.isBlank()) {
-            throw new IllegalArgumentException("command must not be blank");
-        }
+        requireText(command, "command");
         if (command.indexOf('/') >= 0 || command.indexOf('\\') >= 0) {
             throw new IllegalArgumentException("command must be a simple executable name");
         }

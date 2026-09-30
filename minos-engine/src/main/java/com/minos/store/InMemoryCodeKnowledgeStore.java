@@ -19,6 +19,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Deterministic in-memory MINOS store with reconstructible secondary query indexes.
  *
@@ -89,14 +91,14 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     @Override
     public Optional<Symbol> findSymbolById(String projectId, String symbolId) {
-        validateText(projectId, "projectId");
-        validateText(symbolId, "symbolId");
+        requireText(projectId, "projectId");
+        requireText(symbolId, "symbolId");
         return Optional.ofNullable(symbolsByScopedId.get(scopedKey(projectId, symbolId)));
     }
 
     @Override
     public List<Symbol> findSymbols(String projectId, SymbolSearchCriteria criteria) {
-        validateText(projectId, "projectId");
+        requireText(projectId, "projectId");
         if (criteria == null) {
             throw new IllegalArgumentException("criteria must not be null");
         }
@@ -125,8 +127,8 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     @Override
     public List<Symbol> findFileSymbols(String projectId, String fileId, int limit) {
-        validateText(projectId, "projectId");
-        validateText(fileId, "fileId");
+        requireText(projectId, "projectId");
+        requireText(fileId, "fileId");
         validateLimit(limit);
 
         return symbolIndexes.byFileId()
@@ -144,8 +146,8 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     @Override
     public List<SymbolOccurrence> findUsages(String projectId, String symbolId, int limit) {
-        validateText(projectId, "projectId");
-        validateText(symbolId, "symbolId");
+        requireText(projectId, "projectId");
+        requireText(symbolId, "symbolId");
         validateLimit(limit);
 
         return occurrenceIndexes.byResolvedSymbolId()
@@ -166,7 +168,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
             String projectId,
             RelationshipSearchCriteria criteria
     ) {
-        validateText(projectId, "projectId");
+        requireText(projectId, "projectId");
         if (criteria == null) {
             throw new IllegalArgumentException("criteria must not be null");
         }
@@ -412,12 +414,6 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     private static long listSize(Map<String, ? extends List<?>> index) {
         return index.values().stream().mapToLong(List::size).sum();
-    }
-
-    private static void validateText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
     }
 
     private static void validateLimit(int limit) {

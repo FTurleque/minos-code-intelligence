@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Reference-counted, cross-process leases over the entries of a shared on-disk cache.
  *
@@ -29,6 +31,9 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public final class SharedCacheLeaseRegistry {
 
+    /** Field name used in the validation messages: "lease key must not be blank". */
+    private static final String LEASE_KEY = "lease key";
+
     private static final int STRIPE_COUNT = 64;
 
     private final Path leasesRoot;
@@ -45,12 +50,12 @@ public final class SharedCacheLeaseRegistry {
             throw new IllegalArgumentException("acquireTimeout must be positive");
         }
         this.acquireTimeout = timeout;
-        this.description = requireText(description);
+        this.description = requireText(description, LEASE_KEY);
     }
 
     /** Pins {@code cacheKey} for this JVM and every other process, or fails within the timeout. */
     public void acquire(String cacheKey) throws IOException {
-        String key = requireText(cacheKey);
+        String key = requireText(cacheKey, LEASE_KEY);
         LeaseDeadline deadline = LeaseDeadline.after(acquireTimeout);
         ReentrantLock stripe = stripe(key);
         boolean stripeAcquired = false;
@@ -81,7 +86,7 @@ public final class SharedCacheLeaseRegistry {
      * that is not held is a no-op so a cleanup path can run unconditionally.
      */
     public void release(String cacheKey) throws IOException {
-        String key = requireText(cacheKey);
+        String key = requireText(cacheKey, LEASE_KEY);
         synchronized (monitor) {
             LeaseState state = active.get(key);
             if (state == null) return;
@@ -97,7 +102,7 @@ public final class SharedCacheLeaseRegistry {
     /** True when this JVM currently pins {@code cacheKey}. */
     public boolean isHeld(String cacheKey) {
         synchronized (monitor) {
-            return active.containsKey(requireText(cacheKey));
+            return active.containsKey(requireText(cacheKey, LEASE_KEY));
         }
     }
 
@@ -106,7 +111,7 @@ public final class SharedCacheLeaseRegistry {
      * is pinned by this JVM or another process. Never blocks.
      */
     public EvictionLease tryAcquireEviction(String cacheKey) throws IOException {
-        String key = requireText(cacheKey);
+        String key = requireText(cacheKey, LEASE_KEY);
         synchronized (monitor) {
             if (active.containsKey(key)) return null;
         }
@@ -191,11 +196,6 @@ public final class SharedCacheLeaseRegistry {
         if (current == null) return additional;
         current.addSuppressed(additional);
         return current;
-    }
-
-    private static String requireText(String value) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException("lease key must not be blank");
-        return value;
     }
 
     private static final class LeaseState {

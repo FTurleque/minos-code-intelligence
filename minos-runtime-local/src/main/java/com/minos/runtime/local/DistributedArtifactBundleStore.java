@@ -2,6 +2,7 @@ package com.minos.runtime.local;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.FileTreeOperations;
+import com.minos.io.Sha256;
 import com.minos.io.SharedCacheLeaseRegistry;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.remote.DistributedArtifactManifest;
@@ -27,13 +28,11 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.HexFormat;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -529,7 +528,7 @@ public final class DistributedArtifactBundleStore {
     }
 
     private static String cacheKey(DistributedArtifactManifest manifest) {
-        return sha256(String.join("\n",
+        return Sha256.hex(String.join("\n",
                 manifest.format(),
                 manifest.sourceRepository(),
                 manifest.sourceCommit(),
@@ -568,7 +567,7 @@ public final class DistributedArtifactBundleStore {
         if (!Files.isRegularFile(normalized, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("refusing to hash a missing, non-regular or symbolic-link file");
         }
-        MessageDigest digest = digest();
+        MessageDigest digest = Sha256.newDigest();
         try (DigestInputStream input = new DigestInputStream(
                 Files.newInputStream(normalized, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), digest)) {
             byte[] buffer = new byte[8192];
@@ -585,20 +584,7 @@ public final class DistributedArtifactBundleStore {
                 throw new IOException("file changed while hashing: longer than expected length");
             }
         }
-        return HexFormat.of().formatHex(digest.digest());
-    }
-
-    private static String sha256(String value) {
-        MessageDigest digest = digest();
-        return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-    }
-
-    private static MessageDigest digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
+        return Sha256.hex(digest);
     }
 
     private void deleteCacheTree(Path target) throws IOException {

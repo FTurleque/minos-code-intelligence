@@ -5,9 +5,11 @@ import com.minos.domain.SymbolLocation;
 import com.minos.query.SymbolResult;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.StringJoiner;
 
+import static com.minos.output.DeterministicJson.object;
 import static com.minos.output.DeterministicJson.quote;
 
 /**
@@ -90,86 +92,28 @@ public final class SymbolResultRenderer {
     }
 
     private static String renderJson(List<SymbolResult> results) {
-        StringBuilder output = new StringBuilder();
-        output.append("{\"count\":").append(results.size()).append(",\"symbols\":[");
-        for (int index = 0; index < results.size(); index++) {
-            if (index > 0) {
-                output.append(',');
-            }
-            appendJsonSymbol(output, results.get(index));
-        }
-        return output.append("]}").toString();
+        return DeterministicJson.render(object(
+                "count", results.size(),
+                "symbols", results.stream().map(SymbolResultRenderer::symbolMap).toList()));
     }
 
-    private static void appendJsonSymbol(StringBuilder output, SymbolResult result) {
-        output.append('{');
-        appendJsonStringField(output, "id", result.id());
-        appendJsonStringField(output, "symbolKey", result.symbolKey());
-        appendJsonStringField(output, "identityQuality", result.identityQuality().name());
-        appendJsonStringField(output, "projectId", result.projectId());
-        appendJsonStringField(output, "moduleId", result.moduleId());
-        appendJsonStringField(output, "fileId", result.fileId());
-        appendJsonStringField(output, "kind", result.kind().name());
-        appendJsonStringField(output, "name", result.name());
-        appendJsonStringField(output, "qualifiedName", result.qualifiedName());
-        appendJsonStringField(output, "signature", result.signature());
-        appendJsonStringField(output, "language", result.language());
-        appendJsonName(output, "location");
-        appendJsonLocation(output, result.location());
-        output.append(',');
-        appendJsonStringField(output, "resolutionStatus", result.resolutionStatus().name());
-        appendJsonName(output, "origin");
-        appendJsonOrigin(output, result.origin());
-        output.append(',');
-        appendJsonBooleanField(output, "external", result.external());
-        appendJsonBooleanField(output, "generated", result.generated());
-        output.setLength(output.length() - 1);
-        output.append('}');
-    }
-
-    private static void appendJsonLocation(StringBuilder output, SymbolLocation location) {
-        if (location == null) {
-            output.append("null");
-            return;
-        }
-        output.append('{');
-        appendJsonStringField(output, "fileId", location.fileId());
-        appendJsonNumberField(output, "startLine", location.startLine());
-        appendJsonNumberField(output, "startColumn", location.startColumn());
-        appendJsonNumberField(output, "endLine", location.endLine());
-        appendJsonNumberField(output, "endColumn", location.endColumn());
-        appendJsonStringField(output, "positionEncoding", location.positionEncoding().name());
-        output.setLength(output.length() - 1);
-        output.append('}');
-    }
-
-    private static void appendJsonOrigin(StringBuilder output, Origin origin) {
-        output.append('{');
-        appendJsonStringField(output, "providerId", origin.providerId());
-        appendJsonStringField(output, "providerType", origin.providerType());
-        appendJsonStringField(output, "providerVersion", origin.providerVersion());
-        appendJsonStringField(output, "indexRunId", origin.indexRunId());
-        appendJsonStringField(output, "sourceType", origin.sourceType().name());
-        output.setLength(output.length() - 1);
-        output.append('}');
-    }
-
-    private static void appendJsonStringField(StringBuilder output, String name, String value) {
-        appendJsonName(output, name);
-        output.append(value == null ? "null" : quote(value)).append(',');
-    }
-
-    private static void appendJsonNumberField(StringBuilder output, String name, int value) {
-        appendJsonName(output, name);
-        output.append(value).append(',');
-    }
-
-    private static void appendJsonBooleanField(StringBuilder output, String name, boolean value) {
-        appendJsonName(output, name);
-        output.append(value).append(',');
-    }
-
-    private static void appendJsonName(StringBuilder output, String name) {
-        output.append(quote(name)).append(':');
+    private static Map<String, Object> symbolMap(SymbolResult result) {
+        return object(
+                "id", result.id(),
+                "symbolKey", result.symbolKey(),
+                "identityQuality", result.identityQuality().name(),
+                "projectId", result.projectId(),
+                "moduleId", result.moduleId(),
+                "fileId", result.fileId(),
+                "kind", result.kind().name(),
+                "name", result.name(),
+                "qualifiedName", result.qualifiedName(),
+                "signature", result.signature(),
+                "language", result.language(),
+                "location", JsonShapes.location(result.location()),
+                "resolutionStatus", result.resolutionStatus().name(),
+                "origin", JsonShapes.origin(result.origin()),
+                "external", result.external(),
+                "generated", result.generated());
     }
 }

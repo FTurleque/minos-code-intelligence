@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Shared fail-closed skeleton for executable-backed SCIP process plans. */
 abstract class AbstractScipProcessPlanFactory implements IndexerProcessPlanFactory {
     private static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(30);
@@ -70,10 +72,5 @@ abstract class AbstractScipProcessPlanFactory implements IndexerProcessPlanFacto
 
     protected final Path executable() {
         return executable;
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
-        return value;
     }
 }

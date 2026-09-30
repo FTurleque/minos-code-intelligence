@@ -5,6 +5,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Occurrence localisée d'une référence symbolique.
  *
@@ -63,11 +65,5 @@ public record SymbolOccurrence(
 
     public boolean isResolved() {
         return symbolRef instanceof ResolvedSymbolReference;
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
     }
 }

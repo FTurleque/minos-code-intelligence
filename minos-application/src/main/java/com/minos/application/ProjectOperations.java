@@ -5,6 +5,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Application-level project administration and SCIP import port shared by public surfaces. */
 public interface ProjectOperations {
 
@@ -36,7 +38,7 @@ public interface ProjectOperations {
             String lastSuccessfulIndexAt,
             String providerId,
             String providerVersion
-    ) {
+    ) implements ProjectSummary {
         public ProjectView {
             requireText(id, "id");
             requireText(name, "name");
@@ -96,9 +98,5 @@ public interface ProjectOperations {
                     relationshipCount, relatedTestRelationshipCount, unresolvedOccurrenceCount,
                     unresolvedRelationshipCount, completedAt, IndexImportCommitStatus.COMMITTED, null);
         }
-    }
-
-    private static void requireText(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
     }
 }

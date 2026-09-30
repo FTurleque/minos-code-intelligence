@@ -12,6 +12,7 @@ import com.minos.dynamic.RuntimeSymbolReference;
 import com.minos.dynamic.RuntimeSymbolResolution;
 import com.minos.io.BoundedFileLease;
 import com.minos.io.DurableAtomicFile;
+import com.minos.io.Sha256;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -29,17 +30,17 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
+
+import static com.minos.domain.Preconditions.requireText;
 
 /** Atomic, bounded and checksum-verified local persistence for M26 runtime sessions. */
 public final class FileRuntimeObservationStore implements RuntimeObservationStore {
@@ -465,7 +466,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
 
     private static String sha256(Path file) throws IOException {
         requireRegularSessionFile(file);
-        MessageDigest digest = sha256Digest();
+        MessageDigest digest = Sha256.newDigest();
         try (var input = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
             byte[] buffer = new byte[64 * 1024];
             int read;
@@ -473,7 +474,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
                 if (read > 0) digest.update(buffer, 0, read);
             }
         }
-        return HexFormat.of().formatHex(digest.digest());
+        return Sha256.hex(digest);
     }
 
     private static void requireRegularSessionFile(Path file) throws IOException {
@@ -483,15 +484,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     }
 
     private static String digest(byte[] bytes) {
-        return HexFormat.of().formatHex(sha256Digest().digest(bytes));
-    }
-
-    private static MessageDigest sha256Digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
+        return Sha256.hex(bytes);
     }
 
     private record SessionMetadata(Path file, String snapshotId, String sessionId, Instant importedAt) {
@@ -501,10 +494,6 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
             Objects.requireNonNull(sessionId, "sessionId");
             Objects.requireNonNull(importedAt, "importedAt");
         }
-    }
-
-    private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " must not be blank");
     }
 
     private static void rejectUnsafeProjectEntry(Path project) throws IOException {

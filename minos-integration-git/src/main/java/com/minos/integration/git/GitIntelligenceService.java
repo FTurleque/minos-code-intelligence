@@ -1,6 +1,7 @@
 package com.minos.integration.git;
 
 import com.minos.git.GitIntelligence;
+import com.minos.io.Sha256;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -21,17 +22,13 @@ import org.eclipse.jgit.util.io.DisabledOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -206,7 +203,7 @@ public final class GitIntelligenceService implements GitIntelligence {
 
         String identityBasis = remote == null ? "path:" + workTree : "remote:" + remote;
         return new RepositoryView(
-                sha256(identityBasis),
+                Sha256.hex(identityBasis),
                 workTree.toString(),
                 remote,
                 branch,
@@ -407,15 +404,6 @@ public final class GitIntelligenceService implements GitIntelligence {
 
     private static String objectId(org.eclipse.jgit.lib.ObjectId id) {
         return id == null ? null : id.getName();
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
     }
 
     /**

@@ -170,7 +170,7 @@ final class TeamCommand {
             String principal = required(options, "--principal");
             return (service, token) -> {
                 service.revokeMember(token.get(), requestId, principal);
-                return "{\"status\":\"REVOKED\"}";
+                return DeterministicJson.render(DeterministicJson.object("status", "REVOKED"));
             };
         }));
         table.put("project-bind", new Operation(mutation().text("--workspace", "--project", "--snapshot"), options -> {
@@ -192,7 +192,7 @@ final class TeamCommand {
             UUID project = uuid(required(options, "--project"), "project");
             return (service, token) -> {
                 service.unbindProject(token.get(), requestId, workspace, project);
-                return "{\"status\":\"UNBOUND\"}";
+                return DeterministicJson.render(DeterministicJson.object("status", "UNBOUND"));
             };
         }));
         table.put("token-issue", new Operation(mutation().text("--principal")

@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Explicit operational evidence attached to an indexer provider.
  *
@@ -57,12 +59,5 @@ public record ProviderOperationalProfile(
                 "legacy provider did not declare stable identity behavior",
                 "legacy provider did not declare provenance behavior"
         );
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
     }
 }

@@ -7,14 +7,11 @@ import com.minos.domain.Evidence;
 import com.minos.domain.EvidenceType;
 import com.minos.domain.InformationNature;
 import com.minos.domain.Symbol;
+import com.minos.io.Sha256;
 import com.minos.store.CodeKnowledgeSnapshot;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -108,13 +105,7 @@ public final class ArchitectureTopologyService {
     }
 
     private static String stableId(String prefix, String material) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            String hash = HexFormat.of().formatHex(digest.digest(material.getBytes(StandardCharsets.UTF_8)));
-            return prefix + ":" + hash;
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
+        return prefix + ":" + Sha256.hex(material);
     }
 
     private static final class MutableModule {

@@ -35,6 +35,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static com.minos.domain.Preconditions.requireText;
+
 final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotStore {
     private static final long MAX_PERSISTED_SNAPSHOT_BYTES = SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES;
     private static final int MAX_ACTIVE_QUERY_RETRIES = 4;
@@ -72,7 +74,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     public SymbolSnapshot publish(UUID projectId, String snapshotId, Collection<Symbol> symbols) throws IOException {
         List<Symbol> ordered = symbols.stream().sorted(Comparator.comparing(Symbol::id)).toList();
         CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(
-                projectId, requireText(snapshotId), ordered, List.of(), List.of());
+                projectId, requireText(snapshotId, "snapshotId"), ordered, List.of(), List.of());
         publishSnapshot(snapshot);
         return new SymbolSnapshot(projectId, snapshotId, ordered);
     }
@@ -87,7 +89,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     ) throws IOException {
         CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(
                 projectId,
-                requireText(snapshotId),
+                requireText(snapshotId, "snapshotId"),
                 symbols.stream().sorted(Comparator.comparing(Symbol::id)).toList(),
                 occurrences.stream().sorted(Comparator.comparing(SymbolOccurrence::id)).toList(),
                 relationships.stream().sorted(Comparator.comparing(Relationship::id)).toList());
@@ -463,13 +465,6 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         ReentrantLock[] locks = new ReentrantLock[BUILD_LOCK_STRIPES];
         for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
         return locks;
-    }
-
-    private static String requireText(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("snapshotId must not be blank");
-        }
-        return value;
     }
 
     private record Row(String snapshotId, Path payload, String sha256) {

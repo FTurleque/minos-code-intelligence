@@ -33,6 +33,8 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Imports and queries partial runtime observations without changing static knowledge. */
 public final class RuntimeIntelligenceService {
 
@@ -304,10 +306,6 @@ public final class RuntimeIntelligenceService {
         } catch (ArithmeticException exception) {
             throw new IllegalStateException(label + " exceeds supported range", exception);
         }
-    }
-
-    private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " must not be blank");
     }
 
     private static final class SymbolIndex {

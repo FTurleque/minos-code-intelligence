@@ -1,18 +1,19 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.io.Sha256;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+
+import static com.minos.domain.Preconditions.requireText;
 
 /**
  * Trace immuable d'un run d'indexation projet.
@@ -140,13 +141,13 @@ public record IndexingRun(
         String id = requireText(indexerId, "indexerId");
         String version = requireText(providerVersion, "providerVersion");
         String scope = portable(Objects.requireNonNull(projectRelativeRoot, "projectRelativeRoot"));
-        MessageDigest digest = sha256();
+        MessageDigest digest = Sha256.newDigest();
         digest.update(id.getBytes(StandardCharsets.UTF_8));
         digest.update((byte) 0);
         digest.update(version.getBytes(StandardCharsets.UTF_8));
         digest.update((byte) 0);
         digest.update(scope.getBytes(StandardCharsets.UTF_8));
-        return HexFormat.of().formatHex(digest.digest());
+        return Sha256.hex(digest);
     }
 
     private static Optional<String> normalizeText(Optional<String> value, String label) {
@@ -159,13 +160,6 @@ public record IndexingRun(
         });
     }
 
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
-        return value;
-    }
-
     /**
      * Règle de format sur disque partagée entre ce port et ses adaptateurs : forme portable d'un chemin
      * relatif au projet (normalisé, séparateur {@code /}), telle qu'elle entre dans {@link #targetKey} et
@@ -174,14 +168,6 @@ public record IndexingRun(
      */
     public static String portable(Path path) {
         return path.normalize().toString().replace('\\', '/');
-    }
-
-    private static MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
     }
 
     /**

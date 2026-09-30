@@ -13,7 +13,7 @@
 | 1 — Q6, Q7 | Inventaire, encodeur unique (`NaN`/`Infinity` refusés, échappement complet), un seul point d'échappement, ordre des clés stable sur 11 sites, garde-fous, preuve inter-JVM | livré, en attente du verdict final de `verif-code` | `72b3f9b4` … `c74aef8b` (§ 4) |
 | 2 — Q11, Q19, Q20 | Un seul parseur d'arguments (`CliOptions`), garde de `team`, `--help` avant `MINOS_HOME`, `--dry-run` sans effet de bord, `--no-resume` | livré, en attente du verdict final de `verif-code` | `fcbcacd4` … `6debba27` (§ 10) |
 | 3 — Q10, Q14 | Application fermée sur tous les chemins (routeur MCP, lanceur), code mort supprimé, garde de propriété, quatre exceptions avalées journalisées | livré, en attente du verdict final de `verif-code` | `eedd3bf8` … `748115f8` (§ 16) |
-| 4 — Q12, Q13 | Heuristiques et duplication | à faire | — |
+| 4 — Q12, Q13 | Heuristiques de tests liés (suffixe, répertoires), duplication (`requireText`, `sha256`, JSON à la main, mapping DTO, `LogCapture`), gardes | livré, en attente du verdict final de `verif-code` | `b9d57a3b` … `05228456` (§ 22) |
 
 ## 2. Inventaire daté (base `02e490c3`, 29 septembre 2026)
 
@@ -474,3 +474,211 @@ Une première version de `visibleFile` journalisait toute exception : mesurée s
 - **Historique** : `scripts/history/m15/run-s3.ps1` (jamais joué, chemin `minos-app\…\MinosLauncher.java` périmé depuis A3) exige `MinosApplication application = MinosApplication.open(home);` et `MinosMcpServer.run(application);` dans le lanceur : déjà faux avant ce lot, aucun gate ne le lit. `scripts/history/m16` et `m21` (sondes hors build) ouvrent sans fermer.
 - **Q13 (helpers de test)** : `LogCapture` existe en trois exemplaires de test (`minos-cli`, `minos-engine/testsupport`, `minos-storage-local`) faute de test-jar partagé ; à mutualiser avec Q13 si un module de support de test apparaît.
 - **Bruit du fichier hérité corrompu** : la trace (dix au plus) se répète à chaque ouverture tant que le fichier reste dans `runs/` ; une purge ou une mise en quarantaine automatique changerait le flux, elle est laissée à une décision produit.
+
+---
+
+# Lot 4 — Q12, Q13 : heuristiques de tests liés et duplication
+
+> Branche : `code/q12-q13-duplication` (depuis `code/q10-q14-cycle-de-vie`, `fc213702`), worktree `minos-wt/code-q12`. Agents : `impl-code`, `verif-code`. Aucun push, aucune PR.
+> Constats : **Q12** (`RelatedTestDerivationService` : suffixe `it` sans frontière de mot, tout répertoire `/test/` pris pour un répertoire de tests), **Q13** (`requireText`, `sha256`, JSON écrit à la main, mapping DTO, `ProjectView`, `LogCapture`), `AUDIT-2026-09.md` § 10.
+> Règle d'or de Q13 : le nombre d'occurrences de chaque helper baisse **strictement**, l'ancienne implémentation disparaît dans le même commit, et le helper commun ne crée **jamais** une dépendance refusée par `check-module-boundaries.py` (A2 / ADR 0042, 0044) ; le script n'est pas modifié.
+
+## 20. Q12 — heuristiques de tests liés
+
+### 20.1 Cible relocalisée
+
+`minos-engine/src/main/java/com/minos/query/RelatedTestDerivationService.java` (l'audit visait le module d'avant A3). Deux défauts, lus au code de `fc213702` :
+
+| Défaut | Code d'origine | Effet |
+|---|---|---|
+| suffixe sans frontière de mot | `(?i)(?:tests?\|spec(?:ification)?s?\|it)$` appliqué au nom du symbole de test | un symbole de test nommé `Audit`, `Commit`, `Limit`, `Permit`, `Visit`, `Latest`, `Contest`… était rattaché à `Aud`, `Comm`, `Lim`, `Perm`, `Vis`, `La`, `Con` |
+| répertoire de tests par présence du mot | `"/" + chemin` contient `/test/`, `/tests/` ou `/__tests__/` | `src/main/java/com/acme/test/Support.java` (paquet de production) était un symbole de test : jamais cible d'un test, et ancre de test à tort ; `src/it/java` n'était pas reconnu |
+
+`latest/` et `contest/` ne déclenchaient déjà pas `/test/` (le mot est précédé d'une lettre) ; ils sont verrouillés par test.
+
+### 20.2 Décisions
+
+- **Suffixe** : retiré à une frontière de mot uniquement. (a) derrière un séparateur `_`, `-` ou `.` (`audit_it`, `foo-test`, `Foo.spec`), sans tenir compte de la casse ; (b) en casse de chameau : `Test`, `Tests`, `Spec`, `Specs`, `Specification(s)` (mot capitalisé, quel que soit le caractère qui précède : `IOTest` → `IO`), et `IT`/`It` derrière une **minuscule ou un chiffre** (`FooIT`, `Http2IT`, `FooIt`). La fin d'un mot en minuscules (`Audit`, `Commit`, `Latest`) n'est jamais un suffixe ; un mot en capitales (`AUDIT`) non plus.
+- **`IT` et `It`** : la convention du dépôt est `*IT.java` (Failsafe : `minos-app/src/test/java/com/minos/packaging/ShadedJar*IT.java`, aucun `*It`, aucun répertoire `src/it`). `It` reste accepté : c'est un mot de casse de chameau et la règle d'origine le retirait ; le retirer aurait fait perdre `FooIt` sans rien gagner (le défaut est la minuscule finale, pas la casse `It`).
+- **Répertoires de tests** (`isTestPath`) : source sets `src/test`, `src/it`, `src/integrationTest`, `src/integration-test` à toute profondeur (modules) ; `__tests__` ; `test/` ou `tests/` à la racine (Ant, pytest, Cargo) et, hors sources JVM, à toute profondeur (`packages/x/test/…`, monorepos JS) ; pour une source JVM (`.java .kt .kts .scala .groovy`), un `test/` non racine est un **paquet** (`com/acme/test/Support.java`) ; tout ce qui est sous `src/main` est de la production ; les fichiers `*.test.*` / `*.spec.*` restent des tests. Le service ne voit pas les poms du projet analysé : la « convention du projet » est celle des outils (Maven, Gradle, Ant, npm, Cargo, pytest), relevée ici dans les poms et l'arborescence du dépôt (`src/test/java` partout, Failsafe dans `minos-app`).
+- **Non touché** : la dérivation à partir du nom du fichier (`stripTestFileSuffix`, séparateur obligatoire, déjà correct), les préfixes `TestFoo` / `ITFoo` (jamais gérés : ce serait un gain, pas un correctif).
+
+### 20.3 Mesure avant / après
+
+Harnais **non commité** (`RelatedTestsMeasure`, scratchpad `lot4/`) : il lit `src/main/java` et `src/test/java` de tous les modules `minos-*` **de l'arbre de base `fc213702`** (`git archive`, pour que l'entrée soit identique avant et après), crée un symbole par type de premier niveau (520 fichiers de production, 454 de test, 976 symboles) et appelle `RelatedTestDerivationService.derive` avec les classes de la base (copiées avant toute modification) puis celles du correctif. Deux modes : **complet** (une référence résolue est simulée pour tout identifiant d'un fichier de test égal au nom simple d'un type de production unique : 2 771 occurrences, approximation d'un index SCIP) et **nommage seul** (aucune occurrence : ne reste que l'heuristique de Q12). Résultats bruts : `lot4-related-tests-{before,after}[-naming].tsv`.
+
+| Mesure | Avant | Après | Gagnés | Perdus | Inchangés |
+|---|---|---|---|---|---|
+| couples test → production, mode complet | 2 774 | 2 774 | **0** | **0** | 2 774 |
+| couples test → production, nommage seul | 174 | 174 | **0** | **0** | 174 |
+| classement `isTestPath` de tous les fichiers du dépôt (1 585) | 488 tests / 1 097 autres | idem | 0 | 0 | 1 585 |
+| noms de types dont le radical change (972 noms distincts) | | | | | 2 (`JavaParsedUnit`, `ProviderConformanceKit` : noms de **production** qui auraient été tronqués s'ils avaient été côté test) |
+
+**Lecture** : sur ce dépôt, l'ancienne règle ne produisait aucune association fausse (aucun type de test ne se termine en `it`/`test` en minuscules, aucun paquet de production ne s'appelle `test`) : le correctif est **neutre** ici — 0 couple gagné, 0 perdu, 2 774 inchangés — et la mesure sert de preuve d'absence de régression. Il n'y a donc aucune association perdue à justifier sur ce dépôt.
+
+**Effet sur les cas visés** (tests rouges sur le code d'origine, `RelatedTestHeuristicsTest`, 22 échecs avant, 0 après) :
+
+| Cas | Avant | Après |
+|---|---|---|
+| test `Audit`, `Commit`, `Limit`, `Permit`, `Submit`, `Visit`, `Latest`, `Contest`, `Protest`, `AUDIT` | rattaché à `Aud`, `Comm`, `Lim`, `Perm`, `Subm`, `Vis`, `La`, `Con`, `Pro`, `AUD` | aucun rattachement (10 faux positifs supprimés) |
+| `AuditTest`, `CommitTest`, `LimitTest`, `AuditTests`, `CommitIT`, `LimitIT`, `AuditSpec(s)`, `AuditSpecification`, `LatestTest`, `ContestTest`, `HttpClientIT`, `Http2IT`, `IOUtilTest`, `Audit_test`, `audit-it`, `Audit.spec` | rattaché à `Audit`… | inchangé (17 cas verrouillés) |
+| `AuditTest` avec `Audit` **et** `Aud` en production | `Audit` et `Aud` | `Audit` seul |
+| `src/main/java/com/acme/test/Support.java` (production) | symbole de test | production : peut être la cible de `SupportTest` (gagné) et n'est plus une ancre de test |
+| `src/it/java/…`, `src/integrationTest/…`, `src/integration-test/…` | non reconnus | tests (gagné, 4 chemins) |
+| `latest/`, `contest/`, `attest/`, `testing/`, `test-support/`, `src/Test.java` | production | production (verrouillé) |
+
+### 20.4 Pertes acceptées et déclarées
+
+| Perte | Raison |
+|---|---|
+| `FOOTEST`, `FooTEST`, `HTTPIT`, `SQLIT` (mot collé tout en capitales) ne sont plus reliés à `FOO`/`Foo`/`HTTP`/`SQL` (V-L4-01) | indiscernable de `AUDIT` → `AUD` : la garde `AUDIT`/`AUD` impose l'arbitrage ; `fooTest`, `Foo_TEST`, `foo_TEST` restent reliés |
+| une source JVM sous un `test/` ou `tests/` **non racine** (agencement Ant multi-module `svc/test/FooTest.java`) n'est plus classée test (V-L4-02) | `com/acme/test/Support.java` est un paquet de production ; sans lire l'arborescence du projet on ne peut pas distinguer les deux ; 0 occurrence dans ce dépôt (1 585 chemins, 0 différence) ; `svc/src/test/…` et `test/…` racine restent reconnus |
+| noms tout en minuscules sans séparateur (`usertest`) ne sont plus tronqués | pas de frontière de mot ; jamais rencontré |
+
+## 21. Q13 — duplication : inventaire daté (base `fc213702`, 30 septembre 2026)
+
+Les comptes de l'audit sont périmés (`requireText` « ×15 », `sha256` « ×4 ») : le dépôt en compte plus du double. Ils sont produits par un script reproductible (`lot4/counts.py`, scratchpad ; regex sur les sources de production hors commentaires) et rejoués à chaque étape.
+
+### 21.1 Comptes avant
+
+| Helper | Comptes avant | Détail |
+|---|---|---|
+| `requireText` | **63** définitions en production (modules Maven) + 2 dans `minos-intellij` (Gradle, hors réacteur) | domain 9, engine 15, application 22, api 4, cli 2, nexus 1, provider-scip 4, runtime-local 1, storage-local 4, storage-postgresql 1 ; intellij 2 (`MinosCliClient`, `MinosM21Client`) ; 293 appels |
+| `sha256` | **22** méthodes nommées `sha256` en production ; **31** `MessageDigest.getInstance("SHA-256")` avec 31 `catch (NoSuchAlgorithmException)` | 11 copies « texte UTF-8 → hexadécimal » à l'identique (6 en « is not available », 5 en « is unavailable »), 3 copies de la fabrique de `MessageDigest`, le reste inclus dans des calculs propres (empreinte de fichiers, identifiants) ; 12 sites de test |
+| JSON écrit à la main | **3** renderers (`CodeSearchRenderer`, `CodeIntelligenceResultRenderer`, `SymbolResultRenderer`) : 794 lignes, 31 méthodes d'écriture (`stringField`, `numberField`, `booleanField`, `trimComma`, `appendLocation` ×3, `appendOrigin` ×3…), 25 ouvertures d'objet `{` hors encodeur | + 2 littéraux `{"status":"REVOKED"}` / `{"status":"UNBOUND"}` (`TeamCommand`) ; `LockedNpmPackage` écrit un `package.json` npm ; `McpToolSchemas` (gabarits constants, hors périmètre depuis le lot 1) |
+| mapping DTO API / MCP / CLI | résultat d'import : 2 blocs de 13 clés identiques (`ImportScipCommand.render`, `IndexCommand.renderImport`) + le DTO `IndexImportDto` de l'API ; vue projet : `ProjectCommand.projectMap` (12 clés) et `MinosApplicationMcpBackend.projectStructure` (12 clés dans le même ordre) ; statut d'index : `ProjectCommand.renderIndexStatus` et `MinosApplicationMcpBackend.indexStatus` (11 clés identiques) + `LocalMinosApi.project` (3 des 4 champs de reprise) | mesuré par `lot4/dup_keys.py` (suites de ≥ 4 clés identiques entre fichiers) ; les autres coïncidences sont des faux positifs (`DoctorCommand`/`ToolsCommand` : mêmes 4 premières clés, valeurs différentes ; `providerProfiles` MCP est un sous-ensemble de `ProviderCommand.map`, diagnostics bruts contre publics) |
+| `ProjectView` | **2** enregistrements identiques (12 composants) : `ProjectInspectionService.ProjectView` et `ProjectOperations.ProjectView` + la conversion `LocalProjectOperations.projectView` | l'un est consommé par `minos-mcp` (`MinosApplicationMcpBackend`) et un test de `minos-bootstrap`, l'autre par `minos-api`, `minos-cli` et 12 de ses tests |
+| `LogCapture` | **3** copies de test (`minos-cli`, `minos-engine/…/testsupport`, `minos-storage-local`) | identiques au modificateur d'accès près (`public` dans l'engine) |
+
+### 21.2 Où placer chaque helper : graphe des dépendances et règles
+
+Dépendances directes autorisées (`ALLOWED_DEPENDENCIES`) : `domain` ∅ ; `engine` → domain ; `runtime-local`, `storage-local`, `integration-git` → engine ; `provider-scip` → domain, engine, runtime-local, storage-local ; `application` → domain, engine ; `nexus` → domain, application, bootstrap ; `cli` → domain, engine, application, nexus, bootstrap ; `api` → domain, engine, application, bootstrap ; `mcp` → application, bootstrap. Un adaptateur ne dépend jamais de `application`, `bootstrap`, `app` ni d'une surface. Le script ne contrôle que les dépendances **directes** des poms et les noms d'adaptateurs dans les sources ; les modules qui atteignent `domain` ou `engine` par transitivité le font déjà (`minos-mcp` importe `com.minos.domain`, `minos-nexus` importe `com.minos.store`).
+
+| Helper | Lieu retenu | Pourquoi |
+|---|---|---|
+| `requireText` | `minos-domain`, `com.minos.domain.Preconditions` | `minos-domain` porte 9 copies et doit rester sans dépendance interne : c'est le seul module vu par **tous** les appelants |
+| `sha256` (texte, octets, fabrique de `MessageDigest`) | `minos-engine`, `com.minos.io.Sha256` | tous les appelants sont dans un module qui voit l'engine (`nexus` par `application`, comme pour `com.minos.store`) ; aucun appelant dans `domain`, qui reste minimal |
+| JSON des 3 renderers, littéraux `TeamCommand` | `DeterministicJson` (`minos-application`, même paquet `com.minos.output`) | les trois renderers sont déjà dans ce paquet ; `TeamCommand` (`cli`) dépend de `application` |
+| `LockedNpmPackage` (`package.json`) | **deux implémentations conservées** | `minos-provider-scip` est un adaptateur : il ne peut pas dépendre de `minos-application`, où vit `DeterministicJson` (règle A2, ADR 0042) ; déplacer l'encodeur vers `domain`/`engine` élargirait le lot à une API publique ; les valeurs sont des constantes du catalogue |
+| `LogCapture` | test-jar de `minos-engine` (`com.minos.testsupport`), consommé en portée `test` par `storage-local` et `cli` | ces deux modules dépendent déjà de l'engine ; la dépendance en portée `test` sur le même artefact ne crée aucune arête nouvelle (le script garde la portée la plus forte d'un module déclaré deux fois) |
+| `ProjectView` | **deux enregistrements conservés** | voir § 21.3 |
+
+### 21.3 `ProjectView` et mapping projet : règle de l'API publique
+
+Les deux enregistrements sont des types **publics** de types publics, et chacun est référencé par un autre module : `ProjectInspectionService.ProjectView` par `minos-mcp` (`MinosApplicationMcpBackend`, l. 87 et 107) et un test de `minos-bootstrap`, `ProjectOperations.ProjectView` par `minos-api` (`LocalMinosApi.project`), `minos-cli` (`ProjectCommand`, `GitActivityCommand`) et 12 de ses tests. En supprimer un change le type de retour de méthodes publiques observées par un autre module : la règle du lot (« dédupliqué seulement si l'API publique n'en est pas changée ») s'y oppose. **Les deux enregistrements sont conservés**, ainsi que la conversion `LocalProjectOperations.projectView`. Conséquence : la vue projet ne peut pas être partagée telle quelle entre la CLI (`ProjectOperations.ProjectView`) et le MCP (`ProjectInspectionService.ProjectView`) ; le mapping projet est traité au § 21.5 sans toucher à ces types.
+
+### 21.4 Décisions Q13
+
+**`requireText` → `com.minos.domain.Preconditions.requireText(value, name)`.** `null` ou blanc → `IllegalArgumentException("<name> must not be blank")`, la valeur est rendue inchangée. 57 des 63 copies étaient identiques (variantes `void`/`String`, une ligne ou accolades). Six divergeaient ; leur comportement a été **caractérisé avant** la migration (`20e7a0d7`, vert sur le code d'origine et après) et **conservé** :
+
+| Copie | Divergence | Traitement |
+|---|---|---|
+| `SnapshotDescriptor` | `null` → `NullPointerException` (message = champ), blanc → IAE | `requireText(Objects.requireNonNull(x, "x"), "x")` |
+| `ProjectIndexState` | message fixe « text value must not be blank » (sans champ) ; utilisée par référence de méthode | lambda `value -> requireText(value, "text value")` |
+| `SharedCacheLeaseRegistry` | message fixe « lease key must not be blank », y compris pour la description du registre | nom passé « lease key » (constante) — message historique conservé |
+| `IndexingRunExecutor` | `IllegalStateException` (état interne invalide d'un port), et le run persisté porte `IllegalStateException: …` | contrôle **en ligne** (un `if` propre à ce site), plus de méthode `requireText` |
+| `OllamaEmbeddingProvider` | rend le texte **rogné** | `requireText(model, "model").trim()` |
+| `PostgresCodeKnowledgeSnapshotStore` | message fixe « snapshotId must not be blank » | `requireText(snapshotId, "snapshotId")` ; test de caractérisation ajouté (vert sur le code d'origine : fichier de production remis à `fc213702` le temps de la mesure) |
+
+Aucun changement de message ni de type d'exception. Restent deux copies hors réacteur, **conservées** : `minos-intellij` (`MinosCliClient`, `MinosM21Client`) est un plugin Gradle (`build.gradle.kts` : Gson seul) sans dépendance vers les modules MINOS.
+
+**SHA-256 → `com.minos.io.Sha256`** (`newDigest()`, `hex(String)` en UTF-8, `hex(byte[])`, `hex(MessageDigest)`). Les 31 `MessageDigest.getInstance("SHA-256")` de production tombent à 1. Les calculs incrémentaux (fichiers bornés, empreintes de projet, empreinte de fichiers du graphe de programme) **gardent leur boucle de lecture et leurs bornes** : seule la fabrique et l'hexadécimal sont mutualisés. Quatre méthodes `sha256(Path…)` restent nommées ainsi et hachent un fichier avec leurs bornes propres (`ManagedScipProviderRuntimeManager`, `FileProgramGraphProvider`, `DistributedArtifactBundleStore`, `FileRuntimeObservationStore`) : des scripts de garde assertent deux de ces signatures littérales (`check-mne.py` : `private static String sha256(Path file)` ; `check-advanced-provider-consistency.py` : `sha256(metadata, nodes, edges)`), et `check-runtime-dynamic-consistency.py` exige le mot `sha256` dans `RuntimeObservationEnvelopeCodec` — le premier essai, qui le supprimait, faisait rougir `check-post-mne` ; corrigé avant le commit (variable locale `sha256`), aucun script assoupli.
+**Changement observable déclaré** : le message de l'`IllegalStateException` « SHA-256 is not available » (6 copies) devient « SHA-256 is unavailable » (5 copies) ; le cas est impossible sur toute JVM conforme (SHA-256 est obligatoire).
+Les tests gardent leur propre `MessageDigest` (7 sites) quand ils recalculent l'empreinte d'un fichier ou d'un artefact produit : c'est un oracle indépendant du code de production. Les cinq copies d'un fournisseur de clés de test (qui fabriquaient une entrée, sans oracle) ont été mutualisées (`DerivedTenantKeys`, V-L4-04).
+
+**JSON à la main → `DeterministicJson`.** Les trois renderers construisent des objets ordonnés (`DeterministicJson.object`) ; l'emplacement, l'origine, l'entité et les rôles, copiés dans chacun (`appendLocation` ×3, `appendOrigin` ×3, `appendEntity` ×2), vivent dans `JsonShapes` (paquet-privé). Ordre des clés, valeurs, échappement : **identiques octet pour octet** (8 références produites par l'ancien code avant migration, `RendererJsonCharacterizationTest`). Deux littéraux de `TeamCommand` passent aussi par l'encodeur ; `CliJson.quote(StringBuilder, String)`, sans appelant, est supprimé.
+
+**Mapping DTO.** Voir § 21.3 pour `ProjectView`. Résorbés : fiche projet et statut d'index (CLI + MCP → `com.minos.output.ProjectJson`, qui s'écrit contre la nouvelle interface `ProjectSummary` implémentée par les deux enregistrements : ajout pur), résultat d'import (2 blocs de la CLI → `CliCommandSupport.importResultMap`). **Non traités** : `ProjectDto`/`IndexImportDto` de `minos-api` (des records construits par constructeur, pas une copie de clés ; les fusionner changerait la surface publique), le sous-ensemble `providerProfiles` du MCP contre `ProviderCommand.map` (clés partielles, diagnostics bruts contre publics), la conversion `LocalProjectOperations.projectView` (12 champs, 3e copie de la forme de `ProjectView`, conservée avec les deux enregistrements).
+
+**`LogCapture`** : test-jar de `minos-engine` consommé en portée `test` par `minos-storage-local` et `minos-cli` (le script de frontières garde la portée la plus forte d'un module déclaré deux fois : aucune arête nouvelle, `check-module-boundaries.py` inchangé).
+
+## 22. Journal par commit (lot 4)
+
+Gates rejoués après chaque commit : `check-module-boundaries.py`, `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py`, `scripts/remediation/check-post-mne.py`. Boundaries `modules=14, packages=45` ; `sources` 499 → 500 (`Preconditions`) → 501 (`Sha256`) → 502 (`JsonShapes`) → 504 (`ProjectSummary`, `ProjectJson`) ; les quatre autres gates inchangés (`SUCCESS`, `SUCCESS`, `scripts checked=95`, `SUCCESS`).
+
+| Commit | Contenu | Rouge / preuve (jointe au message) |
+|---|---|---|
+| `b9d57a3b` | Q12 : suffixes à frontière de mot, répertoires de tests par convention | `RelatedTestHeuristicsTest` : 22 échecs sur 72 avant, 0 après |
+| `e37e7f54` | ce suivi : mesure de Q12, inventaire et décisions de Q13 | — |
+| `20e7a0d7` | caractérisation des 6 copies de `requireText` qui divergent | verts sur le code d'origine |
+| `3fe66392` | `Preconditions.requireText`, 9 copies du domaine | `PreconditionsTest` : rouge de compilation avant la classe |
+| `c218398d` | 15 copies de l'engine (dont 4 divergentes) | caractérisation verte avant/après |
+| `1b451e57` | 10 copies des adaptateurs ; V-L4-03 (test PostgreSQL) | test vert sur le code d'origine |
+| `9b169dec` | 22 copies de l'application (dont Ollama : `.trim()`) | idem |
+| `1471d0c0` | 7 copies de `api`, `cli`, `nexus` | `requireText` : 8 → 1 |
+| `dff51d7d` | `Sha256` : 31 sites | `Sha256Test` : rouge de compilation ; suite complète 1 555 tests |
+| `e1437272` | caractérisation octet à octet des trois renderers | verte sur le code d'origine |
+| `41920418` | renderers sur `DeterministicJson`, `JsonShapes` | 8 références inchangées ; 12 golden inchangés |
+| `01c72f67` | `ProjectJson`, `ProjectSummary`, `importResultMap` | `ProjectJsonTest` ; 12 golden inchangés |
+| `ffe9c6cd` | `LogCapture` dans le test-jar de l'engine | boundaries inchangé |
+| `d8662fec` | fournisseur de clés de test unique ; V-L4-04, V-L4-06 | — |
+| `642eaec5` | garde `DuplicationGuardTest` | 5 mutations tuées |
+| `bc5cceb8` | ce suivi : décisions Q13, journal, comptes, constats | — |
+| `05228456` | V-L4-09 : 9 copies de `requireText` sous un autre nom (`validateText`, `requireFileId`, `requireLabel`, `requireProvider`, `requireBoundary`, + blocs de tête de 4 validations plus larges) ; garde structurelle ; V-L4-10 (Javadoc) | mutation `requireNonBlank` tuée |
+
+## 23. Preuves
+
+### 23.1 Comptes de duplication avant / après (`lot4/counts.py`, regex hors commentaires)
+
+| Helper | Avant (`fc213702`) | Après | Où reste ce qui reste |
+|---|---|---|---|
+| `requireText`, définitions en production (modules Maven) | **63** | **1** (`Preconditions`) | — |
+| `requireText`, `minos-intellij` (Gradle) | 2 | 2 | plugin sans dépendance vers les modules MINOS (conservé, déclaré) |
+| `MessageDigest.getInstance("SHA-256")`, production | **31** | **1** (`Sha256`) | — |
+| `catch (NoSuchAlgorithmException)`, production | 31 | 1 | — |
+| méthodes nommées `sha256`, production | 22 | 4 | hachent un **fichier** avec leurs bornes propres |
+| `MessageDigest.getInstance("SHA-256")`, tests | 12 | 7 | oracles indépendants (recalcul d'une empreinte produite) |
+| méthodes d'écriture JSON manuelle (3 renderers, `stringField`, `numberField`, `trimComma`, `appendLocation`…) | **29** (+ 2 `appendXxxText` de TEXT) | **0** (les 2 de TEXT restent) | — |
+| lignes des 3 renderers | 794 | 494 (+ `JsonShapes` 58) | — |
+| sites d'ouverture d'objet JSON à la main (hors encodeur et `McpToolSchemas`) | 25 | 0 | `LockedNpmPackage` (`package.json`) et `McpToolSchemas`, exceptions nommées de la garde |
+| `LogCapture` (classes de test) | **3** | **1** | — |
+| projection projet CLI/MCP (blocs `put("providerVersion", …)`) | 4 (2 fiches, 2 statuts) | 0 : 1 projection (`ProjectJson`) | — |
+| résultat d'import (`put("normalizedSymbolCount"`) | 2 | 1 | — |
+| `ProjectView` | 2 | **2** | API publique (§ 21.3) |
+| fournisseur de clés de test (hosted) | 5 | 1 | — |
+
+Production (`*/src/main/*`) : 103 fichiers touchés, +786 / −1 368 lignes.
+
+### 23.2 Changements observables (à reprendre en tête de la PR)
+
+1. **Tests liés (Q12)** : sur ce dépôt **0 couple gagné, 0 perdu, 2 774 inchangés** (§ 20.3). Ailleurs : 10 faux positifs de suffixe supprimés (`Audit`→`Aud`…), les classes d'un paquet de production `test` redeviennent des cibles, `src/it` et `src/integrationTest` reconnus ; pertes acceptées (§ 20.4).
+2. **Message d'erreur** : « SHA-256 is not available » → « SHA-256 is unavailable » (6 copies) — cas impossible sur toute JVM conforme.
+3. **Aucun autre changement de message, de type d'exception, de code de sortie ni de sortie JSON** : 12 golden inchangés, 8 sorties de renderers caractérisées identiques à l'octet, différentiel vivant de `verif-code` (CLI et MCP) identique.
+4. **API publique** : ajouts purs (`Preconditions`, `Sha256`, `ProjectSummary`, `ProjectJson`, `implements ProjectSummary` sur les deux `ProjectView`) ; rien de retiré ni de renommé.
+
+### 23.3 Preuves par mutation (garde)
+
+Cinq mutations posées ensemble puis annulées (`lot4-guard-mutations.log`) : `requireText` recréé dans `CliJson`, `MessageDigest.getInstance("SHA-256")` dans `MinosLauncher`, `new StringBuilder("{")` dans `SymbolResultRenderer`, second `put("normalizedSymbolCount"` dans `ProjectCommand`, `LogCapture` recréé dans `minos-cli` : **5 tests rouges sur 8**, fichier fautif dans le message. `verif-code` en a rejoué six (dont un troisième `record ProjectView`) : 6 rouges. Une copie **renommée** (`requireNonBlank` dans `MinosMcpTools`) n'était pas vue par la garde d'origine (V-L4-09) ; la garde structurelle `noMethodIsAJustRenamedRequireText` la tue (`lot4-guard-renamed-mutation.log`).
+
+### 23.4 Fin de lot
+
+`./mvnw clean verify` complet dans le worktree (journal dans le scratchpad, pas dans `target/`) sur `a65d99ff` : **BUILD SUCCESS**, 15 modules, 10 min 58, **1 671 tests exécutés, 0 échec, 0 erreur, 46 ignorés** (hypothèses `Assumptions` préexistantes, aucun `@Disabled` ajouté ; 1 562 tests à la fin du lot 3, +109 : `RelatedTestHeuristicsTest` 67, caractérisations des copies divergentes 12, `PreconditionsTest` 4, `Sha256Test` 5, `RendererJsonCharacterizationTest` 6, `ProjectJsonTest` 5, `DuplicationGuardTest` 9…). Un premier `clean verify` sur `bc5cceb8` (avant V-L4-09) avait donné 1 670 tests, 0 échec. `python scripts/quality/check-jacoco.py` : 26 portées vertes, **seule rouge : `m24-polyglot-provider-platform`** (`ManagedPolyglotScipRuntimeManager` line 0,228 < 0,28), préexistante et propre à Windows. Gates : boundaries `modules=14, sources=504, packages=45` (+5 sources de production : `Preconditions`, `Sha256`, `JsonShapes`, `ProjectSummary`, `ProjectJson`), current-docs, product-facts, milestone-artifact-references (95), `check-post-mne.py` : verts. Golden : les 12 de `characterization/` **inchangés** (`git diff fc213702..HEAD -- minos-app/src/test/resources scripts` vide) ; aucun script de `scripts/` assoupli.
+
+## 24. Constats de verif-code (lot 4)
+
+| Id | Sévérité | Constat | Résolution |
+|---|---|---|---|
+| V-L4-01 | remarque | mot collé tout en capitales (`FooTEST`, `HTTPIT`) n'est plus relié | déclaré § 20.4 |
+| V-L4-02 | remarque | source JVM sous un `test/` non racine n'est plus classée test | déclaré § 20.4 |
+| V-L4-03 | remarque | copie PostgreSQL de `requireText` non caractérisée ; titre du commit `20e7a0d7` : « 58 autres » alors que 57 copies sont identiques | test ajouté (`1b451e57`) ; le titre n'a pas été réécrit : les comptes exacts sont § 21.4 |
+| V-L4-04 | remarque | 5 copies d'un fournisseur de clés de test présentées comme « oracle indépendant » à tort | `d8662fec` : `DerivedTenantKeys` ; les 7 `getInstance` de test restants sont de vrais oracles |
+| V-L4-05 | remarque | `minos-nexus` importe `com.minos.io.Sha256` par transitivité (`application` → `engine`) | déclaré § 21.2 : `nexus` importait déjà `com.minos.store` et `com.minos.registry` de l'engine ; le script ne contrôle que les dépendances directes |
+| V-L4-06 | remarque | `FileRuntimeObservationStore.digest(byte[])` non migré | `d8662fec` |
+| V-L4-07 | remarque | les branches TEXT des 3 renderers gardent 3 copies de `addTextLocation`/`addTextOrigin` | déclaré § 25 |
+| V-L4-08 | remarque | `LocalProjectOperations.projectView` reste la 3e copie de la forme de `ProjectView` | déclaré § 21.4 / § 25 |
+| V-L4-09 | à corriger | des copies de `requireText` sous un autre nom (`InMemoryCodeKnowledgeStore.validateText` ×12 appels, `requireFileId`, `requireLabel`, `requireProvider`, `requireBoundary`) échappaient à la garde, qui cherchait le nom ; une mutation `requireNonBlank` ne la faisait pas rougir | `05228456` : les cinq supprimées, le bloc de tête de `StorageBackendConfiguration`, `CommandLocator`, `SnapshotProjectLease` et `ProjectRegistryLimits.requireName` (API publique, signature inchangée) devient `requireText` ; garde structurelle (corps entier = contrôle de texte blanc, quel que soit le nom) ; mutation rejouée rouge |
+| V-L4-10 | à corriger | une ligne de Javadoc en français dans `SharedCacheLeaseRegistry` (fichier anglais) | `05228456` |
+| V-L4-11 | remarque | `Sha256` documenté en français dans un paquet (`com.minos.io`) dont d'autres fichiers sont en anglais | conforme à la règle (la langue est celle du fichier, sans mélange) |
+
+## 25. À traiter plus tard (lot 4)
+
+- **Autres helpers « bloc + throw »** de nom différent (`requireToken`, `blankToNull`, validations à message fixe ou à contrôle supplémentaire… : ~50 selon l'inventaire large de `verif-code`, après les 9 traités par V-L4-09) : hors du chiffre de l'audit (`requireText`), non tous équivalents ; la garde ne refuse que les copies dont le corps entier est le contrôle de texte blanc ; le reste est à reprendre helper par helper avec caractérisation. `minos-intellij` : `requireText` ×2 et `requireToken` (plugin Gradle).
+- **Mise en forme TEXT** des 3 renderers (`addTextLocation`, `addTextOrigin`, `field`) : 3 copies restantes (V-L4-07).
+- **`ProjectView` ×2 et `LocalProjectOperations.projectView`** : à fusionner quand une évolution d'API publique le permettra (changer le type de retour de `ProjectInspectionService` ou de `ProjectOperations` est observable par `minos-mcp` / `minos-api` / `minos-cli`).
+- **`ProjectDto`/`IndexImportDto`** (API) et `providerProfiles` (MCP) : mapping par constructeur ou sous-ensemble, non fusionnés (§ 21.4).
+- **`LockedNpmPackage`** : `package.json` écrit à la main ; le déplacer sous `DeterministicJson` demanderait de remonter l'encodeur dans `minos-domain` ou `minos-engine`, c'est-à-dire de changer une API publique du lot 1.
+- **Empreintes de fichiers** : 4 méthodes `sha256(Path…)` avec des bornes différentes (lecture bornée, `NOFOLLOW_LINKS`, multi-fichiers) ; une abstraction commune `BoundedSha256` serait un chantier de sécurité, pas de duplication.
+- **Q12** : préfixes `TestFoo` / `ITFoo` (jamais gérés), suffixes `ITCase`/`TestCase` (Failsafe) ; classement des répertoires de tests **sans** lire le projet analysé (V-L4-02) ; une lecture des poms/`settings.gradle` permettrait de retrouver `svc/test/`.
+- **`minos-intellij`** : deux copies de `requireText` (plugin Gradle autonome).
+- **Historique** : `scripts/history/m21/check-m21-parity.py` (déjà signalé au lot 2) toujours cassé, non rejoué par `check-post-mne`.
+- **SonarCloud** : le commentaire du bot sur la PR #305 (lot 1) signale 6 nouvelles issues, Quality Gate passé ; non examinées ici, non bloquantes, hors du périmètre Q6/Q7. À relire depuis le tableau de bord SonarCloud de la PR.

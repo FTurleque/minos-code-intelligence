@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Public, provider-independent Java contract for consuming MINOS Code Intelligence.
  *
@@ -577,12 +579,6 @@ public interface MinosApi extends AutoCloseable {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
     }
 
     private static void requireLimit(int value, int maximum, String name) {

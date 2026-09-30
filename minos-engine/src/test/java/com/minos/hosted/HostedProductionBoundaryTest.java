@@ -1,14 +1,13 @@
 package com.minos.hosted;
 
+import com.minos.testsupport.DerivedTenantKeys;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -89,18 +88,7 @@ class HostedProductionBoundaryTest {
     }
 
     private static HostedTenantKeyProvider keys() {
-        return (tenantId, keyId, purpose) -> {
-            try {
-                byte[] value = MessageDigest.getInstance("SHA-256")
-                        .digest((tenantId + ":" + keyId + ":" + purpose)
-                                .getBytes(StandardCharsets.UTF_8));
-                return new SecretKeySpec(
-                        value,
-                        purpose == HostedTenantKeyProvider.Purpose.ENCRYPTION ? "AES" : "HmacSHA256");
-            } catch (Exception exception) {
-                throw new IllegalStateException(exception);
-            }
-        };
+        return DerivedTenantKeys.provider();
     }
 
     private static final class InMemoryStore implements HostedControlPlaneStore {

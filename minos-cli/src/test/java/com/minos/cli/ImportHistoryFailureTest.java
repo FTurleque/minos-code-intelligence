@@ -3,6 +3,7 @@ package com.minos.cli;
 import com.minos.application.LocalProjectOperations;
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectOperations;
+import com.minos.testsupport.LogCapture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
