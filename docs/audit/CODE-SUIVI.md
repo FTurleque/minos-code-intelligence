@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 1 — Q6, Q7 | Inventaire, encodeur unique (`NaN`/`Infinity` refusés, échappement complet), un seul point d'échappement, ordre des clés stable sur 11 sites, garde-fous, preuve inter-JVM | livré, en attente du verdict final de `verif-code` | `72b3f9b4` … `c74aef8b` (§ 4) |
 | 2 — Q11, Q19, Q20 | Un seul parseur d'arguments (`CliOptions`), garde de `team`, `--help` avant `MINOS_HOME`, `--dry-run` sans effet de bord, `--no-resume` | livré, en attente du verdict final de `verif-code` | `fcbcacd4` … `6debba27` (§ 10) |
-| 3 — Q10, Q14 | Cycle de vie des ressources, exceptions avalées | à faire | — |
+| 3 — Q10, Q14 | Application fermée sur tous les chemins (routeur MCP, lanceur), code mort supprimé, garde de propriété, quatre exceptions avalées journalisées | livré, en attente du verdict final de `verif-code` | `eedd3bf8` … `748115f8` (§ 16) |
 | 4 — Q12, Q13 | Heuristiques et duplication | à faire | — |
 
 ## 2. Inventaire daté (base `02e490c3`, 29 septembre 2026)
@@ -347,3 +347,118 @@ Les sorties des mutations sont dans le scratchpad de la session (`lot2-mutation*
 - **Bornes MCP de `minos_team_audit`** (`McpToolSchemas.java:141`, `MinosMcpTools.java:417`) dupliquées hors de `MIN/MAX_AUDIT_LIMIT` : remarque W8 des résidus du sprint 1, toujours ouverte (zone `minos-mcp`).
 - **`scripts/history/m21/check-m21-parity.py`** ne résout plus ses chemins (« missing required file: minos-cli/…/IdeCommand.java » alors que le fichier existe) : gate d'historique cassée avant ce lot, non rejouée par `check-post-mne`.
 - **Sonde et guides** : la sonde `ArgumentMatrixProbe` (29 commandes × formes) n'est pas commitée ; `CliArgumentRules` en est la version permanente et déclarative.
+
+---
+
+# Lot 3 — Q10, Q14 : cycle de vie des ressources et exceptions avalées
+
+> Branche : `code/q10-q14-cycle-de-vie` (depuis `code/q11-cli`, `5c019e93`), worktree `minos-wt/code-q10`. Agents : `impl-code`, `verif-code`. Aucun push, aucune PR.
+> Constats : **Q10** (`McpBackendRouter` et `MinosLauncher` n'ont jamais fermé la `MinosApplication` qu'ils ouvrent ; `LazyAutonomousIndexOperations`, code mort), **Q14** (quatre exceptions avalées), `AUDIT-2026-09.md` § 10.
+
+## 14. Inventaire daté (base `5c019e93`, 30 septembre 2026)
+
+### 14.1 Cibles Q10, relocalisées
+
+| Cible de l'audit | Emplacement réel | Constat mesuré |
+|---|---|---|
+| `McpBackendRouter` (« aujourd'hui dans `minos-app` ») | `minos-app/src/main/java/com/minos/app/McpBackendRouter.java` ; le constructeur par défaut câblait `home -> MinosMcpServer.run(MinosApplication.open(home))` | `run(MinosApplication)` **ne prend pas** la propriété de l'application (sa Javadoc le dit) : l'application ouverte n'était fermée ni à la fin de la session MCP, ni sur exception. **Durée de vie réelle** : le serveur répond aux requêtes jusqu'à la fin de l'entrée standard (`stdin.awaitEnd()`), `run(application)` ne rend la main qu'à ce moment : l'application doit rester ouverte pendant toute la session et être fermée **une** fois après |
+| `MinosLauncher` | `minos-cli/src/main/java/com/minos/cli/MinosLauncher.java` (`main`) | `MinosApplication.open(home)` puis `run(application, …)` sans fermeture, quel que soit le chemin ; `System.exit` n'exécute aucune fermeture. L'application n'est partagée avec aucun serveur (la commande est terminée quand `run` rend la main) |
+| `LazyAutonomousIndexOperations` | `minos-cli/src/main/java/com/minos/cli/LazyAutonomousIndexOperations.java` | **code mort confirmé** par `grep -rI "LazyAutonomousIndex"` sur tout le dépôt (sources, tests, `scripts/`, `docs/`, poms, hors `target/`) : aucune référence en dehors d'elle-même et des suivis d'audit (`ARCHI-SUIVI`, `SPRINT-2-SUIVI`, `AUDIT`, historiques). Aucun script n'asserte de littéral de ce fichier |
+
+### 14.2 Tous les sites qui ouvrent une `MinosApplication` (production)
+
+Recherche : `MinosApplication.open|builder`, `MinosApplication::open`, `openApplication`, sur `src/main` de tous les modules, `scripts/`, `benchmarks/`, `minos-intellij/` (aucune occurrence dans ces deux derniers).
+
+| Site | Qui ferme, sur quels chemins | Avant le lot | Après le lot |
+|---|---|---|---|
+| `McpBackendRouter` (runner natif) | le routeur (`serving()`) : fin de session **et** exception ; l'application vit toute la session MCP | personne | `try`-avec-ressources ; `McpBackendRouterLifecycleTest` |
+| `MinosLauncher.main` (commandes ordinaires) | le lanceur (`launch()`) : succès, code d'erreur, exception | personne | `try`-avec-ressources ; `MinosLauncherLifecycleTest` |
+| `MinosLauncher.main` (`--version`, `--help`, aide sans état, `ide handshake`, `mcp`) | n'ouvre rien (`mcp` est routé avant toute ouverture ; son application appartient au routeur) | déjà correct | inchangé, verrouillé par `commandsThatNeedNoApplicationNeverOpenOne` |
+| `MinosCliRunner.run(Path, …)` | `try`-avec-ressources | déjà correct | inchangé |
+| `MinosMcpServer.run(Path)` / `main` | `try`-avec-ressources (le serveur est fermé avant l'application) | déjà correct | inchangé |
+| `MinosMcpTools(Path)` | propriétaire : `close()` ferme `ownedApplication` ; le constructeur ne fait plus que `new MinosApplicationMcpBackend(app)` | déjà correct | déclaré dans la garde |
+| `LocalMinosApi(Path)`, `LocalMinosMultiRepositoryApi(Path)`, `LocalProviderPlatformApi(Path)` (via `MinosApiSupport.openApplication`) | propriétaires : `close()` ferme l'application (`IO_FAILURE` publique si la fermeture échoue) ; constructeurs : accesseurs seulement | déjà correct | déclarés dans la garde |
+| `LocalProjectOperations(Path)`, `LocalAutonomousIndexOperations(Path)` | propriétaires : `close()` ; **aucun appelant de production** de `LocalAutonomousIndexOperations(Path)` une fois `Lazy…` supprimée, un seul test pour `LocalProjectOperations(Path)` | correct | déclarés dans la garde ; constructeurs publics conservés (voir § 19) |
+| `LazyAutonomousIndexOperations` | aurait fuité (`new LocalAutonomousIndexOperations(home)` possède l'application, jamais fermée) | code mort | **supprimée** |
+| Non propriétaires (`MinosCliRunner.run(MinosApplication, …)`, `MinosMcpServer.run(MinosApplication)`, `MinosMcpApplicationTools`, `Local*(MinosApplication)`, `ProviderPlatformService.defaults`, `LocalRemoteIndexOperations`, `new LocalAutonomousIndexOperations(app[, décorateur])`) | ne ferment pas : ils reçoivent l'application de leur appelant ; aucune ne retient de ressource fermable | correct | inchangé |
+| `scripts/history/m16`, `scripts/history/m21` (sondes de performance, hors build) | n'ouvrent pas de `try` | hors compilation | non touchées (§ 19) |
+
+La garde `ApplicationOwnershipGuardTest` (§ 15) transforme cet inventaire en test : une nouvelle création hors `try`-avec-ressources ou hors propriétaire déclaré fait échouer la suite.
+
+### 14.3 Cibles Q14, relocalisées
+
+| Cible de l'audit | Emplacement réel | Ce qui était avalé |
+|---|---|---|
+| `LocalProjectOperations.writeHistory` | `minos-application/src/main/java/com/minos/application/LocalProjectOperations.java` (appel dans `importScip`) | `catch (IOException ignored) {}` autour de l'écriture de `cli-index-history/<projet>.properties` |
+| `DefaultDiscoveryPlugins.visibleFile` | `minos-engine/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java` | `catch (IOException \| SecurityException) { return false; }` autour de l'ouverture confinée d'un marqueur |
+| `FileIndexStateStore.migrateLegacyRuns` | `minos-storage-local/src/main/java/com/minos/storage/local/orchestration/FileIndexStateStore.java` (l'audit visait le module d'avant A3) | deux `continue` muets : nom de fichier qui n'est pas un UUID, métadonnées corrompues |
+| `ExecutionPathAuthorization.tryCapture` | `minos-engine/src/main/java/com/minos/orchestration/IndexingRuntimePorts.java` (record imbriqué de `IndexingRuntimePorts`) | `catch (IOException) { return Optional.empty(); }` |
+
+## 15. Décisions
+
+### 15.1 Q10 — propriété et suppression
+
+- **Propriétaire clair, `try`-avec-ressources** partout où une application est ouverte pour la durée d'une méthode ; **propriétaire nommé** (objet `AutoCloseable` qui la possède) là où elle vit plus longtemps. Aucun `close()` ajouté « pour la forme » : `LazyAutonomousIndexOperations` est **supprimée**, pas rendue `AutoCloseable`.
+- **Application partagée avec un serveur en cours** : jamais fermée avant la fin de la session. Le routeur MCP ferme *après* le retour de `MinosMcpServer.run(application)` (fin de l'entrée standard) ; les surfaces qui **reçoivent** une application (`run(MinosApplication)`, `Local*(MinosApplication)`) ne la ferment pas.
+- **Ouverture et exécution injectées** (`ApplicationOpener`, `ServerRunner`, `CommandRunner`) pour observer la fermeture : `MinosApplication` est finale et `open` statique, la fermeture est donc observée sur le **magasin de stockage** que `close()` ferme (un `StorageBackend` espion par `Proxy`, comme `A2CompositionCharacterizationTest`). Le câblage de production (`MinosApplication::open`) n'est verrouillé que par la garde de source.
+- **Échec de fermeture au lanceur** (nouveau, déclaré) : si `close()` échoue après une commande, le lanceur dit `error: MINOS bootstrap failed: <message>` et sort 1, comme `MinosCliRunner.run(Path, …)` le fait déjà pour ses appelants. Jamais le cas du stockage local (`close()` ne fait rien) ; possible avec PostgreSQL.
+
+### 15.2 Q14 — un choix explicite par site
+
+Règle du lot : une capture délibérée reste **journaliser et continuer** (flux inchangé) ; transformer un silence en échec sur un chemin chaud ou de découverte est une régression. Journalisation : `System.Logger` (idiome des modules `minos-engine`, `minos-runtime-local`), niveau WARNING, message `MINOS …` avec la **classe** de l'exception (jamais son message, qui contient les chemins), sans chemin absolu.
+
+| Site | Intention (lue au code appelant) | Choix | Raison | Bruit |
+|---|---|---|---|---|
+| `writeHistory` | l'historique est une preuve **secondaire** (`ProjectInspectionService.readHistory` s'en sert pour l'affichage fournisseur/version) ; l'instantané actif et l'état, déjà commités, font foi (commentaire d'origine) | **journaliser et continuer** | propager ferait échouer un import déjà valide et commité (l'utilisateur relancerait un import réussi) pour un champ d'affichage ; le silence cachait disque plein / droits / fichier à la place du répertoire | site froid (une fois par import) : aucune borne |
+| `visibleFile` | sonde de **tous** les détecteurs, pour chaque marqueur de chaque répertoire ; « faux » = « pas un marqueur visible » ; un fichier illisible ne doit jamais faire échouer la découverte | **journaliser et continuer** | propager = un seul `pom.xml` sans droits fait échouer la découverte du projet (régression) ; le silence cachait « pourquoi mon module n'est pas détecté » | **site chaud** : `NoSuchFileException` (cas normal) et non-fichier régulier (répertoire, lien : la découverte sonde aussi des entrées de répertoire) restent **muets** ; seul un fichier **régulier** qui existe et ne s'ouvre pas est journalisé, **une fois par fichier**, **dix au plus par découverte**, puis une synthèse |
+| `migrateLegacyRuns` | tourne dans le **constructeur** du magasin (chaque ouverture) ; un fichier hérité corrompu ne doit jamais empêcher l'ouverture ni la migration des autres (même règle que `readRunFormatVersion`) | **journaliser et continuer** | propager = un fichier corrompu bloque tout le `MINOS_HOME` | fichier définitivement corrompu retrouvé à chaque ouverture (pas d'état entre processus) : **dix traces au plus par ouverture**, puis une synthèse avec le total |
+| `tryCapture` | des tests de contrat construisent volontairement des requêtes sur des chemins non matérialisés ; les ports sans processus gardent le contrat historique ; `ProcessIndexerExecutor` refuse l'absence d'autorisation avant le lancement | **journaliser et continuer** | propager casserait ces ports et l'API historique de la requête ; mais le refus au lancement (« not canonically authorized ») **ne porte aucune cause** : la trace est le seul moyen de distinguer racine supprimée / droits | une fois par requête d'exécution : aucune borne |
+
+## 16. Journal par commit (lot 3)
+
+Gates rejoués après chaque commit : `check-module-boundaries.py`, `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py`, `scripts/remediation/check-post-mne.py`. Boundaries `modules=14, sources=500, packages=45` jusqu'à la suppression de `LazyAutonomousIndexOperations`, puis `sources=499` (un fichier de production en moins, aucun ajouté) ; les quatre autres gates inchangés (`SUCCESS`, `SUCCESS`, `scripts checked=95`, `SUCCESS`).
+
+| Commit | Contenu | Rouge (sortie jointe au message) |
+|---|---|---|
+| `eedd3bf8` | Q10 : le routeur MCP ferme l'application (`serving()`) | `McpBackendRouterLifecycleTest` 3/4 : `expected: <[served, close]> but was: <[served]>` |
+| `faa9ec7b` | Q10 : le lanceur ferme l'application (`launch()`) | `MinosLauncherLifecycleTest` 5/6 : `expected: <[open, close]> but was: <[open]>` |
+| `77aacabe` | Q10 : garde de source `ApplicationOwnershipGuardTest` | 2 mutations (fermeture retirée, `open` hors `try`) |
+| `b47427c9` | V-L3-01 : la garde verrouille le câblage de production | mutation : constructeur par défaut du routeur remis à la fuite |
+| `1f843e3f` | Q10 : suppression de `LazyAutonomousIndexOperations` | — (suppression de code mort ; `sources` 500 → 499) |
+| `b94c4a5f` | Q14 : `writeHistory` journalise | `ImportHistoryFailureTest` : `expected: <1> but was: <0>` |
+| `1bc9cd59` | V-L3-02 : la garde prouve la fermeture par le code (créations comptées, fragments hors commentaires) | 3 mutations (Ma, Mb, Mc) toutes rouges |
+| `d8cf0e5b` | Q14 : `visibleFile` journalise (fichier régulier illisible seulement) | `UnreadableMarkerDiscoveryTest` 2/3 rouges (silence) |
+| `d823aea7` | Q14 : `migrateLegacyRuns` journalise (borné) | `LegacyRunMigrationDiagnosticsTest` 2/3 : `expected: <2> but was: <0>`, `<11>` / `<0>` |
+| `748115f8` | Q14 : `tryCapture` journalise la cause | `ExecutionPathAuthorizationDiagnosticsTest` : `expected: <1> but was: <0>` |
+
+## 17. Preuves
+
+### 17.1 Changements observables
+
+1. **Fermeture** : `minos mcp` (natif) ferme l'application à la fin de la session ; toute commande ordinaire la ferme au succès, sur code d'erreur et sur exception. Sans effet visible avec le stockage local (`close()` ne fait rien) ; avec un backend qui tient une ressource (PostgreSQL) elle est désormais libérée.
+2. **Échec de fermeture** (nouveau chemin, jamais atteint avec le stockage local) : `error: MINOS bootstrap failed: <message>`, exit 1.
+3. **Nouvelles lignes de journal** (WARNING, `System.Logger` → console JUL par défaut, donc sortie d'erreur ; jamais la sortie standard, donc jamais le protocole MCP) : `LocalProjectOperations` (échec d'écriture de l'historique d'import), `ProjectIgnorePolicy` (fichier marqueur illisible, dix au plus par découverte), `FileIndexStateStore` (fichier de run hérité ignoré, dix au plus par ouverture), `ExecutionPathAuthorization` (racines non résolues). Aucune autre sortie ne change.
+4. Les **12 golden** de `characterization/` ne bougent pas ; `JsonOrderGuardTest`, `JsonEscapeGuardTest` et les gardes CLI du lot 2 restent verts.
+
+### 17.2 Rouge → vert par site
+
+Chaque test a été joué **avant** le correctif sur le code d'origine (sortie dans le message du commit) ; le flux inchangé (import réussi, découverte aboutie, ouverture du magasin, `Optional.empty()`) est asserté dans le **même** test et passait déjà à l'état rouge : seul le silence était rouge. Les cas normaux qui doivent rester muets (marqueur absent, entrée de répertoire, run hérité valide, racines résolubles, écriture d'historique réussie) sont verts des deux côtés.
+
+Une première version de `visibleFile` journalisait toute exception : mesurée sur un projet ordinaire, elle produisait `could not read the project file 'src'`, `'src\main'`, `'src\main\java'` (`AccessDeniedException`, la découverte sonde des entrées de répertoire). Corrigée avant le commit (fichier régulier seulement) ; le test « marqueur absent et entrées de répertoire → silence » verrouille ce cas.
+
+## 18. Constats de verif-code (lot 3)
+
+| Id | Sévérité | Constat | Résolution |
+|---|---|---|---|
+| V-L3-01 | à corriger | le câblage de production du routeur (`this(serving(MinosApplication::open, MinosMcpServer::run), …)`) n'était verrouillé par aucun test : remettre la fuite d'origine laissait tout vert | `b47427c9` : fragments de câblage dans la garde (une vraie application ne s'ouvre pas avec un magasin espion) ; mutation rejouée rouge |
+| V-L3-02 | à corriger | la garde exemptait un fichier propriétaire entier et sa « preuve » (`if (!ownsApplication) return;`) ne prouvait pas l'appel à `close()` ; trois mutations restaient vertes | `1bc9cd59` : nombre de créations figé par propriétaire, fragments cherchés dans le code sans commentaires (`ownedApplication.close()`, `application.close()`, création possédée), façades de `minos-api` déclarées fermeurs ; les trois mutations rejouées sont rouges |
+
+## 19. À traiter plus tard (lot 3)
+
+- **Câblage eager du CLI** (relevé au lot 2) : vérifié, il ne retient aucune ressource fermable (`LocalRemoteIndexOperations`, `ProviderPlatformService`, `LocalAutonomousIndexOperations(app)` ne fermeraient rien) ; ce n'est donc **pas** une application non fermée et Q10 n'est pas concerné. Reste ouvert au titre de l'effet de bord (`distributed-artifacts/.leases` créé par `project list`).
+- **Autres captures muettes des mêmes classes**, non traitées (hors des quatre sites nommés) : `DefaultDiscoveryPlugins.containsVisibleMarkerExtension` (`IOException` → `false`) et `isPhysicalDirectory` (idem ; cas normal = répertoire absent, sonde chaude) ; `FileIndexStateStore` : `readRunFormatVersion` (version illisible → héritée, documenté V4), les `catch … Optional.empty()` de lecture d'options, `migrateRunLocators` (nom de partition non UUID, nom de fichier corrompu : commentés). Un marqueur qui est un **lien** symbolique refusé par le confinement reste silencieux (refus de politique, pas erreur d'E/S). Le rapporteur `ProjectIgnorePolicy.reportUnreadable` est fait pour être réutilisé.
+- **Constructeurs publics à propriétaire sans appelant de production** : `LocalAutonomousIndexOperations(Path)` (plus aucun appelant de production, `Lazy…` supprimée) et `LocalProjectOperations(Path)` (un test). Conservés (constructeurs publics, correctement propriétaires, déclarés dans la garde) ; retrait à décider avec l'API publique.
+- **Sites de test** qui ouvrent une `MinosApplication` sans `try`-avec-ressources : 69 sur 97 (`minos-bootstrap` 33, `minos-cli` 8, `minos-api` 11, `minos-app` 7, `minos-application` 3, `minos-mcp` 5, `minos-nexus` 2). Sans effet avec le stockage local ; à traiter si les tests PostgreSQL le demandent.
+- **Historique** : `scripts/history/m15/run-s3.ps1` (jamais joué, chemin `minos-app\…\MinosLauncher.java` périmé depuis A3) exige `MinosApplication application = MinosApplication.open(home);` et `MinosMcpServer.run(application);` dans le lanceur : déjà faux avant ce lot, aucun gate ne le lit. `scripts/history/m16` et `m21` (sondes hors build) ouvrent sans fermer.
+- **Q13 (helpers de test)** : `LogCapture` existe en trois exemplaires de test (`minos-cli`, `minos-engine/testsupport`, `minos-storage-local`) faute de test-jar partagé ; à mutualiser avec Q13 si un module de support de test apparaît.
+- **Bruit du fichier hérité corrompu** : la trace (dix au plus) se répète à chaque ouverture tant que le fichier reste dans `runs/` ; une purge ou une mise en quarantaine automatique changerait le flux, elle est laissée à une décision produit.
