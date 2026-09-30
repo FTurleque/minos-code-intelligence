@@ -53,6 +53,38 @@ class ProjectIndexStateReconcilerTest {
     }
 
     @Test
+    void observeReturnsTheRepairWithoutWritingNorTakingTheLease() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(tmp.resolve("snapshots-observe"));
+        snapshots.publish(projectId, "snapshot-new", List.of(), List.of(), List.of());
+        FileIndexStateStore durable = new FileIndexStateStore(tmp.resolve("state-observe"));
+        durable.saveProjectState(state(projectId, ProjectIndexState.Availability.READY, "snapshot-old"));
+        List<String> events = new ArrayList<>();
+        IndexStateStore watching = new DelegatingIndexStateStore(durable) {
+            @Override
+            public void saveProjectState(ProjectIndexState state) {
+                events.add("save");
+                super.saveProjectState(state);
+            }
+
+            @Override
+            public ProjectLease acquireProjectLease(UUID id) {
+                events.add("lease");
+                return super.acquireProjectLease(id);
+            }
+        };
+
+        ProjectIndexStateReconciler.Reconciliation observed =
+                new ProjectIndexStateReconciler(snapshots, watching).observe(projectId);
+
+        assertTrue(observed.repaired(), "the repair that reconcile would perform is reported");
+        assertEquals(Optional.of("snapshot-new"), observed.projectState().orElseThrow().activeSnapshotId());
+        assertEquals(List.of(), events, "observe must neither write nor take the lifecycle lease");
+        assertEquals(Optional.of("snapshot-old"), durable.findProjectState(projectId).orElseThrow().activeSnapshotId(),
+                "the durable state is left as it was");
+    }
+
+    @Test
     void persistentMetadataFailureIsFailClosedInsteadOfExposingStaleState() throws Exception {
         UUID projectId = UUID.randomUUID();
         FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(tmp.resolve("snapshots-failing"));

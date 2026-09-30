@@ -112,10 +112,9 @@ public final class LocalAutonomousIndexOperations
 
     @Override
     public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
-        RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
-            return prepare(projectIdentifier, providerOverride, forceFull).view();
-        }
+        // A dry run writes nothing (no lease, no state, no repair): with nothing to serialize against,
+        // it observes like every other read instead of taking the project lifecycle lease.
+        return prepare(projectIdentifier, providerOverride, forceFull, false).view();
     }
 
     @Override
@@ -139,7 +138,7 @@ public final class LocalAutonomousIndexOperations
             boolean forceFull,
             IndexingResumePolicy resumePolicy
     ) throws Exception {
-        Prepared prepared = prepare(projectIdentifier, providerOverride, forceFull);
+        Prepared prepared = prepare(projectIdentifier, providerOverride, forceFull, true);
         for (ProviderView runtime : prepared.view().providerRuntimes()) {
             if (!"READY".equals(runtime.state())) {
                 throw new IllegalStateException("provider runtime is not ready: " + runtime.id()
@@ -290,11 +289,13 @@ public final class LocalAutonomousIndexOperations
         return first + "; " + second;
     }
 
-    private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull) throws IOException {
+    /** {@code persist} is false for a dry run: the state is observed (a repair or a first state is computed, never saved). */
+    private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull, boolean persist)
+            throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         ProjectDiscovery discovery = application.discoveryService().discover(project.rootPath());
         ProjectFingerprint current = fingerprintService.capture(project.rootPath());
-        ProjectIndexState indexState = alignedIndexState(project.id());
+        ProjectIndexState indexState = alignedIndexState(project.id(), persist);
         Optional<ProjectFingerprintSnapshot> baseline;
         ProjectInvalidationAssessment invalidation;
         try {
@@ -331,13 +332,17 @@ public final class LocalAutonomousIndexOperations
         return new Prepared(project, discovery, negotiation, plan, indexState, current, view);
     }
 
-    private ProjectIndexState alignedIndexState(UUID projectId) throws IOException {
-        ProjectIndexStateReconciler.Reconciliation reconciliation = projectIndexStateReconciler.reconcile(projectId);
+    private ProjectIndexState alignedIndexState(UUID projectId, boolean persist) throws IOException {
+        ProjectIndexStateReconciler.Reconciliation reconciliation = persist
+                ? projectIndexStateReconciler.reconcile(projectId)
+                : projectIndexStateReconciler.observe(projectId);
         if (reconciliation.projectState().isPresent()) {
             return reconciliation.projectState().orElseThrow();
         }
         ProjectIndexState neverIndexed = ProjectIndexState.neverIndexed(projectId, Instant.now());
-        stateStore.saveProjectState(neverIndexed);
+        if (persist) {
+            stateStore.saveProjectState(neverIndexed);
+        }
         return neverIndexed;
     }
 
