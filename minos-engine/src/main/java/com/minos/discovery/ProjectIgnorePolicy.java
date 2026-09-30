@@ -17,15 +17,21 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Operation-scoped ignore policy and visible-file inventory for project discovery. */
 public final class ProjectIgnorePolicy {
+
+    private static final System.Logger LOGGER = System.getLogger(ProjectIgnorePolicy.class.getName());
+    /** Unreadable files reported by one discovery operation; the rest is summarized by one trace. */
+    private static final int MAX_REPORTED_UNREADABLE = 10;
 
     private final Path root;
     private final SourceBudgetPolicy.Tracker budget;
     private final ProjectIgnoreRules rules;
     private final Set<Path> accountedRegularFiles = new HashSet<>();
     private final Map<Path, Set<String>> visibleFileNamesByRoot = new HashMap<>();
+    private final Set<Path> reportedUnreadable = ConcurrentHashMap.newKeySet();
 
     private ProjectIgnorePolicy(
             Path root,
@@ -53,6 +59,28 @@ public final class ProjectIgnorePolicy {
         boolean ignored = rules.isIgnored(normalized, directory);
         if (!directory && !ignored) accountRegularFile(normalized);
         return ignored;
+    }
+
+    /**
+     * Journals a project file discovery could not read and treats as absent. Discovery goes on unchanged (an
+     * unreadable marker must never fail it); the trace only makes the omission observable. The message carries the
+     * project-relative name and the exception class, never an absolute path nor the exception message. One trace
+     * per file, at most {@value #MAX_REPORTED_UNREADABLE} per discovery operation, then a single summary: the
+     * probe runs for every marker of every directory, so a broken tree must not flood the journal.
+     */
+    void reportUnreadable(Path relativePath, Exception failure) {
+        Path relative = normalizeRelative(relativePath);
+        if (reportedUnreadable.size() > MAX_REPORTED_UNREADABLE || !reportedUnreadable.add(relative)) return;
+        int reported = reportedUnreadable.size();
+        if (reported <= MAX_REPORTED_UNREADABLE) {
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS discovery could not read the project file '" + relative
+                            + "' and treats it as absent: " + failure.getClass().getSimpleName());
+        } else if (reported == MAX_REPORTED_UNREADABLE + 1) {
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS discovery met more than " + MAX_REPORTED_UNREADABLE
+                            + " unreadable project files; the others are not reported");
+        }
     }
 
     public boolean isHardIgnored(Path relativePath) {

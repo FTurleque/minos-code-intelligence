@@ -62,6 +62,10 @@ public final class FileIndexStateStore implements IndexStateStore {
     /** Historical read tolerance: a run of up to 10 000 checkpoint-less executions stays readable. */
     static final int MAX_READABLE_EXECUTIONS = 10_000;
 
+    private static final System.Logger LOGGER = System.getLogger(FileIndexStateStore.class.getName());
+    /** Skipped legacy run files reported per opening of the store; the total is summarized beyond this. */
+    private static final int MAX_REPORTED_SKIPPED_LEGACY_RUNS = 10;
+
     private final Path storageRoot;
     private final Path projectRoot;
     private final Path runRoot;
@@ -442,22 +446,43 @@ public final class FileIndexStateStore implements IndexStateStore {
         }
     }
 
+    /**
+     * A legacy run file whose name is not a run id, or whose metadata is corrupt, is skipped and left in place:
+     * it must never prevent the store from opening nor the other runs from migrating. The skip is journaled (file
+     * name only, reason, exception class) instead of silent; the journal is bounded per opening, since a
+     * permanently corrupt file is met again by every opening.
+     */
     private void migrateLegacyRuns() throws IOException {
+        int skipped = 0;
         for (Path legacy : propertyFiles(runRoot, "index run directory")) {
             final UUID runId;
             try {
                 runId = idFromPropertiesFile(legacy);
-            } catch (IllegalStateException ignored) {
+            } catch (IllegalStateException notARunId) {
+                reportSkippedLegacyRun(legacy, "its name is not a run id", notARunId, ++skipped);
                 continue;
             }
             final IndexingRun run;
             try {
                 run = readRun(legacy, runId);
             } catch (RuntimeException corruptLegacyMetadata) {
+                reportSkippedLegacyRun(legacy, "its metadata cannot be read", corruptLegacyMetadata, ++skipped);
                 continue;
             }
             migrateLegacyRun(legacy, run);
         }
+        if (skipped > MAX_REPORTED_SKIPPED_LEGACY_RUNS) {
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS skipped " + skipped + " legacy indexing run files in total; only the first "
+                            + MAX_REPORTED_SKIPPED_LEGACY_RUNS + " are reported");
+        }
+    }
+
+    private static void reportSkippedLegacyRun(Path legacy, String reason, RuntimeException failure, int rank) {
+        if (rank > MAX_REPORTED_SKIPPED_LEGACY_RUNS) return;
+        LOGGER.log(System.Logger.Level.WARNING,
+                "MINOS skipped the legacy indexing run file '" + legacy.getFileName() + "' (" + reason
+                        + "); it is left in place and ignored: " + failure.getClass().getSimpleName());
     }
 
     private void migrateLegacyRun(Path legacy, IndexingRun run) throws IOException {
