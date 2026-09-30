@@ -400,6 +400,7 @@ La garde `ApplicationOwnershipGuardTest` (§ 15) transforme cet inventaire en te
 
 - **Propriétaire clair, `try`-avec-ressources** partout où une application est ouverte pour la durée d'une méthode ; **propriétaire nommé** (objet `AutoCloseable` qui la possède) là où elle vit plus longtemps. Aucun `close()` ajouté « pour la forme » : `LazyAutonomousIndexOperations` est **supprimée**, pas rendue `AutoCloseable`.
 - **Application partagée avec un serveur en cours** : jamais fermée avant la fin de la session. Le routeur MCP ferme *après* le retour de `MinosMcpServer.run(application)` (fin de l'entrée standard) ; les surfaces qui **reçoivent** une application (`run(MinosApplication)`, `Local*(MinosApplication)`) ne la ferment pas.
+- **Fermetures des propriétaires** (`MinosMcpTools`, façades de `minos-api`, `LocalProjectOperations(Path)`, `LocalAutonomousIndexOperations(Path)`, `MinosMcpServer.run(Path)`) : `CloseCountingStorageProvider` (test-jar de `minos-bootstrap`) est un fournisseur de stockage « postgresql » qui enveloppe le stockage local et compte `close()` ; `MinosApplication.open(home)` le sélectionne quand `minos.storage.backend=postgresql` (propriété système, le temps d'un test) et que le module de test déclare le fournisseur dans `META-INF/services` (`minos-api`, `minos-mcp`, `minos-cli` ; jamais `minos-bootstrap`, où le vrai fournisseur PostgreSQL est sur le chemin de test). Aucun point d'injection en production.
 - **Ouverture et exécution injectées** (`ApplicationOpener`, `ServerRunner`, `CommandRunner`) pour observer la fermeture : `MinosApplication` est finale et `open` statique, la fermeture est donc observée sur le **magasin de stockage** que `close()` ferme (un `StorageBackend` espion par `Proxy`, comme `A2CompositionCharacterizationTest`). Le câblage de production (`MinosApplication::open`) n'est verrouillé que par la garde de source.
 - **Échec de fermeture au lanceur** (nouveau, déclaré) : si `close()` échoue après une commande, le lanceur dit `error: MINOS bootstrap failed: <message>` et sort 1, comme `MinosCliRunner.run(Path, …)` le fait déjà pour ses appelants. Jamais le cas du stockage local (`close()` ne fait rien) ; possible avec PostgreSQL.
 
@@ -430,6 +431,8 @@ Gates rejoués après chaque commit : `check-module-boundaries.py`, `check-curre
 | `d8cf0e5b` | Q14 : `visibleFile` journalise (fichier régulier illisible seulement) | `UnreadableMarkerDiscoveryTest` 2/3 rouges (silence) |
 | `d823aea7` | Q14 : `migrateLegacyRuns` journalise (borné) | `LegacyRunMigrationDiagnosticsTest` 2/3 : `expected: <2> but was: <0>`, `<11>` / `<0>` |
 | `748115f8` | Q14 : `tryCapture` journalise la cause | `ExecutionPathAuthorizationDiagnosticsTest` : `expected: <1> but was: <0>` |
+| `51120629` | ce suivi : inventaire, décisions, journal | — |
+| `7e46ef07` | V-L3-03 : fermetures des propriétaires (`minos-api`, `minos-mcp`, `minos-cli`) verrouillées par le comportement, fixture `CloseCountingStorageProvider` | 7 mutations de production toutes rouges (`expected: <1> but was: <0>`) |
 
 ## 17. Preuves
 
@@ -452,6 +455,7 @@ Une première version de `visibleFile` journalisait toute exception : mesurée s
 |---|---|---|---|
 | V-L3-01 | à corriger | le câblage de production du routeur (`this(serving(MinosApplication::open, MinosMcpServer::run), …)`) n'était verrouillé par aucun test : remettre la fuite d'origine laissait tout vert | `b47427c9` : fragments de câblage dans la garde (une vraie application ne s'ouvre pas avec un magasin espion) ; mutation rejouée rouge |
 | V-L3-02 | à corriger | la garde exemptait un fichier propriétaire entier et sa « preuve » (`if (!ownsApplication) return;`) ne prouvait pas l'appel à `close()` ; trois mutations restaient vertes | `1bc9cd59` : nombre de créations figé par propriétaire, fragments cherchés dans le code sans commentaires (`ownedApplication.close()`, `application.close()`, création possédée), façades de `minos-api` déclarées fermeurs ; les trois mutations rejouées sont rouges |
+| V-L3-03 | à corriger | aucune fermeture propriétaire (`MinosMcpTools`, `LocalMinosApi`, `LocalMinosMultiRepositoryApi`, `LocalProviderPlatformApi`, `LocalProjectOperations`, `LocalAutonomousIndexOperations`) n'était verrouillée par un test de comportement : `if (ownedApplication != null && false) …` et `ownsApplication = false` laissaient les suites vertes | `7e46ef07` : `CloseCountingStorageProvider` (fournisseur « postgresql » de test qui compte les fermetures, sélectionné par la propriété `minos.storage.backend`), un `OwnedApplicationLifecycleTest` par module ; sept mutations de production rejouées, toutes rouges |
 
 ## 19. À traiter plus tard (lot 3)
 
