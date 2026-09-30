@@ -95,7 +95,11 @@ Règles de durée de vie d'un répertoire de run : **AVANT : 2** (7 j ordinaire,
 | `eb0b65cb` | R5 : `Policy.lifetime` (règle de durée de vie unique), parcours tronqué sans effet sur un run marqué, entrée illisible sans effet sur un run marqué, test de concurrence à barrière | idem |
 | `fcec3fd3` | R7 : `endResumeOffer`, même point pour la récupération et la réparation « snapshot stable » | idem |
 | `284a2f33` | R5 : run retenu dès son démarrage (`holdRunDirectory`), levé à la fin, levé par la récupération ; `IndexingRun.offersResume` (une copie de la règle en moins) | idem |
-| (commit suivant) | `promoteOnly` : la décision vit entièrement dans le planificateur ; Javadoc des ports ; ADR 0039 écart (k) ; ce journal | idem |
+| `d5e808ec` | `promoteOnly` : la décision vit entièrement dans le planificateur ; Javadoc des ports ; ADR 0039 écart (k) ; ce journal | idem |
+| `cb681858` | docs : preuves de fin de lot (premier `clean verify`) | idem |
+| `7b63257b` | V-L1-01 (date dans le futur re-datée), V-L1-02 (vrai parcours tronqué dans le test de borne) | idem |
+| `6851f615` | V-L1-03 (répertoire vide retiré avec le marqueur) | idem |
+| (commit suivant) | ADR 0039 (k) : 24 h / 7 j, date future ; constats de verif-fiab | idem |
 
 Gates rejoués à chaque commit : `check-module-boundaries.py` (« modules=14, sources=504, packages=45 »), `check-current-docs.py` (SUCCESS), `product-facts.py --check` (SUCCESS), `check-milestone-artifact-references.py` (« scripts checked=95 »), `check-minos-01.py` et `check-post-mne.py` (SUCCESS : ils affirment des littéraux de `RunDirectoryRetention`). **Mêmes chiffres que la base** : aucune classe de production ajoutée ni retirée.
 
@@ -118,7 +122,7 @@ Chaque test a été joué **avant** le correctif sur le code d'origine (quand l'
 | R5 récupération (échec, succès) | `InterruptedRunRecoveryTest.abandonedRunWithoutCheckpoint…`, `…authoritativePromotionRecovery…` | `the hold a crashed run left behind is lifted…`, `a recovered success no longer needs its hold` | 13/13 |
 | R7 réparation « snapshot stable » | `InterruptedRunRecoveryTest.stableSnapshotRepairSupersedesTheOfferedRunAndLiftsItsMarker` | `the offered run is finalized, not left INTERRUPTED ==> expected: <FAILED> but was: <INTERRUPTED>` | 13/13 |
 
-Tests de borne (verts avant et après, ils gardent l'invariant « le marqueur n'immobilise pas `runs/` ») : `aMarkedRunAlwaysExpiresAtTheExplicitUpperBoundEvenWhenTheScanIsTruncated` (supprimé à la borne + 1 s, conservé à la borne − 1 s), `markedRunsRemainBoundedByTheCountBudget` (20 runs marqués, budget 16 : les 4 plus anciens partent), `theMarkerLengthensTheLifetimeWhenTheResumeTtlExceedsTheMaximumAge` (`maxAge` 2 h, `resumeTtl` 24 h : le run marqué survit, l'ordinaire non), `aTruncatedScanStillReclaimsUnmarkedRunsItObserved` (la purge du résidu hostile observé est inchangée).
+Tests de borne (verts avant et après, ils gardent l'invariant « le marqueur n'immobilise pas `runs/` ») : `aMarkedRunAlwaysExpiresAtTheExplicitUpperBound` (supprimé à la borne + 1 s, conservé à la borne − 1 s) et `aMarkedRunAlsoExpiresAtTheUpperBoundWhenTheScanIsTruncated` (vrai parcours tronqué), `markedRunsRemainBoundedByTheCountBudget` (20 runs marqués, budget 16 : les 4 plus anciens partent), `theMarkerLengthensTheLifetimeWhenTheResumeTtlExceedsTheMaximumAge` (`maxAge` 2 h, `resumeTtl` 24 h : le run marqué survit, l'ordinaire non), `aTruncatedScanStillReclaimsUnmarkedRunsItObserved` (la purge du résidu hostile observé est inchangée).
 
 Un test existant a été remplacé parce qu'il figeait le défaut : `resumableRunOlderThanTheResumeTtlIsReclaimedEvenUnderBudget` (marqueur de 25 h ⇒ supprimé). Un autre a été précisé : `threadInterruptionWithoutAnyCheckpointStillFails` affirmait qu'aucun marqueur n'était jamais posé ; il affirme maintenant qu'aucun marqueur ne survit au run.
 
@@ -166,7 +170,12 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 
 ## 6. Constats de verif-fiab
 
-Aucun pour l'instant.
+| Id | Sévérité | Constat | Résolution |
+|---|---|---|---|
+| V-L1-01 | à corriger | la borne de 7 jours n'est pas robuste à un marqueur daté dans le futur (saut d'horloge) : `ageReference` n'était pas plafonnée | **résolu `7b63257b`**. Plafonner à `now` ne suffisait pas (le run serait neuf à chaque passage donc jamais expiré) : la première passe qui voit la date impossible la re-date à now (répertoire et marqueur, au mieux), la durée de vie compte alors depuis ce moment. Test rouge rejoué sur le code précédent : `a future-dated marker expires at most one lifetime after now ==> expected: <false> but was: <true>` ; `aMarkerDatedInTheFutureNeverPinsARunBeyondOneLifetimeFromWhenItWasSeen` et `aRunDirectoryDatedInTheFutureIsRedatedAndExpiresLikeAnyOther` |
+| V-L1-02 | à corriger | le test de la borne « même parcours tronqué » ne tronquait pas (budget de parcours 4096 pour 2 répertoires) | **résolu `7b63257b`**. Aucun défaut de production : test scindé, la borne avec un vrai parcours tronqué (budget d'une entrée par passe) est `aMarkedRunAlsoExpiresAtTheUpperBoundWhenTheScanIsTruncated` ; ce fichier § 5.1 corrigé |
+| V-L1-03 | remarque | (a) un `unmark` qui échoue (verrou antivirus) laisse un run terminal marqué jusqu'à 7 j ; (b) `mark` crée `runs/<runId>/` et `unmark` n'en retire que le fichier : un run qui n'écrit rien laisse un répertoire vide compté dans `maxEntries` | (b) **résolu `6851f615`** : `unmark` retire le répertoire s'il est vide (test rouge rejoué : `an empty run directory goes away with its marker ==> expected: <false> but was: <true>`). (a) documenté § 7 : borné par la durée de vie et par le budget, avertissement journalisé par `unmarkQuietly` |
+| V-L1-04 | remarque | `resumeTtl` 24 h (planificateur) contre 7 j (répertoire marqué) : jusqu'à 6 jours d'artefacts retenus pour une reprise déjà refusée | **résolu (documenté)** : écrit dans l'ADR 0039 (k) comme conséquence assumée d'un marqueur qui ne raccourcit jamais la vie ; § 7 |
 
 ## 7. À traiter plus tard
 
@@ -174,3 +183,5 @@ Aucun pour l'instant.
 - **Trois constantes de 24 h** (`IndexingResumePlanner.DEFAULT_RESUME_TTL`, `RunDirectoryRetention.DEFAULT_RESUME_TTL`, `SnapshotRetentionService.DEFAULT_ORPHAN_MAX_AGE`) : alignées à la main, chacune affirmée par un test local. Les fusionner demande un module commun aux deux côtés du port (ADR 0039, écart (f)).
 - **Un snapshot préparé écarté par R4 reste sur disque** jusqu'au balayage des `.snapshot-*.tmp` (24 h). Les snapshots préparés sous leur nom final ne sont balayés par aucune rétention : à examiner avec le lot 2 (Q4).
 - **`RunDirectoryRetention.prune` ne tourne qu'au début d'une exécution de provider.** Si plus aucune indexation n'a lieu, les répertoires expirés restent jusqu'à la suivante : comportement d'origine, non modifié.
+- **Un `unmark` qui échoue laisse un run terminal marqué** (verrou antivirus Windows, V-L1-03 a) : `unmarkQuietly` journalise un avertissement et la rétention l'expire à `max(maxAge, resumeTtl)` (7 j), après tous les runs non marqués et sous le budget de nombre et de volume. Les runs terminaux ne sont jamais réconciliés : rien ne le lèvera plus tôt. Borné, pas une fuite ; à reconsidérer si les avertissements sont fréquents.
+- **Artefacts d'un run marqué entre 24 h et 7 j** : refusés par le planificateur (TTL de 24 h), conservés par la rétention (V-L1-04, ADR 0039 (k)). Réduire la fenêtre demande de décider si les artefacts d'un run non reprenable servent encore au diagnostic.
