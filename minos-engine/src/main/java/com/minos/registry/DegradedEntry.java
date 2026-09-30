@@ -31,7 +31,24 @@ public record DegradedEntry(String entry, String reason) {
     /** Une entrée dont la lecture a échoué : {@code what} dit ce qui n'a pas pu être fait, sans chemin. */
     public static DegradedEntry of(String rawEntry, String what, Throwable failure) {
         String detail = PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName());
-        return new DegradedEntry(safeEntry(rawEntry), requireText(what, "what") + " (" + detail + ")");
+        return new DegradedEntry(safeEntry(rawEntry), requireText(what, "what") + " (" + printable(detail) + ")");
+    }
+
+    /**
+     * Le message d'une exception recopie parfois une valeur lue dans un fichier : {@code sanitize} aplatit les sauts
+     * de ligne mais laisse passer les séquences de contrôle (ESC, BEL, CSI sur 8 bits, inversion bidirectionnelle),
+     * que l'affichage en terminal exécuterait. Elles sont remplacées ici, une seule fois, par {@code _}.
+     */
+    private static String printable(String text) {
+        StringBuilder printable = new StringBuilder(text.length());
+        text.codePoints().forEach(codePoint -> printable.appendCodePoint(isUnsafeForTerminal(codePoint) ? '_' : codePoint));
+        return printable.toString();
+    }
+
+    private static boolean isUnsafeForTerminal(int codePoint) {
+        int type = Character.getType(codePoint);
+        return Character.isISOControl(codePoint) || type == Character.FORMAT
+                || type == Character.LINE_SEPARATOR || type == Character.PARAGRAPH_SEPARATOR;
     }
 
     private static String safeEntry(String rawEntry) {
