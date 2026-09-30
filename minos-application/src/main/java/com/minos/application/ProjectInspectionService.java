@@ -97,7 +97,9 @@ public final class ProjectInspectionService {
             moduleCount = discovery.modules().size();
         }
 
-        ProjectIndexStateReconciler.Reconciliation consistency = reconciler.reconcile(project.id());
+        // A status read takes no lifecycle lease and writes nothing: it reports the last state published
+        // by the indexing run, brought in line with the authoritative snapshot in memory only (lot 2, P1).
+        ProjectIndexStateReconciler.Reconciliation consistency = reconciler.observe(project.id());
         Optional<CodeKnowledgeSnapshot> active = consistency.activeSnapshot();
         String activeSnapshotId = active.map(CodeKnowledgeSnapshot::snapshotId).orElse(null);
         Optional<ProjectIndexState> persistedState = consistency.projectState();

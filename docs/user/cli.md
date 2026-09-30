@@ -62,6 +62,8 @@ index-status <project> [--format <text|json>]
 
 `project inspect` et `inspect` exposent les faits de découverte : langages, systèmes de build, modules et état d'indexation.
 
+Les lectures d'état (`index-status`, `inspect`, `project list`, outils MCP `minos_index_status` et `minos_project_structure`) ne prennent aucun bail et n'écrivent rien : pendant une indexation elles répondent immédiatement avec le dernier état publié par le run (`INDEXING` tant que le run n'a pas publié sa fin) au lieu d'attendre le bail d'indexation puis d'échouer. Le snapshot actif rapporté est toujours l'autoritaire ; l'état publié peut avoir un court retard sur lui, et c'est le prochain run qui le répare.
+
 Le catalogue provider courant couvre Java/Kotlin, TypeScript, Python, C/C++, C#, Go et Rust selon les profils et plateformes explicitement qualifiés. Une détection de langage/build ne vaut jamais preuve qu'un provider donné offre toutes les capabilities avancées.
 
 ## Diagnostic runtime

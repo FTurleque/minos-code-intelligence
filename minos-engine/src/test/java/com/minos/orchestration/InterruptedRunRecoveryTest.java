@@ -368,10 +368,10 @@ class InterruptedRunRecoveryTest {
                 List.of(executor(artifact)), request -> "snapshot-next", promoter, store, markers, CLOCK);
 
         // A project-state read sees the interruption and keeps offering the resume (R1-12: not blocking).
-        ProjectIndexState observed = service.projectState(projectId);
+        ProjectIndexState observed = service.recoverProjectState(projectId);
         assertEquals(ProjectIndexState.Availability.STALE, observed.availability());
         assertEquals(Optional.of(interruptedId), observed.resumableRunId());
-        assertEquals(Optional.of(interruptedId), service.projectState(projectId).resumableRunId(),
+        assertEquals(Optional.of(interruptedId), service.recoverProjectState(projectId).resumableRunId(),
                 "a second read must not alter the offered resume");
 
         IndexingRun next = service.execute(projectId, root,

@@ -65,7 +65,7 @@ class IndexingLifecycleServiceTest {
         assertEquals(2, stager.lastRequest.get().artifacts().size());
         assertEquals(1, promoter.calls.get());
 
-        ProjectIndexState state = service.projectState(projectId);
+        ProjectIndexState state = service.recoverProjectState(projectId);
         assertEquals(Availability.READY, state.availability());
         assertEquals(Optional.of("snapshot-new"), state.activeSnapshotId());
         assertEquals(Optional.of(run.id()), state.latestRunId());
@@ -149,8 +149,8 @@ class IndexingLifecycleServiceTest {
         assertEquals(1, run.executions().size());
         assertEquals(0, stager.calls.get());
         assertEquals(0, promoter.calls.get());
-        assertEquals(Availability.FAILED, service.projectState(projectId).availability());
-        assertTrue(service.projectState(projectId).activeSnapshotId().isEmpty());
+        assertEquals(Availability.FAILED, service.recoverProjectState(projectId).availability());
+        assertTrue(service.recoverProjectState(projectId).activeSnapshotId().isEmpty());
     }
 
     @Test
@@ -181,7 +181,7 @@ class IndexingLifecycleServiceTest {
         assertEquals(1, stager.calls.get());
         assertEquals(1, promoter.calls.get());
 
-        ProjectIndexState state = service.projectState(projectId);
+        ProjectIndexState state = service.recoverProjectState(projectId);
         assertEquals(Availability.STALE, state.availability());
         assertEquals(Optional.of("snapshot-old"), state.activeSnapshotId());
     }
@@ -196,7 +196,7 @@ class IndexingLifecycleServiceTest {
 
         assertThrows(IllegalArgumentException.class, () -> service.execute(projectId, root, incomplete));
         assertTrue(store.listRuns(projectId).isEmpty());
-        assertEquals(Availability.NEVER_INDEXED, service.projectState(projectId).availability());
+        assertEquals(Availability.NEVER_INDEXED, service.recoverProjectState(projectId).availability());
     }
 
     private static IndexingLifecycleService service(

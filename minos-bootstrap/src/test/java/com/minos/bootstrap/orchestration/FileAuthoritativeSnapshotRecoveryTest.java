@@ -40,13 +40,13 @@ class FileAuthoritativeSnapshotRecoveryTest {
         FileIndexStateStore reopenedState = new FileIndexStateStore(stateRoot);
         IndexingLifecycleService restarted = service(reopenedState, promoter);
 
-        assertThrows(IllegalStateException.class, () -> restarted.projectState(projectId));
+        assertThrows(IllegalStateException.class, () -> restarted.recoverProjectState(projectId));
         assertEquals(Optional.of("snapshot-ghost"),
                 reopenedState.findProjectState(projectId).orElseThrow().activeSnapshotId(),
                 "fail-closed read must not silently rewrite a ghost as valid metadata");
 
         authority.set(ActiveSnapshotObservation.active("snapshot-recovered"));
-        ProjectIndexState recovered = restarted.projectState(projectId);
+        ProjectIndexState recovered = restarted.recoverProjectState(projectId);
         assertEquals(ProjectIndexState.Availability.READY, recovered.availability());
         assertEquals(Optional.of("snapshot-recovered"), recovered.activeSnapshotId());
 

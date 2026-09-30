@@ -18,9 +18,17 @@ import java.util.UUID;
  * Reconciles persisted project metadata against the active snapshot, which is the authoritative
  * commit record once snapshot publication has completed.
  *
- * <p>Consistent reads remain lock-free. When a repair is required, reconciliation acquires the
+ * <p>Consistent reads remain lock-free. When a repair is required, {@link #reconcile} acquires the
  * same project lifecycle lease as indexing and re-observes every input before mutating metadata.
  * A repair therefore cannot race a cross-process snapshot promotion.</p>
+ *
+ * <p>{@link #observe} is the read used by status queries: it never takes the lease and never writes.
+ * It guarantees the last state its owner published, re-read until the active snapshot is stable
+ * (published states are replaced atomically, so a read is never torn), possibly behind the snapshot.
+ * When the state lags the snapshot it answers what the repair would publish, computed in memory,
+ * except while a run is in flight: an {@code INDEXING} or {@code REFRESHING} state belongs to the
+ * run that holds the lease, and a reader that cannot take the lease cannot tell it from an abandoned
+ * one, so it reports that state unchanged and leaves the recovery to the next run.</p>
  */
 public final class ProjectIndexStateReconciler {
     private static final int MAX_RECONCILIATION_ATTEMPTS = 8;
@@ -77,6 +85,10 @@ public final class ProjectIndexStateReconciler {
                     throw new IOException("failed to acquire project lifecycle lease for metadata reconciliation: "
                             + projectId, failure);
                 }
+            }
+
+            if (!persist && inProgress(persisted)) {
+                return new Reconciliation(activeAfter, persisted, false);
             }
 
             Optional<IndexingRun> matchingRun = loadRuns(projectId).stream()
@@ -147,6 +159,13 @@ public final class ProjectIndexStateReconciler {
 
     private static boolean sameSnapshot(Optional<CodeKnowledgeSnapshot> first, Optional<CodeKnowledgeSnapshot> second) {
         return first.map(CodeKnowledgeSnapshot::snapshotId).equals(second.map(CodeKnowledgeSnapshot::snapshotId));
+    }
+
+    private static boolean inProgress(Optional<ProjectIndexState> state) {
+        return state.map(ProjectIndexState::availability)
+                .filter(availability -> availability == ProjectIndexState.Availability.INDEXING
+                        || availability == ProjectIndexState.Availability.REFRESHING)
+                .isPresent();
     }
 
     private static boolean referencesSnapshot(Optional<ProjectIndexState> state, String snapshotId) {

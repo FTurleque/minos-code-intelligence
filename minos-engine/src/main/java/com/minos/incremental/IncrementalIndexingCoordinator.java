@@ -84,7 +84,7 @@ public final class IncrementalIndexingCoordinator {
     ) throws IOException {
         ProjectDiscovery discovery = discoveryService.discover(projectRoot);
         ProjectFingerprint before = fingerprintService.capture(projectRoot);
-        ProjectIndexState indexState = lifecycleService.projectState(projectId);
+        ProjectIndexState indexState = lifecycleService.recoverProjectState(projectId);
 
         BaselineLoad baselineLoad = loadBaselineConservatively(projectId, indexState);
         ProjectInvalidationAssessment invalidation = baselineLoad.unreadable()

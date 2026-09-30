@@ -85,6 +85,42 @@ class ProjectIndexStateReconcilerTest {
     }
 
     @Test
+    void observeReportsAnInFlightRunUnchangedEvenWhenItsSnapshotIsAlreadyPromoted() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(tmp.resolve("snapshots-in-flight"));
+        snapshots.publish(projectId, "snapshot-new", List.of(), List.of(), List.of());
+        FileIndexStateStore durable = new FileIndexStateStore(tmp.resolve("state-in-flight"));
+        ProjectIndexState indexing = state(projectId, ProjectIndexState.Availability.INDEXING, "snapshot-old");
+        durable.saveProjectState(indexing);
+
+        ProjectIndexStateReconciler.Reconciliation observed =
+                new ProjectIndexStateReconciler(snapshots, durable).observe(projectId);
+
+        assertFalse(observed.repaired(), "a reader cannot tell an in-flight run from an abandoned one");
+        assertEquals(indexing, observed.projectState().orElseThrow(), "the state its owner published");
+        assertEquals("snapshot-new", observed.activeSnapshot().orElseThrow().snapshotId(),
+                "the snapshot is the authoritative one, ahead of the published state");
+        assertEquals(indexing, durable.findProjectState(projectId).orElseThrow(), "nothing was written");
+    }
+
+    @Test
+    void reconcileStillRepairsAnAbandonedInProgressStateUnderTheLeaseItOwns() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(tmp.resolve("snapshots-abandoned"));
+        snapshots.publish(projectId, "snapshot-new", List.of(), List.of(), List.of());
+        FileIndexStateStore durable = new FileIndexStateStore(tmp.resolve("state-abandoned"));
+        durable.saveProjectState(state(projectId, ProjectIndexState.Availability.INDEXING, "snapshot-old"));
+
+        ProjectIndexStateReconciler.Reconciliation repaired =
+                new ProjectIndexStateReconciler(snapshots, durable).reconcile(projectId);
+
+        assertTrue(repaired.repaired(), "holding the lease proves no run is in flight: the repair is published");
+        assertEquals(ProjectIndexState.Availability.READY, repaired.projectState().orElseThrow().availability());
+        assertEquals(Optional.of("snapshot-new"),
+                durable.findProjectState(projectId).orElseThrow().activeSnapshotId());
+    }
+
+    @Test
     void persistentMetadataFailureIsFailClosedInsteadOfExposingStaleState() throws Exception {
         UUID projectId = UUID.randomUUID();
         FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(tmp.resolve("snapshots-failing"));

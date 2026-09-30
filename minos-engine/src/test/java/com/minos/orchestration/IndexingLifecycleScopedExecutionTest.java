@@ -98,7 +98,7 @@ class IndexingLifecycleScopedExecutionTest {
         assertEquals(IndexingRun.Status.FAILED, failed.status());
         assertEquals(stableSnapshot, failed.activeSnapshotBefore().orElseThrow());
         assertEquals(stableSnapshot, failed.activeSnapshotAfter().orElseThrow());
-        ProjectIndexState state = lifecycle.projectState(projectId);
+        ProjectIndexState state = lifecycle.recoverProjectState(projectId);
         assertEquals(ProjectIndexState.Availability.STALE, state.availability());
         assertEquals(stableSnapshot, state.activeSnapshotId().orElseThrow());
     }
