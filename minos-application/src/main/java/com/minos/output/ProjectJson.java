@@ -2,8 +2,10 @@ package com.minos.output;
 
 import com.minos.application.ProjectSummary;
 import com.minos.orchestration.ResumableRunSummary;
+import com.minos.registry.DegradedEntry;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,6 +39,12 @@ public final class ProjectJson {
                 "lastSuccessfulIndexAt", project.lastSuccessfulIndexAt(),
                 "providerId", project.providerId(),
                 "providerVersion", project.providerVersion());
+    }
+
+    /** Les entrées d'inventaire dégradées (Q8) : identifiant d'entrée et raison publique, dans l'ordre reçu. */
+    public static List<Map<String, Object>> degraded(List<DegradedEntry> entries) {
+        Objects.requireNonNull(entries, "entries");
+        return entries.stream().map(entry -> object("entry", entry.entry(), "reason", entry.reason())).toList();
     }
 
     /**

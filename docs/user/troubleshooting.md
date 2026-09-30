@@ -266,6 +266,18 @@ Si aucun snapshot n’existe encore :
 minos.cmd index <project>
 ```
 
+## `project list` sort avec le code 3
+
+Diagnostic :
+
+```powershell
+minos.cmd project list --format json
+```
+
+Le code 3 veut dire « inventaire partiel » : les projets lisibles sont listés, et une ou plusieurs entrées sont abîmées. Elles figurent dans la liste à l'état `UNREADABLE` et dans `degraded` (identifiant d'entrée et raison, sans chemin). Le fichier concerné est `registry/projects/<identifiant>.properties` du `MINOS_HOME`, ou `cli-index-history/<identifiant>.properties` pour un historique.
+
+Correction : réparer ou supprimer l'entrée nommée (un projet supprimé du registre se réenregistre avec `project add`), puis relancer `project list` : le code 0 confirme que l'inventaire est complet.
+
 ## Changer temporairement de home
 
 ```powershell

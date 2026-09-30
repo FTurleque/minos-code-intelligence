@@ -64,6 +64,10 @@ index-status <project> [--format <text|json>]
 
 Les lectures d'état (`index-status`, `inspect`, `project list`, outils MCP `minos_index_status` et `minos_project_structure`) ne prennent aucun bail et n'écrivent rien : pendant une indexation elles répondent immédiatement avec le dernier état publié par le run (`INDEXING` tant que le run n'a pas publié sa fin) au lieu d'attendre le bail d'indexation puis d'échouer. Le snapshot actif rapporté est toujours l'autoritaire ; l'état publié peut avoir un court retard sur lui, et c'est le prochain run qui le répare.
 
+`project list` isole les entrées abîmées : un fichier du registre illisible (date ou identifiant invalides, fichier tronqué, entrée remplacée par un répertoire), un historique d'indexation abîmé ou un répertoire illisible sous la racine d'un projet dégradent **ce** projet et pas l'inventaire. Le projet concerné reste une ligne de la liste, à l'état `UNREADABLE` (`-` pour son nom et sa racine quand c'est le registre lui-même qui est illisible), et la commande **sort avec le code 3** au lieu de 0. En texte, les lignes sont suivies d'un pied `degraded: <N>` puis d'une ligne `  <entrée>: <raison>` par entrée dégradée ; en JSON, les clés `degradedCount` et `degraded` (`[{"entry": …, "reason": …}]`) suivent `count` et `projects`. `count` compte toutes les lignes, dégradées comprises. Un avertissement `warning: project inventory is partial: <N> of <total> entries are degraded` est écrit sur la sortie d'erreur. Les raisons ne portent aucun chemin absolu ; `minos inspect <identifiant>` sur le projet concerné donne l'erreur complète. Sans entrée dégradée, la sortie et le code 0 sont inchangés, sans aucune de ces clés. Un registre qui ne peut pas être listé du tout (le répertoire `registry/projects` lui-même est illisible) échoue en bloc avec le code 1 : il n'y a alors rien à rapporter entrée par entrée.
+
+Les commandes qui écrivent ou résolvent par nom (`project add`, `inspect <nom>`) continuent d'échouer (code 1) tant qu'une entrée du registre est illisible : elles ne peuvent pas prouver qu'elles n'agissent pas sur l'entrée abîmée. Adresser un projet sain par son identifiant reste possible.
+
 Le catalogue provider courant couvre Java/Kotlin, TypeScript, Python, C/C++, C#, Go et Rust selon les profils et plateformes explicitement qualifiés. Une détection de langage/build ne vaut jamais preuve qu'un provider donné offre toutes les capabilities avancées.
 
 ## Diagnostic runtime
@@ -451,7 +455,10 @@ Toutes les commandes partagent le même analyseur d'arguments :
 0  succès
 1  erreur d'exécution / diagnostic action requise
 2  erreur d'usage
+3  résultat partiel (`project list` seulement)
 ```
+
+Le code 3 distingue « tout va bien » de « inventaire partiel » : la sortie standard est valide et complète pour ce qui a pu être lu, mais au moins une entrée a été dégradée (comptée et affichée, voir [Administration des projets](#administration-des-projets)). Seule `project list` le rend ; aucune autre commande ne change de code. Un script qui traite tout code non nul comme un échec doit donc accepter 3 s'il veut lire l'inventaire partiel.
 
 Le code 2 est réservé aux erreurs d'usage détectées à l'analyse des arguments, avant tout appel de service. Une erreur levée ensuite par un service (projet inconnu, par exemple) est une erreur d'exécution (code 1), y compris pour les opérations `ide`.
 
