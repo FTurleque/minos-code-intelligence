@@ -106,10 +106,10 @@ public final class ToolsCommand {
             String provider = null;
             int optionsFrom = 1;
             if ("install".equals(action)) {
-                if (arguments.length < 2 || arguments[1] == null || arguments[1].startsWith("-")) {
+                if (arguments.length < 2) {
                     throw new IllegalArgumentException("tools install requires <provider>");
                 }
-                provider = arguments[1];
+                provider = CliCommandSupport.operand(arguments[1], "provider");
                 optionsFrom = 2;
             }
             CliOptions options = OPTIONS.parse(arguments, optionsFrom);
