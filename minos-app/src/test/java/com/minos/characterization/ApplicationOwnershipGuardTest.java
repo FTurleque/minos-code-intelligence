@@ -45,8 +45,12 @@ class ApplicationOwnershipGuardTest {
     /** Fichier de production -> pourquoi il peut créer une application sans try-avec-ressources. */
     private static final Map<String, String> OWNERS = new LinkedHashMap<>();
 
-    /** Fichier de production -> fragment de source qui prouve que l'application est fermée. */
-    private static final Map<String, String> CLOSING_EVIDENCE = new LinkedHashMap<>();
+    /**
+     * Fichier de production -> fragments de source qui prouvent que l'application est fermée. Pour le routeur MCP et
+     * le lanceur, le second fragment verrouille le câblage de production (l'ouverture réelle est injectée dans la
+     * méthode qui ferme) : aucun test ne peut ouvrir une vraie application avec un magasin espion.
+     */
+    private static final Map<String, List<String>> CLOSING_EVIDENCE = new LinkedHashMap<>();
 
     static {
         OWNERS.put("minos-application/src/main/java/com/minos/application/LocalProjectOperations.java",
@@ -63,21 +67,23 @@ class ApplicationOwnershipGuardTest {
                 "référence MinosApplication::open injectée dans launch(), qui ferme dans un try-avec-ressources");
 
         CLOSING_EVIDENCE.put("minos-application/src/main/java/com/minos/application/LocalProjectOperations.java",
-                "ownedApplication.close()");
+                List.of("ownedApplication.close()"));
         CLOSING_EVIDENCE.put("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java",
-                "ownedApplication.close()");
+                List.of("ownedApplication.close()"));
         CLOSING_EVIDENCE.put("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java",
-                "ownedApplication.close()");
+                List.of("ownedApplication.close()"));
         CLOSING_EVIDENCE.put("minos-api/src/main/java/com/minos/api/LocalMinosApi.java",
-                "if (!ownsApplication) return;");
+                List.of("if (!ownsApplication) return;"));
         CLOSING_EVIDENCE.put("minos-api/src/main/java/com/minos/api/LocalMinosMultiRepositoryApi.java",
-                "if (!ownsApplication) return;");
+                List.of("if (!ownsApplication) return;"));
         CLOSING_EVIDENCE.put("minos-api/src/main/java/com/minos/api/LocalProviderPlatformApi.java",
-                "if (!ownsApplication) return;");
+                List.of("if (!ownsApplication) return;"));
         CLOSING_EVIDENCE.put("minos-app/src/main/java/com/minos/app/McpBackendRouter.java",
-                "try (MinosApplication application = opener.open(home))");
+                List.of("try (MinosApplication application = opener.open(home))",
+                        "this(serving(MinosApplication::open, MinosMcpServer::run),"));
         CLOSING_EVIDENCE.put("minos-cli/src/main/java/com/minos/cli/MinosLauncher.java",
-                "try (MinosApplication application = opener.open(home))");
+                List.of("try (MinosApplication application = opener.open(home))",
+                        "MinosApplication::open, MinosLauncher::run));"));
     }
 
     @Test
@@ -107,11 +113,13 @@ class ApplicationOwnershipGuardTest {
                 stale.add(owner + " : ne crée plus d'application, retirer l'entrée");
             }
         }
-        for (Map.Entry<String, String> evidence : CLOSING_EVIDENCE.entrySet()) {
+        for (Map.Entry<String, List<String>> evidence : CLOSING_EVIDENCE.entrySet()) {
             String source = Files.readString(ROOT.resolve(evidence.getKey()), StandardCharsets.UTF_8)
                     .replaceAll("\\s+", " ");
-            if (!source.contains(evidence.getValue())) {
-                stale.add(evidence.getKey() + " : la preuve de fermeture « " + evidence.getValue() + " » a disparu");
+            for (String fragment : evidence.getValue()) {
+                if (!source.contains(fragment)) {
+                    stale.add(evidence.getKey() + " : la preuve de fermeture « " + fragment + " » a disparu");
+                }
             }
         }
         assertEquals(List.of(), stale);
