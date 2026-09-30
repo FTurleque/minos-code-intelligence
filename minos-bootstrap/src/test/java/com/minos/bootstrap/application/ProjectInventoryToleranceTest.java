@@ -1,6 +1,7 @@
 package com.minos.bootstrap.application;
 
 import com.minos.application.ProjectInspectionService;
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.discovery.DefaultDiscoveryPlugins;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.discovery.spi.ProjectDetector;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -89,7 +91,7 @@ class ProjectInventoryToleranceTest {
     private void assertPublic(DegradedEntry entry) {
         String text = entry.entry() + " " + entry.reason();
         assertFalse(text.contains(temp.toString()), text);
-        assertFalse(text.contains("\\") || text.contains("/"), text);
+        assertFalse(PublicErrorMessages.looksSensitive(text), text);
     }
 
     /** Un détecteur qui échoue comme le parcours de fichiers quand un répertoire est illisible ({@code visitFileFailed}). */
@@ -230,6 +232,25 @@ class ProjectInventoryToleranceTest {
         ProjectInspectionService service = inspection(new ProjectDiscoveryService());
 
         assertThrows(IOException.class, service::inventory);
+    }
+
+    @Test
+    void anInterruptionWhileAssemblingAViewIsRethrownInsteadOfDegradingTheProject() throws IOException {
+        registerProjects(2);
+        List<ProjectDetector> detectors = new ArrayList<>(DefaultDiscoveryPlugins.projectDetectors());
+        detectors.add((projectRoot, directory, ignorePolicy) -> {
+            Thread.currentThread().interrupt();
+            throw new UncheckedIOException(new ClosedByInterruptException());
+        });
+        ProjectInspectionService service = inspection(new ProjectDiscoveryService(detectors,
+                DefaultDiscoveryPlugins.buildSystemDetectors(), DefaultDiscoveryPlugins.sourceRootDetectors(),
+                DefaultDiscoveryPlugins.languageDetectors()));
+        try {
+            assertThrows(ClosedByInterruptException.class, service::inventory);
+            assertTrue(Thread.currentThread().isInterrupted(), "the interruption is still pending for the caller");
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test

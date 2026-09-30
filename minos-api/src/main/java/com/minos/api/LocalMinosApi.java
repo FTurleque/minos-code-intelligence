@@ -4,6 +4,7 @@ import com.minos.application.LocalProjectOperations;
 import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectOperations;
+import com.minos.application.ProjectSummary;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.architecture.ArchitectureIntelligenceView;
 import com.minos.architecture.ArchitectureModule;
@@ -250,7 +251,10 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
     }
 
     private ProjectDto project(ProjectOperations.ProjectView view) {
-        Optional<ResumableRunSummary> resumable = resumableRun(view.id());
+        // A row the inventory could not read (Q8) offers nothing: its state store may be the damaged part.
+        Optional<ResumableRunSummary> resumable = ProjectSummary.UNREADABLE_STATE.equals(view.indexState())
+                ? Optional.empty()
+                : resumableRun(view.id());
         Instant now = Instant.now();
         return new ProjectDto(
                 view.id(), view.name(), view.rootPath(), view.rootAvailable(),

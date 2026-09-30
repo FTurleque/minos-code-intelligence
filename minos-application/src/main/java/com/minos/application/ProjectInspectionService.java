@@ -34,6 +34,7 @@ import static com.minos.domain.Preconditions.requireText;
 public final class ProjectInspectionService {
 
     private static final long MAX_HISTORY_PROPERTIES_BYTES = 64L * 1024L;
+    private static final String PLACEHOLDER = "-";
 
     private final ProjectRegistry registry;
     private final ProjectResolver projectResolver;
@@ -76,14 +77,39 @@ public final class ProjectInspectionService {
     }
 
     public List<ProjectView> listProjects() throws IOException {
-        List<ProjectView> projects = new ArrayList<>();
-        for (RegisteredProject project : registry.listProjects()) projects.add(view(project));
-        return List.copyOf(projects);
+        return inventory().projects();
     }
 
-    /** Every project of the registry, and what could not be read of it (Q8). */
+    /**
+     * Every project of the registry, each in its own failure domain (Q8): an entry the registry cannot read, or a
+     * project whose view cannot be assembled (unreadable history or state, unreadable directory under its root),
+     * is a row in the state {@value ProjectSummary#UNREADABLE_STATE} and one {@link DegradedEntry}, never a failure of the whole
+     * inventory and never a row that vanishes. A registry that cannot be listed at all still fails. An
+     * interruption is not a damaged entry: it is rethrown.
+     */
     public Inventory inventory() throws IOException {
-        return new Inventory(listProjects(), List.of());
+        ProjectRegistry.Inventory registered = registry.inventory();
+        List<ProjectView> views = new ArrayList<>();
+        List<DegradedEntry> degraded = new ArrayList<>(registered.unreadable());
+        registered.unreadable().forEach(entry -> views.add(unreadableView(entry.entry(), PLACEHOLDER, PLACEHOLDER)));
+        for (RegisteredProject project : registered.projects()) {
+            try {
+                views.add(view(project));
+            } catch (IOException | RuntimeException failure) {
+                if (Thread.currentThread().isInterrupted()) throw failure;
+                String id = project.id().toString();
+                views.add(unreadableView(id, project.displayName(), project.rootPath().toString()));
+                degraded.add(DegradedEntry.of(id, "project view could not be assembled", failure));
+            }
+        }
+        views.sort(Comparator.comparing(ProjectView::id));
+        degraded.sort(Comparator.comparing(DegradedEntry::entry));
+        return new Inventory(views, degraded);
+    }
+
+    private static ProjectView unreadableView(String id, String name, String rootPath) {
+        return new ProjectView(id, name, rootPath, false, List.of(), List.of(), 0, ProjectSummary.UNREADABLE_STATE,
+                null, null, null, null);
     }
 
     public ProjectView inspectProject(String projectIdentifier) throws IOException {
