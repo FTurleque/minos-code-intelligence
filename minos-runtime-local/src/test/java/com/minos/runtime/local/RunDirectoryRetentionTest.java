@@ -235,8 +235,7 @@ class RunDirectoryRetentionTest {
     }
 
     @Test
-    void aMarkedRunAlwaysExpiresAtTheExplicitUpperBoundEvenWhenTheScanIsTruncated(@TempDir Path home)
-            throws Exception {
+    void aMarkedRunAlwaysExpiresAtTheExplicitUpperBound(@TempDir Path home) throws Exception {
         // R5 disk-leak guard: the marker protects, it never pins runs/ forever.
         Path runs = home.resolve("runs");
         Instant now = Instant.parse("2026-09-26T12:00:00Z");
@@ -253,6 +252,63 @@ class RunDirectoryRetentionTest {
         RunDirectoryRetention.prune(runs, null, policy, now.plusSeconds(2),
                 new RunDirectoryRetention.Budgets(1_000_000L, 4_096L, 250_000L));
         assertFalse(Files.exists(justInside), "and it expires as soon as the bound is crossed");
+    }
+
+    @Test
+    void aMarkedRunAlsoExpiresAtTheUpperBoundWhenTheScanIsTruncated(@TempDir Path home) throws Exception {
+        // V-L1-02: the scan really is truncated here (one entry observed per pass, two runs present).
+        Path runs = home.resolve("runs");
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        Duration bound = RunDirectoryRetention.DEFAULT.lifetime(true);
+        Instant tooOld = now.minus(bound).minusSeconds(1);
+        markedRun(runs, "expired-a", tooOld, tooOld);
+        markedRun(runs, "expired-b", tooOld, tooOld);
+        RunDirectoryRetention.Budgets oneEntryPerPass = new RunDirectoryRetention.Budgets(1_000_000L, 1L, 250_000L);
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, now, oneEntryPerPass);
+        try (var children = Files.list(runs)) {
+            assertEquals(1L, children.count(), "the truncated pass reclaims the expired run it observed, not the other");
+        }
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, now, oneEntryPerPass);
+        try (var children = Files.list(runs)) {
+            assertEquals(0L, children.count(), "the next pass finishes: a marker never pins runs/");
+        }
+    }
+
+    @Test
+    void aMarkerDatedInTheFutureNeverPinsARunBeyondOneLifetimeFromWhenItWasSeen(@TempDir Path home) throws Exception {
+        // V-L1-01: a clock that jumped forward while the marker was written must not keep the run for the
+        // jump plus seven days. The first pass that sees the impossible date re-dates it to now.
+        Path runs = home.resolve("runs");
+        Instant seen = Instant.parse("2026-09-26T12:00:00Z");
+        Duration bound = RunDirectoryRetention.DEFAULT.lifetime(true);
+        Path pinned = markedRun(runs, "future-marker", seen.plus(Duration.ofDays(365)), seen.minus(Duration.ofDays(30)));
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, seen);
+        assertTrue(Files.exists(pinned), "the pass that sees the impossible date cannot tell the age: it keeps the run");
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, seen.plus(bound).minusSeconds(1));
+        assertTrue(Files.exists(pinned), "still inside one lifetime from when the date was seen");
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, seen.plus(bound).plusSeconds(1));
+        assertFalse(Files.exists(pinned), "and gone one lifetime after it was seen, not a year later");
+    }
+
+    @Test
+    void aRunDirectoryDatedInTheFutureIsRedatedAndExpiresLikeAnyOther(@TempDir Path home) throws Exception {
+        Path runs = home.resolve("runs");
+        Instant seen = Instant.parse("2026-09-26T12:00:00Z");
+        Path pinned = markedRun(runs, "future-run", seen.plus(Duration.ofDays(365)), seen.plus(Duration.ofDays(365)));
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, seen);
+        assertTrue(Files.exists(pinned));
+        assertFalse(Files.getLastModifiedTime(pinned).toInstant().isAfter(seen), "the directory date was re-dated");
+        assertFalse(Files.getLastModifiedTime(pinned.resolve(FileResumableRunMarkers.MARKER_FILE_NAME))
+                .toInstant().isAfter(seen), "and so was the marker's");
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT,
+                seen.plus(RunDirectoryRetention.DEFAULT.lifetime(true)).plusSeconds(1));
+        assertFalse(Files.exists(pinned));
     }
 
     @Test

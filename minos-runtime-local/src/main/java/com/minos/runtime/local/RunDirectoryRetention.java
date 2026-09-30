@@ -109,7 +109,15 @@ final class RunDirectoryRetention {
         int retainedCount = entries.size();
 
         for (Entry entry : entries) {
-            boolean expired = entry.ageReference().toInstant().isBefore(now.minus(policy.lifetime(entry.resumable())));
+            // A date in the future (a clock that jumped forward while the marker or the run was written)
+            // cannot date anything: it is re-dated to now, once, so the lifetime counts from the moment
+            // retention first saw it instead of from a point that may never arrive.
+            Instant reference = entry.ageReference().toInstant();
+            if (reference.isAfter(now)) {
+                redateToNow(entry, now);
+                reference = now;
+            }
+            boolean expired = reference.isBefore(now.minus(policy.lifetime(entry.resumable())));
             // A truncated listing means the retained set was not fully measured: it justifies reclaiming
             // the unmarked residue that was observed, never a run held by a marker (R5).
             boolean overCount = retainedCount > policy.maxEntries() || (scan.truncated() && !entry.resumable());
@@ -302,6 +310,20 @@ final class RunDirectoryRetention {
             }
         }
         return new Entry(run, lastModified, bytes[0], reclaimFirst[0], resumableSince);
+    }
+
+    /** Best effort: a date that cannot be rewritten only leaves the run for the next passes to re-date. */
+    private static void redateToNow(Entry entry, Instant now) {
+        FileTime present = FileTime.from(now);
+        try {
+            if (entry.lastModified().toInstant().isAfter(now)) Files.setLastModifiedTime(entry.path(), present);
+            if (entry.resumableSince().filter(since -> since.toInstant().isAfter(now)).isPresent()) {
+                Files.setLastModifiedTime(entry.path().resolve(FileResumableRunMarkers.MARKER_FILE_NAME), present);
+            }
+        } catch (IOException failure) {
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not re-date a run directory written in the future: "
+                    + failure.getClass().getSimpleName());
+        }
     }
 
     /** The interruption time of a run offered for resume: its marker's modification time. */
