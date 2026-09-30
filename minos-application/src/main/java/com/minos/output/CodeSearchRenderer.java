@@ -15,12 +15,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
+import static com.minos.output.DeterministicJson.quote;
+
 /**
  * Rendu compact TEXT/JSON des recherches et sources M4.
  */
 public final class CodeSearchRenderer {
-
-    private static final char[] HEX = "0123456789abcdef".toCharArray();
 
     private CodeSearchRenderer() {
     }
@@ -316,7 +316,7 @@ public final class CodeSearchRenderer {
 
     private static void nullableNumberField(StringBuilder output, String name, Double value) {
         name(output, name);
-        output.append(value == null ? "null" : Double.toString(value)).append(',');
+        output.append(value == null ? "null" : DeterministicJson.number(value)).append(',');
     }
 
     private static void booleanField(StringBuilder output, String name, boolean value) {
@@ -332,37 +332,5 @@ public final class CodeSearchRenderer {
         if (!output.isEmpty() && output.charAt(output.length() - 1) == ',') {
             output.setLength(output.length() - 1);
         }
-    }
-
-    private static String quote(String value) {
-        StringBuilder escaped = new StringBuilder(value.length() + 2).append('"');
-        for (int index = 0; index < value.length(); index++) {
-            char current = value.charAt(index);
-            switch (current) {
-                case '"' -> escaped.append("\\\"");
-                case '\\' -> escaped.append("\\\\");
-                case '\b' -> escaped.append("\\b");
-                case '\f' -> escaped.append("\\f");
-                case '\n' -> escaped.append("\\n");
-                case '\r' -> escaped.append("\\r");
-                case '\t' -> escaped.append("\\t");
-                default -> {
-                    if (Character.isHighSurrogate(current) && index + 1 < value.length()
-                            && Character.isLowSurrogate(value.charAt(index + 1))) {
-                        escaped.append(current).append(value.charAt(++index));
-                    } else if (Character.isSurrogate(current) || current < 0x20
-                            || current == '\u2028' || current == '\u2029') {
-                        escaped.append("\\u")
-                                .append(HEX[current >>> 12 & 0xF])
-                                .append(HEX[current >>> 8 & 0xF])
-                                .append(HEX[current >>> 4 & 0xF])
-                                .append(HEX[current & 0xF]);
-                    } else {
-                        escaped.append(current);
-                    }
-                }
-            }
-        }
-        return escaped.append('"').toString();
     }
 }

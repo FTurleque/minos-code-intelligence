@@ -8,12 +8,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
+import static com.minos.output.DeterministicJson.quote;
+
 /**
  * Rend les résultats de symboles sous une forme déterministe et bornée.
  */
 public final class SymbolResultRenderer {
-
-    private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
 
     private SymbolResultRenderer() {
     }
@@ -171,44 +171,5 @@ public final class SymbolResultRenderer {
 
     private static void appendJsonName(StringBuilder output, String name) {
         output.append(quote(name)).append(':');
-    }
-
-    private static String quote(String value) {
-        StringBuilder escaped = new StringBuilder(value.length() + 2).append('"');
-        for (int index = 0; index < value.length(); index++) {
-            char current = value.charAt(index);
-            switch (current) {
-                case '"' -> escaped.append("\\\"");
-                case '\\' -> escaped.append("\\\\");
-                case '\b' -> escaped.append("\\b");
-                case '\f' -> escaped.append("\\f");
-                case '\n' -> escaped.append("\\n");
-                case '\r' -> escaped.append("\\r");
-                case '\t' -> escaped.append("\\t");
-                default -> {
-                    if (Character.isHighSurrogate(current)
-                            && index + 1 < value.length()
-                            && Character.isLowSurrogate(value.charAt(index + 1))) {
-                        escaped.append(current).append(value.charAt(++index));
-                    } else if (Character.isSurrogate(current)
-                            || current < 0x20
-                            || current == '\u2028'
-                            || current == '\u2029') {
-                        appendUnicodeEscape(escaped, current);
-                    } else {
-                        escaped.append(current);
-                    }
-                }
-            }
-        }
-        return escaped.append('"').toString();
-    }
-
-    private static void appendUnicodeEscape(StringBuilder output, char value) {
-        output.append("\\u");
-        output.append(HEX_DIGITS[value >>> 12 & 0xF]);
-        output.append(HEX_DIGITS[value >>> 8 & 0xF]);
-        output.append(HEX_DIGITS[value >>> 4 & 0xF]);
-        output.append(HEX_DIGITS[value & 0xF]);
     }
 }

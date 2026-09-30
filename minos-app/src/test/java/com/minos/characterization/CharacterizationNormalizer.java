@@ -1,19 +1,13 @@
 package com.minos.characterization;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.minos.output.DeterministicJson;
-
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * A2 — normalisation explicite des sorties de caractérisation.
@@ -22,7 +16,6 @@ import java.util.stream.Stream;
  * remplacées ; tout le reste de la sortie est comparé octet pour octet au fichier de référence.
  * Les règles, appliquées dans cet ordre, sont exhaustives :</p>
  * <ol>
- *   <li><b>Maps sans ordre contractuel</b> : voir {@link #canonicalizeUnorderedMaps(String)}.</li>
  *   <li><b>Fin de ligne de la plateforme</b> : {@code \r\n} devient {@code \n}.</li>
  *   <li><b>Répertoires d'exécution</b> : le répertoire temporaire du test devient {@code <TEMP>}
  *       et la racine absolue du dépôt (emplacement de l'extraction) devient {@code <REPO>} — chacun
@@ -41,6 +34,10 @@ import java.util.stream.Stream;
  *       somme des durées d'une enveloppe d'observations importée) reste comparée.</li>
  *   <li><b>Runtimes de providers de l'hôte</b> : voir {@link #normalizeProviderRuntimeHostFacts(String)}.</li>
  * </ol>
+ * <p><b>L'ordre des clés n'est jamais normalisé</b> (Q6) : il est comparé octet pour octet comme le reste.
+ * Jusqu'à Q6, cinq familles de sorties étaient réémises triées par clé parce que leur ordre changeait
+ * d'une JVM à l'autre ({@code Map.of}/{@code Map.copyOf}) ; elles ont maintenant un ordre défini par le
+ * code et ce masque a été retiré, de sorte qu'un retour de l'ordre aléatoire fait échouer les golden.</p>
  * <p>L'identifiant de projet, que le registre tire au hasard et dont dérivent les identifiants de
  * symbole, n'est pas normalisé ici : le test le fige sur disque juste après l'enregistrement.</p>
  * <p>Pour {@code doctor} uniquement, {@link #normalizeHostFacts(String)} remplace en plus les faits
@@ -50,14 +47,6 @@ final class CharacterizationNormalizer {
 
     private static final Pattern UUID = Pattern.compile(
             "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
-    private static final ObjectMapper JSON = new ObjectMapper();
-    /** Clés JSON dont la valeur (ou chaque élément, pour un tableau) est une map sans ordre contractuel. */
-    private static final Set<String> UNORDERED_MAP_KEYS = Set.of("capabilities", "providerProfiles");
-    private static final String ROOT = "<root>";
-    private static final Set<String> RUNTIME_SESSIONS_ROOT_KEYS = Set.of("nature", "exhaustive", "sessions", "limitations");
-    /** Idem, dans la seule sortie git-activity ({@code "nature":"FACTUAL_ACTIVITY"}) : requête, fichiers et zones (Map.of). */
-    private static final Set<String> GIT_ACTIVITY_UNORDERED_MAP_KEYS = Set.of("query", "files", "zones");
-    private static final Pattern TEXT_CAPABILITIES = Pattern.compile("(?m)^(\\s*capabilities: \\{)([^}\\n]*)\\}$");
     private static final Pattern DERIVED_HASH = Pattern.compile(
             "((?:\"(?:repositoryId|previousHash|hash)\":\"|\\b(?:repositoryId|previousHash|hash)[=:] ?))([0-9a-f]{64})\\b");
     private static final Pattern INSTANT = Pattern.compile(
@@ -121,7 +110,7 @@ final class CharacterizationNormalizer {
     }
 
     String normalize(String raw) {
-        String value = canonicalizeUnorderedMaps(raw.replace("\r\n", "\n"));
+        String value = raw.replace("\r\n", "\n");
         // Graphies triées de la plus longue à la plus courte (voir le constructeur).
         for (Map.Entry<String, String> entry : directories.entrySet()) {
             value = value.replace(entry.getKey(), entry.getValue());
@@ -196,76 +185,6 @@ final class CharacterizationNormalizer {
         result = result.replaceAll("(\\bruntimeState=)[A-Z_]+", "$1<host>");
         result = result.replaceAll("(\\bruntimeDiagnostics=)\\[[^\\]]*\\]", "$1<host>");
         return result;
-    }
-
-    /**
-     * Ordre des clés des maps sans ordre contractuel. {@code ProviderView.capabilities} est un
-     * {@code Map.copyOf}, chaque profil {@code providerProfiles} du MCP est un {@code Map.copyOf}, les
-     * objets {@code query}, {@code files}, {@code zones} de git-activity et la racine de
-     * {@code RuntimeIntelligenceRenderer.renderSessions} ({@code Map.of}) aussi :
-     * leur ordre d'itération change d'une JVM à l'autre (non-déterminisme préexistant, hors A2). Ces
-     * maps-là, et elles seules, sont réémises triées par clé avec le moteur JSON du produit, après
-     * vérification que la sortie brute se relit et se réémet à l'octet près (sinon le test échoue au
-     * lieu de masquer une différence de rendu). Rendu texte : la ligne {@code capabilities: {..}} est
-     * triée de la même façon.
-     */
-    static String canonicalizeUnorderedMaps(String value) {
-        String trimmed = value.strip();
-        if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-            return TEXT_CAPABILITIES.matcher(value).replaceAll(match -> Matcher.quoteReplacement(
-                    match.group(1) + String.join(", ", Stream.of(match.group(2).split(", ")).sorted().toList()) + "}"));
-        }
-        Object tree;
-        try {
-            tree = JSON.readValue(trimmed, Object.class);
-        } catch (IOException notJson) {
-            return value;
-        }
-        Set<String> unordered = unorderedKeys(tree);
-        if (!containsUnorderedMap(tree, ROOT, unordered)) return value;
-        String reEmitted = DeterministicJson.render(tree);
-        if (!reEmitted.equals(trimmed)) {
-            throw new AssertionError("JSON output does not re-emit byte for byte; refusing to canonicalize it:\n" + trimmed);
-        }
-        return value.replace(trimmed, DeterministicJson.render(canonical(tree, ROOT, unordered)));
-    }
-
-    private static Set<String> unorderedKeys(Object tree) {
-        if (tree instanceof Map<?, ?> map && "FACTUAL_ACTIVITY".equals(map.get("nature"))) {
-            return Stream.concat(UNORDERED_MAP_KEYS.stream(), GIT_ACTIVITY_UNORDERED_MAP_KEYS.stream())
-                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        }
-        // RuntimeIntelligenceRenderer.renderSessions émet un Map.of : seul son niveau racine est concerné.
-        if (tree instanceof Map<?, ?> map && map.keySet().equals(RUNTIME_SESSIONS_ROOT_KEYS)) {
-            return Stream.concat(UNORDERED_MAP_KEYS.stream(), Stream.of(ROOT))
-                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        }
-        return UNORDERED_MAP_KEYS;
-    }
-
-    private static boolean containsUnorderedMap(Object node, String key, Set<String> unordered) {
-        if (node instanceof Map<?, ?> map) {
-            if (key != null && unordered.contains(key)) return true;
-            return map.entrySet().stream()
-                    .anyMatch(entry -> containsUnorderedMap(entry.getValue(), String.valueOf(entry.getKey()), unordered));
-        }
-        if (node instanceof List<?> list) {
-            return list.stream().anyMatch(element -> containsUnorderedMap(element, key, unordered));
-        }
-        return false;
-    }
-
-    private static Object canonical(Object node, String key, Set<String> unordered) {
-        if (node instanceof Map<?, ?> map) {
-            Map<String, Object> result = key != null && unordered.contains(key) ? new TreeMap<>() : new LinkedHashMap<>();
-            map.forEach((childKey, child) ->
-                    result.put(String.valueOf(childKey), canonical(child, String.valueOf(childKey), unordered)));
-            return result;
-        }
-        if (node instanceof List<?> list) {
-            return list.stream().map(element -> canonical(element, key, unordered)).toList();
-        }
-        return node;
     }
 
     /**

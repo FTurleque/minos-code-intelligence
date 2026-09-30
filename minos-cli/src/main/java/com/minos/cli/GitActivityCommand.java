@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.output.DeterministicJson.object;
+
 /** CLI adapter exposing the existing factual Git intelligence to external IDE clients. */
 public final class GitActivityCommand {
 
@@ -86,7 +88,7 @@ public final class GitActivityCommand {
         root.put("nature", "FACTUAL_ACTIVITY");
         root.put("importanceInference", false);
         root.put("repository", repositoryMap(report.repository()));
-        root.put("query", Map.of(
+        root.put("query", object(
                 "since", report.query().since().toString(),
                 "maxCommits", report.query().maxCommits(),
                 "maxFiles", report.query().maxFiles(),
@@ -128,7 +130,7 @@ public final class GitActivityCommand {
     }
 
     private static Map<String, Object> fileMap(GitIntelligence.FileActivity file) {
-        return Map.of(
+        return object(
                 "path", file.path(),
                 "commitCount", file.commitCount(),
                 "uniqueAuthorCount", file.uniqueAuthorCount(),
@@ -138,7 +140,7 @@ public final class GitActivityCommand {
     }
 
     private static Map<String, Object> zoneMap(GitIntelligence.ZoneActivity zone) {
-        return Map.of(
+        return object(
                 "zone", zone.zone(),
                 "commitTouches", zone.commitTouches(),
                 "distinctFileCount", zone.distinctFileCount(),

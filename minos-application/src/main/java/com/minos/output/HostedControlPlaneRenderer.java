@@ -44,7 +44,7 @@ public final class HostedControlPlaneRenderer {
     }
 
     public static String renderWorkspaces(List<SharedWorkspace> values) {
-        return DeterministicJson.render(Map.of(
+        return DeterministicJson.render(DeterministicJson.object(
                 "isolation", "TENANT_SCOPED",
                 "workspaces", values.stream().map(HostedControlPlaneRenderer::workspaceMap).toList()));
     }
@@ -54,13 +54,13 @@ public final class HostedControlPlaneRenderer {
     }
 
     public static String renderMembers(List<HostedPrincipal> values) {
-        return DeterministicJson.render(Map.of(
+        return DeterministicJson.render(DeterministicJson.object(
                 "isolation", "TENANT_SCOPED",
                 "members", values.stream().map(HostedControlPlaneRenderer::memberMap).toList()));
     }
 
     public static String renderAudit(List<HostedAuditEvent> values) {
-        return DeterministicJson.render(Map.of(
+        return DeterministicJson.render(DeterministicJson.object(
                 "integrity", "HMAC_SHA256_CHAINED",
                 "events", values.stream().map(HostedControlPlaneRenderer::auditMap).toList()));
     }

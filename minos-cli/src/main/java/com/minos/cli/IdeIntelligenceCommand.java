@@ -22,6 +22,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.output.DeterministicJson.object;
+
 /**
  * Additive M21-S6 transport for IntelliJ M19/M20 parity.
  *
@@ -397,15 +399,6 @@ final class IdeIntelligenceCommand {
 
     private static String message(RuntimeException exception) {
         return CliCommandSupport.failureMessage(exception);
-    }
-
-    private static Map<String, Object> object(Object... pairs) {
-        if (pairs.length % 2 != 0) throw new IllegalArgumentException("object requires key/value pairs");
-        Map<String, Object> value = new LinkedHashMap<>();
-        for (int index = 0; index < pairs.length; index += 2) {
-            value.put(String.valueOf(pairs[index]), pairs[index + 1]);
-        }
-        return value;
     }
 
     private record Options(Map<String, String> values) {

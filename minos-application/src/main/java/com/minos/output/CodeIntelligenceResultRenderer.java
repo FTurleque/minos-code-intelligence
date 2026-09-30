@@ -11,12 +11,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
+import static com.minos.output.DeterministicJson.quote;
+
 /**
  * Rendu déterministe TEXT/JSON des résultats d'occurrences et de relations M3.
  */
 public final class CodeIntelligenceResultRenderer {
-
-    private static final char[] HEX = "0123456789abcdef".toCharArray();
 
     private CodeIntelligenceResultRenderer() {
     }
@@ -79,7 +79,7 @@ public final class CodeIntelligenceResultRenderer {
             field(lines, 2, "nature", relationship.nature().name());
             field(lines, 2, "confidence", relationship.confidence() == null
                     ? "null"
-                    : Double.toString(relationship.confidence()));
+                    : DeterministicJson.number(relationship.confidence()));
             appendLocationText(lines, relationship.location());
             appendOriginText(lines, relationship.origin());
             field(lines, 2, "evidenceCount", Integer.toString(relationship.evidence().size()));
@@ -161,7 +161,7 @@ public final class CodeIntelligenceResultRenderer {
             name(output, "confidence");
             output.append(relationship.confidence() == null
                     ? "null"
-                    : Double.toString(relationship.confidence())).append(',');
+                    : DeterministicJson.number(relationship.confidence())).append(',');
             name(output, "origin");
             appendOriginJson(output, relationship.origin());
             output.append(',');
@@ -192,7 +192,7 @@ public final class CodeIntelligenceResultRenderer {
             appendLocationJson(output, item.location());
             output.append(',');
             name(output, "weight");
-            output.append(item.weight() == null ? "null" : Double.toString(item.weight()));
+            output.append(item.weight() == null ? "null" : DeterministicJson.number(item.weight()));
             output.append('}');
         }
         output.append(']');
@@ -279,38 +279,5 @@ public final class CodeIntelligenceResultRenderer {
 
     private static void name(StringBuilder output, String name) {
         output.append(quote(name)).append(':');
-    }
-
-    private static String quote(String value) {
-        StringBuilder output = new StringBuilder(value.length() + 2).append('"');
-        for (int index = 0; index < value.length(); index++) {
-            char current = value.charAt(index);
-            switch (current) {
-                case '"' -> output.append("\\\"");
-                case '\\' -> output.append("\\\\");
-                case '\b' -> output.append("\\b");
-                case '\f' -> output.append("\\f");
-                case '\n' -> output.append("\\n");
-                case '\r' -> output.append("\\r");
-                case '\t' -> output.append("\\t");
-                default -> {
-                    if (Character.isHighSurrogate(current)
-                            && index + 1 < value.length()
-                            && Character.isLowSurrogate(value.charAt(index + 1))) {
-                        output.append(current).append(value.charAt(++index));
-                    } else if (Character.isSurrogate(current) || current < 0x20
-                            || current == '\u2028' || current == '\u2029') {
-                        output.append("\\u")
-                                .append(HEX[current >>> 12 & 0xF])
-                                .append(HEX[current >>> 8 & 0xF])
-                                .append(HEX[current >>> 4 & 0xF])
-                                .append(HEX[current & 0xF]);
-                    } else {
-                        output.append(current);
-                    }
-                }
-            }
-        }
-        return output.append('"').toString();
     }
 }

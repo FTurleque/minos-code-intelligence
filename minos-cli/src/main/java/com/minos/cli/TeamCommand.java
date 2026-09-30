@@ -3,6 +3,7 @@ package com.minos.cli;
 import com.minos.hosted.HostedControlPlaneService;
 import com.minos.hosted.HostedRetentionPolicy;
 import com.minos.hosted.HostedRole;
+import com.minos.output.DeterministicJson;
 import com.minos.output.HostedControlPlaneRenderer;
 
 import java.io.IOException;
@@ -155,8 +156,10 @@ final class TeamCommand {
             String snapshot = required(options, "snapshot");
             return (service, token) -> {
                 var binding = service.bindProject(token.get(), requestId, workspace, project, snapshot);
-                return "{\"projectId\":\"" + binding.projectId() + "\",\"snapshotId\":\""
-                        + jsonEscape(binding.snapshotId()) + "\",\"status\":\"BOUND\"}";
+                return DeterministicJson.render(DeterministicJson.object(
+                        "projectId", binding.projectId().toString(),
+                        "snapshotId", binding.snapshotId(),
+                        "status", "BOUND"));
             };
         });
         table.put("project-unbind", options -> {
@@ -330,10 +333,6 @@ final class TeamCommand {
 
     private static String safeMessage(Exception exception) {
         return CliCommandSupport.failureMessage(exception);
-    }
-
-    private static String jsonEscape(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     /** Consumes and validates the options of one operation; it never receives the service. */

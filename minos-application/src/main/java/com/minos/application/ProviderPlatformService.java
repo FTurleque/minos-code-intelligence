@@ -106,7 +106,7 @@ public final class ProviderPlatformService {
             if (qualification == null || qualification.isBlank()) throw new IllegalArgumentException("qualification must not be blank");
             languages = List.copyOf(Objects.requireNonNull(languages, "languages"));
             buildSystems = List.copyOf(Objects.requireNonNull(buildSystems, "buildSystems"));
-            capabilities = Map.copyOf(Objects.requireNonNull(capabilities, "capabilities"));
+            capabilities = ProviderConformanceKit.sortedCopy(Objects.requireNonNull(capabilities, "capabilities"));
             limitations = List.copyOf(Objects.requireNonNull(limitations, "limitations"));
             qualificationPlatforms = List.copyOf(Objects.requireNonNull(qualificationPlatforms, "qualificationPlatforms"));
             runtimeRequirements = List.copyOf(Objects.requireNonNull(runtimeRequirements, "runtimeRequirements"));

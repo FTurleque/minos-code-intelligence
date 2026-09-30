@@ -133,4 +133,22 @@ class OllamaEmbeddingProviderTest {
         assertTrue(body.contains("line 1\\n\\\"quoted\\\"\\\\path"));
         assertTrue(body.endsWith("\"truncate\":true}"));
     }
+
+    @Test
+    void requestBodyIsValidJsonForEveryControlCharacterAndLoneSurrogate() throws Exception {
+        StringBuilder input = new StringBuilder();
+        for (char control = 0; control < 0x20; control++) input.append(control);
+        input.append("\ud800tail\u2028\"end\\");
+
+        String body = OllamaEmbeddingProvider.requestBody("code-model", input.toString());
+
+        for (int index = 0; index < body.length(); index++) {
+            assertTrue(body.charAt(index) >= 0x20, "raw control character at " + index);
+            assertTrue(!Character.isSurrogate(body.charAt(index)), "raw lone surrogate at " + index);
+        }
+        var parsed = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
+        assertEquals(input.toString(), parsed.get("input").textValue());
+        assertEquals("code-model", parsed.get("model").textValue());
+        assertEquals(true, parsed.get("truncate").booleanValue());
+    }
 }
