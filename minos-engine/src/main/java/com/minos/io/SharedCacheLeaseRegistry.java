@@ -31,7 +31,7 @@ import static com.minos.domain.Preconditions.requireText;
  */
 public final class SharedCacheLeaseRegistry {
 
-    /** Nom du champ dans les messages de validation : « lease key must not be blank ». */
+    /** Field name used in the validation messages: "lease key must not be blank". */
     private static final String LEASE_KEY = "lease key";
 
     private static final int STRIPE_COUNT = 64;

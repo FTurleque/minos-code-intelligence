@@ -55,6 +55,43 @@ class DuplicationGuardTest {
                 "requireText vit une seule fois, dans com.minos.domain.Preconditions (Q13) ; copies trouvees");
     }
 
+    /** En-tete d'une methode a un ou deux parametres texte : {@code void|String nom(String x[, String y]) {}. */
+    private static final Pattern TEXT_METHOD_HEADER = Pattern.compile(
+            "\\b(?:void|String)\\s+(\\w+)\\s*\\(\\s*String\\s+\\w+\\s*(?:,\\s*String\\s+\\w+\\s*)?\\)\\s*\\{");
+
+    /** Corps qui n'est QUE « texte null ou blanc -> IllegalArgumentException », rendu ou non de la valeur. */
+    private static final Pattern BLANK_ONLY_BODY = Pattern.compile(
+            "\\s*if\\s*\\(\\s*(\\w+)\\s*==\\s*null\\s*\\|\\|\\s*\\1\\.isBlank\\(\\)\\s*\\)\\s*\\{?\\s*"
+                    + "throw\\s+new\\s+IllegalArgumentException\\s*\\([^;]*\\)\\s*;\\s*\\}?\\s*"
+                    + "(?:return\\s+\\w+(?:\\.trim\\(\\))?\\s*;)?\\s*");
+
+    /** V-L4-09 : une copie renommee ({@code validateText}, {@code requireFileId}...) est une copie. */
+    @Test
+    void noMethodIsAJustRenamedRequireText() throws IOException {
+        List<String> copies = new ArrayList<>();
+        for (Path file : productionSources(MODULES)) {
+            String relative = relative(file);
+            if (relative.equals(PRECONDITIONS)) continue;
+            String code = JsonSourceScanner.codeOnly(Files.readString(file, StandardCharsets.UTF_8));
+            Matcher header = TEXT_METHOD_HEADER.matcher(code);
+            while (header.find()) {
+                int depth = 1;
+                int index = header.end();
+                while (index < code.length() && depth > 0) {
+                    char current = code.charAt(index++);
+                    if (current == '{') depth++;
+                    else if (current == '}') depth--;
+                }
+                String body = code.substring(header.end(), index - 1);
+                if (BLANK_ONLY_BODY.matcher(body).matches()) copies.add(relative + " : " + header.group(1));
+            }
+        }
+
+        assertEquals(List.of(), copies,
+                "une methode dont tout le corps est le controle « texte blanc -> IllegalArgumentException » "
+                        + "est requireText sous un autre nom : appeler Preconditions.requireText (Q13)");
+    }
+
     // --- SHA-256 -------------------------------------------------------------------------------------
 
     private static final Pattern DIGEST_FACTORY = Pattern.compile("MessageDigest\\s*\\.\\s*getInstance\\s*\\(");
