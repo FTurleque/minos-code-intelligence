@@ -74,8 +74,8 @@ Règles de durée de vie d'un répertoire de run : **AVANT : 2** (7 j ordinaire,
 | `check-current-docs.py` | SUCCESS |
 | `product-facts.py --check` | SUCCESS |
 | `check-milestone-artifact-references.py` | `scripts checked=95` |
-| `check-jacoco.py` | à compléter (§ 5.4, `clean verify` de la base) |
-| tests | à compléter (§ 5.4) |
+| `check-jacoco.py` (après `clean verify` de la base, Windows) | 26 portées PASS ; **seule rouge : `m24-polyglot-provider-platform`** (`ManagedPolyglotScipRuntimeManager` line 0,228 < 0,28, branch 0,146 < 0,20), préexistante et propre à Windows. `critical-orchestration` line 0,888 / branch 0,759 ; `resume-orchestration` line 0,903 / branch 0,782 (seuils 0,75 / 0,55) |
+| `./mvnw clean verify` (base `017e339d`) | **BUILD SUCCESS**, 15 modules, 11 min 21, **1 671 tests, 0 échec, 0 erreur, 46 ignorés** (hypothèses `Assumptions` préexistantes) |
 
 ## 3. Décisions
 
