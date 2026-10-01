@@ -324,6 +324,9 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Compose $ComposeArguments -AcceptedExitCodes @(0, 3)
         if ($LASTEXITCODE -eq 3) {
             Write-Warning 'MINOS exited 3 (partial result): some registry entries are unreadable and were counted, not used. Run `project list` to see them.'
+            # The partial result is reported by the warning; do not leave a stale 3 for an in-process caller that reads
+            # $LASTEXITCODE after this action (qualify-docker-upgrade.ps1, run-s3.ps1, minos-docker.ps1).
+            $global:LASTEXITCODE = 0
         }
     }
     'Status' {
