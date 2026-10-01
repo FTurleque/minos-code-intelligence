@@ -18,6 +18,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectIndexState.Availability;
 
 import java.io.IOException;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -162,8 +163,11 @@ final class IndexingRunExecutor {
             }
             return ResumedAttempt.completed(persistSuccess(context, mode, ports.clock().instant()));
         } catch (ResumeAborted aborted) {
-            persistTerminalFailure(context, aborted, ports.clock().instant());
-            return ResumedAttempt.aborted(aborted.getMessage());
+            IndexingRun terminal = persistTerminalFailure(context, aborted, ports.clock().instant());
+            // R6: an interruption that surfaces as an aborted resume is still an interruption. The run is
+            // left offered for resume; it never triggers the fallback to a new full run.
+            return isInterruption(aborted) ? ResumedAttempt.completed(terminal)
+                    : ResumedAttempt.aborted(aborted.getMessage());
         } catch (Exception failure) {
             return ResumedAttempt.completed(persistTerminalFailure(context, failure, ports.clock().instant()));
         }
@@ -178,27 +182,23 @@ final class IndexingRunExecutor {
      */
     private static void reverifyReusedArtifacts(RunContext context, List<ReusedTarget> reused) throws ResumeAborted {
         if (reused.isEmpty()) return;
-        Path runDirectory = canonicalRunDirectory(context);
+        Path runDirectory = existingRunDirectory(context);
         for (ReusedTarget target : reused) {
             ExecutionCheckpoint checkpoint = target.execution().checkpoint().orElseThrow();
             String scope = portable(target.target().projectRelativeRoot());
             Path artifact = target.execution().finalArtifact();
-            // V16: containment is re-decided on the canonical path before a single byte is re-read.
-            if (Files.isSymbolicLink(artifact)) {
-                throw new ResumeAborted("resume aborted: artifact became a symbolic link (scope " + scope + ")");
-            }
+            // V16: containment is re-decided, physically, before a single byte is re-read (Q5: one decision).
             try {
-                if (!artifact.toRealPath().startsWith(runDirectory)) {
-                    throw new ResumeAborted("resume aborted: artifact left the run directory (scope " + scope + ")");
-                }
-            } catch (IOException failure) {
-                throw new ResumeAborted("resume aborted: artifact cannot be resolved before staging (scope " + scope + ")");
+                ArtifactConfinement.requireInside(runDirectory, artifact);
+            } catch (ArtifactConfinement.Escape escape) {
+                throw new ResumeAborted("resume aborted: " + escape.getMessage() + " (scope " + scope + ")", escape);
             }
             ExecutionCheckpoints.ArtifactDigest digest;
             try {
                 digest = ExecutionCheckpoints.artifactDigest(artifact);
             } catch (ExecutionCheckpoints.Unavailable unavailable) {
-                throw new ResumeAborted("resume aborted: " + unavailable.getMessage() + " (scope " + scope + ")");
+                throw new ResumeAborted(
+                        "resume aborted: " + unavailable.getMessage() + " (scope " + scope + ")", unavailable);
             }
             if (digest.bytes() != checkpoint.artifactBytes() || !digest.sha256().equals(checkpoint.artifactSha256())) {
                 throw new ResumeAborted("resume aborted: artifact changed before staging (scope " + scope + ")");
@@ -206,14 +206,14 @@ final class IndexingRunExecutor {
         }
     }
 
-    private static Path canonicalRunDirectory(RunContext context) throws ResumeAborted {
+    /** The run directory as the port names it ({@link ArtifactConfinement} resolves it itself). */
+    private static Path existingRunDirectory(RunContext context) throws ResumeAborted {
         Path runDirectory = context.ports.markers().runDirectory(context.runId)
                 .orElseThrow(() -> new ResumeAborted("resume aborted: run directory is unknown to this runtime"));
-        try {
-            return runDirectory.toRealPath();
-        } catch (IOException failure) {
+        if (!Files.isDirectory(runDirectory)) {
             throw new ResumeAborted("resume aborted: run directory disappeared before staging");
         }
+        return runDirectory;
     }
 
     /**
@@ -231,8 +231,9 @@ final class IndexingRunExecutor {
         } catch (CommitUncertainException uncertain) {
             throw uncertain;
         } catch (Exception failure) {
+            if (isInterruption(failure)) throw failure;
             throw new ResumeAborted("resume aborted: staged snapshot could not be promoted ("
-                    + failure.getClass().getSimpleName() + ")");
+                    + failure.getClass().getSimpleName() + ")", failure);
         }
     }
 
@@ -325,7 +326,7 @@ final class IndexingRunExecutor {
                 selection,
                 mode,
                 scopedChangedFiles)), "indexer execution artifact");
-        Path artifactPath = validateArtifact(selection, artifact, relative);
+        Path artifactPath = validateArtifact(context, executor, selection, artifact, relative);
         CheckpointOutcome checkpoint = checkpoint(
                 material, artifactPath, relative, selection.indexer().version(), mode, scopedChangedFiles,
                 context.ports.clock().instant());
@@ -442,6 +443,7 @@ final class IndexingRunExecutor {
     }
 
     private static void stageSnapshot(RunContext context, IndexingMode mode) throws Exception {
+        requireArtifactsStillInsideRunDirectory(context);
         context.phase = Phase.STAGING;
         context.ports.stateStore().saveRun(running(context, "staging project snapshot: mode=" + mode));
         String stagedId = context.ports.stager().stage(new IndexSnapshotStageRequest(
@@ -525,31 +527,47 @@ final class IndexingRunExecutor {
     }
 
     /**
-     * Terminal outcome of a run that did not complete. A thread interruption (R1-11) restores the
-     * interrupt flag and, when the run already owns a checkpoint or a staged snapshot, leaves an
-     * INTERRUPTED run offered for resume instead of a FAILED one.
+     * Terminal outcome of a run that did not complete. A thread interruption (R1-11) leaves an INTERRUPTED
+     * run offered for resume, instead of a FAILED one, when the run already owns a checkpoint or a staged
+     * snapshot.
+     *
+     * <p>The state is written with the interrupt flag <em>cleared</em> and the flag is replayed last, on
+     * every way out (Q5, R6): with the flag raised, every durable write goes through an interruptible file
+     * channel and fails with {@link ClosedByInterruptException}, so the INTERRUPTED run, its marker and the
+     * project state would never reach the disk and the run would be reported FAILED with its checkpoints
+     * thrown away. The flag is replayed when it was raised on entry as well, whatever the failure was.</p>
      */
     private static IndexingRun persistTerminalFailure(RunContext context, Exception failure, Instant completedAt) {
-        if (isInterruption(failure)) {
-            Thread.currentThread().interrupt();
-            IndexingRun interrupted = interruptedRun(context, completedAt);
-            if (!context.committed && interrupted.offersResume()) {
-                return persistInterruption(context, interrupted, failure, completedAt);
+        context.clearInterruptFlagForWrite();
+        boolean interruption = isInterruption(failure);
+        try {
+            if (interruption) {
+                IndexingRun interrupted = interruptedRun(context, completedAt, "");
+                if (!context.committed && interrupted.offersResume()) {
+                    return persistInterruption(context, interrupted, failure, completedAt);
+                }
             }
+            return persistFailure(context, failure, completedAt);
+        } finally {
+            if (interruption || context.interruptedWhilePersisting) Thread.currentThread().interrupt();
         }
-        return persistFailure(context, failure, completedAt);
     }
 
+    /**
+     * The only place that says "this failure is an interruption": an {@link InterruptedException}, or the
+     * {@link ClosedByInterruptException} an interrupted file channel raises, anywhere in the chain of causes.
+     * A failure that loses its cause on the way (R6) is therefore a bug at the place that loses it.
+     */
     private static boolean isInterruption(Throwable failure) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-            if (cause instanceof InterruptedException) return true;
+            if (cause instanceof InterruptedException || cause instanceof ClosedByInterruptException) return true;
             if (cause.getCause() == cause) break;
         }
         return false;
     }
 
     /** The run as it would be left by an interruption now; whether it is offered for resume is its own rule. */
-    private static IndexingRun interruptedRun(RunContext context, Instant completedAt) {
+    private static IndexingRun interruptedRun(RunContext context, Instant completedAt, String note) {
         return new IndexingRun(
                 context.runId,
                 context.projectId,
@@ -563,7 +581,7 @@ final class IndexingRunExecutor {
                 context.previous.activeSnapshotId(),
                 Optional.of("indexing run interrupted by thread interruption; resumable targets="
                         + context.checkpointCount() + "/" + context.totalTargets()
-                        + context.staged.map(id -> ", staged snapshot retained").orElse("")),
+                        + context.staged.map(id -> ", staged snapshot retained").orElse("") + note),
                 IndexingRun.CURRENT_FORMAT_VERSION,
                 context.trace);
     }
@@ -572,17 +590,17 @@ final class IndexingRunExecutor {
             RunContext context, IndexingRun interrupted, Exception failure, Instant completedAt) {
         IndexStateStore stateStore = context.ports.stateStore();
         try {
-            context.ports.markers().mark(context.runId);
+            holdAgainstRetention(context);
         } catch (IOException | RuntimeException markerFailure) {
             AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
             failure.addSuppressed(markerFailure);
             return persistFailure(context, failure, completedAt);
         }
-        persist(() -> stateStore.saveRun(interrupted), failure);
+        boolean written = persist(context, () -> stateStore.saveRun(interrupted), failure);
         Availability availability = context.previous.activeSnapshotId().isPresent()
                 ? Availability.STALE
                 : Availability.FAILED;
-        persist(() -> stateStore.saveProjectState(new ProjectIndexState(
+        written &= persist(context, () -> stateStore.saveProjectState(new ProjectIndexState(
                 context.projectId,
                 availability,
                 context.previous.activeSnapshotId(),
@@ -590,7 +608,30 @@ final class IndexingRunExecutor {
                 completedAt,
                 Optional.of("indexing run interrupted; resumable run offered"),
                 Optional.of(context.runId))), failure);
-        return interrupted;
+        // What the caller is told is what the store holds: a state that could not be written is said so, and the
+        // next run reconciles it (its checkpoints and its marker are on disk).
+        return written ? interrupted : interruptedRun(context, completedAt, UNWRITTEN_INTERRUPTION_NOTE);
+    }
+
+    /** {@link #persist} and {@link #holdAgainstRetention} write again at most this many times under interruption. */
+    private static final int PERSISTENCE_ATTEMPTS_UNDER_INTERRUPTION = 3;
+    private static final String UNWRITTEN_INTERRUPTION_NOTE =
+            "; the interrupted state could not be written, the next indexing reconciles it";
+
+    /**
+     * Holds the run directory against retention for the interrupted run. A second interruption closes the marker's
+     * file channel like any other write (V-L4-02): the hold is made again, flag cleared, a bounded number of times.
+     */
+    private static void holdAgainstRetention(RunContext context) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            context.clearInterruptFlagForWrite();
+            try {
+                context.ports.markers().mark(context.runId);
+                return;
+            } catch (IOException failure) {
+                if (attempt >= PERSISTENCE_ATTEMPTS_UNDER_INTERRUPTION || !isInterruption(failure)) throw failure;
+            }
+        }
     }
 
     private static IndexingRun persistFailure(RunContext context, Exception failure, Instant completedAt) {
@@ -602,6 +643,7 @@ final class IndexingRunExecutor {
         } else {
             persistUncommittedFailure(context, failed, message, completedAt, failure);
         }
+        context.clearInterruptFlagForWrite();
         AuthoritativeProjectStateReconciler.unmarkQuietly(context.ports.markers(), context.runId);
         return failed;
     }
@@ -640,14 +682,14 @@ final class IndexingRunExecutor {
             Exception original
     ) {
         IndexStateStore stateStore = context.ports.stateStore();
-        persist(() -> stateStore.saveProjectState(new ProjectIndexState(
+        persist(context, () -> stateStore.saveProjectState(new ProjectIndexState(
                 context.projectId,
                 Availability.READY,
                 activeAfter,
                 Optional.of(context.runId),
                 completedAt,
                 Optional.of("active snapshot committed; run metadata recovery required: " + message))), original);
-        persist(() -> stateStore.saveRun(failed), original);
+        persist(context, () -> stateStore.saveRun(failed), original);
     }
 
     private static void persistUncommittedFailure(
@@ -658,11 +700,11 @@ final class IndexingRunExecutor {
             Exception original
     ) {
         IndexStateStore stateStore = context.ports.stateStore();
-        persist(() -> stateStore.saveRun(failed), original);
+        persist(context, () -> stateStore.saveRun(failed), original);
         Availability availability = context.previous.activeSnapshotId().isPresent()
                 ? Availability.STALE
                 : Availability.FAILED;
-        persist(() -> stateStore.saveProjectState(new ProjectIndexState(
+        persist(context, () -> stateStore.saveProjectState(new ProjectIndexState(
                 context.projectId,
                 availability,
                 context.previous.activeSnapshotId(),
@@ -703,26 +745,57 @@ final class IndexingRunExecutor {
     private static final int ARTIFACT_READABILITY_RETRY_ATTEMPTS = 10;
     private static final long ARTIFACT_READABILITY_RETRY_DELAY_MILLIS = 100L;
 
-    private static Path validateArtifact(IndexerNegotiationResult.IndexerSelection selection,
-                                         IndexingArtifact artifact, Path expectedRoot) {
+    private static Path validateArtifact(RunContext context, IndexerExecutor executor,
+                                         IndexerNegotiationResult.IndexerSelection selection,
+                                         IndexingArtifact artifact, Path expectedRoot) throws InterruptedException {
         if (artifact.language() != selection.language()) throw new IllegalStateException("executor returned an artifact for an unexpected language");
         if (!artifact.indexerId().equals(selection.indexer().id())) throw new IllegalStateException("executor returned an artifact for an unexpected indexer");
         if (!artifact.projectRelativeRoot().normalize().equals(expectedRoot.normalize())) throw new IllegalStateException("executor returned an artifact for an unexpected project scope");
         Path path = artifact.finalArtifact().toAbsolutePath().normalize();
-        if (!awaitReadable(path)) throw new IllegalStateException("final index artifact is missing or unreadable: " + path);
+        if (!awaitReadable(path)) throw new IllegalStateException("final index artifact is missing or unreadable");
+        requireInsideRunDirectory(context, executor, path);
         return path;
     }
 
-    static boolean awaitReadable(Path path) {
+    /**
+     * Q5: the artifact an executor returns stays in the run directory, physically (no {@code ..}, no link at any
+     * level of its path), before any checkpoint or staging reads it. Without a known run directory there is nothing to confine
+     * to (and no resume is possible either); an executor with a store of its own is confined by that store.
+     */
+    private static void requireInsideRunDirectory(RunContext context, IndexerExecutor executor, Path artifact) {
+        if (!executor.artifactsLiveInRunDirectory()) return;
+        Optional<Path> runDirectory = context.ports.markers().runDirectory(context.runId);
+        if (runDirectory.isEmpty()) return;
+        try {
+            ArtifactConfinement.requireInside(runDirectory.orElseThrow(), artifact);
+        } catch (ArtifactConfinement.Escape escape) {
+            throw new IllegalStateException("executor returned an artifact that "
+                    + escape.reason().phrase(), escape);
+        }
+    }
+
+    /**
+     * V-L4-03: an artifact was confined when its provider returned, and the providers of the other scopes have run
+     * since. Every artifact, fresh or reused, is confined again right before the snapshot reads it: the same single
+     * decision, the same single place for the answer.
+     */
+    private static void requireArtifactsStillInsideRunDirectory(RunContext context) {
+        for (IndexingArtifact artifact : context.artifacts()) {
+            IndexerExecutor executor = context.ports.executors().get(artifact.indexerId());
+            if (executor != null) requireInsideRunDirectory(context, executor, artifact.finalArtifact());
+        }
+    }
+
+    /**
+     * Waits, bounded, for a freshly written artifact to become readable. An interruption is never
+     * folded into "the artifact is missing" (R6): it propagates, so that the run ends INTERRUPTED and
+     * resumable and not FAILED.
+     */
+    static boolean awaitReadable(Path path) throws InterruptedException {
         for (int attempt = 1; attempt <= ARTIFACT_READABILITY_RETRY_ATTEMPTS; attempt++) {
             if (Files.exists(path) && Files.isReadable(path)) return true;
             if (attempt == ARTIFACT_READABILITY_RETRY_ATTEMPTS) return false;
-            try {
-                Thread.sleep(ARTIFACT_READABILITY_RETRY_DELAY_MILLIS);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
+            Thread.sleep(ARTIFACT_READABILITY_RETRY_DELAY_MILLIS);
         }
         return false;
     }
@@ -734,8 +807,25 @@ final class IndexingRunExecutor {
                 IndexingRun.CURRENT_FORMAT_VERSION, context.trace);
     }
 
-    private static void persist(Runnable action, Exception original) {
-        try { action.run(); } catch (RuntimeException failure) { original.addSuppressed(failure); }
+    /**
+     * One write of the terminal state. A write that fails because the thread was interrupted again (the file
+     * channel closes on the raised flag, V-L4-02) is made again with the flag cleared, a bounded number of times;
+     * any other failure, and the last one, is kept as suppressed on the original failure and reported as
+     * {@code false}. A flag cleared on the way is replayed when the terminal outcome is over.
+     */
+    private static boolean persist(RunContext context, Runnable action, Exception original) {
+        for (int attempt = 1; ; attempt++) {
+            context.clearInterruptFlagForWrite();
+            try {
+                action.run();
+                return true;
+            } catch (RuntimeException failure) {
+                if (attempt >= PERSISTENCE_ATTEMPTS_UNDER_INTERRUPTION || !isInterruption(failure)) {
+                    original.addSuppressed(failure);
+                    return false;
+                }
+            }
+        }
     }
 
     private static String portable(Path path) { return path == null ? "" : path.normalize().toString().replace('\\', '/'); }
@@ -787,6 +877,10 @@ final class IndexingRunExecutor {
         private ResumeAborted(String message) {
             super(message);
         }
+
+        private ResumeAborted(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 
     /** Mutable state of one run; artifacts and executions are always listed in plan order. */
@@ -806,6 +900,7 @@ final class IndexingRunExecutor {
         private Phase phase = Phase.PROVIDER_EXECUTION;
         private boolean committed;
         private boolean durabilityAcknowledgementPending;
+        private boolean interruptedWhilePersisting;
         private int withheldCheckpoints;
 
         private RunContext(
@@ -853,6 +948,14 @@ final class IndexingRunExecutor {
                 if (execution != null) executions.add(execution);
             }
             return List.copyOf(executions);
+        }
+
+        /**
+         * Clears a raised interrupt flag so the next write goes through (a raised flag closes the file channel), and
+         * remembers it: the flag is replayed when the terminal outcome is over.
+         */
+        private void clearInterruptFlagForWrite() {
+            interruptedWhilePersisting |= Thread.interrupted();
         }
 
         private int checkpointCount() {

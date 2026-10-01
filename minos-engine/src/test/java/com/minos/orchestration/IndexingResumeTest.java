@@ -621,7 +621,7 @@ class IndexingResumeTest {
     }
 
     static final class RecordingStager implements SnapshotStager {
-        private final List<List<String>> requests = new ArrayList<>();
+        final List<List<String>> requests = new ArrayList<>();
 
         @Override public String stage(IndexSnapshotStageRequest request) throws IOException {
             List<String> artifacts = new ArrayList<>();

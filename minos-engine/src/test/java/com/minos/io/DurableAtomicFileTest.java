@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -147,5 +148,23 @@ class DurableAtomicFileTest {
 
         assertEquals(3, attempts.get(), "each of the three refusals was final at its first attempt");
         assertEquals(0, pauses.get());
+    }
+
+    @Test
+    void anInterruptionDuringTheReplacementPauseKeepsItsCauseAndReplaysTheFlag() {
+        // R6: the pause restored the flag but threw an IOException without cause, so the orchestration,
+        // which looks for the interruption in the chain of causes, reported an ordinary failure.
+        DurableAtomicFile.ReplacePause pause = DurableAtomicFile.Platform.SYSTEM.pause();
+        Thread.currentThread().interrupt();
+        IOException failure;
+        boolean flagReplayed;
+        try {
+            failure = assertThrows(IOException.class, () -> pause.pause(1));
+        } finally {
+            flagReplayed = Thread.interrupted();
+        }
+
+        assertTrue(flagReplayed, "the interrupt flag is replayed to the caller");
+        assertInstanceOf(InterruptedException.class, failure.getCause());
     }
 }

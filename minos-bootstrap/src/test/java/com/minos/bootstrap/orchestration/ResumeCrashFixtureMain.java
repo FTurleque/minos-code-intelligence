@@ -64,15 +64,9 @@ public final class ResumeCrashFixtureMain {
         Path project = Path.of(arguments[2]).toAbsolutePath().normalize();
         UUID projectId = UUID.fromString(PROJECT_ID);
         FileIndexStateStore store = new FileIndexStateStore(home.resolve("index-state"));
-        FileResumableRunMarkers fileMarkers = new FileResumableRunMarkers(home);
-        ResumableRunMarkers markers = new ResumableRunMarkers() {
-            @Override public void mark(UUID runId) throws IOException { fileMarkers.mark(runId); }
-            @Override public void unmark(UUID runId) throws IOException { fileMarkers.unmark(runId); }
-            @Override public Optional<Path> runDirectory(UUID runId) { return Optional.of(fileMarkers.runDirectory(runId)); }
-        };
         IndexingLifecycleService lifecycle = new IndexingLifecycleService(
                 List.of(new CountingExecutor(home, "crash".equals(mode) ? 2 : Integer.MAX_VALUE)),
-                new FileStager(home), new FilePromoter(home), store, markers, ResumableArtifactPolicy.DEFAULT);
+                new FileStager(home), new FilePromoter(home), store, markers(home), ResumableArtifactPolicy.DEFAULT);
         // The parent forwards -Dminos.test.resumePolicy to prove the test detects an absent resume.
         IndexingResumePolicy policy = arguments.length > 3
                 ? IndexingResumePolicy.valueOf(arguments[3]) : IndexingResumePolicy.RESUME;
@@ -80,6 +74,16 @@ public final class ResumeCrashFixtureMain {
         Files.writeString(home.resolve("result-" + mode + ".txt"),
                 run.id() + "\n" + run.status() + "\n" + run.resume().map(Object::toString).orElse("none") + "\n");
         System.exit(run.status() == IndexingRun.Status.SUCCEEDED ? 0 : 3);
+    }
+
+    /** Port des marqueurs adossé au vrai {@code MINOS_HOME/runs/<runId>} d'un répertoire de test. */
+    static ResumableRunMarkers markers(Path home) {
+        FileResumableRunMarkers fileMarkers = new FileResumableRunMarkers(home);
+        return new ResumableRunMarkers() {
+            @Override public void mark(UUID runId) throws IOException { fileMarkers.mark(runId); }
+            @Override public void unmark(UUID runId) throws IOException { fileMarkers.unmark(runId); }
+            @Override public Optional<Path> runDirectory(UUID runId) { return Optional.of(fileMarkers.runDirectory(runId)); }
+        };
     }
 
     static ProjectDiscovery discovery(Path root) {

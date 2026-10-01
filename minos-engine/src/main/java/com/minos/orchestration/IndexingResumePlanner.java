@@ -162,7 +162,7 @@ final class IndexingResumePlanner {
             throw new Refusal("resumable run was written in run format " + run.runFormatVersion()
                     + ", expected " + IndexingRun.CURRENT_FORMAT_VERSION);
         }
-        Path runDirectory = canonicalRunDirectory(port, runId);
+        Path runDirectory = existingRunDirectory(port, runId);
 
         List<ReusedTarget> reused = new ArrayList<>();
         List<IndexingExecutionTarget> remaining = new ArrayList<>();
@@ -179,17 +179,17 @@ final class IndexingResumePlanner {
         return new Outcome.Resume(run, attempt, reused, remaining);
     }
 
-    private static Path canonicalRunDirectory(ResumableRunMarkers port, UUID runId) throws Refusal {
+    /**
+     * The run directory as the port names it: {@link ArtifactConfinement} resolves it itself, and reads an
+     * artifact path written the same way as the directory (a short Windows name, say) without a second guess.
+     */
+    private static Path existingRunDirectory(ResumableRunMarkers port, UUID runId) throws Refusal {
         Path runDirectory = port.runDirectory(runId)
                 .orElseThrow(() -> new Refusal("run directory is unknown to this runtime"));
         if (!Files.isDirectory(runDirectory, LinkOption.NOFOLLOW_LINKS)) {
             throw new Refusal("run directory is missing");
         }
-        try {
-            return runDirectory.toRealPath();
-        } catch (IOException failure) {
-            throw new Refusal("run directory cannot be resolved: " + failure.getClass().getSimpleName());
-        }
+        return runDirectory;
     }
 
     private static Optional<IndexerExecution> checkpointFor(IndexingRun run, IndexingExecutionTarget target) {
@@ -237,19 +237,16 @@ final class IndexingResumePlanner {
         }
 
         Path artifact = execution.finalArtifact();
-        // Containment is decided on canonical paths before a single byte is read (R1-6).
-        if (Files.isSymbolicLink(artifact)) throw new Refusal("artifact is a symbolic link");
-        if (!Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS)) throw new Refusal("artifact is missing");
-        Path real;
+        // Containment is decided, physically, before a single byte is read (R1-6): the one decision of
+        // the orchestration, shared with the executor's validation and the reverification (Q5).
         try {
-            real = artifact.toRealPath();
-        } catch (IOException failure) {
-            throw new Refusal("artifact cannot be resolved: " + failure.getClass().getSimpleName());
+            ArtifactConfinement.requireInside(runDirectory, artifact);
+        } catch (ArtifactConfinement.Escape escape) {
+            throw new Refusal(escape.getMessage());
         }
-        if (!real.startsWith(runDirectory)) throw new Refusal("artifact lies outside the run directory");
         long size;
         try {
-            size = Files.size(real);
+            size = Files.size(artifact);
         } catch (IOException failure) {
             throw new Refusal("artifact size cannot be read: " + failure.getClass().getSimpleName());
         }

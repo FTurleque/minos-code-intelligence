@@ -28,6 +28,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class DistributedIndexerExecutorScopeTest {
 
@@ -104,6 +105,8 @@ class DistributedIndexerExecutorScopeTest {
         assertEquals(List.of("module-a", "module-b"), executor.verifiedArtifacts().stream()
                 .map(value -> value.manifest().projectRelativeRoot())
                 .toList());
+        // Q5: its artifacts live in the verified bundle cache, so the orchestrator must not confine them to runs/<runId>/.
+        assertFalse(executor.artifactsLiveInRunDirectory());
         executor.close();
     }
 

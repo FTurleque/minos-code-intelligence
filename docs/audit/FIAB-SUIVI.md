@@ -1,4 +1,4 @@
-# Suivi — chantier Fiabilité opérationnelle (lot 1 : R4, R5, R7 — intégrité de la reprise ; lot 2 : P1, Q3, Q4 — un seul régime de verrous, § 8 ; lot 3 : R2, R3 — propriété des cgroups, § 9)
+# Suivi — chantier Fiabilité opérationnelle (lot 1 : R4, R5, R7 — intégrité de la reprise ; lot 2 : P1, Q3, Q4 — un seul régime de verrous, § 8 ; lot 3 : R2, R3 — propriété des cgroups, § 9 ; lot 4 : Q5, R6 — interruption et confinement, § 10)
 
 > Branche : `fiab/r4-r5-r7-reprise` (depuis `develop`, base `017e339d`, les branches `code/*` des PR #305 à #308 y sont déjà fusionnées), worktree `minos-wt/fiab-lot1`.
 > Constats : **R4** (promotion reprise sans égalité des cibles), **R5** (rétention d'un run reprenable, durée de vie du marqueur) et **R7** (réparation « snapshot stable » sans `resumableRunId` ni `supersede`), `AUDIT-2026-09.md` § R4, R5, R7 ; conception de référence : [ADR 0039](../adr/0039-reprise-indexation-apres-interruption.md).
@@ -13,7 +13,7 @@
 | 1 — R4, R5, R7 | Promotion reprise bornée aux cibles courantes, rétention d'un run reprenable (parcours tronqué, run concurrent, durée de vie), réparation « snapshot stable » alignée | livré, en attente du verdict final de `verif-fiab` | `cdeac459` … (§ 4) |
 | 2 — P1, Q3, Q4 | Un seul régime de verrous ; lecture d'état sans bail exclusif (§ 8) | en cours (branche `fiab/p1-q3-q4-verrous`, depuis la branche du lot 1 `bcdadd23`) | § 8.8 |
 | 3 — R2, R3 | Propriété des cgroups : R2 et R3 déjà fermés sur `develop` (§ 9.1) ; le lot referme les trous restants de la décision « ce cgroup appartient à un MINOS mort » (§ 9.4) | livré, en attente du verdict final de `verif-fiab` (branche `fiab/r2-r3-cgroups`, depuis la branche du lot 2, fusion `8670f2e2`) | § 9.7 |
-| 4 — Q5, R6 | Interruption de bout en bout, confinement du chemin d'artefact | à faire | — |
+| 4 — Q5, R6 | Interruption de bout en bout (le drapeau était rétabli avant d'écrire l'état), confinement du chemin d'artefact (PLAUSIBLE reproduit puis corrigé) | livré, `VERDICT-FINAL: ok` de `verif-fiab` (branche `fiab/q5-r6-interruption`, depuis la branche du lot 3 `cab6f74e`) | § 10.6 |
 | 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) | à faire | — |
 
 ## 2. Inventaire daté (base `017e339d`, 30 septembre 2026)
@@ -200,6 +200,16 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 | V-L3-05 | remarque | le balayage plafonne en silence à 4 096 entrées | **résolu `2d2c2b5f`** : `StaleSweep.notExamined` et « N entries were not examined » dans le WARNING |
 | V-L3-06 | remarque | `ProcessOwnershipTracker` compare `startInstant` : pas R2 (même JVM, base `btime` figée une fois) | **vérifié, hors périmètre** : § 9.2, § 7 |
 
+### Lot 4
+
+| Id | Sévérité | Constat | Résolution |
+|---|---|---|---|
+| V-L4-01 | bloquant | le drapeau est rétabli AVANT la persistance du run INTERRUPTED : avec un vrai magasin, FAILED rendu, run RUNNING sur disque, marqueur retiré, projet `INDEXING` (sondes rejouées par verif-fiab sous Windows et WSL) | **résolu `97aba265`** : tests rouges sur le vrai stockage (`5cd64c30`, `expected: <INTERRUPTED> but was: <FAILED>`) ; le drapeau est effacé pour écrire et rejoué en dernier sur toutes les sorties |
+| V-L4-02 | à corriger | une seconde interruption pendant l'écriture de l'état INTERRUPTED est avalée : le run rendu dit INTERRUPTED, le disque dit RUNNING | **résolu `fad14230`** (+ `af85eab9`) : écriture refaite drapeau effacé (3 tentatives au plus), statut rendu fidèle à ce que le magasin tient ; rouge `037bf19f` (`expected: <INTERRUPTED> but was: <RUNNING>`) |
+| V-L4-03 | à corriger | un répertoire ANCÊTRE lié vers l'INTÉRIEUR du répertoire de run est accepté (la Javadoc promettait « aucun lien sur le chemin ») ; un artefact frais n'est pas reconfiné avant la mise en snapshot | **résolu `66fd1d17`** : tous les composants parcourus sans suivre de lien (Windows : symlink et jonction ; Linux : `openat`), tous les artefacts reconfinés au début de `stageSnapshot`, Javadoc alignées ; rouge `3c71e622` |
+| V-L4-04 | remarque | confinement ignoré quand les marqueurs n'ont pas de répertoire de run ; chemin absolu dans le message d'un artefact illisible (préexistant) | **résolu** : la décision est écrite au § 10.4 ; message sans chemin (`66fd1d17`, rouge `3c71e622`) |
+| V-L4-05 | remarque | répertoire de run en nom LONG avec un artefact écrit en nom COURT (8.3) : refusé depuis `66fd1d17`, accepté par `41be5596` | **accepté, documenté § 7** : échec fermé, jamais observé (l'artefact et le marqueur dérivent du même `MINOS_HOME`) ; le deviner demanderait de tolérer un alias dont on ne sait pas s'il est un lien |
+
 ## 7. À traiter plus tard
 
 - **Publication atomique et rétention concurrente sous Windows (traité au lot 2, § 8.9, `7e1b2903`).** Un premier essai du test de concurrence, où le « fournisseur » publiait par `Files.move(ATOMIC_MOVE)` pendant que `prune` mesurait le même répertoire, a échoué sous Windows avec `FileSystemException … utilisé par un autre processus` : la lecture des attributs par la rétention entre en conflit avec le renommage. Hors périmètre (le test a été ramené à des écritures simples). À vérifier dans `DurableAtomicFile.replace`, qui n'a pas de nouvelle tentative : deux indexations de projets différents sur un même `MINOS_HOME` Windows peuvent-elles s'y gêner ?
@@ -229,6 +239,17 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 - **(lot 3) `relocateSelf`** (S3 : déplacer tout le processus MINOS dans `minos-controller`) : effet de bord global inchangé.
 - **(lot 3) Les cgroups marqués par les builds `develop` antérieurs** à ce lot survivant à leur propriétaire restent à supprimer à la main (§ 9.10) ; à clore quand aucun de ces builds n'existe plus.
 - **SonarCloud, PR 311 (Quality Gate passé, 18 issues propres au lot 3)** : corrigées, sans effet sur la décision de tuer : `S6353` (`\d` pour `[0-9]`, équivalent en Java sans `UNICODE_CHARACTER_CLASS`), `S1192` (`OWNER_PID`), `S3358` (ternaire imbriqué de `Mark.suffix`), `S1130` et `S5778` (tests). **Non traitées, par prudence** : `S5843` (complexité de la regex `MARKED_NAME`), `S135` ×2 et `S3776` (`CgroupJobOwnership` ~l. 399, `LinuxCgroupJob.reclaimStaleJobs`) : ce sont les boucles et la regex qui décident de tuer ; `verif-fiab` les a relues et rejouées adversairement, les réécrire pour un gain de style sans refaire cette vérification irait contre la règle « en cas de doute, ne pas récupérer ». À traiter dans un lot dédié avec le même rejeu adverse.
+
+
+- **(lot 4) `AUDIT-2026-09.md` donne encore Q5 pour « CONFIRMÉ / PLAUSIBLE » et R6 pour ouverts.** Q5 : le drapeau était déjà rétabli depuis `90ab9197`, le vrai défaut (l'ordre drapeau / écriture) est corrigé par ce lot, et le confinement est reproduit puis corrigé (§ 10.2, § 10.4) ; R6 est fermé. Le fichier porte des modifications non suivies de l'utilisateur dans le dépôt principal : non touché. À mettre à jour par l'orchestrateur.
+- **(lot 4) Le planificateur de reprise ne chaîne pas la cause de ses refus** (`Refusal(String)`) : une interruption pendant le plan (lecture de l'empreinte du scope, confinement d'un artefact) refuse la reprise et laisse le run se poursuivre en run complet, sur un thread dont le drapeau est levé (les providers sont interrompus au premier point bloquant). Sans dommage démontré ; à traiter avec la suite du planificateur.
+- **(lot 4) `LinuxCgroupJob` préserve une interruption dans sa chaîne nettoyée avec sa propre reconnaissance** (`cause instanceof InterruptedException`) ; ce n'est pas une décision sur un run. Un reconnaisseur partagé par l'orchestration et le runtime demanderait un module commun (les deux côtés du port) ; non fait.
+- **(lot 4) Les autres `catch (InterruptedException)` de `minos-runtime-local`** (`ProcessOwnershipTracker`, `ProviderWriteQuotaSupervisor`, `ProcessTreeTermination`, sandbox Windows) rétablissent le drapeau sans relancer : ils n'atteignent l'orchestrateur qu'en cause chaînée (vérifié pour le chemin d'un provider) et n'ont pas été modifiés.
+- **(lot 4) Confinement ignoré sans répertoire de run** (V-L4-04) : `ResumableRunMarkers.none()` ne connaît aucun répertoire de run ; c'est une décision (§ 10.4), valable tant que le câblage de production fournit toujours un répertoire. À reconsidérer si un port inerte apparaissait en production.
+- **(lot 4) Un répertoire de run nommé en nom LONG avec un artefact écrit en nom COURT (8.3) est refusé** (V-L4-05) : `ArtifactConfinement` lit le chemin sous le répertoire tel qu'il est écrit, puis sous sa forme résolue ; l'artefact écrit en nom long sous un répertoire en nom court est accepté, l'inverse non. `41be5596` acceptait les deux, `66fd1d17` (qui refuse tout lien à tout niveau) ne le peut plus sans deviner si un alias est un lien. Échec fermé (au pire une reprise refusée, donc un run complet), jamais observé : l'artefact et le marqueur dérivent du même `MINOS_HOME`. Les chemins persistés d'un run écrit avec un `MINOS_HOME` exprimé autrement (court/long) ne seraient plus reprenables.
+- **(lot 4) Les tests de liens symboliques se sautent (`assumeTrue`) sur un Windows sans privilège** (R-L4-B) : une CI Windows sans mode développeur ne les exécute pas ; le cas `..` et les tests de `ArtifactConfinementTest` sans lien, eux, s'exécutent toujours. Les liens ont été exécutés ici (Windows avec privilège, WSL) : 0 test sauté.
+- **(lot 4) Après une interruption, les appelants de l'exécuteur écrivent drapeau levé** (R-L4-C) : l'exécuteur rejoue le drapeau en sortant, et un appelant qui écrit ensuite (par exemple `LocalAutonomousIndexOperations` : `recoverPromotedRunIfNeeded`, la compaction de la rétention) peut échouer en `ClosedByInterruptException` (non sondé). Comportement d'avant le lot, hors périmètre : le run, lui, est déjà persisté. À traiter si un arrêt réel du service doit aussi nettoyer derrière lui.
+- **(lot 4) Rejeu ×50 sous Linux et interruption d'un provider externe réel sous sandbox** : non exécutés (le test simule le provider par un exécuteur) ; le test passe sous WSL en une exécution.
 
 ## 8. Lot 2 — P1, Q3, Q4 : un seul régime de verrous
 
@@ -561,3 +582,132 @@ Gates rejoués à chaque commit : `check-module-boundaries.py` (`modules=14, sou
 - **`hidepid`.** Une table qui masque les processus d'autres comptes ne prouve l'absence d'un propriétaire que si ce propriétaire est le compte du balayeur (propriétaire du répertoire du cgroup = propriétaire de `/proc/self`). Sinon, `UNVERIFIABLE` : résidu signalé, jamais tué.
 - **Appartenance lue récursivement** (le cgroup et ceux en dessous, bornes 16 niveaux et 1 024 cgroups, dépassement = échec fermé comme une lecture impossible) : la frontière d'un job inclut les cgroups qu'il a créés. Conséquence sur un job vivant : `aliveProcesses()` et la vérification de `kill()` couvrent aussi ses sous-cgroupes ; `close()` ne les supprime pas (inchangé, voir § 7).
 - **Un cgroup « récupéré » qu'on n'a pas pu supprimer est un résidu**, pas une récupération ; il n'y a plus de journal par cgroup hors du rapport agrégé.
+
+## 10. Lot 4 — Q5, R6 : une interruption reste une interruption, un artefact reste dans son répertoire
+
+> Branche `fiab/q5-r6-interruption`, créée depuis la branche du lot 3 (`fiab/r2-r3-cgroups`, `cab6f74e`), worktree `minos-wt/fiab-lot4`. Constats : **Q5** (`InterruptedException` avalée ; chemin d'artefact non confiné, PLAUSIBLE pour la seconde partie) et **R6** (une interruption pendant l'attente de l'artefact dégrade le run en FAILED). Règles du lot : test rouge avant correctif ; le confinement passe par une primitive de confinement unique, pas par une comparaison de chaînes ; l'interruption se reconnaît d'**une seule** façon.
+
+### 10.1 Cibles relocalisées (base `cab6f74e`)
+
+| Cible de l'audit | Emplacement réel |
+|---|---|
+| `IndexingRunExecutor.execute` (`catch (Exception)`) | `minos-engine/src/main/java/com/minos/orchestration/IndexingRunExecutor.java` : `execute` puis `persistTerminalFailure` (l. ~532) |
+| détection d'interruption en aval | `IndexingRunExecutor.isInterruption` (chaîne des causes, `InterruptedException` seulement) |
+| `validateArtifact` et l'attente de lisibilité | `IndexingRunExecutor.validateArtifact`, `awaitReadable` (l. ~706-728) |
+| `ResumeAborted` | classe privée de `IndexingRunExecutor` (constructeur sans cause), levée par `reverifyReusedArtifacts`, `canonicalRunDirectory`, `resumeStagedPromotion` |
+| confinement de l'artefact à `runs/<runId>/` | `IndexingResumePlanner.reusable` (`toRealPath().startsWith(runDirectory)`) et `IndexingRunExecutor.reverifyReusedArtifacts` ; **aucun** à `validateArtifact` |
+| exécuteur de production dont l'artefact n'est PAS dans `runs/<runId>/` | `minos-runtime-local/.../DistributedIndexerExecutor` (rend `distributed-artifacts/<clé>/artifact`, hors du répertoire de run) |
+
+### 10.2 Ce qui reste vrai à la base (lu, puis prouvé par un test rouge)
+
+- **Q5, drapeau d'interruption : déjà fermé, depuis `90ab9197` (R1 lot 3, « R1-11 »).** `persistTerminalFailure` rétablit le drapeau quand `isInterruption` est vrai ; `InterruptedRunRecoveryTest.threadInterruptionDuringAProviderLeavesAnInterruptedRunAndRestoresTheFlag` et `RunDirectoryHoldTest.anInterruptedRunKeepsItsMarkerBecauseItIsOfferedForResume` le gardent. Le constat tel que l'audit le formule (« sans rétablir le drapeau ») ne se recorrige pas.
+- **Mais le correctif d'origine a un défaut que l'audit ne voit pas, et que les tests d'origine ne peuvent pas voir : le drapeau est rétabli AVANT d'écrire l'état.** Avec le drapeau levé, toute entrée-sortie sur un canal de fichier interruptible échoue (`ClosedByInterruptException`) : `markers.mark` de `persistInterruption` échoue, et `persistInterruption` bascule sur `persistFailure`. Les tests d'origine utilisent des stockages en mémoire, qui n'écrivent aucun fichier. Preuve sur le vrai stockage : `InterruptionDuringIndexingTest.interruptionRaisedByTheProviderKeepsTheRunResumableWithItsCheckpoints` (provider qui lève `InterruptedException` après deux cibles terminées) rend `FAILED` au lieu de `INTERRUPTED`, marqueur retiré, `resumableRunId` vide : **les deux points de contrôle sont jetés**. C'est le vrai défaut de Q5/R6 : un arrêt du service pendant une indexation ne laisse pas de run reprenable.
+- **R6 : ouvert.** `awaitReadable` rétablit le drapeau mais rend `false` ; `validateArtifact` lève `IllegalStateException("final index artifact is missing or unreadable")` sans cause ; `isInterruption` ne voit donc rien. Rouge : `IndexingInterruptionTest.anInterruptionPendingWhenTheArtifactWaitBeginsLeavesAnInterruptedResumableRun` (`expected: <INTERRUPTED> but was: <FAILED>`, message `IllegalStateException`) et, sur le vrai stockage, `InterruptionDuringIndexingTest.interruptionWhileWaitingForTheArtifactKeepsTheRunResumableWithItsCheckpoints`.
+- **R6, même famille : `ResumeAborted` sans cause.** Une interruption pendant la promotion d'une reprise (`resumeStagedPromotion` enveloppe toute exception) devient un `ResumeAborted` sans cause : le run est FAILED **et l'appelant enchaîne sur un run complet neuf**, qui relance tous les providers alors que le service s'arrête. Rouge : `IndexingInterruptionTest.anInterruptionDuringTheResumedPromotionKeepsTheRunInterruptedInsteadOfFallingBackToAFullRun` (le run rendu est un run neuf, pas le run interrompu).
+- **R6, même famille : un canal fermé par l'interruption n'est pas reconnu.** `ClosedByInterruptException` (exception d'un canal de fichier interrompu, par exemple dans la lecture de mise en snapshot) n'est pas un `InterruptedException` : le run devient FAILED. Rouge : `IndexingInterruptionTest.aChannelClosedByTheInterruptionDuringStagingKeepsTheRunInterrupted`.
+- **Q5, confinement : REPRODUIT (le PLAUSIBLE tombe), au niveau du port.** Un exécuteur qui rend un artefact hors de `runs/<runId>/` est accepté, le run SUCCEEDED et le fichier extérieur est mis en snapshot : par des segments `..` (le chemin est normalisé en `home/outside/index.scip`, donc accepté), par un lien symbolique final, par un répertoire ancêtre lié. Rouge : `IndexingArtifactConfinementTest` (3 tests, `expected: <FAILED> but was: <SUCCEEDED>` ; les liens symboliques sont disponibles sur cette machine Windows, aucun test sauté). **Portée réelle, dite honnêtement** : aucun exécuteur de production ne laisse le *fournisseur* choisir le chemin rendu (`ProcessIndexerExecutor` le construit lui-même et vérifie `regularFileNoFollow`, `SymlinkReplacingProviderMain` en est le test) ; le défaut est l'absence de garde-fou dans l'orchestrateur (défense en profondeur), pas une faille atteignable aujourd'hui. Le lot le ferme quand même, parce que le port n'impose rien à un futur exécuteur.
+- **Piège découvert : `DistributedIndexerExecutor` rend un artefact hors de `runs/<runId>/`** (`distributed-artifacts/<clé>/artifact`, dans le cache de bundles vérifié). Un confinement naïf au répertoire de run casserait l'indexation distante (elle est aujourd'hui fermée en échec par A1, mais le code est prévu pour fonctionner). Décision au § 10.4.
+
+### 10.3 Chiffres de référence des gates (base `cab6f74e`)
+
+| Gate | Résultat |
+|---|---|
+| `check-module-boundaries.py` | `modules=14, sources=504, packages=45` |
+| `check-current-docs.py`, `product-facts.py --check` | SUCCESS |
+| `check-milestone-artifact-references.py` | `scripts checked=95` |
+| `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py` | SUCCESS |
+| `check-jacoco.py` | référence : fin du lot 3 (`dfc9027a`), 26 portées PASS, seule rouge `m24-polyglot-provider-platform` (préexistante, Windows) ; `critical-orchestration` line 0,891 / branch 0,773 ; `resume-orchestration` 0,906 / 0,787 |
+
+### 10.4 Décisions
+
+- **Q5, drapeau d'interruption : pas recorrigé, déjà fermé.** Ce que le lot corrige est l'**ordre** : `persistTerminalFailure` efface le drapeau pour écrire l'état (`RunContext.clearInterruptFlagForWrite`) et le **rejoue en tout dernier**, sur toutes les sorties (INTERRUPTED persisté, repli FAILED, interruption levée à l'entrée, interruption reçue pendant l'écriture). Le drapeau rétabli avant l'écriture était la cause des points de contrôle jetés (§ 10.2).
+- **Une seconde interruption pendant l'écriture (V-L4-02).** Chaque écriture terminale efface le drapeau avant d'écrire et se refait (au plus 3 tentatives, constante `PERSISTENCE_ATTEMPTS_UNDER_INTERRUPTION`) quand elle a échoué parce que le thread a été interrompu de nouveau ; il en va de même du marqueur de rétention. Si une écriture échoue malgré tout, **le run rendu le dit** (« the interrupted state could not be written, the next indexing reconciles it ») au lieu d'annoncer une reprise offerte que le magasin ne tient pas.
+- **Une seule façon de reconnaître une interruption : `IndexingRunExecutor.isInterruption`.** Elle cherche, dans toute la chaîne des causes, un `InterruptedException` ou un `ClosedByInterruptException` (l'exception d'un canal de fichier interrompu). `InterruptedIOException` est volontairement exclue : `SocketTimeoutException` en hérite, un délai réseau n'est pas un arrêt du service. Conséquence de la règle : **toute exception qui perd la cause d'une interruption est un défaut à l'endroit où elle la perd** ; les trois endroits trouvés sont corrigés (`awaitReadable` propage au lieu de rendre `false` ; `ResumeAborted` chaîne sa cause ; la pause de remplacement de `DurableAtomicFile` garde l'`InterruptedException` comme cause).
+- **Une interruption pendant une reprise n'abandonne pas la reprise.** `resumeStagedPromotion` ne transforme plus une interruption en `ResumeAborted` et `executeResumed` ne rend pas la main à un run complet neuf quand l'abandon était une interruption : le run rouvert reste INTERRUPTED et offert.
+- **Q5, confinement : la primitive est `ConfinedFileOpener`** (S5 : chaque répertoire descendu sans suivre de lien, dernier composant ouvert sans suivre de lien, lien, jonction, objet spécial et non-régulier refusés). `PrivateLocalStorage` est la politique de droits à la création (0700/0600, ACL), pas une primitive de confinement : elle n'est pas le bon outil ici. Aucune comparaison de chaînes : `Path.startsWith` sur des chemins normalisés ou résolus, par composants (un répertoire frère `run-evil` n'est pas « sous » `run`, test dédié).
+- **Une seule décision de confinement : `ArtifactConfinement.requireInside`**, appelée par `validateArtifact` (à la sortie du provider), par `stageSnapshot` (tous les artefacts, frais ou réutilisés, juste avant la mise en snapshot : V-L4-03), par `IndexingResumePlanner.reusable` et par `reverifyReusedArtifacts` (les deux copies de la règle d'avant disparaissent). Un lien est refusé **à tout niveau** du chemin, même quand sa cible retomberait dans le répertoire de run (refuser tout lien est plus simple à démontrer que trier les liens inoffensifs).
+- **L'exécuteur distribué n'est pas confiné à `runs/<runId>/`.** Il rend un artefact du cache de bundles vérifié (`distributed-artifacts/<clé>/`). Le port `IndexerExecutor` gagne `artifactsLiveInRunDirectory()` (défaut `true` : un nouvel exécuteur est confiné tant qu'il ne déclare pas le contraire) ; `DistributedIndexerExecutor` répond `false`, `LocalRemoteIndexingRuntime` le transmet. Le confiner aurait cassé l'indexation distante le jour où A1 la rouvre.
+- **Sans répertoire de run connu, rien n'est confiné (V-L4-04).** Le port `ResumableRunMarkers.none()` (constructeur de cycle de vie à quatre arguments, stores en mémoire) ne connaît aucun répertoire de run ; aucune reprise n'est possible non plus (le planificateur refuse). En production le câblage (`RunDirectoryResumableRunMarkers`) rend toujours un répertoire. C'est une décision, pas un oubli : un répertoire inconnu ne se confine pas.
+- **Messages.** Aucun message neuf ne porte de chemin. Le message d'un run dont l'artefact ne devient jamais lisible n'en porte plus non plus (il portait le chemin absolu, V-L4-04). Les refus de reprise `artifact became a symbolic link` / `left the run directory` deviennent `artifact is, or lies under, a symbolic link or a special file` / `lies outside the run directory` (le texte ne dit plus « became », il décrit l'état ; aucun test ni script n'affirmait l'ancien).
+- **Jouée au niveau du port, pas de la production.** Le chemin de l'artefact n'est jamais choisi par le provider (§ 10.2) : le lot est une défense en profondeur qui ne change rien aujourd'hui en production. Ce qui change pour l'utilisateur, c'est l'interruption (§ 10.7).
+
+### 10.5 Comptes AVANT (les comptes APRÈS sont au § 10.7)
+
+| Décision | Sites avant |
+|---|---|
+| « ceci est une interruption » (production) | **1** : `IndexingRunExecutor.isInterruption` (cause `InterruptedException` seulement) ; `LinuxCgroupJob` *préserve* une interruption dans une chaîne nettoyée mais ne décide rien du run |
+| « ce chemin est confiné au répertoire de run » | **2** : `IndexingResumePlanner.reusable`, `IndexingRunExecutor.reverifyReusedArtifacts` (deux copies de la même règle `isSymbolicLink` + `toRealPath().startsWith`) ; **0** à `validateArtifact` |
+
+### 10.6 Journal par commit
+
+| Commit | Contenu | Gates |
+|---|---|---|
+| `b9a74864` | docs : état réel de Q5 et R6 à la base, inventaire des décisions | 504 / 45 / SUCCESS / SUCCESS / 95 |
+| `5cd64c30` | tests rouges : interruption sur le vrai stockage (2), en mémoire (3), confinement (3) | idem |
+| `1cbb1432` | test rouge : la pause de remplacement garde sa cause | idem |
+| `97aba265` | Q5/R6 : drapeau effacé pour écrire puis rejoué, `awaitReadable` propage, `ResumeAborted` chaîne sa cause, pas de repli sur un run complet après interruption | idem |
+| `41be5596` | Q5 : `ArtifactConfinement`, une décision pour trois sites, exemption de l'exécuteur distribué | 505 / 45 / SUCCESS / SUCCESS / 95 |
+| `037bf19f` | test rouge : V-L4-02, seconde interruption pendant l'écriture | idem |
+| `fad14230` | V-L4-02 : écriture refaite drapeau effacé, statut rendu fidèle | idem |
+| `af85eab9` | refactor : un seul endroit efface le drapeau pour écrire | idem |
+| `3c71e622` | tests rouges : V-L4-03 (ancêtre lié vers l'intérieur, artefact frais échangé), V-L4-04 (message sans chemin) | idem |
+| `66fd1d17` | V-L4-03/04 : aucun lien à aucun niveau, chaque artefact reconfiné avant la mise en snapshot, message sans chemin | idem |
+| `8bec5c6e` | décisions, journal, preuves de fin de lot, constats | idem |
+| (commit suivant) | remarques non bloquantes du verdict final : constantes des tests, § 7 | idem |
+
+Gates rejoués après chaque commit : `check-module-boundaries.py` (`modules=14`, `sources=505` depuis `41be5596` : +1 classe de production, `ArtifactConfinement`, attendue ; `packages=45`), `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py` (`scripts checked=95`), `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py`, `check-remote-distributed-consistency.py` (le lot touche `DistributedIndexerExecutor`) : SUCCESS. Aucun script de `scripts/` ne nomme les méthodes touchées (grep fait avant chaque changement de nom).
+
+### 10.7 Preuves
+
+**Ce que voit l'utilisateur.**
+
+- **Un arrêt du service pendant une indexation** (le thread d'indexation est interrompu : arrêt de l'hôte MCP, fermeture d'un pool) : avant, le run était rendu **FAILED** (ou restait RUNNING sur disque), le marqueur de rétention était retiré et les points de contrôle déjà acquis devenaient inutilisables ; `minos_index_status` répondait `INDEXING` jusqu'à la prochaine exécution. Après, le run est **INTERRUPTED**, le projet est `STALE` (ou `FAILED` s'il n'avait jamais été indexé) avec `resumableRunId`, le répertoire de run reste retenu, et `minos index` **reprend** : les providers terminés ne sont pas relancés. Le drapeau d'interruption est rendu à l'appelant.
+- **Une interruption pendant la promotion d'une reprise** ne relance plus un run complet (tous les providers) pendant que le service s'arrête.
+- Le message d'un run dont l'artefact est introuvable ne contient plus de chemin absolu.
+- **Rien d'autre ne change en production** : un artefact qui sort de `runs/<runId>/` n'est produit par aucun exécuteur (§ 10.2) ; s'il l'était, le run serait FAILED avec « executor returned an artifact that lies outside the run directory » (ou « … is, or lies under, a symbolic link or a special file »), sans rien mettre en snapshot.
+
+**Rouge → vert.** Chaque test a été joué sur le code d'origine avant le correctif (Windows, puis WSL Ubuntu pour ceux qui touchent aux liens), sortie rouge dans le message du commit.
+
+| Défaut | Test | Rouge (code d'origine) | Vert |
+|---|---|---|---|
+| Q5/R6 interruption levée par le provider, vrai stockage | `InterruptionDuringIndexingTest.interruptionRaisedByTheProviderKeepsTheRunResumableWithItsCheckpoints` | `Optional[InterruptedException: service is stopping] ==> expected: <INTERRUPTED> but was: <FAILED>` | 2/2 ; **2 points de contrôle relus sur disque, run INTERRUPTED, marqueur, `resumableRunId`, puis la reprise en réutilise 2 et ne relance que le dernier provider** |
+| R6 interruption PENDANT l'attente de l'artefact, vrai stockage | `…interruptionWhileWaitingForTheArtifactKeepsTheRunResumableWithItsCheckpoints` | `IllegalStateException: final index artifact is missing or unreadable … ==> expected: <INTERRUPTED> but was: <FAILED>` | idem |
+| R6 attente déjà interrompue, en mémoire | `IndexingInterruptionTest.anInterruptionPendingWhenTheArtifactWaitBeginsLeavesAnInterruptedResumableRun` | `expected: <INTERRUPTED> but was: <FAILED>` | 5/5 |
+| R6 `ResumeAborted` sans cause, repli sur un run neuf | `…anInterruptionDuringTheResumedPromotionKeepsTheRunInterruptedInsteadOfFallingBackToAFullRun` | le run rendu est un run **neuf** | vert |
+| R6 canal fermé par l'interruption | `…aChannelClosedByTheInterruptionDuringStagingKeepsTheRunInterrupted` | `the interrupt flag must be replayed to the caller ==> expected: <true> but was: <false>` | vert |
+| R6 pause de remplacement sans cause | `DurableAtomicFileTest.anInterruptionDuringTheReplacementPauseKeepsItsCauseAndReplaysTheFlag` | `Unexpected null value, expected: <java.lang.InterruptedException> but was: <null>` | 7/7 |
+| V-L4-02 seconde interruption pendant l'écriture de l'état | `…aSecondInterruptionWhileTheInterruptedStateIsBeingWrittenStillReachesTheStore` | `the store holds what the caller was told ==> expected: <INTERRUPTED> but was: <RUNNING>` | vert |
+| V-L4-02 seconde interruption pendant la pose du marqueur | `…aSecondInterruptionWhileTheMarkerIsBeingHeldStillOffersTheRunForResume` | `expected: <INTERRUPTED> but was: <FAILED>` | vert |
+| Q5 confinement : `..`, lien final, ancêtre lié | `IndexingArtifactConfinementTest` (3) | `an artifact outside the run directory is refused ==> expected: <FAILED> but was: <SUCCEEDED>` (le fichier extérieur est mis en snapshot) | 7/7 |
+| V-L4-03 ancêtre lié vers l'intérieur | `ArtifactConfinementTest.aDirectoryOnTheWayThatIsALinkIsRefusedEvenWhenItLeadsInsideTheRunDirectory` | `Expected ArtifactConfinement.Escape to be thrown, but nothing was thrown` | 8/8 |
+| V-L4-03 artefact frais échangé pendant un autre provider | `…anArtifactReplacedByALinkWhileLaterProvidersRanIsRefusedBeforeStaging` | `expected: <FAILED> but was: <SUCCEEDED>` | vert |
+| V-L4-04 message sans chemin | `…anArtifactThatNeverBecomesReadableFailsTheRunWithoutItsPath` | message avec `C:\Users\…\never-written.scip` | vert |
+
+**Le constat PLAUSIBLE (confinement) n'est pas tombé : il est reproduit**, au niveau du port (§ 10.2). Sa portée réelle est documentée : défense en profondeur, pas une faille atteignable aujourd'hui.
+
+**Test de concurrence, rejoué 50 fois.** `InterruptionDuringIndexingTest` (vrai stockage, deux threads : celui qui indexe et celui qui l'interrompt) se synchronise sans aucun `Thread.sleep` : le fournisseur de la troisième cible signale sa sortie par un `CountDownLatch`, le thread d'interruption attend ce signal, puis l'entrée du thread d'indexation dans son **unique** attente chronométrée (état `TIMED_WAITING` : l'attente de lisibilité de l'artefact), et seulement alors l'interrompt. Les bornes de 60 s ne sont que des garde-fous, jamais ce qui ordonne les événements. Rejeu par 50 lancements Maven successifs (`-Dsurefire.rerunFailingTestsCount=0`, script `loop50.sh` du scratchpad, arbre séparé du worktree) : **50 passages sur 50, 0 échec** sur `97aba265` (premier correctif) et **50 passages sur 50, 0 échec (et 50 sur 50 de `verif-fiab`, indépendamment, sur les cinq classes du lot)** sur `66fd1d17` (code final). Les autres tests du lot (en mémoire) sont déterministes et mono-thread : les deux « secondes interruptions » sont livrées par l'appel d'écriture lui-même.
+
+**Comptes AVANT / APRÈS** (grep du code de production, hors commentaires ; `minos-intellij` exclu).
+
+| Décision | Avant | Après |
+|---|---|---|
+| « ceci est une interruption » | **1** (`isInterruption`, `InterruptedException` seulement) | **1** (`isInterruption`, `InterruptedException` ou `ClosedByInterruptException`) ; ses appelants passent de 1 à 5 (reprise, promotion, écriture, marqueur), la règle reste écrite une fois |
+| interruptions avalées qui perdaient la cause (`catch InterruptedException` qui rend `false`, `ResumeAborted` sans cause, `IOException` sans cause) | 3 (`awaitReadable`, `ResumeAborted`, pause de `DurableAtomicFile`) | **0** |
+| endroits qui effacent le drapeau pour écrire | 0 | **1** (`RunContext.clearInterruptFlagForWrite`, appelé par les quatre écritures terminales) |
+| « ce chemin est confiné au répertoire de run » | **2** (`IndexingResumePlanner.reusable`, `reverifyReusedArtifacts`) + **0** à `validateArtifact` | **1** (`ArtifactConfinement.requireInside`), 4 appelants |
+| `catch (InterruptedException)` de production | 33 | 32 |
+| `Thread.interrupted()` / `isInterrupted()` de production | 1 | 2 (la pause de `DurableAtomicFile`, existante, et `RunContext.clearInterruptFlagForWrite`) |
+
+**Gates de fin de lot.** `clean verify` sur `66fd1d17` (code final ; les commits suivants ne changent que ce fichier) : voir ci-dessus. `check-module-boundaries.py` `modules=14, sources=505, packages=45` (base 504 : +1, `ArtifactConfinement`) ; `check-current-docs.py`, `product-facts.py --check` SUCCESS ; `check-milestone-artifact-references.py` `scripts checked=95` ; `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py`, `check-remote-distributed-consistency.py` SUCCESS ; `check-jacoco.py` : 26 portées PASS, **seule rouge `m24-polyglot-provider-platform`** (line 0,228 < 0,28, préexistante, Windows, mêmes chiffres qu'à la base) ; `critical-orchestration` line / branch 0,891 / 0,773 → 0,908 / 0,766 ; `resume-orchestration` 0,906 / 0,787 → 0,920 / 0,782 (seuils 0,75 / 0,55 ; la branche baisse de 0,007 et 0,005 : des chemins neufs, dont les réécritures sous interruption, sont des branches de plus)
+
+**Golden.** Les 12 de `characterization/` sont **inchangés** (`git diff cab6f74e..HEAD -- minos-app/src/test/resources scripts` vide) ; aucun script de `scripts/` assoupli.
+
+### 10.8 Répartition Windows / WSL
+
+- **Windows** (machine locale, liens symboliques disponibles : **aucun test sauté**) : toute la suite du lot ; `clean verify` complet (`BUILD SUCCESS`, 15 modules, 11 min 19, **1 773 tests exécutés, 0 échec, 0 erreur, 53 ignorés** (les mêmes 53 `Assumptions` qu'au lot 3 ; les tests de liens symboliques du lot se sont exécutés, aucun sauté ; 1 750 à la base, +23 : `ArtifactConfinementTest` 8, `IndexingArtifactConfinementTest` 7, `IndexingInterruptionTest` 5, `InterruptionDuringIndexingTest` 2, `DurableAtomicFileTest` +1)) ; le test de concurrence rejoué 50 fois ; les stratégies de confinement du repli par chemin de `ConfinedFileOpener` (Windows : revalidation de la chaîne d'ancêtres pendant que le canal est tenu ouvert).
+- **WSL Ubuntu, Java 24, compte non privilégié, arbre copié sur le système de fichiers Linux** : `ArtifactConfinementTest` 8, `IndexingArtifactConfinementTest` 7, `IndexingInterruptionTest` 5, `IndexingResumeTest` 19, `IndexingResumePlannerTest` 7, `InterruptedRunRecoveryTest` 13, `RunDirectoryHoldTest` 4, `DurableAtomicFileTest` 7, `InterruptionDuringIndexingTest` 2 : **tous verts, 0 sauté** (stratégie `SecureDirectoryStream` de `ConfinedFileOpener`, `openat` sans suivre de lien) ; le même ensemble est **rouge** sur le code d'origine (9 tests rouges : 3 de confinement, 3 d'interruption en mémoire, 1 de pause de remplacement, 2 sur le vrai stockage).
+- **Non exécuté nulle part** : le rejeu ×50 n'a été fait que sous Windows (le test n'a pas de dépendance à la plateforme autre que le système de fichiers, et passe sous Linux en une exécution) ; une interruption réelle d'un provider externe sous sandbox (le test simule le provider par un exécuteur).
+
+### 10.9 Constats de verif-fiab (lot 4)
+
+V-L4-01 à V-L4-05 et leur résolution : § 6, « Lot 4 ». Aucun constat ouvert à la fin du lot : `VERDICT-FINAL: ok` de `verif-fiab` sur `8bec5c6e` (`clean verify` rejoué de son côté : 1 773 tests, 0 échec, 9 min 57 ; rejeux ×50 indépendants sur les cinq classes du lot). Trois remarques non bloquantes, consignées : R-L4-A (littéraux dupliqués dans `IndexingArtifactConfinementTest`, factorisés en constantes), R-L4-B et R-L4-C (§ 7).
