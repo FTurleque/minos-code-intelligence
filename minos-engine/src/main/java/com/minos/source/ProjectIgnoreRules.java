@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 /**
@@ -31,24 +32,60 @@ public final class ProjectIgnoreRules {
     private static final int MAX_IGNORE_LINES = 20_000;
     private static final int MAX_IGNORE_RULES = 10_000;
     private static final int MAX_IGNORE_LINE_CHARS = 8_192;
+    /** A rule longer than this is refused at compilation: no legitimate glob needs it. */
+    static final int MAX_RULE_CHARS = 1_024;
+    /** Star groups per rule; each one multiplies the backtracking a match can need. */
+    static final int MAX_WILDCARDS_PER_RULE = 8;
+    /** Characters one rule may read while matching one path; beyond it the rule is disabled, not retried. */
+    static final int MATCH_STEP_BUDGET = 100_000;
+
+    private static final String ANY_DIRECTORIES = "(?:.*/)?";
+    private static final System.Logger LOGGER = System.getLogger(ProjectIgnoreRules.class.getName());
 
     private static final Set<String> HARD_IGNORED_DIRECTORY_NAMES = Set.of(
             ".git", ".idea", ".minos", ".minos-m0", "node_modules", "target", "dist", "out");
 
     private final List<IgnoreRule> gitRules;
     private final List<IgnoreRule> minosRules;
+    private final int discardedRules;
 
-    private ProjectIgnoreRules(List<IgnoreRule> gitRules, List<IgnoreRule> minosRules) {
+    private ProjectIgnoreRules(List<IgnoreRule> gitRules, List<IgnoreRule> minosRules, int discardedRules) {
         this.gitRules = List.copyOf(gitRules);
         this.minosRules = List.copyOf(minosRules);
+        this.discardedRules = discardedRules;
     }
 
+    /**
+     * Loads {@code .gitignore} and {@code .minosignore} of the project root only. Nested
+     * {@code .gitignore} files and {@code .git/info/exclude} are deliberately not read: honouring
+     * them needs Git's full precedence, negation and directory-scope semantics, and a partial
+     * version would be worse than a documented gap. A rule that cannot be compiled, or is too
+     * large or complex to evaluate safely, is discarded and counted ({@link #discardedRuleCount()}),
+     * never allowed to fail the load of the others.
+     */
     public static ProjectIgnoreRules load(Path projectRoot) throws IOException {
         Path root = Objects.requireNonNull(projectRoot, "projectRoot").toAbsolutePath().normalize();
-        return new ProjectIgnoreRules(
-                readRules(root, root.resolve(".gitignore")),
-                readRules(root, root.resolve(".minosignore"))
-        );
+        int[] discarded = new int[1];
+        List<IgnoreRule> git = readRules(root, root.resolve(".gitignore"), discarded);
+        List<IgnoreRule> minos = readRules(root, root.resolve(".minosignore"), discarded);
+        if (discarded[0] > 0) {
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS discarded " + discarded[0]
+                    + " unusable project ignore rule(s); the other rules still apply");
+        }
+        return new ProjectIgnoreRules(git, minos, discarded[0]);
+    }
+
+    /** Rules refused at load (invalid syntax, too long, too many star groups). Counts only, never their text. */
+    public int discardedRuleCount() {
+        return discardedRules;
+    }
+
+    /** Rules disabled so far because matching one path exceeded the step budget. */
+    public int exhaustedRuleCount() {
+        int count = 0;
+        for (IgnoreRule rule : gitRules) if (rule.exhausted().get()) count++;
+        for (IgnoreRule rule : minosRules) if (rule.exhausted().get()) count++;
+        return count;
     }
 
     public boolean isIgnored(Path relativePath, boolean directory) {
@@ -78,7 +115,7 @@ public final class ProjectIgnoreRules {
         return ignored;
     }
 
-    private static List<IgnoreRule> readRules(Path root, Path file) throws IOException {
+    private static List<IgnoreRule> readRules(Path root, Path file, int[] discarded) throws IOException {
         Path candidate = file.toAbsolutePath().normalize();
         if (!candidate.startsWith(root) || !Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) {
             return List.of();
@@ -98,7 +135,7 @@ public final class ProjectIgnoreRules {
                 if (lines > MAX_IGNORE_LINES) {
                     throw new IOException("project ignore file exceeds line limit");
                 }
-                IgnoreRule rule = parseRule(rawLine);
+                IgnoreRule rule = parseRuleOrDiscard(rawLine, discarded);
                 if (rule != null) {
                     if (rules.size() >= MAX_IGNORE_RULES) {
                         throw new IOException("project ignore file exceeds rule limit");
@@ -108,6 +145,16 @@ public final class ProjectIgnoreRules {
             }
         }
         return List.copyOf(rules);
+    }
+
+    private static IgnoreRule parseRuleOrDiscard(String rawLine, int[] discarded) {
+        try {
+            return parseRule(rawLine);
+        } catch (IllegalArgumentException unusable) {
+            // PatternSyntaxException is an IllegalArgumentException: one bad rule never fails the load.
+            discarded[0]++;
+            return null;
+        }
     }
 
     private static IgnoreRule parseRule(String rawLine) {
@@ -131,6 +178,7 @@ public final class ProjectIgnoreRules {
         if (anchored) line = line.substring(1);
         if (line.isEmpty()) return null;
 
+        if (line.length() > MAX_RULE_CHARS) throw new IllegalArgumentException("ignore rule is too long");
         boolean containsSlash = line.indexOf('/') >= 0;
         String regex = globToRegex(line);
         StringBuilder baseExpression = new StringBuilder("^");
@@ -140,14 +188,21 @@ public final class ProjectIgnoreRules {
         Pattern effectivePattern = directoryOnly
                 ? Pattern.compile(baseExpression + "(?:/.*)?$")
                 : directPattern;
-        return new IgnoreRule(effectivePattern, directPattern, negated, directoryOnly);
+        return new IgnoreRule(effectivePattern, directPattern, negated, directoryOnly, new AtomicBoolean());
     }
 
     private static String globToRegex(String glob) {
         StringBuilder regex = new StringBuilder();
         int index = 0;
+        int wildcards = 0;
         while (index < glob.length()) {
+            boolean star = glob.charAt(index) == '*';
+            int before = regex.length();
             index = appendGlobToken(regex, glob, index);
+            // A "**/" folded into the previous one adds nothing and is not counted.
+            if (star && regex.length() > before && ++wildcards > MAX_WILDCARDS_PER_RULE) {
+                throw new IllegalArgumentException("ignore rule has too many wildcards");
+            }
         }
         return regex.toString();
     }
@@ -186,7 +241,9 @@ public final class ProjectIgnoreRules {
         int cursor = index + 2;
         while (cursor < glob.length() && glob.charAt(cursor) == '*') cursor++;
         if (cursor < glob.length() && glob.charAt(cursor) == '/') {
-            regex.append("(?:.*/)?");
+            // Consecutive "**/" segments match exactly what one does; repeating the group only
+            // multiplies backtracking.
+            if (!regex.toString().endsWith(ANY_DIRECTORIES)) regex.append(ANY_DIRECTORIES);
             return cursor + 1;
         }
         regex.append(".*");
@@ -200,14 +257,34 @@ public final class ProjectIgnoreRules {
             return index + 1;
         }
         String characterClass = glob.substring(index + 1, closing);
-        regex.append('[');
-        if (characterClass.startsWith("!")) {
-            regex.append('^');
-            characterClass = characterClass.substring(1);
+        boolean negated = characterClass.startsWith("!") || characterClass.startsWith("^");
+        if (negated) characterClass = characterClass.substring(1);
+        if (characterClass.isEmpty()) throw new IllegalArgumentException("empty character class");
+        // Every class member is emitted escaped: the content is untrusted input, never regex syntax
+        // ("[[]", "[a&&b]"), and a reversed range ("[z-a]") makes the rule unusable.
+        regex.append(negated ? "[^" : "[");
+        int position = 0;
+        while (position < characterClass.length()) {
+            char first = characterClass.charAt(position);
+            if (position + 2 < characterClass.length() && characterClass.charAt(position + 1) == '-') {
+                char last = characterClass.charAt(position + 2);
+                if (first > last) throw new IllegalArgumentException("reversed character range");
+                appendClassMember(regex, first);
+                regex.append('-');
+                appendClassMember(regex, last);
+                position += 3;
+            } else {
+                appendClassMember(regex, first);
+                position++;
+            }
         }
-        regex.append(characterClass.replace("\\", "\\\\"));
         regex.append(']');
         return closing + 1;
+    }
+
+    private static void appendClassMember(StringBuilder regex, char value) {
+        if ("[]&^-\\".indexOf(value) >= 0) regex.append('\\');
+        regex.append(value);
     }
 
     private static void appendRegexLiteral(StringBuilder regex, char value) {
@@ -233,11 +310,61 @@ public final class ProjectIgnoreRules {
             Pattern effectivePattern,
             Pattern directPattern,
             boolean negated,
-            boolean directoryOnly
+            boolean directoryOnly,
+            AtomicBoolean exhausted
     ) {
         private boolean matches(String portablePath, boolean directory) {
-            if (directoryOnly && !directory && directPattern.matcher(portablePath).matches()) return false;
-            return effectivePattern.matcher(portablePath).matches();
+            if (exhausted.get()) return false;
+            try {
+                if (directoryOnly && !directory
+                        && directPattern.matcher(new BudgetedPath(portablePath)).matches()) {
+                    return false;
+                }
+                return effectivePattern.matcher(new BudgetedPath(portablePath)).matches();
+            } catch (MatchBudgetExceeded exceeded) {
+                // Fail closed on the rule, not on the load: it is disabled, counted, and never retried.
+                exhausted.set(true);
+                return false;
+            }
+        }
+    }
+
+    private static final class MatchBudgetExceeded extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        private MatchBudgetExceeded() {
+            super(null, null, false, false);
+        }
+    }
+
+    /** The only way a rule reads a path: each character read spends a fixed budget, so cost is bounded by count, not time. */
+    private static final class BudgetedPath implements CharSequence {
+        private final String value;
+        private int remaining = MATCH_STEP_BUDGET;
+
+        private BudgetedPath(String value) {
+            this.value = value;
+        }
+
+        @Override
+        public int length() {
+            return value.length();
+        }
+
+        @Override
+        public char charAt(int index) {
+            if (--remaining < 0) throw new MatchBudgetExceeded();
+            return value.charAt(index);
+        }
+
+        @Override
+        public CharSequence subSequence(int start, int end) {
+            return value.subSequence(start, end);
+        }
+
+        @Override
+        public String toString() {
+            return value;
         }
     }
 }

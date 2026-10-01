@@ -12,7 +12,7 @@ S9 et S12 sont les deux seuls qui donnent quelque chose à un attaquant aujourd'
 | 1 | `sec/s9-git` | S9 | #317 | brouillon, CI en cours |
 | 2 | `sec/s12-audit` | S12 | #318 | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
 | 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | à ouvrir | **code terminé**, non poussé ; gate `check-private-io` |
-| 4 | `sec/s8-gitignore` | S8 | – | – |
+| 4 | `sec/s8-gitignore` | S8 | à ouvrir | code terminé |
 | 5 | `sec/s7-s15-windows` | S7, S15 | – | – |
 
 Base : `origin/develop` au 2026-10-01 (b991ffd2). Une branche, un worktree (`minos-wt/sec-lotN`) par lot, rebasés l'un sur l'autre.
@@ -305,6 +305,41 @@ et non construit ; les sandbox `bubblewrap`/cgroup (Linux seulement) n'ont tourn
 ### Gates à texte littéral du dossier `quality/` (orchestrateur, après fusion des lots 1-2)
 
 Trois scripts de `scripts/quality/` que `impl-sec` n'avait pas rejoués exigeaient du texte que les primitives remplacent : `FileLock` dans `FileHostedControlPlaneStore` et `JGitRemoteRepositoryMaterializer` devient `BoundedFileLease` ; `Files.isSymbolicLink` dans `RuntimeObservationEnvelopeCodec` devient `ConfinedFileOpener.openRegularFileNoFollow`. L'exigence reste du même ordre (le verrou fichier et le non-suivi de lien sont toujours gardés, par la primitive nommée). Tous les `check-*.py` de `remediation/`, `quality/` et `architecture/` sont verts après ce changement, hors `check-jacoco.py` (rapports JaCoCo requis).
+
+## 4. Lot 4 : S8, un `.gitignore` hostile ne casse pas le chargement
+
+### Relocalisation
+
+`ProjectIgnoreRules` : `minos-engine`, `com.minos.source` (utilisé par la découverte, `ProjectIgnorePolicy`, et trois appelants provider/runtime). Un seul compilateur de motifs d'exclusion, avant comme après.
+
+### Décisions (écrites avant le code)
+
+1. **Un motif qui ne compile pas est écarté et compté, jamais fatal.** `parseRuleOrDiscard` attrape `IllegalArgumentException` (dont `PatternSyntaxException`) : la règle est ignorée, `discardedRuleCount()` l'indique, un seul WARNING par chargement donne le nombre (jamais le texte du motif).
+2. **Les classes de caractères sont une entrée, pas de la syntaxe regex.** Chaque membre est échappé ; un intervalle inversé (`[z-a]`) ou une classe vide (`[!]`) rend la règle inutilisable ; `[[]` et `[a&&b]` (intersection regex Java) deviennent des littéraux, comme dans Git.
+3. **Le coût est borné par un mécanisme, pas par une horloge** :
+   - à la compilation : `MAX_RULE_CHARS` = 1 024 caractères, `MAX_WILDCARDS_PER_RULE` = 8 groupes d'étoiles, les `**/` consécutifs sont repliés en un seul (sémantiquement identique, et c'est le vecteur de répétition `(?:.*/)?(?:.*/)?…`) ;
+   - à l'évaluation : le chemin est lu par un `CharSequence` à budget (`MATCH_STEP_BUDGET` = 100 000 lectures par règle et par chemin). Au-delà, la règle est **désactivée** (échec fermé sur la règle, pas sur le chargement), comptée par `exhaustedRuleCount()`, et plus jamais évaluée.
+4. **`.gitignore` imbriqués et `.git/info/exclude` : écart assumé et documenté** (Javadoc de `load`). Les lire est un élargissement fonctionnel qui exige la sémantique complète de Git (précédence entre fichiers, négation, portée du répertoire) ; une demi-sémantique serait pire que l'écart. À traiter plus tard si demandé.
+5. Les règles `**` non suivies de `/` gardent leur sémantique historique (`.*`, franchit les `/`) : la changer modifierait le périmètre d'indexation, hors périmètre.
+
+### Preuve rouge (2026-10-01, `src/main` d'avant)
+
+Test jetable hors dépôt rejoué : `[z-a]x` et `[[]open` font échouer `ProjectIgnoreRules.load` (`PatternSyntaxException`, CONFIRMÉ) ; `*a*a*a*a*a*a*a*a*a*b` contre 200 `a` **ne termine pas en 20 s** (`assertTimeoutPreemptively` dans ce seul essai de preuve ; le test commité n'a aucune assertion de durée) : **le ReDoS est reproduit**, la part PLAUSIBLE de S8 est donc CONFIRMÉE. Tests commités (`ProjectIgnoreRulesHostileInputTest`, 5 tests) : vérifient les compteurs et les résultats, pas la durée.
+
+### Effet sur le périmètre d'indexation (mesuré)
+
+Ancienne et nouvelle implémentation comparées, mêmes entrées :
+
+| Jeu | Évaluations | Ignorées avant | Gagnées | Perdues | Écartées |
+|---|---|---|---|---|---|
+| `.gitignore` de ce dépôt × 1 657 fichiers suivis | 1 657 | – | 0 | 0 | 0 |
+| corpus de 26 motifs courants (classes `[Bb]in/`, `*.py[cod]`, `[^a-m]z.txt`, `[!0-9]data`, `**/target/`, négations…) × 1 682 chemins (fichier et répertoire) | 3 364 | 524 | **0** | **0** | 0 |
+
+Aucun fichier gagné ni perdu. Les `.gitignore` de deux dépôts publics n'ont **pas** été comparés (pas de téléchargement sans demande explicite) : à faire par `verif-sec` sur les dépôts qu'il a déjà en local, ou à la demande.
+
+### Windows / Linux
+
+Tout exécuté sous Windows (logique pure, sans dépendance de plateforme). Linux : par la CI. Tests ignorés ajoutés : 0.
 
 ## À traiter plus tard
 
