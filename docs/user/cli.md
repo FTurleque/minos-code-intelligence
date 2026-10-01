@@ -14,7 +14,7 @@ Checkout source sur la ligne de maintenance courante :
 java -jar .\target\minos-code-intelligence-1.3.0-SNAPSHOT-all.jar <commande>
 ```
 
-`--help` reste la source de vérité exécutable. Les commandes d'aide n'ont pas besoin d'initialiser un projet MINOS pour afficher leur syntaxe.
+`--help` reste la source de vérité exécutable. Les commandes d'aide n'ont pas besoin d'initialiser un projet MINOS pour afficher leur syntaxe : `--help` est reconnu à n'importe quelle position après le nom d'une commande (`minos find-symbol p S --limit 5 --help`), et ni l'aide ni une erreur d'usage (code 2) n'ouvrent `MINOS_HOME`. Une commande n'ouvre `MINOS_HOME` qu'une fois ses arguments compris, et ne construit que ce dont elle a besoin : une commande de lecture ne crée pas de répertoire d'indexation distante dans `MINOS_HOME`.
 
 ## Version
 
@@ -447,7 +447,7 @@ Toutes les commandes partagent le même analyseur d'arguments :
 - une option répétée est refusée (`duplicate option: --format`), qu'elle porte une valeur ou non ;
 - une option inconnue (`unknown option: --x`) ou un argument en trop (`unexpected argument: x`) est refusé ;
 - les bornes annoncées dans l'usage sont contrôlées avant tout accès aux données (`--limit must be between 1 and 10000`, code 2) ;
-- `--help` ou `-h`, seul après la commande ou après son opération (`minos tools install --help`, `minos team audit --help`), affiche l'usage et sort 0 sans ouvrir `MINOS_HOME`, y compris pour `doctor` et `mcp` ; ailleurs, `--help` est une option inconnue.
+- `--help` ou `-h`, seul après la commande ou après son opération (`minos tools install --help`, `minos team audit --help`), affiche l'usage et sort 0 sans ouvrir `MINOS_HOME`, y compris pour `doctor` et `mcp` ; `--help` placé n'importe où après le nom de la commande (`minos find-symbol p S --limit 5 --help`) a le même effet. `-h` n'est reconnu que seul ou en dernière position de trois arguments : il peut être une valeur (`--name -h`).
 
 ## Codes de sortie
 

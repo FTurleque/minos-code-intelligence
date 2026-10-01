@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Shared fail-closed skeleton for the option-parsing MINOS commands.
@@ -95,6 +96,9 @@ final class CliCommandSupport {
         }
         try {
             return body.execute(options);
+        } catch (LazyApplication.OpenFailure openFailure) {
+            // MINOS_HOME could not be opened: not a failure of this command, the launcher reports it as before.
+            throw openFailure;
         } catch (Exception exception) {
             error.append("error: ").append(failureReporter.describe(options, exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
@@ -118,6 +122,12 @@ final class CliCommandSupport {
     /** Failure line {@code <label> failed: <message>} reporting the originating cause of nested runtime wrappers. */
     static <O> FailureReporter<O> reportingCause(String label) {
         return (options, exception) -> label + " failed: " + failureMessage(unwrapRuntime(exception));
+    }
+
+    /** An already available collaborator as a supplier, for the commands that also accept a deferred one. */
+    static <T> Supplier<T> constant(T value, String name) {
+        Objects.requireNonNull(value, name);
+        return () -> value;
     }
 
     static boolean isHelp(String value) {

@@ -70,13 +70,19 @@ final class TeamCommand {
      */
     private static final Map<String, Operation> OPERATIONS = operationTable();
 
-    private final HostedControlPlaneService service;
+    private final Supplier<HostedControlPlaneService> service;
     private final Supplier<String> bearerToken;
 
     TeamCommand(HostedControlPlaneService service, Supplier<String> bearerToken) {
+        this(CliCommandSupport.constant(service, "service"), bearerToken);
+    }
+
+    /** The service is built on its first call, that is after the arguments have been analysed. */
+    TeamCommand(Supplier<HostedControlPlaneService> service, Supplier<String> bearerToken) {
         this.service = Objects.requireNonNull(service, "service");
         this.bearerToken = Objects.requireNonNull(bearerToken, "bearerToken");
     }
+
 
     int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         Objects.requireNonNull(arguments, "arguments");
@@ -126,7 +132,7 @@ final class TeamCommand {
             throw new UsageException(invalid.getMessage());
         }
         Invocation invocation = declared.parser.parse(options);
-        return invocation.run(service, this::token);
+        return invocation.run(service.get(), this::token);
     }
 
     private static Map<String, Operation> operationTable() {

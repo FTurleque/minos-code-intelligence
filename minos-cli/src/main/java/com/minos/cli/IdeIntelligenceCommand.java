@@ -18,6 +18,7 @@ import com.minos.application.semantic.SemanticSearchService;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 import static com.minos.output.DeterministicJson.object;
 
@@ -56,11 +57,17 @@ final class IdeIntelligenceCommand {
     private static final CliOptions.Spec CONTEXT_OPTIONS = CliOptions.spec().text("--format")
             .integer("--max-documents").integer("--max-tokens").integer("--max-tokens-per-document");
 
-    private final MinosApplication application;
+    private final Supplier<MinosApplication> application;
 
     IdeIntelligenceCommand(MinosApplication application) {
+        this(CliCommandSupport.constant(application, "application"));
+    }
+
+    /** The application is opened by the first operation that runs, that is after the arguments have been analysed. */
+    IdeIntelligenceCommand(Supplier<MinosApplication> application) {
         this.application = Objects.requireNonNull(application, "application");
     }
+
 
     int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         Objects.requireNonNull(arguments, "arguments");
@@ -118,7 +125,7 @@ final class IdeIntelligenceCommand {
         CliOptions options = analyse(PROGRAM_GRAPH_OPTIONS, arguments, 2);
         int maxNodes = options.integer("--max-nodes", ProgramGraphService.DEFAULT_MAX_NODES);
         int maxEdges = options.integer("--max-edges", ProgramGraphService.DEFAULT_MAX_EDGES);
-        return () -> graph(application.programGraphService().getGraph(arguments[1], maxNodes, maxEdges));
+        return () -> graph(application.get().programGraphService().getGraph(arguments[1], maxNodes, maxEdges));
     }
 
     private Invocation impactV2(String[] arguments) {
@@ -129,7 +136,7 @@ final class IdeIntelligenceCommand {
                 arguments[2],
                 options.integer("--max-depth", defaults.maxDepth()),
                 options.integer("--max-results", defaults.maxResults()));
-        return () -> impact(application.advancedImpactService().analyze(arguments[1], request));
+        return () -> impact(application.get().advancedImpactService().analyze(arguments[1], request));
     }
 
     private Invocation securityPaths(String[] arguments) {
@@ -139,19 +146,19 @@ final class IdeIntelligenceCommand {
                 options.text("--source-node"),
                 options.integer("--max-depth", 8),
                 options.integer("--max-results", 100));
-        return () -> security(application.securityAnalysisService().analyze(arguments[1], request));
+        return () -> security(application.get().securityAnalysisService().analyze(arguments[1], request));
     }
 
     private Invocation semanticIndexStatus(String[] arguments) {
         requirePositions(arguments, 2, "semantic-index-status requires <project>");
         analyse(FORMAT_ONLY, arguments, 2);
-        return () -> semanticStatus(application.semanticIndexService().status(arguments[1]));
+        return () -> semanticStatus(application.get().semanticIndexService().status(arguments[1]));
     }
 
     private Invocation semanticIndexSync(String[] arguments) {
         requirePositions(arguments, 2, "semantic-index-sync requires <project>");
         analyse(FORMAT_ONLY, arguments, 2);
-        return () -> semanticUpdate(application.semanticIndexService().synchronize(arguments[1]));
+        return () -> semanticUpdate(application.get().semanticIndexService().synchronize(arguments[1]));
     }
 
     private Invocation semanticSearch(String[] arguments) {
@@ -162,7 +169,7 @@ final class IdeIntelligenceCommand {
                 arguments[2],
                 options.integer("--limit", defaults.limit()),
                 options.decimal("--minimum-score", defaults.minimumScore()));
-        return () -> semantic(application.semanticSearchService().search(arguments[1], request));
+        return () -> semantic(application.get().semanticSearchService().search(arguments[1], request));
     }
 
     private Invocation hybridSearch(String[] arguments) {
@@ -173,7 +180,7 @@ final class IdeIntelligenceCommand {
                 arguments[2],
                 options.integer("--limit", defaults.limit()),
                 options.decimal("--minimum-score", defaults.minimumScore()));
-        return () -> hybrid(application.hybridSearchService().search(arguments[1], request));
+        return () -> hybrid(application.get().hybridSearchService().search(arguments[1], request));
     }
 
     private Invocation hybridContext(String[] arguments) {
@@ -185,7 +192,7 @@ final class IdeIntelligenceCommand {
                 options.integer("--max-documents", defaults.maxDocuments()),
                 options.integer("--max-tokens", defaults.maxTokens()),
                 options.integer("--max-tokens-per-document", defaults.maxTokensPerDocument()));
-        return () -> context(application.hybridContextBuilder().build(arguments[1], request));
+        return () -> context(application.get().hybridContextBuilder().build(arguments[1], request));
     }
 
     private static Map<String, Object> graph(ProgramGraph graph) {

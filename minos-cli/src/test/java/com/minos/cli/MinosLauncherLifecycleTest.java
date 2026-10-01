@@ -40,16 +40,19 @@ class MinosLauncherLifecycleTest {
     }
 
     @Test
-    void theApplicationIsClosedAfterAnUsageError(@TempDir Path home) {
+    void theApplicationIsNeverOpenedForAnUsageError(@TempDir Path home) {
+        // Q22 : l'erreur d'usage est refusee par l'analyse, avant que MINOS_HOME ne soit ouvert (elle l'ouvrait
+        // puis le fermait avant ce correctif : [open, close]).
         Launch launch = launch(home, new String[]{"find-symbol", "--bogus"}, MinosLauncher::run, null);
 
         assertEquals(FindSymbolCommand.USAGE_ERROR, launch.exit(), launch.error());
-        assertEquals(List.of("open", "close"), launch.events());
+        assertEquals(List.of(), launch.events());
     }
 
     @Test
     void theApplicationIsClosedWhenTheCommandThrows(@TempDir Path home) {
         Launch launch = launch(home, new String[]{"project", "list"}, (application, arguments, output, error) -> {
+            application.get();
             throw new IOException("boom");
         }, null);
 
@@ -61,6 +64,7 @@ class MinosLauncherLifecycleTest {
     @Test
     void theApplicationIsClosedWhenTheCommandFailsWithARuntimeException(@TempDir Path home) {
         Launch launch = launch(home, new String[]{"project", "list"}, (application, arguments, output, error) -> {
+            application.get();
             throw new IllegalStateException("broken");
         }, null);
 

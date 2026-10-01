@@ -65,6 +65,8 @@ final class RetrievalStatusCommand {
             SemanticIndexService.Status status = statusReader.status(options.projectReference());
             output.append(render(status, mode, options.format())).append('\n');
             return FindSymbolCommand.SUCCESS;
+        } catch (LazyApplication.OpenFailure openFailure) {
+            throw openFailure;
         } catch (RuntimeException exception) {
             error.append("error: ").append(mode.commandName()).append(" status failed: ")
                     .append(CliCommandSupport.failureMessage(exception)).append('\n');

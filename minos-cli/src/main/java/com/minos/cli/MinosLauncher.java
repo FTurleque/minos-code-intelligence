@@ -26,10 +26,14 @@ public final class MinosLauncher {
         MinosApplication open(Path home) throws IOException;
     }
 
-    /** Exécute une ligne de commande sur une application ouverte ; en production {@link #run}. */
+    /**
+     * Exécute une ligne de commande sur une application ouverte à la demande ; en production {@link #run}. La
+     * commande analyse ses arguments avant d'avoir besoin de l'application : une erreur d'usage, une aide ou une
+     * commande sans état n'ouvrent jamais {@code MINOS_HOME}.
+     */
     @FunctionalInterface
     interface CommandRunner {
-        int run(MinosApplication application, String[] arguments, Appendable output, Appendable error)
+        int run(LazyApplication application, String[] arguments, Appendable output, Appendable error)
                 throws IOException;
     }
 
@@ -39,8 +43,9 @@ public final class MinosLauncher {
     }
 
     /**
-     * Le processus, sans {@code System.exit} : rend le code de sortie. L'application ouverte pour une commande
-     * appartient à ce lanceur, qui la ferme sur tous les chemins de sortie (succès, code d'erreur, exception).
+     * Le processus, sans {@code System.exit} : rend le code de sortie. L'application qu'une commande ouvre
+     * appartient à ce lanceur, qui la ferme sur tous les chemins de sortie (succès, code d'erreur, exception) ;
+     * une commande qui n'en a pas besoin n'en ouvre aucune.
      */
     static int launch(
             String[] arguments,
@@ -73,13 +78,16 @@ public final class MinosLauncher {
                     // minos-mcp, so the route is an SPI resolved in MINOS's own class loader.
                     exitCode = McpLaunchRoutes.resolve().run(home);
                 } else {
-                    try (MinosApplication application = opener.open(home)) {
+                    try (LazyApplication application = LazyApplication.opening(home, () -> opener.open(home))) {
                         exitCode = runner.run(application, arguments, out, err);
                     }
                 }
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            exitCode = FindSymbolCommand.EXECUTION_ERROR;
+        } catch (LazyApplication.OpenFailure openFailure) {
+            err.println("error: MINOS bootstrap failed: " + failureMessage(openFailure.failure()));
             exitCode = FindSymbolCommand.EXECUTION_ERROR;
         } catch (Exception exception) {
             err.println("error: MINOS bootstrap failed: " + failureMessage(exception));
@@ -99,6 +107,15 @@ public final class MinosLauncher {
 
     public static int run(
             MinosApplication application,
+            String[] arguments,
+            Appendable output,
+            Appendable error
+    ) throws IOException {
+        return MinosCliRunner.run(application, arguments, output, error);
+    }
+
+    static int run(
+            LazyApplication application,
             String[] arguments,
             Appendable output,
             Appendable error

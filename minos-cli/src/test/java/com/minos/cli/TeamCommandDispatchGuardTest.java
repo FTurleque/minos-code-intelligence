@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * them away from both), and requires that:
  * <ul>
  *   <li>the service and the token supplier appear only in the single call
- *       {@code invocation.run(service, this::token)};</li>
+ *       {@code invocation.run(service.get(), this::token)};</li>
  *   <li>that call comes after the analysis of the whole argument list and after the parser of the
  *       operation ({@code options.parse}, then {@code parser.parse}, then {@code run});</li>
  *   <li>an operation is looked up in the table, never compared with a literal.</li>
@@ -61,7 +61,7 @@ class TeamCommandDispatchGuardTest {
     @Test
     void theServiceAndTheTokenAreReachedOnlyByTheSingleInvocationAfterTheAnalysis() throws IOException {
         String region = instanceRegion(source());
-        String call = "invocation.run(service, this::token)";
+        String call = "invocation.run(service.get(), this::token)";
         assertEquals(1, count(region, Pattern.quote(call)), "exactly one service call: " + call);
 
         String rest = withoutStrings(region.replace(call, ""));
@@ -94,10 +94,10 @@ class TeamCommandDispatchGuardTest {
     void theGuardSeesTheBypassItIsMeantToCatch() {
         String bypassed = "    int run(String[] arguments) {\n"
                 + "        if (\"ping\".equals(arguments[0])) { return service.tenant(token()); }\n"
-                + "        return execute();\n    }\n    private String execute() { return invocation.run(service, this::token); }\n"
+                + "        return execute();\n    }\n    private String execute() { return invocation.run(service.get(), this::token); }\n"
                 + END;
         String region = instanceRegion(bypassed);
-        String rest = withoutStrings(region.replace("invocation.run(service, this::token)", ""));
+        String rest = withoutStrings(region.replace("invocation.run(service.get(), this::token)", ""));
         assertTrue(Pattern.compile("\\bservice\\b").matcher(rest).find());
         assertTrue(Pattern.compile("\"[a-z][a-z-]*\"\\s*\\.equals\\(").matcher(region).find());
     }

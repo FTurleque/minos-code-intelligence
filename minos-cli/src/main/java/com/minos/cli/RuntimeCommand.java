@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 /** CLI import and read surface for explicitly partial M26 runtime observations. */
 public final class RuntimeCommand {
@@ -41,7 +42,7 @@ public final class RuntimeCommand {
     private static final CliOptions.Spec SYMBOL_OPTIONS = CliOptions.spec()
             .text("--symbol", "--session", "--format").integer("--limit", 1, 1_000);
 
-    private final RuntimeIntelligenceService service;
+    private final Supplier<RuntimeIntelligenceService> service;
     private final RuntimeObservationEnvelopeCodec codec;
 
     public RuntimeCommand(RuntimeIntelligenceService service) {
@@ -49,9 +50,19 @@ public final class RuntimeCommand {
     }
 
     RuntimeCommand(RuntimeIntelligenceService service, RuntimeObservationEnvelopeCodec codec) {
+        this(CliCommandSupport.constant(service, "service"), codec);
+    }
+
+    /** The service is built on its first call, that is after the arguments have been analysed. */
+    RuntimeCommand(Supplier<RuntimeIntelligenceService> service) {
+        this(service, new RuntimeObservationEnvelopeCodec());
+    }
+
+    private RuntimeCommand(Supplier<RuntimeIntelligenceService> service, RuntimeObservationEnvelopeCodec codec) {
         this.service = java.util.Objects.requireNonNull(service, "service");
         this.codec = java.util.Objects.requireNonNull(codec, "codec");
     }
+
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse,
@@ -72,7 +83,8 @@ public final class RuntimeCommand {
     public static String usage() { return USAGE; }
 
     private String renderImport(Options options) throws IOException {
-        var result = service.importSession(options.project(), codec.read(options.file()));
+        var envelope = codec.read(options.file());
+        var result = service.get().importSession(options.project(), envelope);
         if (options.format() == SymbolOutputFormat.JSON) return RuntimeIntelligenceRenderer.renderImport(result);
         return String.join("\n",
                 "nature: " + result.nature(),
@@ -90,7 +102,7 @@ public final class RuntimeCommand {
     }
 
     private String renderSessions(Options options) throws IOException {
-        List<SessionView> sessions = service.listSessions(options.project(), options.limit());
+        List<SessionView> sessions = service.get().listSessions(options.project(), options.limit());
         if (options.format() == SymbolOutputFormat.JSON) return RuntimeIntelligenceRenderer.renderSessions(sessions);
         List<String> lines = new ArrayList<>();
         lines.add("nature: OBSERVED_PARTIAL");
@@ -106,7 +118,7 @@ public final class RuntimeCommand {
     }
 
     private String renderReport(Options options) throws IOException {
-        RuntimeReport report = service.report(options.project(), options.sessionId(), options.limit());
+        RuntimeReport report = service.get().report(options.project(), options.sessionId(), options.limit());
         if (options.format() == SymbolOutputFormat.JSON) return RuntimeIntelligenceRenderer.renderReport(report);
         List<String> lines = new ArrayList<>();
         lines.add("nature: " + report.nature());
@@ -127,7 +139,7 @@ public final class RuntimeCommand {
     }
 
     private String renderSymbol(Options options) throws IOException {
-        SymbolRuntimeReport report = service.symbolReport(
+        SymbolRuntimeReport report = service.get().symbolReport(
                 options.project(), options.symbolId(), options.sessionId(), options.limit());
         if (options.format() == SymbolOutputFormat.JSON) return RuntimeIntelligenceRenderer.renderSymbol(report);
         return String.join("\n",

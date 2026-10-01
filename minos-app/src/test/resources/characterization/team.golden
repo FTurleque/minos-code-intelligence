@@ -26,6 +26,41 @@ exit: 1
 error: MINOS_TEAM_TOKEN is required for authenticated team operations
 
 $ minos team tenant --format json
+exit: 2
+--- stdout
+
+--- stderr
+error: unknown team option: --format
+Usage: minos team <operation> [options]
+
+Read-only:
+  tenant
+  workspaces
+  workspace-show --workspace <uuid>
+  members
+  audit [--limit <1..10000>]
+  retention-plan
+
+Mutations:
+  bootstrap --tenant <uuid> --name <name> --key-id <id> --owner <id> --owner-name <name>
+  workspace-create --name <name>
+  workspace-archive --workspace <uuid>
+  member-grant --principal <id> --display-name <name> --role <role>
+  member-revoke --principal <id>
+  project-bind --workspace <uuid> --project <uuid> --snapshot <id>
+  project-unbind --workspace <uuid> --project <uuid>
+  token-issue --principal <id> [--token-hours <1..24>]
+  key-rotate --key-id <id> [--token-hours <1..24>]
+  retention-set --max-audit-events <100..100000> --audit-days <1..3650>
+                --archived-workspace-days <1..3650>
+  retention-apply
+
+Authentication:
+  Set MINOS_TEAM_TOKEN for every operation except bootstrap.
+  Bearer tokens are never accepted as command-line arguments.
+  Mutations accept optional --request-id <id>; otherwise a UUID is generated.
+
+$ minos team tenant
 exit: 1
 --- stdout
 
