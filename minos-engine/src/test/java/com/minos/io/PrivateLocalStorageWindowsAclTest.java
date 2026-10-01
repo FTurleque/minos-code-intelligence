@@ -86,6 +86,10 @@ class PrivateLocalStorageWindowsAclTest {
                 assertTrue(failure.getMessage().contains("does not remove it"), failure.getMessage());
                 assertFalse(failure.getMessage().contains(temporary.toString()),
                         "no absolute path in the message: " + failure.getMessage());
+                for (Throwable cause = failure.getCause(); cause != null; cause = cause.getCause()) {
+                    assertFalse(String.valueOf(cause.getMessage()).contains(temporary.toString()),
+                            "no absolute path in the chained cause");
+                }
             }
             assertTrue(hasWriteDenyForOwner(home), "failing is the only answer: the deny is still there");
             assertFalse(Files.exists(hardened.resolve("created.bin")));
@@ -190,6 +194,34 @@ class PrivateLocalStorageWindowsAclTest {
         assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(againFile));
         assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(againDirectory));
         assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(againWritten));
+    }
+
+    @Test
+    void theProtectionIsAssertedOncePerObjectAndPerJvmNotOnEveryCall() throws Exception {
+        Path home = PrivateLocalStorage.ensurePrivateDirectory(temporary.resolve("home"));
+        PrivateLocalStorage.CapabilityProbe real = PrivateLocalStorage.CapabilityProbe.real();
+        int[] calls = {0};
+        PrivateLocalStorage.useForTesting(new PrivateLocalStorage.CapabilityProbe() {
+            @Override public boolean supportsPosix(Path target) { return real.supportsPosix(target); }
+            @Override public AclFileAttributeView aclView(Path target) { return real.aclView(target); }
+            @Override public void protectFromInheritance(Path target) throws IOException {
+                calls[0]++;
+                real.protectFromInheritance(target);
+            }
+        });
+        try {
+            PrivateLocalStorage.forgetProtectedLocationsForTesting();
+            PrivateLocalStorage.ensurePrivateDirectory(home);
+            PrivateLocalStorage.ensurePrivateDirectory(home);
+            assertEquals(1, calls[0], "once per object in this JVM");
+
+            PrivateLocalStorage.forgetProtectedLocationsForTesting();
+            PrivateLocalStorage.ensurePrivateDirectory(home);
+            assertEquals(2, calls[0], "a fresh JVM asserts it again, even on an object that is already protected");
+        } finally {
+            PrivateLocalStorage.resetCapabilityProbeForTesting();
+        }
+        assertTrue(isDaclProtected(home));
     }
 
     // ------------------------------------------------------------------------------ helpers

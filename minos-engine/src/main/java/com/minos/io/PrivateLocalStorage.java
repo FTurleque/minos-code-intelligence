@@ -51,30 +51,20 @@ import java.util.concurrent.TimeUnit;
  * <h2>What hardening never removes</h2>
  * <p>An ACL platform keeps every DENY entry the location already carries, explicit or inherited
  * (an inherited one becomes explicit when the DACL stops inheriting), ahead of the owner's ALLOW
- * entry: a restriction an administrator placed is theirs to lift, never MINOS's. When such a
- * restriction stops MINOS from writing where it must, the operation fails and says so, without
- * naming the path. ALLOW entries granted to any other principal are removed: a grant is a right,
- * not a restriction, and this storage is owner-only by definition. Hardening a location whose DACL is
- * already the right one writes nothing, so a read-only location is not modified by being checked.</p>
+ * entry: a restriction an administrator placed is theirs to lift, never MINOS's. To lift one that
+ * became explicit this way, an administrator removes it by name:
+ * {@code icacls <MINOS_HOME> /remove:d <principal> /T}. When such a restriction stops MINOS from writing
+ * where it must, the operation fails and says so, without naming the path. ALLOW entries granted to any
+ * other principal are removed: a grant is a right, not a restriction, and this storage is owner-only by
+ * definition.</p>
  *
- * <h2>Guarantees</h2>
- * <p>Permissions are requested <em>at creation</em> via {@link FileAttribute} where the platform
- * allows it (POSIX), so there is no window between a world-readable create and a later
- * {@code chmod}. Every directory a call creates along the way — not just the leaf — is hardened and
- * re-verified before use, which matters on ACL platforms where attribute-at-creation is not
- * available. Locations that already exist — an installation created before this policy, or by an
- * older MINOS — are hardened in place and then re-read: enforcement is verified, never assumed. A
- * path that is a symbolic link, a filesystem-specific/special object ({@link BasicFileAttributes#isOther()}),
- * or whose type is not the expected one is rejected rather than followed. On Windows this explicitly
- * includes junction/reparse points before any ACL mutation.</p>
- *
- * <p>Where the filesystem exposes neither a POSIX nor an ACL view there is nothing to enforce, so
- * every enforcement entry point ({@link #ensurePrivateDirectory}, {@link #createPrivateFile},
- * {@link #createPrivateTempFile}, {@link #hardenExistingFile}, {@link #verifyPrivateDirectory},
- * {@link #verifyPrivateFile}) fails closed with an {@link IOException} rather than treating the
- * location as private. Only the read-only {@link #privacyOf(Path)} diagnostic reports
- * {@link Privacy#UNSUPPORTED} without throwing, so the condition can surface in tooling such as
- * {@code minos doctor}.</p>
+ * <h2>What hardening writes, and how often</h2>
+ * <p>The list of entries is rewritten only when it is not already the expected one, so a location that is
+ * already right is not re-ACL'd. The protection against inheritance is a different matter: Java cannot read
+ * that bit, so it is asserted once per object and per JVM with {@code icacls /inheritance:d}, which writes
+ * the DACL (it needs WRITE_DAC, which an owner always holds) even when the bit was already set. That is one
+ * short process per object the first time this JVM touches it, and none after, until the object is created
+ * again.</p>
  */
 public final class PrivateLocalStorage {
 
@@ -387,7 +377,7 @@ public final class PrivateLocalStorage {
             try {
                 acl.setAcl(desired);
             } catch (AccessDeniedException denied) {
-                throw explainDenied(denied, current);
+                throw explainDenied(denied, current, owner);
             }
             PROTECTED_LOCATIONS.remove(key);
         }
@@ -436,17 +426,32 @@ public final class PrivateLocalStorage {
             AclEntryPermission.WRITE_ACL);
 
     /**
-     * The failure for an access-denied error on a location that carries an explicit DENY entry: MINOS
-     * says why it cannot write and does not name the path. The original error, which does name it, is
-     * deliberately not chained.
+     * The failure for an access-denied error on a location whose DACL carries a write DENY that applies to
+     * the owner: MINOS says why it cannot write, and the message does not name the path. The original
+     * error names it, so what is chained is an access-denied cause without its path.
      */
-    private static IOException explainDenied(AccessDeniedException denied, List<AclEntry> aclOfTheLocation) {
-        return carriesWriteDeny(aclOfTheLocation) ? new IOException(WRITE_PROTECTED_MESSAGE) : denied;
+    private static IOException explainDenied(AccessDeniedException denied, List<AclEntry> aclOfTheLocation,
+                                             UserPrincipal owner) {
+        return carriesWriteDenyForOwner(aclOfTheLocation, owner) ? writeProtected() : denied;
     }
 
-    private static boolean carriesWriteDeny(List<AclEntry> acl) {
+    private static IOException writeProtected() {
+        return new IOException(WRITE_PROTECTED_MESSAGE, new AccessDeniedException(null));
+    }
+
+    /**
+     * Whether a DENY entry that applies to the object itself takes a write right from the owner. An entry
+     * counts when it is not inherit-only and names the owner, or a group: Java cannot say which groups the
+     * process belongs to, so a DENY on a group is assumed to apply. That is wrong only when the owner is
+     * not a member, and then the refusal had another cause that the message would mislabel.
+     */
+    static boolean carriesWriteDenyForOwner(List<AclEntry> acl, UserPrincipal owner) {
         for (AclEntry entry : acl) {
             if (entry.type() != AclEntryType.DENY) continue;
+            if (entry.flags().contains(AclEntryFlag.INHERIT_ONLY)) continue;
+            boolean applies = entry.principal().equals(owner)
+                    || entry.principal() instanceof java.nio.file.attribute.GroupPrincipal;
+            if (!applies) continue;
             for (AclEntryPermission right : entry.permissions()) {
                 if (WRITE_RIGHTS.contains(right)) return true;
             }
@@ -454,14 +459,14 @@ public final class PrivateLocalStorage {
         return false;
     }
 
-    /** Rethrows {@code denied} as the write-protected failure when any of {@code locations} carries a write DENY. */
+    /** Rethrows {@code denied} as the write-protected failure when one of {@code locations} carries a write DENY. */
     private static IOException explainDenied(AccessDeniedException denied, Path... locations) {
         for (Path location : locations) {
             if (location == null) continue;
             AclFileAttributeView view = aclView(location);
             if (view == null) continue;
             try {
-                if (carriesWriteDeny(view.getAcl())) return new IOException(WRITE_PROTECTED_MESSAGE);
+                if (carriesWriteDenyForOwner(view.getAcl(), view.getOwner())) return writeProtected();
             } catch (IOException unreadable) {
                 // Nothing more precise than the original refusal can be said.
             }
@@ -496,7 +501,7 @@ public final class PrivateLocalStorage {
                 if (FORBIDDEN_PERMISSIONS.contains(permission)) leaked.add(permission);
             }
             if (!leaked.isEmpty()) {
-                throw new IOException("private storage is readable beyond its owner: " + target + " grants " + leaked);
+                throw new IOException("private storage is readable beyond its owner: grants " + leaked);
             }
             return;
         }
@@ -505,7 +510,7 @@ public final class PrivateLocalStorage {
         AclEntry foreign = foreignAclEntry(acl);
         if (foreign != null) {
             throw new IOException("private storage grants access to another principal: "
-                    + target + " grants " + foreign.principal().getName());
+                    + foreign.principal().getName());
         }
     }
 
@@ -517,7 +522,7 @@ public final class PrivateLocalStorage {
      */
     private static IOException unsupportedFilesystem(Path target) {
         return new IOException("cannot enforce private storage: filesystem supports neither POSIX "
-                + "permissions nor ACLs for " + target);
+                + "permissions nor ACLs");
     }
 
     /** The first entry granting access to a principal other than the owner, or {@code null}. */
@@ -533,13 +538,13 @@ public final class PrivateLocalStorage {
     private static void requireType(Path target, boolean directory) throws IOException {
         BasicFileAttributes attributes = readAttributesNoFollow(target);
         if (attributes.isSymbolicLink() || attributes.isOther()) {
-            throw new IOException("private storage path must not be a symbolic link or reparse/special object: " + target);
+            throw new IOException("private storage path must not be a symbolic link or reparse/special object");
         }
         if (directory && !attributes.isDirectory()) {
-            throw new IOException("private storage path is not a directory: " + target);
+            throw new IOException("private storage path is not a directory");
         }
         if (!directory && !attributes.isRegularFile()) {
-            throw new IOException("private storage path is not a regular file: " + target);
+            throw new IOException("private storage path is not a regular file");
         }
     }
 
@@ -547,7 +552,7 @@ public final class PrivateLocalStorage {
         try {
             return Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
         } catch (IOException unreadable) {
-            throw new IOException("private storage path is not readable: " + target, unreadable);
+            throw new IOException("private storage path is not readable");
         }
     }
 
@@ -583,7 +588,7 @@ public final class PrivateLocalStorage {
      * {@code :d} turns it into an explicit entry.
      */
     private static final class WindowsDacl {
-        private static final long TIMEOUT_SECONDS = 30L;
+        private static final long TIMEOUT_SECONDS = 10L;
 
         private WindowsDacl() {
         }
