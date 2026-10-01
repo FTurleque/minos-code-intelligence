@@ -13,7 +13,7 @@ S9 et S12 sont les deux seuls qui donnent quelque chose à un attaquant aujourd'
 | 2 | `sec/s12-audit` | S12 | #318 | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
 | 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | #319 | brouillon |
 | 4 | `sec/s8-gitignore` | S8 | #320 | brouillon |
-| 5 | `sec/s7-s15-windows` | S7, S15 | à ouvrir | **code terminé** (S15 et S7 a, b, c corrigés ; S7 d documenté), revue verif-sec traitée |
+| 5 | `sec/s7-s15-windows` | S7, S15 | PR du lot 5 | **code terminé** (S15 et S7 a, b, c corrigés ; S7 d documenté), revue verif-sec traitée |
 
 Base : `origin/develop` au 2026-10-01 (b991ffd2). Une branche, un worktree (`minos-wt/sec-lotN`) par lot, rebasés l'un sur l'autre.
 
@@ -640,6 +640,12 @@ main d'une JVM, jamais ensuite si rien n'a changé » (`hardeningRewritesTheDacl
 décision 1 reste vraie dans ces termes (aucune réécriture répétée) ; le premier passage écrit déjà la DACL pour `icacls /inheritance:d`.
 **Limite assumée** : un DENY conditionnel (`XD`) est lui aussi invisible à Java, donc supprimé par la réécriture. MINOS ne peut pas
 garder une restriction qu'il ne voit pas ; le lire demanderait un `icacls /save` par objet (un processus de plus).
+
+### Résultats de fin de lot 5 (orchestrateur, 2026-10-02, Windows 10, JDK 24)
+
+- `./mvnw -B clean verify` après les deux revues `verif-sec` : **BUILD SUCCESS**, 15 modules, 1 965 tests, 0 échec, 54 ignorés (tous antérieurs ; aucun `@Disabled` ni `assumeTrue` ajouté ; les tests propres à Windows sont `@EnabledOnOs(WINDOWS)` et s'ignorent sous Linux, voir les décomptes ci-dessus).
+- Gates `remediation/`, `quality/` et `architecture/` verts (hors `check-jacoco.py`) ; golden `characterization/` inchangés.
+- Sous Windows : bac à sable réel (AppContainer, Job Object), qualification et `minos doctor` rejoués après chaque changement du lot par `impl-sec`. Linux : par la CI uniquement ; les tests Windows n'y tournent pas.
 
 ## À traiter plus tard
 
