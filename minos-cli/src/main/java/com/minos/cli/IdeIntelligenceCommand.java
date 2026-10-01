@@ -60,18 +60,14 @@ final class IdeIntelligenceCommand {
     private final Supplier<MinosApplication> application;
 
     IdeIntelligenceCommand(MinosApplication application) {
-        this(supplying(application));
+        this(CliCommandSupport.constant(application, "application"));
     }
 
-    /** Application ouverte à la première opération exécutée, c'est-à-dire après l'analyse des arguments. */
+    /** The application is opened by the first operation that runs, that is after the arguments have been analysed. */
     IdeIntelligenceCommand(Supplier<MinosApplication> application) {
         this.application = Objects.requireNonNull(application, "application");
     }
 
-    private static Supplier<MinosApplication> supplying(MinosApplication application) {
-        Objects.requireNonNull(application, "application");
-        return () -> application;
-    }
 
     int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         Objects.requireNonNull(arguments, "arguments");

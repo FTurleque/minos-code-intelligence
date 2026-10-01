@@ -21,11 +21,10 @@ public final class ProviderCommand {
     private final Supplier<ProviderPlatformService> service;
 
     public ProviderCommand(ProviderPlatformService service) {
-        Objects.requireNonNull(service, "service");
-        this.service = () -> service;
+        this.service = CliCommandSupport.constant(service, "service");
     }
 
-    /** Service construit à son premier appel, c'est-à-dire après l'analyse des arguments. */
+    /** The service is built on its first call, that is after the arguments have been analysed. */
     ProviderCommand(Supplier<ProviderPlatformService> service) {
         this.service = Objects.requireNonNull(service, "service");
     }

@@ -50,10 +50,10 @@ public final class RuntimeCommand {
     }
 
     RuntimeCommand(RuntimeIntelligenceService service, RuntimeObservationEnvelopeCodec codec) {
-        this(supplying(service), codec);
+        this(CliCommandSupport.constant(service, "service"), codec);
     }
 
-    /** Service construit à son premier appel, c'est-à-dire après l'analyse des arguments. */
+    /** The service is built on its first call, that is after the arguments have been analysed. */
     RuntimeCommand(Supplier<RuntimeIntelligenceService> service) {
         this(service, new RuntimeObservationEnvelopeCodec());
     }
@@ -63,10 +63,6 @@ public final class RuntimeCommand {
         this.codec = java.util.Objects.requireNonNull(codec, "codec");
     }
 
-    private static Supplier<RuntimeIntelligenceService> supplying(RuntimeIntelligenceService service) {
-        java.util.Objects.requireNonNull(service, "service");
-        return () -> service;
-    }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse,

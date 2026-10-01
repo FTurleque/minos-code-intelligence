@@ -74,19 +74,15 @@ final class TeamCommand {
     private final Supplier<String> bearerToken;
 
     TeamCommand(HostedControlPlaneService service, Supplier<String> bearerToken) {
-        this(supplying(service), bearerToken);
+        this(CliCommandSupport.constant(service, "service"), bearerToken);
     }
 
-    /** Service construit à son premier appel, c'est-à-dire après l'analyse des arguments. */
+    /** The service is built on its first call, that is after the arguments have been analysed. */
     TeamCommand(Supplier<HostedControlPlaneService> service, Supplier<String> bearerToken) {
         this.service = Objects.requireNonNull(service, "service");
         this.bearerToken = Objects.requireNonNull(bearerToken, "bearerToken");
     }
 
-    private static Supplier<HostedControlPlaneService> supplying(HostedControlPlaneService service) {
-        Objects.requireNonNull(service, "service");
-        return () -> service;
-    }
 
     int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         Objects.requireNonNull(arguments, "arguments");

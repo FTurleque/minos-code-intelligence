@@ -162,3 +162,8 @@ est désactivé (avant : 1, « not configured », parce que la commande n'était
   `providers`, `architecture` et les commandes qui qualifient le runtime matérialisent `sandbox/` à la première
   utilisation. C'est un effet de la qualification elle-même (module `minos-runtime-local`, code de sécurité), pas du
   câblage ; à traiter dans un chantier de sécurité du runtime, pas ici.
+- **`MinosApplication.open` réécrit l'ACL de `MINOS_HOME` (Windows).** Constaté par `verif-cli` : sur un home dont on a
+  retiré l'écriture (`icacls /deny`), la première commande qui ouvre l'application supprime l'ACE de refus ; seuls
+  `--help` et les erreurs d'usage, qui n'ouvrent plus rien, laissent l'ACL intacte. Un `MINOS_HOME` réellement en
+  lecture seule n'est donc pas testable sous Windows. Comportement de `PrivateLocalStorage` (module `minos-storage-local`),
+  non modifié par ce chantier.
