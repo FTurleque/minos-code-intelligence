@@ -13,7 +13,7 @@ S9 et S12 sont les deux seuls qui donnent quelque chose à un attaquant aujourd'
 | 2 | `sec/s12-audit` | S12 | #318 | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
 | 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | à ouvrir | **code terminé**, non poussé ; gate `check-private-io` |
 | 4 | `sec/s8-gitignore` | S8 | à ouvrir | code terminé |
-| 5 | `sec/s7-s15-windows` | S7, S15 | à ouvrir | **en cours** (décisions écrites, voir section 5) |
+| 5 | `sec/s7-s15-windows` | S7, S15 | à ouvrir | **code terminé** (S15 et S7 a, b, c corrigés ; S7 d documenté), non poussé |
 
 Base : `origin/develop` au 2026-10-01 (b991ffd2). Une branche, un worktree (`minos-wt/sec-lotN`) par lot, rebasés l'un sur l'autre.
 
@@ -382,8 +382,9 @@ Tout exécuté sous Windows (logique pure, sans dépendance de plateforme). Linu
    un processus du même utilisateur peut encore substituer le fichier (c'est le périmètre de confiance « même compte »,
    hors de ce que `-File` permet de fermer sans natif).
 3. **DACL protégée : seulement si l'expérience la justifie.** Voir « Preuves ». Le moyen retenu est le plus petit :
-   `icacls <chemin> /inheritance:r` après `setAcl`, sans shell, sur un chemin déjà validé (jamais avant `setAcl` : sur un
-   objet qui n'a que des ACE héritées, `/inheritance:r` laisse une DACL **vide**, mesuré).
+   `icacls <chemin> /inheritance:d` après `setAcl`, sans shell, sur un chemin déjà validé. **`:d`, pas `:r`** (écart avec la
+   formulation de départ, mesuré) : sur un objet qui n'a que des ACE héritées, `/inheritance:r` laisse une DACL **vide** (un fichier
+   tout juste créé dans un répertoire privé n'a qu'une ACE héritée, que Java lit comme égale à l'attendue) ; `:d` la rend explicite.
 4. **Environnement des lanceurs : liste blanche.** Le lanceur PowerShell (de confiance, mais qui n'a aucune raison de voir un
    secret de l'environnement MINOS) ne reçoit plus l'environnement parent complet. Il reçoit la liste blanche déjà
    commune aux fournisseurs (`ProviderProcessEnvironment`), réduite empiriquement au minimum dont PowerShell et le bac à
@@ -392,6 +393,123 @@ Tout exécuté sous Windows (logique pure, sans dépendance de plateforme). Linu
    commande (`-Duser.name=…`, `JAVA_TOOL_OPTIONS`) modifie : elle est passée telle quelle à `icacls`, qui accepte aussi les
    SID (`*S-1-1-0`). L'identité vient de `whoami /user` (SID du jeton, y compris élevé), lue une fois par JVM.
 6. **`forceDirectory` : limite documentée, pas simulée.** Voir « Preuves ».
+
+### Preuves
+
+**S15 : confirmé.** Un répertoire avec un refus d'écriture posé par un administrateur (`icacls <dir> /deny <utilisateur>:(WD,AD)`)
+puis `PrivateLocalStorage.ensurePrivateDirectory` : avant, `DESKTOP-…\fturl:(DENY)(S,WD,AD)` et six entrées héritées ; après, une
+seule ligne, `fturl:(OI)(CI)(F)`. Le refus a disparu sans un mot, au premier lancement.
+
+**S7 (b) : reproduit, avec une nuance dite.** `icacls <MINOS_HOME> /grant *S-1-1-0:(OI)(CI)R` (une ACE héritable d'un administrateur)
+après durcissement : **tous** les enfants durcis par MINOS passent `EXPOSED` (sous-répertoire, fichier créé par
+`createPrivateFile`, fichier de `writePrivateFile`, fichier de `hardenExistingFile`). `Get-Acl` donne `AreAccessRulesProtected = False`
+pour chacun : Java écrit une DACL (`SetFileSecurity`, `DACL_SECURITY_INFORMATION` seul, vérifié dans les sources du JDK 24) mais ne
+sait pas la marquer protégée. **Nuance** : un grant ajouté au *parent* ou au *grand-parent* d'un répertoire durci n'a, dans trois
+montages, pas atteint ce répertoire ; il a atteint son sous-répertoire et tout enfant d'un répertoire dont la DACL a changé. Je n'ai
+pas pu établir la règle du moteur d'héritage de Windows ; le défaut est réel mais sa portée dépend de l'histoire de l'objet, ce que la
+DACL protégée supprime.
+
+**S7 (a) : reproduit.** Une variable sentinelle posée dans l'environnement de la JVM de test (configuration surefire du module) est
+lue par un vrai PowerShell lancé comme lanceur de confiance.
+
+**S7 (c) : reproduit, et plus grave que décrit.** `-Duser.name=*S-1-1-0` : `icacls` accepte la forme SID, la racine d'écriture
+reçoit un contrôle total héritable pour **Tout le monde** (mesuré). Un `user.name` divergent d'un vrai nom (`minos-no-such-user`) fait
+échouer la préparation du bac à sable, avec le chemin dans le message.
+
+**S7 (d) : non corrigé, documenté.** `FileChannel.open` d'un répertoire échoue en `AccessDeniedException` sous Windows, en lecture
+comme en écriture (mesuré, JDK 24). Rien de propre sans natif. La Javadoc de `DurableAtomicFile.forceDirectory` dit ce que l'inertie
+signifie : la donnée est forcée avant le renommage (`forceFile`) ; NTFS journalise ses métadonnées, donc après un crash le volume est
+cohérent et le renommage est appliqué ou non, jamais déchiré ; ce qui n'est pas garanti est qu'un renommage tout juste terminé survive
+à une coupure de courant qui le suit de près (dernière écriture perdue, pas corruption). Le `MoveFileEx` du JDK ne demande pas non plus
+le write-through.
+
+#### Rouge → vert (2026-10-01, machine Windows 10, JDK 24)
+
+Les tests ont été commités **avant** les correctifs (`git log` : `bb899906`, `abe2751b`, puis les correctifs) et rejoués contre le
+`src/main` d'avant (seule une couture de test sans effet, `forgetProtectedLocationsForTesting`, existait).
+
+| Cible | Test | Sans correctif | Avec |
+|---|---|---|---|
+| refus conservé (explicite) | `anExplicitDenyEntryPlacedByAnAdministratorSurvivesHardening` | rouge | vert |
+| refus hérité conservé | `aDenyEntryInheritedFromTheParentSurvivesHardeningAsAnExplicitEntry` | rouge | vert |
+| échec dit, sans chemin | `aWriteProtectedLocationFailsClosedAndSaysSoWithoutNamingThePath` | rouge (aucune exception : l'écriture réussissait) | vert |
+| grant ultérieur du parent | `anInheritableGrantAddedLaterToTheParentDoesNotReachHardenedChildren` | rouge (`EXPOSED`) | vert |
+| DACL protégée | `aHardenedDaclIsProtectedAgainstInheritanceForDirectoriesAndFiles` | rouge (bit absent, lu par `icacls /save`) | vert |
+| pas d'écriture si déjà bon | `hardeningAnAlreadyRightLocationDoesNotRewriteItsDacl` | rouge (2 `setAcl`) | vert (0) |
+| lecture d'un emplacement protégé | `aWriteProtectedLocationStaysReadableAndVerifiableWithoutAnyWrite` | vert (non-régression, voulu) | vert |
+| sentinelle | `aSecretOfTheParentEnvironmentNeverReachesATrustedLauncher` | rouge (la valeur factice est lue) | vert |
+| minimum du lanceur | `theLauncherKeepsTheNonSecretMetadataPowerShellNeedsToStart` | vert (non-régression) | vert |
+| script hors `MINOS_HOME` (2 lanceurs), lecture seule, empreinte, falsification refusée | `WindowsLauncherScriptPlacementTest` (4) | **4 échecs sur 4** | vert |
+| copie héritée supprimée | `aCopyLeftInMinosHomeByAnEarlierVersionIsRemoved` | non rejoué en rouge (ajouté après le correctif) | vert |
+| identité de l'ACE héritable | `WindowsSandboxWriteRootIdentityTest` (2) | **2 échecs sur 2** (Tout le monde reçoit le contrôle total ; `IllegalStateException`) | vert |
+
+Total des tests de ce lot : **16 propres à Windows** (`@EnabledOnOs(WINDOWS)`, **ignorés sous Linux : 16**, comptés ici et à ne pas
+confondre avec les 54 déjà ignorés) et 1 test multiplateforme (`ProviderProcessEnvironmentTest.aTrustedLauncherKeeps…`). Aucun
+`@Disabled`, aucun `assumeTrue` ajouté.
+
+**Deux scénarios que j'ai écartés après essai** : un refus `WRITE_DAC` posé au propriétaire (`/deny <moi>:(WDAC)`) n'empêche pas
+le propriétaire de réécrire la DACL (droit implicite du propriétaire, mesuré) : il ne modélise donc pas un verrou de DACL, et le test
+« pas d'écriture si déjà bon » passe par un compteur d'appels `setAcl` sur la couture `CapabilityProbe` à la place. Un verrou réel
+demande une ACE `OWNER RIGHTS` ; non traité (voir « À traiter plus tard »).
+
+#### Environnement du lanceur : mesure du minimum
+
+Par essai direct des deux vrais lanceurs (AppContainer et Job Object, `exit 0` dans le bac à sable) avec l'environnement vidé puis
+rempli : seuls `PATH` et `PATHEXT` sont indispensables individuellement ; ensemble, `PATH`, `PATHEXT`, `SystemRoot`, `TEMP`, `TMP`
+suffisent aux deux lanceurs (sans `TEMP`, `Add-Type` tente d'écrire dans `C:\Windows`). La liste retenue a quinze noms (ces cinq plus
+`windir`, `SystemDrive`, `ComSpec`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `ProgramData`, `USERNAME`, `USERDOMAIN`,
+`COMPUTERNAME`) : une marge pour une configuration de profil différente de celle mesurée, sans variable qui ressemble à un secret.
+**Ce n'est pas le minimum strict**, c'est le minimum mesuré plus une marge nommée. Le fournisseur, lui, reçoit toujours l'environnement
+du plan (liste blanche commune `ProviderProcessEnvironment`, inchangée).
+
+### Changements observables
+
+- Le premier lancement ne supprime plus un refus posé par un administrateur. Si ce refus empêche MINOS d'écrire, l'opération échoue
+  avec `private storage is write-protected by an explicit deny entry; MINOS does not remove it`.
+- **R12 devient observable sous Windows** : un emplacement protégé en écriture n'est plus silencieusement rouvert ; une commande qui
+  l'ouvre en écriture échoue maintenant. Une commande de lecture qui n'a pas besoin d'écrire n'écrit plus quand la DACL est déjà la
+  bonne. R12 n'est pas fermé (une commande de lecture qui crée encore un répertoire échouera), c'est volontaire.
+- Les scripts des lanceurs ne sont plus dans `MINOS_HOME\sandbox`, mais dans `%TEMP%\minos-launchers\<sha256>\` ; les copies d'un
+  MINOS précédent sont supprimées au démarrage du bac à sable.
+- Chaque objet que `PrivateLocalStorage` durcit pour la première fois dans un processus coûte un `icacls` (environ 13 ms mesurés).
+  Sur les 207 tests de `minos-storage-local`, 43 s deviennent 74 s (environ 14 s pour les répertoires, 17 s pour les fichiers) : un test
+  crée des milliers de petits objets, une commande réelle en crée quelques dizaines.
+- La DACL de chaque objet durci est protégée (bit « P » du SDDL) ; `verifyPrivacy` ne change pas (un DENY n'est pas un grant à un autre
+  principal).
+
+### Résultats de fin de lot (Windows 10, JDK 24)
+
+- `./mvnw -fae test -Djacoco.skip=true` (réacteur entier, **sans `clean`**, après le dernier commit de code) : 14 modules sur 15 **SUCCESS**,
+  0 échec dans chacun ; 522 tests dans `minos-engine`, 207 dans `minos-storage-local`, 270 dans `minos-cli`, etc. Le 15e (`MINOS
+  Code Intelligence`, module `minos-app`) a **1 échec, hérité du lot 4, non introduit ici** :
+  `JsonEscapeGuardTest.everyListedExceptionStillExistsAndStillContainsTheSignature` (« exception inutile, plus aucune signature dans
+  `minos-engine/.../source/ProjectIgnoreRules.java` ») : la liste d'exceptions de ce test de caractérisation nomme encore une signature
+  que la réécriture de `ProjectIgnoreRules` (S8) a retirée. `git diff 25920ed4 HEAD -- minos-engine/src/main/java/com/minos/source`
+  est vide : ce lot n'y touche pas. À corriger dans le lot 4 (retirer l'entrée, c'est le test qui l'exige).
+- **Tests réels du bac à sable, rejoués sur cette machine après chaque changement du lot** (surefire, 71 tests, 0 échec, 2 ignorés
+  antérieurs au lot, POSIX) : `WindowsAppContainerWorkerSandboxBackendTest` (11, dont `realWindowsSandboxUsesAppContainerJobLimits…`,
+  `realWindowsSandboxRunsAManagedBatchFileProvider…`, `allowPolicyKeepsAppContainer…`, la qualification
+  `qualificationOnlyPermitsSandboxClaimOnWindows` qui exécute la vraie sonde AppContainer/Job Object), `WindowsJobObjectContainmentTest`
+  (3), `WindowsNonElevatedIndexingTest` (2), `WindowsStrongProcessOwnershipContainmentTest` (2), `WindowsExecutionPathIdentityProviderTest`
+  (2), `WindowsContainmentScriptTest` (6), `WorkerSandboxBackendsTest` (9), `WorkerSandboxQualificationTest` (4),
+  `ProviderSandboxSecurityRegressionTest` (2), `StrongProcessOwnership*`/`StrongOwnershipRemoteSandboxCompositionTest` (5),
+  `ProcessIndexerExecutor*Test` (15), plus les 8 tests neufs du lot. Aucun repli silencieux : un lanceur dont l'empreinte ne correspond
+  plus lève `IOException`, le backend ne se rabat sur rien.
+- **`minos doctor` réel** (jar ombré construit par `package`, `MINOS_HOME` neuf) : le backend `windows-appcontainer-job-v3` est
+  découvert et qualifié (la ligne d'avertissement sur le code non fiable est l'ADR 0041, antérieure : le backend est rejeté pour du code
+  distant non fiable, pas pour un échec de démarrage) ; **aucun `.ps1` sous `MINOS_HOME`** ; les lanceurs sont sous
+  `%TEMP%\minos-launchers\<sha256>\`.
+- **R12, observé de bout en bout** : `MINOS_HOME` avec `icacls /deny <moi>:(WD,AD)`, puis `minos project list` (une commande de
+  lecture) : `error: MINOS bootstrap failed: private storage is write-protected by an explicit deny entry; MINOS does not remove it`,
+  code de sortie 1, et la DACL montre le refus toujours là (avant le lot, la commande réussissait en effaçant le refus).
+- Gates : tous les `check-*.py` de `scripts/remediation/`, `scripts/quality/` (hors `check-jacoco.py`) et `scripts/architecture/` verts
+  (20 scripts, dont `check-private-io.py` et `check-module-boundaries.py`) ; `test_check_private_io.py` (21) et
+  `test_check_module_boundaries.py` (13) OK. Aucun gate n'a eu à être aligné. Les 12 golden de `characterization/` sont inchangés
+  (`git diff 25920ed4 HEAD` ne les touche pas).
+- Non vérifié : l'exécution sous Linux (les 16 tests Windows s'y ignorent ; la CI le dit) ; `clean verify` et JaCoCo (orchestrateur) ;
+  un poste avec profil itinérant ou de domaine (la marge de l'environnement du lanceur est là pour lui, non mesurée) ; une session
+  élevée (la lecture du SID par `whoami` est censée suivre le jeton, non essayé).
+
 
 ## À traiter plus tard
 
@@ -414,3 +532,14 @@ Tout exécuté sous Windows (logique pure, sans dépendance de plateforme). Linu
   (qui le refuse ensuite, avec un chemin dans le message). Même famille que le secret absolu, hors S5 nommé.
 - **Hérité du lot 1** : `check-post-mne.py` (donc le gate M25 `check-remote-distributed-consistency.py`) échoue sur
   `RemoteRepositoryRequest.java` : les faits `GITHUB("github.com")` / `GITLAB("gitlab.com")` ont déménagé dans `RemoteHost` avec S9.
+- **Lot 5, FFM** : un appel natif (`SetNamedSecurityInfo` avec `PROTECTED_DACL_SECURITY_INFORMATION`, `GetSecurityDescriptorControl`
+  pour lire le bit) supprimerait le processus `icacls` par objet et permettrait de vérifier la protection au lieu de la supposer ; le
+  même mécanisme (`CreateFile` avec `FILE_FLAG_BACKUP_SEMANTICS` puis `FlushFileBuffers`) rendrait `forceDirectory` réel. Coût : le
+  drapeau `--enable-native-access` (ou l'attribut `Enable-Native-Access` du manifeste) dans la distribution.
+- **Lot 5, `OWNER RIGHTS`** : une ACE `ALLOW` pour `S-1-3-4` limite les droits implicites du propriétaire (il ne peut plus écrire la
+  DACL). `PrivateLocalStorage` la verrait comme un grant étranger à retirer, ne le pourrait pas, et échouerait avec le message brut du
+  JDK (qui nomme le chemin). Non traité.
+- **Lot 5, répertoires de lanceurs** : `%TEMP%\minos-launchers\<sha256>` accumule un répertoire par version du script ; aucun ménage.
+- **Lot 5, autres écritures d'ACL** : `requireAclGrantable` / `isAclGrantable` / `runIcacls` de `WindowsAppContainerWorkerSandboxBackend`
+  écrivent encore des ACE (grants de lecture AppContainer sur les racines d'outils) hors de `PrivateLocalStorage` ; antérieur au lot,
+  non touché, et le message de `requireAclGrantable` nomme encore un chemin.
