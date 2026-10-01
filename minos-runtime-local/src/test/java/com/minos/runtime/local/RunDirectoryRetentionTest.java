@@ -11,6 +11,14 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -189,25 +197,240 @@ class RunDirectoryRetentionTest {
     }
 
     @Test
-    void resumableRunOlderThanTheResumeTtlIsReclaimedEvenUnderBudget(@TempDir Path home) throws Exception {
+    void markingARunNeverShortensItsLifetimeBelowThatOfAnOrdinaryRun(@TempDir Path home) throws Exception {
+        // R5: a marker used to expire after the 24 h resume TTL where an ordinary run lives 7 days,
+        // so marking an interrupted run divided its lifetime by seven. 25 h old, still marked: it stays.
         Path runs = home.resolve("runs");
         Instant now = Instant.parse("2026-09-26T12:00:00Z");
-        Path expired = run(runs, "expired", 8);
-        Path expiredMarker = Files.writeString(expired.resolve(FileResumableRunMarkers.MARKER_FILE_NAME), "runId=expired\n");
-        Files.setLastModifiedTime(expiredMarker, FileTime.from(now.minus(Duration.ofHours(25))));
-        // The sidecar/marker writes bumped the directory mtime recently (R1-7): the marker's age rules.
-        Files.setLastModifiedTime(expired, FileTime.from(now));
-        Path live = run(runs, "live", 8);
-        Path liveMarker = Files.writeString(live.resolve(FileResumableRunMarkers.MARKER_FILE_NAME), "runId=live\n");
-        Files.setLastModifiedTime(liveMarker, FileTime.from(now.minus(Duration.ofHours(23))));
-        Files.setLastModifiedTime(live, FileTime.from(now.minus(Duration.ofDays(8))));
+        Path marked = markedRun(runs, "marked", now.minus(Duration.ofHours(25)), now.minus(Duration.ofHours(25)));
+        Path ordinary = run(runs, "ordinary", 8);
+        Files.setLastModifiedTime(ordinary, FileTime.from(now.minus(Duration.ofHours(25))));
 
-        RunDirectoryRetention.prune(runs, null,
-                new RunDirectoryRetention.Policy(16, 1024L * 1024L, Duration.ofDays(7), Duration.ofHours(24)), now);
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, now);
 
-        assertFalse(Files.exists(expired), "a marker older than the resume TTL no longer protects the run");
-        assertTrue(Files.exists(live), "a live marker protects the run even past the general max age");
-        assertEquals(Duration.ofHours(24), RunDirectoryRetention.DEFAULT.resumeTtl());
+        assertTrue(Files.exists(marked), "a marker must lengthen the lifetime, never shorten it");
+        assertTrue(Files.exists(ordinary));
+        assertEquals(Duration.ofDays(7), RunDirectoryRetention.DEFAULT.lifetime(false));
+        assertEquals(Duration.ofDays(7), RunDirectoryRetention.DEFAULT.lifetime(true));
+    }
+
+    @Test
+    void theMarkerLengthensTheLifetimeWhenTheResumeTtlExceedsTheMaximumAge(@TempDir Path home) throws Exception {
+        Path runs = home.resolve("runs");
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        Path marked = markedRun(runs, "marked", now.minus(Duration.ofHours(5)), now.minus(Duration.ofHours(5)));
+        Path ordinary = run(runs, "ordinary", 8);
+        Files.setLastModifiedTime(ordinary, FileTime.from(now.minus(Duration.ofHours(5))));
+        RunDirectoryRetention.Policy policy =
+                new RunDirectoryRetention.Policy(16, 1024L * 1024L, Duration.ofHours(2), Duration.ofHours(24));
+
+        RunDirectoryRetention.prune(runs, null, policy, now);
+
+        assertFalse(Files.exists(ordinary), "an ordinary run is reclaimed after the maximum age");
+        assertTrue(Files.exists(marked), "a marked run is kept for the longer of the maximum age and the resume TTL");
+        assertEquals(Duration.ofHours(24), policy.lifetime(true));
+        assertEquals(Duration.ofHours(2), policy.lifetime(false));
+        assertEquals(Duration.ofHours(24), RunDirectoryRetention.DEFAULT.resumeTtl(),
+                "aligned by hand on the resume planner's TTL (ADR 0039, deviation f)");
+    }
+
+    @Test
+    void aMarkedRunAlwaysExpiresAtTheExplicitUpperBound(@TempDir Path home) throws Exception {
+        // R5 disk-leak guard: the marker protects, it never pins runs/ forever.
+        Path runs = home.resolve("runs");
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        RunDirectoryRetention.Policy policy = RunDirectoryRetention.DEFAULT;
+        Duration bound = policy.lifetime(true);
+        Path expired = markedRun(runs, "expired", now.minus(bound).minusSeconds(1), now.minus(bound).minusSeconds(1));
+        Path justInside = markedRun(runs, "just-inside", now.minus(bound).plusSeconds(1), now.minus(bound).plusSeconds(1));
+
+        RunDirectoryRetention.prune(runs, null, policy, now,
+                new RunDirectoryRetention.Budgets(1_000_000L, 4_096L, 250_000L));
+        assertFalse(Files.exists(expired), "past the upper bound a marked run is reclaimed");
+        assertTrue(Files.exists(justInside), "inside the bound it is kept");
+
+        RunDirectoryRetention.prune(runs, null, policy, now.plusSeconds(2),
+                new RunDirectoryRetention.Budgets(1_000_000L, 4_096L, 250_000L));
+        assertFalse(Files.exists(justInside), "and it expires as soon as the bound is crossed");
+    }
+
+    @Test
+    void aMarkedRunAlsoExpiresAtTheUpperBoundWhenTheScanIsTruncated(@TempDir Path home) throws Exception {
+        // V-L1-02: the scan really is truncated here (one entry observed per pass, two runs present).
+        Path runs = home.resolve("runs");
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        Duration bound = RunDirectoryRetention.DEFAULT.lifetime(true);
+        Instant tooOld = now.minus(bound).minusSeconds(1);
+        markedRun(runs, "expired-a", tooOld, tooOld);
+        markedRun(runs, "expired-b", tooOld, tooOld);
+        RunDirectoryRetention.Budgets oneEntryPerPass = new RunDirectoryRetention.Budgets(1_000_000L, 1L, 250_000L);
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, now, oneEntryPerPass);
+        try (var children = Files.list(runs)) {
+            assertEquals(1L, children.count(), "the truncated pass reclaims the expired run it observed, not the other");
+        }
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, now, oneEntryPerPass);
+        try (var children = Files.list(runs)) {
+            assertEquals(0L, children.count(), "the next pass finishes: a marker never pins runs/");
+        }
+    }
+
+    @Test
+    void aMarkerDatedInTheFutureNeverPinsARunBeyondOneLifetimeFromWhenItWasSeen(@TempDir Path home) throws Exception {
+        // V-L1-01: a clock that jumped forward while the marker was written must not keep the run for the
+        // jump plus seven days. The first pass that sees the impossible date re-dates it to now.
+        Path runs = home.resolve("runs");
+        Instant seen = Instant.parse("2026-09-26T12:00:00Z");
+        Duration bound = RunDirectoryRetention.DEFAULT.lifetime(true);
+        Path pinned = markedRun(runs, "future-marker", seen.plus(Duration.ofDays(365)), seen.minus(Duration.ofDays(30)));
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, seen);
+        assertTrue(Files.exists(pinned), "the pass that sees the impossible date cannot tell the age: it keeps the run");
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, seen.plus(bound).minusSeconds(1));
+        assertTrue(Files.exists(pinned), "still inside one lifetime from when the date was seen");
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, seen.plus(bound).plusSeconds(1));
+        assertFalse(Files.exists(pinned), "and gone one lifetime after it was seen, not a year later");
+    }
+
+    @Test
+    void aRunDirectoryDatedInTheFutureIsRedatedAndExpiresLikeAnyOther(@TempDir Path home) throws Exception {
+        Path runs = home.resolve("runs");
+        Instant seen = Instant.parse("2026-09-26T12:00:00Z");
+        Path pinned = markedRun(runs, "future-run", seen.plus(Duration.ofDays(365)), seen.plus(Duration.ofDays(365)));
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, seen);
+        assertTrue(Files.exists(pinned));
+        assertFalse(Files.getLastModifiedTime(pinned).toInstant().isAfter(seen), "the directory date was re-dated");
+        assertFalse(Files.getLastModifiedTime(pinned.resolve(FileResumableRunMarkers.MARKER_FILE_NAME))
+                .toInstant().isAfter(seen), "and so was the marker's");
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT,
+                seen.plus(RunDirectoryRetention.DEFAULT.lifetime(true)).plusSeconds(1));
+        assertFalse(Files.exists(pinned));
+    }
+
+    @Test
+    void aTruncatedScanNeverReclaimsARunOfferedForResume(@TempDir Path home) throws Exception {
+        // R5: scan.truncated() used to make overCount true for EVERY entry, .resumable included.
+        Path runs = home.resolve("runs");
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        List<Path> marked = new ArrayList<>();
+        for (int index = 0; index < 6; index++) {
+            marked.add(markedRun(runs, "marked-" + index, now.minus(Duration.ofHours(1)), now.minus(Duration.ofHours(1))));
+        }
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, now,
+                new RunDirectoryRetention.Budgets(1_000_000L, 3L, 250_000L));
+
+        for (Path run : marked) assertTrue(Files.exists(run), "a marked run survives a truncated scan: " + run.getFileName());
+    }
+
+    @Test
+    void aTruncatedScanStillReclaimsUnmarkedRunsItObserved(@TempDir Path home) throws Exception {
+        Path runs = home.resolve("runs");
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        for (int index = 0; index < 6; index++) {
+            Path run = run(runs, "ordinary-" + index, 8);
+            Files.setLastModifiedTime(run, FileTime.from(now.minus(Duration.ofHours(1))));
+        }
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, now,
+                new RunDirectoryRetention.Budgets(1_000_000L, 3L, 250_000L));
+
+        try (var children = Files.list(runs)) {
+            assertEquals(3L, children.filter(Files::isDirectory).count(),
+                    "the three observed unmarked runs are reclaimed, the three unobserved wait for the next pass");
+        }
+    }
+
+    @Test
+    void markedRunsRemainBoundedByTheCountBudget(@TempDir Path home) throws Exception {
+        Path runs = home.resolve("runs");
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        for (int index = 0; index < 20; index++) {
+            Instant marked = now.minus(Duration.ofMinutes(100 - index));
+            markedRun(runs, "marked-%02d".formatted(index), marked, marked);
+        }
+
+        RunDirectoryRetention.prune(runs, null, RunDirectoryRetention.DEFAULT, now);
+
+        try (var children = Files.list(runs)) {
+            assertEquals(16L, children.count(), "the marker defers deletion, it never lifts the count budget");
+        }
+        for (int index = 0; index < 4; index++) {
+            assertFalse(Files.exists(runs.resolve("marked-%02d".formatted(index))), "the oldest marked runs go first");
+        }
+    }
+
+    @Test
+    void anEntryThatVanishesOrIsUnreadableNeverDisqualifiesARunHeldByAMarker() {
+        // R5: another indexation renames its temporaries while this one measures; a vanished entry is
+        // not evidence of hostile residue, and a held run is never reclaimed first for a read failure.
+        assertFalse(RunDirectoryRetention.unreadableEntryMakesRunReclaimable(
+                new java.nio.file.NoSuchFileException("artifact.partial"), false));
+        assertFalse(RunDirectoryRetention.unreadableEntryMakesRunReclaimable(new IOException("denied"), true));
+        assertTrue(RunDirectoryRetention.unreadableEntryMakesRunReclaimable(new IOException("denied"), false),
+                "an unreadable entry of an unmarked run is still hostile residue");
+    }
+
+    @Test
+    void anInFlightRunOfAnotherIndexationSurvivesEveryConcurrentPruneWhileItIsBeingWritten(@TempDir Path home)
+            throws Exception {
+        // R5, second indexation: process B prunes under budget pressure and a truncated scan while
+        // process A is still producing artifacts in its own run directory. A's marker (posed before its
+        // first provider) is the only thing B can see. Synchronised on a barrier, repeated 50 times.
+        FileResumableRunMarkers markers = new FileResumableRunMarkers(home);
+        Path runs = home.resolve("runs");
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < CONCURRENCY_ROUNDS; round++) {
+                UUID runA = UUID.randomUUID();
+                Path directoryA = Files.createDirectories(runs.resolve(runA.toString()));
+                for (int decoy = 0; decoy < 5; decoy++) run(runs, "decoy-" + round + "-" + decoy, 4);
+                markers.mark(runA);
+                CyclicBarrier barrier = new CyclicBarrier(2);
+                Future<?> writer = pool.submit(() -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    for (int file = 0; file < 20; file++) {
+                        Files.writeString(directoryA.resolve("artifact-" + file), "scip");
+                    }
+                    return null;
+                });
+                Future<?> pruner = pool.submit(() -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    for (int pass = 0; pass < 20; pass++) {
+                        RunDirectoryRetention.prune(runs, null,
+                                new RunDirectoryRetention.Policy(2, 1024L * 1024L, Duration.ofDays(7)), Instant.now(),
+                                new RunDirectoryRetention.Budgets(1_000_000L, 2L, 250_000L));
+                    }
+                    return null;
+                });
+                writer.get(30, TimeUnit.SECONDS);
+                pruner.get(30, TimeUnit.SECONDS);
+
+                assertTrue(Files.isDirectory(directoryA), "round " + round + ": the in-flight run must survive");
+                for (int file = 0; file < 20; file++) {
+                    assertTrue(Files.exists(directoryA.resolve("artifact-" + file)), "round " + round + " file " + file);
+                }
+                markers.unmark(runA);
+                RunDirectoryRetention.deleteTree(runs, directoryA);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private static final int CONCURRENCY_ROUNDS = 50;
+
+    /** A run directory held by a marker, dated explicitly (the marker is written after the artifacts). */
+    private static Path markedRun(Path runs, String name, Instant markerTime, Instant directoryTime) throws Exception {
+        Path directory = run(runs, name, 8);
+        Path marker = Files.writeString(directory.resolve(FileResumableRunMarkers.MARKER_FILE_NAME), "runId=" + name + "\n");
+        Files.setLastModifiedTime(marker, FileTime.from(markerTime));
+        Files.setLastModifiedTime(directory, FileTime.from(directoryTime));
+        return directory;
     }
 
     private static void createJunction(Path link, Path target) throws IOException, InterruptedException {

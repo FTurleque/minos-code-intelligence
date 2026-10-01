@@ -15,8 +15,9 @@ import java.util.UUID;
  * Marqueur durable {@code MINOS_HOME/runs/<runId>/.resumable} (ADR 0039 §5).
  *
  * <p>Le marqueur est publié par la même primitive durable que les artefacts de run. Il est lu par la
- * rétention des répertoires de run (lot 4) pour protéger un run interrompu jusqu'à son TTL ; il ne
- * porte aucune donnée nécessaire à la correction de la reprise.</p>
+ * rétention des répertoires de run, qui protège le run qu'il désigne (un run en cours d'une autre
+ * indexation, ou un run interrompu offert à la reprise) et en borne la durée de vie ; il ne porte
+ * aucune donnée nécessaire à la correction de la reprise.</p>
  *
  * <p>Ce module ne dépend pas de l'application : le port {@code ResumableRunMarkers} de
  * l'orchestration est adapté à cette classe par la racine de composition.</p>
@@ -51,6 +52,20 @@ public final class FileResumableRunMarkers {
             throw new IOException("resumable run marker is not a regular file");
         }
         DurableAtomicFile.deleteIfExists(marker, "resumable run marker deletion");
+        removeRunDirectoryIfEmpty(marker.getParent());
+    }
+
+    /**
+     * Le répertoire est créé par {@link #mark} avant le premier provider : un run qui s'achève sans
+     * avoir écrit le moindre artefact ne doit pas laisser un répertoire vide, compté dans le budget de
+     * la rétention. Une tentative sans effet sur un répertoire non vide ; jamais une erreur.
+     */
+    private static void removeRunDirectoryIfEmpty(Path runDirectory) {
+        try {
+            Files.deleteIfExists(runDirectory);
+        } catch (IOException notEmptyOrBusy) {
+            // Artefacts présents, ou répertoire tenu par un autre processus : la rétention s'en charge.
+        }
     }
 
     /** Emplacement du marqueur d'un run ; le runId est un UUID, le chemin reste confiné sous runs/. */

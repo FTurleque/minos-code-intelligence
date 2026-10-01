@@ -408,6 +408,59 @@ class IndexingResumeTest {
         assertTrue(run.resume().orElseThrow().refusalReason().orElseThrow().contains("promoted"));
     }
 
+    @Test
+    void stagedSnapshotIsNeverPromotedWhenAModuleWasRemovedSinceTheInterruption(@TempDir Path temp) throws Exception {
+        // R4: the run was interrupted in PROMOTION over three scopes; the user then deletes one module.
+        // Every remaining target still owns a valid checkpoint, but the staged snapshot also indexes the
+        // removed module: promoting it would publish an index a full run would never produce.
+        Fixture fixture = new Fixture(temp);
+        fixture.active.set("snapshot-old");
+        IndexingRun interrupted = fixture.interruptInPhase(IndexingRun.Phase.PROMOTION, Optional.of("snapshot-staged"), T0);
+        deleteRecursively(fixture.root.resolve("ui/web"));
+        Fixture.Executor executor = new Fixture.Executor(fixture, 0);
+        int stagedBefore = fixture.stager.requests.size();
+
+        IndexingRun resumed = fixture.lifecycle(executor, T0.plusSeconds(10)).execute(
+                fixture.projectId, fixture.root, fixture.discovery(List.of(Path.of("ui/app"), Path.of("ui/lib"))),
+                negotiation());
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, resumed.status());
+        assertEquals(interrupted.id(), resumed.id(), "the run is still resumed: both remaining targets are reusable");
+        assertTrue(executor.executed.isEmpty(), "no provider is relaunched");
+        assertFalse(fixture.promoted.contains("snapshot-staged"), "the stale staged snapshot must never be promoted");
+        assertEquals(stagedBefore + 1, fixture.stager.requests.size(), "the snapshot is prepared again");
+        assertEquals(2, fixture.stager.lastArtifacts().size(), "and it holds the two current scopes only");
+        assertTrue(fixture.stager.lastArtifacts().stream().noneMatch(artifact -> artifact.startsWith("ui/web=")));
+        assertNotEquals(Optional.of("snapshot-staged"), resumed.activeSnapshotAfter());
+        assertEquals(resumed.activeSnapshotAfter(),
+                fixture.store.findProjectState(fixture.projectId).orElseThrow().activeSnapshotId());
+    }
+
+    @Test
+    void stagedSnapshotOfAnExecutionWithoutCheckpointIsNotProvablyCurrentAndIsPreparedAgain(@TempDir Path temp)
+            throws Exception {
+        // R4, fail-closed: an execution whose checkpoint was withheld cannot be tied to any current
+        // target key, so the staged snapshot that contains it cannot be proven to match the plan.
+        Fixture fixture = new Fixture(temp);
+        fixture.active.set("snapshot-old");
+        IndexingRun interrupted = fixture.interruptInPhase(IndexingRun.Phase.PROMOTION, Optional.of("snapshot-staged"), T0);
+        List<IndexingRun.IndexerExecution> executions = new ArrayList<>(interrupted.executions());
+        executions.add(new IndexingRun.IndexerExecution(
+                com.minos.discovery.ProjectDiscovery.Language.TYPESCRIPT, PROVIDER, Path.of("removed/index.scip")));
+        fixture.store.saveRun(new IndexingRun(interrupted.id(), fixture.projectId, interrupted.status(),
+                interrupted.phase(), interrupted.createdAt(), Optional.empty(), executions,
+                interrupted.stagedSnapshotId(), interrupted.activeSnapshotBefore(), interrupted.activeSnapshotAfter(),
+                interrupted.message(), interrupted.runFormatVersion(), interrupted.resume()));
+        Fixture.Executor executor = new Fixture.Executor(fixture, 0);
+
+        IndexingRun resumed = fixture.lifecycle(executor, T0.plusSeconds(10)).execute(
+                fixture.projectId, fixture.root, fixture.discovery(), negotiation());
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, resumed.status());
+        assertFalse(fixture.promoted.contains("snapshot-staged"));
+        assertEquals(3, fixture.stager.lastArtifacts().size());
+    }
+
     static IndexerNegotiationResult negotiation() {
         return negotiation(VERSION, PROVIDER);
     }
@@ -472,8 +525,12 @@ class IndexingResumeTest {
         }
 
         ProjectDiscovery discovery() {
+            return discovery(SCOPES);
+        }
+
+        ProjectDiscovery discovery(List<Path> scopes) {
             List<DiscoveredModule> modules = new ArrayList<>();
-            for (Path scope : SCOPES) {
+            for (Path scope : scopes) {
                 modules.add(new DiscoveredModule(scope, scope.getFileName().toString(), EnumSet.of(BuildSystem.NPM),
                         List.of(new SourceRoot(scope.resolve("src"), SourceRootKind.SOURCE, Language.TYPESCRIPT))));
             }

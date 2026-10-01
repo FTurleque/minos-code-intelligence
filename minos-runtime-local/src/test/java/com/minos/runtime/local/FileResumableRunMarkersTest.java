@@ -48,6 +48,34 @@ class FileResumableRunMarkersTest {
     }
 
     @Test
+    void unmarkOfARunThatWroteNothingLeavesNoEmptyRunDirectoryBehind(@TempDir Path home) throws Exception {
+        // V-L1-03: the run is held before its first provider, which creates the directory; a run that
+        // ends without any artifact must not leave an empty directory counted against the budget.
+        UUID runId = UUID.randomUUID();
+        FileResumableRunMarkers markers = new FileResumableRunMarkers(home);
+        markers.mark(runId);
+        Path runDirectory = home.resolve("runs").resolve(runId.toString());
+        assertTrue(Files.isDirectory(runDirectory));
+
+        markers.unmark(runId);
+
+        assertFalse(Files.exists(runDirectory), "an empty run directory goes away with its marker");
+    }
+
+    @Test
+    void unmarkNeverRemovesARunDirectoryThatHoldsArtifacts(@TempDir Path home) throws Exception {
+        UUID runId = UUID.randomUUID();
+        FileResumableRunMarkers markers = new FileResumableRunMarkers(home);
+        markers.mark(runId);
+        Path runDirectory = home.resolve("runs").resolve(runId.toString());
+        Files.writeString(runDirectory.resolve("index.scip"), "index");
+
+        markers.unmark(runId);
+
+        assertTrue(Files.isRegularFile(runDirectory.resolve("index.scip")));
+    }
+
+    @Test
     void unmarkOfARunWhoseDirectoryIsGoneIsANoOp(@TempDir Path home) throws Exception {
         new FileResumableRunMarkers(home).unmark(UUID.randomUUID());
 

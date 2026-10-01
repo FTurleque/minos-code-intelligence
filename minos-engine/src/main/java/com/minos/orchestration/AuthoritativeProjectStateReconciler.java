@@ -129,7 +129,7 @@ final class AuthoritativeProjectStateReconciler {
                 detail,
                 exclusiveLeaseHeld);
         return recovery.orElseGet(() -> reconcileStableSnapshot(
-                projectId, activeAfter, persisted, promoter, stateStore, observedAt, detail));
+                projectId, activeAfter, persisted, promoter, stateStore, markers, observedAt, detail));
     }
 
     private static Optional<Decision> recoverIfRequired(
@@ -165,6 +165,7 @@ final class AuthoritativeProjectStateReconciler {
             ProjectIndexState persisted,
             SnapshotPromoter promoter,
             IndexStateStore stateStore,
+            ResumableRunMarkers markers,
             Instant observedAt,
             String detail
     ) {
@@ -177,13 +178,17 @@ final class AuthoritativeProjectStateReconciler {
             return Decision.resolved(persisted);
         }
 
+        // R7: the repaired project is READY, which never offers a resume. The offered run is ended by
+        // the same rule as in every other recovery path, not silently forgotten.
+        endResumeOffer(stateStore, markers, persisted.resumableRunId(), observedAt);
         ProjectIndexState repaired = new ProjectIndexState(
                 projectId,
                 ProjectIndexState.Availability.READY,
                 Optional.of(authoritativeId),
                 persisted.latestRunId(),
                 observedAt,
-                Optional.of(detail));
+                Optional.of(detail),
+                Optional.empty());
         stateStore.saveProjectState(repaired);
         return verifyRepair(projectId, active, promoter, stateStore);
     }
@@ -253,17 +258,21 @@ final class AuthoritativeProjectStateReconciler {
             if (committed) {
                 stateStore.saveRun(terminalRecovery(run, active.snapshotId(), observedAt, Status.SUCCEEDED,
                         "recovered abandoned indexing run: staged snapshot was already authoritative after lifecycle lease reacquisition"));
+                unmarkQuietly(markers, run.id());
                 continue;
             }
-            Optional<String> markerFailure = offersResume(run) ? markResumable(markers, run.id()) : Optional.of("");
+            Optional<String> markerFailure = run.offersResume() ? markResumable(markers, run.id()) : Optional.of("");
             if (markerFailure.isEmpty()) {
                 if (resumable.isPresent()) supersede(stateStore, markers, resumable.orElseThrow(), run.id(), observedAt);
                 resumable = Optional.of(run.id());
                 stateStore.saveRun(terminalRecovery(run, active.snapshotId(), observedAt, Status.INTERRUPTED,
                         "interrupted indexing run recovered after exclusive lifecycle lease reacquisition; resumable"
-                                + " targets=" + checkpointCount(run) + "/" + run.executions().size()
+                                + " targets=" + run.checkpointCount() + "/" + run.executions().size()
                                 + run.stagedSnapshotId().map(id -> ", staged snapshot retained").orElse("")));
             } else {
+                // A run that was held against retention while it ran (R5) and is not offered for resume
+                // is terminal now: its hold is lifted with it.
+                unmarkQuietly(markers, run.id());
                 stateStore.saveRun(terminalRecovery(run, active.snapshotId(), observedAt, Status.FAILED,
                         "recovered abandoned indexing run after exclusive lifecycle lease reacquisition"
                                 + markerFailure.orElseThrow()));
@@ -271,16 +280,6 @@ final class AuthoritativeProjectStateReconciler {
         }
         Optional<IndexingRun> latest = stateStore.listRuns(projectId).stream().max(RUN_ORDER);
         return new Recovery(running.size(), latest, resumable);
-    }
-
-    /** ADR 0039 §2: a run is offered for resume only when written in the current format. */
-    private static boolean offersResume(IndexingRun run) {
-        return run.runFormatVersion() == IndexingRun.CURRENT_FORMAT_VERSION
-                && (checkpointCount(run) > 0 || run.stagedSnapshotId().isPresent());
-    }
-
-    private static int checkpointCount(IndexingRun run) {
-        return (int) run.executions().stream().filter(execution -> execution.checkpoint().isPresent()).count();
     }
 
     /**
@@ -324,6 +323,21 @@ final class AuthoritativeProjectStateReconciler {
         IndexingRun run = superseded.orElseThrow();
         stateStore.saveRun(terminalRecovery(run, run.activeSnapshotAfter(), observedAt, Status.FAILED, reason));
         unmarkQuietly(markers, run.id());
+    }
+
+    /**
+     * V12, R7: a project that holds a current snapshot has nothing to resume. The run it offered is
+     * finalized and its marker removed instead of being left INTERRUPTED and marked. The one place
+     * that ends an offer for a current project, whichever recovery path made the project current.
+     */
+    private static void endResumeOffer(
+            IndexStateStore stateStore,
+            ResumableRunMarkers markers,
+            Optional<UUID> offeredRunId,
+            Instant observedAt
+    ) {
+        offeredRunId.ifPresent(id -> supersede(stateStore, markers, id,
+                "interrupted indexing run superseded: project already holds a current snapshot", observedAt));
     }
 
     /** The marker only protects retention: a failure to remove it is reported, never propagated. */
@@ -409,10 +423,7 @@ final class AuthoritativeProjectStateReconciler {
                 ? ProjectIndexState.Availability.READY
                 : ProjectIndexState.Availability.STALE;
         if (availability == ProjectIndexState.Availability.READY) {
-            // V12: a current project has nothing to resume; the offered run is finalized and its
-            // marker removed instead of being abandoned INTERRUPTED and marked.
-            resumableRunId.ifPresent(id -> supersede(stateStore, markers, id,
-                    "interrupted indexing run superseded: project already holds a current snapshot", observedAt));
+            endResumeOffer(stateStore, markers, resumableRunId, observedAt);
         }
         return new ProjectIndexState(
                 projectId,

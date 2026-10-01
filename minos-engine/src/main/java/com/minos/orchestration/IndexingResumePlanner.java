@@ -11,9 +11,11 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -81,6 +83,32 @@ final class IndexingResumePlanner {
                 reused = List.copyOf(Objects.requireNonNull(reused, "reused"));
                 remaining = List.copyOf(Objects.requireNonNull(remaining, "remaining"));
                 if (reused.isEmpty()) throw new IllegalArgumentException("a resume reuses at least one target");
+            }
+
+            /** Vrai quand la tentative interrompue avait déjà préparé un snapshot, en phase de promotion. */
+            boolean stagedSnapshotKnown() {
+                return run.phase() == IndexingRun.Phase.PROMOTION && run.stagedSnapshotId().isPresent();
+            }
+
+            /**
+             * Vrai seulement quand la reprise couvre <em>exactement</em> ce que le run interrompu avait mis
+             * en snapshot : aucune cible à réexécuter, et l'ensemble des clés de cible des exécutions du
+             * run égal à celui des cibles courantes (R4). Le snapshot préparé par la tentative interrompue
+             * contient l'index de chacune de ses exécutions ; si un module a disparu depuis, le promouvoir
+             * publierait un index qu'un run complet ne produirait jamais. Fail-closed : une exécution sans
+             * point de contrôle n'a pas de clé de cible, donc n'est pas prouvée présente dans le plan.
+             */
+            boolean stagedSnapshotCoversThePlan() {
+                if (!remaining.isEmpty()) return false;
+                Set<String> staged = new HashSet<>();
+                for (IndexerExecution execution : run.executions()) {
+                    Optional<String> key = executionKey(execution);
+                    if (key.isEmpty()) return false;
+                    staged.add(key.orElseThrow());
+                }
+                Set<String> current = new HashSet<>();
+                for (ReusedTarget target : reused) current.add(targetKey(target.target()));
+                return staged.equals(current);
             }
         }
 
@@ -165,15 +193,23 @@ final class IndexingResumePlanner {
     }
 
     private static Optional<IndexerExecution> checkpointFor(IndexingRun run, IndexingExecutionTarget target) {
-        IndexerSelection selection = target.selection();
-        String key = IndexingRun.targetKey(
-                selection.indexer().id(), selection.indexer().version(), target.projectRelativeRoot());
+        String key = targetKey(target);
         return run.executions().stream()
-                .filter(execution -> execution.checkpoint().isPresent())
-                .filter(execution -> key.equals(IndexingRun.targetKey(execution.indexerId(),
-                        execution.checkpoint().orElseThrow().providerVersion(),
-                        execution.checkpoint().orElseThrow().projectRelativeRoot())))
+                .filter(execution -> executionKey(execution).filter(key::equals).isPresent())
                 .findFirst();
+    }
+
+    /** Clé de la cible courante : celle que le point de contrôle d'une exécution a portée si elle a réussi. */
+    private static String targetKey(IndexingExecutionTarget target) {
+        IndexerSelection selection = target.selection();
+        return IndexingRun.targetKey(
+                selection.indexer().id(), selection.indexer().version(), target.projectRelativeRoot());
+    }
+
+    /** Clé de cible d'une exécution du run, vide quand elle ne porte aucun point de contrôle. */
+    private static Optional<String> executionKey(IndexerExecution execution) {
+        return execution.checkpoint().map(checkpoint -> IndexingRun.targetKey(
+                execution.indexerId(), checkpoint.providerVersion(), checkpoint.projectRelativeRoot()));
     }
 
     /**

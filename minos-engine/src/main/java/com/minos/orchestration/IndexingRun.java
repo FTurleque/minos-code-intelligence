@@ -119,6 +119,21 @@ public record IndexingRun(
                 activeSnapshotBefore, activeSnapshotAfter, message, runFormatVersion, Optional.empty());
     }
 
+    /** Nombre d'exécutions dont le point de contrôle est valide, donc réutilisables par une reprise. */
+    public int checkpointCount() {
+        return (int) executions.stream().filter(execution -> execution.checkpoint().isPresent()).count();
+    }
+
+    /**
+     * La règle unique qui décide qu'un run abandonné ou interrompu est offert à la reprise (ADR 0039
+     * §2) : écrit au format courant, et porteur d'au moins un point de contrôle ou d'un snapshot
+     * préparé. La récupération d'un run abandonné et l'interruption d'un run en cours l'appliquent
+     * toutes deux ; aucune n'en garde de copie.
+     */
+    public boolean offersResume() {
+        return runFormatVersion == CURRENT_FORMAT_VERSION && (checkpointCount() > 0 || stagedSnapshotId.isPresent());
+    }
+
     /**
      * Trace de reprise (ADR 0039 §6) : numéro de tentative, cibles réutilisées et réexécutées, et la
      * raison publique quand une reprise a été considérée puis refusée.

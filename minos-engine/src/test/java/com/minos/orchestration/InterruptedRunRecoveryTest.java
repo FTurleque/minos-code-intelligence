@@ -85,6 +85,8 @@ class InterruptedRunRecoveryTest {
         assertEquals(ProjectIndexState.Availability.STALE, recovered.availability());
         assertEquals(Optional.empty(), recovered.resumableRunId());
         assertTrue(events.stream().noneMatch(event -> event.startsWith("mark:")));
+        assertTrue(events.contains("unmark:" + runId),
+                "R5: the hold a crashed run left behind is lifted when recovery finalizes it as failed");
     }
 
     @Test
@@ -128,6 +130,7 @@ class InterruptedRunRecoveryTest {
         assertEquals(ProjectIndexState.Availability.READY, recovered.availability());
         assertEquals(Optional.empty(), recovered.resumableRunId());
         assertTrue(events.stream().noneMatch(event -> event.startsWith("mark:")));
+        assertTrue(events.contains("unmark:" + runId), "R5: a recovered success no longer needs its hold");
     }
 
     @Test
@@ -226,6 +229,56 @@ class InterruptedRunRecoveryTest {
     }
 
     @Test
+    void stableSnapshotRepairSupersedesTheOfferedRunAndLiftsItsMarker() {
+        // R7: the persisted state offers an interrupted run but references an older snapshot than the
+        // authoritative one. The repair makes the project READY (which never offers a resume); it used
+        // to drop the reference silently, leaving the run INTERRUPTED and marked, out of retention's
+        // reach and able to be offered again later.
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        List<String> events = new ArrayList<>();
+        RecordingStore store = new RecordingStore(events);
+        store.saveRun(new IndexingRun(runId, projectId, IndexingRun.Status.INTERRUPTED,
+                IndexingRun.Phase.PROVIDER_EXECUTION, CREATED, Optional.of(CHECKPOINT), List.of(checkpointed("ui/app")),
+                Optional.empty(), Optional.of("snapshot-old"), Optional.of("snapshot-old"), Optional.of("interrupted"),
+                IndexingRun.CURRENT_FORMAT_VERSION));
+        store.saveProjectState(new ProjectIndexState(projectId, ProjectIndexState.Availability.STALE,
+                Optional.of("snapshot-old"), Optional.of(runId), CREATED, Optional.of("interrupted run offered"),
+                Optional.of(runId)));
+        events.clear();
+
+        ProjectIndexState repaired = AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease(
+                projectId, promoter(new AtomicReference<>("snapshot-new")), store,
+                new RecordingMarkers(events, false), RECOVERED, "restart");
+
+        assertEquals(ProjectIndexState.Availability.READY, repaired.availability());
+        assertEquals(Optional.of("snapshot-new"), repaired.activeSnapshotId());
+        assertEquals(Optional.empty(), repaired.resumableRunId(), "a current project offers nothing to resume");
+        IndexingRun superseded = store.findRun(runId).orElseThrow();
+        assertEquals(IndexingRun.Status.FAILED, superseded.status(), "the offered run is finalized, not left INTERRUPTED");
+        assertTrue(superseded.message().orElseThrow().contains("superseded"), superseded.message().orElse(""));
+        assertTrue(events.contains("unmark:" + runId), "its marker is lifted so retention can reclaim the directory");
+        assertEquals(Optional.empty(), store.findProjectState(projectId).orElseThrow().resumableRunId());
+    }
+
+    @Test
+    void stableSnapshotRepairWithoutAnOfferedRunTouchesNoRunAndNoMarker() {
+        UUID projectId = UUID.randomUUID();
+        List<String> events = new ArrayList<>();
+        RecordingStore store = new RecordingStore(events);
+        store.saveProjectState(new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
+                Optional.of("snapshot-old"), Optional.empty(), CREATED, Optional.of("baseline")));
+        events.clear();
+
+        ProjectIndexState repaired = AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease(
+                projectId, promoter(new AtomicReference<>("snapshot-new")), store,
+                new RecordingMarkers(events, false), RECOVERED, "restart");
+
+        assertEquals(Optional.of("snapshot-new"), repaired.activeSnapshotId());
+        assertTrue(events.stream().noneMatch(event -> event.startsWith("saveRun:") || event.startsWith("unmark:")), events.toString());
+    }
+
+    @Test
     void threadInterruptionDuringAProviderLeavesAnInterruptedRunAndRestoresTheFlag(@TempDir Path root)
             throws Exception {
         // R1-11: an InterruptedException is not an explicit failure; with a checkpoint already
@@ -289,7 +342,11 @@ class InterruptedRunRecoveryTest {
         }
 
         assertEquals(IndexingRun.Status.FAILED, run.status());
-        assertTrue(events.stream().noneMatch(event -> event.startsWith("mark:")));
+        // R5: the run was held against retention while it ran; a failed run offers nothing, so the hold
+        // is lifted with it and no marker outlives the run.
+        List<String> markerEvents = events.stream()
+                .filter(event -> event.startsWith("mark:") || event.startsWith("unmark:")).toList();
+        assertEquals("unmark:" + run.id(), markerEvents.getLast(), markerEvents.toString());
         assertEquals(Optional.empty(), store.findProjectState(projectId).orElseThrow().resumableRunId());
     }
 
