@@ -15,6 +15,8 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.AclEntry;
 import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.UserPrincipal;
+import java.nio.file.InvalidPathException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -50,7 +52,7 @@ import java.util.concurrent.TimeUnit;
  * there. A process that is elevated while the root was made by a non-elevated one (or the opposite) sees
  * another owner and refuses.</p>
  */
-record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl) {
+record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl, UserPrincipal parentOwner) {
 
     private static final String ROOT_NAME = "minos-launchers";
     private static final int MAX_SCRIPT_BYTES = 1024 * 1024;
@@ -64,20 +66,29 @@ record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl)
         Objects.requireNonNull(file, "file");
         Objects.requireNonNull(sha256, "sha256");
         parentAcl = List.copyOf(Objects.requireNonNull(parentAcl, "parentAcl"));
+        Objects.requireNonNull(parentOwner, "parentOwner");
     }
 
     /** Materialises {@code launcherName} under {@code %LOCALAPPDATA%\minos-launchers}. */
     static SandboxLauncherScript materialize(String launcherName) throws IOException {
         String localAppData = System.getenv("LOCALAPPDATA");
-        if (localAppData == null || localAppData.isBlank() || !Path.of(localAppData).isAbsolute()) {
+        Path base;
+        try {
+            base = localAppData == null || localAppData.isBlank() ? null : Path.of(localAppData);
+        } catch (InvalidPathException invalid) {
+            base = null;
+        }
+        if (base == null || !base.isAbsolute()) {
             throw new IOException("sandbox launcher root is unavailable: no private user directory");
         }
-        return materialize(Path.of(localAppData).resolve(ROOT_NAME), launcherName);
+        return materialize(base.resolve(ROOT_NAME), launcherName);
     }
 
     static SandboxLauncherScript materialize(Path root, String launcherName) throws IOException {
         try {
             return materializeChecked(root, launcherName);
+        } catch (IllegalStateException identityUnknown) {
+            throw new IOException("sandbox launcher is unavailable: the identity of this process is unknown");
         } catch (FileSystemException failure) {
             // A file-system error names the path in its message; the launcher is reported without it.
             throw new IOException("sandbox launcher is unavailable (" + failure.getClass().getSimpleName() + ")");
@@ -99,8 +110,8 @@ record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl)
         PrivateLocalStorage.ensurePrivateDirectory(directory);
         requireOurPrivateDirectories(normalizedRoot, directory);
         Path target = directory.resolve(launcherName);
-        List<AclEntry> parentAcl = requireParentNotReplaceableByOthers(normalizedRoot, directory);
-        SandboxLauncherScript script = new SandboxLauncherScript(target, digest, parentAcl);
+        ParentState parent = requireParentNotReplaceableByOthers(normalizedRoot, directory);
+        SandboxLauncherScript script = new SandboxLauncherScript(target, digest, parent.acl(), parent.owner());
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             PrivateLocalStorage.verifyOwnedByCurrentUser(target);
             if (script.contentMatches()) {
@@ -130,7 +141,8 @@ record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl)
             PrivateLocalStorage.verifyPrivateFile(file);
             AclFileAttributeView parent = Files.getFileAttributeView(
                     root.getParent(), AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-            if (parent != null && !parent.getAcl().equals(parentAcl)) {
+            if (parent != null
+                    && (!parent.getAcl().equals(parentAcl) || !parent.getOwner().equals(parentOwner))) {
                 throw new IOException(INTEGRITY_FAILURE);
             }
         } catch (IOException failure) {
@@ -172,20 +184,28 @@ record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl)
         }
     }
 
+    /** What was validated about the directory that contains the root, kept to be compared with before each launch. */
+    private record ParentState(List<AclEntry> acl, UserPrincipal owner) { }
+
     /**
      * The directory that contains the root decides who can rename the root away and put another one in
-     * its place. Its DACL is read once, as SDDL (SIDs, so the answer does not depend on the language of the
-     * machine); the live ACL is kept to be compared with before each launch.
+     * its place, and its owner can always rewrite its DACL (the SDDL that {@code icacls /save} writes does
+     * not carry the owner). Its DACL is read as SDDL (SIDs, so the answer does not depend on the language of
+     * the machine) and must be the same as the live ACL read just before and just after, else it changed
+     * while it was being read and is refused; its owner must be this process's principal, SYSTEM or
+     * Administrators. The live ACL and owner are kept to be compared with before each launch.
      */
-    private static List<AclEntry> requireParentNotReplaceableByOthers(Path root, Path scratch) throws IOException {
+    private static ParentState requireParentNotReplaceableByOthers(Path root, Path scratch) throws IOException {
         Path parent = root.getParent();
         if (parent == null) throw new IOException("sandbox launcher root has no containing directory");
         AclFileAttributeView view = Files.getFileAttributeView(
                 parent, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-        if (view == null) return List.of();
+        if (view == null) throw new IOException(UNREADABLE_RIGHTS);
         // Written inside the directory MINOS just made private, never in a place others can write.
         Path saved = PrivateLocalStorage.createPrivateTempFile(scratch, ".acl-", ".txt");
         try {
+            List<AclEntry> before = view.getAcl();
+            UserPrincipal owner = view.getOwner();
             String systemRoot = System.getenv("SystemRoot");
             if (systemRoot == null || systemRoot.isBlank()) throw new IOException("Windows directory unknown");
             Process process = new ProcessBuilder(
@@ -206,13 +226,25 @@ record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl)
             }
             if (process.exitValue() != 0) throw new IOException(UNREADABLE_RIGHTS);
             String sddl = new String(Files.readAllBytes(saved), StandardCharsets.UTF_16LE);
-            String foreign = SddlReplaceRights.firstForeignReplaceGrant(
-                    sddl, Set.of(ProcessIdentity.sid(), "S-1-5-18", "S-1-5-32-544"));
-            if (foreign != null) {
+            if (!view.getAcl().equals(before) || !view.getOwner().equals(owner)) {
+                throw new IOException("sandbox launcher root: its directory changed while it was being checked");
+            }
+            Set<String> trusted = Set.of(ProcessIdentity.sid(), "S-1-5-18", "S-1-5-32-544");
+            if (SddlReplaceRights.firstForeignReplaceGrant(sddl, trusted) != null) {
                 throw new IOException(
                         "sandbox launcher root: another principal can replace what is under its directory");
             }
-            return view.getAcl();
+            boolean ownedByUs;
+            try {
+                PrivateLocalStorage.verifyOwnedByCurrentUser(parent);
+                ownedByUs = true;
+            } catch (IOException notOurs) {
+                ownedByUs = false;
+            }
+            if (!SddlReplaceRights.ownerTrusted(owner, ownedByUs, before, sddl, trusted)) {
+                throw new IOException("sandbox launcher root: its directory is owned by another principal");
+            }
+            return new ParentState(before, owner);
         } finally {
             Files.deleteIfExists(saved);
         }

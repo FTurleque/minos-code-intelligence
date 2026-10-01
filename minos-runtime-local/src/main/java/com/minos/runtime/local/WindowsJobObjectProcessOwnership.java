@@ -42,7 +42,7 @@ final class WindowsJobObjectProcessOwnership {
             SandboxLauncherScript launcher = SandboxLauncherScript.materialize(LAUNCHER_NAME);
             SandboxLauncherScript.requireOutsideMinosHome(launcher.file(), minosHome);
             return Optional.of(new WindowsJobObjectProcessOwnership(powershell.orElseThrow(), launcher));
-        } catch (IOException failure) {
+        } catch (IOException | IllegalArgumentException | IllegalStateException failure) {
             // Not just "PowerShell missing": this can also mean the launcher could not be installed
             // as owner-only (e.g. the private-storage filesystem could not enforce or verify
             // ownership). The caller reports this as an ordinary "capability unavailable" diagnostic,

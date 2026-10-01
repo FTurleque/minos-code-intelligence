@@ -108,7 +108,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 return Optional.empty();
             }
             return Optional.of(candidate);
-        } catch (IOException | IllegalArgumentException exception) {
+        } catch (IOException | IllegalArgumentException | IllegalStateException exception) {
             // Not just "PowerShell missing": this can also mean the launcher could not be installed
             // as owner-only (e.g. the private-storage filesystem could not enforce or verify
             // ownership) or another environmental failure. WorkerSandboxBackends.selectForUntrustedCode()

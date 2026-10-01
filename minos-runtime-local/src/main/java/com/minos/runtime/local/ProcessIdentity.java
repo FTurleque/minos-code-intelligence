@@ -3,6 +3,7 @@ package com.minos.runtime.local;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -31,8 +32,12 @@ final class ProcessIdentity {
             Process process = new ProcessBuilder(
                     Path.of(systemRoot, "System32", "whoami.exe").toString(), "/user", "/fo", "csv", "/nh")
                     .redirectErrorStream(true).start();
+            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IOException("whoami timed out");
+            }
             String output = new String(process.getInputStream().readNBytes(4096), StandardCharsets.ISO_8859_1).trim();
-            if (process.waitFor() == 0) {
+            if (process.exitValue() == 0) {
                 Matcher matcher = SECURITY_IDENTIFIER.matcher(output.substring(output.lastIndexOf(',') + 1));
                 if (matcher.find()) {
                     sid = matcher.group();
