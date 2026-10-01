@@ -101,6 +101,12 @@ Correctifs de production retirés (`git stash` de `src/main`), tests rejoués :
 Avec les correctifs, les mêmes tests passent (12 + 8 tests ciblés, plus `CliValidInvocationsTest`,
 `ExecutionCommandsArgumentRulesTest`, `RemoteIndexCommandTest`).
 
+### Résultats de fin de lot (2026-10-01, Windows 10, JDK 24)
+
+- `./mvnw -B clean verify` : **BUILD SUCCESS**, 15 modules, 1 876 tests, 0 échec, 54 ignorés (déjà ignorés avant ce lot ; aucun ajouté par le lot).
+- Gates : `check-module-boundaries.py` SUCCESS (modules=14, sources=508) ; `check-milestone-artifact-references.py` SUCCESS (95 scripts) ; `check-workflow-pins.py` SUCCESS (70 `uses`).
+- Windows : tout a été exécuté sous Windows. Linux : non exécuté localement (la CI le fait).
+
 ## À traiter plus tard
 
 - **Clone shallow à profondeur 1 (S9 point 6)** : voir décision 8.
