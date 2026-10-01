@@ -58,8 +58,6 @@ class JsonEscapeGuardTest {
     static {
         ESCAPE_EXCEPTIONS.put(OUTPUT_DIRECTORY + "/ArchitectureResultRenderer.java",
                 "échappement Graphviz DOT (dotText), pas du JSON ; le JSON de ce renderer passe par DeterministicJson");
-        ESCAPE_EXCEPTIONS.put("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java",
-                "échappement d'une classe de caractères d'expression régulière, pas du JSON");
     }
 
     @Test
