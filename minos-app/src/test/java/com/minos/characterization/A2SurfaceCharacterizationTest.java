@@ -409,6 +409,8 @@ class A2SurfaceCharacterizationTest {
         }
         Path local = temp.resolve("home-local");
         transcript.cli(local, "team", "tenant", "--format", "json");
+        // Une ligne valide sur un home sans mode hebergé : « not configured », code 1 (la précédente est une erreur d'usage).
+        transcript.cli(local, "team", "tenant");
         Path configured = temp.resolve("home-hosted");
         transcript.cli(configured, "project", "list", "--format", "json");
         configure(configured, "minos.hosted.mode=enabled\n");

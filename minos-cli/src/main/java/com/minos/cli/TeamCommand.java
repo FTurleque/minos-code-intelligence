@@ -70,12 +70,22 @@ final class TeamCommand {
      */
     private static final Map<String, Operation> OPERATIONS = operationTable();
 
-    private final HostedControlPlaneService service;
+    private final Supplier<HostedControlPlaneService> service;
     private final Supplier<String> bearerToken;
 
     TeamCommand(HostedControlPlaneService service, Supplier<String> bearerToken) {
+        this(supplying(service), bearerToken);
+    }
+
+    /** Service construit à son premier appel, c'est-à-dire après l'analyse des arguments. */
+    TeamCommand(Supplier<HostedControlPlaneService> service, Supplier<String> bearerToken) {
         this.service = Objects.requireNonNull(service, "service");
         this.bearerToken = Objects.requireNonNull(bearerToken, "bearerToken");
+    }
+
+    private static Supplier<HostedControlPlaneService> supplying(HostedControlPlaneService service) {
+        Objects.requireNonNull(service, "service");
+        return () -> service;
     }
 
     int run(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -126,7 +136,7 @@ final class TeamCommand {
             throw new UsageException(invalid.getMessage());
         }
         Invocation invocation = declared.parser.parse(options);
-        return invocation.run(service, this::token);
+        return invocation.run(service.get(), this::token);
     }
 
     private static Map<String, Operation> operationTable() {

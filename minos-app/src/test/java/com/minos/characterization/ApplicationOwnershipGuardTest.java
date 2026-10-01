@@ -76,9 +76,17 @@ class ApplicationOwnershipGuardTest {
                         List.of("try (MinosApplication application = opener.open(home))",
                                 "this(serving(MinosApplication::open, MinosMcpServer::run),")));
         OWNERS.put("minos-cli/src/main/java/com/minos/cli/MinosLauncher.java",
-                new Owner(1, "référence MinosApplication::open injectée dans launch(), qui ferme dans un try-avec-ressources",
-                        List.of("try (MinosApplication application = opener.open(home))",
+                new Owner(1, "référence MinosApplication::open injectée dans launch(), qui la confie à une LazyApplication "
+                        + "ouverte à la demande, fermée par un try-avec-ressources",
+                        List.of("try (LazyApplication application = LazyApplication.opening(home, () -> opener.open(home)))",
                                 "MinosApplication::open, MinosLauncher::run));")));
+        OWNERS.put("minos-cli/src/main/java/com/minos/cli/MinosCliRunner.java",
+                new Owner(1, "run(Path, …) : l'ouverture est différée dans une LazyApplication, fermée par un try-avec-ressources",
+                        List.of("try (LazyApplication application = LazyApplication.opening(home, () -> MinosApplication.open(home)))")));
+
+        // La LazyApplication ne crée rien elle-même (l'ouvreur lui est donné) : elle ferme ce qu'elle a ouvert, une fois.
+        CLOSERS.put("minos-cli/src/main/java/com/minos/cli/LazyApplication.java",
+                List.of("if (owned && application != null) application.close();", "if (closed) return;"));
 
         for (String facade : List.of("LocalMinosApi", "LocalMinosMultiRepositoryApi", "LocalProviderPlatformApi")) {
             CLOSERS.put("minos-api/src/main/java/com/minos/api/" + facade + ".java",

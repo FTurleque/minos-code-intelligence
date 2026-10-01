@@ -62,6 +62,8 @@ public final class NexusExportCommand {
         NexusExportContract.ExportSnapshot snapshot;
         try {
             snapshot = exportOperation.export(root);
+        } catch (LazyApplication.OpenFailure openFailure) {
+            throw openFailure;
         } catch (Exception exception) {
             error.append("error: nexus-export failed: ")
                     .append(exportFailureMessage(exception))

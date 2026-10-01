@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /** Dispatcher stable des commandes CLI MINOS. */
 public final class MinosCli {
@@ -106,11 +107,11 @@ public final class MinosCli {
         NexusExportCommand nexusExportCommand = builder.nexusExportCommand;
         AutonomousIndexOperations autonomousOperations = builder.autonomousOperations;
         Path home = builder.home;
-        ProviderPlatformService providerPlatformService = builder.providerPlatformService;
+        Supplier<ProviderPlatformService> providerPlatformService = builder.providerPlatformService;
         GitIntelligence gitIntelligenceService = builder.gitIntelligence;
         RemoteIndexOperations remoteIndexOperations = builder.remoteIndexOperations;
-        RuntimeIntelligenceService runtimeIntelligenceService = builder.runtimeIntelligenceService;
-        HostedControlPlaneService hostedControlPlaneService = builder.hostedControlPlaneService;
+        Supplier<RuntimeIntelligenceService> runtimeIntelligenceService = builder.runtimeIntelligenceService;
+        Supplier<HostedControlPlaneService> hostedControlPlaneService = builder.hostedControlPlaneService;
         IndexResumeStatusSource resumeStatus = builder.resumeStatus;
         IdeCommand ideCommand = new IdeCommand();
         ProjectCommand projectCommand = projectOperations == null ? null : new ProjectCommand(projectOperations,
@@ -186,9 +187,28 @@ public final class MinosCli {
         }
     }
 
-    /** Ajoute la route d'une commande ; une commande dont le collaborateur n'est pas câblé répond « not configured ». */
+    /**
+     * Ajoute la route d'une commande ; une commande dont le collaborateur n'est pas câblé, ou dont le service différé
+     * s'avère absent à son premier appel ({@link ServiceNotConfigured}), répond « not configured ».
+     */
     private void register(String name, String usage, boolean configured, Handler handler) {
-        routes.put(name, new Route(usage, configured ? handler : (arguments, output, error) -> unavailable(name, error)));
+        routes.put(name, new Route(usage, configured ? (arguments, output, error) -> {
+            try {
+                return handler.run(arguments, output, error);
+            } catch (ServiceNotConfigured notConfigured) {
+                return unavailable(name, error);
+            }
+        } : (arguments, output, error) -> unavailable(name, error)));
+    }
+
+    /**
+     * Levée par le fournisseur d'un service différé qui n'existe pas dans cette configuration (le mode hébergé
+     * désactivé, par exemple). Non vérifiée et distincte de {@link IllegalStateException}, que des commandes interceptent.
+     */
+    static final class ServiceNotConfigured extends RuntimeException {
+        ServiceNotConfigured() {
+            super("service not configured", null, false, false);
+        }
     }
 
     /** Les noms de toutes les commandes de premier niveau, dans l'ordre de déclaration. */
@@ -245,11 +265,11 @@ public final class MinosCli {
         private NexusExportCommand nexusExportCommand;
         private AutonomousIndexOperations autonomousOperations;
         private Path home;
-        private ProviderPlatformService providerPlatformService;
+        private Supplier<ProviderPlatformService> providerPlatformService;
         private GitIntelligence gitIntelligence;
         private RemoteIndexOperations remoteIndexOperations;
-        private RuntimeIntelligenceService runtimeIntelligenceService;
-        private HostedControlPlaneService hostedControlPlaneService;
+        private Supplier<RuntimeIntelligenceService> runtimeIntelligenceService;
+        private Supplier<HostedControlPlaneService> hostedControlPlaneService;
         private IndexResumeStatusSource resumeStatus;
 
         private Builder(ProjectSymbolQuery symbolQuery) {
@@ -287,6 +307,12 @@ public final class MinosCli {
         }
 
         Builder providerPlatformService(ProviderPlatformService value) {
+            Objects.requireNonNull(value);
+            return providerPlatformServiceSupplier(() -> value);
+        }
+
+        /** Service construit à son premier appel : la commande analyse ses arguments avant de le demander. */
+        Builder providerPlatformServiceSupplier(Supplier<ProviderPlatformService> value) {
             this.providerPlatformService = Objects.requireNonNull(value);
             return this;
         }
@@ -302,11 +328,26 @@ public final class MinosCli {
         }
 
         Builder runtimeIntelligenceService(RuntimeIntelligenceService value) {
+            Objects.requireNonNull(value);
+            return runtimeIntelligenceServiceSupplier(() -> value);
+        }
+
+        /** Service construit à son premier appel : la commande analyse ses arguments avant de le demander. */
+        Builder runtimeIntelligenceServiceSupplier(Supplier<RuntimeIntelligenceService> value) {
             this.runtimeIntelligenceService = Objects.requireNonNull(value);
             return this;
         }
 
         Builder hostedControlPlaneService(HostedControlPlaneService value) {
+            Objects.requireNonNull(value);
+            return hostedControlPlaneServiceSupplier(() -> value);
+        }
+
+        /**
+         * Service construit à son premier appel ; le fournisseur lève {@link ServiceNotConfigured} quand le mode
+         * hébergé n'est pas activé, et la commande répond alors « not configured in this CLI bootstrap ».
+         */
+        Builder hostedControlPlaneServiceSupplier(Supplier<HostedControlPlaneService> value) {
             this.hostedControlPlaneService = Objects.requireNonNull(value);
             return this;
         }

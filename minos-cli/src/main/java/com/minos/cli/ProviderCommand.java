@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /** Read-only provider capability, qualification and runtime diagnostics. */
 public final class ProviderCommand {
@@ -17,19 +18,25 @@ public final class ProviderCommand {
 
     private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--format").operands(1);
 
-    private final ProviderPlatformService service;
+    private final Supplier<ProviderPlatformService> service;
 
     public ProviderCommand(ProviderPlatformService service) {
+        Objects.requireNonNull(service, "service");
+        this.service = () -> service;
+    }
+
+    /** Service construit à son premier appel, c'est-à-dire après l'analyse des arguments. */
+    ProviderCommand(Supplier<ProviderPlatformService> service) {
         this.service = Objects.requireNonNull(service, "service");
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             if (options.providerId() == null) {
-                List<ProviderPlatformService.ProviderView> providers = service.listProviders();
+                List<ProviderPlatformService.ProviderView> providers = service.get().listProviders();
                 output.append(renderList(providers, options.format())).append('\n');
             } else {
-                output.append(render(service.inspect(options.providerId()), options.format())).append('\n');
+                output.append(render(service.get().inspect(options.providerId()), options.format())).append('\n');
             }
             return FindSymbolCommand.SUCCESS;
         });

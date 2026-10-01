@@ -92,7 +92,16 @@ second est le régime de verrous unique du chantier Fiabilité (une lecture du r
   (`MinosApplicationComposers.resolve()`), appelé par `MinosApplication.open`. Rien n'est déplacé vers l'appelant.
 - **Échec d'ouverture** : conservé tel quel pour l'utilisateur (`error: MINOS bootstrap failed: …`, code 1). L'échec
   surgit désormais depuis le corps d'une commande ; il est relayé par une exception non vérifiée dédiée
-  (`LazyApplication.OpenFailure`) que `CliCommandSupport.run` laisse remonter au lanceur.
+  (`LazyApplication.OpenFailure`) que les trois sites qui interceptent tout (`CliCommandSupport.run`,
+  `NexusExportCommand`, `RetrievalStatusCommand`) laissent remonter au lanceur. Le relais porte l'exception d'origine,
+  `IOException` **ou** non vérifiée (`dimensions must be between 32 and 16384`, par exemple) : `MinosCliRunner.run(Path, …)`
+  la relève avec son type, ce que le golden `cli-semantic` impose. Une garde (`anOpenFailureIsStillReported…`) vérifie
+  que chaque commande qui a besoin de l'application répond encore `MINOS bootstrap failed` en code 1.
+- **Mode hébergé désactivé** : la route `team` est toujours câblée ; son fournisseur de service lève
+  `MinosCli.ServiceNotConfigured` au premier appel, que la route traduit en « not configured in this CLI bootstrap »
+  (code 1), comme avant. Seul l'ordre change : l'analyse précède, donc une erreur d'usage sort 2 (§ 4).
+- **Simplification** : le câblage « sans état » de l'aide (`unused(...)`, mandataires qui échouent) disparaît ; l'aide
+  s'appuie sur le câblage réel, désormais sans effet à la construction. Un seul chemin de câblage : `cli(LazyApplication)`.
 - **`--help` à toute position** : un `--help` placé après une commande connue est servi sans état, quelle que soit sa
   position (`-h` garde ses positions actuelles : une valeur peut légitimement valoir `-h`).
 
@@ -107,6 +116,29 @@ second est le régime de verrous unique du chantier Fiabilité (une lecture du r
    avant/après, octet par octet ;
 4. chaque commande de la table est **classée** (lecture ou mutation) dans la garde : une commande ajoutée sans
    classement fait échouer la suite.
+
+### 3.4 Ce que le code a appris (2026-10-01)
+
+- **Rouge avant correctif** : sur la base, `LazyWiringGuardTest` échoue 3 fois sur 4 (le classement passe) — les 29
+  commandes de la table ouvrent `MINOS_HOME` sur une erreur d'usage, 29 commandes ouvrent `MINOS_HOME` ou refusent un
+  `--help` placé au-delà de la première position, et 22 commandes de lecture le modifient (`distributed-artifacts/`,
+  `remote-cache/`, …).
+- **Golden `team`** (`team.golden`), seule modification d'un des 12 golden : la ligne `team tenant --format json` sur un
+  home sans mode hébergé sortait 1 (« not configured ») ; or `team tenant` n'accepte pas `--format`, c'était une erreur
+  d'usage masquée parce que la commande n'était pas analysée. Elle sort maintenant 2 avec `unknown team option:
+  --format` et l'usage — la correction de Q22. La ligne valide `team tenant`, ajoutée au test, garde l'ancienne sortie
+  exacte (« not configured », code 1). `cli-semantic` et les dix autres golden sont inchangés.
+- **Gardes de source adaptées, pas affaiblies** : `ApplicationOwnershipGuardTest` (Q10) déclare `MinosCliRunner` et
+  `MinosLauncher` propriétaires via une `LazyApplication` fermée par un `try`, et `LazyApplication` comme fermeur ;
+  `TeamCommandDispatchGuardTest` pointe `invocation.run(service.get(), this::token)` ; `MinosCliSurfaceTest` compte
+  trois méthodes de plus (`*Supplier`, visibilité paquet) ; `StableCliHelpTest` n'affirme plus qu'un `--help` au-delà du
+  troisième argument n'est pas une aide (c'était le constat Q22) et affirme qu'un `-h` y reste une valeur.
+- **`MinosLauncherLifecycleTest`** : `theApplicationIsClosedAfterAnUsageError` affirmait `[open, close]`, soit le défaut
+  lui-même ; elle affirme maintenant `[]`.
+- **Constat hors câblage, trouvé par la garde** : sous Windows, `doctor`, `providers`, `architecture`, … créent
+  `sandbox/` (script AppContainer, `WindowsAppContainerWorkerSandboxBackend`) la première fois qu'une commande
+  qualifie le bac à sable des workers. C'est la sonde, pas le câblage ; la garde compare donc à un home sur lequel la
+  sonde a déjà tourné. Voir § 6.
 
 ## 4. Tableau « commande → codes de sortie possibles »
 
@@ -126,3 +158,7 @@ est désactivé (avant : 1, « not configured », parce que la commande n'était
   Y remédier suppose un mode de stockage sans écriture ou un verrou de lecture sans fichier, c'est-à-dire de rouvrir
   le régime de verrous du chantier Fiabilité (P1, Q3, Q4). Hors périmètre de ce chantier ; la garde du lot 1 mesure
   ce qui relève du câblage sur un `MINOS_HOME` déjà initialisé.
+- **La sonde du bac à sable écrit dans `MINOS_HOME` (Windows).** Trouvé par `LazyWiringGuardTest` : `doctor`,
+  `providers`, `architecture` et les commandes qui qualifient le runtime matérialisent `sandbox/` à la première
+  utilisation. C'est un effet de la qualification elle-même (module `minos-runtime-local`, code de sécurité), pas du
+  câblage ; à traiter dans un chantier de sécurité du runtime, pas ici.

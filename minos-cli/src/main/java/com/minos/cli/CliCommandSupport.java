@@ -95,6 +95,9 @@ final class CliCommandSupport {
         }
         try {
             return body.execute(options);
+        } catch (LazyApplication.OpenFailure openFailure) {
+            // MINOS_HOME could not be opened: not a failure of this command, the launcher reports it as before.
+            throw openFailure;
         } catch (Exception exception) {
             error.append("error: ").append(failureReporter.describe(options, exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;

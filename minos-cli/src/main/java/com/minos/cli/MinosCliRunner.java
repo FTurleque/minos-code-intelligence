@@ -8,11 +8,11 @@ import com.minos.application.MinosApplication;
 import com.minos.application.MinosHome;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
+import com.minos.git.GitIntelligence;
 import com.minos.impact.ProjectImpactQuery;
 import com.minos.nexus.NexusExportService;
 
 import java.io.IOException;
-import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
@@ -28,6 +28,7 @@ public final class MinosCliRunner {
     private static final String SEMANTIC_COMMAND = "semantic";
     private static final String HYBRID_COMMAND = "hybrid";
     private static final String MCP_COMMAND = "mcp";
+    private static final String LONG_HELP = "--help";
     private static final String MCP_USAGE = """
             Usage: minos mcp
 
@@ -35,11 +36,14 @@ public final class MinosCliRunner {
             """.stripTrailing();
 
     /**
-     * A CLI wired with collaborators that fail on first use. Its route table ({@link MinosCli#commandNames()})
-     * is the list of the commands that answer {@code --help} before {@code MINOS_HOME} is opened; there is no
-     * second list to keep in step.
+     * The CLI wired on an application that is never opened: building it opens and constructs nothing (every
+     * collaborator is deferred, see {@link LazyApplication}). Its route table ({@link MinosCli#commandNames()}) is
+     * the list of the commands that answer {@code --help} before {@code MINOS_HOME} is opened; there is no second
+     * list to keep in step.
      */
-    private static final MinosCli STATELESS_HELP_CLI = statelessHelpCli();
+    private static final MinosCli STATELESS_HELP_CLI = cli(LazyApplication.opening(Path.of("."), () -> {
+        throw new IOException("stateless help never opens MINOS_HOME");
+    }));
 
     private MinosCliRunner() { }
 
@@ -48,62 +52,90 @@ public final class MinosCliRunner {
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
-        if (isStatelessHelpRequest(arguments)) return runStatelessHelp(arguments, output, error);
-        if (isIdeHandshake(arguments)) return runIdeHandshake(arguments, output, error);
-        try (MinosApplication application = MinosApplication.open(home)) {
+        try (LazyApplication application = LazyApplication.opening(home, () -> MinosApplication.open(home))) {
             return run(application, arguments, output, error);
+        } catch (LazyApplication.OpenFailure failure) {
+            throw failure.rethrow();
         }
     }
 
     public static int run(MinosApplication application, String[] arguments, Appendable output, Appendable error) throws IOException {
-        MinosApplication app = Objects.requireNonNull(application, "application");
+        Objects.requireNonNull(application, "application");
+        return run(LazyApplication.of(application), arguments, output, error);
+    }
+
+    /**
+     * Runs a command line on an application that is opened only when the command needs it. The command analyses
+     * its arguments first, with no service: a usage error, a help request and every command that needs no
+     * application leave {@code MINOS_HOME} untouched, and a command constructs only what it calls.
+     */
+    static int run(LazyApplication application, String[] arguments, Appendable output, Appendable error) throws IOException {
+        Objects.requireNonNull(application, "application");
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
         if (isStatelessHelpRequest(arguments)) return runStatelessHelp(arguments, output, error);
         if (isIdeHandshake(arguments)) return runIdeHandshake(arguments, output, error);
         if (isIdeIntelligenceRequest(arguments)) {
-            return new IdeIntelligenceCommand(app).run(slice(arguments, 1), output, error);
+            return new IdeIntelligenceCommand(application::get).run(slice(arguments, 1), output, error);
         }
         if (isRetrievalStatusRequest(arguments)) {
-            return new RetrievalStatusCommand(retrievalMode(arguments[0]), app.semanticIndexService())
+            return new RetrievalStatusCommand(retrievalMode(arguments[0]),
+                    project -> application.get().semanticIndexService().status(project))
                     .run(slice(arguments, 1), output, error);
         }
+        return cli(application).run(arguments, output, error);
+    }
 
-        NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
-                new NexusExportService(app.projectRegistry(), app.snapshotStore()).export(projectRoot));
-        LocalAutonomousIndexOperations autonomousIndex = new LocalAutonomousIndexOperations(app);
-        MinosCli.Builder cli = MinosCli.builder(new LocalProjectSymbolQuery(app))
-                .projectOperations(new LocalProjectOperations(app))
-                .architectureQuery(app.architectureQuery())
-                .impactQuery(app.impactQuery())
-                .nexusExportCommand(nexusExportCommand)
-                .autonomousOperations(autonomousIndex)
-                .home(app.home())
-                .providerPlatformService(ProviderPlatformService.defaults(app))
-                .gitIntelligence(app.gitIntelligence())
-                .remoteIndexOperations(new LocalRemoteIndexOperations(app))
-                .runtimeIntelligenceService(app.runtimeIntelligenceService());
-        app.hostedControlPlaneService().ifPresent(cli::hostedControlPlaneService);
-        return cli.resumeStatus(autonomousIndex).build().run(arguments, output, error);
+    /** The one place where the commands are wired: every collaborator is a deferred handle on {@code application}. */
+    private static MinosCli cli(LazyApplication application) {
+        LazyApplication.Deferred<LocalAutonomousIndexOperations> autonomousIndex =
+                application.deferred(LocalAutonomousIndexOperations::new);
+        MinosCli.Builder cli = MinosCli.builder(
+                        LazyApplication.lazy(ProjectSymbolQuery.class, application.deferred(LocalProjectSymbolQuery::new)))
+                .projectOperations(
+                        LazyApplication.lazy(ProjectOperations.class, application.deferred(LocalProjectOperations::new)))
+                .architectureQuery(LazyApplication.lazy(ProjectArchitectureQuery.class,
+                        application.deferred(MinosApplication::architectureQuery)))
+                .impactQuery(LazyApplication.lazy(ProjectImpactQuery.class,
+                        application.deferred(MinosApplication::impactQuery)))
+                .nexusExportCommand(new NexusExportCommand(projectRoot -> {
+                    MinosApplication opened = application.get();
+                    return new NexusExportService(opened.projectRegistry(), opened.snapshotStore()).export(projectRoot);
+                }))
+                .autonomousOperations(LazyApplication.lazy(AutonomousIndexOperations.class, autonomousIndex))
+                .home(application.home())
+                .providerPlatformServiceSupplier(application.deferred(ProviderPlatformService::defaults))
+                .gitIntelligence(LazyApplication.lazy(GitIntelligence.class,
+                        application.deferred(MinosApplication::gitIntelligence)))
+                .remoteIndexOperations(LazyApplication.lazy(RemoteIndexOperations.class,
+                        application.deferred(LocalRemoteIndexOperations::new)))
+                .runtimeIntelligenceServiceSupplier(application.deferred(MinosApplication::runtimeIntelligenceService))
+                .hostedControlPlaneServiceSupplier(application.deferred(opened -> opened.hostedControlPlaneService()
+                        .orElseThrow(MinosCli.ServiceNotConfigured::new)));
+        return cli.resumeStatus(projectId -> autonomousIndex.get().resumableRun(projectId)).build();
     }
 
     /**
-     * A help request is a help token that is the last of at most three arguments, after a known command:
-     * {@code minos <command> --help} and {@code minos <command> <operation-or-operand> --help}
-     * (for instance {@code tools install --help}, {@code team audit --help}). It is answered before
-     * {@code MINOS_HOME} is opened, whatever the command.
+     * A help request is a help token after a known command: {@code minos <command> --help}, a short help token that is
+     * the last of at most three arguments ({@code tools install -h}, {@code team audit --help}), or a long
+     * {@code --help} at <em>any</em> position ({@code find-symbol p S --limit 5 --help}). It is answered before
+     * {@code MINOS_HOME} is opened, whatever the command. {@code --help} cannot be the datum of a valid command
+     * line, since no operand or value may start with {@code --}; {@code -h} can ({@code --name -h}), which is why
+     * it keeps its positions.
      */
     static boolean isStatelessHelpRequest(String[] arguments) {
         Objects.requireNonNull(arguments, "arguments");
         if (isHelp(arguments)) return true;
-        if (arguments.length == 2 && isHelpToken(arguments[1])) {
-            return isKnownCommand(arguments[0]);
+        if (arguments.length < 2 || !isKnownCommand(arguments[0])) return false;
+        if (arguments.length == 2) return isHelpToken(arguments[1]);
+        if (arguments.length == 3 && isHelpToken(arguments[2]) && CliCommandSupport.isOperand(arguments[1])) {
+            return true;
         }
-        return arguments.length == 3
-                && isHelpToken(arguments[2])
-                && isKnownCommand(arguments[0])
-                && CliCommandSupport.isOperand(arguments[1]);
+        for (int index = 1; index < arguments.length; index++) {
+            if (LONG_HELP.equals(arguments[index])) return true;
+        }
+        return false;
     }
 
     private static boolean isKnownCommand(String name) {
@@ -126,13 +158,13 @@ public final class MinosCliRunner {
             output.append(MCP_USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
-        // project add|list|inspect --help keeps its own usage; any other operation shows the command's usage.
+        // project add|list|inspect --help keeps its own usage; any other form shows the command's usage.
         boolean projectOperation = arguments.length == 3 && ProjectCommand.NAME.equals(command)
-                && Set.of("add", "list", "inspect").contains(arguments[1]);
-        if (arguments.length == 3 && !projectOperation) {
-            return STATELESS_HELP_CLI.run(new String[]{command, arguments[2]}, output, error);
+                && Set.of("add", "list", "inspect").contains(arguments[1]) && isHelpToken(arguments[2]);
+        if (arguments.length <= 2 || projectOperation) {
+            return STATELESS_HELP_CLI.run(arguments, output, error);
         }
-        return STATELESS_HELP_CLI.run(arguments, output, error);
+        return STATELESS_HELP_CLI.run(new String[]{command, LONG_HELP}, output, error);
     }
 
     /**
@@ -185,34 +217,6 @@ public final class MinosCliRunner {
             case HYBRID_COMMAND -> RetrievalStatusCommand.Mode.HYBRID;
             default -> throw new IllegalArgumentException("unsupported retrieval command: " + command);
         };
-    }
-
-    private static MinosCli statelessHelpCli() {
-        ProjectSymbolQuery symbolQuery = unused(ProjectSymbolQuery.class);
-        ProjectOperations projectOperations = unused(ProjectOperations.class);
-        AutonomousIndexOperations autonomousOperations = unused(AutonomousIndexOperations.class);
-        return MinosCli.builder(symbolQuery)
-                .projectOperations(projectOperations)
-                .architectureQuery(unused(ProjectArchitectureQuery.class))
-                .impactQuery(unused(ProjectImpactQuery.class))
-                .nexusExportCommand(new NexusExportCommand(projectRoot -> {
-                    throw new IllegalStateException("stateless help attempted NEXUS export");
-                }))
-                .autonomousOperations(autonomousOperations)
-                .home(Path.of("."))
-                .build();
-    }
-
-    private static <T> T unused(Class<T> contract) {
-        Object proxy = Proxy.newProxyInstance(
-                contract.getClassLoader(),
-                new Class<?>[]{contract},
-                (instance, method, arguments) -> {
-                    throw new IllegalStateException(
-                            "stateless help attempted to invoke " + contract.getSimpleName() + "." + method.getName());
-                }
-        );
-        return contract.cast(proxy);
     }
 
     private static boolean isHelp(String[] arguments) {

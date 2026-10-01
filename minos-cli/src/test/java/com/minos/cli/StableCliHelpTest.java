@@ -110,12 +110,20 @@ class StableCliHelpTest {
     }
 
     @Test
-    void aHelpTokenAmongOtherArgumentsIsNotAHelpRequest() {
-        // More than three arguments, an option before the help token, an unknown command: ordinary invocations.
-        assertFalse(MinosCliRunner.isStatelessHelpRequest(new String[]{"find-symbol", "p", "s", "--help"}));
-        assertFalse(MinosCliRunner.isStatelessHelpRequest(new String[]{"team", "audit", "--limit", "5", "--help"}));
-        assertFalse(MinosCliRunner.isStatelessHelpRequest(new String[]{"doctor", "--format", "--help"}));
+    void aLongHelpTokenAfterAKnownCommandIsAHelpRequestAtAnyPosition() {
+        // Q22: --help beyond the third argument used to be an unknown option, after MINOS_HOME had been opened.
+        assertTrue(MinosCliRunner.isStatelessHelpRequest(new String[]{"find-symbol", "p", "s", "--help"}));
+        assertTrue(MinosCliRunner.isStatelessHelpRequest(new String[]{"team", "audit", "--limit", "5", "--help"}));
+        assertTrue(MinosCliRunner.isStatelessHelpRequest(new String[]{"doctor", "--format", "--help"}));
+        assertTrue(MinosCliRunner.isStatelessHelpRequest(new String[]{"find-symbol", "--help", "p", "s", "--limit", "5"}));
+    }
+
+    @Test
+    void aHelpTokenOfAnUnknownCommandOrAShortHelpTokenAmongOtherArgumentsIsNotAHelpRequest() {
+        // An unknown command is an ordinary (refused) invocation; -h keeps its positions because it can be a value.
         assertFalse(MinosCliRunner.isStatelessHelpRequest(new String[]{"unknown-command", "--help"}));
         assertFalse(MinosCliRunner.isStatelessHelpRequest(new String[]{"unknown-command", "x", "--help"}));
+        assertFalse(MinosCliRunner.isStatelessHelpRequest(new String[]{"find-symbol", "p", "s", "-h"}));
+        assertFalse(MinosCliRunner.isStatelessHelpRequest(new String[]{"project", "add", "work", "--name", "-h"}));
     }
 }

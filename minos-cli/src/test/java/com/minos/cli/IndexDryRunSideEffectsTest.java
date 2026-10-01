@@ -8,11 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -24,23 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class IndexDryRunSideEffectsTest {
 
     @TempDir Path temp;
-
-    /** Chaque entrée de l'arbre sous {@code root} : chemin relatif -> « dir » ou SHA-256 du fichier. */
-    private static Map<String, String> tree(Path root) throws Exception {
-        Map<String, String> entries = new TreeMap<>();
-        try (Stream<Path> walk = Files.walk(root)) {
-            for (Path path : (Iterable<Path>) walk::iterator) {
-                String relative = root.relativize(path).toString().replace('\\', '/');
-                if (Files.isDirectory(path)) {
-                    entries.put(relative + "/", "dir");
-                } else {
-                    entries.put(relative, HexFormat.of().formatHex(
-                            MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))));
-                }
-            }
-        }
-        return entries;
-    }
 
     private RegisteredProject registerJavaProject(MinosApplication application) throws IOException {
         Path project = Files.createDirectories(temp.resolve("project"));
@@ -58,11 +37,11 @@ class IndexDryRunSideEffectsTest {
         Path home = temp.resolve("home");
         try (MinosApplication application = MinosApplication.open(home)) {
             RegisteredProject project = registerJavaProject(application);
-            // The CLI wiring creates a few empty stores whatever the command; a first read-only command
-            // takes them out of the comparison so that only what the dry run itself does is measured.
-            assertEquals(0, MinosCliRunner.run(application, new String[]{"project", "list"},
-                    new StringBuilder(), new StringBuilder()));
-            Map<String, String> before = tree(home);
+            // Any read of the registry takes its inter-process lock file, which it creates (storage, not the dry run):
+            // one read takes it out of the comparison so that only what the dry run itself does is measured. The CLI
+            // wiring itself creates nothing any more (LazyWiringGuardTest).
+            application.projectRegistry().listProjects();
+            Map<String, String> before = HomeTree.of(home);
 
             StringBuilder output = new StringBuilder();
             StringBuilder error = new StringBuilder();
@@ -71,7 +50,7 @@ class IndexDryRunSideEffectsTest {
 
             assertEquals(0, code, error.toString());
             assertEquals(true, output.toString().contains("\"mode\":"), output.toString());
-            assertEquals(before, tree(home), "index --dry-run changed MINOS_HOME");
+            assertEquals(before, HomeTree.of(home), "index --dry-run changed MINOS_HOME");
         }
     }
 
@@ -80,14 +59,14 @@ class IndexDryRunSideEffectsTest {
         Path home = temp.resolve("home");
         try (MinosApplication application = MinosApplication.open(home)) {
             RegisteredProject project = registerJavaProject(application);
-            Map<String, String> before = tree(home);
+            Map<String, String> before = HomeTree.of(home);
 
             try (LocalAutonomousIndexOperations operations = new LocalAutonomousIndexOperations(application)) {
                 operations.plan(project.id().toString(), null, false);
                 operations.plan(project.id().toString(), null, true);
             }
 
-            assertEquals(before, tree(home), "plan() changed MINOS_HOME");
+            assertEquals(before, HomeTree.of(home), "plan() changed MINOS_HOME");
         }
     }
 }
