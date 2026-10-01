@@ -16,7 +16,6 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.DosFileAttributeView;
 import java.util.Objects;
 
 import static com.minos.domain.Preconditions.requireText;
@@ -95,33 +94,7 @@ final class ProviderWorkspaceFiles {
         if (normalized.equals(root) || !normalized.startsWith(root)) {
             throw new IOException(label + " refuses to delete outside its workspace root");
         }
-        Files.walkFileTree(normalized, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
-                    throws IOException {
-                if (FileTreeOperations.isRecursableDirectory(attributes)) return FileVisitResult.CONTINUE;
-                // A provider-planted Windows junction/reparse point: never descend into it. Deleting
-                // the entry itself only removes the reparse point, never the content it points at.
-                clearReadOnly(directory);
-                Files.deleteIfExists(directory);
-                return FileVisitResult.SKIP_SUBTREE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                clearReadOnly(file);
-                Files.deleteIfExists(file);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
-                if (failure != null) throw failure;
-                clearReadOnly(directory);
-                Files.deleteIfExists(directory);
-                return FileVisitResult.CONTINUE;
-            }
-        });
+        FileTreeOperations.deleteRecursively(normalized);
     }
 
     private static void copyBounded(
@@ -153,18 +126,6 @@ final class ProviderWorkspaceFiles {
             throw new IOException(boundary + " path escapes its target root");
         }
         return target;
-    }
-
-    private static void clearReadOnly(Path path) {
-        try {
-            DosFileAttributeView attributes = Files.getFileAttributeView(
-                    path, DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-            if (attributes != null && attributes.readAttributes().isReadOnly()) {
-                attributes.setReadOnly(false);
-            }
-        } catch (IOException | UnsupportedOperationException ignored) {
-            // Non-DOS file systems do not need this Windows-specific cleanup.
-        }
     }
 
     private static String portable(Path path) {

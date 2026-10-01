@@ -107,6 +107,8 @@ public final class GitIntelligenceService implements GitIntelligence {
                     // Old commits are skipped, and the walk only stops on a long run of them, or at a
                     // hard scan cap, so a hostile history stays bounded without hiding recent commits.
                     if (++scanned > MAX_SCANNED_COMMITS) {
+                        historyTruncated = true;
+                        limitations.add("HISTORY_TRUNCATED");
                         limitations.add("HISTORY_SCAN_LIMIT");
                         break;
                     }
