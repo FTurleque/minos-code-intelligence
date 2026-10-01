@@ -189,10 +189,17 @@ public final class IndexingLifecycleService {
         }
     }
 
-    public ProjectIndexState projectState(UUID id) {
+    /**
+     * Récupère l'état du projet sous le bail exclusif de cycle de vie. C'est une <em>mutation</em>, pas une
+     * lecture : elle finalise chaque run laissé RUNNING par un propriétaire mort, réécrit l'état, et attend
+     * le bail (de façon bornée) si une indexation est en cours. Une lecture de statut ne doit pas l'appeler :
+     * elle passe par {@code ProjectIndexStateReconciler.observeStatus}, qui ne prend aucun bail et n'écrit rien
+     * (lot 2, P1). Son seul appelant est le coordinateur incrémental, qui tient déjà le bail.
+     */
+    public ProjectIndexState recoverProjectState(UUID id) {
         UUID projectId = Objects.requireNonNull(id, PROJECT_ID);
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(projectId)) {
-            // The read already owns the same exclusive lifecycle authority as an index mutation.
+            // The caller owns the same exclusive lifecycle authority as an index mutation.
             // Therefore any pre-existing RUNNING run is necessarily abandoned and must be
             // terminalized instead of exposing an indefinitely stale INDEXING/REFRESHING state.
             return AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease(

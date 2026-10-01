@@ -134,7 +134,7 @@ class AbandonedIndexingLifecycleRecoveryTest {
                 Optional.of("crashed first index")));
 
         ProjectIndexState recovered = inspectionService(store, promoter(new AtomicReference<>()))
-                .projectState(projectId);
+                .recoverProjectState(projectId);
 
         assertEquals(ProjectIndexState.Availability.FAILED, recovered.availability());
         assertEquals(IndexingRun.Status.FAILED, store.findRun(runId).orElseThrow().status());
@@ -157,7 +157,7 @@ class AbandonedIndexingLifecycleRecoveryTest {
                 Optional.of("refresh died")));
 
         ProjectIndexState recovered = inspectionService(
-                store, promoter(new AtomicReference<>("snapshot-old"))).projectState(projectId);
+                store, promoter(new AtomicReference<>("snapshot-old"))).recoverProjectState(projectId);
 
         assertEquals(ProjectIndexState.Availability.STALE, recovered.availability());
         assertEquals(Optional.of("snapshot-old"), recovered.activeSnapshotId());
@@ -180,7 +180,7 @@ class AbandonedIndexingLifecycleRecoveryTest {
                 Optional.of("crashed after promotion")));
 
         ProjectIndexState recovered = inspectionService(
-                store, promoter(new AtomicReference<>("snapshot-new"))).projectState(projectId);
+                store, promoter(new AtomicReference<>("snapshot-new"))).recoverProjectState(projectId);
 
         assertEquals(ProjectIndexState.Availability.READY, recovered.availability());
         assertEquals(Optional.of("snapshot-new"), recovered.activeSnapshotId());

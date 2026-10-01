@@ -21,7 +21,15 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** File-backed retention coordinated under one inter-process per-project maintenance lock. */
+/**
+ * File-backed retention coordinated under one inter-process per-project maintenance lock.
+ *
+ * <p>Lock order (FIAB-SUIVI section 8.6): the caller holds the project lifecycle lease, which is how
+ * retention and the lifecycle exclude each other; the retention lock is taken after it, and each
+ * store compaction then takes and releases the project mutation lease in sequence. Retention does not
+ * take the lifecycle lease itself: Q4 (a prepared snapshot deleted before its promotion) is not
+ * reproducible under the production policy, see {@code LocalStorageRetentionPreparedSnapshotTest}.</p>
+ */
 final class LocalStorageRetentionService implements StorageRetentionService {
     private final Path lockRoot;
     private final SnapshotCompactionService knowledgeSnapshots;

@@ -13,14 +13,20 @@ import java.util.concurrent.locks.ReentrantLock;
 import static com.minos.domain.Preconditions.requireText;
 
 /**
- * Cross-JVM mutation lease shared by structural snapshot publication/promotion, semantic commit and
- * structural retention for one project.
+ * Cross-JVM mutation lease shared by structural snapshot publication/promotion, semantic commit,
+ * fingerprint snapshot publication/promotion/compaction and structural retention for one project.
  *
  * <p>Storage implementations live in sibling directories below the MINOS home. The lock therefore
  * lives at their common parent rather than inside one particular store; otherwise a semantic recheck
  * and a structural promotion can both hold different "project" locks and race.</p>
+ *
+ * <p>Lock order (lot 2, FIAB-SUIVI section 8.6): this lease ranks after the project lifecycle lease
+ * ({@code IndexStateStore.acquireProjectLease}) and the retention lock, and before the semantic sync
+ * lock. A holder of this lease never acquires the lifecycle lease, and never acquires this lease a
+ * second time: the lease is owner-thread and not reentrant, so a nested acquisition waits for its own
+ * thread until the deadline.</p>
  */
-final class SnapshotProjectLease implements AutoCloseable {
+public final class SnapshotProjectLease implements AutoCloseable {
     static final Duration DEFAULT_ACQUIRE_TIMEOUT = Duration.ofSeconds(10);
     private static final int STRIPES = 64;
     private static final ReentrantLock[] JVM_LOCKS = locks();
@@ -32,7 +38,7 @@ final class SnapshotProjectLease implements AutoCloseable {
         this.lease = lease;
     }
 
-    static SnapshotProjectLease acquire(Path storageRoot, UUID projectId) throws IOException {
+    public static SnapshotProjectLease acquire(Path storageRoot, UUID projectId) throws IOException {
         return acquire(storageRoot, Objects.requireNonNull(projectId, "projectId").toString(), DEFAULT_ACQUIRE_TIMEOUT);
     }
 

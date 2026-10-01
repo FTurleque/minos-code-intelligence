@@ -1,4 +1,4 @@
-# Suivi — chantier Fiabilité opérationnelle (lot 1 : R4, R5, R7 — intégrité de la reprise)
+# Suivi — chantier Fiabilité opérationnelle (lot 1 : R4, R5, R7 — intégrité de la reprise ; lot 2 : P1, Q3, Q4 — un seul régime de verrous, § 8)
 
 > Branche : `fiab/r4-r5-r7-reprise` (depuis `develop`, base `017e339d`, les branches `code/*` des PR #305 à #308 y sont déjà fusionnées), worktree `minos-wt/fiab-lot1`.
 > Constats : **R4** (promotion reprise sans égalité des cibles), **R5** (rétention d'un run reprenable, durée de vie du marqueur) et **R7** (réparation « snapshot stable » sans `resumableRunId` ni `supersede`), `AUDIT-2026-09.md` § R4, R5, R7 ; conception de référence : [ADR 0039](../adr/0039-reprise-indexation-apres-interruption.md).
@@ -11,7 +11,7 @@
 | Lot | Contenu | Statut | Commits |
 |---|---|---|---|
 | 1 — R4, R5, R7 | Promotion reprise bornée aux cibles courantes, rétention d'un run reprenable (parcours tronqué, run concurrent, durée de vie), réparation « snapshot stable » alignée | livré, en attente du verdict final de `verif-fiab` | `cdeac459` … (§ 4) |
-| 2 — P1, Q3, Q4 | Un seul régime de verrous ; lecture d'état sans bail exclusif | à faire | — |
+| 2 — P1, Q3, Q4 | Un seul régime de verrous ; lecture d'état sans bail exclusif (§ 8) | en cours (branche `fiab/p1-q3-q4-verrous`, depuis la branche du lot 1 `bcdadd23`) | § 8.8 |
 | 3 — R2, R3 | Propriété des cgroups indépendante de l'horloge murale | à faire | — |
 | 4 — Q5, R6 | Interruption de bout en bout, confinement du chemin d'artefact | à faire | — |
 | 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) | à faire | — |
@@ -179,14 +179,228 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 | V-L1-04 | remarque | `resumeTtl` 24 h (planificateur) contre 7 j (répertoire marqué) : jusqu'à 6 jours d'artefacts retenus pour une reprise déjà refusée | **résolu (documenté)** : écrit dans l'ADR 0039 (k) comme conséquence assumée d'un marqueur qui ne raccourcit jamais la vie ; § 7 |
 | V-L1-05 | remarque | la re-datation d'une date future est « au mieux » : si `setLastModifiedTime` échoue en permanence (marqueur en lecture seule, verrou), la date future reste traitée comme `now` à chaque passe et le run ne vieillit jamais | **accepté, documenté § 7** : cas conjugué (horloge avancée et fichier non modifiable) ; le budget de nombre et de volume borne toujours la taille ; un avertissement sans chemin est journalisé à chaque échec |
 
+### Lot 2
+
+| Id | Sévérité | Constat | Résolution |
+|---|---|---|---|
+| V-L2-01 | à corriger | le raccourci « état en vol rapporté tel quel » de `observe` (91a23b22) s'appliquait aussi au plan du `--dry-run` : après un crash entre la promotion et l'écriture de l'état, le dry-run annonçait `NONE` (état `INDEXING`/ancien snapshot) alors que le run réel, qui répare sous bail, planifie `FULL_REQUIRED [BASELINE_INDEX_MISMATCH]` | **résolu `55d4091d`** : deux points d'entrée en lecture, `observe` (plan : calcule toujours la réparation en mémoire, comportement d'origine) et `observeStatus` (statut : rapporte l'état en vol tel quel, utilisé par `ProjectInspectionService.view`) ; test rouge rejoué sur `44aca82a` (`expected: <true> but was: <false>`), `observeForADryRunPlanStillComputesTheRepairOfAnInProgressStateLeftByADeadRun` |
+| V-L2-02 | remarque | l'ordre de prise écrit dans les Javadoc de `IndexStateStore.acquireProjectLease` et de `ProjectIndexLease` omettait le verrou de rétention L3 | **résolu** (commit suivant) : L3 ajouté aux deux Javadoc ; l'ordre L1 < L3 < L2 < L4 < M est désormais le même aux quatre endroits et dans l'ADR 0039 (l) |
+| V-L2-03 | remarque | la règle (b) « toute mutation sous L1 » n'est appliquée par aucun test ni garde : `compact` appelé sans L1 n'est pas attrapé (sonde de verif-fiab : `OverlappingFileLockException` de L3 sur les threads de cycle de vie) | **accepté, documenté § 7** : Q4 non reproductible, la rétention ne prend pas L1 ; son unique appelant le tient ; la fusion L3 → L1 est la suite indiquée si un scénario atteignable apparaît |
+| V-L2-04 | remarque | `FileIndexStateStore` (constructeur, `migrateLegacyRuns`) et `findRun` (`migrateLegacyRun`) migrent des fichiers de run du format historique sans bail : le processus qui répond au statut peut donc écrire | **documenté § 7** : préexistant, limité au format historique, idempotent (remplacement atomique, `NoSuchFile` toléré) ; hors périmètre du lot |
+| V-L2-05 | remarque | la nouvelle tentative de `DurableAtomicFile` retarde d'environ une seconde l'échec d'un refus d'accès réel, sous L1 ou L2 | **accepté** : bornée, Windows seulement, § 7 |
+
 ## 7. À traiter plus tard
 
-- **Publication atomique et rétention concurrente sous Windows.** Un premier essai du test de concurrence, où le « fournisseur » publiait par `Files.move(ATOMIC_MOVE)` pendant que `prune` mesurait le même répertoire, a échoué sous Windows avec `FileSystemException … utilisé par un autre processus` : la lecture des attributs par la rétention entre en conflit avec le renommage. Hors périmètre (le test a été ramené à des écritures simples). À vérifier dans `DurableAtomicFile.replace`, qui n'a pas de nouvelle tentative : deux indexations de projets différents sur un même `MINOS_HOME` Windows peuvent-elles s'y gêner ?
+- **Publication atomique et rétention concurrente sous Windows (traité au lot 2, § 8.9, `7e1b2903`).** Un premier essai du test de concurrence, où le « fournisseur » publiait par `Files.move(ATOMIC_MOVE)` pendant que `prune` mesurait le même répertoire, a échoué sous Windows avec `FileSystemException … utilisé par un autre processus` : la lecture des attributs par la rétention entre en conflit avec le renommage. Hors périmètre (le test a été ramené à des écritures simples). À vérifier dans `DurableAtomicFile.replace`, qui n'a pas de nouvelle tentative : deux indexations de projets différents sur un même `MINOS_HOME` Windows peuvent-elles s'y gêner ?
 - **Trois constantes de 24 h** (`IndexingResumePlanner.DEFAULT_RESUME_TTL`, `RunDirectoryRetention.DEFAULT_RESUME_TTL`, `SnapshotRetentionService.DEFAULT_ORPHAN_MAX_AGE`) : alignées à la main, chacune affirmée par un test local. Les fusionner demande un module commun aux deux côtés du port (ADR 0039, écart (f)).
 - **Un snapshot préparé écarté par R4 reste sur disque** jusqu'au balayage des `.snapshot-*.tmp` (24 h). Les snapshots préparés sous leur nom final ne sont balayés par aucune rétention : à examiner avec le lot 2 (Q4).
 - **`RunDirectoryRetention.prune` ne tourne qu'au début d'une exécution de provider.** Si plus aucune indexation n'a lieu, les répertoires expirés restent jusqu'à la suivante : comportement d'origine, non modifié.
 - **Un `unmark` qui échoue laisse un run terminal marqué** (verrou antivirus Windows, V-L1-03 a) : `unmarkQuietly` journalise un avertissement et la rétention l'expire à `max(maxAge, resumeTtl)` (7 j), après tous les runs non marqués et sous le budget de nombre et de volume. Les runs terminaux ne sont jamais réconciliés : rien ne le lèvera plus tôt. Borné, pas une fuite ; à reconsidérer si les avertissements sont fréquents.
 - **Artefacts d'un run marqué entre 24 h et 7 j** : refusés par le planificateur (TTL de 24 h), conservés par la rétention (V-L1-04, ADR 0039 (k)). Réduire la fenêtre demande de décider si les artefacts d'un run non reprenable servent encore au diagnostic.
 - **Re-datation impossible d'une date future** (V-L1-05) : si le marqueur est en lecture seule ou verrouillé en permanence *et* que l'horloge a sauté en avant, la borne de durée de vie est perdue pour ce run (il reste borné par le budget de nombre et de volume). Une alternative serait de supprimer le marqueur dont la date est impossible et non modifiable ; non retenue ici : supprimer une protection sur un doute est le mauvais sens pour un run peut-être en cours.
-
+- **(lot 2) `staged-snapshots/<runId>/` n'est balayé par aucune rétention.** Un run tué avant `promote` laisse son snapshot préparé (pouvant peser des centaines de Mo) pour toujours ; même chose pour les `.fingerprint-*.tmp` et `.active-*.tmp` d'un processus tué pendant une publication d'empreinte. Ce n'est pas une suppression (Q4), c'est la fuite de disque que la non-reproduction de Q4 laisse en évidence. À traiter sous L1, avec l'âge de la durée de vie unique du lot 1.
+- **(lot 2) Verrou de rétention L3.** `retention-locks/<projet>.lock` est un `FileChannel.lock()` sans délai (les autres baux sont bornés à 10 s, et les gates interdisent `channel.lock()` ailleurs), sans couche JVM (un second `compact` du même processus lèverait `OverlappingFileLockException`, non contrôlée, au lieu d'attendre) et ouvert sans `NOFOLLOW` ni droits privés. Sans danger aujourd'hui parce que son unique appelant tient L1, qui sérialise déjà ; le fusionner dans L1 (la rétention prend L1 elle-même) supprimerait un fichier de verrou, et serait la suite naturelle si un scénario atteignable de Q4 apparaissait.
+- **(lot 2) L4 (`semantic-index/.sync-locks`) est redondant avec L2** dans le câblage réel (`ProjectMutationSemanticVectorStore` le prend toujours sous L2) ; il ne sert que lorsque `FileSemanticVectorStore` est employé seul. Candidat à la fusion.
+- **(lot 2) Lecture sans bail de l'empreinte active.** `loadActive` lit le pointeur puis le snapshot sans bail : si une promotion et une compaction s'intercalent, le snapshot désigné par le pointeur lu peut avoir été supprimé avant sa lecture (échec transitoire « file is missing », à relire). Le store structurel traite ce cas par une boucle de relecture bornée ; le store d'empreintes non.
+- **(lot 2) Un état `INDEXING` abandonné reste visible en lecture.** Une lecture ne répare plus : après un crash entre la promotion et l'écriture de l'état, le statut répond `INDEXING` (avec le bon snapshot actif) jusqu'au prochain run, qui récupère sous bail. Avant, la première lecture qui trouvait le bail libre réparait. Acceptable (le snapshot actif rapporté est juste), à reconsidérer si un client a besoin de la fin d'un run abandonné.
+- **(lot 2) Bail de mutation strié à l'échelle de la JVM.** `SnapshotProjectLease` partage 64 verrous JVM entre tous les projets et tous les `MINOS_HOME` du processus : deux projets qui tombent sur la même bande s'attendent. Sans conséquence avec un projet actif à la fois ; à revoir pour un processus qui indexerait plusieurs projets en parallèle.
+- **(lot 2) Nouvelle tentative de remplacement : bornée à environ une seconde.** Un lecteur qui tiendrait une cible ouverte plus longtemps ferait échouer le remplacement (erreur de l'écrivain, inchangée dans son type). Les lectures de ces fichiers durent quelques millisecondes.
+- **(lot 2) Migrations de runs du format historique sans bail.** Le constructeur de `FileIndexStateStore` (`migrateLegacyRuns`, `migrateRunLocators`) et `findRun` (`migrateLegacyRun`) déplacent ou suppriment des `runs/<id>.properties` du format d'origine : tout processus qui ouvre le store, y compris celui qui répond à un statut, peut donc écrire, sans L1. Préexistant, idempotent, limité aux données historiques ; la règle « une lecture ne mute rien » ne le couvre pas. À encadrer (migration à l'ouverture sous L1, ou à l'écriture seulement) dans un lot dédié (V-L2-04).
+- **(lot 2) La règle (b) de l'ordre n'est vérifiée par aucun garde.** Un futur appelant de `LocalStorageRetentionService.compact` sans L1 ne serait pas attrapé (V-L2-03) ; un test d'architecture, ou la fusion de L3 dans L1, le ferait.
 - **SonarCloud, PR 309 (Quality Gate passé, 4 issues)** : `S1186` (`RunDirectoryHoldTest`, méthode vide) et `S3776` (`RunDirectoryRetention.measure`, complexité 16 pour 15) corrigées dans le même lot. Restent : `S6539` (`IndexingRunExecutor`, 25 dépendances pour 20 autorisées : la classe est découpée par le chantier Architecture, pas ici) et `S9391` (`IndexingResumePlanner`, boucle à remplacer par un flux : purement stylistique). Non traitées pour ne pas élargir le périmètre.
+- **SonarCloud, PR 310 (Quality Gate passé, 3 issues propres au lot 2, corrigées)** : `S1192` (littéral `projectId` dupliqué) et `S3776` (`ProjectIndexStateReconciler.reconcile`, complexité 24 ; `FileProjectFingerprintSnapshotStore.compactLocked`, 16) corrigées par extraction de méthodes, sans changement de comportement (`reconcileUnderLease`, `repairedState`, `requireNoPersistedActiveSnapshot`, `activeFileName`, `protectedPrefixes`). `S6539` et `S9391` : voir le lot 1.
+
+## 8. Lot 2 — P1, Q3, Q4 : un seul régime de verrous
+
+> Branche `fiab/p1-q3-q4-verrous`, créée depuis la branche du lot 1 (`fiab/r4-r5-r7-reprise`, `bcdadd23`), worktree `minos-wt/fiab-lot2`. Constats : **P1** (la lecture d'état prend le bail exclusif puis réécrit l'état), **Q3** (publication, promotion et compaction d'empreintes non exclusives), **Q4** (PLAUSIBLE : la rétention tourne sous un verrou distinct du bail de cycle de vie). Règle du lot : **un ordre de prise unique et documenté ; aucun mécanisme d'exclusion ajouté, l'existant est réutilisé ou fusionné.**
+
+### 8.1 Cibles relocalisées (base `bcdadd23`)
+
+| Cible | Emplacement réel | Constat |
+|---|---|---|
+| `FileProjectFingerprintSnapshotStore` (`publish`, `promote`, `compact`) | `minos-storage-local/.../storage/local/incremental/FileProjectFingerprintSnapshotStore.java` | `publish` : « existe-t-il un fichier pour cet identifiant ? » puis publication, sans exclusion ; `promote` : lecture du snapshot puis remplacement du pointeur, sans exclusion ; `compact` : seul `synchronized` (moniteur de l'instance, donc invisible d'un autre processus et des deux autres méthodes) |
+| bail de cycle de vie exclusif de 10 s | `minos-storage-local/.../orchestration/ProjectIndexLease.java` (fichier `index-state/locks/indexing/<projectId>.lock`), pris par `FileIndexStateStore.acquireProjectLease` (réentrant par thread et par instance de store), exposé par le port `IndexStateStore.acquireProjectLease`, tenu par `IndexingLifecycleService.run()` | l'ADR 0039 cite encore l'ancien chemin `minos-application/.../ProjectIndexLease` et `MINOS_HOME/locks/indexing` |
+| lecture d'état qui prend le bail puis réécrit | `minos-engine/.../orchestration/IndexingLifecycleService.projectState(UUID)` (bail, puis `AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease` qui termine les runs abandonnés et réécrit l'état) ; et, sur le chemin réel de `minos_index_status`, `MinosApplicationMcpBackend.indexStatus` → `ProjectInspectionService.view` → `ProjectIndexStateReconciler.reconcile(projectId)` (persistant) qui prend le bail dès que le snapshot actif n'est pas celui que l'état référence | P1 : deux chemins de lecture qui écrivent |
+| rétention et son verrou | `minos-storage-local/.../storage/local/LocalStorageRetentionService.java` : `FileChannel.lock()` brut sur `retention-locks/<projectId>.lock` ; appelle `SnapshotCompactionService.compactWithActiveSnapshot` (bail de mutation), `FileProjectFingerprintSnapshotStore.compact`, `IndexRunRetentionService.compact` | Q4 : ni bail de cycle de vie, ni bail de mutation autour de l'ensemble ; seuls appelants de production : quatre sites de `LocalAutonomousIndexOperations.executeLocked`, tous sous le bail de cycle de vie **par convention** (rien ne l'impose) |
+| bail de mutation de snapshot | `minos-storage-local/.../store/SnapshotProjectLease.java` (fichier `.project-mutation-leases/<projectId>.lock` au parent commun des stores frères, donc `MINOS_HOME/.project-mutation-leases/`) | partagé par `FileSymbolSnapshotStore.publishSnapshot`, `SnapshotCompactionService`, `SnapshotRetentionService`, `ProjectMutationSemanticVectorStore` ; **pas** par le store d'empreintes |
+| snapshot « préparé » | `minos-provider-scip/.../ScipProjectSnapshotLifecycle` : `stage` écrit dans `MINOS_HOME/staged-snapshots/<runId>/project/` (un `FileSymbolSnapshotStore` privé), `promote` republie dans `symbol-snapshots` | aucun code de rétention ne parcourt `staged-snapshots/` : ni suppression, ni balayage (voir § 8.3) |
+
+### 8.2 Inventaire des verrous et baux sous `MINOS_HOME`
+
+Notation : **portée** = `thread` (verrou JVM réentrant), `JVM` (moniteur/verrou en mémoire), `inter-processus` (verrou fichier du système d'exploitation, `FileLock`). Tous les baux `BoundedFileLease` ont **un délai d'acquisition de 10 s** (un seul `LeaseDeadline` partagé par le verrou JVM strié et le verrou fichier), sont propres au thread propriétaire, ouverts `NOFOLLOW_LINKS`, et échouent en `IOException` au délai.
+
+**Famille « un projet » (celle de ce lot) :**
+
+| # | Nom | Fichier / objet | Pris par | Tenu pendant | Portée | Réentrance / délai |
+|---|---|---|---|---|---|---|
+| L1 | bail de **cycle de vie** | `index-state/locks/indexing/<projectId>.lock` (`ProjectIndexLease`) | `IndexingLifecycleService` (`run`, `planned`, `projectState`, `withProjectLease`), `LocalAutonomousIndexOperations.execute` (toute l'indexation : préparation, run, empreinte, sémantique, rétention), `LocalProjectOperations.importScip`, `ProjectIndexStateReconciler.reconcile` (si réparation), `IncrementalIndexingCoordinator.refresh` | le cycle complet d'une indexation (heures possibles) | thread + JVM (verrou par chemin, compté) + inter-processus | réentrant **par thread et par instance de `FileIndexStateStore`** (compteur en `ThreadLocal`), 10 s |
+| L2 | bail de **mutation de snapshot** | `.project-mutation-leases/<projectId>.lock` (`SnapshotProjectLease`) | `FileSymbolSnapshotStore.publishSnapshot` (publication + promotion du pointeur), `SnapshotCompactionService.compactWithActiveSnapshot`, `SnapshotRetentionService` (`applyPolicy`, `deleteHistoricalSnapshots`, `deleteOrphanPreparedSnapshots`), `ProjectMutationSemanticVectorStore` (`replace`, `replaceConditionally`, `delete`) | une publication, une passe de compaction, un remplacement sémantique (secondes) | thread (64 verrous striés) + inter-processus | **non réentrant** : un second `acquire` du même thread réussit le verrou JVM puis boucle sur `OverlappingFileLockException` jusqu'au délai de 10 s, puis `IOException` ; 10 s |
+| L3 | verrou de **rétention** | `retention-locks/<projectId>.lock` (`LocalStorageRetentionService`) | `LocalStorageRetentionService.compact` | une compaction complète (snapshots, empreintes, métadonnées de run) | inter-processus seulement ; **aucune couche JVM** : un second `compact` du même processus lève `OverlappingFileLockException` (non contrôlée) au lieu d'attendre | `FileChannel.lock()` **sans délai**, contrairement à tous les autres baux ; fichier créé sans `NOFOLLOW` ni droits privés |
+| L4 | verrou de **synchronisation sémantique** | `semantic-index/.sync-locks/<projectId>.lock` (`FileSemanticVectorStore.replaceConditionally`) | `replaceConditionally`, toujours **sous L2** quand le store passe par `ProjectMutationSemanticVectorStore` (câblage de `LocalStorageBackend`) | la vérification « le snapshot actif n'a pas changé » et le remplacement | thread (table de verrous compté) + inter-processus | 10 s ; redondant avec L2 dans le câblage réel, utile quand le store est employé seul |
+| M | moniteur de l'**état d'index** | `synchronized` sur 6 méthodes de `FileIndexStateStore` (`findProjectState`, `findRun`, `listRuns`, `saveProjectState`, `saveRun`, `deleteRun`…) | toute lecture ou écriture de l'état | un appel (I/O locales) | JVM, **par instance** | aucun bail n'est jamais pris depuis l'intérieur : feuille |
+| FPM | moniteur de la **compaction d'empreintes** | `public synchronized … compact` de `FileProjectFingerprintSnapshotStore` | `LocalStorageRetentionService` | une compaction | JVM, par instance ; **ne couvre ni `publish` ni `promote` ni les autres processus** | — |
+
+**Feuilles hors famille projet** (aucun n'est jamais pris avec L1 ou L2 tenus, ils ne participent à aucun cycle) :
+
+| Nom | Fichier / objet | Portée |
+|---|---|---|
+| registre de projets | `registry/.registry.lock` (`InterProcessLocalProjectRegistry`, global, pas par projet) | thread (64) + inter-processus, 10 s |
+| observations d'exécution | `runtime-observations/<projet>/.lock` (`FileRuntimeObservationStore`) précédé d'un verrou JVM strié (`SerializedRuntimeObservationStore`) | idem, 10 s |
+| plan de contrôle hébergé | `<tenantId>.lock` (`FileHostedControlPlaneStore`, `FileChannel.lock()` brut) | thread + inter-processus, sans délai (hors périmètre, hébergé) |
+| indexation distante | `remote-index-leases/<sha>.lock` (`RemoteIndexLease`, cli) ; verrou de matérialisation et baux de cache (`JGitRemoteRepositoryMaterializer`, `SharedCacheLeaseRegistry`, `DistributedArtifactBundleStore`) | par source ou clé de cache, 10 s |
+| verrous purement mémoire | `FileSymbolSnapshotStore` (verrous de construction de vue et cache), `ProgramGraphService`, `SemanticSearchService`, `HybridSearchService`, `InMemoryIndexStateStore` | JVM |
+
+### 8.3 Répertoires de travail sous `MINOS_HOME` qui touchent ce lot
+
+| Répertoire | Propriétaire | Durée de vie / nettoyage | Protégé par |
+|---|---|---|---|
+| `index-state/projects/<id>.properties`, `index-state/runs/<id>/<runId>.properties`, `.by-id/` | `FileIndexStateStore` | métadonnées : `IndexRunRetentionService` (protège `latestRunId` et `resumableRunId`) ; écriture : temporaire `.state-*.tmp` puis `DurableAtomicFile.replace` | M pour les accès d'une instance ; L1 pour l'exclusivité entre indexations ; **aucun verrou pour les lecteurs d'un autre processus** (remplacement atomique) |
+| `symbol-snapshots/<id>/` : `snapshot-*.bin`, `active.pointer`, `.snapshot-*.tmp` | `FileSymbolSnapshotStore` | historique borné par `SnapshotRetentionService` (sous L2) ; `.snapshot-*.tmp` balayés après 24 h (sous L2) | L2 |
+| `fingerprint-snapshots/<id>/` : `fingerprint-*.bin`, `active.pointer`, `.fingerprint-*.tmp`, `.active-*.tmp` | `FileProjectFingerprintSnapshotStore` | historique borné par `compact` ; les temporaires ne sont supprimés qu'à la fin de l'appel qui les a créés (un processus tué en laisse, jamais balayés) | **rien** avant ce lot (FPM pour `compact` seulement) |
+| `staged-snapshots/<runId>/project/` (snapshot **préparé**) | `ScipProjectSnapshotLifecycle` | supprimé par `promote` après la publication, ou par le prochain `stage` du même run ; **aucun balayage** d'un run abandonné | le bail de cycle de vie L1 du projet, par convention ; aucune rétention ne le parcourt |
+| `runs/<runId>/…` (artefacts des providers, `.resumable`) | `ProcessIndexerExecutor`, `RunDirectoryRetention` | règle de durée de vie unique du lot 1 (`Policy.lifetime`) ; marqueur « répertoire retenu » | aucun bail : ce répertoire est **global à tous les projets**, donc un bail par projet ne peut pas le protéger ; c'est le marqueur de fichier du lot 1 qui le fait |
+| `retention-locks/`, `.project-mutation-leases/`, `index-state/locks/indexing/`, `semantic-index/.sync-locks/` | les baux ci-dessus | les fichiers de verrou ne sont jamais supprimés (le verrou est sur le descripteur, pas sur l'existence du fichier) | — |
+
+### 8.4 Graphe de prise AVANT (base `bcdadd23`)
+
+Arête `A → B` : B est pris alors que A est déjà tenu. Les flux qui prennent plusieurs verrous :
+
+```
+indexation CLI (LocalAutonomousIndexOperations.execute)
+  L1 ──► M                                  (état)                      // run, reprise, finalisation
+  L1 ──► L2                                 (activeStore.publish)       // promotion
+  L1 ──► L2 ──► L4                          (ProjectMutationSemanticVectorStore.replaceConditionally)
+  L1 ──► L3 ──► L2 ──(relâché)──► FPM ──► M (LocalStorageRetentionService.compact : snapshots, empreintes, runs)
+  L1 ──► (publication d'empreintes : aucun verrou)                      // Q3
+lecture d'état minos_index_status
+  (aucun verrou)  ou, si le snapshot actif n'est pas celui de l'état :  L1 ──► M (écriture)   // P1
+IndexingLifecycleService.projectState
+  L1 ──► M (écriture)                                                   // P1
+rétention appelée sans L1 (l'API le permet, aucun appelant actuel)
+  L3 ──► L2 ──► FPM ──► M                                               // Q4 : ne connaît pas L1
+```
+
+Pas de cycle dans le graphe d'origine : L1 est toujours pris avant L2, L2 avant L4, M est une feuille ; L3 n'est jamais tenu par un appelant de L1 qui le prendrait à rebours. Mais **l'ordre n'est écrit nulle part**, L3 n'est ordonné par rapport à L1 que par la position des appels dans `executeLocked`, et FPM n'est ordonné par rien. Un appelant futur qui prendrait L2 puis L1 (par exemple une réparation dans un chemin de lecture sous mutation) fermerait un cycle sans qu'aucun test ne l'attrape.
+
+### 8.5 Ce que fait le code d'origine (lu)
+
+- **P1.** `IndexingLifecycleService.projectState` : bail L1 puis `reconcileUnderExclusiveLease`, qui finalise comme abandonné tout run `RUNNING` (en présupposant que le détenteur du bail est mort) et réécrit l'état. Pendant une indexation (bail tenu ailleurs) l'appel attend 10 s puis lève `UncheckedIOException`. Sur le chemin de l'outil MCP, `ProjectIndexStateReconciler.reconcile(projectId)` lit sans verrou quand l'état référence le snapshot actif, mais, dès que le snapshot actif a avancé (promotion faite, état pas encore écrit : la fenêtre dure jusqu'à la fin du run), il prend L1 pour réparer : même attente, même échec.
+- **Q3.** `publish` : `filesForIdHash` puis `DurableAtomicFile.publish` sans exclusion ; le nom du fichier contient la somme de contrôle du contenu, donc deux publications de contenus différents pour un même identifiant écrivent deux fichiers distincts et `load` / `promote` répondent ensuite `multiple fingerprint snapshots` **de façon permanente**. `compact` peut supprimer le fichier qu'une `promote` en cours vient de lire et va référencer.
+- **Q4.** `LocalStorageRetentionService.compact` calcule son ensemble protégé (snapshot actif de l'état + snapshot de connaissance actif) puis compacte les empreintes ; il ne prend pas L1, donc rien n'empêche, dans l'API, qu'il s'exécute en même temps qu'un cycle de vie. Aucun appelant de production ne le fait (les quatre sites de `LocalAutonomousIndexOperations.executeLocked` sont sous L1). Ce qui a été mesuré est au § 8.10 : l'énoncé de l'audit (un snapshot « préparé » est celui de `staged-snapshots/`) ne tient pas, et l'empreinte publiée avant sa promotion survit à la rétention de production.
+
+### 8.6 Ordre de prise retenu
+
+Un seul ordre total, à respecter par tout code qui prend plusieurs verrous d'un même projet :
+
+1. **L1** bail de cycle de vie (`IndexStateStore.acquireProjectLease`) ;
+2. **L3** verrou de rétention (`retention-locks`), pris par la seule rétention, toujours sous L1 ;
+3. **L2** bail de mutation de snapshot (`SnapshotProjectLease`) ;
+4. **L4** verrou de synchronisation sémantique (toujours sous L2) ;
+5. **M** moniteurs en mémoire (feuille) ; puis les feuilles hors famille (registre, observations, distant), jamais tenues avec L1 ou L2.
+
+Règles : (a) on ne prend **jamais** un verrou de rang inférieur en tenant un verrou de rang supérieur (en particulier jamais L1 en tenant L2 ou L4), et L2 n'est jamais repris par son propre thread (il n'est pas réentrant) ; (b) **toute mutation du stockage d'index d'un projet, rétention comprise, se fait sous L1** (réentrant pour le thread qui le tient déjà) : la rétention ne prend pas L1 elle-même, c'est son unique appelant qui le tient (§ 8.10, Q4) ; (c) **toute mutation d'un store partagé entre processus se fait sous L2**, y compris le store d'empreintes ; (d) une **lecture ne prend ni L1 ni L2 et n'écrit pas**.
+
+Décisions après preuve, sans nouveau mécanisme : le store d'empreintes réutilise L2 (la classe `SnapshotProjectLease`, dont la documentation prévoit déjà ce rôle pour les stores frères sous `MINOS_HOME`), ce qui retire le moniteur FPM (Q3) ; les lectures d'état n'ont plus aucun chemin vers L1 ni vers une écriture (P1) ; la rétention **garde** L3 : le scénario de Q4 ne se reproduit pas (§ 8.10), donc elle n'est pas fusionnée dans L1 (un changement de comportement sans scénario démontré). L'ordre est écrit à quatre endroits, là où l'on prend les verrous : Javadoc de `IndexStateStore.acquireProjectLease`, de `ProjectIndexLease`, de `SnapshotProjectLease` et de `LocalStorageRetentionService`, plus l'ADR 0039 (l) ; `LocalStorageRetentionPreparedSnapshotTest` exécute l'ordre sur un thread.
+
+### 8.7 Comptes AVANT
+
+Mécanismes d'exclusion de la famille « un projet » : **6** (L1, L2, L3, L4, M, FPM), dont **3 fichiers indépendants sans ordre écrit** (L1, L2, L3) et **2 moniteurs JVM sans couverture inter-processus** (M, FPM), plus L4 imbriqué sous L2. Chemins de lecture d'état qui prennent L1 : **2** (`IndexingLifecycleService.projectState`, `ProjectIndexStateReconciler.reconcile` persistant, ce dernier via `ProjectInspectionService.view` et donc `minos_index_status`). Appels du store d'empreintes qui mutent sans aucun verrou inter-processus : **3** (`publish`, `promote`, `compact`).
+
+### 8.8 Journal par commit (lot 2)
+
+| Commit | Contenu | Gates |
+|---|---|---|
+| `ec49871b` | docs : inventaire des verrous, baux et répertoires de travail, graphe de prise, ordre retenu (§ 8.1 à 8.7) | 504 / 45 / SUCCESS / SUCCESS / 95 |
+| `64c704b6` | Q3 : publication, promotion et compaction d'empreintes sous le bail de mutation du projet ; `SnapshotProjectLease` publique ; le `synchronized` de `compact` disparaît | idem |
+| `7e1b2903` | `DurableAtomicFile.replace` retenté sous Windows face à un lecteur qui tient la cible ouverte (conséquence de P1, § 8.9) ; test de lecture sous écriture concurrente | idem |
+| `91a23b22` | P1 : le statut lit par `observe` (aucun bail, aucune écriture), un état en vol est rapporté tel quel ; `projectState` devient `recoverProjectState` | idem |
+| `49e3fdfb` | Q4 : test de non-reproduction (empreinte préparée, snapshot structurel préparé, ordre de prise) ; aucun correctif | idem |
+| `44aca82a` | documentation : ordre de prise dans les Javadoc et l'ADR 0039 (l), ce journal, preuves (avec correction de l'emplacement périmé du bail dans l'ADR) | idem |
+| `0003d80e` | preuves de fin de lot (rejeux, `clean verify`, Linux) | idem |
+| `55d4091d` | V-L2-01 : `observeStatus` (lecture de statut) distinct de `observe` (plan du dry-run) | idem |
+
+### 8.9 Preuves
+
+**Rouge → vert.** Chaque test a été joué sur le code d'origine avant le correctif correspondant (sortie rouge dans le message du commit).
+
+| Constat | Test | Rouge (code d'origine) | Vert |
+|---|---|---|---|
+| Q3 publications de contenus différents | `FileProjectFingerprintSnapshotStoreConcurrencyTest.twoConcurrentPublicationsWithDifferentContentLeaveExactlyOneSnapshotForTheIdentifier` | `one content wins, the other is refused ==> expected: <1> but was: <2>` (tour 0) | 3/3 |
+| Q3 publications du même contenu | `…twoConcurrentPublicationsOfTheSameContentBothSucceedAndShareOneFile` | `a republication of identical content is idempotent: [done, refused: … .fingerprint-*.tmp -> …]` | 3/3 |
+| Q3 compaction pendant une promotion | `…aCompactionNeverDeletesTheSnapshotAPromotionIsReadingOrLeavesADanglingPointer` | `a refused promotion is refused cleanly: refused: fingerprint snapshot must be a regular non-symlink file` | 3/3 |
+| P1 statut pendant une indexation | `ProjectStatusReadIsLeaseFreeTest.statusAnswersInsteadOfFailingWhileAnotherProcessHoldsTheLifecycleLease` | `IOException: failed to acquire project lifecycle lease for metadata reconciliation … timed out … after PT10S` | 3/3 |
+| P1 une lecture n'écrit pas | `…aReadNeverRepairsTheStateItReportsEvenWhenNoRunHoldsTheLease` | `array lengths differ, expected: <295> but was: <347>` (l'état a été réécrit) | 3/3 |
+| P1 état en vol rapporté tel quel | `ProjectIndexStateReconcilerTest.observeStatusReportsAnInFlightRunUnchangedEvenWhenItsSnapshotIsAlreadyPromoted` | (l'ancien `observe` répondait READY réparé en mémoire : `repaired` vrai) | 10/10 |
+| V-L2-01 le dry-run planifie comme le run réel | `ProjectIndexStateReconcilerTest.observeForADryRunPlanStillComputesTheRepairOfAnInProgressStateLeftByADeadRun` | sur `44aca82a` : `the plan anticipates the recovery the real run performs under the lease ==> expected: <true> but was: <false>` | 10/10 |
+| Windows : remplacement face à un lecteur | `ProjectStateReadUnderConcurrentWriteTest` | `UncheckedIOException: cannot write MINOS index state … Caused by: AccessDeniedException: .state-<n>.tmp -> <id>.properties` (premier essai) | 1/1 |
+| Windows : politique de nouvelle tentative | `DurableAtomicFileTest` (4 nouveaux, déterministes : le déplacement, le système et la pause sont injectés) | (la politique n'existait pas) | 6/6 |
+
+Garde-fous verts avant et après (ils ne devaient pas bouger) : `statusBeforeThePromotionIsLockFreeToo`, `reconcileStillRepairsAnAbandonedInProgressStateUnderTheLeaseItOwns`, tout `IndexingLifecycle*`/`InterruptedRunRecoveryTest`/`Abandoned*` du moteur (43/43, renommage inclus), `LocalStorageRetentionServiceTest`, `FileProjectFingerprintSnapshotStoreTest`.
+
+**Changement observable, en clair.** Pendant une indexation, `minos_index_status`, `index-status`, `inspect`, `project list` et `minos_project_structure` répondent tout de suite avec le dernier état que le run a publié (`INDEXING` tant qu'il n'a pas publié sa fin) ; avant, dès que le snapshot était promu et l'état pas encore écrit, ils attendaient 10 s puis échouaient (`failed to acquire project lifecycle lease`). Une lecture ne répare plus l'état : si le snapshot actif a de l'avance sur l'état publié, elle répond ce que la réparation publierait (calculé en mémoire), sauf pour un état `INDEXING`/`REFRESHING` qu'elle rapporte tel quel (`ProjectIndexStateReconciler.observeStatus`) ; c'est le prochain run qui répare. Le plan d'un `--dry-run` (`observe`) ne change pas : il calcule toujours la réparation en mémoire, pour annoncer le plan que le run réel fera (V-L2-01). Aucun code de sortie ni golden ne change (`git diff bcdadd23..HEAD -- minos-app/src/test/resources scripts` est vide).
+
+**Le lot a révélé un défaut Windows que la correction de P1 rend ordinaire.** Rendre la lecture concurrente de l'écriture fait échouer `DurableAtomicFile.replace` côté écrivain : `Files.move(ATOMIC_MOVE, REPLACE_EXISTING)` lève `AccessDeniedException` (ou une violation de partage) tant qu'un lecteur tient la cible ouverte. C'est l'échec « rare » relevé au § 7 du lot 1 ; il se produisait au premier essai dès qu'un lecteur sans bail existait. Sans ce correctif, P1 aurait fait échouer l'indexeur parce qu'un client lit le statut. Correction dans la primitive commune (aucun mécanisme ajouté) : au plus 20 tentatives, pauses croissantes de 5 ms (environ une seconde), seulement sous Windows, seulement pour un remplacement, seulement pour `AccessDeniedException` ou une `FileSystemException` nue.
+
+**Tests de concurrence rejoués 50 fois** (une invocation Maven par rejeu, `-Dsurefire.rerunFailingTestsCount=0`, arbre de rejeu dédié, aucun `Thread.sleep` : barrières `CyclicBarrier`, drapeau d'arrêt du lecteur) :
+
+| Classe | Synchronisation | Rejeux sur le commit | Résultat |
+|---|---|---|---|
+| `FileProjectFingerprintSnapshotStoreConcurrencyTest` (3 tests, 10 tours chacun par exécution) | `CyclicBarrier(2)` par tour, `Future.get` | `7e1b2903` (code de production final de Q3) | **50 passages sur 50**, 0 échec (30 tours par exécution : 1 500 tours) |
+| `ProjectStateReadUnderConcurrentWriteTest` (200 publications par exécution) | `CyclicBarrier(2)`, drapeau `writerDone`, relecture finale après l'arrêt de l'écrivain | `49e3fdfb` puis `55d4091d` (code de production final de P1, après V-L2-01) | **50 sur 50** sur chacun, 0 échec (200 publications lues en boucle par exécution : 10 000 publications, l'échec Windows de l'écrivain n'apparaît plus) |
+| `ProjectStatusReadIsLeaseFreeTest` (le bail est tenu par le thread de test, la lecture sur un autre thread) | bail tenu pendant l'appel, `Future.get` | `49e3fdfb` puis `55d4091d` | **50 sur 50** sur chacun (rejoués avec le précédent, et avec `ProjectIndexStateReconcilerTest` au second) |
+
+### 8.10 Q4 : non reproductible, non corrigé
+
+Preuve : `LocalStorageRetentionPreparedSnapshotTest` (commit `49e3fdfb`), 3 tests, verts sur le code d'origine `bcdadd23` (arbre séparé) comme sur le code courant.
+
+1. **Le snapshot « préparé » de l'audit n'est à la portée d'aucune rétention.** Le snapshot structurel qu'un run prépare est écrit par `ScipProjectSnapshotLifecycle.stage` dans un store privé `staged-snapshots/<runId>/project/`. Les trois rétentions (`SnapshotRetentionService` sur `symbol-snapshots/`, `FileProjectFingerprintSnapshotStore.compact` sur `fingerprint-snapshots/`, `RunDirectoryRetention` sur `runs/`) ne parcourent jamais `staged-snapshots/`. Le test crée un snapshot préparé, passe la rétention avec la politique `(0, 0, 0)` (qui ne garde rien) et un balayage des temporaires avec une horloge avancée de trois jours : aucun fichier de `staged-snapshots/` ne bouge. Le pendant est une fuite, pas une suppression (§ 7).
+2. **L'empreinte publiée avant sa promotion survit.** C'est le seul snapshot « publié, pas encore promu » qu'une rétention parcourt. Le test place le passage de rétention à l'endroit nuisible d'un cycle de vie, entre `publish` et `promote`, avec l'ensemble protégé d'une rétention qui aurait calculé avant (l'état et le snapshot structurel nomment encore le précédent), sous la politique de production. `compact` garde le plus récent des `maxHistoricalSnapshots = 2` fichiers historiques : l'empreinte préparée est le fichier le plus récent de son répertoire (publiée secondes après les autres), elle est donc conservée quel que soit l'ensemble protégé. Le passage n'est pas vacueux (l'ancien historique est réclamé) et la promotion réussit ensuite.
+3. **Borne mesurée, puis annulée.** Avec une politique qui garde **zéro** snapshot historique (`new PersistentRetentionPolicy(0, …)`), la même séquence supprime l'empreinte préparée (`expected: <true> but was: <false>`). Aucun code de production ne la construit : `PersistentRetentionPolicy.DEFAULT` est le seul argument passé par `LocalAutonomousIndexOperations`, dont les quatre appels sont sous le bail de cycle de vie. Un correctif (la rétention prend L1, ou ne supprime pas ce qui est plus récent que le pointeur actif) serait défensif : il ajouterait un changement de comportement (une attente bornée de 10 s de la rétention) sans scénario atteignable, et ne fermerait rien.
+
+Ce qui reste vrai et est consigné au § 7 : la rétention ne prend pas L1 elle-même ; son verrou L3 est un `FileChannel.lock()` sans délai ni couche JVM.
+
+### 8.11 Comptes AVANT / APRÈS
+
+| Mesure | Avant (`bcdadd23`) | Après |
+|---|---|---|
+| Mécanismes d'exclusion de la famille « un projet » | **6** : L1, L2, L3, L4, M, FPM | **5** : L1, L2, L3, L4, M (FPM, le `synchronized` de `compact`, est retiré) |
+| Fichiers de verrou distincts pour un projet | 4 (`index-state/locks/indexing`, `.project-mutation-leases`, `retention-locks`, `semantic-index/.sync-locks`) | 4 (inchangé ; aucun ajouté), **ordonnés** et documentés |
+| Appels du store d'empreintes qui mutent sans verrou inter-processus | 3 (`publish`, `promote`, `compact`) | **0** |
+| Chemins de lecture d'état qui prennent L1 | 2 (`IndexingLifecycleService.projectState`, `ProjectIndexStateReconciler.reconcile` via le statut) | **0** (`recoverProjectState` est nommé comme la mutation qu'il est) |
+| Chemins de lecture d'état qui écrivent | 2 | **0** |
+| Sites `SnapshotProjectLease.acquire` | 8 | 11 (les trois opérations d'empreintes, même bail : des sites d'un mécanisme existant, pas un mécanisme) |
+| Ordre de prise écrit | nulle part | Javadoc ×4, ADR 0039 (l), § 8.6, un test d'exécution de l'ordre |
+| Graphe de prise | sans cycle, non écrit | sans cycle, écrit (§ 8.4 avant, ci-dessous après) |
+
+Graphe APRÈS (arête `A ──► B` : B pris sous A) :
+
+```
+indexation CLI (execute)
+  L1 ──► M                                   (état, run, reprise)
+  L1 ──► L2                                  (promotion du snapshot structurel)
+  L1 ──► L2                                  (publication et promotion des empreintes)   // Q3 : avant, sans verrou
+  L1 ──► L2 ──► L4                           (synchronisation sémantique)
+  L1 ──► L3 ──► L2 (snapshots) , L2 (empreintes) , M (runs)    (rétention, étapes séquentielles, L2 relâché entre elles)
+lecture d'état (statut, inspect, project list) : aucun verrou, aucune écriture          // P1
+recoverProjectState : L1 ──► M                (mutation, appelée sous L1 par le coordinateur incrémental)
+```
+
+Aucun cycle : l'ordre L1 < L3 < L2 < L4 < M est total et respecté par chaque arête ci-dessus ; aucun chemin ne prend un verrou de rang inférieur en tenant un de rang supérieur.
+
+### 8.12 Fin de lot
+
+`./mvnw clean verify` complet dans un arbre dédié (journal dans le scratchpad, pas dans `target/`) : sur `44aca82a` puis, après V-L2-01, sur `55d4091d` (les commits suivants ne changent que de la Javadoc et ce fichier) : **BUILD SUCCESS** les deux fois, 15 modules, 12 min 57 pour le second, **1 708 tests exécutés, 0 échec, 0 erreur, 46 ignorés** (les mêmes hypothèses `Assumptions` qu'à la base ; aucun `@Disabled` ajouté) ; 1 691 à la base du lot, +17 : `FileProjectFingerprintSnapshotStoreConcurrencyTest` 3, `DurableAtomicFileTest` +4, `ProjectStateReadUnderConcurrentWriteTest` 1, `ProjectStatusReadIsLeaseFreeTest` 3, `ProjectIndexStateReconcilerTest` +3, `LocalStorageRetentionPreparedSnapshotTest` 3.
+
+| Gate | Base `bcdadd23` | Fin de lot |
+|---|---|---|
+| `check-module-boundaries.py` | `modules=14, sources=504, packages=45` | identique |
+| `check-current-docs.py`, `product-facts.py --check` | SUCCESS | SUCCESS |
+| `check-milestone-artifact-references.py` | `scripts checked=95` | `scripts checked=95` |
+| `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py` (littéraux de `SnapshotProjectLease.acquire`, `compactWithActiveSnapshot`, `CompactionResult::activeSnapshotId`) | SUCCESS | SUCCESS |
+| `check-jacoco.py` | 26 PASS, seule rouge `m24-polyglot-provider-platform` (line 0,228 < 0,28, préexistante, Windows) | 26 PASS, **même unique rouge**, mêmes chiffres |
+| `critical-orchestration` (line / branch) | 0,891 / 0,773 | 0,891 / 0,773 |
+| `resume-orchestration` (line / branch) | 0,906 / 0,787 | 0,906 / 0,787 |
+
+Golden : les 12 de `characterization/` **inchangés**, aucun script de `scripts/` modifié (`git diff bcdadd23..HEAD -- minos-app/src/test/resources scripts` vide).
+
+**Linux.** WSL Ubuntu (Java 24), tests du reactor `minos-engine` (455 tests, 7 ignorés), `minos-runtime-local` (226, 30 ignorés : Windows seulement) et `minos-storage-local` (177, 0 ignoré), sur `44aca82a` : **verts, 0 échec**, dont `FileProjectFingerprintSnapshotStoreConcurrencyTest` (3/3), `LocalStorageRetentionPreparedSnapshotTest` (3/3) et `DurableAtomicFileTest` (6/6, où la politique de nouvelle tentative est injectée et ne dépend pas du système). **Vérifié seulement sous Windows** : `minos-bootstrap` (les trois tests de P1, le test de lecture sous écriture concurrente, le rejeu ×50) — le module dépend de `minos-provider-scip`, dont une dépendance n'est pas dans le dépôt Maven local de WSL hors ligne ; le défaut Windows de `replace` (rename sur une cible ouverte) n'existe pas sous Linux, où la lecture concurrente est sans effet sur l'écrivain ; le rejeu ×50 n'a été fait que sous Windows.

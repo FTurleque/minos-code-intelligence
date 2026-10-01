@@ -12,7 +12,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 
-/** Cross-JVM exclusive lease for one project's indexing lifecycle. */
+/**
+ * Cross-JVM exclusive lease for one project's indexing lifecycle. First lock of the project lock order
+ * (FIAB-SUIVI section 8.6): it is held for the whole lifecycle, and the retention lock, the snapshot
+ * mutation lease and every later lock are taken under it, never the other way round.
+ */
 public final class ProjectIndexLease implements AutoCloseable {
 
     static final Duration DEFAULT_ACQUIRE_TIMEOUT = Duration.ofSeconds(10);
