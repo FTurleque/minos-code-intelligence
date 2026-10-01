@@ -77,7 +77,51 @@ final class ProviderProcessEnvironment {
             "WINDIR"
     );
 
+    /**
+     * What a trusted Windows launcher (the PowerShell program that contains a provider) needs to start,
+     * and nothing else. Measured, not guessed: with only {@code PATH}, {@code PATHEXT}, {@code SystemRoot},
+     * {@code TEMP} and {@code TMP} both the AppContainer and the Job Object launcher start and run a
+     * provider. The other entries are the profile and machine locations a launcher resolves on a
+     * configuration that differs from the one it was measured on (a roaming or domain profile): kept as a
+     * margin, each of them a path or a name, none of them a secret. The provider itself never sees this
+     * environment: it receives the one the sandbox plan carries.
+     */
+    private static final Set<String> TRUSTED_LAUNCHER_KEYS = Set.of(
+            "PATH",
+            "PATHEXT",
+            "SystemRoot",
+            "windir",
+            "SystemDrive",
+            "ComSpec",
+            "TEMP",
+            "TMP",
+            "USERPROFILE",
+            "APPDATA",
+            "LOCALAPPDATA",
+            "ProgramData",
+            "USERNAME",
+            "USERDOMAIN",
+            "COMPUTERNAME"
+    );
+
     private ProviderProcessEnvironment() {
+    }
+
+    /** Replaces the environment of {@code builder} with the minimum a trusted launcher needs, plus {@code declared}. */
+    static void applyForTrustedLauncher(ProcessBuilder builder, Map<String, String> declared) {
+        Objects.requireNonNull(builder, "builder");
+        Objects.requireNonNull(declared, "declared");
+        Map<String, String> environment = builder.environment();
+        LinkedHashMap<String, String> kept = new LinkedHashMap<>();
+        environment.forEach((key, value) -> {
+            if (key != null && value != null
+                    && TRUSTED_LAUNCHER_KEYS.stream().anyMatch(allowed -> allowed.equalsIgnoreCase(key))) {
+                kept.put(key, value);
+            }
+        });
+        environment.clear();
+        environment.putAll(kept);
+        environment.putAll(declared);
     }
 
     static void apply(ProcessBuilder builder, Map<String, String> declared) {

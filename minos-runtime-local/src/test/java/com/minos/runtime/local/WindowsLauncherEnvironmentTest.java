@@ -86,7 +86,7 @@ class WindowsLauncherEnvironmentTest {
             }
 
             @Override
-            public boolean trustedLauncherRequiresParentEnvironment() {
+            public boolean isTrustedLauncher() {
                 return true;
             }
         });

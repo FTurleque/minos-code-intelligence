@@ -82,7 +82,7 @@ final class WindowsJobObjectProcessOwnership {
             }
 
             @Override
-            public boolean trustedLauncherRequiresParentEnvironment() {
+            public boolean isTrustedLauncher() {
                 return true;
             }
         };

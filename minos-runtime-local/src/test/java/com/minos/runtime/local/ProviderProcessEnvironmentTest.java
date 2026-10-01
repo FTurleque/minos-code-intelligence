@@ -51,4 +51,25 @@ class ProviderProcessEnvironmentTest {
         assertFalse(sanitized.containsKey("MINOS_TEAM_TOKEN"));
         assertTrue(sanitized.size() >= 2);
     }
+
+    @Test
+    void aTrustedLauncherKeepsOnlyWhatItNeedsToStartAndWhatTheOverlayDeclares() {
+        ProcessBuilder builder = new ProcessBuilder();
+        builder.environment().clear();
+        builder.environment().put("PATH", "/usr/bin");
+        builder.environment().put("TEMP", "/tmp");
+        builder.environment().put("JAVA_HOME", "/jdk");
+        builder.environment().put("MINOS_TEAM_TOKEN", "team-secret");
+        builder.environment().put("GITHUB_TOKEN", "github-secret");
+
+        ProviderProcessEnvironment.applyForTrustedLauncher(builder, Map.of("DECLARED", "value"));
+
+        Map<String, String> environment = builder.environment();
+        assertEquals("/usr/bin", environment.get("PATH"));
+        assertEquals("/tmp", environment.get("TEMP"));
+        assertEquals("value", environment.get("DECLARED"));
+        assertFalse(environment.containsKey("JAVA_HOME"), "a launcher has no use for the toolchain variables");
+        assertFalse(environment.containsKey("MINOS_TEAM_TOKEN"));
+        assertFalse(environment.containsKey("GITHUB_TOKEN"));
+    }
 }

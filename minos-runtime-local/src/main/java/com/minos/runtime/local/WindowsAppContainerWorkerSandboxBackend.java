@@ -227,7 +227,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                     }
 
                     @Override
-                    public boolean trustedLauncherRequiresParentEnvironment() {
+                    public boolean isTrustedLauncher() {
                         return true;
                     }
 

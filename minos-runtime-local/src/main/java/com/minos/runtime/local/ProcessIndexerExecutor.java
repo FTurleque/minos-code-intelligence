@@ -288,11 +288,12 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
     ) throws IOException {
         ProcessBuilder processBuilder = new ProcessBuilder(plan.command());
         processBuilder.directory(plan.workingDirectory().toFile());
-        if (transformer.trustedLauncherRequiresParentEnvironment()) {
-            // The transformed command is a MINOS-owned sandbox launcher, not provider code.
-            // Provider environment isolation remains the launcher's responsibility and must be
-            // encoded into the sandbox plan before this trusted boundary is selected.
-            processBuilder.environment().putAll(plan.environment());
+        // Neither a provider nor the trusted launcher that contains one inherits the environment of this
+        // process: it may carry tokens and passwords. A provider gets the explicit allow-list plus what its
+        // plan declares; a launcher gets the smaller set it needs to start, and passes the provider the
+        // environment the sandbox plan carries (built from the same allow-list).
+        if (transformer.isTrustedLauncher()) {
+            ProviderProcessEnvironment.applyForTrustedLauncher(processBuilder, plan.environment());
         } else {
             ProviderProcessEnvironment.apply(processBuilder, plan.environment());
         }
@@ -444,7 +445,11 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
     interface ProcessPlanTransformer {
         IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception;
 
-        default boolean trustedLauncherRequiresParentEnvironment() {
+        /**
+         * Whether the transformed command is a MINOS-owned sandbox launcher rather than the provider
+         * itself. A launcher is started with the minimum environment it needs, not the provider allow-list.
+         */
+        default boolean isTrustedLauncher() {
             return false;
         }
 
