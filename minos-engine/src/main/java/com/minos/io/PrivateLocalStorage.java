@@ -8,6 +8,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryFlag;
 import java.nio.file.attribute.AclEntryPermission;
 import java.nio.file.attribute.AclEntryType;
 import java.nio.file.attribute.AclFileAttributeView;
@@ -250,6 +251,11 @@ public final class PrivateLocalStorage {
         try {
             Files.createDirectory(target, privateDirectoryAttributes(target));
         } catch (FileAlreadyExistsException concurrentlyCreated) {
+            // Anything but a directory (a file, or a link) occupying the name is not a lost race: it is
+            // refused in the same family Files.createDirectories uses, without naming the path.
+            if (!Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+                throw new FileAlreadyExistsException(null, null, "private storage path exists and is not a directory");
+            }
             // Another writer won the race; hardening and verification below still apply to it, but
             // it is theirs, not ours -- it must not be deleted if hardening fails below.
             created = false;
@@ -277,14 +283,15 @@ public final class PrivateLocalStorage {
     }
 
     private static void hardenDirectory(Path target) throws IOException {
-        harden(target, DIRECTORY_PERMISSIONS);
+        harden(target, DIRECTORY_PERMISSIONS, true);
     }
 
     private static void hardenFile(Path target) throws IOException {
-        harden(target, FILE_PERMISSIONS);
+        harden(target, FILE_PERMISSIONS, false);
     }
 
-    private static void harden(Path target, Set<PosixFilePermission> permissions) throws IOException {
+    private static void harden(Path target, Set<PosixFilePermission> permissions, boolean directory)
+            throws IOException {
         BasicFileAttributes attributes = readAttributesNoFollow(target);
         if (attributes.isSymbolicLink() || attributes.isOther()) {
             throw new IOException("private storage path must not be a symbolic link or reparse/special object: " + target);
@@ -297,11 +304,17 @@ public final class PrivateLocalStorage {
         AclFileAttributeView acl = aclView(target);
         if (acl == null) throw unsupportedFilesystem(target);
         UserPrincipal owner = Files.getOwner(target, LinkOption.NOFOLLOW_LINKS);
-        acl.setAcl(List.of(AclEntry.newBuilder()
+        // The owner entry of a directory is inheritable: whatever any process of the owner creates in it
+        // (a sandboxed provider writing its artifact, a tool unpacking an archive) is owner-only too,
+        // instead of falling back to the default ACL of the creating process. Still no other principal.
+        AclEntry.Builder entry = AclEntry.newBuilder()
                 .setType(AclEntryType.ALLOW)
                 .setPrincipal(owner)
-                .setPermissions(EnumSet.allOf(AclEntryPermission.class))
-                .build()));
+                .setPermissions(EnumSet.allOf(AclEntryPermission.class));
+        if (directory) {
+            entry.setFlags(AclEntryFlag.FILE_INHERIT, AclEntryFlag.DIRECTORY_INHERIT);
+        }
+        acl.setAcl(List.of(entry.build()));
     }
 
     private static void verifyPrivacy(Path target) throws IOException {

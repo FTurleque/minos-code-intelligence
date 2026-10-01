@@ -1,6 +1,8 @@
 package com.minos.io;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -49,6 +51,38 @@ class PrivateLocalStorageWritesTest {
         assertThrows(IOException.class,
                 () -> PrivateLocalStorage.writePrivateFile(link, "overwritten".getBytes(StandardCharsets.UTF_8)));
         assertEquals("untouched", Files.readString(outside, StandardCharsets.UTF_8));
+    }
+
+    /**
+     * On an ACL platform the owner entry of a private directory is inheritable, so whatever a process of
+     * the owner creates in it later -- here a plain Files.createFile, in production the artifact a
+     * sandboxed provider writes -- is owner-only too instead of taking the default ACL of its creator.
+     */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void aFileCreatedLaterInAPrivateDirectoryInheritsOwnerOnlyAccess(@TempDir Path root) throws Exception {
+        Path directory = PrivateLocalStorage.ensurePrivateDirectory(root.resolve("run"));
+
+        Path child = Files.createFile(directory.resolve("artifact.scip"));
+        Path subdirectory = Files.createDirectory(directory.resolve("nested"));
+        Path grandchild = Files.createFile(subdirectory.resolve("deeper.scip"));
+
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(child));
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(subdirectory));
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(grandchild));
+    }
+
+    @Test
+    void aFileOccupyingTheDirectoryNameIsRefusedAsAlreadyExistingWithoutNamingThePath(@TempDir Path root)
+            throws Exception {
+        Path blocker = Files.writeString(root.resolve("leases"), "not a directory", StandardCharsets.UTF_8);
+
+        java.nio.file.FileAlreadyExistsException failure = assertThrows(
+                java.nio.file.FileAlreadyExistsException.class,
+                () -> PrivateLocalStorage.ensurePrivateDirectory(blocker));
+
+        assertEquals(false, String.valueOf(failure.getMessage()).contains(root.toString()));
+        assertEquals("not a directory", Files.readString(blocker, StandardCharsets.UTF_8));
     }
 
     @Test
