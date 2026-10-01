@@ -127,7 +127,7 @@ class RuntimeStoragePrivacyTest {
                 }
                 """);
         String java = Path.of(System.getProperty("java.home"), "bin",
-                System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java").toString();
+                System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win") ? "java.exe" : "java").toString();
         ProcessIndexerExecutor executor = new ProcessIndexerExecutor(
                 "fake-provider",
                 temp.resolve("home"),
