@@ -2,6 +2,7 @@ package com.minos.io;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -17,10 +18,14 @@ import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.nio.file.attribute.UserPrincipal;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Single owner-only policy for every local location that can hold user code or its derivatives.
@@ -35,8 +40,18 @@ import java.util.Set;
  * <h2>Policy</h2>
  * <ul>
  *   <li>POSIX: directories {@code 0700}, files {@code 0600} — no GROUP and no OTHERS bit.</li>
- *   <li>ACL platforms (Windows): a single explicit ALLOW entry for the owner.</li>
+ *   <li>ACL platforms (Windows): a single explicit ALLOW entry for the owner, and a DACL that does
+ *       not inherit from its parent, so that a grant added later to a parent cannot flow back in.</li>
  * </ul>
+ *
+ * <h2>What hardening never removes</h2>
+ * <p>An ACL platform keeps every DENY entry the location already carries, explicit or inherited
+ * (an inherited one becomes explicit when the DACL stops inheriting), ahead of the owner's ALLOW
+ * entry: a restriction an administrator placed is theirs to lift, never MINOS's. When such a
+ * restriction stops MINOS from writing where it must, the operation fails and says so, without
+ * naming the path. ALLOW entries granted to any other principal are removed: a grant is a right,
+ * not a restriction, and this storage is owner-only by definition. Hardening a location whose DACL is
+ * already the right one writes nothing, so a read-only location is not modified by being checked.</p>
  *
  * <h2>Guarantees</h2>
  * <p>Permissions are requested <em>at creation</em> via {@link FileAttribute} where the platform
@@ -119,7 +134,11 @@ public final class PrivateLocalStorage {
         Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
         Path parent = target.getParent();
         if (parent != null) ensurePrivateDirectory(parent);
-        Files.createFile(target, privateFileAttributes(target));
+        try {
+            Files.createFile(target, privateFileAttributes(target));
+        } catch (AccessDeniedException denied) {
+            throw explainDenied(denied, parent);
+        }
         hardenOrDeleteAndThrow(target);
         return target;
     }
@@ -130,7 +149,12 @@ public final class PrivateLocalStorage {
      */
     public static Path createPrivateTempFile(Path directory, String prefix, String suffix) throws IOException {
         Path parent = ensurePrivateDirectory(directory);
-        Path temporary = Files.createTempFile(parent, prefix, suffix, privateFileAttributes(parent));
+        Path temporary;
+        try {
+            temporary = Files.createTempFile(parent, prefix, suffix, privateFileAttributes(parent));
+        } catch (AccessDeniedException denied) {
+            throw explainDenied(denied, parent);
+        }
         hardenOrDeleteAndThrow(temporary);
         return temporary;
     }
@@ -142,7 +166,12 @@ public final class PrivateLocalStorage {
      */
     public static Path createPrivateTempDirectory(Path parent, String prefix) throws IOException {
         Path root = ensurePrivateDirectory(parent);
-        Path temporary = Files.createTempDirectory(root, prefix, privateDirectoryAttributes(root));
+        Path temporary;
+        try {
+            temporary = Files.createTempDirectory(root, prefix, privateDirectoryAttributes(root));
+        } catch (AccessDeniedException denied) {
+            throw explainDenied(denied, root);
+        }
         try {
             hardenDirectory(temporary);
             verifyPrivateDirectory(temporary);
@@ -181,6 +210,8 @@ public final class PrivateLocalStorage {
         try (OutputStream output = Files.newOutputStream(target,
                 StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS)) {
             output.write(content);
+        } catch (AccessDeniedException denied) {
+            throw explainDenied(denied, target, target.getParent());
         }
         return target;
     }
@@ -250,6 +281,8 @@ public final class PrivateLocalStorage {
         boolean created = true;
         try {
             Files.createDirectory(target, privateDirectoryAttributes(target));
+        } catch (AccessDeniedException denied) {
+            throw explainDenied(denied, parent);
         } catch (FileAlreadyExistsException concurrentlyCreated) {
             // A regular file occupying the name is not a lost race: it is refused in the same family
             // Files.createDirectories uses, without naming the path. A link or a special object falls
@@ -295,7 +328,7 @@ public final class PrivateLocalStorage {
             throws IOException {
         BasicFileAttributes attributes = readAttributesNoFollow(target);
         if (attributes.isSymbolicLink() || attributes.isOther()) {
-            throw new IOException("private storage path must not be a symbolic link or reparse/special object: " + target);
+            throw new IOException("private storage path must not be a symbolic link or reparse/special object");
         }
         if (supportsPosix(target)) {
             Set<PosixFilePermission> actual = Files.getPosixFilePermissions(target, LinkOption.NOFOLLOW_LINKS);
@@ -305,9 +338,36 @@ public final class PrivateLocalStorage {
         AclFileAttributeView acl = aclView(target);
         if (acl == null) throw unsupportedFilesystem(target);
         UserPrincipal owner = Files.getOwner(target, LinkOption.NOFOLLOW_LINKS);
-        // The owner entry of a directory is inheritable: whatever any process of the owner creates in it
-        // (a sandboxed provider writing its artifact, a tool unpacking an archive) is owner-only too,
-        // instead of falling back to the default ACL of the creating process. Still no other principal.
+        List<AclEntry> current = acl.getAcl();
+        List<AclEntry> desired = ownerOnlyAcl(current, owner, directory);
+        String key = target.toString();
+        if (!current.equals(desired)) {
+            try {
+                acl.setAcl(desired);
+            } catch (AccessDeniedException denied) {
+                throw explainDenied(denied, current);
+            }
+            PROTECTED_LOCATIONS.remove(key);
+        }
+        if (!PROTECTED_LOCATIONS.contains(key)) {
+            CAPABILITY_PROBE.get().protectFromInheritance(target);
+            rememberProtected(key);
+        }
+    }
+
+    /**
+     * The DACL a private location must have: every DENY entry it already carries (kept ahead of the
+     * ALLOW entry, in their original order, inherited ones included), then the owner's entry.
+     *
+     * <p>The owner entry of a directory is inheritable: whatever any process of the owner creates in it
+     * (a sandboxed provider writing its artifact, a tool unpacking an archive) is owner-only too,
+     * instead of falling back to the default ACL of the creating process. Still no other principal.</p>
+     */
+    private static List<AclEntry> ownerOnlyAcl(List<AclEntry> current, UserPrincipal owner, boolean directory) {
+        List<AclEntry> desired = new ArrayList<>();
+        for (AclEntry entry : current) {
+            if (entry.type() == AclEntryType.DENY) desired.add(entry);
+        }
         AclEntry.Builder entry = AclEntry.newBuilder()
                 .setType(AclEntryType.ALLOW)
                 .setPrincipal(owner)
@@ -315,7 +375,71 @@ public final class PrivateLocalStorage {
         if (directory) {
             entry.setFlags(AclEntryFlag.FILE_INHERIT, AclEntryFlag.DIRECTORY_INHERIT);
         }
-        acl.setAcl(List.of(entry.build()));
+        desired.add(entry.build());
+        return List.copyOf(desired);
+    }
+
+    // ------------------------------------------------------------ explicit deny entries (Windows)
+
+    private static final String WRITE_PROTECTED_MESSAGE =
+            "private storage is write-protected by an explicit deny entry; MINOS does not remove it";
+
+    private static final Set<AclEntryPermission> WRITE_RIGHTS = EnumSet.of(
+            AclEntryPermission.WRITE_DATA,
+            AclEntryPermission.APPEND_DATA,
+            AclEntryPermission.DELETE,
+            AclEntryPermission.DELETE_CHILD,
+            AclEntryPermission.WRITE_ATTRIBUTES,
+            AclEntryPermission.WRITE_NAMED_ATTRS,
+            AclEntryPermission.WRITE_ACL);
+
+    /**
+     * The failure for an access-denied error on a location that carries an explicit DENY entry: MINOS
+     * says why it cannot write and does not name the path. The original error, which does name it, is
+     * deliberately not chained.
+     */
+    private static IOException explainDenied(AccessDeniedException denied, List<AclEntry> aclOfTheLocation) {
+        return carriesWriteDeny(aclOfTheLocation) ? new IOException(WRITE_PROTECTED_MESSAGE) : denied;
+    }
+
+    private static boolean carriesWriteDeny(List<AclEntry> acl) {
+        for (AclEntry entry : acl) {
+            if (entry.type() != AclEntryType.DENY) continue;
+            for (AclEntryPermission right : entry.permissions()) {
+                if (WRITE_RIGHTS.contains(right)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** Rethrows {@code denied} as the write-protected failure when any of {@code locations} carries a write DENY. */
+    private static IOException explainDenied(AccessDeniedException denied, Path... locations) {
+        for (Path location : locations) {
+            if (location == null) continue;
+            AclFileAttributeView view = aclView(location);
+            if (view == null) continue;
+            try {
+                if (carriesWriteDeny(view.getAcl())) return new IOException(WRITE_PROTECTED_MESSAGE);
+            } catch (IOException unreadable) {
+                // Nothing more precise than the original refusal can be said.
+            }
+        }
+        return denied;
+    }
+
+    // ------------------------------------------------------------ protected DACLs (Windows)
+
+    /**
+     * Locations this process already made inheritance-proof. A pure optimisation: it spares a process
+     * boundary per call on a location hardened earlier in this JVM, and a DACL that no longer equals the
+     * expected one is rewritten and protected again whatever this set says.
+     */
+    private static final Set<String> PROTECTED_LOCATIONS = ConcurrentHashMap.newKeySet();
+    private static final int MAX_REMEMBERED_LOCATIONS = 8_192;
+
+    private static void rememberProtected(String key) {
+        if (PROTECTED_LOCATIONS.size() >= MAX_REMEMBERED_LOCATIONS) PROTECTED_LOCATIONS.clear();
+        PROTECTED_LOCATIONS.add(key);
     }
 
     private static void verifyPrivacy(Path target) throws IOException {
@@ -402,6 +526,54 @@ public final class PrivateLocalStorage {
         return CAPABILITY_PROBE.get().supportsPosix(target);
     }
 
+    /**
+     * Switches inheritance off on a Windows DACL. Java writes a DACL ({@link AclFileAttributeView#setAcl})
+     * but cannot mark it protected, so an inheritable grant added later to a parent would flow back
+     * into the location (measured: {@code icacls <parent> /grant Everyone:(OI)(CI)R} reached every
+     * hardened child). {@code icacls /inheritance:d} is the smallest reliable way to set that bit; it runs
+     * without a shell, by absolute path, on a path checked beforehand. It is {@code :d}, not {@code :r}:
+     * a file just created in a private directory holds nothing but an inherited owner entry, which Java
+     * reads back as equal to the expected one; {@code :r} would drop it and leave an empty DACL (measured),
+     * {@code :d} turns it into an explicit entry.
+     */
+    private static final class WindowsDacl {
+        private static final long TIMEOUT_SECONDS = 30L;
+
+        private WindowsDacl() {
+        }
+
+        static void protect(Path target) throws IOException {
+            if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) return;
+            String path = target.toString();
+            if (!target.isAbsolute() || path.chars().anyMatch(c -> c < 0x20 || "*?\"<>|".indexOf(c) >= 0)) {
+                throw new IOException("cannot protect private storage from inheritance: unsupported path");
+            }
+            String systemRoot = System.getenv("SystemRoot");
+            if (systemRoot == null || systemRoot.isBlank()) {
+                throw new IOException("cannot protect private storage from inheritance: Windows directory unknown");
+            }
+            Process process = new ProcessBuilder(
+                    Path.of(systemRoot, "System32", "icacls.exe").toString(), path, "/inheritance:d", "/L", "/q")
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            try {
+                if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                    throw new IOException("cannot protect private storage from inheritance: timed out");
+                }
+            } catch (InterruptedException interrupted) {
+                process.destroyForcibly();
+                Thread.currentThread().interrupt();
+                throw new IOException("cannot protect private storage from inheritance: interrupted");
+            }
+            if (process.exitValue() != 0) {
+                throw new IOException("cannot protect private storage from inheritance (exit "
+                        + process.exitValue() + ")");
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- fault-injection seam (tests)
 
     /**
@@ -422,6 +594,15 @@ public final class PrivateLocalStorage {
 
         AclFileAttributeView aclView(Path target);
 
+        /**
+         * Makes the DACL of {@code target}, which already holds its final explicit entries, stop
+         * inheriting from its parent. Only a platform whose inheritance Java cannot switch off through
+         * {@link AclFileAttributeView} has anything to do here: the default does nothing, which is what a
+         * test double wants.
+         */
+        default void protectFromInheritance(Path target) throws IOException {
+        }
+
         static CapabilityProbe real() {
             return new CapabilityProbe() {
                 @Override
@@ -432,6 +613,11 @@ public final class PrivateLocalStorage {
                 @Override
                 public AclFileAttributeView aclView(Path target) {
                     return Files.getFileAttributeView(target, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+                }
+
+                @Override
+                public void protectFromInheritance(Path target) throws IOException {
+                    WindowsDacl.protect(target);
                 }
             };
         }
@@ -468,6 +654,7 @@ public final class PrivateLocalStorage {
 
     /** Test-only: forgets which locations this process already protected, as a fresh process would. */
     static void forgetProtectedLocationsForTesting() {
+        PROTECTED_LOCATIONS.clear();
     }
 
     private static void requireTestRuntime() {
