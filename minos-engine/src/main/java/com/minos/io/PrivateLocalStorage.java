@@ -143,6 +143,7 @@ public final class PrivateLocalStorage {
         } catch (AccessDeniedException denied) {
             throw explainDenied(denied, parent);
         }
+        forgetProtected(target);
         hardenOrDeleteAndThrow(target);
         return target;
     }
@@ -159,6 +160,7 @@ public final class PrivateLocalStorage {
         } catch (AccessDeniedException denied) {
             throw explainDenied(denied, parent);
         }
+        forgetProtected(temporary);
         hardenOrDeleteAndThrow(temporary);
         return temporary;
     }
@@ -176,6 +178,7 @@ public final class PrivateLocalStorage {
         } catch (AccessDeniedException denied) {
             throw explainDenied(denied, root);
         }
+        forgetProtected(temporary);
         try {
             hardenDirectory(temporary);
             verifyPrivateDirectory(temporary);
@@ -318,6 +321,8 @@ public final class PrivateLocalStorage {
         boolean created = true;
         try {
             Files.createDirectory(target, privateDirectoryAttributes(target));
+            // A new object at a path this process knew is a new object: what was said of the old one is void.
+            forgetProtected(target);
         } catch (AccessDeniedException denied) {
             throw explainDenied(denied, parent);
         } catch (FileAlreadyExistsException concurrentlyCreated) {
@@ -473,6 +478,10 @@ public final class PrivateLocalStorage {
      */
     private static final Set<String> PROTECTED_LOCATIONS = ConcurrentHashMap.newKeySet();
     private static final int MAX_REMEMBERED_LOCATIONS = 8_192;
+
+    private static void forgetProtected(Path target) {
+        PROTECTED_LOCATIONS.remove(target.toString());
+    }
 
     private static void rememberProtected(String key) {
         if (PROTECTED_LOCATIONS.size() >= MAX_REMEMBERED_LOCATIONS) PROTECTED_LOCATIONS.clear();
