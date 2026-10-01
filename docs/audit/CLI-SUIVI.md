@@ -198,7 +198,50 @@ restent strictes ; le point part dans « à traiter plus tard ».
 **Le code 3** garde un seul sens (« résultat partiel : valide pour ce qui a été lu, des entrées ont été écartées et
 comptées ») pour `project list` et la résolution par nom ; la convention est écrite dans `docs/user/cli.md`.
 
-## 6. À traiter plus tard
+## 6. Lot 3 — les consommateurs du code de sortie (Q23)
+
+Balayage du dépôt (`scripts/`, `packaging/`, `docker/`, `.github/workflows/`, `docs/`, `benchmarks/`, `fixtures/`, tous les
+modules Java dont `minos-intellij`, et les tests qui lancent la CLI en processus), cherchant tout appelant qui compare le code de sortie de `minos` à 0
+alors que la commande peut rendre **3**. Seules peuvent le rendre : `project list`, et `inspect <nom>`, `project inspect <nom>`,
+`index-status <nom>` (par **nom**, jamais par UUID). Les homes consultés par ces appelants sont isolés ou neufs : le 3 n'y apparaît que si le registre
+reçoit une entrée illisible ; le seul déclencheur réaliste est la qualification d'une mise à niveau Docker (le candidat B lit le registre
+écrit par le candidat A).
+
+| # | Consommateur | Commande, par nom ? | Traitement | Verdict |
+|---|---|---|---|---|
+| 1 | plugin IntelliJ, `MinosCliClient.resolveProject` | `project list` | n'acceptait que 0 | **corrigé** : `{0, 3}` pour cette commande seule, notification (§ plugin) |
+| 2 | `docker/scripts/mcp-lifecycle.ps1`, action `Admin` (`Compose`) | toute commande, dont `project list`, `inspect <nom>`, `index-status <nom>` | `throw` sur tout code non nul | **corrigé** : `Admin` accepte `{0, 3}` et avertit ; `Install`, `Start`, `Validate`, `Uninstall` gardent tout non-zéro comme un échec |
+| 3 | `docker/scripts/minos-docker.ps1`, `prod-mcp-release.ps1` | relais de #2 | aucun | corrigés par #2 |
+| 4 | `scripts/m29/run-s3.ps1` (l. 205-225) | `project list`, `project inspect`/`index-status m29-s3-fixture` | via #2 | corrigé par #2 |
+| 5 | `scripts/ci/qualify-docker-upgrade.ps1` (l. 271, 303, 309) | `index-status`/`project list` par nom, après mise à niveau | via #2 | corrigé par #2 (workflows `docker-upgrade-qualification`, `release-promotion-gate`) |
+| 6 | `scripts/m29/run-s5.ps1`, `Invoke-AdminJson` (l. 114-138, 186) | `project list`, `index-status m29-s5-polyglot` | `Assert-NativeSuccess` lance sur tout non-zéro, sans passer par #2 | **nommé, non corrigé** : registre neuf, aucun workflow ; latent |
+| 7 | `scripts/m14/validate-local.ps1`, `Invoke-MinosJson` (l. 103-112, 243) | `index-status m14-java` | `throw` sur tout non-zéro | **nommé, non corrigé** : script manuel, home isolé ; latent |
+| 8 | `scripts/m24/run-provider-e2e.py`, `run()` (l. 118-122, 256) | `project inspect m24-<cas>` | `RuntimeError` sur tout non-zéro | **nommé, non corrigé** : home temporaire, hors workflow ; latent |
+| 9 | `scripts/history/m17/run-final.ps1` (l. 68-85, 251, 253) | `project inspect m17-*` | `throw` sur tout non-zéro | **nommé, non corrigé** : historique |
+
+Pourquoi #6 à #9 restent nommés : chacun lance une fois une commande par nom sur un registre qu'il vient de créer, sans workflow qui l'exécute ;
+un correctif de plus dans trois dialectes de script, sans moyen de l'exercer ici, vaut moins que la liste. S'ils reçoivent un jour un 3,
+l'erreur est visible (le script s'arrête), jamais silencieuse.
+
+**Déjà conformes ou sans objet** (vérifiés ligne par ligne) : l'ensemble des autres appels du plugin (identifiants UUID, jamais 3 ;
+`doctor` accepte `{0, 1}`) ; `minos.cmd` et le `minos.cmd` de la distribution (`exit /b %ERRORLEVEL%`, relais sans interprétation) ;
+`MinosLauncher.main` (ne borne pas le code) ; `NexusExportBridgeMain` (`nexus-export` est strict : 0 ou 1) ; `ShadedJarCompositionRootIT`
+(home neuf, `project list` attend 0) ; les tests qui lancent la CLI sur un registre sain ; les scripts qui n'appellent que
+`--version`, `--help`, `doctor`, `tools`, `providers`, `index`, `semantic|hybrid status`, `remote`, `runtime`, `team`, `mcp` (jamais 3) ;
+`minos-mcp`, `minos-api`, `minos-nexus` (aucun consommateur du code ; leurs résolveurs par nom restent stricts) ; les golden de caractérisation
+(le code y est une donnée, aucun ne vaut 3). Aucune documentation n'enchaîne `$LASTEXITCODE` après ces commandes ; les énoncés périmés
+(« seule `project list` rend 3 ») sont corrigés dans `docs/user/cli.md` et `docs/architecture/arc42/08-concepts-transverses.md` (lot 2).
+
+**Non énumérable depuis le dépôt** : les consommateurs externes (NEXUS, scripts des utilisateurs). La convention est écrite dans
+`docs/user/cli.md`, § Codes de sortie, avec le conseil d'accepter 3 pour ces commandes.
+
+**CI du plugin** : `.github/workflows/intellij-plugin.yml` construit et teste le plugin (`gradle test buildPlugin verifyPluginProjectConfiguration
+verifyPluginStructure`, puis `verifyPlugin`, sur Linux ; tests sur Windows) pour toute PR qui touche `minos-intellij/**` **ou `minos-cli/**`** :
+les lots 1 et 2 le déclenchent déjà. Ce n'est pas le workflow `pr-ci.yml` ; si le contrôle de branche ne l'exige pas, un plugin cassé
+pourrait fusionner : l'exiger est une décision de configuration du dépôt, que ce lot n'a pas prise. Gradle n'est pas installé sur le poste
+qui a écrit ce lot : la logique pure du plugin a été exécutée localement avec JUnit, le build Gradle n'a pas été lancé.
+
+## 7. À traiter plus tard
 
 - **Lecture d'un `MINOS_HOME` en lecture seule.** Une commande de lecture ne réussit pas sur un `MINOS_HOME` en
   lecture seule, et ne le pourra pas par le seul câblage : `MinosApplication.open` crée le squelette du stockage, et

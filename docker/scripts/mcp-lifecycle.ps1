@@ -112,14 +112,14 @@ function Resolve-SemanticProvider([string] $Requested) {
     return $Normalized
 }
 
-function Compose([string[]] $Arguments) {
+function Compose([string[]] $Arguments, [int[]] $AcceptedExitCodes = @(0)) {
     # Stdin MUST be a non-terminal pipe here: some invocation contexts (notably an
     # installer's inherited console) leave stdin attached to a handle that satisfies
     # isatty() without any human able to answer it. Compose only prompts interactively
     # ("... Recreate (data will be lost)?") when it believes stdin is a real terminal;
     # forcing it through a PowerShell pipe guarantees non-interactive, fail-fast behavior.
     $null | & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($Arguments -join ' ')" }
+    if ($LASTEXITCODE -notin $AcceptedExitCodes) { throw "docker compose failed (exit $LASTEXITCODE): $($Arguments -join ' ')" }
 }
 
 function Invoke-DockerAllowFailure([string[]] $Arguments) {
@@ -318,7 +318,16 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Require-Installed
         if ($null -eq $MinosArguments -or $MinosArguments.Count -eq 0) { throw '-MinosArguments is required for Admin.' }
         $ComposeArguments = @('run', '--rm', '--no-deps', 'minos-admin') + $MinosArguments
-        Compose $ComposeArguments
+        # Exit 3 is a MINOS partial result (some registry entries are unreadable): the output printed above is valid
+        # for the entries that could be read, so it is not a failure of the admin command. Every other Compose call
+        # (Install, Start, Validate, Uninstall) keeps treating any non-zero code as a failure.
+        Compose $ComposeArguments -AcceptedExitCodes @(0, 3)
+        if ($LASTEXITCODE -eq 3) {
+            Write-Warning 'MINOS exited 3 (partial result): some registry entries are unreadable and were counted, not used. Run `project list` to see them.'
+            # The partial result is reported by the warning; do not leave a stale 3 for an in-process caller that reads
+            # $LASTEXITCODE after this action (qualify-docker-upgrade.ps1, run-s3.ps1, minos-docker.ps1).
+            $global:LASTEXITCODE = 0
+        }
     }
     'Status' {
         Require-Installed

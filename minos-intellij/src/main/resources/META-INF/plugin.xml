@@ -15,6 +15,7 @@
         <toolWindow id="MINOS"
                     anchor="right"
                     factoryClass="com.minos.intellij.ui.MinosToolWindowFactory"/>
+        <notificationGroup id="MINOS" displayType="BALLOON"/>
         <projectConfigurable id="com.minos.codeintelligence.settings"
                              parentId="tools"
                              nonDefaultProject="true"
