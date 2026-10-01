@@ -11,7 +11,7 @@ S9 et S12 sont les deux seuls qui donnent quelque chose à un attaquant aujourd'
 |---|---|---|---|---|
 | 1 | `sec/s9-git` | S9 | #317 | brouillon, CI en cours |
 | 2 | `sec/s12-audit` | S12 | #318 | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
-| 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | à ouvrir | **code terminé**, non poussé ; gate `check-private-io` |
+| 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | PR du lot 3 | **code terminé**, non poussé ; gate `check-private-io` |
 | 4 | `sec/s8-gitignore` | S8 | – | – |
 | 5 | `sec/s7-s15-windows` | S7, S15 | – | – |
 
@@ -326,6 +326,12 @@ et non construit ; les sandbox `bubblewrap`/cgroup (Linux seulement) n'ont tourn
 ### Gates à texte littéral du dossier `quality/` (orchestrateur, après fusion des lots 1-2)
 
 Trois scripts de `scripts/quality/` que `impl-sec` n'avait pas rejoués exigeaient du texte que les primitives remplacent : `FileLock` dans `FileHostedControlPlaneStore` et `JGitRemoteRepositoryMaterializer` devient `BoundedFileLease` ; `Files.isSymbolicLink` dans `RuntimeObservationEnvelopeCodec` devient `ConfinedFileOpener.openRegularFileNoFollow`. L'exigence reste du même ordre (le verrou fichier et le non-suivi de lien sont toujours gardés, par la primitive nommée). Tous les `check-*.py` de `remediation/`, `quality/` et `architecture/` sont verts après ce changement, hors `check-jacoco.py` (rapports JaCoCo requis).
+
+### Résultat de fin de lot 3 (orchestrateur, 2026-10-01, Windows 10, JDK 24)
+
+- `./mvnw -B clean verify` après les corrections de `verif-sec` : **BUILD SUCCESS**, 15 modules, 1 910 tests, 0 échec, 54 ignorés (tous antérieurs ; ceux ajoutés par le lot : 0 hors `@EnabledOnOs(WINDOWS)`).
+- Revue `verif-sec` : aucun bloquant ; G1 (contournements du gate), G2 (exemptions trop larges), S6a (`compact` non protégé après un run réussi) et M1 (secret absolu par lien feuille) corrigés, voir ci-dessus ; G3/G4/W1/R1/R2/S6b/A1/E1/T1 consignés comme remarques ou en « à traiter plus tard ».
+- Tous les `check-*.py` rejoués verts (hors `check-jacoco.py`) ; golden `characterization/` inchangés.
 
 ## À traiter plus tard
 
