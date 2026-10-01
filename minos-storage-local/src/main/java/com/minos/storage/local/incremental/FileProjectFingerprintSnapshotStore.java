@@ -1,5 +1,7 @@
 package com.minos.storage.local.incremental;
 
+import com.minos.io.PrivateLocalStorage;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.incremental.BuildDescriptorPolicy;
 import com.minos.incremental.FileFingerprint;
 import com.minos.incremental.ProjectFingerprint;
@@ -103,7 +105,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         );
         Path projectDirectory = projectDirectory(projectId);
         DurableAtomicFile.ensureDirectory(projectDirectory, "fingerprint project directory");
-        Path temporary = Files.createTempFile(projectDirectory, ".fingerprint-", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(projectDirectory, ".fingerprint-", ".tmp");
         try {
             // The encoding is the expensive part and only touches this call's temporary file: it runs
             // before the lease. The existence check and the publication must not be separated by
@@ -178,7 +180,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
             throw new IOException("fingerprint snapshot id hash collision");
         }
         String checksum = checksum(snapshotFile);
-        Path temporaryPointer = Files.createTempFile(projectDirectory, ".active-", ".tmp");
+        Path temporaryPointer = PrivateLocalStorage.createPrivateTempFile(projectDirectory, ".active-", ".tmp");
         try {
             writePointer(temporaryPointer, new ActivePointer(
                     indexSnapshotId,
@@ -403,7 +405,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
             throws IOException {
         requireBoundedRegularFile(file, "fingerprint snapshot", MAX_SNAPSHOT_BYTES);
         verifyFileNameChecksum(file);
-        try (InputStream fileInput = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+        try (InputStream fileInput = ConfinedFileOpener.openRegularFileNoFollow(file);
              BoundedInputStream boundedInput = new BoundedInputStream(
                      fileInput, MAX_SNAPSHOT_BYTES, "fingerprint snapshot");
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
@@ -533,7 +535,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     private static ActivePointer readPointer(Path file) throws IOException {
         requireBoundedRegularFile(file, FINGERPRINT_ACTIVE_POINTER_LABEL, MAX_POINTER_BYTES);
-        try (InputStream fileInput = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+        try (InputStream fileInput = ConfinedFileOpener.openRegularFileNoFollow(file);
              BoundedInputStream boundedInput = new BoundedInputStream(
                      fileInput, MAX_POINTER_BYTES, FINGERPRINT_ACTIVE_POINTER_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
@@ -719,7 +721,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static String checksum(Path file) throws IOException {
         requireBoundedRegularFile(file, "fingerprint snapshot", MAX_SNAPSHOT_BYTES);
         MessageDigest digest = Sha256.newDigest();
-        try (InputStream fileInput = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+        try (InputStream fileInput = ConfinedFileOpener.openRegularFileNoFollow(file);
              BoundedInputStream boundedInput = new BoundedInputStream(
                      fileInput, MAX_SNAPSHOT_BYTES, "fingerprint snapshot checksum");
              InputStream input = new DigestInputStream(boundedInput, digest)) {

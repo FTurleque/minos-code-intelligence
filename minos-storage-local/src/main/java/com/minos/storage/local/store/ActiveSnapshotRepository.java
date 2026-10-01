@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.io.ConfinedFileOpener;
 import com.minos.store.SnapshotDescriptor;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -85,7 +86,7 @@ public final class ActiveSnapshotRepository {
 
     private static SnapshotDescriptor readPointer(Path file) throws IOException {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)
+                ConfinedFileOpener.openRegularFileNoFollow(file)
         ))) {
             int version = SnapshotBinaryCodecSupport.readHeaderVersion(input, POINTER_MAGIC, "active snapshot pointer");
             if (version != FORMAT_VERSION_V1 && version != FORMAT_VERSION_V2 && version != FORMAT_VERSION_V3) {

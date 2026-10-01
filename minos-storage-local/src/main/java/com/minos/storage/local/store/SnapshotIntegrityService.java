@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.Sha256;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.SnapshotDescriptor;
@@ -27,7 +28,7 @@ public final class SnapshotIntegrityService {
         }
         MessageDigest digest = Sha256.newDigest();
         try (InputStream input = new DigestInputStream(
-                Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS), digest)) {
+                ConfinedFileOpener.openRegularFileNoFollow(file), digest)) {
             input.transferTo(OutputStream.nullOutputStream());
         }
         return HEX.formatHex(digest.digest());

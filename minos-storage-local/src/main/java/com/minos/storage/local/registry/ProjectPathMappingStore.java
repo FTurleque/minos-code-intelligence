@@ -1,5 +1,6 @@
 package com.minos.storage.local.registry;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
 import com.minos.registry.ProjectPathMapping;
@@ -80,7 +81,7 @@ public final class ProjectPathMappingStore implements ProjectPathMappings {
         properties.setProperty("formatVersion", Integer.toString(CURRENT_FORMAT_VERSION));
         properties.setProperty("hostRoot", mapping.hostRoot());
         properties.setProperty("containerRoot", mapping.containerRoot());
-        Path temporary = Files.createTempFile(runtimeDirectory, FILE_NAME + ".", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(runtimeDirectory, FILE_NAME + ".", ".tmp");
         try {
             try (Writer writer = Files.newBufferedWriter(
                     temporary, StandardCharsets.UTF_8,

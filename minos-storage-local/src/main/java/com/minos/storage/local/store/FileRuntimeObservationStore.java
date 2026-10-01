@@ -1,5 +1,7 @@
 package com.minos.storage.local.store;
 
+import com.minos.io.PrivateLocalStorage;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.dynamic.CorrelatedRuntimeObservation;
 import com.minos.dynamic.CorrelatedRuntimeSession;
 import com.minos.dynamic.RuntimeObservation;
@@ -108,7 +110,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
                 throw new IOException("runtime observation session capacity reached for project " + projectId);
             }
             long currentBytes = totalBytes(current);
-            Path temporary = Files.createTempFile(project, ".runtime-session-", ".tmp");
+            Path temporary = PrivateLocalStorage.createPrivateTempFile(project, ".runtime-session-", ".tmp");
             try {
                 write(temporary, session);
                 long size = Files.size(temporary);
@@ -179,7 +181,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         long size = Files.size(file);
         if (size < 1L || size > maxSessionBytes) throw new IOException("persisted runtime session size is invalid");
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
+                ConfinedFileOpener.openRegularFileNoFollow(file)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid runtime session magic");
             int version = input.readInt();
             if (version != VERSION) throw new IOException("unsupported runtime session version: " + version);
@@ -260,7 +262,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     private static CorrelatedRuntimeSession read(Path file) throws IOException {
         requireRegularSessionFile(file);
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
+                ConfinedFileOpener.openRegularFileNoFollow(file)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid runtime session magic");
             int version = input.readInt();
             if (version != VERSION) throw new IOException("unsupported runtime session version: " + version);
@@ -467,7 +469,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     private static String sha256(Path file) throws IOException {
         requireRegularSessionFile(file);
         MessageDigest digest = Sha256.newDigest();
-        try (var input = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+        try (var input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = input.read(buffer)) >= 0) {

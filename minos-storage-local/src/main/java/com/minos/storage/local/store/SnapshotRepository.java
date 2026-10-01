@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.DurableAtomicFile;
 
 import java.io.IOException;
@@ -38,11 +39,11 @@ public final class SnapshotRepository {
     }
 
     public Path createTemporarySnapshot(UUID projectId) throws IOException {
-        return Files.createTempFile(ensureProjectDirectory(projectId), ".snapshot-", ".tmp");
+        return PrivateLocalStorage.createPrivateTempFile(ensureProjectDirectory(projectId), ".snapshot-", ".tmp");
     }
 
     public Path createTemporaryPointer(UUID projectId) throws IOException {
-        return Files.createTempFile(ensureProjectDirectory(projectId), ".active-", ".tmp");
+        return PrivateLocalStorage.createPrivateTempFile(ensureProjectDirectory(projectId), ".active-", ".tmp");
     }
 
     public Path publishSnapshot(UUID projectId, String fileName, Path temporary) throws IOException {
