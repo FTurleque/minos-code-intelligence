@@ -66,6 +66,8 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
             // A mutation stays strict: it cannot know whether the unreadable entry is the one it was about to
             // overwrite. It refuses, and says why instead of surfacing a raw read failure (Q24).
             if (Thread.currentThread().isInterrupted()) throw failure;
+            // A path that is not a directory is its own failure, whatever the state of the registry.
+            if (!Files.isDirectory(rootPath)) throw failure;
             Optional<UnreadableRegistryException> explained = UnreadableRegistryException.explaining(registry,
                     "the uniqueness of the registration cannot be guaranteed");
             if (explained.isEmpty()) throw failure;

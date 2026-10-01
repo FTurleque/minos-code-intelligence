@@ -130,6 +130,16 @@ class CliCommandSupportTest {
     }
 
     @Test
+    void aFailureMessageNeverCarriesTheControlSequencesOfADamagedFile() {
+        // A message may copy a value read from a damaged file: ESC, BEL and bidirectional marks must not reach a terminal.
+        String message = CliCommandSupport.failureMessage(
+                new IllegalStateException("bad value \u001b[2Jevil\u0007 and ‮flipped"));
+
+        assertTrue(message.chars().noneMatch(value -> Character.isISOControl(value) || value == 0x202e), message);
+        assertTrue(message.contains("evil"), "the text stays readable: " + message);
+    }
+
+    @Test
     void unwrapRuntimeKeepsCheckedFailuresAndCauselessRuntimeFailures() {
         IOException checked = new IOException("checked", new IllegalStateException("cause"));
         assertEquals(checked, CliCommandSupport.unwrapRuntime(checked));
