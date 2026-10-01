@@ -110,6 +110,15 @@ Correction : installer/pointer `JAVA_HOME` (ou la variable concernée) vers une 
 
 Le périmètre M14 initial qualifie le provider Java sur Maven. Un projet hors de ce périmètre doit rester explicitement non couvert plutôt que recevoir une fausse garantie.
 
+## Windows : « private storage is write-protected by an explicit deny entry »
+
+MINOS ne retire jamais un refus (ACE `DENY`) posé par un administrateur sur `MINOS_HOME` ou sur un de ses sous-répertoires : si ce
+refus l'empêche d'écrire, la commande échoue en le disant, sans chemin dans le message. Un `MINOS_HOME` protégé en écriture fait
+aujourd'hui échouer **même les commandes de lecture** (`project list`, `doctor`…) : une commande de lecture ouvre encore le stockage en
+écriture (suivi sous la référence R12, non fermée). Pour lever la protection, retirez le refus vous-même :
+`icacls "<MINOS_HOME>" /remove:d <compte> /T` (un refus hérité d'un parent est devenu explicite sur les objets que MINOS a durcis,
+d'où `/T`).
+
 ## `scip-typescript` est `BLOCKED`
 
 Vérifier :
