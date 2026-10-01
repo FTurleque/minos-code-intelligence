@@ -224,6 +224,25 @@ class PrivateLocalStorageWindowsAclTest {
         assertTrue(isDaclProtected(home));
     }
 
+    @Test
+    void aConditionalEntryInheritedFromTheParentIsNotKeptByHardening() throws Exception {
+        // Java's getAcl() does not see conditional (XA) entries: a child that inherits one looks "already
+        // right" to it, and turning inheritance off would make the hidden entry explicit and permanent.
+        Path parent = Files.createDirectory(temporary.resolve("conditional-parent"));
+        String sid = currentUserSid();
+        setSddl(parent, "D:PAI(A;OICI;FA;;;" + sid + ")(XA;OICI;0x1301bf;;;WD;(Member_of {SID(WD)}))");
+        Path child = Files.createDirectory(parent.resolve("child"));
+        Path file = Files.writeString(parent.resolve("file.txt"), "x");
+        assertTrue(rawSddl(child).contains("XA;"), "fixture: the child inherits the conditional entry");
+
+        PrivateLocalStorage.ensurePrivateDirectory(child);
+        PrivateLocalStorage.hardenExistingFile(file);
+
+        assertFalse(rawSddl(child).contains("XA;"), "the conditional entry must not survive: " + rawSddl(child));
+        assertFalse(rawSddl(file).contains("XA;"), "the conditional entry must not survive: " + rawSddl(file));
+        assertTrue(isDaclProtected(child));
+    }
+
     // ------------------------------------------------------------------------------ helpers
 
     private static boolean hasWriteDenyForOwner(Path path) throws IOException {
@@ -261,6 +280,33 @@ class PrivateLocalStorageWindowsAclTest {
         Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
         String output = new String(process.getInputStream().readAllBytes(), Charset.defaultCharset());
         assertEquals(0, process.waitFor(), "icacls failed: " + output);
+    }
+
+    private static void setSddl(Path path, String sddl) throws Exception {
+        String script = "$a = New-Object System.Security.AccessControl.DirectorySecurity;"
+                + "$a.SetSecurityDescriptorSddlForm('" + sddl + "');"
+                + "Set-Acl -LiteralPath '" + path + "' -AclObject $a";
+        Process process = new ProcessBuilder(
+                Path.of(System.getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe").toString(),
+                "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
+                .redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), Charset.defaultCharset());
+        assertEquals(0, process.waitFor(), "Set-Acl failed: " + output);
+    }
+
+    private static String rawSddl(Path path) throws Exception {
+        Path saved = Files.createTempFile("minos-sddl-", ".txt");
+        try {
+            Process process = new ProcessBuilder(
+                    Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString(),
+                    path.toString(), "/save", saved.toString(), "/q")
+                    .redirectErrorStream(true).start();
+            process.getInputStream().readAllBytes();
+            assertEquals(0, process.waitFor());
+            return new String(Files.readAllBytes(saved), java.nio.charset.StandardCharsets.UTF_16LE);
+        } finally {
+            Files.deleteIfExists(saved);
+        }
     }
 
     /** Reads the protected-DACL bit the way an administrator would: from the SDDL {@code icacls /save} writes. */
