@@ -158,6 +158,17 @@ class PrivateLocalStorageWindowsAclTest {
         assertTrue(isDaclProtected(home));
     }
 
+    @Test
+    void anObjectWeCreatedIsOwnedByTheCurrentUserAndASystemOneIsNot() throws Exception {
+        Path ours = Files.createDirectory(temporary.resolve("ours"));
+
+        PrivateLocalStorage.verifyOwnedByCurrentUser(ours);
+
+        IOException refusal = assertThrows(IOException.class,
+                () -> PrivateLocalStorage.verifyOwnedByCurrentUser(Path.of(System.getenv("SystemRoot"), "System32")));
+        assertFalse(refusal.getMessage().contains("System32"), "no path in the message");
+    }
+
     // ------------------------------------------------------------------------------ helpers
 
     private static boolean hasWriteDenyForOwner(Path path) throws IOException {

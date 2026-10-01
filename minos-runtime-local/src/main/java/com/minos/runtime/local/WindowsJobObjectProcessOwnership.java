@@ -39,8 +39,9 @@ final class WindowsJobObjectProcessOwnership {
         try {
             // The launcher is a script that gets executed: it lives outside MINOS_HOME (see SandboxLauncherScript).
             SandboxLauncherScript.removeLegacyCopy(minosHome, LAUNCHER_NAME);
-            return Optional.of(new WindowsJobObjectProcessOwnership(
-                    powershell.orElseThrow(), SandboxLauncherScript.materialize(LAUNCHER_NAME)));
+            SandboxLauncherScript launcher = SandboxLauncherScript.materialize(LAUNCHER_NAME);
+            SandboxLauncherScript.requireOutsideMinosHome(launcher.file(), minosHome);
+            return Optional.of(new WindowsJobObjectProcessOwnership(powershell.orElseThrow(), launcher));
         } catch (IOException failure) {
             // Not just "PowerShell missing": this can also mean the launcher could not be installed
             // as owner-only (e.g. the private-storage filesystem could not enforce or verify

@@ -252,6 +252,39 @@ public final class PrivateLocalStorage {
         verifyPrivacy(target);
     }
 
+    /**
+     * Fails unless {@code path} is owned by the principal this process creates new objects as. The
+     * private-storage checks compare an ACL with the <em>actual</em> owner of the object, which is the
+     * right question for a location MINOS made, and the wrong one for a location it merely found: an
+     * object owned by another principal always passes "owner only", because the owner is that principal,
+     * and keeps the right to rewrite its own ACL whatever MINOS then writes into it. Call this on
+     * anything that pre-exists, before hardening or trusting it.
+     *
+     * <p>The reference identity is not read from a name or a property (both can be set from outside): it
+     * is the owner the operating system gives a file this process creates, once per JVM.</p>
+     */
+    public static void verifyOwnedByCurrentUser(Path path) throws IOException {
+        Path target = Objects.requireNonNull(path, "path").toAbsolutePath().normalize();
+        UserPrincipal owner = Files.getOwner(target, LinkOption.NOFOLLOW_LINKS);
+        if (!owner.equals(currentOwner())) {
+            throw new IOException("private storage location is owned by another principal");
+        }
+    }
+
+    private static volatile UserPrincipal currentOwner;
+
+    private static UserPrincipal currentOwner() throws IOException {
+        UserPrincipal known = currentOwner;
+        if (known != null) return known;
+        Path probe = Files.createTempFile("minos-owner-", ".probe");
+        try {
+            currentOwner = Files.getOwner(probe, LinkOption.NOFOLLOW_LINKS);
+            return currentOwner;
+        } finally {
+            Files.deleteIfExists(probe);
+        }
+    }
+
     public static void verifyPrivateFile(Path file) throws IOException {
         Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
         requireType(target, false);
