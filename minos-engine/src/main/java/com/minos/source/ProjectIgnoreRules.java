@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -48,6 +48,7 @@ public final class ProjectIgnoreRules {
     private final List<IgnoreRule> gitRules;
     private final List<IgnoreRule> minosRules;
     private final int discardedRules;
+    private final AtomicInteger exhaustedEvaluations = new AtomicInteger();
 
     private ProjectIgnoreRules(List<IgnoreRule> gitRules, List<IgnoreRule> minosRules, int discardedRules) {
         this.gitRules = List.copyOf(gitRules);
@@ -80,20 +81,31 @@ public final class ProjectIgnoreRules {
         return discardedRules;
     }
 
-    /** Rules disabled so far because matching one path exceeded the step budget. */
-    public int exhaustedRuleCount() {
-        int count = 0;
-        for (IgnoreRule rule : gitRules) if (rule.exhausted().get()) count++;
-        for (IgnoreRule rule : minosRules) if (rule.exhausted().get()) count++;
-        return count;
+    /**
+     * Evaluations (one path against the rules) that exceeded the step budget so far. Such a path is
+     * treated as ignored, never indexed on a guess: the verdict belongs to that path alone and depends
+     * on neither the order of evaluation nor on any earlier path.
+     */
+    public int exhaustedEvaluationCount() {
+        return exhaustedEvaluations.get();
     }
 
     public boolean isIgnored(Path relativePath, boolean directory) {
         Path normalized = normalizeRelative(relativePath);
         if (isHardIgnoredNormalized(normalized)) return true;
         String portablePath = portable(normalized);
-        return evaluate(gitRules, portablePath, directory)
-                || evaluate(minosRules, portablePath, directory);
+        try {
+            return evaluate(gitRules, portablePath, directory)
+                    || evaluate(minosRules, portablePath, directory);
+        } catch (MatchBudgetExceeded exceeded) {
+            // Fail closed for this path only: a rule that cannot be evaluated within its budget makes the
+            // path "not indexable", never "not excluded". One warning per instance, counts only.
+            if (exhaustedEvaluations.incrementAndGet() == 1) {
+                LOGGER.log(System.Logger.Level.WARNING, "MINOS could not evaluate a project ignore rule within its "
+                        + "budget and treats the affected paths as ignored");
+            }
+            return true;
+        }
     }
 
     public boolean isHardIgnored(Path relativePath) {
@@ -188,7 +200,7 @@ public final class ProjectIgnoreRules {
         Pattern effectivePattern = directoryOnly
                 ? Pattern.compile(baseExpression + "(?:/.*)?$")
                 : directPattern;
-        return new IgnoreRule(effectivePattern, directPattern, negated, directoryOnly, new AtomicBoolean());
+        return new IgnoreRule(effectivePattern, directPattern, negated, directoryOnly);
     }
 
     private static String globToRegex(String glob) {
@@ -260,14 +272,18 @@ public final class ProjectIgnoreRules {
         boolean negated = characterClass.startsWith("!") || characterClass.startsWith("^");
         if (negated) characterClass = characterClass.substring(1);
         if (characterClass.isEmpty()) throw new IllegalArgumentException("empty character class");
+        // POSIX classes ("[[:alpha:]]") are not supported: refuse the rule rather than compile a wrong one.
+        if (characterClass.startsWith("[:")) throw new IllegalArgumentException("unsupported POSIX character class");
         // Every class member is emitted escaped: the content is untrusted input, never regex syntax
-        // ("[[]", "[a&&b]"), and a reversed range ("[z-a]") makes the rule unusable.
+        // ("[[]", "[a&&b]"), and a reversed range ("[z-a]") makes the rule unusable. Members are code
+        // points, so a range between characters outside the Basic Multilingual Plane stays valid.
         regex.append(negated ? "[^" : "[");
+        int[] members = characterClass.codePoints().toArray();
         int position = 0;
-        while (position < characterClass.length()) {
-            char first = characterClass.charAt(position);
-            if (position + 2 < characterClass.length() && characterClass.charAt(position + 1) == '-') {
-                char last = characterClass.charAt(position + 2);
+        while (position < members.length) {
+            int first = members[position];
+            if (position + 2 < members.length && members[position + 1] == '-') {
+                int last = members[position + 2];
                 if (first > last) throw new IllegalArgumentException("reversed character range");
                 appendClassMember(regex, first);
                 regex.append('-');
@@ -282,9 +298,9 @@ public final class ProjectIgnoreRules {
         return closing + 1;
     }
 
-    private static void appendClassMember(StringBuilder regex, char value) {
+    private static void appendClassMember(StringBuilder regex, int value) {
         if ("[]&^-\\".indexOf(value) >= 0) regex.append('\\');
-        regex.append(value);
+        regex.appendCodePoint(value);
     }
 
     private static void appendRegexLiteral(StringBuilder regex, char value) {
@@ -310,22 +326,14 @@ public final class ProjectIgnoreRules {
             Pattern effectivePattern,
             Pattern directPattern,
             boolean negated,
-            boolean directoryOnly,
-            AtomicBoolean exhausted
+            boolean directoryOnly
     ) {
+        /** @throws MatchBudgetExceeded when matching this path needs more than the step budget */
         private boolean matches(String portablePath, boolean directory) {
-            if (exhausted.get()) return false;
-            try {
-                if (directoryOnly && !directory
-                        && directPattern.matcher(new BudgetedPath(portablePath)).matches()) {
-                    return false;
-                }
-                return effectivePattern.matcher(new BudgetedPath(portablePath)).matches();
-            } catch (MatchBudgetExceeded exceeded) {
-                // Fail closed on the rule, not on the load: it is disabled, counted, and never retried.
-                exhausted.set(true);
+            if (directoryOnly && !directory && directPattern.matcher(new BudgetedPath(portablePath)).matches()) {
                 return false;
             }
+            return effectivePattern.matcher(new BudgetedPath(portablePath)).matches();
         }
     }
 
