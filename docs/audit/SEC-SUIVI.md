@@ -13,7 +13,7 @@ S9 et S12 sont les deux seuls qui donnent quelque chose à un attaquant aujourd'
 | 2 | `sec/s12-audit` | S12 | #318 | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
 | 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | à ouvrir | **code terminé**, non poussé ; gate `check-private-io` |
 | 4 | `sec/s8-gitignore` | S8 | à ouvrir | code terminé |
-| 5 | `sec/s7-s15-windows` | S7, S15 | – | – |
+| 5 | `sec/s7-s15-windows` | S7, S15 | à ouvrir | **en cours** (décisions écrites, voir section 5) |
 
 Base : `origin/develop` au 2026-10-01 (b991ffd2). Une branche, un worktree (`minos-wt/sec-lotN`) par lot, rebasés l'un sur l'autre.
 
@@ -340,6 +340,58 @@ Aucun fichier gagné ni perdu. Les `.gitignore` de deux dépôts publics n'ont *
 ### Windows / Linux
 
 Tout exécuté sous Windows (logique pure, sans dépendance de plateforme). Linux : par la CI. Tests ignorés ajoutés : 0.
+
+## 5. Lot 5 : S15 et S7, Windows (ACL, script du bac à sable, environnement des lanceurs)
+
+### Relocalisation
+
+| Cité par l'audit | Réalité |
+|---|---|
+| `PrivateLocalStorage.harden` : `acl.setAcl(List.of(ownerEntry))` | `minos-engine`, `com.minos.io.PrivateLocalStorage.harden` (le seul endroit qui écrit une ACL sous `MINOS_HOME`) |
+| script `sandbox/windows-appcontainer-sandbox-v4.ps1` matérialisé par `doctor` | `WindowsAppContainerWorkerSandboxBackend.installLauncher` (constructeur, donc à chaque `discover`) ; même défaut pour `WindowsJobObjectProcessOwnership.installLauncher` (`windows-job-object-owner-v1.ps1`). Le contenu est assemblé depuis les gabarits du jar par `WindowsContainmentScript.assemble` |
+| héritage de l'environnement complet | `ProcessIndexerExecutor.startProvider` (branche `trustedLauncherRequiresParentEnvironment()`), activée par les deux lanceurs |
+| `requireInheritableOwnerAccess` / `user.name` | `WindowsAppContainerWorkerSandboxBackend` |
+| `forceDirectory` inerte | `DurableAtomicFile.forceDirectory` (`minos-engine`) |
+
+### Décisions (écrites avant le code)
+
+1. **MINOS ne retire jamais une restriction posée par un administrateur.** Les ACE de REFUS (DENY) d'un chemin que MINOS
+   durcit sont conservées, placées avant l'ACE ALLOW du propriétaire. Cela vaut aussi pour un refus *hérité* (il devient
+   explicite dans la DACL protégée de la décision 3 : le retirer serait le retirer). Si MINOS ne peut pas écrire là où il
+   doit écrire à cause d'un refus, il **échoue en le disant** (`private storage is write-protected by an explicit deny entry;
+   MINOS does not remove it`, sans chemin), jamais d'élévation silencieuse.
+   - **Les ALLOW d'un autre principal restent retirés** (invariant « propriétaire seul » de `verifyPrivacy`/`foreignAclEntry`,
+     inchangé). Un grant est un droit accordé, pas une restriction posée : c'est la nature du stockage privé de ne le
+     réserver qu'au propriétaire. **Je n'exempte pas SYSTEM et Administrateurs** (position de l'orchestrateur laissée
+     ouverte) : (a) ils gardent `SeBackupPrivilege`, `SeRestorePrivilege` et la prise de possession, donc le retrait de
+     l'ACE ne leur ôte aucun pouvoir, il ôte seulement l'accès ambiant ; (b) les exempter obligerait `verifyPrivacy` à
+     reconnaître deux SID bien connus, soit un affaiblissement de l'invariant vérifié et une surface de plus à garder ;
+     (c) c'est le comportement de tous les lots précédents, sur lequel les 3 tests `AppContainer` réels reposent.
+   - **Le durcissement n'écrit plus quand l'état est déjà le bon.** Si la DACL est déjà celle attendue, aucun `setAcl`
+     n'est émis : un répertoire en lecture seule n'est pas modifié par une simple vérification. Conséquence pour **R12**
+     (une commande de lecture ne devrait pas avoir besoin d'écrire dans un `MINOS_HOME` en lecture seule) : sous Windows,
+     R12 devient **observable** pour la première fois (avant, la DACL de refus disparaissait au premier lancement, donc il
+     n'y avait rien à observer). Je **ne cherche pas à le fermer** ici.
+2. **Un script exécutable n'a pas sa place dans un répertoire de données.** Le script du bac à sable est un artefact du
+   produit (le jar : il est assemblé depuis ses ressources, ADR 0040, zip auto-portant). `-EncodedCommand` est exclu : le
+   script assemblé dépasse la limite de 32 767 caractères de ligne de commande de `CreateProcess`. Il est donc matérialisé
+   **hors de `MINOS_HOME`**, dans un répertoire privé propre à l'utilisateur sous le répertoire temporaire de la JVM, à un
+   **nom dérivé de son empreinte SHA-256** (jamais remplacé, jamais réécrit sur place), en **lecture seule**, et son
+   empreinte est **revérifiée avant chaque lancement** (`sandboxPlan` et plan du Job Object) : un écart échoue fermé, sans
+   repli. Le contenu des `.ps1` n'est pas modifié. Limite dite : entre la vérification et la lecture par PowerShell,
+   un processus du même utilisateur peut encore substituer le fichier (c'est le périmètre de confiance « même compte »,
+   hors de ce que `-File` permet de fermer sans natif).
+3. **DACL protégée : seulement si l'expérience la justifie.** Voir « Preuves ». Le moyen retenu est le plus petit :
+   `icacls <chemin> /inheritance:r` après `setAcl`, sans shell, sur un chemin déjà validé (jamais avant `setAcl` : sur un
+   objet qui n'a que des ACE héritées, `/inheritance:r` laisse une DACL **vide**, mesuré).
+4. **Environnement des lanceurs : liste blanche.** Le lanceur PowerShell (de confiance, mais qui n'a aucune raison de voir un
+   secret de l'environnement MINOS) ne reçoit plus l'environnement parent complet. Il reçoit la liste blanche déjà
+   commune aux fournisseurs (`ProviderProcessEnvironment`), réduite empiriquement au minimum dont PowerShell et le bac à
+   sable ont besoin.
+5. **Identité de l'ACE héritable : le jeton du processus, pas `user.name`.** `user.name` est une propriété JVM que la ligne de
+   commande (`-Duser.name=…`, `JAVA_TOOL_OPTIONS`) modifie : elle est passée telle quelle à `icacls`, qui accepte aussi les
+   SID (`*S-1-1-0`). L'identité vient de `whoami /user` (SID du jeton, y compris élevé), lue une fois par JVM.
+6. **`forceDirectory` : limite documentée, pas simulée.** Voir « Preuves ».
 
 ## À traiter plus tard
 
