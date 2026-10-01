@@ -23,11 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class CodeKnowledgeSnapshotIdentityTest {
 
     private static final UUID PROJECT = UUID.randomUUID();
+    private static final String SYM_A = "sym:a";
     private static final String SNAPSHOT = "snapshot-1";
 
     @Test
     void twoSymbolsWithTheSameIdAreRefusedByTheSnapshot() {
-        List<Symbol> symbols = List.of(symbol("sym:a", "key:a"), symbol("sym:a", "key:b"));
+        List<Symbol> symbols = List.of(symbol(SYM_A, "key:a"), symbol(SYM_A, "key:b"));
 
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
                 () -> new CodeKnowledgeSnapshot(PROJECT, SNAPSHOT, symbols, List.of(), List.of()));
@@ -37,7 +38,7 @@ class CodeKnowledgeSnapshotIdentityTest {
 
     @Test
     void theSnapshotDoesNotCheckKeysItself() {
-        List<Symbol> symbols = List.of(symbol("sym:a", "key:same"), symbol("sym:b", "key:same"));
+        List<Symbol> symbols = List.of(symbol(SYM_A, "key:same"), symbol("sym:b", "key:same"));
 
         CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(PROJECT, SNAPSHOT, symbols, List.of(), List.of());
 

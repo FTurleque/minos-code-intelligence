@@ -46,6 +46,7 @@ class SemanticDocumentKeysReachabilityTest {
     private static final String SHARED_NAME = "Shared";
     private static final String APP_SYMBOL = "scip-typescript npm app 1.0.0 src/`Shared.ts`/Shared#";
     private static final String LIB_SYMBOL = "scip-typescript npm lib 1.0.0 src/`Shared.ts`/Shared#";
+    private static final String APP_SCOPE = "ui/app";
     private static final String PROVIDER = "scip-typescript";
 
     @TempDir
@@ -82,7 +83,7 @@ class SemanticDocumentKeysReachabilityTest {
         Path libIndex = writeIndex(temp.resolve("lib.scip"), List.of(LIB_SYMBOL));
 
         CodeKnowledgeSnapshot snapshot = snapshotOf(List.of(
-                new IndexingArtifact(Language.TYPESCRIPT, PROVIDER, appIndex, Path.of("ui/app")),
+                new IndexingArtifact(Language.TYPESCRIPT, PROVIDER, appIndex, Path.of(APP_SCOPE)),
                 new IndexingArtifact(Language.TYPESCRIPT, PROVIDER, libIndex, Path.of("ui/lib"))));
 
         assertEquals(2, snapshot.symbols().size(), "one symbol per scope: the duplicate definition in app is merged");
@@ -107,8 +108,8 @@ class SemanticDocumentKeysReachabilityTest {
         Path first = writeIndex(temp.resolve("first.scip"), List.of(APP_SYMBOL));
         Path second = writeIndex(temp.resolve("second.scip"), List.of(APP_SYMBOL));
         List<IndexingArtifact> artifacts = List.of(
-                new IndexingArtifact(Language.TYPESCRIPT, PROVIDER, first, Path.of("ui/app")),
-                new IndexingArtifact(Language.JAVA, "scip-java", second, Path.of("ui/app")));
+                new IndexingArtifact(Language.TYPESCRIPT, PROVIDER, first, Path.of(APP_SCOPE)),
+                new IndexingArtifact(Language.JAVA, "scip-java", second, Path.of(APP_SCOPE)));
 
         IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> snapshotOf(artifacts));
 

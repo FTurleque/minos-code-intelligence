@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assumptions.abort;
 class LocalProjectRegistryInventoryTest {
 
     private static final int PROJECT_COUNT = 3;
+    private static final String PROJECTS = "projects";
     private static final String PROPERTIES = ".properties";
     private static final String CREATED_AT = "createdAt=.*";
 
@@ -53,7 +54,7 @@ class LocalProjectRegistryInventoryTest {
     }
 
     private Path entryOf(RegisteredProject project) {
-        return storage.resolve("projects").resolve(project.id() + PROPERTIES);
+        return storage.resolve(PROJECTS).resolve(project.id() + PROPERTIES);
     }
 
     private static void rewrite(Path file, UnaryOperator<String> edit) {
@@ -184,7 +185,7 @@ class LocalProjectRegistryInventoryTest {
     @Test
     void aFileNameThatIsNotAnIdentityIsCountedUnderASafeName() throws IOException {
         registerThreeProjects();
-        Files.writeString(storage.resolve("projects").resolve("not-a-uuid" + PROPERTIES), "id=x\n");
+        Files.writeString(storage.resolve(PROJECTS).resolve("not-a-uuid" + PROPERTIES), "id=x\n");
 
         ProjectRegistry.Inventory inventory = new LocalProjectRegistry(storage).inventory();
 
@@ -244,7 +245,7 @@ class LocalProjectRegistryInventoryTest {
     @Test
     void aRegistryDirectoryThatCannotBeListedFailsAsAWholeBecauseThereIsNothingToReportByEntry() throws IOException {
         registerThreeProjects();
-        Path projects = storage.resolve("projects");
+        Path projects = storage.resolve(PROJECTS);
         for (RegisteredProject project : registered) Files.delete(entryOf(project));
         Files.delete(projects);
         Files.writeString(projects, "not a directory");

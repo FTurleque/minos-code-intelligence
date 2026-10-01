@@ -14,7 +14,7 @@
 | 2 — P1, Q3, Q4 | Un seul régime de verrous ; lecture d'état sans bail exclusif (§ 8) | en cours (branche `fiab/p1-q3-q4-verrous`, depuis la branche du lot 1 `bcdadd23`) | § 8.8 |
 | 3 — R2, R3 | Propriété des cgroups : R2 et R3 déjà fermés sur `develop` (§ 9.1) ; le lot referme les trous restants de la décision « ce cgroup appartient à un MINOS mort » (§ 9.4) | livré, en attente du verdict final de `verif-fiab` (branche `fiab/r2-r3-cgroups`, depuis la branche du lot 2, fusion `8670f2e2`) | § 9.7 |
 | 4 — Q5, R6 | Interruption de bout en bout (le drapeau était rétabli avant d'écrire l'état), confinement du chemin d'artefact (PLAUSIBLE reproduit puis corrigé) | livré, `VERDICT-FINAL: ok` de `verif-fiab` (branche `fiab/q5-r6-interruption`, depuis la branche du lot 3 `cab6f74e`) | § 10.6 |
-| 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) : Q8 ouvert à la base, corrigé (`project list` sort en 3 sur un inventaire partiel) ; Q9 PLAUSIBLE, non reproduit par le chemin de production, aucun correctif (§ 11) | livré, en attente du verdict final de `verif-fiab` (branche `fiab/q8-q9-tolerance`, depuis la branche du lot 4 `40100dbf`) | § 11.6 |
+| 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) : Q8 ouvert à la base, corrigé (`project list` sort en 3 sur un inventaire partiel) ; Q9 PLAUSIBLE, non reproduit par le chemin de production, aucun correctif (§ 11) | livré, `VERDICT-FINAL: ok` de `verif-fiab` (branche `fiab/q8-q9-tolerance`, depuis la branche du lot 4 `40100dbf`) | § 11.6 |
 
 ## 2. Inventaire daté (base `017e339d`, 30 septembre 2026)
 
@@ -219,6 +219,10 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 | V-L5-03 | à corriger | la page arc42 des concepts transverses disait encore « 0/1/2 » | **résolu `dc38efee`** (code 3 ajouté à `08-concepts-transverses.md`) |
 | V-L5-04 | remarque | le plugin IntelliJ (`MinosCliClient.resolveProject`) n'accepte que le code 0 pour `project list` : avec un seul projet abîmé il reçoit « exit 3 » et ne résout pas le projet sain ouvert | **consigné § 7** : `minos-intellij` est hors réacteur (Gradle), non touché ; pas une régression (le code était 1 avant) ; correctif : accepter `Set.of(0, 3)` pour cette seule commande, la sortie JSON étant valide et complète |
 | V-L5-05 | remarque | Q9 : le refus « collision » au staging n'est pas le constat Q9 mais reste un échec global du run | **consigné § 7** (§ 11.8) : autre mécanisme, préexistant, voulu ; à rouvrir seulement si un plan d'indexation peut produire le cas |
+| R-L5-A | remarque | littéraux dupliqués trois fois ou plus dans des fichiers de test neufs (`"registry"`, `"NEVER_INDEXED"`, `"projects"`, `".properties"`, `"ui/app"`, `"sym:a"`, `"degraded"`) | **résolu** (commit suivant) : constantes, aucun changement de comportement |
+| R-L5-B | remarque | pour un échec de VUE (historique, état, répertoire illisible) la ligne `UNREADABLE` porte `rootAvailable=false` alors que la racine existe (elle est seulement illisible), et la raison ne dit que le nom de classe de l'exception quand le message porte un chemin (`AccessDeniedException`) | **accepté, consigné § 7** : la ligne est volontairement une ligne « sans information » (aucun fait de découverte n'a pu être établi) ; le nom de classe est le repli de `PublicErrorMessages` |
+| R-L5-C | remarque | `listWorkspaces()` reste strict : un seul fichier de projet abîmé fait encore échouer `LocalMinosMultiRepositoryApi.listWorkspaces` | **consigné § 7** (listage strict) |
+| R-L5-D | remarque | un échec d'E/S transitoire sur l'état d'un projet (verrou Windows pendant une indexation par exemple) dégrade ce projet en `UNREADABLE` pour cet appel et fait sortir `project list` en 3, sans nouvelle tentative | **accepté, consigné § 7** : explicite et visible, un second appel donne le bon résultat ; la nouvelle tentative appartient à `DurableAtomicFile` / au magasin d'état, pas à l'inventaire |
 
 ## 7. À traiter plus tard
 
@@ -269,6 +273,9 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 - **(lot 5) Deux fournisseurs qui décrivent le même symbole dans la même portée** font échouer le run au staging (« provider snapshot collision », `ScipProjectSnapshotLifecycle.putUnique`) : vu en prouvant Q9, non cherché plus loin (V-L5-05).
 - **(lot 5) Clé sémantique en double : aucune garde défensive n'a été ajoutée.** Si l'invariant « id dérivé de la clé » était un jour cassé (un second producteur de symboles, un format de snapshot qui porte des ids indépendants), la fabrique échouerait bruyamment (`IllegalStateException`), comme aujourd'hui ; une règle de résolution (première gagne, dernière gagne, fusion) serait alors à écrire, avec son compteur, après un test rouge atteignable.
 - **(lot 5) PostgreSQL** : `inventory()` y vaut `listProjects()` (colonnes typées, aucune corruption de texte possible) ; si une colonne `root_value` illisible y devenait possible, le défaut de l'interface devrait être remplacé.
+- **(lot 5) Ligne `UNREADABLE` d'un échec de vue** (R-L5-B) : `rootAvailable=false` et aucun fait de découverte, même quand la racine existe et n'est qu'illisible ; la raison se réduit au nom de classe quand le message porte un chemin. À enrichir seulement si un client a besoin de distinguer « racine absente » de « racine illisible ».
+- **(lot 5) Échec transitoire d'un magasin d'état** (R-L5-D) : un verrou Windows passager pendant une indexation dégrade le projet concerné en `UNREADABLE` pour un appel (code 3), sans nouvelle tentative ; le second appel donne le bon résultat. Une nouvelle tentative bornée, si elle est voulue, se met dans la lecture de l'état, pas dans l'inventaire.
+- **(lot 5) `listWorkspaces()` et `findWorkspace()` restent stricts** (R-L5-C) : ils lisent tous les projets pour établir l'appartenance ; un fichier de projet abîmé fait échouer `LocalMinosMultiRepositoryApi.listWorkspaces`.
 
 ## 8. Lot 2 — P1, Q3, Q4 : un seul régime de verrous
 
@@ -895,4 +902,4 @@ Golden : les 12 de `characterization/` sont **inchangés** (`git diff 40100dbf..
 
 ### 11.13 Constats de verif-fiab (lot 5)
 
-V-L5-01 à V-L5-05 et leur résolution : § 6, « Lot 5 ».
+V-L5-01 à V-L5-05 et R-L5-A à R-L5-D (remarques du verdict final) et leur résolution : § 6, « Lot 5 ». `VERDICT-FINAL: ok` de `verif-fiab` sur `b9441160` (`clean verify` rejoué de son côté : 1 826 tests, 0 échec, 54 ignorés, 9 min 57 ; test POSIX du vrai `visitFileFailed` rejoué sous WSL ; ×10 de trois classes du lot).

@@ -23,6 +23,10 @@ class ProjectListDamagedRegistryIntegrationTest {
     private static final String PROJECT = "project";
     private static final String FORMAT = "--format";
     private static final String JSON = "json";
+    private static final String REGISTRY = "registry";
+    private static final String PROJECTS = "projects";
+    private static final String PROPERTIES = ".properties";
+    private static final String DEGRADED = "degraded";
     private static final String LIST = "list";
     private static final Pattern IDENTIFIER = Pattern.compile("\"id\":\"([0-9a-f-]{36})\"");
 
@@ -40,10 +44,10 @@ class ProjectListDamagedRegistryIntegrationTest {
         }
         Result before = run(home, PROJECT, LIST, FORMAT, JSON);
         assertEquals(0, before.exit(), before.error());
-        assertFalse(before.output().contains("degraded"), "a healthy registry carries no counter: " + before.output());
+        assertFalse(before.output().contains(DEGRADED), "a healthy registry carries no counter: " + before.output());
 
         String damagedId = firstIdentifier(before.output());
-        Path file = home.resolve("registry").resolve("projects").resolve(damagedId + ".properties");
+        Path file = home.resolve(REGISTRY).resolve(PROJECTS).resolve(damagedId + PROPERTIES);
         Files.writeString(file, Files.readString(file, StandardCharsets.UTF_8)
                 .replaceAll("createdAt=.*", "createdAt=not-an-instant"), StandardCharsets.UTF_8);
 
@@ -60,7 +64,7 @@ class ProjectListDamagedRegistryIntegrationTest {
         assertEquals(PARTIAL, text.exit(), text.output() + text.error());
         assertTrue(text.output().contains("degraded: 1"), text.output());
         assertTrue(text.output().contains(damagedId + "\t-\tUNREADABLE"), text.output());
-        assertNoAbsolutePath(text, home.resolve("registry"));
+        assertNoAbsolutePath(text, home.resolve(REGISTRY));
     }
 
     @Test
@@ -68,7 +72,7 @@ class ProjectListDamagedRegistryIntegrationTest {
         Path home = Files.createDirectories(temp.resolve("home"));
         assertEquals(0, run(home, PROJECT, "add", Files.createDirectories(temp.resolve("only")).toString()).exit());
         String id = firstIdentifier(run(home, PROJECT, LIST, FORMAT, JSON).output());
-        Path file = home.resolve("registry").resolve("projects").resolve(id + ".properties");
+        Path file = home.resolve(REGISTRY).resolve(PROJECTS).resolve(id + PROPERTIES);
         Files.writeString(file, Files.readString(file, StandardCharsets.UTF_8)
                 .replaceAll("createdAt=.*", "createdAt=\u001b[2Jevil\u0007"), StandardCharsets.UTF_8);
 
@@ -95,7 +99,7 @@ class ProjectListDamagedRegistryIntegrationTest {
         String damagedId = matcher.group(1);
         assertTrue(matcher.find());
         String healthyId = matcher.group(1);
-        Path file = home.resolve("registry").resolve("projects").resolve(damagedId + ".properties");
+        Path file = home.resolve(REGISTRY).resolve(PROJECTS).resolve(damagedId + PROPERTIES);
         Files.writeString(file, "id=" + damagedId + "\n", StandardCharsets.UTF_8);
 
         Result inspect = run(home, "inspect", healthyId, FORMAT, JSON);
@@ -122,7 +126,7 @@ class ProjectListDamagedRegistryIntegrationTest {
 
     /** Ce que la commande dit d'une entrée dégradée ne porte aucun chemin absolu (le répertoire du test en est un). */
     private static void assertNoAbsolutePath(Result result, Path directory) {
-        String degraded = result.output().contains("degraded") ? result.output().substring(result.output().indexOf("degraded")) : "";
+        String degraded = result.output().contains(DEGRADED) ? result.output().substring(result.output().indexOf(DEGRADED)) : "";
         assertFalse((degraded + result.error()).contains(directory.toString()), degraded + result.error());
     }
 

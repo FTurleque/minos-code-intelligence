@@ -43,6 +43,8 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
  */
 class ProjectInventoryToleranceTest {
 
+    private static final String REGISTRY = "registry";
+    private static final String NEVER_INDEXED = "NEVER_INDEXED";
     private static final String UNREADABLE = "UNREADABLE";
     private static final String PROPERTIES = ".properties";
     private static final String SNAPSHOT = "snapshot-1";
@@ -56,7 +58,7 @@ class ProjectInventoryToleranceTest {
 
     private void registerProjects(int count) throws IOException {
         home = Files.createDirectories(temp.resolve("home"));
-        registry = new LocalProjectRegistry(home.resolve("registry"));
+        registry = new LocalProjectRegistry(home.resolve(REGISTRY));
         for (int index = 0; index < count; index++) {
             Path root = Files.createDirectories(temp.resolve("project-" + index));
             projects.add(registry.registerProject(root, "Project " + index));
@@ -70,7 +72,7 @@ class ProjectInventoryToleranceTest {
     }
 
     private void corruptRegistryEntry(RegisteredProject project) throws IOException {
-        Path file = home.resolve("registry").resolve("projects").resolve(project.id() + PROPERTIES);
+        Path file = home.resolve(REGISTRY).resolve("projects").resolve(project.id() + PROPERTIES);
         Files.writeString(file,
                 Files.readString(file, StandardCharsets.UTF_8).replaceAll("createdAt=.*", "createdAt=not-an-instant"),
                 StandardCharsets.UTF_8);
@@ -121,8 +123,8 @@ class ProjectInventoryToleranceTest {
         assertEquals(List.of(projects.getFirst().id().toString()),
                 inventory.degraded().stream().map(DegradedEntry::entry).toList());
         inventory.degraded().forEach(this::assertPublic);
-        assertEquals("NEVER_INDEXED", byId(inventory).get(projects.get(1).id().toString()).indexState());
-        assertEquals("NEVER_INDEXED", byId(inventory).get(projects.get(2).id().toString()).indexState());
+        assertEquals(NEVER_INDEXED, byId(inventory).get(projects.get(1).id().toString()).indexState());
+        assertEquals(NEVER_INDEXED, byId(inventory).get(projects.get(2).id().toString()).indexState());
     }
 
     @Test
@@ -141,7 +143,7 @@ class ProjectInventoryToleranceTest {
         assertEquals(1, inventory.degraded().size());
         assertEquals(failing.id().toString(), inventory.degraded().getFirst().entry());
         assertPublic(inventory.degraded().getFirst());
-        assertEquals("NEVER_INDEXED", byId(inventory).get(projects.getFirst().id().toString()).indexState());
+        assertEquals(NEVER_INDEXED, byId(inventory).get(projects.getFirst().id().toString()).indexState());
     }
 
     @Test
@@ -174,7 +176,7 @@ class ProjectInventoryToleranceTest {
 
         assertEquals(2, inventory.projects().size());
         assertEquals(UNREADABLE, byId(inventory).get(projects.getFirst().id().toString()).indexState());
-        assertEquals("NEVER_INDEXED", byId(inventory).get(projects.get(1).id().toString()).indexState());
+        assertEquals(NEVER_INDEXED, byId(inventory).get(projects.get(1).id().toString()).indexState());
         assertEquals(1, inventory.degraded().size());
         assertPublic(inventory.degraded().getFirst());
     }
@@ -192,7 +194,7 @@ class ProjectInventoryToleranceTest {
         assertEquals(4, inventory.projects().size());
         assertEquals(3, inventory.degraded().size(), "one degraded entry per damaged project");
         assertEquals(3, inventory.projects().stream().filter(view -> UNREADABLE.equals(view.indexState())).count());
-        assertEquals("NEVER_INDEXED", byId(inventory).get(projects.get(3).id().toString()).indexState());
+        assertEquals(NEVER_INDEXED, byId(inventory).get(projects.get(3).id().toString()).indexState());
         inventory.degraded().forEach(this::assertPublic);
     }
 
@@ -225,7 +227,7 @@ class ProjectInventoryToleranceTest {
     @Test
     void aRegistryThatCannotBeListedStillFailsAsAWhole() throws IOException {
         registerProjects(2);
-        Path directory = home.resolve("registry").resolve("projects");
+        Path directory = home.resolve(REGISTRY).resolve("projects");
         for (RegisteredProject project : projects) Files.delete(directory.resolve(project.id() + PROPERTIES));
         Files.delete(directory);
         Files.writeString(directory, "not a directory");
