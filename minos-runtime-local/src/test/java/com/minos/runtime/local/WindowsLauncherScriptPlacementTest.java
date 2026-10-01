@@ -80,6 +80,18 @@ class WindowsLauncherScriptPlacementTest {
         assertFalse(refusal.getMessage().contains(temporary.toString()), "no absolute path in the message");
     }
 
+    @Test
+    void aCopyLeftInMinosHomeByAnEarlierVersionIsRemoved() throws Exception {
+        Path home = Files.createDirectories(temporary.resolve("home-legacy"));
+        Path legacy = Files.createDirectories(home.resolve("sandbox")).resolve("windows-appcontainer-sandbox-v4.ps1");
+        Files.writeString(legacy, "Write-Output 'old copy'", StandardCharsets.UTF_8);
+        Files.setAttribute(legacy, "dos:readonly", true);
+
+        backend(home);
+
+        assertFalse(Files.exists(legacy), "an executable script no longer sits among the data");
+    }
+
     // ------------------------------------------------------------------------------ helpers
 
     private WindowsAppContainerWorkerSandboxBackend backend(Path home) throws IOException {
