@@ -1,5 +1,7 @@
 package com.minos.runtime.local;
 
+import com.minos.io.PrivateLocalStorage;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.BoundedProperties;
 import com.minos.io.FileTreeOperations;
 import com.minos.io.Sha256;
@@ -99,8 +101,8 @@ public final class DistributedArtifactBundleStore {
         this.cacheRoot = home.resolve("distributed-artifacts");
         this.leasesRoot = cacheRoot.resolve(".leases");
         this.policy = Objects.requireNonNull(policy, "policy");
-        Files.createDirectories(cacheRoot);
-        Files.createDirectories(leasesRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(cacheRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(leasesRoot);
         this.leases = new SharedCacheLeaseRegistry(
                 leasesRoot, LEASE_ACQUIRE_TIMEOUT, "distributed artifact cache");
     }
@@ -137,8 +139,7 @@ public final class DistributedArtifactBundleStore {
                 zip.write(manifestBytes);
                 zip.closeEntry();
                 zip.putNextEntry(new ZipEntry(DistributedArtifactManifest.ARTIFACT_PATH));
-                try (InputStream input = Files.newInputStream(
-                        source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+                try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(source)) {
                     transferBounded(input, zip, policy.maxArtifactBytes());
                 }
                 zip.closeEntry();
@@ -171,7 +172,7 @@ public final class DistributedArtifactBundleStore {
             throw new IOException("distributed artifact bundle exceeds its byte limit");
         }
 
-        Path extraction = Files.createTempDirectory(cacheRoot, ".accept-");
+        Path extraction = PrivateLocalStorage.createPrivateTempDirectory(cacheRoot, ".accept-");
         String leasedKey = null;
         try {
             Extracted extracted = extract(source, extraction);
@@ -206,10 +207,10 @@ public final class DistributedArtifactBundleStore {
                 if (Files.exists(entry)) {
                     deleteCacheTree(entry);
                 }
-                Files.createDirectory(entry);
+                PrivateLocalStorage.ensurePrivateDirectory(entry);
                 try {
                     move(artifact, cachedArtifact);
-                    Files.write(cachedManifest, extracted.manifestBytes());
+                    PrivateLocalStorage.writePrivateFile(cachedManifest, extracted.manifestBytes());
                     evict(cacheKey);
                 } catch (IOException | RuntimeException exception) {
                     try {
@@ -259,8 +260,7 @@ public final class DistributedArtifactBundleStore {
         byte[] manifest = null;
         Path artifact = extraction.resolve(DistributedArtifactManifest.ARTIFACT_PATH);
         Set<String> names = new HashSet<>();
-        try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(
-                bundle, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS))) {
+        try (ZipInputStream zip = new ZipInputStream(ConfinedFileOpener.openRegularFileNoFollow(bundle))) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
                 String name = entry.getName();
@@ -292,10 +292,12 @@ public final class DistributedArtifactBundleStore {
     }
 
     private static void copyBounded(InputStream input, Path target, long maximum) throws IOException {
+        PrivateLocalStorage.createPrivateFile(target);
         try (OutputStream output = Files.newOutputStream(
                 target,
-                StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE
+                StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                LinkOption.NOFOLLOW_LINKS
         )) {
             transferBounded(input, output, maximum);
         } catch (Exception exception) {
@@ -453,8 +455,7 @@ public final class DistributedArtifactBundleStore {
                 return false;
             }
             DistributedArtifactManifest actual;
-            try (InputStream input = Files.newInputStream(
-                    manifestFile, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+            try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(manifestFile)) {
                 actual = decodeManifest(readBounded(input, MAX_MANIFEST_BYTES));
             }
             long artifactBytes = Files.size(artifact);
@@ -569,7 +570,7 @@ public final class DistributedArtifactBundleStore {
         }
         MessageDigest digest = Sha256.newDigest();
         try (DigestInputStream input = new DigestInputStream(
-                Files.newInputStream(normalized, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), digest)) {
+                ConfinedFileOpener.openRegularFileNoFollow(normalized), digest)) {
             byte[] buffer = new byte[8192];
             long remaining = expectedBytes;
             while (remaining > 0L) {

@@ -1,5 +1,6 @@
 package com.minos.runtime.local;
 
+import com.minos.io.PrivateLocalStorage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -80,13 +81,16 @@ public final class BoundedProcessOutput {
         if (target == null) return OutputStream.nullOutputStream();
         Path normalized = target.toAbsolutePath().normalize();
         Path parent = normalized.getParent();
-        if (parent != null) Files.createDirectories(parent);
-        // deleteIfExists removes a symlink entry itself rather than its target. CREATE_NEW then
-        // closes the replacement race before an untrusted process is started by ProcessIndexerExecutor.
+        if (parent != null) PrivateLocalStorage.ensurePrivateDirectory(parent);
+        // deleteIfExists removes a symlink entry itself rather than its target. createPrivateFile then
+        // creates the file owner-only and fails if anything re-appeared under the name, which closes
+        // the replacement race before an untrusted process is started by ProcessIndexerExecutor; the
+        // channel is opened NOFOLLOW so a link swapped in after the creation is refused too.
         Files.deleteIfExists(normalized);
+        PrivateLocalStorage.createPrivateFile(normalized);
         return Channels.newOutputStream(Files.newByteChannel(
                 normalized,
-                Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)));
+                Set.of(StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS)));
     }
 
     private static void requireLimit(long maxBytesPerStream) {

@@ -1,5 +1,6 @@
 package com.minos.runtime.local;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
@@ -150,7 +151,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
                             + " cannot prove OS-level network denial; DENY remains fail-closed");
         }
 
-        Files.createDirectories(workersRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(workersRoot);
         Path providerRoot = workersRoot
                 .resolve(request.execution().runId().toString())
                 .resolve(ProviderId.require(delegate.indexerId()))
@@ -159,7 +160,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
             throw new IOException("worker provider path escapes distributed worker root");
         }
         Path workspace = providerRoot.resolve("workspace");
-        Files.createDirectories(providerRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(providerRoot);
         if (Files.exists(workspace, LinkOption.NOFOLLOW_LINKS)) {
             ProviderWorkspaceFiles.deleteTree(workersRoot, workspace, WORKSPACE_BOUNDARY);
         }
@@ -216,7 +217,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
                     DistributedArtifactManifest.ARTIFACT_PATH,
                     artifactBytes,
                     DistributedArtifactBundleStore.sha256(artifactPath));
-            Path bundle = Files.createTempFile(workersRoot, ".bundle-", ".zip");
+            Path bundle = PrivateLocalStorage.createPrivateTempFile(workersRoot, ".bundle-", ".zip");
             try {
                 bundleStore.createBundle(bundle, manifest, artifactPath);
                 return new WorkerResponse(bundle, manifest);

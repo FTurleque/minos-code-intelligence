@@ -1,5 +1,6 @@
 package com.minos.runtime.local;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.DurableAtomicFile;
 
 import java.io.IOException;
@@ -35,10 +36,10 @@ public final class FileResumableRunMarkers {
     public void mark(UUID runId) throws IOException {
         Path marker = markerPath(runId);
         DurableAtomicFile.ensureDirectory(marker.getParent(), "resumable run directory");
-        Path temporary = Files.createTempFile(marker.getParent(), ".resumable-", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(marker.getParent(), ".resumable-", ".tmp");
         try {
-            Files.writeString(temporary, "runId=" + runId + "\nmarkedAt=" + Instant.now() + "\n",
-                    StandardCharsets.UTF_8);
+            PrivateLocalStorage.writePrivateFile(temporary,
+                    ("runId=" + runId + "\nmarkedAt=" + Instant.now() + "\n").getBytes(StandardCharsets.UTF_8));
             DurableAtomicFile.replace(temporary, marker, "resumable run marker replacement");
         } finally {
             Files.deleteIfExists(temporary);
