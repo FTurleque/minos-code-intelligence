@@ -148,7 +148,39 @@ est désactivé (avant : 1, « not configured », parce que la commande n'était
 
 ## 5. Lot 2 — décision commande par commande
 
-*(à écrire au lot 2, avant le code, à partir des mesures ; le principe est au § 2)*
+*Écrit avant le code, au 2026-10-01. Mesure de départ (`verif-cli`, 7 formes d'abîmage, un projet sain et un abîmé) :
+`project list` sort 3 ; `inspect <identifiant sain>` sort 0 ; `inspect <nom>` (sain, abîmé ou inexistant),
+`project add` et toutes les commandes par nom sortent 1 avec un message brut du JDK (`IOException`, `Input length = 1`,
+et parfois un fragment du fichier lu).*
+
+Un seul signal porte l'information « N entrées sont illisibles » : **`UnreadableRegistryException`** (moteur,
+`com.minos.registry`), qui porte les `DegradedEntry` déjà produites par le registre — pas une seconde notion d'entrée
+dégradée — et dont le message ne dit que le nombre. La commande décide du code ; l'exception dit pourquoi.
+
+| Commande | Devant ≥ 1 entrée abîmée | Code | Message |
+|---|---|---|---|
+| `project list` | **inchangé** : liste les lisibles, compte et affiche les dégradées | 3 (0 si aucune) | avertissement existant |
+| `project list`, **toutes** les entrées abîmées | **inchangé** : 0 ligne lisible, N dégradées affichées. Le registre a pu être listé et chaque entrée est rapportée : c'est un résultat partiel, pas une panne | 3 | `N of N entries are degraded` |
+| `project list`, registre **non listable** (répertoire illisible, stockage en panne) | échec, jamais un inventaire partiel | 1 | échec d'ouverture ou d'E/S |
+| `project add` | **stricte** : elle ne peut pas savoir si l'entrée illisible est celle qu'elle allait écraser | 1 | « N registry entries are unreadable, so the uniqueness of the registration cannot be guaranteed » |
+| `inspect <identifiant>`, `project inspect <id>`, `index-status <id>` | **inchangés** : ils lisent l'entrée demandée, un voisin abîmé ne les concerne pas | 0 | — |
+| `inspect <nom>`, `project inspect <nom>`, `index-status <nom>` : **trouvé** parmi les lisibles | la réponse est donnée (sortie inchangée) **et** le verdict dit qu'elle est incomplète : l'unicité du nom ne peut pas être prouvée | 3 | stderr : `warning: N registry entries are unreadable, so this name cannot be proven unique` |
+| idem : **introuvable**, des entrées illisibles | distinct de « absent » : on ne devine pas | 3 | « N registry entries are unreadable, so it cannot be told whether this project exists » |
+| idem : **introuvable**, registre sain | inchangé | 1 | `unknown project: <nom>` |
+| idem : **ambigu** parmi les lisibles | inchangé | 1 | `ambiguous project name, use its UUID` |
+| `nexus-export --root` | **stricte, message véridique** : produit un contrat consommé par NEXUS, un code « partiel » y serait un contrat nouveau sans demande | 1 | « N registry entries are unreadable, so the project of this root cannot be located with certainty » |
+| Toute autre commande qui prend `<projet>` par nom (`find-symbol`, `search`, `architecture`, `impact`, `index`, `import-scip`, …) | **stricte** (résolveur partagé avec MCP et l'API ; une mutation ne devine pas sa cible), mais le message devient véridique et actionnable | 1 | « N registry entries are unreadable, so the project name cannot be resolved with certainty; use its UUID » |
+| `listWorkspaces`, `findWorkspace` | **inchangés, strictes** (voir ci-dessous) | — | — |
+
+**Où je contredis l'avis de départ : `listWorkspaces` ne « suit » pas l'inventaire dans ce lot.** Aucune commande CLI
+ne le liste : ses seuls consommateurs sont l'API et MCP, dont les listes (`List<WorkspaceDto>`) n'ont aucun champ où
+porter le compte des entrées écartées. Les rendre tolérantes serait exactement le silence que la doctrine interdit, et
+leur ajouter ce champ est un changement de contrat API/MCP, hors d'un chantier de résidus CLI. De même `findWorkspace` :
+l'appartenance d'un espace est calculée sur les projets, et une liste tronquée y serait une réponse fausse. Les deux
+restent strictes ; le point part dans « à traiter plus tard ».
+
+**Le code 3** garde un seul sens (« résultat partiel : valide pour ce qui a été lu, des entrées ont été écartées et
+comptées ») pour `project list` et la résolution par nom ; la convention est écrite dans `docs/user/cli.md`.
 
 ## 6. À traiter plus tard
 
@@ -167,3 +199,10 @@ est désactivé (avant : 1, « not configured », parce que la commande n'était
   `--help` et les erreurs d'usage, qui n'ouvrent plus rien, laissent l'ACL intacte. Un `MINOS_HOME` réellement en
   lecture seule n'est donc pas testable sous Windows. Comportement de `PrivateLocalStorage` (module `minos-storage-local`),
   non modifié par ce chantier.
+- **`listWorkspaces` / `findWorkspace` stricts.** Tolérer un registre abîmé suppose un champ « entrées écartées » dans
+  les DTO de l'API et de MCP (contrat public) ; voir § 5.
+- **Texte d'un fichier abîmé dans un message d'échec.** Sur les chemins d'échec stricts qui remontent l'exception
+  d'origine (par exemple `inspect <identifiant d'une entrée abîmée>`), `CliCommandSupport.failureMessage` passe par
+  `PublicErrorMessages.sanitize`, qui aplatit les sauts de ligne mais laisse passer les caractères de contrôle ;
+  `DegradedEntry` est seul à les remplacer. Les messages du lot 2 n'embarquent aucun texte de fichier (un nombre), mais
+  la fuite des autres chemins relève de `PublicErrorMessages` (toutes surfaces), hors périmètre.
