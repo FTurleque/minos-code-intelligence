@@ -89,7 +89,7 @@ def main() -> int:
                 "BoundedInputStream", "BoundedLineReader", "FixedTsv.splitExact")
         forbid("FileProgramGraphProvider.java", graph_sidecar, 'split("\\t", -1)')
 
-        require("FileHostedControlPlaneStore.java", hosted, "ReentrantLock[] JVM_LOCKS", "jvmLock.lock()")
+        require("FileHostedControlPlaneStore.java", hosted, "ReentrantLock[] JVM_LOCKS", "BoundedFileLease.acquire")
         require("LocalStorageBackend.java", local_storage, "SerializedRuntimeObservationStore")
 
         require("SemanticIndexBudget.java", semantic_budget, "Double.BYTES")

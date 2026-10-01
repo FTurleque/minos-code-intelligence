@@ -123,7 +123,7 @@ def main() -> int:
             "BoundedInputStream",
             "BoundedOutputStream",
             "MAX_PERSISTED_SNAPSHOT_BYTES",
-            "Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)",
+            "ConfinedFileOpener.openRegularFileNoFollow(file)",
         )
         require(
             "minos-engine/src/main/java/com/minos/io/BoundedProperties.java",
