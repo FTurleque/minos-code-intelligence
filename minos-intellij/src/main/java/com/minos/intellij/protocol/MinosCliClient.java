@@ -1,14 +1,12 @@
 package com.minos.intellij.protocol;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.minos.intellij.settings.MinosSettingsState;
+import com.minos.intellij.ui.MinosRegistryNotice;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -33,6 +31,7 @@ public final class MinosCliClient {
 
     private final Project project;
     private volatile String verifiedConfiguration;
+    private volatile int reportedUnreadable;
 
     public MinosCliClient(Project project) {
         this.project = project;
@@ -56,16 +55,19 @@ public final class MinosCliClient {
             throw new MinosProtocolException("IntelliJ project has no local base path");
         }
         String expected = normalizePath(basePath);
-        JsonObject root = runJsonRaw(List.of("project", "list", "--format", "json"));
-        JsonArray projects = root.has("projects") ? root.getAsJsonArray("projects") : new JsonArray();
-        for (JsonElement element : projects) {
-            if (!element.isJsonObject()) continue;
-            JsonObject candidate = element.getAsJsonObject();
-            String rootPath = nullableString(candidate, "rootPath");
-            if (rootPath != null && pathsEqual(expected, normalizePath(rootPath))) return candidate;
-        }
-        throw new MinosProjectNotRegisteredException(
-                "This IntelliJ project is not registered in MINOS. Run `minos project add \"" + basePath + "\"` first.");
+        // Exit 3 is a partial result (some registry entries are unreadable) with valid JSON for the others (Q23).
+        JsonObject root = runJsonRaw(List.of("project", "list", "--format", "json"), MinosProjectList.ACCEPTED_EXIT_CODES);
+        MinosProjectList.Resolution resolution = MinosProjectList.resolve(
+                root, rootPath -> pathsEqual(expected, normalizePath(rootPath)), basePath);
+        reportUnreadableEntries(resolution.unreadable());
+        return resolution.project();
+    }
+
+    /** Tells the user, once per distinct count, that MINOS skipped unreadable registry entries: a quiet success would hide it. */
+    private void reportUnreadableEntries(int unreadable) {
+        if (unreadable == reportedUnreadable) return;
+        reportedUnreadable = unreadable;
+        if (unreadable > 0) MinosRegistryNotice.show(project, MinosProjectList.describe(unreadable));
     }
 
     public JsonObject registerProject() throws MinosProtocolException {
@@ -124,17 +126,7 @@ public final class MinosCliClient {
 
     private JsonObject runJsonRaw(List<String> arguments, Set<Integer> acceptedExitCodes) throws MinosProtocolException {
         ProcessResult result = run(arguments);
-        if (!acceptedExitCodes.contains(result.exitCode())) {
-            String diagnostic = result.stderr().isBlank() ? result.stdout() : result.stderr();
-            throw new MinosProtocolException("MINOS command failed (exit " + result.exitCode() + "): " + diagnostic.trim());
-        }
-        try {
-            JsonElement parsed = JsonParser.parseString(result.stdout().trim());
-            if (!parsed.isJsonObject()) throw new MinosProtocolException("MINOS command did not return a JSON object");
-            return parsed.getAsJsonObject();
-        } catch (RuntimeException exception) {
-            throw new MinosProtocolException("Invalid JSON returned by MINOS: " + abbreviate(result.stdout()), exception);
-        }
+        return MinosJsonOutput.parse(result.exitCode(), result.stdout(), result.stderr(), acceptedExitCodes);
     }
 
     private ProcessResult run(List<String> arguments) throws MinosProtocolException {
@@ -203,11 +195,6 @@ public final class MinosCliClient {
         }
     }
 
-    private static String nullableString(JsonObject object, String name) {
-        JsonElement element = object.get(name);
-        return element == null || element.isJsonNull() ? null : element.getAsString();
-    }
-
     private static String normalizePath(String value) {
         try {
             Path path = Path.of(value).toAbsolutePath().normalize();
@@ -226,11 +213,6 @@ public final class MinosCliClient {
     private static String requireText(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
         return value;
-    }
-
-    private static String abbreviate(String value) {
-        String normalized = value == null ? "" : value.replace('\r', ' ').replace('\n', ' ').trim();
-        return normalized.length() <= 240 ? normalized : normalized.substring(0, 240) + "…";
     }
 
     private record ProcessResult(int exitCode, String stdout, String stderr) { }
