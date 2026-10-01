@@ -216,7 +216,7 @@ class LazyWiringGuardTest {
     }
 
     @Test
-    void anOpenFailureIsStillReportedAsABootstrapFailureByEveryCommandThatNeedsTheApplication() throws Exception {
+    void anOpenFailureIsStillReportedAsABootstrapFailureByEveryCommandThatNeedsTheApplication() {
         List<String> offenders = new ArrayList<>();
         for (Map.Entry<String, List<String>> entry : readInvocations().entrySet()) {
             for (String invocation : entry.getValue()) {
