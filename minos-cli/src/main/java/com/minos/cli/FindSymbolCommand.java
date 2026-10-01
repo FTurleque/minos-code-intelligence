@@ -18,8 +18,9 @@ public final class FindSymbolCommand {
     public static final int EXECUTION_ERROR = 1;
     public static final int USAGE_ERROR = 2;
     /**
-     * Résultat partiel : la sortie est valide et complète pour ce qui a pu être lu, mais des entrées ont été
-     * dégradées (comptées et affichées). Aujourd'hui, seule {@code project list} le rend (Q8).
+     * Résultat partiel : la sortie est valide pour ce qui a pu être lu, mais des entrées du registre ont été
+     * écartées (comptées et affichées). Un seul sens, pour toutes les commandes : {@code project list} (Q8) et la
+     * résolution par nom de {@code inspect}, {@code project inspect} et {@code index-status} (Q24).
      */
     public static final int PARTIAL_RESULT = 3;
 

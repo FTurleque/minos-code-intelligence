@@ -26,6 +26,23 @@ public interface ProjectOperations {
 
     ProjectView inspectProject(String projectIdentifier) throws IOException;
 
+    /**
+     * The project named by {@code projectIdentifier}, with the registry entries that could not be read while
+     * resolving it (Q24). A name found among the readable entries is answered with the unreadable ones listed; a name
+     * not found while some are unreadable fails with {@link com.minos.registry.UnreadableRegistryException}, which is
+     * not the same answer as an absent project.
+     */
+    default ProjectInspection inspection(String projectIdentifier) throws IOException {
+        return new ProjectInspection(inspectProject(projectIdentifier), List.of());
+    }
+
+    record ProjectInspection(ProjectView project, List<DegradedEntry> unreadable) {
+        public ProjectInspection {
+            Objects.requireNonNull(project, "project");
+            unreadable = List.copyOf(Objects.requireNonNull(unreadable, "unreadable"));
+        }
+    }
+
     IndexImportResult importScip(
             String projectIdentifier,
             Path indexFile,

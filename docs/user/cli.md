@@ -16,6 +16,34 @@ java -jar .\target\minos-code-intelligence-1.3.0-SNAPSHOT-all.jar <commande>
 
 `--help` reste la source de vérité exécutable. Les commandes d'aide n'ont pas besoin d'initialiser un projet MINOS pour afficher leur syntaxe : `--help` est reconnu à n'importe quelle position après le nom d'une commande (`minos find-symbol p S --limit 5 --help`), et ni l'aide ni une erreur d'usage (code 2) n'ouvrent `MINOS_HOME`. Une commande n'ouvre `MINOS_HOME` qu'une fois ses arguments compris, et ne construit que ce dont elle a besoin : une commande de lecture ne crée pas de répertoire d'indexation distante dans `MINOS_HOME`.
 
+## Codes de sortie
+
+| Code | Sens |
+|---|---|
+| `0` | succès |
+| `1` | échec d'exécution (projet inexistant, `MINOS_HOME` inutilisable, mutation refusée, `doctor` à corriger) |
+| `2` | erreur d'usage (option inconnue, valeur manquante, borne violée) : rien n'a été ouvert ni modifié |
+| `3` | **résultat partiel** : la sortie est valide pour ce qui a pu être lu, mais des entrées du registre étaient illisibles et ont été écartées ; elles sont comptées et affichées, jamais ignorées en silence |
+
+Le code `3` a un seul sens, quelle que soit la commande. Aujourd'hui il est rendu par `project list` (le registre est listé,
+les entrées abîmées sont comptées et montrées) et par la résolution **par nom** de `inspect`, `project inspect` et
+`index-status` :
+
+- le nom est trouvé parmi les entrées lisibles : le projet est affiché et le code est `3`, avec
+  `warning: N registry entries are unreadable, so this name cannot be proven unique` sur la sortie d'erreur ;
+- le nom n'est pas trouvé alors que des entrées sont illisibles : `N registry entries are unreadable, so it cannot be told
+  whether this project exists` et le code `3`. Ce n'est pas « projet inexistant » (`unknown project`, code `1`, registre
+  sain) : le projet existe peut-être parmi les entrées illisibles.
+
+Une résolution par **identifiant** (UUID) ne lit que l'entrée demandée : une entrée voisine abîmée ne la concerne pas.
+Les mutations restent strictes : `project add` échoue (`1`) avec `N registry entries are unreadable, so the uniqueness of
+the registration cannot be guaranteed`, de même que les autres commandes qui résolvent un projet par nom (`N registry
+entries are unreadable, so the project name cannot be resolved with certainty; use its UUID`). Un registre qui ne peut pas
+être listé du tout (stockage inaccessible) est un échec (`1`), jamais un résultat partiel.
+
+En automatisation, un script qui traite tout code non nul comme un échec doit accepter `3` pour ces commandes : la sortie
+standard reste exploitable, c'est le verdict qui dit qu'elle est incomplète.
+
 ## Version
 
 ```text

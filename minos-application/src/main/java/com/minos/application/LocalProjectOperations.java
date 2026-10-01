@@ -12,6 +12,7 @@ import com.minos.orchestration.ProjectIndexState;
 import com.minos.orchestration.ProviderId;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
+import com.minos.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
@@ -58,7 +59,20 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     }
 
     @Override public ProjectView addProject(Path rootPath, String displayName) throws IOException {
-        return projectView(inspectionService.view(registry.registerProject(rootPath, displayName)));
+        RegisteredProject registered;
+        try {
+            registered = registry.registerProject(rootPath, displayName);
+        } catch (IOException | RuntimeException failure) {
+            // A mutation stays strict: it cannot know whether the unreadable entry is the one it was about to
+            // overwrite. It refuses, and says why instead of surfacing a raw read failure (Q24).
+            if (Thread.currentThread().isInterrupted()) throw failure;
+            Optional<UnreadableRegistryException> explained = UnreadableRegistryException.explaining(registry,
+                    "the uniqueness of the registration cannot be guaranteed");
+            if (explained.isEmpty()) throw failure;
+            explained.get().addSuppressed(failure);
+            throw explained.get();
+        }
+        return projectView(inspectionService.view(registered));
     }
     @Override public List<ProjectView> listProjects() throws IOException { return inventory().projects(); }
     @Override public ProjectInventory inventory() throws IOException {
@@ -68,6 +82,10 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     }
     @Override public ProjectView inspectProject(String projectIdentifier) throws IOException {
         return projectView(inspectionService.inspectProject(projectIdentifier));
+    }
+    @Override public ProjectInspection inspection(String projectIdentifier) throws IOException {
+        ProjectInspectionService.Inspection inspection = inspectionService.inspection(projectIdentifier);
+        return new ProjectInspection(projectView(inspection.project()), inspection.unreadable());
     }
 
     @Override

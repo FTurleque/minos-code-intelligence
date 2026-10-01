@@ -179,6 +179,22 @@ leur ajouter ce champ est un changement de contrat API/MCP, hors d'un chantier d
 l'appartenance d'un espace est calculée sur les projets, et une liste tronquée y serait une réponse fausse. Les deux
 restent strictes ; le point part dans « à traiter plus tard ».
 
+### 5.1 Ce que le code a appris (2026-10-01)
+
+- **Rouge avant correctif** : `RegistryToleranceCliTest`, 9 cas sur un vrai `MINOS_HOME`, échoue 6 fois sur la base (nom
+  trouvé, nom introuvable, `project add`, autres commandes par nom, `nexus-export`, registre non listable via le
+  lanceur) ; les 3 autres figent ce qui ne bouge pas (nom absent d'un registre sain : 1 ; identifiant : 0 ; registre
+  entièrement abîmé : 3).
+- **Entièrement abîmé** : `project list` garde le code 3 avec 0 ligne lisible et N dégradées affichées (« N of N »).
+  Le registre a pu être listé et chaque entrée est rapportée : c'est un résultat partiel, pas une panne. Un registre non
+  listable (ici `registry/projects` remplacé par un fichier) sort 1 par le lanceur (`MINOS bootstrap failed`).
+- **Une seule notion d'entrée dégradée** : `UnreadableRegistryException` porte les `DegradedEntry` du registre ; elle
+  n'en introduit pas de seconde. `UnreadableRegistryException.explaining` ne répond que si l'inventaire lui-même a pu
+  être lu : une panne du registre n'est jamais présentée comme des entrées illisibles.
+- **Codes de sortie distincts** avant : 0, 1, 2, 3 ; après : 0, 1, 2, 3. Le 3 s'étend de `project list` à la résolution
+  par nom de `inspect` / `project inspect` / `index-status` ; aucun code ne s'ajoute.
+- `MinosCli.USAGE` (« Exit codes ») ne citait pas le 3 ; il le cite.
+
 **Le code 3** garde un seul sens (« résultat partiel : valide pour ce qui a été lu, des entrées ont été écartées et
 comptées ») pour `project list` et la résolution par nom ; la convention est écrite dans `docs/user/cli.md`.
 

@@ -9,6 +9,7 @@ import com.minos.domain.SymbolLocation;
 import com.minos.io.Sha256;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
+import com.minos.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
@@ -48,9 +49,26 @@ public final class NexusExportService {
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
     }
 
+    /**
+     * The export feeds a contract that NEXUS consumes: it stays strict when registry entries are unreadable, and says
+     * so instead of surfacing a raw read failure (Q24).
+     */
+    private List<RegisteredProject> registeredProjects() throws IOException {
+        try {
+            return registry.listProjects();
+        } catch (IOException | RuntimeException failure) {
+            if (Thread.currentThread().isInterrupted()) throw failure;
+            java.util.Optional<UnreadableRegistryException> explained = UnreadableRegistryException.explaining(registry,
+                    "the project of this root cannot be located with certainty");
+            if (explained.isEmpty()) throw failure;
+            explained.get().addSuppressed(failure);
+            throw explained.get();
+        }
+    }
+
     public NexusExportContract.ExportSnapshot export(Path projectRoot) throws IOException {
         Path root = canonicalProjectRoot(projectRoot);
-        RegisteredProject project = registry.listProjects().stream().filter(candidate -> candidate.rootPath().equals(root)).findFirst()
+        RegisteredProject project = registeredProjects().stream().filter(candidate -> candidate.rootPath().equals(root)).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("project root is not registered in MINOS: " + root));
         CodeKnowledgeSnapshot snapshot = snapshots.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active MINOS knowledge snapshot: " + project.displayName()));

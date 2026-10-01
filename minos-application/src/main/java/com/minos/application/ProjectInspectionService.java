@@ -116,6 +116,19 @@ public final class ProjectInspectionService {
         return view(projectResolver.resolve(projectIdentifier));
     }
 
+    /** {@link #inspectProject} that reports the unreadable registry entries it ignored instead of failing on them (Q24). */
+    public Inspection inspection(String projectIdentifier) throws IOException {
+        ProjectResolver.Resolution resolution = projectResolver.resolveTolerantly(projectIdentifier);
+        return new Inspection(view(resolution.project()), resolution.unreadable());
+    }
+
+    public record Inspection(ProjectView project, List<DegradedEntry> unreadable) {
+        public Inspection {
+            Objects.requireNonNull(project, "project");
+            unreadable = List.copyOf(Objects.requireNonNull(unreadable, "unreadable"));
+        }
+    }
+
     public ProjectView view(RegisteredProject project) throws IOException {
         Objects.requireNonNull(project, "project");
         boolean rootAvailable = Files.isDirectory(project.rootPath());
