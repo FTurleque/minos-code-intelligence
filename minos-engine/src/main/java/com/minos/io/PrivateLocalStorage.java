@@ -41,7 +41,11 @@ import java.util.concurrent.TimeUnit;
  * <ul>
  *   <li>POSIX: directories {@code 0700}, files {@code 0600} — no GROUP and no OTHERS bit.</li>
  *   <li>ACL platforms (Windows): a single explicit ALLOW entry for the owner, and a DACL that does
- *       not inherit from its parent, so that a grant added later to a parent cannot flow back in.</li>
+ *       not inherit from its parent, so that a grant added later to a parent cannot flow back in. On a
+ *       directory that entry is inheritable (file and directory inherit), so whatever a process of the
+ *       owner creates in it later -- a sandboxed provider writing its artifact, a tool unpacking an
+ *       archive -- is owner-only too instead of taking the default ACL of its creator. Still no other
+ *       principal.</li>
  * </ul>
  *
  * <h2>What hardening never removes</h2>

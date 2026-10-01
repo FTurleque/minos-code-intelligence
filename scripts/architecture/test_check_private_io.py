@@ -3,8 +3,10 @@
 
 Each forbidden call has its own witness mutation (a source that uses exactly that call must fail), and
 each way of escaping the rule has its own refusal: a directory or wildcard in the allowlist, a missing
-justification, one more occurrence than listed, a stale maximum. Comments and string literals do not
-count; tests, resources, the excluded module and the primitives themselves are out of scope. The real
+justification, one more occurrence than listed, a stale maximum. The known ways around a text rule are
+witnessed too: a wildcard static import, a method reference, a call split over lines, a unicode escape, a
+file lock taken through a channel whose receiver is named anything. Comments and string literals do not
+count; tests, resources, the excluded module and the four primitives are out of scope. The real
 repository is checked by running the script directly, as the CI does just before this self-test.
 """
 
@@ -25,23 +27,27 @@ _SPEC = importlib_util.spec_from_file_location("check_private_io", _MODULE_PATH)
 _MODULE = importlib_util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)
 
-PRIMITIVE = "minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java"
+PRIMITIVE = "minos-engine/src/main/java/com/minos/io/BoundedFileLease.java"
+NOT_A_PRIMITIVE = "minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java"
 SOURCE = "minos-storage-local/src/main/java/com/minos/storage/local/Store.java"
 OTHER = "minos-storage-local/src/main/java/com/minos/storage/local/Other.java"
+BACKSLASH = chr(92)
 
-# One witness per forbidden call: a body that uses exactly that call.
+# One witness per forbidden call: (header, body) of a source that uses exactly that call.
 WITNESSES = {
-    "Files.createDirectories": "Files.createDirectories(root);",
-    "Files.write": "Files.write(file, bytes);",
-    "Files.writeString": "Files.writeString(file, text);",
-    "Files.newInputStream": "try (var in = Files.newInputStream(file)) { }",
-    "FileChannel.open": "var c = FileChannel.open(file, StandardOpenOption.WRITE);",
-    "FileChannel.lock": "lockChannel.tryLock();",
+    "Files.createDirectories": ("", "Files.createDirectories(root);"),
+    "Files.write": ("", "Files.write(file, bytes);"),
+    "Files.writeString": ("", "Files.writeString(file, text);"),
+    "Files.newInputStream": ("", "try (var in = Files.newInputStream(file)) { }"),
+    "Files.*": ("import static java.nio.file.Files.*;\n", "write(file, bytes);"),
+    "FileChannel.open": ("", "var c = FileChannel.open(file, StandardOpenOption.WRITE);"),
+    "AsynchronousFileChannel.open": ("", "var c = AsynchronousFileChannel.open(file);"),
+    "FileChannel.lock": ("", "lockChannel.tryLock();"),
 }
 
 
-def java(body: str) -> str:
-    return f"package p;\n\nclass C {{\n    void m() throws Exception {{\n        {body}\n    }}\n}}\n"
+def java(body: str, header: str = "") -> str:
+    return f"package p;\n{header}\nclass C {{\n    void m() throws Exception {{\n        {body}\n    }}\n}}\n"
 
 
 class Repo:
@@ -75,6 +81,10 @@ class PrivateIoGateTest(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.repo = Repo(Path(self._tmp.name))
 
+    def violations(self, source: str) -> list[str]:
+        self.repo.put(SOURCE, source)
+        return self.repo.check()[0]
+
     # ----------------------------------------------------------------------- the forbidden calls
 
     def test_a_clean_tree_passes(self):
@@ -84,10 +94,9 @@ class PrivateIoGateTest(unittest.TestCase):
         self.assertEqual((1, 0), (scanned, listed))
 
     def test_each_forbidden_call_fails_on_its_own(self):
-        for method, body in WITNESSES.items():
+        for method, (header, body) in WITNESSES.items():
             with self.subTest(method=method):
-                self.repo.put(SOURCE, java(body))
-                violations, _, _ = self.repo.check()
+                violations = self.violations(java(body, header))
                 self.assertEqual(1, len(violations), violations)
                 self.assertIn(method, violations[0])
                 self.assertIn(SOURCE, violations[0])
@@ -96,37 +105,79 @@ class PrivateIoGateTest(unittest.TestCase):
         self.assertEqual(set(_MODULE.FORBIDDEN), set(WITNESSES))
 
     def test_a_fully_qualified_call_is_caught(self):
-        self.repo.put(SOURCE, java("java.nio.file.Files.createDirectories(root);"))
-        self.assertEqual(1, len(self.repo.check()[0]))
+        self.assertEqual(1, len(self.violations(java("java.nio.file.Files.createDirectories(root);"))))
 
-    def test_a_static_import_is_caught(self):
-        self.repo.put(SOURCE, "package p;\nimport static java.nio.file.Files.writeString;\nclass C { }\n")
-        violations, _, _ = self.repo.check()
+    def test_a_static_import_of_one_method_is_caught(self):
+        violations = self.violations("package p;\nimport static java.nio.file.Files.writeString;\nclass C { }\n")
         self.assertEqual(1, len(violations))
         self.assertIn("Files.writeString", violations[0])
 
+    def test_a_wildcard_static_import_is_caught_whatever_it_is_followed_by(self):
+        violations = self.violations(java("int x = 1;", "import static java.nio.file.Files.*;\n"))
+        self.assertEqual(1, len(violations))
+        self.assertIn("Files.*", violations[0])
+
+    def test_a_method_reference_is_caught(self):
+        for method, text in (("Files.write", "BiFunction<Path, byte[], Path> f = Files::write;"),
+                             ("Files.newInputStream", "Callable<InputStream> c = Files::newInputStream;"),
+                             ("Files.createDirectories", "Function<Path, Path> d = Files::createDirectories;"),
+                             ("Files.writeString", "var f = Files::writeString;")):
+            with self.subTest(method=method):
+                violations = self.violations(java(text))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn(method, violations[0])
+
+    def test_a_call_split_over_lines_is_caught(self):
+        for body in ("Files\n            .write(file, bytes);", "Files.\n            createDirectories (root);",
+                     "Files . newInputStream\n            (file);"):
+            with self.subTest(body=body):
+                self.assertEqual(1, len(self.violations(java(body))))
+
+    def test_a_unicode_escaped_call_is_caught(self):
+        escaped = BACKSLASH + "u0046iles.write(file, bytes);"
+        violations = self.violations(java(escaped))
+        self.assertEqual(1, len(violations))
+        self.assertIn("Files.write", violations[0])
+
+    def test_an_escaped_backslash_before_u_is_not_a_unicode_escape(self):
+        text = BACKSLASH * 2 + "u0046iles.write"
+        self.assertEqual([], self.violations(java('String s = "' + text + '";')))
+
     def test_a_stored_file_lock_is_caught_whatever_the_receiver_is_named(self):
-        self.repo.put(SOURCE, java("FileLock held = owner.lock();"))
-        self.assertEqual(1, len(self.repo.check()[0]))
+        for body in ("FileLock held = owner.lock();",
+                     "var lock = raf.getChannel().lock();",
+                     "FileChannel fc = null; var l = fc.tryLock();",
+                     'new RandomAccessFile(f, "rw").getChannel().lock();',
+                     "AsynchronousFileChannel c = null; c.lock();"):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertGreaterEqual(len(violations), 1, body)
+                self.assertTrue(any("FileChannel.lock" in v for v in violations), violations)
+
+    def test_a_channel_obtained_from_a_stream_is_caught(self):
+        violations = self.violations(java("var anything = new FileInputStream(f).getChannel();"))
+        self.assertEqual(1, len(violations))
+        self.assertIn("FileChannel.lock", violations[0])
 
     def test_a_jvm_lock_is_not_a_file_lock(self):
-        self.repo.put(SOURCE, java("stripe.lock(); other.tryLock(1, TimeUnit.SECONDS);"))
-        self.assertEqual([], self.repo.check()[0])
+        self.assertEqual([], self.violations(java("stripe.lock(); other.tryLock(1, TimeUnit.SECONDS);")))
 
     def test_the_similar_but_allowed_calls_are_not_caught(self):
-        self.repo.put(SOURCE, java(
-            "Files.createDirectory(d); Files.newOutputStream(f); Files.readAllBytes(f); Files.writeFoo(f);"))
-        self.assertEqual([], self.repo.check()[0])
+        self.assertEqual([], self.violations(java(
+            "Files.createDirectory(d); Files.newOutputStream(f); Files.readAllBytes(f); Files.writeFoo(f);"
+            " Function<Path, OutputStream> o = Files::newOutputStream;")))
 
     # ------------------------------------------------------------------------------- what is ignored
 
     def test_comments_and_string_literals_do_not_count(self):
-        self.repo.put(SOURCE, java(
+        self.assertEqual([], self.violations(java(
             '// Files.createDirectories(root);\n        /* Files.write(f, b); */\n'
-            '        String s = "Files.newInputStream(f) FileChannel.open(f)";\n'
+            '        String s = "Files.newInputStream(f) FileChannel.open(f) FileLock";\n'
             '        String t = """\n        Files.writeString(f, t);\n        """;\n'
-            "        char c = '\"'; /** Files.write(x) */"))
-        self.assertEqual([], self.repo.check()[0])
+            "        char c = '\"'; /** Files.write(x) */")))
+
+    def test_an_import_of_a_channel_type_alone_is_not_a_use(self):
+        self.assertEqual([], self.violations(java("int x;", "import java.nio.channels.FileChannel;\n")))
 
     def test_tests_resources_the_excluded_module_and_the_primitives_are_out_of_scope(self):
         body = java("Files.createDirectories(root);")
@@ -137,6 +188,16 @@ class PrivateIoGateTest(unittest.TestCase):
         violations, scanned, _ = self.repo.check()
         self.assertEqual([], violations)
         self.assertEqual(1, scanned)  # only the primitive's file is under src/main/java and scanned
+
+    def test_only_the_four_justified_primitives_are_exempt(self):
+        self.assertEqual({"BoundedFileLease", "BoundedProperties", "ConfinedFileOpener", "DurableAtomicFile"},
+                         {Path(name).stem for name in _MODULE.PRIMITIVES})
+
+    def test_a_former_primitive_is_checked_like_any_other_file(self):
+        self.repo.put(NOT_A_PRIMITIVE, java("Files.createDirectories(root);"))
+        violations, _, _ = self.repo.check()
+        self.assertEqual(1, len(violations))
+        self.assertIn(NOT_A_PRIMITIVE, violations[0])
 
     # --------------------------------------------------------------------------------- the allowlist
 

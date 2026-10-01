@@ -153,9 +153,10 @@ public final class LocalAutonomousIndexOperations
                 throw new IllegalStateException("resume-only indexing refused: no changes to index");
             }
             String semanticDiagnostic = synchronizeSemanticIfConfigured(prepared.project().id());
-            application.retentionService().compact(prepared.project().id());
+            String retentionDiagnostic = compactAfterSuccess(prepared.project().id());
             return new IndexExecutionView(prepared.view(), null, "NO_CHANGES",
-                    prepared.indexState().activeSnapshotId().orElse(null), true, semanticDiagnostic);
+                    prepared.indexState().activeSnapshotId().orElse(null), true,
+                    combineDiagnostics(semanticDiagnostic, retentionDiagnostic));
         }
         var executors = prepared.negotiation().selections().stream()
                 .map(selection -> runtimeManager.executor(selection.indexer().id()))
@@ -218,7 +219,7 @@ public final class LocalAutonomousIndexOperations
             diagnostic = "workspace changed during indexing; fingerprint baseline was not promoted";
         }
         diagnostic = combineDiagnostics(diagnostic, synchronizeSemanticIfConfigured(prepared.project().id()));
-        application.retentionService().compact(prepared.project().id());
+        diagnostic = combineDiagnostics(diagnostic, compactAfterSuccess(prepared.project().id()));
         return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
                 run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic, resumeView(run));
     }
@@ -283,6 +284,20 @@ public final class LocalAutonomousIndexOperations
             String message = exception.getMessage();
             return "semantic index refresh failed without invalidating structured snapshot: "
                     + (message == null || message.isBlank() ? exception.getClass().getSimpleName() : message);
+        }
+    }
+
+    /**
+     * Retention is maintenance after an index that already succeeded. Its lock is bounded, so it can time out
+     * behind a concurrent compaction: that must not turn a successful index into a failure. The diagnostic
+     * never carries the cause, which may name a path.
+     */
+    private String compactAfterSuccess(java.util.UUID projectId) {
+        try {
+            application.retentionService().compact(projectId);
+            return null;
+        } catch (IOException retentionFailure) {
+            return "storage retention did not run (its lock was busy or unavailable); it runs after the next indexing";
         }
     }
 

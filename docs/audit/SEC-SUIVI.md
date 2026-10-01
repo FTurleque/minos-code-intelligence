@@ -9,9 +9,9 @@ S9 et S12 sont les deux seuls qui donnent quelque chose à un attaquant aujourd'
 
 | Lot | Branche | Constats | PR | État |
 |---|---|---|---|---|
-| 1 | `sec/s9-git` | S9 | #317 | brouillon, CI en cours |
+| 1 | `sec/s9-git` | S9 | #317 | brouillon |
 | 2 | `sec/s12-audit` | S12 | #318 | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
-| 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | à ouvrir | **code terminé**, non poussé ; gate `check-private-io` |
+| 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | #319 | brouillon |
 | 4 | `sec/s8-gitignore` | S8 | à ouvrir | code terminé |
 | 5 | `sec/s7-s15-windows` | S7, S15 | à ouvrir | **code terminé** (S15 et S7 a, b, c corrigés ; S7 d documenté), non poussé |
 
@@ -196,19 +196,26 @@ version consommée).
 
 ### Le gate
 
-`scripts/architecture/check-private-io.py` interdit, dans `src/main/java` de tous les modules sauf `minos-intellij`, hors des sept
-primitives nommées (`PrivateLocalStorage`, `ConfinedFileOpener`, `DurableAtomicFile`, `FileTreeOperations`, `BoundedFileLease`,
-`BoundedProperties`, `SharedCacheLeaseRegistry`) : `Files.createDirectories`, `Files.write`, `Files.writeString`,
-`Files.newInputStream`, `FileChannel.open`, `FileChannel.lock`/`tryLock` (récepteur nommé `*channel*` ou tout `FileLock`).
+`scripts/architecture/check-private-io.py` interdit, dans `src/main/java` de tous les modules sauf `minos-intellij`, hors des **quatre**
+primitives qui doivent toucher l'API brute (`ConfinedFileOpener`, `DurableAtomicFile`, `BoundedFileLease`, `BoundedProperties`) :
+`Files.createDirectories`, `Files.write`, `Files.writeString`, `Files.newInputStream` (appel **ou référence de méthode**
+`Files::write`), `import static java.nio.file.Files.*`, `FileChannel.open`, `AsynchronousFileChannel.open`, et tout usage d'un
+canal (`FileChannel`, `AsynchronousFileChannel`, `FileLock`, `RandomAccessFile`, `getChannel()`, `lock`/`tryLock` sur un récepteur
+`*channel*`) : un canal ne vient que des primitives, le détenir ailleurs est le constat, quel que soit le nom de la variable.
+`PrivateLocalStorage`, `FileTreeOperations` (0 occurrence) et `SharedCacheLeaseRegistry` (plafonné par une entrée) n'ont plus
+d'exemption. Revue verif-sec G1/G2 : l'import joker, les références de méthode, `raf.getChannel().lock()`, un récepteur nommé
+autrement, `AsynchronousFileChannel.open` et l'échappement unicode (décodé comme le fait le compilateur) contournaient la
+première version.
 **Les tests (`src/test`) et les ressources (`src/main/resources`, scripts embarqués) sont exclus par construction** : la règle
-gouverne le code que MINOS livre, pas ses fixtures. Commentaires et littéraux ignorés ; import statique et nom qualifié détectés.
+gouverne le code que MINOS livre, pas ses fixtures. Commentaires et littéraux ignorés ; import statique, nom qualifié, appel coupé sur plusieurs lignes et échappement unicode détectés.
 
 La liste blanche `scripts/architecture/private-io-allowlist.json` est nominative (fichier + méthode + maximum + justification
 écrite) ; jamais un répertoire, jamais un joker (refusés à la lecture) ; **cliquet** : une occurrence hors liste, ou une de plus
 dans un fichier listé, échoue ; une entrée dont le maximum dépasse le compte réel échoue aussi, la liste ne peut que rétrécir.
 Branché dans `.github/workflows/pr-ci.yml` (gate + auto-test, juste après `check-module-boundaries`) et dans `run-final.sh` /
-`run-final.ps1`. Auto-test `test_check_private_io.py` : 21 cas, dont **une mutation témoin par interdiction** (6) et une par
-échappatoire (répertoire, joker, justification vide, maximum périmé, occurrence en trop, doublon, fichier absent, primitive).
+`run-final.ps1`. Auto-test `test_check_private_io.py` : 30 cas, dont **une mutation témoin par interdiction** (8) et une par contournement connu
+(import joker, référence de méthode, ligne coupée, unicode, `getChannel().lock()`, canal issu d'un flux) et par échappatoire
+(répertoire, joker, justification vide, maximum périmé, occurrence en trop, doublon, fichier absent, primitive, ancienne primitive).
 
 | Fichier (module) | Méthode | Max | Pourquoi |
 |---|---|---|---|
@@ -223,10 +230,11 @@ Branché dans `.github/workflows/pr-ci.yml` (gate + auto-test, juste après `che
 | `WindowsAppContainerWorkerSandboxBackend` (runtime-local) | `Files.createDirectories` | 1 | idem |
 | `LinuxCgroupJob` (runtime-local) | `Files.writeString` | 4 | interface noyau cgroup v2, pas des fichiers MINOS |
 | `ProviderWorkspaceFiles` (runtime-local) | `Files.createDirectories` | 2 | copie du projet dans l'arbre de travail sandboxé (accès conteneur par héritage d'ACL) |
+| `SharedCacheLeaseRegistry` (engine) | `FileChannel.lock` | 18 | registre à compte de références : un canal et un verrou par clé (types `FileChannel`/`FileLock`) ; ouverture par `BoundedFileLease.openPrivateLockChannel` |
 
-11 entrées, 19 occurrences, sur 508 sources. Limite du gate, dite : il lit le texte, pas les types. Un verrou de fichier se
-reconnaît à un récepteur nommé `*channel*` ou au type `FileLock` ; un `FileChannel` obtenu d'ailleurs, nommé autrement et dont le
-verrou n'est jamais stocké, passerait. `Files.newOutputStream`, `Files.createTempFile`, `Files.createDirectory` et `Files.copy`
+12 entrées, 37 occurrences, sur 508 sources. Limite du gate, dite : il lit le texte, pas les types. Un verrou de fichier se
+reconnaît à la présence d'un type de canal ou de verrou, de `getChannel()` ou d'un récepteur `*channel*` ; ce qui y échappe serait un
+`Channel` générique (`Files.newByteChannel`) dont on ne ferait que lire et écrire, ce qui n'est pas un verrou. `Files.newOutputStream`, `Files.createTempFile`, `Files.createDirectory` et `Files.copy`
 ne sont pas dans la liste demandée et ne sont pas contrôlés (voir « À traiter plus tard »).
 
 ### Journal
@@ -238,10 +246,11 @@ ne sont pas dans la liste demandée et ne sont pas contrôlés (voir « À trait
 | 3 | S5/S6 : verrou de matérialisation Git, `pin`, `writeProperties` |
 | 4 | S5 : TOCTOU du codec d'observations |
 | 5 | S5 : entrée propriétaire héritable, refus d'un fichier occupant un répertoire |
-| 6 | S5 : secret absolu |
+| 6 | S5 : secret absolu (puis M1 : lien feuille toléré pour ce seul secret) |
 | 7-9 | S5 : `minos-runtime-local` ; `minos-storage-local` + application + PostgreSQL ; `minos-provider-scip` + `minos-cli` |
 | 10 | gates de remédiation alignés sur les primitives |
-| 11 | le gate `check-private-io` |
+| 11 | le gate `check-private-io` (puis G1/G2 : contournements fermés, quatre primitives) |
+| 12 | S6a : `compactAfterSuccess` dans `LocalAutonomousIndexOperations` |
 
 ### Preuve rouge → vert (2026-10-01)
 
@@ -261,7 +270,7 @@ production concernés, ou la version `HEAD` d'un seul fichier), puis contre le c
 | `minos-provider-scip` | `ScipRuntimeStoragePrivacyTest` (2) | **1 échec sur 2** (racine d'installation npm `EXPOSED`) | vert |
 | ACL héritable | `aFileCreatedLaterInAPrivateDirectoryInheritsOwnerOnlyAccess` | rouge (`EXPOSED`) ; en production : 3 tests `AppContainer` réels en `AccessDenied` | vert, et les 3 tests sandbox verts |
 | fichier occupant un répertoire | `aFileOccupyingTheDirectoryNameIsRefused…` | rouge (`IOException` au lieu de `FileAlreadyExistsException`) ; en production : `releasesMaterializationWhenRemoteIndexLeaseAcquisitionFails` | vert |
-| secret absolu | `AbsoluteSecretFileTest` (5) | **4 échecs sur 5** (chemin absolu dans le message : fichier absent, vide, lien, répertoire) | vert |
+| secret absolu | `AbsoluteSecretFileTest` (6) | **4 échecs sur 5** (chemin absolu dans le message : fichier absent, vide, lien, répertoire) ; après M1 : le test de lien feuille vers fichier régulier rouge avant, vert après | vert |
 | baux d'indexation distante | `RemoteIndexLeaseTest` (+1) | **pas rouge** : `BoundedFileLease` durcissait déjà le répertoire en créant le fichier de verrou ; le changement est un nettoyage (un `createDirectories` en moins), la garde est une non-régression | vert |
 
 Tests ignorés par ce lot : **0** de mes tests ne sont ignorés sur cette machine (les liens symboliques se créent ; mes tests de
@@ -273,10 +282,22 @@ tests POSIX ignorés sous Windows, **antérieurs au lot**. Un test de plus est p
 - Les gates de remédiation `check-mnd`, `check-audit-remediation-v2` et `check-post-mne` exigeaient le texte brut que les
   primitives remplacent (`jvmLock.lock()`, `Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)`, `Files.walkFileTree` dans JGit).
   Chaque littéral est remplacé par celui de la primitive plus stricte, aucune exigence n'est supprimée.
-- **Hérité du lot 1, non corrigé ici** : `check-post-mne.py` échoue encore, par cascade, sur `check-remote-distributed-consistency.py`
-  (`RemoteRepositoryRequest.java: missing semantic facts: GITHUB("github.com"), GITLAB("gitlab.com")`) : S9 a déplacé ces faits
-  dans `RemoteHost`. Le littéral `Files.walkFileTree` de JGit, cassé par le même S9, est en revanche corrigé ici car ce lot
-  réécrit ce fichier.
+- `check-post-mne` exigeait aussi `Files.walkFileTree` dans JGit (effaceur local disparu avec S9) : le littéral est celui de
+  `FileTreeOperations.deleteRecursively`. Après la fusion de `sec/s12-audit` et des gates `quality` de l'orchestrateur, `check-post-mne`
+  et `check-remote-distributed-consistency` sont verts.
+- **Revue verif-sec, S6a** : la compaction de rétention est bornée à 10 s, donc elle peut expirer ; deux appels de
+  `LocalAutonomousIndexOperations` (`NO_CHANGES` et succès) la laissaient remonter après un index réussi, alors que les deux autres sont
+  protégés (chemins d'échec). Ils passent par `compactAfterSuccess` : `IOException` capturée, diagnostic « storage retention did not run »
+  sans cause ni chemin. Preuve : `RetentionFailureAfterIndexTest` rouge (l'`IOException` remontait) puis vert ; le chemin succès
+  d'une exécution réelle partage la même méthode et n'a pas de test propre. `check-post-mne` compte désormais les appels directs et
+  `compactAfterSuccess` pour son invariant « rétention sur chaque chemin terminal ».
+- **Revue verif-sec, M1, décision** : `readAbsoluteSecret` refusait un lien feuille, ce qui casse les volumes de secrets Kubernetes
+  (`key` → `..data/key`) alors que la Javadoc de classe parle de « mounted secret stores ». **Exception limitée au seul secret ABSOLU**,
+  que l'opérateur désigne lui-même : le chemin est résolu une fois (`toRealPath`), doit aboutir à un **fichier régulier**, est ouvert
+  `NOFOLLOW` et lu sur ce seul flux ; répertoire, lien pendant ou autre objet : refus, sans chemin. Tout ce qui est sous MINOS_HOME, secret
+  relatif compris, reste strictement `NOFOLLOW`. Preuve : `AbsoluteSecretFileTest` (6) : lien feuille via `..data` lu ; lien vers répertoire
+  et lien pendant refusés ; rouge avant (« must be a regular non-symlink file »), vert après. Le test de refus d'un lien feuille du
+  lot 3 d'origine est remplacé par ces deux-là : c'est une décision écrite, pas un affaiblissement silencieux.
 - Compromis de S6, dit : une compaction qui en attend une autre sur le même projet échoue au bout de 10 s au lieu de lever tout
   de suite (même JVM) ou d'attendre sans fin (autre processus). Une compaction plus longue que 10 s sur un gros projet, relancée
   en parallèle, échouerait donc ; ce n'est pas un chemin chaud (la rétention suit la fin d'une indexation).
@@ -289,14 +310,14 @@ Machine : Windows 10, JDK 24 (liens symboliques disponibles). Aucun `clean`, auc
 | Commande | Résultat |
 |---|---|
 | `./mvnw -fae test` (réacteur entier, après le dernier commit de code) | **BUILD SUCCESS**, 14 modules, 1 901 tests, 0 échec, 0 erreur, 54 ignorés (tous antérieurs au lot : tests POSIX/Linux sous Windows) |
-| `check-private-io.py` | SUCCESS : 508 sources, 19 occurrences listées, 6 interdictions, 7 primitives |
-| `test_check_private_io.py` | 21 tests OK |
+| `check-private-io.py` | SUCCESS : 508 sources, 37 occurrences listées (12 entrées), 8 interdictions, 4 primitives |
+| `test_check_private_io.py` | 30 tests OK |
 | `test_check_module_boundaries.py`, `check-module-boundaries.py` | OK ; SUCCESS (14 modules, 508 sources) |
 | `check-workflow-pins.py` | SUCCESS (70 usages externes) |
 | `product-facts.py --check`, `check-current-docs.py`, `check-current-docs-vertical-extension.py` | SUCCESS |
 | `check-milestone-artifact-references.py` | SUCCESS (98 scripts) |
 | `check-mnd`, `check-mne`, `check-p0-p2`, `check-post228-hardening`, `check-audit-remediation-v2`, `check-minos-01`, `check-vertical-decomposition-consistency` | SUCCESS |
-| `check-post-mne.py`, `check-remote-distributed-consistency.py` | **échec hérité du lot 1** (voir ci-dessus), pas introduit ici |
+| `check-post-mne`, `check-remote-distributed-consistency` et tous les gates `quality/` | SUCCESS (après fusion) |
 
 Non vérifié : `clean verify` complet et JaCoCo (rouge m24 sous Windows, antérieur) ; l'exécution Linux (verrous POSIX, droits 0700/0600,
 `SecureDirectoryStream`) : les tests de droits POSIX sont ignorés ici et ne tournent qu'en CI ; `minos-intellij` (Gradle) non touché
@@ -305,6 +326,12 @@ et non construit ; les sandbox `bubblewrap`/cgroup (Linux seulement) n'ont tourn
 ### Gates à texte littéral du dossier `quality/` (orchestrateur, après fusion des lots 1-2)
 
 Trois scripts de `scripts/quality/` que `impl-sec` n'avait pas rejoués exigeaient du texte que les primitives remplacent : `FileLock` dans `FileHostedControlPlaneStore` et `JGitRemoteRepositoryMaterializer` devient `BoundedFileLease` ; `Files.isSymbolicLink` dans `RuntimeObservationEnvelopeCodec` devient `ConfinedFileOpener.openRegularFileNoFollow`. L'exigence reste du même ordre (le verrou fichier et le non-suivi de lien sont toujours gardés, par la primitive nommée). Tous les `check-*.py` de `remediation/`, `quality/` et `architecture/` sont verts après ce changement, hors `check-jacoco.py` (rapports JaCoCo requis).
+
+### Résultat de fin de lot 3 (orchestrateur, 2026-10-01, Windows 10, JDK 24)
+
+- `./mvnw -B clean verify` après les corrections de `verif-sec` : **BUILD SUCCESS**, 15 modules, 1 910 tests, 0 échec, 54 ignorés (tous antérieurs ; ceux ajoutés par le lot : 0 hors `@EnabledOnOs(WINDOWS)`).
+- Revue `verif-sec` : aucun bloquant ; G1 (contournements du gate), G2 (exemptions trop larges), S6a (`compact` non protégé après un run réussi) et M1 (secret absolu par lien feuille) corrigés, voir ci-dessus ; G3/G4/W1/R1/R2/S6b/A1/E1/T1 consignés comme remarques ou en « à traiter plus tard ».
+- Tous les `check-*.py` rejoués verts (hors `check-jacoco.py`) ; golden `characterization/` inchangés.
 
 ## 4. Lot 4 : S8, un `.gitignore` hostile ne casse pas le chargement
 
@@ -530,8 +557,6 @@ du plan (liste blanche commune `ProviderProcessEnvironment`, inchangée).
   passage par `PublicErrorMessages` à la frontière.
 - **Lot 3, `MinosRuntimeSettings.load`** : `Files.isRegularFile(configuration)` suit encore un lien avant `BoundedProperties.load`
   (qui le refuse ensuite, avec un chemin dans le message). Même famille que le secret absolu, hors S5 nommé.
-- **Hérité du lot 1** : `check-post-mne.py` (donc le gate M25 `check-remote-distributed-consistency.py`) échoue sur
-  `RemoteRepositoryRequest.java` : les faits `GITHUB("github.com")` / `GITLAB("gitlab.com")` ont déménagé dans `RemoteHost` avec S9.
 - **Lot 5, FFM** : un appel natif (`SetNamedSecurityInfo` avec `PROTECTED_DACL_SECURITY_INFORMATION`, `GetSecurityDescriptorControl`
   pour lire le bit) supprimerait le processus `icacls` par objet et permettrait de vérifier la protection au lieu de la supposer ; le
   même mécanisme (`CreateFile` avec `FILE_FLAG_BACKUP_SEMANTICS` puis `FlushFileBuffers`) rendrait `forceDirectory` réel. Coût : le
