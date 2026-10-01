@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.registry.UnreadableRegistryException;
 import com.minos.domain.SymbolLocation;
 import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.program.ProgramGraph;
@@ -90,7 +91,7 @@ final class IdeIntelligenceCommand {
         try {
             output.append(CliJson.render(invocation.run())).append('\n');
             return FindSymbolCommand.SUCCESS;
-        } catch (IllegalArgumentException | IllegalStateException exception) {
+        } catch (IllegalArgumentException | IllegalStateException | UnreadableRegistryException exception) {
             error.append("error: ").append(message(exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
@@ -402,7 +403,7 @@ final class IdeIntelligenceCommand {
         }
     }
 
-    private static String message(RuntimeException exception) {
+    private static String message(Exception exception) {
         return CliCommandSupport.failureMessage(exception);
     }
 }

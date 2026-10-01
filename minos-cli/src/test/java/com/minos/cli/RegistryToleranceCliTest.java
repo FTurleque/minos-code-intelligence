@@ -125,6 +125,32 @@ class RegistryToleranceCliTest {
     }
 
     @Test
+    void projectAddOfAMissingPathIsNotBlamedOnTheDamagedEntry() throws Exception {
+        registry(true);
+
+        Result result = run("project", "add", temp.resolve("does-not-exist").toString());
+
+        assertEquals(1, result.exit(), result.output() + result.error());
+        assertFalse(result.error().contains("uniqueness"), "the path is the failure, not the registry: " + result.error());
+    }
+
+    @Test
+    void statusAndIdeCommandsReportTheDamageAsTheirOwnFailureNotAsABootstrapFailure() throws Exception {
+        registry(true);
+
+        for (String[] command : new String[][]{
+                {"semantic", "status", "alpha"}, {"hybrid", "status", "alpha"},
+                {"ide", "semantic-index-status", "alpha"}}) {
+            Result result = run(command);
+            String context = String.join(" ", command) + " -> " + result.error();
+            assertEquals(1, result.exit(), context);
+            assertTrue(result.error().contains("1 registry entry is unreadable"), context);
+            assertFalse(result.error().contains("bootstrap failed"), "the home was opened: " + context);
+            assertClean(result);
+        }
+    }
+
+    @Test
     void everyOtherCommandByNameStaysStrictWithAnActionableMessage() throws Exception {
         registry(true);
 

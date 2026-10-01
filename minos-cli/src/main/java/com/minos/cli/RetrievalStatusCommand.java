@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.output.SymbolOutputFormat;
+import com.minos.registry.UnreadableRegistryException;
 import com.minos.application.semantic.SemanticIndexService;
 
 import java.io.IOException;
@@ -67,7 +68,7 @@ final class RetrievalStatusCommand {
             return FindSymbolCommand.SUCCESS;
         } catch (LazyApplication.OpenFailure openFailure) {
             throw openFailure;
-        } catch (RuntimeException exception) {
+        } catch (UnreadableRegistryException | RuntimeException exception) {
             error.append("error: ").append(mode.commandName()).append(" status failed: ")
                     .append(CliCommandSupport.failureMessage(exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;

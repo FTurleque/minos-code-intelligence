@@ -3,6 +3,7 @@ package com.minos.cli;
 import com.minos.application.ProjectOperations;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.domain.SymbolKind;
+import com.minos.registry.DegradedEntry;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -158,8 +159,13 @@ final class CliCommandSupport {
         }
     }
 
+    /**
+     * The one failure line of the CLI. A message may copy a value read from a damaged file, so the control
+     * sequences that a terminal would execute are replaced by the same rule as a degraded entry ({@link DegradedEntry#printable}).
+     */
     static String failureMessage(Throwable failure) {
-        return PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName());
+        return DegradedEntry.printable(
+                PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName()));
     }
 
     static String publicDiagnostic(String diagnostic) {

@@ -39,7 +39,7 @@ public record DegradedEntry(String entry, String reason) {
      * de ligne mais laisse passer les séquences de contrôle (ESC, BEL, CSI sur 8 bits, inversion bidirectionnelle),
      * que l'affichage en terminal exécuterait. Elles sont remplacées ici, une seule fois, par {@code _}.
      */
-    private static String printable(String text) {
+    public static String printable(String text) {
         StringBuilder printable = new StringBuilder(text.length());
         text.codePoints().forEach(codePoint -> printable.appendCodePoint(isUnsafeForTerminal(codePoint) ? '_' : codePoint));
         return printable.toString();

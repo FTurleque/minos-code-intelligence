@@ -260,8 +260,13 @@ qui a écrit ce lot : la logique pure du plugin a été exécutée localement av
   non modifié par ce chantier.
 - **`listWorkspaces` / `findWorkspace` stricts.** Tolérer un registre abîmé suppose un champ « entrées écartées » dans
   les DTO de l'API et de MCP (contrat public) ; voir § 5.
-- **Texte d'un fichier abîmé dans un message d'échec.** Sur les chemins d'échec stricts qui remontent l'exception
-  d'origine (par exemple `inspect <identifiant d'une entrée abîmée>`), `CliCommandSupport.failureMessage` passe par
-  `PublicErrorMessages.sanitize`, qui aplatit les sauts de ligne mais laisse passer les caractères de contrôle ;
-  `DegradedEntry` est seul à les remplacer. Les messages du lot 2 n'embarquent aucun texte de fichier (un nombre), mais
-  la fuite des autres chemins relève de `PublicErrorMessages` (toutes surfaces), hors périmètre.
+- **Texte d'un fichier abîmé dans un message d'échec.** Sur les chemins d'échec stricts qui remontent l'exception d'origine
+  (par exemple `inspect <identifiant d'une entrée abîmée>`), le message du JDK peut recopier un fragment du fichier lu
+  (`Text 'nope' could not be parsed`). Constat de `verif-cli`. Corrigé dans ce lot pour ce qui est dangereux : la ligne d'échec
+  unique de la CLI (`CliCommandSupport.failureMessage`) remplace désormais les séquences de contrôle (ESC, BEL, inversion
+  bidirectionnelle) par la règle de `DegradedEntry` (`DegradedEntry.printable`, rendue publique, une seule règle). Reste, hors
+  périmètre : le fragment lui-même, rendu lisible mais non remplacé par un message véridique, et les autres surfaces
+  (`PublicErrorMessages`, MCP, API). Une résolution par identifiant d'une entrée abîmée garde donc un message brut du JDK.
+- **`project inspect <nom>` introuvable, entrées illisibles : code 3 sans sortie.** Le contrat « valide pour ce qui a été lu » se
+  réduit ici à une ligne `error:` sur stderr et une sortie standard vide ; un consommateur qui analyse stdout sur un 3 doit
+  d'abord tester qu'elle n'est pas vide. Voulu (on ne devine pas), mais à savoir.
