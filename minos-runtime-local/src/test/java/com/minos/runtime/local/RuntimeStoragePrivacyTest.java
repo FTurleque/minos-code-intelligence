@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -127,7 +128,7 @@ class RuntimeStoragePrivacyTest {
                 }
                 """);
         String java = Path.of(System.getProperty("java.home"), "bin",
-                System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win") ? "java.exe" : "java").toString();
+                System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win") ? "java.exe" : "java").toString();
         ProcessIndexerExecutor executor = new ProcessIndexerExecutor(
                 "fake-provider",
                 temp.resolve("home"),
