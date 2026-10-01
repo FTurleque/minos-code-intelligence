@@ -30,6 +30,8 @@ minos.cmd remote materialize https://github.com/acme/private-project `
 
 MINOS ne persiste ni le token ni le nom de sa variable. Utilisez un token read-only.
 
+Le nom de la variable n'est pas libre : seules `MINOS_REMOTE_TOKEN` (ou `MINOS_REMOTE_TOKEN_<SUFFIXE>`) et la variable usuelle de l'hôte visé (`MINOS_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN` pour github.com ; `MINOS_GITLAB_TOKEN`, `GITLAB_TOKEN` pour gitlab.com) sont acceptées. Toute autre variable est **refusée avant tout accès réseau**, avec un message qui liste les noms admis : une configuration ne peut pas faire partir une clé cloud ou le jeton d'un autre hôte. Si vous utilisiez un autre nom, renommez simplement la variable.
+
 ## État de `remote index`
 
 `remote materialize` est utilisable indépendamment de la sandbox provider. En revanche, `remote index` n’exécute du code distant que si **toutes** les dimensions de confinement exigées sont qualifiées au niveau OS. Une **sandbox OS qualifiée** désigne ici une frontière qui satisfait réellement toutes ces exigences ; **aucun backend intégré ne l’est, par décision** ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md), 2026-09-26).

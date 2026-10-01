@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -68,6 +69,36 @@ class RemoteRepositoryRequestTest {
                 Optional.empty(),
                 RemoteRepositoryRequest.FetchNetworkPolicy.FETCH_ONLY
         ));
+    }
+
+    @Test
+    void anUnrelatedEnvironmentVariableCanNeverBeNamedAsTheCredential() {
+        for (String name : new String[]{"AWS_SECRET_ACCESS_KEY", "OPENAI_API_KEY", "PATH", "MINOS_REMOTE_TOKENX", "TOKEN"}) {
+            IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                    () -> RemoteRepositoryRequest.of("https://github.com/acme/demo", "main", COMMIT, null, name),
+                    name);
+            assertTrue(refusal.getMessage().contains("MINOS_REMOTE_TOKEN"), refusal.getMessage());
+            if (name.endsWith("_KEY")) {
+                assertFalse(refusal.getMessage().contains(name), "the refusal must not echo an arbitrary variable name");
+            }
+        }
+        // A host's own token variable is not another host's: GITHUB_TOKEN must not travel to gitlab.com.
+        assertThrows(IllegalArgumentException.class, () -> RemoteRepositoryRequest.of(
+                "https://gitlab.com/acme/demo", "main", COMMIT, null, "GITHUB_TOKEN"));
+        assertEquals(Optional.of("GITHUB_TOKEN"), RemoteRepositoryRequest.of(
+                "https://github.com/acme/demo", "main", COMMIT, null, "GITHUB_TOKEN").credentialEnvironmentVariable());
+        assertEquals(Optional.of("MINOS_REMOTE_TOKEN_CI"), RemoteRepositoryRequest.of(
+                "https://gitlab.com/acme/demo", "main", COMMIT, null, "MINOS_REMOTE_TOKEN_CI")
+                .credentialEnvironmentVariable());
+    }
+
+    @Test
+    void aTrailingSlashDoesNotProduceADotGitSegment() {
+        for (String url : new String[]{
+                "https://github.com/acme/demo/", "https://github.com/acme/demo.git/", "https://github.com/acme/demo//"}) {
+            assertEquals("https://github.com/acme/demo.git",
+                    RemoteRepositoryRequest.of(url, "main", COMMIT, null, null).canonicalRepositoryUri(), url);
+        }
     }
 
     private static void assertInvalid(

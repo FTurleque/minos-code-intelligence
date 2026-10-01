@@ -2,6 +2,7 @@ package com.minos.integration.git;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
+import com.minos.io.FileTreeOperations;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 import com.minos.io.SharedCacheLeaseRegistry;
@@ -17,15 +18,11 @@ import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.DosFileAttributeView;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -406,33 +403,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         if (normalized.equals(cacheRoot) || !normalized.startsWith(cacheRoot)) {
             throw new IOException("refusing to delete outside the remote repository cache");
         }
-        if (!Files.exists(normalized)) return;
-        Files.walkFileTree(normalized, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult visitFile(Path path, BasicFileAttributes attributes) throws IOException {
-                clearReadOnly(path);
-                Files.deleteIfExists(path);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
-                if (failure != null) throw failure;
-                clearReadOnly(directory);
-                Files.deleteIfExists(directory);
-                return FileVisitResult.CONTINUE;
-            }
-        });
-    }
-
-    private static void clearReadOnly(Path path) {
-        try {
-            DosFileAttributeView attributes = Files.getFileAttributeView(
-                    path, DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-            if (attributes != null && attributes.readAttributes().isReadOnly()) attributes.setReadOnly(false);
-        } catch (IOException | UnsupportedOperationException ignored) {
-            // Non-DOS file systems do not need this Windows-specific cleanup.
-        }
+        FileTreeOperations.deleteRecursively(normalized);
     }
 
     private static long saturatingAdd(long left, long right) {

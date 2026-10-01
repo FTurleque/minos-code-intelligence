@@ -45,6 +45,11 @@ import java.util.TreeSet;
  */
 public final class GitIntelligenceService implements GitIntelligence {
 
+    /** Commits visited, kept or skipped, before the walk gives up; a visit without a diff is cheap. */
+    static final int MAX_SCANNED_COMMITS = 200_000;
+    /** Consecutive commits older than {@code since} after which the rest of the history is taken as older too. */
+    static final int OLDER_COMMIT_RUN_LIMIT = 1_000;
+
     private final ActivityBudget budget;
 
     public GitIntelligenceService() {
@@ -87,18 +92,30 @@ public final class GitIntelligenceService implements GitIntelligence {
                 int processed = 0;
                 Iterable<RevCommit> history;
                 try {
-                    history = git.log().setMaxCount(query.maxCommits() + 1).call();
+                    history = git.log().setMaxCount(MAX_SCANNED_COMMITS + 1).call();
                 } catch (NoHeadException exception) {
                     limitations.add("UNBORN_HEAD");
                     history = List.of();
                 }
 
                 int retainedPathCount = 0;
+                int scanned = 0;
+                int consecutiveOlder = 0;
                 for (RevCommit commit : history) {
-                    Instant committedAt = commit.getCommitterIdent().getWhenAsInstant();
-                    if (committedAt.isBefore(query.since())) {
+                    // Committer dates are not monotone along parent links (clock skew, rebases,
+                    // imported history): one old commit does not prove everything after it is old.
+                    // Old commits are skipped, and the walk only stops on a long run of them, or at a
+                    // hard scan cap, so a hostile history stays bounded without hiding recent commits.
+                    if (++scanned > MAX_SCANNED_COMMITS) {
+                        limitations.add("HISTORY_SCAN_LIMIT");
                         break;
                     }
+                    Instant committedAt = commit.getCommitterIdent().getWhenAsInstant();
+                    if (committedAt.isBefore(query.since())) {
+                        if (++consecutiveOlder >= OLDER_COMMIT_RUN_LIMIT) break;
+                        continue;
+                    }
+                    consecutiveOlder = 0;
                     if (processed >= query.maxCommits()) {
                         historyTruncated = true;
                         limitations.add("HISTORY_TRUNCATED");
@@ -162,8 +179,9 @@ public final class GitIntelligenceService implements GitIntelligence {
         if (!Files.isDirectory(root)) {
             throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
         }
+        // No readEnvironment(): GIT_DIR, GIT_WORK_TREE and GIT_CEILING_DIRECTORIES must not redirect
+        // the analysis to a repository other than the one under the requested root.
         FileRepositoryBuilder builder = new FileRepositoryBuilder()
-                .readEnvironment()
                 .findGitDir(root.toFile());
         if (builder.getGitDir() == null) {
             throw new IllegalArgumentException("projectRoot is not inside a Git repository: " + root);

@@ -3,9 +3,12 @@ package com.minos.remote;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import static com.minos.domain.Preconditions.requireText;
@@ -45,6 +48,11 @@ public record RemoteRepositoryRequest(
         credentialEnvironmentVariable.ifPresent(value -> {
             if (!ENVIRONMENT_VARIABLE.matcher(value).matches()) {
                 throw new IllegalArgumentException("credential environment variable has an invalid name");
+            }
+            if (!host.isAllowedCredentialVariable(value)) {
+                throw new IllegalArgumentException(
+                        "credential environment variable is not allowed for " + host.hostname()
+                                + "; use one of: " + host.allowedCredentialVariablesDescription());
             }
         });
         if (fetchNetworkPolicy != FetchNetworkPolicy.FETCH_ONLY) {
@@ -107,7 +115,7 @@ public record RemoteRepositoryRequest(
         if (path == null || path.isBlank() || path.equals("/")) {
             throw new IllegalArgumentException("repositoryUri must identify a repository path");
         }
-        String normalizedPath = path.endsWith(".git") ? path.substring(0, path.length() - 4) : path;
+        String normalizedPath = stripRepositorySuffix(path);
         String[] segments = normalizedPath.substring(1).split("/");
         if (segments.length < 2) {
             throw new IllegalArgumentException("repositoryUri must include an owner/group and repository");
@@ -122,6 +130,15 @@ public record RemoteRepositoryRequest(
         } catch (URISyntaxException exception) {
             throw new IllegalArgumentException("repositoryUri cannot be canonicalized", exception);
         }
+    }
+
+    /** Single place that turns a URL path into its repository path: no trailing slash, no {@code .git}. */
+    private static String stripRepositorySuffix(String path) {
+        String result = path;
+        int end = result.length();
+        while (end > 1 && result.charAt(end - 1) == '/') end--;
+        result = result.substring(0, end);
+        return result.endsWith(".git") ? result.substring(0, result.length() - 4) : result;
     }
 
     private static String canonicalReference(String value) {
@@ -154,13 +171,37 @@ public record RemoteRepositoryRequest(
     }
 
     public enum RemoteHost {
-        GITHUB("github.com"),
-        GITLAB("gitlab.com");
+        GITHUB("github.com", "MINOS_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"),
+        GITLAB("gitlab.com", "MINOS_GITLAB_TOKEN", "GITLAB_TOKEN");
+
+        /** Dedicated namespace: variables created for MINOS, never an ambient secret. */
+        private static final String DEDICATED_PREFIX = "MINOS_REMOTE_TOKEN";
 
         private final String hostname;
+        private final Set<String> credentialVariables;
 
-        RemoteHost(String hostname) {
+        RemoteHost(String hostname, String... credentialVariables) {
             this.hostname = hostname;
+            this.credentialVariables = Set.of(credentialVariables);
+        }
+
+        /**
+         * Whether {@code name} may be sent as a basic-auth secret to this host. The name is never
+         * free: only the dedicated {@code MINOS_REMOTE_TOKEN[_SUFFIX]} namespace and this host's own
+         * conventional token variables qualify, so a configuration cannot make an unrelated secret
+         * (a cloud key, another host's token) leave the machine.
+         */
+        public boolean isAllowedCredentialVariable(String name) {
+            if (name == null) return false;
+            if (name.equals(DEDICATED_PREFIX) || name.startsWith(DEDICATED_PREFIX + "_")) return true;
+            return credentialVariables.contains(name);
+        }
+
+        String allowedCredentialVariablesDescription() {
+            List<String> names = new ArrayList<>(credentialVariables);
+            names.sort(null);
+            names.add(0, DEDICATED_PREFIX + "[_SUFFIX]");
+            return String.join(", ", names);
         }
 
         public String hostname() {

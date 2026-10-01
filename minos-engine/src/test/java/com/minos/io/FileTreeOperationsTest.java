@@ -37,6 +37,18 @@ class FileTreeOperationsTest {
     }
 
     @Test
+    void deletesReadOnlyEntriesSuchAsClonedPackFiles() throws IOException {
+        Path target = Files.createDirectories(temporaryDirectory.resolve("target/objects"));
+        Path pack = Files.writeString(target.resolve("pack.idx"), "read-only");
+        Files.setAttribute(pack, "dos:readonly", true);
+        Files.setAttribute(target, "dos:readonly", true);
+
+        FileTreeOperations.deleteRecursively(temporaryDirectory.resolve("target"));
+
+        assertFalse(Files.exists(temporaryDirectory.resolve("target")));
+    }
+
+    @Test
     void deletesAWindowsJunctionEntryWithoutWalkingThroughToItsTarget() throws Exception {
         Assumptions.assumeTrue(isWindows(), "NTFS junctions are a Windows-only reparse point");
         Path outside = Files.createDirectories(temporaryDirectory.resolve("outside"));
