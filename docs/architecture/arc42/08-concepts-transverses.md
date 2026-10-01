@@ -56,7 +56,7 @@
 - Les services retournent des types portant les limitations et le `ResolutionStatus` (non des exceptions de bas niveau).
 - `ImpactAnalysisReport` porte une liste de `ImpactLimitation` explicites.
 - `IndexerNegotiationResult` indique les capacités absentes ou partielles.
-- En CLI, les exit codes sont : 0 = succès, 1 = erreur d'exécution, 2 = erreur d'usage, 3 = résultat partiel (`project list` seulement : des entrées abîmées sont dégradées, comptées et affichées ; voir `docs/user/cli.md`).
+- En CLI, les exit codes sont : 0 = succès, 1 = erreur d'exécution, 2 = erreur d'usage, 3 = résultat partiel (un seul sens pour toutes les commandes : `project list` et la résolution par nom de `inspect`, `project inspect` et `index-status`, quand des entrées du registre sont illisibles, comptées et affichées ; voir `docs/user/cli.md`).
 - En MCP, les erreurs sont des réponses JSON-RPC d'erreur, pas des panics.
 
 ---

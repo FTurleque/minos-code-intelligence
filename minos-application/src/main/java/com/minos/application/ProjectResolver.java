@@ -1,12 +1,15 @@
 package com.minos.application;
 
+import com.minos.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
+import com.minos.registry.UnreadableRegistryException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Single application-level policy for resolving user-facing project references. */
@@ -32,6 +35,17 @@ public final class ProjectResolver {
         public List<UUID> candidateIds() { return candidateIds; }
     }
 
+    /**
+     * A project resolved while some registry entries could not be read: the answer is true for what was read, and
+     * {@code unreadable} says what was ignored (never empty-by-accident: it is the registry's own inventory).
+     */
+    public record Resolution(RegisteredProject project, List<DegradedEntry> unreadable) {
+        public Resolution {
+            Objects.requireNonNull(project, "project");
+            unreadable = List.copyOf(Objects.requireNonNull(unreadable, "unreadable"));
+        }
+    }
+
     private final ProjectRegistry registry;
 
     public ProjectResolver(ProjectRegistry registry) { this.registry = Objects.requireNonNull(registry, "registry"); }
@@ -40,6 +54,27 @@ public final class ProjectResolver {
         requireReference(reference);
         UUID projectId = parseUuid(reference);
         return projectId == null ? resolveByName(reference) : resolveById(projectId);
+    }
+
+    /**
+     * Like {@link #resolve} for the commands that report an incomplete answer instead of failing (Q24): a name found
+     * among the readable entries is returned with the entries that could not be read; a name not found while some
+     * entries are unreadable is neither found nor absent, and fails with {@link UnreadableRegistryException}. A
+     * reference that is a UUID reads only its own entry, so a damaged neighbour never concerns it.
+     */
+    public Resolution resolveTolerantly(String reference) throws IOException {
+        requireReference(reference);
+        UUID projectId = parseUuid(reference);
+        if (projectId != null) return new Resolution(resolveById(projectId), List.of());
+        ProjectRegistry.Inventory inventory = registry.inventory();
+        List<RegisteredProject> candidates = inventory.projects().stream()
+                .filter(project -> reference.equals(project.displayName())).toList();
+        if (candidates.size() > 1) throw ambiguous(reference, candidates);
+        if (candidates.isEmpty()) {
+            if (inventory.unreadable().isEmpty()) throw notFound(reference);
+            throw UnreadableRegistryException.of(inventory.unreadable(), "it cannot be told whether this project exists");
+        }
+        return new Resolution(candidates.getFirst(), inventory.unreadable());
     }
 
     public RegisteredProject resolveById(UUID projectId) throws IOException {
@@ -63,7 +98,16 @@ public final class ProjectResolver {
     }
 
     private List<RegisteredProject> candidatesByName(String displayName) throws IOException {
-        return registry.listProjects().stream().filter(project -> displayName.equals(project.displayName())).toList();
+        try {
+            return registry.listProjects().stream().filter(project -> displayName.equals(project.displayName())).toList();
+        } catch (IOException | RuntimeException failure) {
+            if (Thread.currentThread().isInterrupted()) throw failure;
+            Optional<UnreadableRegistryException> explained = UnreadableRegistryException.explaining(registry,
+                    "the project name cannot be resolved with certainty; use its UUID");
+            if (explained.isEmpty()) throw failure;
+            explained.get().addSuppressed(failure);
+            throw explained.get();
+        }
     }
 
     private static void requireReference(String reference) {

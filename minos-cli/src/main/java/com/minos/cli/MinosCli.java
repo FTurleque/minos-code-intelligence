@@ -71,6 +71,7 @@ public final class MinosCli {
               0  success
               1  execution failure / doctor action required
               2  usage error
+              3  partial result: valid for what was read, unreadable registry entries were counted and ignored
 
             Run `minos <command> --help` for command options.
             """.stripTrailing();

@@ -2,6 +2,7 @@ package com.minos.cli;
 
 import com.minos.application.ProjectOperations;
 import com.minos.orchestration.ResumableRunSummary;
+import com.minos.registry.UnreadableRegistryException;
 import com.minos.output.ProjectJson;
 import com.minos.output.SymbolOutputFormat;
 
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiFunction;
 
 /** Commandes stables d'administration du registre projet. */
 public final class ProjectCommand {
@@ -71,20 +73,38 @@ public final class ProjectCommand {
     }
 
     public int runInspectAlias(String[] arguments, Appendable output, Appendable error) throws IOException {
-        return CliCommandSupport.run(arguments, output, error, INSPECT_USAGE, Options::singleProject,
-                CliCommandSupport.reportingCause("inspect"), options -> {
-                    ProjectOperations.ProjectView project = operations.inspectProject(options.project());
-                    output.append(renderProject(project, options.format())).append('\n');
-                    return FindSymbolCommand.SUCCESS;
-                });
+        return runInspection(arguments, output, error, INSPECT_USAGE, "inspect", ProjectCommand::renderProject);
     }
 
     public int runIndexStatus(String[] arguments, Appendable output, Appendable error) throws IOException {
-        return CliCommandSupport.run(arguments, output, error, STATUS_USAGE, Options::singleProject,
-                CliCommandSupport.reportingCause("index-status"), options -> {
-                    ProjectOperations.ProjectView project = operations.inspectProject(options.project());
-                    output.append(renderIndexStatus(project, options.format())).append('\n');
-                    return FindSymbolCommand.SUCCESS;
+        return runInspection(arguments, output, error, STATUS_USAGE, "index-status", this::renderIndexStatus);
+    }
+
+    /**
+     * Resolution by name that reports an incomplete answer instead of failing (Q24): a project found beside
+     * unreadable registry entries is shown and the verdict is {@link FindSymbolCommand#PARTIAL_RESULT}, since its name
+     * cannot be proven unique; a name not found while entries are unreadable is not reported as absent. A lookup by
+     * identifier reads only its own entry and stays a plain success.
+     */
+    private int runInspection(String[] arguments, Appendable output, Appendable error, String usage, String label,
+                              BiFunction<ProjectOperations.ProjectView, SymbolOutputFormat, String> render)
+            throws IOException {
+        return CliCommandSupport.run(arguments, output, error, usage, Options::singleProject,
+                CliCommandSupport.reportingCause(label), options -> {
+                    ProjectOperations.ProjectInspection inspection;
+                    try {
+                        inspection = operations.inspection(options.project());
+                    } catch (UnreadableRegistryException unreadable) {
+                        error.append("error: ").append(label).append(" failed: ").append(unreadable.getMessage()).append('\n');
+                        return FindSymbolCommand.PARTIAL_RESULT;
+                    }
+                    output.append(render.apply(inspection.project(), options.format())).append('\n');
+                    if (inspection.unreadable().isEmpty()) {
+                        return FindSymbolCommand.SUCCESS;
+                    }
+                    error.append("warning: ").append(UnreadableRegistryException.describe(inspection.unreadable().size()))
+                            .append(", so this name cannot be proven unique\n");
+                    return FindSymbolCommand.PARTIAL_RESULT;
                 });
     }
 
