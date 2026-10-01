@@ -1,5 +1,6 @@
 package com.minos.application.dynamic;
 
+import com.minos.io.ConfinedFileOpener;
 import com.minos.dynamic.RuntimeObservation;
 import com.minos.dynamic.RuntimeObservationCompleteness;
 import com.minos.dynamic.RuntimeObservationSession;
@@ -11,11 +12,11 @@ import com.minos.io.FixedTsv;
 import com.minos.io.Sha256;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
@@ -31,17 +32,20 @@ public final class RuntimeObservationEnvelopeCodec {
     public static final long MAX_INPUT_BYTES = 64L * 1024L * 1024L;
     public static final int MAX_LINE_CHARS = 1024 * 1024;
     private static final int METADATA_LINES = 9;
+    private static final String NOT_A_REGULAR_FILE = "runtime observation input must be a regular non-symlink file";
 
+    /**
+     * Reads one envelope. The file is opened exactly once, with no link followed, and every byte comes
+     * from that open stream: a leaf replaced by a link after any earlier look is refused by the open
+     * itself, never followed. Nothing re-checks or re-opens the pathname.
+     */
     public DecodedSession read(Path source) throws IOException {
-        Path path = source == null ? null : source.toAbsolutePath().normalize();
-        if (path == null || Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("runtime observation input must be a regular non-symlink file");
-        }
+        InputStream opened = open(source);
         MessageDigest digest = Sha256.newDigest();
         String[] metadata = new String[METADATA_LINES];
         List<RuntimeObservation> observations = new ArrayList<>();
         long sourceBytes;
-        try (DigestInputStream digestInput = new DigestInputStream(Files.newInputStream(path), digest);
+        try (DigestInputStream digestInput = new DigestInputStream(opened, digest);
              BoundedInputStream bounded = new BoundedInputStream(
                      digestInput, MAX_INPUT_BYTES, "runtime observation input");
              BoundedLineReader reader = new BoundedLineReader(new InputStreamReader(
@@ -94,6 +98,17 @@ public final class RuntimeObservationEnvelopeCodec {
                 startedAt, endedAt, collector[1], collector[2], environment, completeness, observations);
         String sha256 = Sha256.hex(digest);
         return new DecodedSession(session, sha256, sourceBytes);
+    }
+
+    private static InputStream open(Path source) throws IOException {
+        if (source == null) throw new IOException(NOT_A_REGULAR_FILE);
+        try {
+            return ConfinedFileOpener.openRegularFileNoFollow(source);
+        } catch (ConfinedFileOpener.ConfinementException refused) {
+            throw new IOException(NOT_A_REGULAR_FILE, refused);
+        } catch (NoSuchFileException absent) {
+            throw new IOException(NOT_A_REGULAR_FILE);
+        }
     }
 
     private static RuntimeObservation parseObservation(String line, int lineNumber) throws IOException {
