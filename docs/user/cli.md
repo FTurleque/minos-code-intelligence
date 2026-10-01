@@ -447,7 +447,7 @@ Toutes les commandes partagent le même analyseur d'arguments :
 - une option répétée est refusée (`duplicate option: --format`), qu'elle porte une valeur ou non ;
 - une option inconnue (`unknown option: --x`) ou un argument en trop (`unexpected argument: x`) est refusé ;
 - les bornes annoncées dans l'usage sont contrôlées avant tout accès aux données (`--limit must be between 1 and 10000`, code 2) ;
-- `--help` ou `-h`, seul après la commande ou après son opération (`minos tools install --help`, `minos team audit --help`), affiche l'usage et sort 0 sans ouvrir `MINOS_HOME`, y compris pour `doctor` et `mcp` ; ailleurs, `--help` est une option inconnue.
+- `--help` ou `-h`, seul après la commande ou après son opération (`minos tools install --help`, `minos team audit --help`), affiche l'usage et sort 0 sans ouvrir `MINOS_HOME`, y compris pour `doctor` et `mcp` ; `--help` placé n'importe où après le nom de la commande (`minos find-symbol p S --limit 5 --help`) a le même effet. `-h` n'est reconnu que seul ou en dernière position de trois arguments : il peut être une valeur (`--name -h`).
 
 ## Codes de sortie
 
