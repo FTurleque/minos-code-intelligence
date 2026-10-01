@@ -61,6 +61,13 @@ final class SddlReplaceRights {
         return null;
     }
 
+    /** Whether the owner of the directory is a principal that is trusted anyway. (Stub: filled in with the fix.) */
+    static boolean ownerTrusted(java.nio.file.attribute.UserPrincipal owner, boolean ownerIsCurrentUser,
+                                java.util.List<java.nio.file.attribute.AclEntry> javaAcl, String sddl,
+                                Set<String> trustedSids) {
+        return true;
+    }
+
     /** The access mask of a rights field, or -1 when it holds a token this reader does not know. */
     private static long mask(String rights) {
         try {

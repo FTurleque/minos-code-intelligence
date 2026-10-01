@@ -4,10 +4,14 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.attribute.UserPrincipal;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** SDDL as {@code icacls /save} writes it: SIDs, so the verdict does not depend on the machine's language. */
@@ -77,5 +81,87 @@ class SddlReplaceRightsTest {
                 () -> SandboxLauncherScript.requireOutsideMinosHome(home.resolve("sandbox").resolve("x.ps1"), home));
         assertThrows(IOException.class,
                 () -> SandboxLauncherScript.requireOutsideMinosHome(home.resolve("a").resolve("..").resolve("x.ps1"), home));
+    }
+
+    // ---- second review: entries the first reader could not see
+
+    @Test
+    void aConditionalEntryOfEveryoneIsNotInvisible() {
+        String sddl = "D:AI(XA;OICI;0x1301bf;;;WD;(Member_of {SID(WD)}))";
+
+        assertNotNull(SddlReplaceRights.firstForeignReplaceGrant(sddl, TRUSTED),
+                "a conditional ALLOW is an ALLOW the reader does not understand: refuse");
+    }
+
+    @Test
+    void parenthesesInsideAConditionDoNotCutTheEntriesApart() {
+        String sddl = "D:AI(A;OICIID;FA;;;SY)(XA;OICI;0x1301bf;;;WD;(Member_of {SID(WD)}))(A;OICIID;FA;;;BA)";
+
+        assertNotNull(SddlReplaceRights.firstForeignReplaceGrant(sddl, TRUSTED));
+    }
+
+    @Test
+    void anObjectEntryIsRefusedWhateverItsRights() {
+        assertNotNull(SddlReplaceRights.firstForeignReplaceGrant("D:AI(OA;;FA;;;WD)", TRUSTED));
+    }
+
+    @Test
+    void aNullDaclMeansEveryoneHasFullAccessAndIsRefused() {
+        assertNotNull(SddlReplaceRights.firstForeignReplaceGrant("D:PAINO_ACCESS_CONTROL", TRUSTED));
+        assertNotNull(SddlReplaceRights.firstForeignReplaceGrant("D:NO_ACCESS_CONTROL", TRUSTED));
+    }
+
+    @Test
+    void anEmptyDaclGrantsNothingToAnyone() {
+        assertNull(SddlReplaceRights.firstForeignReplaceGrant("D:PAI", TRUSTED));
+    }
+
+    @Test
+    void inheritanceFlagsAreReadTwoCharactersAtATimeNotBySubstring() {
+        // CI + OI: the letters "IO" appear across the two flags, but this is not an inherit-only entry.
+        assertEquals("WD", SddlReplaceRights.firstForeignReplaceGrant("D:AI(A;CIOI;FA;;;WD)", TRUSTED));
+        // A flag this reader does not know is refused, not guessed.
+        assertNotNull(SddlReplaceRights.firstForeignReplaceGrant("D:AI(A;OIX;FA;;;SY)", TRUSTED));
+    }
+
+    @Test
+    void aParentOwnedByAnUntrustedPrincipalIsRefused() {
+        UserPrincipal stranger = new User("stranger");
+        UserPrincipal admins = new User("Administrators");
+        java.util.List<java.nio.file.attribute.AclEntry> acl = java.util.List.of(
+                entry(admins), entry(stranger));
+        String sddl = "D:AI(A;OICIID;FA;;;BA)(A;OICIID;0x1200a9;;;S-1-5-21-9-9-9-1500)";
+
+        assertFalse(SddlReplaceRights.ownerTrusted(stranger, false, acl, sddl, TRUSTED));
+        assertTrue(SddlReplaceRights.ownerTrusted(admins, false, acl, sddl, TRUSTED),
+                "the owner maps to BA through the entry at the same position");
+        assertTrue(SddlReplaceRights.ownerTrusted(stranger, true, acl, sddl, TRUSTED),
+                "the principal this process runs as is trusted by definition");
+    }
+
+    @Test
+    void anOwnerWithoutAnyEntryCannotBeMappedAndIsRefused() {
+        UserPrincipal unknown = new User("unknown");
+        java.util.List<java.nio.file.attribute.AclEntry> acl = java.util.List.of(entry(new User("Administrators")));
+
+        assertFalse(SddlReplaceRights.ownerTrusted(unknown, false, acl, "D:AI(A;OICIID;FA;;;BA)", TRUSTED));
+    }
+
+    @Test
+    void anAclThatDoesNotLineUpWithItsSddlIsNotTrusted() {
+        UserPrincipal admins = new User("Administrators");
+        java.util.List<java.nio.file.attribute.AclEntry> acl = java.util.List.of(entry(admins));
+
+        assertFalse(SddlReplaceRights.ownerTrusted(admins, false, acl, "D:AI(A;;FA;;;BA)(A;;FA;;;SY)", TRUSTED));
+    }
+
+    private record User(String getName) implements UserPrincipal { }
+
+    private static java.nio.file.attribute.AclEntry entry(UserPrincipal who) {
+        return java.nio.file.attribute.AclEntry.newBuilder()
+                .setType(java.nio.file.attribute.AclEntryType.ALLOW)
+                .setPrincipal(who)
+                .setPermissions(java.nio.file.attribute.AclEntryPermission.READ_DATA)
+                .build();
     }
 }
