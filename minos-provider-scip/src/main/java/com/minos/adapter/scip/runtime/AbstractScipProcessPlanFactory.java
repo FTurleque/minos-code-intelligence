@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.runtime.local.IndexerProcessPlan;
@@ -42,7 +43,7 @@ abstract class AbstractScipProcessPlanFactory implements IndexerProcessPlanFacto
         }
         Path runRoot = Objects.requireNonNull(runDirectory, "runDirectory").toAbsolutePath().normalize();
         Path output = runRoot.resolve("index.scip");
-        Files.createDirectories(output.getParent());
+        PrivateLocalStorage.ensurePrivateDirectory(output.getParent());
         Map<String, String> environment = environment(request, root, runRoot, output);
         List<String> command = command(request, root, runRoot, output);
         return new IndexerProcessPlan(command, root, environment, output, timeout());

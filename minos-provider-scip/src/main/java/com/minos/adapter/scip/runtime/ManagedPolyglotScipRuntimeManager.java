@@ -1,5 +1,7 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.PrivateLocalStorage;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.FileTreeOperations;
@@ -249,18 +251,17 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         Path destination = dotnetDirectory();
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
         deleteRecursively(partial);
-        Files.createDirectories(partial);
+        PrivateLocalStorage.ensurePrivateDirectory(partial);
         Path localSource = partial.resolve("pinned-nuget-source");
-        Files.createDirectories(localSource);
+        PrivateLocalStorage.ensurePrivateDirectory(localSource);
         Path pinnedPackage = localSource.resolve("scip-dotnet." + ScipIndexerCatalog.SCIP_DOTNET_VERSION + ".nupkg");
         downloadPinnedDotnetPackage(pinnedPackage);
         Path nugetConfig = partial.resolve("minos-nuget.config");
-        Files.writeString(nugetConfig,
-                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        PrivateLocalStorage.writePrivateFile(nugetConfig,
+                ("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
                         + "<configuration><packageSources><clear/>"
                         + "<add key=\"minos-pinned\" value=\"" + xml(localSource.toString()) + "\"/>"
-                        + "</packageSources></configuration>\n",
-                StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                        + "</packageSources></configuration>\n").getBytes(StandardCharsets.UTF_8));
         CommandResult result = run(CommandLocator.invocation(
                         dotnet, "tool", "install", "--tool-path", partial.toString(), "scip-dotnet",
                         "--version", ScipIndexerCatalog.SCIP_DOTNET_VERSION,
@@ -288,7 +289,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         Path destination = goDirectory();
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
         deleteRecursively(partial);
-        Files.createDirectories(partial);
+        PrivateLocalStorage.ensurePrivateDirectory(partial);
         Map<String, String> environment = new LinkedHashMap<>();
         environment.put("GOBIN", partial.toString());
         environment.put("GOPROXY", GO_PROXY);
@@ -369,9 +370,10 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
 
     /** Package-visible for {@link StampManagedProviderMarkers}: see that class for why. */
     static void writeManagedMarkers(Path directory, String version, String source) throws IOException {
-        Files.writeString(directory.resolve(VERSION_MARKER), version, StandardCharsets.UTF_8);
-        Files.writeString(directory.resolve(SOURCE_MARKER), source, StandardCharsets.UTF_8);
-        Files.writeString(directory.resolve(INTEGRITY_MARKER), directoryDigest(directory), StandardCharsets.UTF_8);
+        PrivateLocalStorage.writePrivateFile(directory.resolve(VERSION_MARKER), version.getBytes(StandardCharsets.UTF_8));
+        PrivateLocalStorage.writePrivateFile(directory.resolve(SOURCE_MARKER), source.getBytes(StandardCharsets.UTF_8));
+        PrivateLocalStorage.writePrivateFile(
+                directory.resolve(INTEGRITY_MARKER), directoryDigest(directory).getBytes(StandardCharsets.UTF_8));
     }
 
     private static boolean versionMarkerMatches(Path directory, String expected) {
@@ -437,7 +439,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
                 throw new IOException("managed runtime integrity traversal exceeds byte limit");
             }
             long observed = 0L;
-            try (InputStream input = Files.newInputStream(file)) {
+            try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
                 byte[] buffer = new byte[64 * 1024];
                 int read;
                 while ((read = input.read(buffer)) >= 0) {
@@ -517,14 +519,14 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     }
 
     private static String readBoundedText(Path file, long maximumBytes, String boundary) throws IOException {
-        try (BoundedInputStream input = new BoundedInputStream(Files.newInputStream(file), maximumBytes, boundary)) {
+        try (BoundedInputStream input = new BoundedInputStream(ConfinedFileOpener.openRegularFileNoFollow(file), maximumBytes, boundary)) {
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 
     private static void replaceDirectory(Path source, Path destination) throws IOException {
         deleteRecursively(destination);
-        Files.createDirectories(destination.getParent());
+        PrivateLocalStorage.ensurePrivateDirectory(destination.getParent());
         try { Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE); }
         catch (java.nio.file.AtomicMoveNotSupportedException exception) {
             Files.move(source, destination, StandardCopyOption.REPLACE_EXISTING);

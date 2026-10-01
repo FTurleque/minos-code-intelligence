@@ -33,4 +33,21 @@ class RemoteIndexLeaseTest {
             }
         }
     }
+
+    @Test
+    void theLeaseDirectoryAndItsLockFileAreOwnerOnly() throws Exception {
+        try (RemoteIndexLease ignored = RemoteIndexLease.acquire(home, "remote-cache-key")) {
+            Path directory = home.resolve("remote-index-leases");
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    com.minos.io.PrivateLocalStorage.Privacy.ENFORCED,
+                    com.minos.io.PrivateLocalStorage.privacyOf(directory));
+            try (var locks = java.nio.file.Files.list(directory)) {
+                for (Path lock : (Iterable<Path>) locks::iterator) {
+                    org.junit.jupiter.api.Assertions.assertEquals(
+                            com.minos.io.PrivateLocalStorage.Privacy.ENFORCED,
+                            com.minos.io.PrivateLocalStorage.privacyOf(lock));
+                }
+            }
+        }
+    }
 }

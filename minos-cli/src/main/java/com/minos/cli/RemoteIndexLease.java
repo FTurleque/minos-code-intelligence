@@ -1,10 +1,10 @@
 package com.minos.cli;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.BoundedFileLease;
 import com.minos.io.Sha256;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Objects;
@@ -28,7 +28,7 @@ final class RemoteIndexLease implements AutoCloseable {
             throw new IllegalArgumentException("sourceIdentity must not be blank");
         }
         Path directory = home.resolve("remote-index-leases");
-        Files.createDirectories(directory);
+        PrivateLocalStorage.ensurePrivateDirectory(directory);
         String digest = Sha256.hex(sourceIdentity);
         Path lockFile = directory.resolve(digest + ".lock");
         ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(lockFile.hashCode(), JVM_LOCKS.length)];

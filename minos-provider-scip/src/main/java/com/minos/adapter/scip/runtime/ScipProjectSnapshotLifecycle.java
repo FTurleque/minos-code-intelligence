@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
 import com.minos.io.Sha256;
@@ -58,8 +59,8 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
             }
         }
         this.descriptors = Map.copyOf(values);
-        Files.createDirectories(stagingRoot);
-        Files.createDirectories(runsRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(stagingRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(runsRoot);
     }
 
     @Override
@@ -67,7 +68,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
         Objects.requireNonNull(request, "request");
         Path runRoot = runRoot(request.runId());
         deleteRecursively(runRoot);
-        Files.createDirectories(runRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(runRoot);
         Map<String, Symbol> symbols = new LinkedHashMap<>();
         Map<String, SymbolOccurrence> occurrences = new LinkedHashMap<>();
         Map<String, Relationship> relationships = new LinkedHashMap<>();
