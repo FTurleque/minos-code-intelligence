@@ -12,7 +12,7 @@ S9 et S12 sont les deux seuls qui donnent quelque chose à un attaquant aujourd'
 | 1 | `sec/s9-git` | S9 | #317 | brouillon |
 | 2 | `sec/s12-audit` | S12 | #318 | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
 | 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | #319 | brouillon |
-| 4 | `sec/s8-gitignore` | S8 | à ouvrir | code terminé |
+| 4 | `sec/s8-gitignore` | S8 | PR du lot 4 | brouillon |
 | 5 | `sec/s7-s15-windows` | S7, S15 | – | – |
 
 Base : `origin/develop` au 2026-10-01 (b991ffd2). Une branche, un worktree (`minos-wt/sec-lotN`) par lot, rebasés l'un sur l'autre.
@@ -377,9 +377,11 @@ Ancienne et nouvelle implémentation comparées, mêmes entrées :
 
 Aucun fichier gagné ni perdu. Les `.gitignore` de deux dépôts publics n'ont **pas** été comparés (pas de téléchargement sans demande explicite) : à faire par `verif-sec` sur les dépôts qu'il a déjà en local, ou à la demande.
 
-### Windows / Linux
+### Résultats de fin de lot 4 (2026-10-01, Windows 10, JDK 24)
 
-Tout exécuté sous Windows (logique pure, sans dépendance de plateforme). Linux : par la CI. Tests ignorés ajoutés : 0.
+- `./mvnw -B clean verify` : **BUILD SUCCESS**, 15 modules, 1 917 tests, 0 échec, 54 ignorés (tous antérieurs ; 0 ajouté par ce lot).
+- Gates `remediation/`, `quality/`, `architecture/` : verts (hors `check-jacoco.py`).
+- Windows : tout exécuté ici (logique pure, sans dépendance de plateforme). Linux : par la CI.
 
 ## À traiter plus tard
 
