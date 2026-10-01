@@ -169,6 +169,29 @@ class PrivateLocalStorageWindowsAclTest {
         assertFalse(refusal.getMessage().contains("System32"), "no path in the message");
     }
 
+    @Test
+    void anObjectDeletedAndCreatedAgainAtTheSamePathIsProtectedAgain() throws Exception {
+        Path home = PrivateLocalStorage.ensurePrivateDirectory(temporary.resolve("home"));
+        Path file = PrivateLocalStorage.createPrivateFile(home.resolve("recreated.bin"));
+        Path directory = PrivateLocalStorage.ensurePrivateDirectory(home.resolve("recreated"));
+        Files.delete(file);
+        Files.delete(directory);
+
+        Path againFile = PrivateLocalStorage.createPrivateFile(home.resolve("recreated.bin"));
+        Path againDirectory = PrivateLocalStorage.ensurePrivateDirectory(home.resolve("recreated"));
+        Path againWritten = PrivateLocalStorage.writePrivateFile(home.resolve("written.bin"), new byte[]{1});
+        Files.delete(againWritten);
+        againWritten = PrivateLocalStorage.writePrivateFile(home.resolve("written.bin"), new byte[]{2});
+
+        for (Path path : List.of(againFile, againDirectory, againWritten)) {
+            assertTrue(isDaclProtected(path), "a new object at a known path is a new object");
+        }
+        icacls(home, "/grant", "*S-1-1-0:(OI)(CI)R");
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(againFile));
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(againDirectory));
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(againWritten));
+    }
+
     // ------------------------------------------------------------------------------ helpers
 
     private static boolean hasWriteDenyForOwner(Path path) throws IOException {
