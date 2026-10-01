@@ -466,6 +466,10 @@ public final class PrivateLocalStorage {
         CAPABILITY_PROBE.remove();
     }
 
+    /** Test-only: forgets which locations this process already protected, as a fresh process would. */
+    static void forgetProtectedLocationsForTesting() {
+    }
+
     private static void requireTestRuntime() {
         try {
             Class.forName("org.junit.jupiter.api.Test", false, PrivateLocalStorage.class.getClassLoader());
