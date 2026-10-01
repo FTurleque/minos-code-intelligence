@@ -79,13 +79,15 @@ class OpenRegularFileNoFollowTest {
             }
         };
 
-        IOException failure = assertThrows(IOException.class, () -> {
-            try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
-                String read = new String(input.readAllBytes(), StandardCharsets.UTF_8);
-                assertTrue(read.isEmpty(), "the swapped-in link was followed and exposed: " + read.length());
-            }
-        });
+        IOException failure = assertThrows(IOException.class, () -> assertNothingExposed(file));
         assertFalse(String.valueOf(failure.getMessage()).contains(root.toString()));
+    }
+
+    private static void assertNothingExposed(Path file) throws IOException {
+        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
+            String read = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(read.isEmpty(), "the swapped-in link was followed and exposed: " + read.length());
+        }
     }
 
     private static boolean canLink(Path link, Path target) {
