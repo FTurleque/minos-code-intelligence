@@ -17,6 +17,11 @@ public final class FindSymbolCommand {
     public static final int SUCCESS = 0;
     public static final int EXECUTION_ERROR = 1;
     public static final int USAGE_ERROR = 2;
+    /**
+     * Résultat partiel : la sortie est valide et complète pour ce qui a pu être lu, mais des entrées ont été
+     * dégradées (comptées et affichées). Aujourd'hui, seule {@code project list} le rend (Q8).
+     */
+    public static final int PARTIAL_RESULT = 3;
 
     static final int DEFAULT_LIMIT = 20;
     static final int MAX_LIMIT = 1_000;

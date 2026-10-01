@@ -1,4 +1,4 @@
-# Suivi — chantier Fiabilité opérationnelle (lot 1 : R4, R5, R7 — intégrité de la reprise ; lot 2 : P1, Q3, Q4 — un seul régime de verrous, § 8 ; lot 3 : R2, R3 — propriété des cgroups, § 9 ; lot 4 : Q5, R6 — interruption et confinement, § 10)
+# Suivi — chantier Fiabilité opérationnelle (lot 1 : R4, R5, R7 — intégrité de la reprise ; lot 2 : P1, Q3, Q4 — un seul régime de verrous, § 8 ; lot 3 : R2, R3 — propriété des cgroups, § 9 ; lot 4 : Q5, R6 — interruption et confinement, § 10 ; lot 5 : Q8, Q9 — tolérance aux données abîmées, § 11)
 
 > Branche : `fiab/r4-r5-r7-reprise` (depuis `develop`, base `017e339d`, les branches `code/*` des PR #305 à #308 y sont déjà fusionnées), worktree `minos-wt/fiab-lot1`.
 > Constats : **R4** (promotion reprise sans égalité des cibles), **R5** (rétention d'un run reprenable, durée de vie du marqueur) et **R7** (réparation « snapshot stable » sans `resumableRunId` ni `supersede`), `AUDIT-2026-09.md` § R4, R5, R7 ; conception de référence : [ADR 0039](../adr/0039-reprise-indexation-apres-interruption.md).
@@ -14,7 +14,7 @@
 | 2 — P1, Q3, Q4 | Un seul régime de verrous ; lecture d'état sans bail exclusif (§ 8) | en cours (branche `fiab/p1-q3-q4-verrous`, depuis la branche du lot 1 `bcdadd23`) | § 8.8 |
 | 3 — R2, R3 | Propriété des cgroups : R2 et R3 déjà fermés sur `develop` (§ 9.1) ; le lot referme les trous restants de la décision « ce cgroup appartient à un MINOS mort » (§ 9.4) | livré, en attente du verdict final de `verif-fiab` (branche `fiab/r2-r3-cgroups`, depuis la branche du lot 2, fusion `8670f2e2`) | § 9.7 |
 | 4 — Q5, R6 | Interruption de bout en bout (le drapeau était rétabli avant d'écrire l'état), confinement du chemin d'artefact (PLAUSIBLE reproduit puis corrigé) | livré, `VERDICT-FINAL: ok` de `verif-fiab` (branche `fiab/q5-r6-interruption`, depuis la branche du lot 3 `cab6f74e`) | § 10.6 |
-| 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) | à faire | — |
+| 5 — Q8, Q9 | Tolérance aux données abîmées (`listProjects`, clé sémantique en double) : Q8 ouvert à la base, corrigé (`project list` sort en 3 sur un inventaire partiel) ; Q9 PLAUSIBLE, non reproduit par le chemin de production, aucun correctif (§ 11) | livré, `VERDICT-FINAL: ok` de `verif-fiab` (branche `fiab/q8-q9-tolerance`, depuis la branche du lot 4 `40100dbf`) | § 11.6 |
 
 ## 2. Inventaire daté (base `017e339d`, 30 septembre 2026)
 
@@ -210,6 +210,20 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 | V-L4-04 | remarque | confinement ignoré quand les marqueurs n'ont pas de répertoire de run ; chemin absolu dans le message d'un artefact illisible (préexistant) | **résolu** : la décision est écrite au § 10.4 ; message sans chemin (`66fd1d17`, rouge `3c71e622`) |
 | V-L4-05 | remarque | répertoire de run en nom LONG avec un artefact écrit en nom COURT (8.3) : refusé depuis `66fd1d17`, accepté par `41be5596` | **accepté, documenté § 7** : échec fermé, jamais observé (l'artefact et le marqueur dérivent du même `MINOS_HOME`) ; le deviner demanderait de tolérer un alias dont on ne sait pas s'il est un lien |
 
+### Lot 5
+
+| Id | Sévérité | Constat | Résolution |
+|---|---|---|---|
+| V-L5-01 | à corriger | `DegradedEntry.reason` laisse passer les caractères de contrôle d'un fichier abîmé : `PublicErrorMessages.sanitize` n'aplatit que CR et LF, le message d'une `DateTimeParseException` recopie la valeur brute ; un fichier forgé écrit ESC/BEL dans les lignes de `project list` (confirmé de bout en bout sur un vrai `MINOS_HOME`, `createdAt=<ESC>[2Jevil`) | **résolu `dc38efee`** : `DegradedEntry.printable`, seul endroit, remplace par `_` tout caractère de contrôle ISO, de format (U+202E…) et tout séparateur de ligne ou de paragraphe ; tests rouges `3d2247a1` (`unexpected character U+1b in: registry entry is unreadable (bad …`), verts `DegradedEntryTest` 6/6 et les deux tests d'intégration |
+| V-L5-02 | remarque | (a) `ProjectInspectionService.readHistory` ignore en silence un historique qui est un répertoire ou un lien pendant (`Files.isRegularFile`) : la ligne perd `lastSuccessfulIndexAt` et `providerId` sans trace ; (b) le listage strict (`registerProject`, `ProjectResolver` par nom, `NexusExportService`, `findWorkspace`) échoue toujours sur une entrée abîmée et ignore toujours en silence un répertoire ou un lien pendant | **consigné § 7**. (b) est voulu et documenté (mutations et résolutions fermées, `docs/user/cli.md`) ; (a) préexiste, ne concerne pas l'inventaire, et le corriger ferait échouer `inspect` là où il réussit aujourd'hui |
+| V-L5-03 | à corriger | la page arc42 des concepts transverses disait encore « 0/1/2 » | **résolu `dc38efee`** (code 3 ajouté à `08-concepts-transverses.md`) |
+| V-L5-04 | remarque | le plugin IntelliJ (`MinosCliClient.resolveProject`) n'accepte que le code 0 pour `project list` : avec un seul projet abîmé il reçoit « exit 3 » et ne résout pas le projet sain ouvert | **consigné § 7** : `minos-intellij` est hors réacteur (Gradle), non touché ; pas une régression (le code était 1 avant) ; correctif : accepter `Set.of(0, 3)` pour cette seule commande, la sortie JSON étant valide et complète |
+| V-L5-05 | remarque | Q9 : le refus « collision » au staging n'est pas le constat Q9 mais reste un échec global du run | **consigné § 7** (§ 11.8) : autre mécanisme, préexistant, voulu ; à rouvrir seulement si un plan d'indexation peut produire le cas |
+| R-L5-A | remarque | littéraux dupliqués trois fois ou plus dans des fichiers de test neufs (`"registry"`, `"NEVER_INDEXED"`, `"projects"`, `".properties"`, `"ui/app"`, `"sym:a"`, `"degraded"`) | **résolu** (commit suivant) : constantes, aucun changement de comportement |
+| R-L5-B | remarque | pour un échec de VUE (historique, état, répertoire illisible) la ligne `UNREADABLE` porte `rootAvailable=false` alors que la racine existe (elle est seulement illisible), et la raison ne dit que le nom de classe de l'exception quand le message porte un chemin (`AccessDeniedException`) | **accepté, consigné § 7** : la ligne est volontairement une ligne « sans information » (aucun fait de découverte n'a pu être établi) ; le nom de classe est le repli de `PublicErrorMessages` |
+| R-L5-C | remarque | `listWorkspaces()` reste strict : un seul fichier de projet abîmé fait encore échouer `LocalMinosMultiRepositoryApi.listWorkspaces` | **consigné § 7** (listage strict) |
+| R-L5-D | remarque | un échec d'E/S transitoire sur l'état d'un projet (verrou Windows pendant une indexation par exemple) dégrade ce projet en `UNREADABLE` pour cet appel et fait sortir `project list` en 3, sans nouvelle tentative | **accepté, consigné § 7** : explicite et visible, un second appel donne le bon résultat ; la nouvelle tentative appartient à `DurableAtomicFile` / au magasin d'état, pas à l'inventaire |
+
 ## 7. À traiter plus tard
 
 - **Publication atomique et rétention concurrente sous Windows (traité au lot 2, § 8.9, `7e1b2903`).** Un premier essai du test de concurrence, où le « fournisseur » publiait par `Files.move(ATOMIC_MOVE)` pendant que `prune` mesurait le même répertoire, a échoué sous Windows avec `FileSystemException … utilisé par un autre processus` : la lecture des attributs par la rétention entre en conflit avec le renommage. Hors périmètre (le test a été ramené à des écritures simples). À vérifier dans `DurableAtomicFile.replace`, qui n'a pas de nouvelle tentative : deux indexations de projets différents sur un même `MINOS_HOME` Windows peuvent-elles s'y gêner ?
@@ -250,6 +264,18 @@ Golden : les 12 de `characterization/` **inchangés** (`git diff 017e339d..HEAD 
 - **(lot 4) Les tests de liens symboliques se sautent (`assumeTrue`) sur un Windows sans privilège** (R-L4-B) : une CI Windows sans mode développeur ne les exécute pas ; le cas `..` et les tests de `ArtifactConfinementTest` sans lien, eux, s'exécutent toujours. Les liens ont été exécutés ici (Windows avec privilège, WSL) : 0 test sauté.
 - **(lot 4) Après une interruption, les appelants de l'exécuteur écrivent drapeau levé** (R-L4-C) : l'exécuteur rejoue le drapeau en sortant, et un appelant qui écrit ensuite (par exemple `LocalAutonomousIndexOperations` : `recoverPromotedRunIfNeeded`, la compaction de la rétention) peut échouer en `ClosedByInterruptException` (non sondé). Comportement d'avant le lot, hors périmètre : le run, lui, est déjà persisté. À traiter si un arrêt réel du service doit aussi nettoyer derrière lui.
 - **(lot 4) Rejeu ×50 sous Linux et interruption d'un provider externe réel sous sandbox** : non exécutés (le test simule le provider par un exécuteur) ; le test passe sous WSL en une exécution.
+
+- **(lot 5) `AUDIT-2026-09.md` donne encore Q8 et Q9 pour ouverts.** Q8 est corrigé (§ 11) ; Q9 est **PLAUSIBLE non reproduit** (§ 11.8). Le fichier porte des modifications non suivies de l'utilisateur dans le dépôt principal : non touché. À mettre à jour par l'orchestrateur.
+- **(lot 5) Le listage strict reste strict** (`registerProject`, `ProjectResolver` par nom, `NexusExportService`, `findWorkspace`, `listWorkspaces`) : avec un seul fichier de registre abîmé, `minos project add` et `minos inspect <nom>` échouent (code 1) ; `inspect <identifiant>` passe. C'est voulu pour les mutations (elles ne savent pas si l'entrée abîmée est celle qu'elles cherchent). Pour la résolution par nom et les workspaces, la tolérance demanderait de dire « inconnu, mais N entrées sont illisibles » au lieu d'« inconnu » : à traiter dans un lot dédié (V-L5-02 b).
+- **(lot 5) Entrées écartées en silence qui subsistent hors de l'inventaire** : `ProjectInspectionService.readHistory` ignore un historique qui est un répertoire ou un lien pendant ; `LocalProjectRegistry.propertyFiles` ignore un workspace qui est un répertoire ou un lien pendant (V-L5-02 a). Préexistant, hors `listProjects` ; les corriger fait échouer là où ça réussit aujourd'hui.
+- **(lot 5) Plugin IntelliJ** (`minos-intellij/.../MinosCliClient.resolveProject`) : n'accepte que le code 0 de `project list` ; avec un projet abîmé il échoue (comme avant, avec le code 1) et ne résout pas le projet sain. Accepter `Set.of(0, 3)` pour cette commande, dans le lot qui touche le plugin (V-L5-04).
+- **(lot 5) Garde d'interruption du registre sans test** : `LocalProjectRegistry.scanProjects` relance un échec quand le thread est interrompu ; sur ce JDK une lecture de fichier sur un thread déjà interrompu ne lève pas, et une interruption en plein milieu d'une lecture n'est pas reproductible de façon déterministe : le garde de la vue est sous test (rouge sans lui), celui du registre est par symétrie (§ 11.7).
+- **(lot 5) Deux fournisseurs qui décrivent le même symbole dans la même portée** font échouer le run au staging (« provider snapshot collision », `ScipProjectSnapshotLifecycle.putUnique`) : vu en prouvant Q9, non cherché plus loin (V-L5-05).
+- **(lot 5) Clé sémantique en double : aucune garde défensive n'a été ajoutée.** Si l'invariant « id dérivé de la clé » était un jour cassé (un second producteur de symboles, un format de snapshot qui porte des ids indépendants), la fabrique échouerait bruyamment (`IllegalStateException`), comme aujourd'hui ; une règle de résolution (première gagne, dernière gagne, fusion) serait alors à écrire, avec son compteur, après un test rouge atteignable.
+- **(lot 5) PostgreSQL** : `inventory()` y vaut `listProjects()` (colonnes typées, aucune corruption de texte possible) ; si une colonne `root_value` illisible y devenait possible, le défaut de l'interface devrait être remplacé.
+- **(lot 5) Ligne `UNREADABLE` d'un échec de vue** (R-L5-B) : `rootAvailable=false` et aucun fait de découverte, même quand la racine existe et n'est qu'illisible ; la raison se réduit au nom de classe quand le message porte un chemin. À enrichir seulement si un client a besoin de distinguer « racine absente » de « racine illisible ».
+- **(lot 5) Échec transitoire d'un magasin d'état** (R-L5-D) : un verrou Windows passager pendant une indexation dégrade le projet concerné en `UNREADABLE` pour un appel (code 3), sans nouvelle tentative ; le second appel donne le bon résultat. Une nouvelle tentative bornée, si elle est voulue, se met dans la lecture de l'état, pas dans l'inventaire.
+- **(lot 5) `listWorkspaces()` et `findWorkspace()` restent stricts** (R-L5-C) : ils lisent tous les projets pour établir l'appartenance ; un fichier de projet abîmé fait échouer `LocalMinosMultiRepositoryApi.listWorkspaces`.
 
 ## 8. Lot 2 — P1, Q3, Q4 : un seul régime de verrous
 
@@ -711,3 +737,169 @@ Gates rejoués après chaque commit : `check-module-boundaries.py` (`modules=14`
 ### 10.9 Constats de verif-fiab (lot 4)
 
 V-L4-01 à V-L4-05 et leur résolution : § 6, « Lot 4 ». Aucun constat ouvert à la fin du lot : `VERDICT-FINAL: ok` de `verif-fiab` sur `8bec5c6e` (`clean verify` rejoué de son côté : 1 773 tests, 0 échec, 9 min 57 ; rejeux ×50 indépendants sur les cinq classes du lot). Trois remarques non bloquantes, consignées : R-L4-A (littéraux dupliqués dans `IndexingArtifactConfinementTest`, factorisés en constantes), R-L4-B et R-L4-C (§ 7).
+
+## 11. Lot 5 — Q8, Q9 : une entrée abîmée dégrade cette entrée, pas l'inventaire
+
+> Branche `fiab/q8-q9-tolerance`, créée depuis la branche du lot 4 (`fiab/q5-r6-interruption`, `40100dbf`), worktree `minos-wt/fiab-lot5`. Constats : **Q8** (un seul fichier corrompu ou un répertoire illisible fait échouer tout `listProjects`) et **Q9** (PLAUSIBLE : une clé sémantique en double fait échouer toute l'indexation sémantique). Règles du lot : test rouge avant correctif ; la tolérance ne devient jamais du silence (chaque entrée dégradée est **comptée et affichée**, sans chemin absolu) ; Q9 se prouve atteignable par le chemin de production **avant** toute correction.
+
+### 11.1 Cibles relocalisées (base `40100dbf`)
+
+| Cible de l'audit | Emplacement réel |
+|---|---|
+| registre de projets, lecture d'une entrée | `minos-storage-local/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java` : `listProjects` (boucle sur `projects/*.properties`), `readProject` (`UUID.fromString`, `Instant.parse` deux fois, racines, `required`), `idFromPropertiesFile` ; enveloppé par `InterProcessLocalProjectRegistry` (même contrat, sous bail de fichier) |
+| port | `minos-engine/src/main/java/com/minos/registry/ProjectRegistry.java` (`listProjects() throws IOException`) |
+| historique (`cli-index-history/<projectId>.properties`) | `minos-application/src/main/java/com/minos/application/ProjectInspectionService.java` : `readHistory` (`BoundedProperties.load`, `required`, `Instant.parse`), appelée par `view` |
+| `visitFileFailed` (répertoire illisible) | `minos-engine/src/main/java/com/minos/discovery/ProjectDiscoveryService.java` (l. 151 : `throw exception`), appelée par `ProjectInspectionService.view` pour la racine de chaque projet |
+| `listProjects` de la commande | `minos-cli/.../ProjectCommand.runList` → `ProjectOperations.listProjects` → `LocalProjectOperations.listProjects` → `ProjectInspectionService.listProjects` (une boucle `view(project)` sans garde) ; aussi `LocalMinosApi.listProjects` (API Java) |
+| fabrique sémantique | `minos-application/src/main/java/com/minos/application/semantic/SemanticDocumentFactory.java` (l. 89-95, `IllegalStateException("duplicate semantic stable key")`), appelée par `SemanticIndexService` |
+
+### 11.2 Q8 : ce qui reste vrai à la base (lu dans les sources)
+
+Aucun commit postérieur à l'audit ne touche ces chemins. **Q8 est ouvert.** Les modes de défaillance d'un seul fichier abîmé, tous propagés hors de la boucle :
+
+- un `createdAt`/`updatedAt` invalide : `DateTimeParseException` (non contrôlée) ;
+- un `id` de contenu qui n'est pas un UUID : `IllegalArgumentException` ; un `id` de contenu différent du nom de fichier : `IOException` (« identity mismatch ») ;
+- une propriété requise absente ou vide : `IllegalStateException` ; les deux racines à la fois, une racine portable sans mapping, un fichier vide, tronqué, binaire, trop gros : `IOException` (`BoundedProperties`) ;
+- un nom de fichier `*.properties` qui n'est pas un UUID : `IOException` ;
+- un répertoire illisible sous la racine d'un projet (`visitFileFailed`) : `IOException`, qui fait échouer `ProjectInspectionService.listProjects` **pour tous les projets** ;
+- un historique dont `completedAt` est invalide : `DateTimeParseException`, même effet.
+
+Ce que la lecture découvre en plus : `propertyFiles` écarte **en silence** toute entrée `*.properties` qui n'est pas un fichier régulier (répertoire, lien pendant), donc un projet dont l'entrée a été remplacée disparaît sans trace.
+
+### 11.3 Comptes AVANT : qui lit ou valide une entrée de registre ou d'historique
+
+| # | Site | Tolérance |
+|---|---|---|
+| 1 | `LocalProjectRegistry.readProject` (entrée de projet) | aucune |
+| 2 | `LocalProjectRegistry.readWorkspaceMetadata` (entrée de workspace) | aucune |
+| 3 | `LocalProjectRegistry.idFromPropertiesFile` (nom de fichier) | aucune |
+| 4 | `ProjectInspectionService.readHistory` (historique) | aucune |
+| 5 | `PostgresProjectRegistry.readProject` (ligne SQL typée : `uuid`, `timestamptz`) | sans objet : aucune corruption de texte possible |
+
+**AVANT : 5 sites, 0 chemin tolérant.** L'objectif est **un** vocabulaire de dégradation (`DegradedEntry`) produit à deux endroits qui ne peuvent pas être confondus (une entrée de registre illisible ; un projet dont la vue ne peut être assemblée), pas une sixième variante de lecture : la lecture d'une entrée reste dans `readProject`.
+
+### 11.4 Q9 : ce que dit la lecture avant tout test
+
+Une clé en double n'existe que si deux symboles non externes d'un même instantané portent le même `symbolKey` (la clé d'un document SYMBOL est `symbol:<symbolKey>` ; celle d'un CHUNK `chunk:<symbolKey>:<début>:<fin>` ; celle d'un FILE `file:<fileId>`, une par entrée d'une table à clé unique). Or : (1) le **seul** producteur de symboles en production est `ScipSymbolNormalizer`, qui dérive `id = "sym:" + sha256(projectId + symbolKey)` ; deux symboles de même `symbolKey` ont donc le **même `id`** ; (2) `CodeKnowledgeSnapshot` refuse deux symboles de même `id` (`requireUniqueIds`), `FileSymbolSnapshotStore.publish` aussi (`rejectDuplicateIds`), et la mise en snapshot d'un run fusionne les symboles par `id` (`ScipProjectSnapshotLifecycle.putUnique`) ; un même symbole défini deux fois dans un index est dédupliqué par `id` à l'import (`ScipSymbolSnapshotImporter.CapturingStore`). Le scénario demandé (« deux documents de même clé ») demande donc un instantané que la production ne peut pas construire. **À prouver par des tests** : chaîne normaliseur → import → instantané → fabrique, sans appel direct de la fabrique avec des symboles fabriqués à la main.
+
+### 11.5 Chiffres de référence des gates (base `40100dbf`, avant le premier commit de code)
+
+| Gate | Résultat |
+|---|---|
+| `check-module-boundaries.py` | `modules=14, sources=505, packages=45` |
+| `check-current-docs.py`, `product-facts.py --check` | SUCCESS |
+| `check-milestone-artifact-references.py` | `scripts checked=95` |
+| `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py` | SUCCESS |
+| `check-jacoco.py` | référence : fin du lot 4 (`66fd1d17`, code identique), 26 portées PASS, seule rouge `m24-polyglot-provider-platform` (préexistante, Windows) ; `semantic-hybrid-retrieval` line 0,910 / branch 0,722 (la seule portée qui nomme une classe de ce lot, `SemanticDocumentFactory`) |
+| `./mvnw clean verify` (fin du lot 4) | BUILD SUCCESS, 1 773 tests, 0 échec, 53 ignorés |
+
+### 11.6 Journal par commit (lot 5)
+
+| Commit | Contenu | Gates |
+|---|---|---|
+| `7e3ac753` | docs : état réel de Q8 et Q9 à la base, inventaire, comptes AVANT | 505 / 45 / SUCCESS / SUCCESS / 95 |
+| `821c7e67` | tests rouges Q8 (registre, vue, CLI, vrai `MINOS_HOME`) ; points d'entrée neufs en façades de l'ancien comportement | 506 / 45 / SUCCESS / SUCCESS / 95 |
+| `97021726` | Q8 : `ProjectRegistry.inventory()`, `scanProjects` (une lecture, deux vues), `DegradedEntry` | idem |
+| `a097708a` | Q8 : `ProjectInspectionService.inventory()`, ligne `UNREADABLE`, interruption relancée, API sans run reprenable pour une ligne abîmée | idem |
+| `83474d98` | Q8 : `project list` sort en 3, compteur et raisons en texte et en JSON ; `docs/user/cli.md`, `troubleshooting.md` | idem |
+| `f6d0606b` | Q9 : le constat tombe, trois chaînes de tests (aucun correctif) | idem |
+| `3d2247a1` | tests rouges V-L5-01 (caractères de contrôle dans la raison) | idem |
+| `dc38efee` | V-L5-01 : `DegradedEntry.printable` ; V-L5-03 : code 3 dans arc42 | idem |
+| (commit suivant) | décisions, journal, preuves de fin de lot, constats | idem |
+
+Gates rejoués après chaque commit : `check-module-boundaries.py` (`modules=14`, `sources=506` depuis `821c7e67` : +1 classe de production, `DegradedEntry`, attendue ; `packages=45`), `check-current-docs.py`, `product-facts.py --check`, `check-milestone-artifact-references.py` (`scripts checked=95`), `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py` : SUCCESS. Aucun script de `scripts/` ne nomme les méthodes touchées (`listProjects` n'y apparaît que dans des sondes historiques sous `scripts/history/` et `scripts/m15`, qui compilent contre l'interface inchangée).
+
+### 11.7 Décisions
+
+- **Q8 : une entrée abîmée dégrade cette entrée, elle ne disparaît pas.** Le projet abîmé reste une **ligne** de l'inventaire, à l'état explicite `UNREADABLE` (`ProjectSummary.UNREADABLE_STATE` : un état de vue, pas une disponibilité d'index), et il est **compté** dans un `DegradedEntry(entry, reason)`. `entry` est l'identifiant du projet (ou le nom du fichier de registre réduit à `[A-Za-z0-9._-]`, 64 caractères au plus), `reason` est un message public passé par `PublicErrorMessages.sanitize` (un message qui porte un chemin tombe sur le nom de la classe de l'exception) : **aucun chemin absolu**. Quand c'est le registre lui-même qui est illisible, nom et racine de la ligne valent `-` ; quand c'est la vue qui n'a pas pu être assemblée (historique, état, répertoire), ils restent ceux du registre.
+- **Deux frontières d'isolement, un vocabulaire.** (1) `LocalProjectRegistry.scanProjects` : une entrée de registre ; (2) `ProjectInspectionService.inventory` : la vue d'un projet (historique d'indexation, état, découverte, donc `visitFileFailed`). Les deux produisent le même `DegradedEntry` par les deux mêmes fabriques, et un seul rendu (`ProjectCommand.renderProjects`, `ProjectJson.degraded`). La lecture d'une entrée reste dans `readProject` : pas de sixième variante de lecture.
+- **Le listage strict reste strict.** `ProjectRegistry.listProjects()` échoue toujours sur la première entrée abîmée, avec l'exception d'origine : c'est ce que `registerProject` (qui cherche une racine déjà enregistrée), la résolution d'un projet par nom, l'export NEXUS et les workspaces utilisent ; une mutation ou une résolution qui ne sait pas si l'entrée abîmée est celle qu'elle cherche doit échouer fermée. `inspectProject` (un seul projet) reste strict aussi. Seul l'**inventaire** (`inventory()`) est tolérant. Un registre dont le répertoire ne peut pas être listé du tout échoue en bloc (code 1) : il n'y a rien à rapporter entrée par entrée.
+- **Une interruption n'est pas une entrée abîmée.** Les deux frontières relancent l'échec quand le thread est interrompu, au lieu de dégrader le projet en cours (mutation témoin : sans le garde, le test d'interruption de la vue est rouge). Le garde du registre n'a pas de test : sur ce JDK, une lecture de fichier sur un thread interrompu ne lève pas, et l'interruption en plein milieu d'une lecture n'est pas reproductible de façon déterministe ; le test du registre affirme ce qu'il peut (une interruption en attente ne dégrade aucune entrée et reste en attente).
+- **Le code de sortie : 3, et seule `project list` le rend.** Les codes existants : 0 succès, 1 erreur d'exécution ou diagnostic action requise (`doctor`), 2 usage. Un résultat partiel existe déjà ailleurs comme **avertissement** (`import-scip` : `commitStatus` et `warning:` sur stderr, code 0), mais le constat demande explicitement un code qui distingue « tout va bien » de « inventaire partiel ». 1 le confondrait avec un échec (un script ne lirait plus stdout, pourtant valide) ; 3 dit « la sortie est valide et complète pour ce qui a pu être lu ». Écrit dans `docs/user/cli.md` (Codes de sortie) et `troubleshooting.md`. **Aucune autre commande ne change de code** (tests : `add`, `inspect`, `index-status`, registre non listable = 1, usage = 2, registre vide = 0).
+- **La tolérance est comptée et affichée, dans les deux formats.** Texte : les lignes, puis `degraded: <N>` et `  <entrée>: <raison>` par entrée ; JSON : `degradedCount` et `degraded` après `count` et `projects` ; stderr : `warning: project inventory is partial: <N> of <total> entries are degraded`. `count` compte toutes les lignes, dégradées comprises. **Sans entrée dégradée rien ne change** (octet pour octet : pas une clé, pas une ligne, rien sur stderr ; les golden `characterization/` sont inchangés).
+- **L'API Java** (`MinosApi.listProjects`) rend la même liste : la ligne abîmée a l'état `UNREADABLE` (visible de l'appelant) ; elle ne cherche pas de run reprenable pour cette ligne (son magasin d'état peut être la partie abîmée). L'API n'a pas de compteur : l'état est la trace.
+- **PostgreSQL** : `PostgresProjectRegistry.readProject` lit des colonnes typées (`uuid`, `timestamptz`) : aucune corruption de texte n'y est possible ; il garde le défaut de l'interface (`inventory()` = `listProjects()`, sans entrée dégradée).
+- **Q9 : le constat tombe, aucun correctif.** Voir § 11.8 : deux symboles de même clé ne peuvent pas arriver à la fabrique par le chemin de production.
+
+### 11.8 Q9 : pourquoi le constat ne tient pas (preuve, pas de correctif)
+
+**Verdict : NON REPRODUIT.** Une clé sémantique en double exige deux symboles non externes de même `symbolKey` dans l'instantané actif (les clés `chunk:` et `file:` en découlent : `chunk:<symbolKey>:<début>:<fin>` se décode sans ambiguïté, les deux derniers champs étant des entiers ; `file:<fileId>` est une clé de table). L'invariant qui l'empêche est à trois étages, **chacun sous test** :
+
+1. **Le producteur dérive l'identifiant de la clé.** `ScipSymbolNormalizer.normalize` est le seul producteur de symboles hors codec de relecture : `id = "sym:" + sha256(projectId + symbolKey)`. Deux symboles du même projet ont la même clé **si et seulement s'ils ont le même identifiant** (`ScipSymbolNormalizerTest.theIdOfASymbolIsAFunctionOfItsKeyAndTheKeyOfItsIdentity`, six variantes : fournisseur, run, genre, externe, projet).
+2. **L'instantané refuse un identifiant en double** (`CodeKnowledgeSnapshot.requireUniqueIds`, `FileSymbolSnapshotStore.publish` : `rejectDuplicateIds`) : `CodeKnowledgeSnapshotIdentityTest.twoSymbolsWithTheSameIdAreRefusedByTheSnapshot` (message exact). Le même test dit aussi, honnêtement, ce que l'instantané **ne** vérifie **pas** : l'unicité des clés (`theSnapshotDoesNotCheckKeysItself`) ; elle découle du point 1, pas d'un contrôle.
+3. **Chaque étape en amont fusionne ou refuse** : un même symbole défini plusieurs fois dans un index est dédupliqué par identifiant à l'import (`ScipSymbolSnapshotImporter.CapturingStore`) ; la mise en snapshot d'un run fusionne les symboles identiques et refuse les autres (`ScipProjectSnapshotLifecycle.putUnique` : « provider snapshot collision »).
+
+**Le test de bout en bout** (`SemanticDocumentKeysReachabilityTest`, module `minos-bootstrap`, qui voit à la fois `minos-provider-scip` et `minos-application`) suit le chemin de production, sans appeler la fabrique avec des symboles fabriqués : index SCIP écrit en protobuf → `ScipProjectSnapshotLifecycle.stage` → `promote` → instantané actif **relu du disque** → `SemanticDocumentFactory.build`. Trois scénarios, tous **verts sur le code d'origine** : (a) même nom qualifié dans deux portées + un symbole défini deux fois dans un index : deux symboles, toutes les clés uniques, aucune exception ; (b) un symbole défini trois fois dans un index : fusionné, un symbole ; (c) deux fournisseurs qui décrivent le même symbole dans la même portée : refusé **au staging** (le run échoue à cet endroit, avec « collision »), jamais transformé en doublon. Le seul moyen d'atteindre l'`IllegalStateException` est un fichier d'instantané forgé ou altéré (identifiant qui n'est pas la fonction de la clé) : hors du périmètre « indexation normale » (un fichier altéré après sa publication est déjà refusé à la relecture par la somme de contrôle, `SnapshotIntegrityService.verifyChecksum` ; un fichier forgé avec une somme recalculée n'est pas une indexation).
+
+**Règle de résolution non écrite** : puisqu'aucun doublon n'est atteignable, ni règle (première gagne, dernière gagne, fusion) ni compteur ni journalisation n'ont été ajoutés : ce serait du code défensif sans scénario démontré (règle 3 du chantier). La garde `IllegalStateException` de la fabrique reste ce qu'elle est : une assertion d'invariant qui échouerait bruyamment si l'invariant 1 était un jour cassé.
+
+**Observation hors périmètre (pas un constat, non reproduite ici)** : le scénario (c) montre qu'un run dont deux fournisseurs décrivent le même symbole dans la même portée échoue au staging (`IllegalStateException`, « provider snapshot collision ») : je n'ai pas cherché si un plan d'indexation peut produire ce cas (deux fournisseurs, même portée), c'est hors de ce lot. Noté en § 7.
+
+### 11.9 Preuves
+
+**Ce que voit l'utilisateur.**
+
+- **`minos project list` avec une entrée abîmée.** Avant : `error: project list failed: Text 'not-an-instant' could not be parsed at index 0`, code 1, **aucun** projet listé, pour un seul fichier de registre abîmé (ou un seul historique, ou un seul répertoire illisible sous la racine d'un projet). Après : tous les projets sont listés, le projet abîmé est une ligne à l'état `UNREADABLE`, le pied `degraded: N` et une ligne `  <entrée>: <raison>` par entrée suivent (JSON : `degradedCount` et `degraded`), un avertissement `warning: project inventory is partial: N of T entries are degraded` est écrit sur stderr, et la commande **sort avec le code 3**.
+- **Sans entrée abîmée, rien ne change** : code 0, sortie octet pour octet identique, aucune clé ni ligne en plus, rien sur stderr. Les golden `characterization/` sont inchangés.
+- **Aucune autre commande ne change de code** : `project add`, `inspect <nom>` échouent toujours (code 1) tant qu'une entrée est illisible (résolution par nom et mutation fermées), `inspect <identifiant sain>` passe (0), registre non listable = 1, usage = 2, registre vide = 0.
+- **API Java** : `MinosApi.listProjects` ne lève plus ; la ligne abîmée a l'état `UNREADABLE`.
+- Une entrée du registre qui est un **répertoire ou un lien pendant** (avant : le projet disparaissait sans trace) est maintenant comptée.
+- Les raisons affichées n'ont **ni chemin absolu ni caractère de contrôle** (V-L5-01).
+
+**Rouge → vert.** Chaque test a été joué sur le code d'origine avant le correctif (Windows ; le vrai `visitFileFailed` sous WSL), sortie rouge dans le message du commit `821c7e67` (et `3d2247a1` pour V-L5-01). Les points d'entrée neufs n'y sont que des façades de l'ancien comportement strict, pour que les tests compilent.
+
+| Défaut | Test | Rouge (code d'origine) | Vert |
+|---|---|---|---|
+| entrée de registre abîmée (`Instant`, UUID du contenu, identité ≠ nom de fichier, fichier vide / trop gros / propriété manquante, nom non UUID) fait échouer tout l'inventaire | `LocalProjectRegistryInventoryTest` (12 tests) | `DateTimeParse Text 'not-an-instant' could not be parsed at index 0`, `IllegalArgument Invalid UUID string`, `IO project identity mismatch`, … | 19/19 |
+| entrée remplacée par un répertoire ou un lien pendant : disparaît sans trace | `…aDirectoryWhereAnEntryShouldBeIsCountedInsteadOfVanishing`, `…aDanglingLink…` | `the damaged entry is counted, not dropped ==> expected: <1> but was: <0>` ; `expected: <[id]> but was: <[]>` | vert |
+| plusieurs entrées abîmées, toutes abîmées | `…severalDamagedEntries…`, `…everyEntryDamaged…` | `IllegalArgument Invalid UUID string: not-a-uuid`, `DateTimeParse Text 'x'…` | vert |
+| historique abîmé, registre abîmé dans la vue, plusieurs dégâts de natures différentes | `ProjectInventoryToleranceTest` (5 rouges) | `DateTimeParse Text 'not-an-instant' could not be parsed at index 0` | 10/10 (+1 sauté sous Windows) |
+| répertoire illisible sous la racine d'un projet (`visitFileFailed`), par injection | `…anUnreadableDirectoryUnderOneProjectRootDegradesThatProjectOnly` | `AccessDenied project-1` | vert |
+| **vrai `visitFileFailed`** (`chmod 000`), WSL non privilégié | `…aReallyUnreadableSubdirectoryIsVisitFileFailed…` | `AccessDenied …/project-0/locked` (code d'origine sous WSL : 6 rouges sur 9) | vert sous WSL |
+| inventaire partiel rendu avec le code 0 et sans compteur | `ProjectListPartialInventoryTest` (2 rouges) | texte et JSON sans `degraded`, code 0 | 7/7 |
+| un fichier abîmé fait échouer `project list` sur un vrai `MINOS_HOME` | `ProjectListDamagedRegistryIntegrationTest` (1 rouge) | `error: project list failed: Text 'not-an-instant' could not be parsed at index 0` (code 1) | 4/4 |
+| V-L5-01 caractères de contrôle d'un fichier dans la raison | `DegradedEntryTest`, `…aValueCarryingTerminalControlsNeverReachesTheReason`, `…aHostileValueInADamagedFileNeverReachesTheTerminal` | `unexpected character U+1b in: registry entry is unreadable (bad …` | 6/6, 19/19, 4/4 |
+
+Gardes verts avant et après (ils figent ce qui ne doit pas changer) : un registre sain ne rapporte rien de dégradé et rend les mêmes projets que `listProjects()` ; `listProjects()` strict échoue toujours sur une entrée abîmée ; un registre dont le répertoire ne peut pas être listé échoue en bloc ; `inspectProject` d'un projet abîmé échoue toujours ; une interruption pendant l'assemblage d'une vue est relancée (mutation témoin : sans le garde, rouge) ; les lignes restent triées par identifiant.
+
+**Q9 : non reproduit, aucun correctif** (§ 11.8). Trois tests verts sur le code d'origine, aucune ligne de production touchée pour ce constat (`git diff 40100dbf..HEAD -- minos-application/src/main/java/com/minos/application/semantic` vide).
+
+**Test de concurrence** : aucun dans ce lot. Les deux interruptions sont livrées par le test lui-même (`Thread.interrupt()` avant l'appel, ou par le détecteur injecté), sans `Thread.sleep` ni attente calibrée ; il n'y a pas de course à rejouer 50 fois.
+
+### 11.10 Comptes AVANT / APRÈS (grep du code de production, hors commentaires)
+
+| Décision | Avant | Après |
+|---|---|---|
+| sites qui lisent ou valident une entrée de registre ou d'historique | 5 (`readProject`, `readWorkspaceMetadata`, `idFromPropertiesFile`, `readHistory`, ligne SQL) | **5** : aucune variante de lecture de plus |
+| chemins qui isolent l'échec d'une entrée | 0 | **2**, par nature : une entrée de registre (`LocalProjectRegistry.scanProjects`) et la vue d'un projet (`ProjectInspectionService.inventory`) ; un seul vocabulaire (`DegradedEntry`, deux fabriques, appelées à 3 endroits), un seul rendu (`ProjectCommand.renderProjects`), une seule projection JSON (`ProjectJson.degraded`) |
+| endroits où les entrées du registre de projets sont lues toutes ensemble | 1 (`listProjects`) | **1** (`scanProjects`, dont `listProjects` strict et `inventory` tolérant sont deux lectures) |
+| entrées de projet écartées en silence | 1 (`propertyFiles` : tout `*.properties` qui n'est pas un fichier régulier) | **0** pour les projets ; restent 1 pour les workspaces (`propertyFiles`) et 1 pour l'historique (`readHistory`, V-L5-02), § 7 |
+| appelants de production du listage strict `registry.listProjects()` | 4 (inspection, résolution par nom, NEXUS, enregistrement) | **3** (résolution par nom, NEXUS, enregistrement : les mutations et les résolutions restent fermées) |
+| façons de dire « cette ligne est illisible » | 0 | **1** (`ProjectSummary.UNREADABLE_STATE`, construite par `ProjectInspectionService.unreadableView`) |
+| records « inventaire » voisins | 0 | 3 (`ProjectRegistry.Inventory`, `ProjectInspectionService.Inventory`, `ProjectOperations.ProjectInventory`) : même forme à chaque couche, comme les deux `ProjectView` (`CODE-SUIVI` § 21.3), sans règle de décision dedans |
+| classes de production | 505 | 506 (`DegradedEntry`) |
+
+### 11.11 Gates de fin de lot
+
+| Gate | Base `40100dbf` | Fin de lot |
+|---|---|---|
+| `check-module-boundaries.py` | `modules=14, sources=505, packages=45` | `modules=14, sources=506, packages=45` (+1 : `DegradedEntry`, attendu) |
+| `check-current-docs.py`, `product-facts.py --check` | SUCCESS | SUCCESS |
+| `check-milestone-artifact-references.py` | `scripts checked=95` | `scripts checked=95` |
+| `check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `check-mne.py`, `check-audit-remediation-v2.py`, `check-p0-p2.py`, `check-post228-hardening.py`, `check-semantic-retrieval-consistency.py` | SUCCESS | SUCCESS |
+| `check-jacoco.py` | 26 portées PASS, seule rouge `m24-polyglot-provider-platform` (line 0,228 < 0,28, préexistante, Windows) | **identique** : 26 PASS, même unique rouge, mêmes chiffres |
+| `public-api` (line / branch, portée qui nomme `LocalMinosApi`) | 0,823 / 0,593 | 0,824 / 0,599 |
+| `semantic-hybrid-retrieval` (la portée qui nomme `SemanticDocumentFactory`) | 0,910 / 0,722 | 0,910 / 0,722 (inchangée : aucune ligne de production) |
+| `./mvnw clean verify` | 1 773 tests, 0 échec, 53 ignorés | **1 826 tests, 0 échec, 0 erreur, 54 ignorés** (le seul ignoré de plus : le test POSIX du vrai `visitFileFailed`, exécuté sous WSL), BUILD SUCCESS, 15 modules, 10 min 06 |
+
+Golden : les 12 de `characterization/` sont **inchangés** (`git diff 40100dbf..HEAD -- minos-app/src/test/resources scripts` vide) ; aucun script de `scripts/` assoupli ; aucun test désactivé ni retenté.
+
+### 11.12 Répartition Windows / WSL
+
+- **Windows** (machine locale, liens symboliques disponibles : le test du lien pendant s'est exécuté) : toute la suite du lot ; `clean verify` complet ; toutes les sondes de rouge ; le test POSIX du vrai `visitFileFailed` est sauté (`@EnabledOnOs`).
+- **WSL Ubuntu, Java 24, compte non privilégié, arbre copié sur le système de fichiers Linux** : `LocalProjectRegistryInventoryTest` 19/19 (lien pendant compris), `ProjectInventoryToleranceTest` 10/10 **dont le vrai `visitFileFailed`** (répertoire `chmod 000`), `SemanticDocumentKeysReachabilityTest` 3/3, `ProjectListPartialInventoryTest` 7/7, `ProjectListDamagedRegistryIntegrationTest` 4/4, `DegradedEntryTest` 6/6, `LocalMinosApiDamagedRegistryTest` 1/1, `ScipSymbolNormalizerTest` 6/6, `CodeKnowledgeSnapshotIdentityTest` 2/2 ; le vrai `visitFileFailed` est **rouge** sur le code d'origine sous WSL (`AccessDenied …/locked`, 6 tests rouges sur 9).
+- **Non exécuté nulle part** : `clean verify` complet sous Linux ; `minos-intellij` (Gradle, hors réacteur, V-L5-04) ; une interruption en plein milieu d'une lecture de fichier du registre (non déterministe, § 7).
+
+### 11.13 Constats de verif-fiab (lot 5)
+
+V-L5-01 à V-L5-05 et R-L5-A à R-L5-D (remarques du verdict final) et leur résolution : § 6, « Lot 5 ». `VERDICT-FINAL: ok` de `verif-fiab` sur `b9441160` (`clean verify` rejoué de son côté : 1 826 tests, 0 échec, 54 ignorés, 9 min 57 ; test POSIX du vrai `visitFileFailed` rejoué sous WSL ; ×10 de trois classes du lot).

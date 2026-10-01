@@ -2,6 +2,7 @@ package com.minos.storage.local.registry;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
+import com.minos.registry.DegradedEntry;
 import com.minos.registry.ProjectPathMapping;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.ProjectRegistryLimits;
@@ -35,6 +36,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
 
     private static final String PROJECTS_DIRECTORY = "projects";
     private static final String WORKSPACES_DIRECTORY = "workspaces";
+    private static final String PROPERTIES_SUFFIX = ".properties";
     private static final String LEGACY_ROOT_PATH = "rootPath";
     private static final String PORTABLE_ROOT_PATH = "rootRelativePath";
     private static final long MAX_METADATA_BYTES = 128L * 1024L;
@@ -150,7 +152,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     @Override
     public synchronized Optional<RegisteredProject> findProject(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        Path file = projectsDirectory.resolve(projectId + ".properties");
+        Path file = projectsDirectory.resolve(projectId + PROPERTIES_SUFFIX);
         if (!Files.isRegularFile(file)) return Optional.empty();
         return Optional.of(readProject(file, projectId));
     }
@@ -158,7 +160,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     @Override
     public synchronized Optional<RegisteredWorkspace> findWorkspace(UUID workspaceId) throws IOException {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        Path file = workspacesDirectory.resolve(workspaceId + ".properties");
+        Path file = workspacesDirectory.resolve(workspaceId + PROPERTIES_SUFFIX);
         if (!Files.isRegularFile(file)) return Optional.empty();
         WorkspaceMetadata metadata = readWorkspaceMetadata(file, workspaceId);
         List<UUID> projectIds = listProjects().stream()
@@ -171,12 +173,15 @@ public final class LocalProjectRegistry implements ProjectRegistry {
 
     @Override
     public synchronized List<RegisteredProject> listProjects() throws IOException {
-        List<RegisteredProject> projects = new ArrayList<>();
-        for (Path file : propertyFiles(projectsDirectory)) {
-            projects.add(readProject(file, idFromPropertiesFile(file)));
-        }
-        projects.sort(Comparator.comparing(project -> project.id().toString()));
-        return List.copyOf(projects);
+        Scan scan = scanProjects();
+        scan.rethrowFirstReadFailure();
+        return scan.projects();
+    }
+
+    @Override
+    public synchronized Inventory inventory() throws IOException {
+        Scan scan = scanProjects();
+        return new Inventory(scan.projects(), scan.degraded());
     }
 
     @Override
@@ -227,7 +232,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         properties.setProperty("workspaceId", project.workspaceId().map(UUID::toString).orElse(""));
         properties.setProperty("createdAt", project.createdAt().toString());
         properties.setProperty("updatedAt", project.updatedAt().toString());
-        writePropertiesAtomically(projectsDirectory.resolve(project.id() + ".properties"), properties);
+        writePropertiesAtomically(projectsDirectory.resolve(project.id() + PROPERTIES_SUFFIX), properties);
     }
 
     private void writeWorkspace(RegisteredWorkspace workspace) throws IOException {
@@ -236,7 +241,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         properties.setProperty("name", workspace.name());
         properties.setProperty("createdAt", workspace.createdAt().toString());
         properties.setProperty("updatedAt", workspace.updatedAt().toString());
-        writePropertiesAtomically(workspacesDirectory.resolve(workspace.id() + ".properties"), properties);
+        writePropertiesAtomically(workspacesDirectory.resolve(workspace.id() + PROPERTIES_SUFFIX), properties);
     }
 
     private RegisteredProject readProject(Path file, UUID expectedId) throws IOException {
@@ -314,7 +319,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
 
     private static UUID idFromPropertiesFile(Path file) throws IOException {
         String name = file.getFileName().toString();
-        String suffix = ".properties";
+        String suffix = PROPERTIES_SUFFIX;
         if (!name.endsWith(suffix)) {
             throw new IOException("unexpected registry metadata filename: " + file);
         }
@@ -351,13 +356,42 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         return value;
     }
 
-    private static List<Path> propertyFiles(Path directory) throws IOException {
+    /** Toute entrée nommée {@code *.properties}, quelle qu'elle soit : ce qui n'est pas un fichier régulier est signalé, pas écarté. */
+    private static List<Path> propertyEntries(Path directory) throws IOException {
         try (var paths = Files.list(directory)) {
-            return paths.filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().endsWith(".properties"))
+            return paths.filter(path -> path.getFileName().toString().endsWith(PROPERTIES_SUFFIX))
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
                     .toList();
         }
+    }
+
+    private static List<Path> propertyFiles(Path directory) throws IOException {
+        return propertyEntries(directory).stream().filter(Files::isRegularFile).toList();
+    }
+
+    /**
+     * Le seul endroit qui lit toutes les entrées de projet et borne le dégât à l'entrée qui le porte (Q8) :
+     * {@link #listProjects()} échoue sur la première entrée abîmée comme avant, {@link #inventory()} la signale.
+     */
+    private Scan scanProjects() throws IOException {
+        List<RegisteredProject> projects = new ArrayList<>();
+        List<EntryFailure> failures = new ArrayList<>();
+        for (Path file : propertyEntries(projectsDirectory)) {
+            if (!Files.isRegularFile(file)) {
+                failures.add(new EntryFailure(file, null));
+                continue;
+            }
+            try {
+                projects.add(readProject(file, idFromPropertiesFile(file)));
+            } catch (IOException | RuntimeException failure) {
+                // Une interruption n'est pas une entrée abîmée : lire toutes les entrées thread interrompu les
+                // dégraderait toutes, en silence.
+                if (Thread.currentThread().isInterrupted()) throw failure;
+                failures.add(new EntryFailure(file, failure));
+            }
+        }
+        projects.sort(Comparator.comparing(project -> project.id().toString()));
+        return new Scan(List.copyOf(projects), List.copyOf(failures));
     }
 
     private static void writePropertiesAtomically(Path target, Properties properties) throws IOException {
@@ -395,5 +429,36 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     private record WorkspaceMetadata(UUID id, String name, Instant createdAt, Instant updatedAt) {
+    }
+
+    /** {@code cause == null} : l'entrée porte un nom d'entrée de registre sans être un fichier régulier. */
+    private record EntryFailure(Path file, Exception cause) {
+    }
+
+    private record Scan(List<RegisteredProject> projects, List<EntryFailure> failures) {
+
+        private List<DegradedEntry> degraded() {
+            return failures.stream().map(Scan::describe).toList();
+        }
+
+        /** Listage strict : ce qui a échoué à la lecture d'une entrée est relancé tel qu'il l'a toujours été. */
+        private void rethrowFirstReadFailure() throws IOException {
+            for (EntryFailure failure : failures) {
+                if (failure.cause() instanceof IOException io) throw io;
+                if (failure.cause() instanceof RuntimeException runtime) throw runtime;
+            }
+        }
+
+        private static String entryName(Path file) {
+            String name = file.getFileName().toString();
+            return name.substring(0, name.length() - PROPERTIES_SUFFIX.length());
+        }
+
+        private static DegradedEntry describe(EntryFailure failure) {
+            String entry = entryName(failure.file());
+            return failure.cause() == null
+                    ? DegradedEntry.of(entry, "registry entry is not a regular file")
+                    : DegradedEntry.of(entry, "registry entry is unreadable", failure.cause());
+        }
     }
 }

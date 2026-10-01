@@ -115,17 +115,27 @@ public final class ProjectCommand {
         return CliCommandSupport.run(arguments, output, error, LIST_USAGE,
                 listArguments -> FORMAT_ONLY.parse(listArguments, 0).format(),
                 CliCommandSupport.reportingCause("project list"), format -> {
-                    List<ProjectOperations.ProjectView> projects = operations.listProjects();
-                    output.append(renderProjects(projects, format)).append('\n');
-                    return FindSymbolCommand.SUCCESS;
+                    ProjectOperations.ProjectInventory inventory = operations.inventory();
+                    output.append(renderProjects(inventory, format)).append('\n');
+                    if (inventory.degraded().isEmpty()) {
+                        return FindSymbolCommand.SUCCESS;
+                    }
+                    error.append("warning: project inventory is partial: " + inventory.degraded().size()
+                            + " of " + inventory.projects().size() + " entries are degraded\n");
+                    return FindSymbolCommand.PARTIAL_RESULT;
                 });
     }
 
-    private static String renderProjects(List<ProjectOperations.ProjectView> projects, SymbolOutputFormat format) {
+    private static String renderProjects(ProjectOperations.ProjectInventory inventory, SymbolOutputFormat format) {
+        List<ProjectOperations.ProjectView> projects = inventory.projects();
         if (format == SymbolOutputFormat.JSON) {
             Map<String, Object> root = new LinkedHashMap<>();
             root.put("count", projects.size());
             root.put("projects", projects.stream().map(ProjectJson::project).toList());
+            if (!inventory.degraded().isEmpty()) {
+                root.put("degradedCount", inventory.degraded().size());
+                root.put("degraded", ProjectJson.degraded(inventory.degraded()));
+            }
             return CliJson.render(root);
         }
         if (projects.isEmpty()) {
@@ -134,6 +144,10 @@ public final class ProjectCommand {
         List<String> lines = new ArrayList<>();
         for (ProjectOperations.ProjectView project : projects) {
             lines.add(project.id() + "\t" + project.name() + "\t" + project.indexState() + "\t" + project.rootPath());
+        }
+        if (!inventory.degraded().isEmpty()) {
+            lines.add("degraded: " + inventory.degraded().size());
+            inventory.degraded().forEach(entry -> lines.add("  " + entry.entry() + ": " + entry.reason()));
         }
         return String.join("\n", lines);
     }

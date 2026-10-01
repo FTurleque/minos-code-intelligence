@@ -11,6 +11,12 @@ import java.util.List;
  */
 public interface ProjectSummary {
 
+    /**
+     * L'état d'une ligne d'inventaire dont le projet n'a pas pu être lu ou assemblé (Q8) : ce n'est pas une
+     * disponibilité d'index ({@code ProjectIndexState.Availability}), c'est l'état de la vue.
+     */
+    String UNREADABLE_STATE = "UNREADABLE";
+
     String id();
 
     String name();
