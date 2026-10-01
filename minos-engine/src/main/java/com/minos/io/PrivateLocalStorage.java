@@ -251,9 +251,10 @@ public final class PrivateLocalStorage {
         try {
             Files.createDirectory(target, privateDirectoryAttributes(target));
         } catch (FileAlreadyExistsException concurrentlyCreated) {
-            // Anything but a directory (a file, or a link) occupying the name is not a lost race: it is
-            // refused in the same family Files.createDirectories uses, without naming the path.
-            if (!Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+            // A regular file occupying the name is not a lost race: it is refused in the same family
+            // Files.createDirectories uses, without naming the path. A link or a special object falls
+            // through to hardenDirectory, which refuses it with its own, more precise, diagnostic.
+            if (Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
                 throw new FileAlreadyExistsException(null, null, "private storage path exists and is not a directory");
             }
             // Another writer won the race; hardening and verification below still apply to it, but
