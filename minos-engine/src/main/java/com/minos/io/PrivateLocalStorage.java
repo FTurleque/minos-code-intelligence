@@ -59,12 +59,17 @@ import java.util.concurrent.TimeUnit;
  * definition.</p>
  *
  * <h2>What hardening writes, and how often</h2>
- * <p>The list of entries is rewritten only when it is not already the expected one, so a location that is
- * already right is not re-ACL'd. The protection against inheritance is a different matter: Java cannot read
- * that bit, so it is asserted once per object and per JVM with {@code icacls /inheritance:d}, which writes
- * the DACL (it needs WRITE_DAC, which an owner always holds) even when the bit was already set. That is one
- * short process per object the first time this JVM touches it, and none after, until the object is created
- * again.</p>
+ * <p>The first time a JVM touches an object, its DACL is rewritten (the owner entry and the DENY entries
+ * kept) and then protected against inheritance with {@code icacls /inheritance:d}: one short process per
+ * object and per JVM. Java cannot read the protected bit, and its {@code getAcl()} does not show conditional
+ * (XA) entries, so neither can be assumed already right. After that, in the same JVM, a call rewrites the
+ * entries only if they are no longer the expected ones. Both writes need WRITE_DAC, which an owner always
+ * holds. The memory of what was protected is forgotten when this class creates an object again at the same
+ * path, and emptied when it reaches 8192 entries; an object deleted and recreated by anything else is
+ * touched afresh only after one of those two events.</p>
+ *
+ * <p>Known limit: a conditional DENY (XD) is invisible to Java as well, so the rewrite drops it. MINOS
+ * cannot keep a restriction it cannot see.</p>
  */
 public final class PrivateLocalStorage {
 
@@ -373,7 +378,11 @@ public final class PrivateLocalStorage {
         List<AclEntry> current = acl.getAcl();
         List<AclEntry> desired = ownerOnlyAcl(current, owner, directory);
         String key = target.toString();
-        if (!current.equals(desired)) {
+        // The first time this process touches an object, its DACL is rewritten even if the entries Java can
+        // see already look right: Java's getAcl() does not show conditional (XA) entries, so an object that
+        // inherits one would otherwise keep it (made explicit, and permanent, by the protection below).
+        boolean firstTouch = !PROTECTED_LOCATIONS.contains(key);
+        if (firstTouch || !current.equals(desired)) {
             try {
                 acl.setAcl(desired);
             } catch (AccessDeniedException denied) {

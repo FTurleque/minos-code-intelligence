@@ -146,7 +146,7 @@ class PrivateLocalStorageWindowsAclTest {
     }
 
     @Test
-    void hardeningAnAlreadyRightLocationDoesNotRewriteItsDacl() throws Exception {
+    void hardeningRewritesTheDaclOnTheFirstTouchOfAJvmAndNeverWhenNothingChanged() throws Exception {
         Path home = PrivateLocalStorage.ensurePrivateDirectory(temporary.resolve("home"));
         CountingAclProbe probe = new CountingAclProbe();
         PrivateLocalStorage.useForTesting(probe);
@@ -158,7 +158,8 @@ class PrivateLocalStorageWindowsAclTest {
             PrivateLocalStorage.resetCapabilityProbeForTesting();
         }
 
-        assertEquals(0, probe.setAclCalls, "a location that already has the right DACL is read, not written");
+        assertEquals(1, probe.setAclCalls,
+                "the first touch of a JVM rewrites the DACL; the second call, with nothing changed, writes nothing");
         assertTrue(isDaclProtected(home));
     }
 
