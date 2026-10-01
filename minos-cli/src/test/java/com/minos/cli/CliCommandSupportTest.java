@@ -133,7 +133,7 @@ class CliCommandSupportTest {
     void aFailureMessageNeverCarriesTheControlSequencesOfADamagedFile() {
         // A message may copy a value read from a damaged file: ESC, BEL and bidirectional marks must not reach a terminal.
         String message = CliCommandSupport.failureMessage(
-                new IllegalStateException("bad value \u001b[2Jevil\u0007 and ‮flipped"));
+                new IllegalStateException("bad value \u001b[2Jevil\u0007 and " + (char) 0x202e + "flipped"));
 
         assertTrue(message.chars().noneMatch(value -> Character.isISOControl(value) || value == 0x202e), message);
         assertTrue(message.contains("evil"), "the text stays readable: " + message);
