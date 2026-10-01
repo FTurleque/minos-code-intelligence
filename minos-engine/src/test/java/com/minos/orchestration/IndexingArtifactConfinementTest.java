@@ -171,7 +171,7 @@ class IndexingArtifactConfinementTest {
 
     /** Un seul cible, dont l'exécuteur rend le chemin calculé par {@code artifactFor(répertoire de run, requête)}. */
     private static IndexingRun execute(Fixture fixture,
-                                       BiFunction<Path, IndexingExecutionRequest, Path> artifactFor) throws Exception {
+                                       BiFunction<Path, IndexingExecutionRequest, Path> artifactFor) {
         IndexerExecutor executor = new Fixture.Executor(fixture, 99) {
             @Override
             public IndexingArtifact execute(IndexingExecutionRequest request) throws IOException {
