@@ -30,6 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Windows worker sandbox backed by an AppContainer token and a Job Object.
@@ -598,21 +600,49 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
      * successfully-generated SCIP artifact reported as "missing or unreadable" moments later.
      */
     static void requireInheritableOwnerAccess(Path writeRoot) {
-        String identity = System.getProperty("user.name");
-        if (identity == null || identity.isBlank()) {
-            throw new IllegalStateException("cannot determine the current user to secure write root: " + writeRoot);
-        }
+        // The identity is the one of the process token, read from the operating system. It is never the
+        // user.name system property: the command line can set that to anything, and icacls resolves a
+        // name or a SID alike (-Duser.name=*S-1-1-0 would grant Everyone Full Control of the write root).
+        String sid = currentProcessSid();
         boolean granted;
         try {
-            granted = runIcacls(writeRoot.toString(), "/grant", identity + ":(OI)(CI)F");
+            granted = runIcacls(writeRoot.toString(), "/grant", "*" + sid + ":(OI)(CI)F");
         } catch (IOException | InterruptedException failure) {
             if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
             granted = false;
         }
         if (!granted) {
-            throw new IllegalStateException(
-                    "Unable to secure inheritable owner access on sandbox write root: " + writeRoot);
+            throw new IllegalStateException("Unable to secure inheritable owner access on a sandbox write root");
         }
+    }
+
+    private static final Pattern SECURITY_IDENTIFIER = Pattern.compile("S-1-[0-9]+(?:-[0-9]+){1,14}");
+    private static volatile String processSid;
+
+    /** The SID of the user of this process's token (elevated or not), read once per JVM from {@code whoami}. */
+    private static String currentProcessSid() {
+        String known = processSid;
+        if (known != null) return known;
+        try {
+            String systemRoot = System.getenv("SystemRoot");
+            if (systemRoot == null || systemRoot.isBlank()) throw new IOException("Windows directory unknown");
+            Process process = new ProcessBuilder(
+                    Path.of(systemRoot, "System32", "whoami.exe").toString(), "/user", "/fo", "csv", "/nh")
+                    .redirectErrorStream(true).start();
+            String output = new String(process.getInputStream().readNBytes(4096), StandardCharsets.ISO_8859_1).trim();
+            if (process.waitFor() == 0) {
+                Matcher matcher = SECURITY_IDENTIFIER.matcher(output.substring(output.lastIndexOf(',') + 1));
+                if (matcher.find()) {
+                    processSid = matcher.group();
+                    return processSid;
+                }
+            }
+        } catch (IOException failure) {
+            // Reported below, without the cause: it may carry a path.
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        throw new IllegalStateException("cannot determine the identity of the current process");
     }
 
     /**
