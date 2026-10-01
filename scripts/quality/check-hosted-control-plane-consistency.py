@@ -81,7 +81,7 @@ def main() -> int:
                 "Base64.getDecoder", "key must decode to exactly 32 bytes", "HmacSHA256")
         require("FileHostedControlPlaneStore.java", store, 'Cipher.getInstance("AES/GCM/NoPadding")',
                 "GCMParameterSpec(GCM_TAG_BITS", "DurableAtomicFile.replace", "DurableAtomicFile.publish",
-                "FileLock", "DEFAULT_MAX_TENANT_BYTES",
+                "BoundedFileLease", "DEFAULT_MAX_TENANT_BYTES",
                 "must not be a symbolic link", "authentication tag mismatch",
                 "hosted tenant concurrent modification")
         forbid("FileHostedControlPlaneStore.java", store, "ObjectInputStream", "ObjectOutputStream")

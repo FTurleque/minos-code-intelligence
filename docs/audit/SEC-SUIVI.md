@@ -302,6 +302,10 @@ Non vérifié : `clean verify` complet et JaCoCo (rouge m24 sous Windows, antér
 `SecureDirectoryStream`) : les tests de droits POSIX sont ignorés ici et ne tournent qu'en CI ; `minos-intellij` (Gradle) non touché
 et non construit ; les sandbox `bubblewrap`/cgroup (Linux seulement) n'ont tourné nulle part.
 
+### Gates à texte littéral du dossier `quality/` (orchestrateur, après fusion des lots 1-2)
+
+Trois scripts de `scripts/quality/` que `impl-sec` n'avait pas rejoués exigeaient du texte que les primitives remplacent : `FileLock` dans `FileHostedControlPlaneStore` et `JGitRemoteRepositoryMaterializer` devient `BoundedFileLease` ; `Files.isSymbolicLink` dans `RuntimeObservationEnvelopeCodec` devient `ConfinedFileOpener.openRegularFileNoFollow`. L'exigence reste du même ordre (le verrou fichier et le non-suivi de lien sont toujours gardés, par la primitive nommée). Tous les `check-*.py` de `remediation/`, `quality/` et `architecture/` sont verts après ce changement, hors `check-jacoco.py` (rapports JaCoCo requis).
+
 ## À traiter plus tard
 
 - **Clone shallow à profondeur 1 (S9 point 6)** : voir décision 8.

@@ -78,7 +78,7 @@ def main() -> int:
 
         require_facts("RemoteRepositoryCachePolicy.java", cache_policy, "8", "10L * 1024L * 1024L * 1024L")
         require_facts("JGitRemoteRepositoryMaterializer.java", materializer,
-                      "remote-cache", "FileLock", "expectedCommit", "isClean", "ATOMIC_MOVE", "deleteCacheTree",
+                      "remote-cache", "BoundedFileLease", "expectedCommit", "isClean", "ATOMIC_MOVE", "deleteCacheTree",
                       "new JGitRemoteGitClient", "new CloneBudget")
         require_facts("JGitRemoteGitClient.java", git_client,
                       "setCloneSubmodules(false)", "setDepth(1)", "credentials.clear",
