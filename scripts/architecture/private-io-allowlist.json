@@ -12,6 +12,12 @@
     "justification": "Empreinte des sources du projet de l'utilisateur (options d'ouverture fixées par l'appelant) ; à migrer vers ConfinedFileOpener, hors S5 nommé."
   },
   {
+    "file": "minos-engine/src/main/java/com/minos/io/SharedCacheLeaseRegistry.java",
+    "method": "FileChannel.lock",
+    "max": 18,
+    "justification": "Registre de baux à compte de références : garde un canal et un verrou par clé de cache (types FileChannel et FileLock) ; l'ouverture passe par BoundedFileLease.openPrivateLockChannel, plafonné car il n'est pas une primitive d'ouverture."
+  },
+  {
     "file": "minos-mcp/src/main/java/com/minos/mcp/MinosMcpHandshakeProbe.java",
     "method": "Files.createDirectories",
     "max": 1,

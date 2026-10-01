@@ -35,7 +35,10 @@ import java.util.Set;
  * <h2>Policy</h2>
  * <ul>
  *   <li>POSIX: directories {@code 0700}, files {@code 0600} — no GROUP and no OTHERS bit.</li>
- *   <li>ACL platforms (Windows): a single explicit ALLOW entry for the owner.</li>
+ *   <li>ACL platforms (Windows): a single explicit ALLOW entry for the owner. On a directory that entry is
+ *       inheritable (file and directory inherit), so whatever a process of the owner creates in it later --
+ *       a sandboxed provider writing its artifact, a tool unpacking an archive -- is owner-only too instead of
+ *       taking the default ACL of its creator. Still no other principal.</li>
  * </ul>
  *
  * <h2>Guarantees</h2>

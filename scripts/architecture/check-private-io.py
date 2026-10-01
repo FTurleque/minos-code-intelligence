@@ -3,18 +3,25 @@
 
 MINOS_HOME accumulates material as confidential as the repositories it indexes. Java's defaults leave
 it world-readable (Files.createDirectories, Files.write), follow links (Files.newInputStream) and
-wait for a lock without end (FileChannel.lock). The primitives of com.minos.io -- PrivateLocalStorage,
-ConfinedFileOpener, DurableAtomicFile, FileTreeOperations, BoundedFileLease, BoundedProperties,
-SharedCacheLeaseRegistry -- are the one place that decides what private, confined and bounded mean.
+wait for a lock without end (FileChannel.lock). The four primitives that must touch the raw API to do
+their job -- ConfinedFileOpener, BoundedFileLease, BoundedProperties, DurableAtomicFile -- are the one
+place that decides what private, confined and bounded mean. PrivateLocalStorage and FileTreeOperations
+are checked like any other file (they need nothing raw); SharedCacheLeaseRegistry holds channels and
+locks per key and is bounded by an allowlist entry.
 
 Forbidden in src/main/java of every module except minos-intellij, outside those primitives:
 
-  Files.createDirectories   Files.write   Files.writeString   Files.newInputStream
-  FileChannel.open          FileChannel.lock / tryLock (a receiver named *channel*, or any FileLock)
+  Files.createDirectories   Files.write   Files.writeString   Files.newInputStream   (call or method reference)
+  import static java.nio.file.Files.*      (a wildcard import hides every call above)
+  FileChannel.open          AsynchronousFileChannel.open
+  FileChannel.lock          any use of FileChannel, AsynchronousFileChannel, FileLock, RandomAccessFile or
+                            getChannel(), and lock/tryLock on a receiver named *channel*: a channel can only
+                            come from the primitives, so holding one outside them is the finding, whatever
+                            its variable is called. A bare import is not a use.
 
 The tests (src/test) and the resources (src/main/resources, e.g. embedded scripts) are excluded by
 construction: the rule governs the code MINOS ships and runs, not its fixtures. Comments and string
-literals are ignored.
+literals are ignored; unicode escapes are decoded first, as the Java compiler does.
 
 Exceptions are the nominative allowlist scripts/architecture/private-io-allowlist.json: one entry per
 (file, forbidden method) with the maximum number of occurrences and a written justification. Never a
@@ -36,15 +43,12 @@ ALLOWLIST = Path(__file__).resolve().parent / "private-io-allowlist.json"
 
 EXCLUDED_MODULES = frozenset({"minos-intellij"})
 
-# The primitives themselves: the only files allowed to use the forbidden calls without a list entry.
+# The primitives that must use the raw API: the only files allowed to do so without a list entry.
 PRIMITIVES = frozenset({
-    "minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java",
     "minos-engine/src/main/java/com/minos/io/ConfinedFileOpener.java",
     "minos-engine/src/main/java/com/minos/io/DurableAtomicFile.java",
-    "minos-engine/src/main/java/com/minos/io/FileTreeOperations.java",
     "minos-engine/src/main/java/com/minos/io/BoundedFileLease.java",
     "minos-engine/src/main/java/com/minos/io/BoundedProperties.java",
-    "minos-engine/src/main/java/com/minos/io/SharedCacheLeaseRegistry.java",
 })
 
 FORBIDDEN = (
@@ -52,32 +56,45 @@ FORBIDDEN = (
     "Files.write",
     "Files.writeString",
     "Files.newInputStream",
+    "Files.*",
     "FileChannel.open",
+    "AsynchronousFileChannel.open",
     "FileChannel.lock",
 )
 
-_STATIC_IMPORT = re.compile(
-    r"\bimport\s+static\s+java\.nio\.file\.Files\.(createDirectories|writeString|write|newInputStream)\b")
+_FILES_METHODS = ("createDirectories", "write", "writeString", "newInputStream")
+_STATIC_IMPORT = re.compile(r"\bimport\s+static\s+java\s*\.\s*nio\s*\.\s*file\s*\.\s*Files\s*\.\s*(\*|\w+)\s*;")
+_IMPORT = re.compile(r"^\s*import\b[^;]*;", re.MULTILINE)
+_NOT_OPEN = r"(?!\s*(?:\.|::)\s*open\b)"
 _PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
-    "Files.createDirectories": (re.compile(r"\bFiles\s*\.\s*createDirectories\s*\("),),
-    "Files.write": (re.compile(r"\bFiles\s*\.\s*write\s*\("),),
-    "Files.writeString": (re.compile(r"\bFiles\s*\.\s*writeString\s*\("),),
-    "Files.newInputStream": (re.compile(r"\bFiles\s*\.\s*newInputStream\s*\("),),
-    "FileChannel.open": (re.compile(r"\bFileChannel\s*\.\s*open\s*\("),),
-    # A receiver named after a channel, or the FileLock type that every stored lock mentions.
+    **{
+        f"Files.{name}": (
+            re.compile(rf"\bFiles\s*\.\s*{name}\s*\("),
+            re.compile(rf"\bFiles\s*::\s*{name}\b"),
+        )
+        for name in _FILES_METHODS
+    },
+    "FileChannel.open": (re.compile(r"\bFileChannel\s*(?:\.|::)\s*open\b"),),
+    "AsynchronousFileChannel.open": (re.compile(r"\bAsynchronousFileChannel\s*(?:\.|::)\s*open\b"),),
+    # A channel can only come from the primitives: holding one, or a lock on one, is the finding whatever
+    # the variable is named. FileChannel.open is counted above, not twice.
     "FileChannel.lock": (
-        re.compile(r"\b\w*[cC]hannel\w*\s*\.\s*(?:lock|tryLock)\s*\("),
         re.compile(r"\bFileLock\b"),
+        re.compile(r"\bRandomAccessFile\b"),
+        re.compile(r"\.\s*getChannel\s*\("),
+        re.compile(r"\b\w*[cC]hannel\w*\s*\.\s*(?:lock|tryLock)\s*\("),
+        re.compile(r"\bFileChannel\b" + _NOT_OPEN),
+        re.compile(r"\bAsynchronousFileChannel\b" + _NOT_OPEN),
     ),
 }
-_STATIC_IMPORT_KEY = {
-    "createDirectories": "Files.createDirectories",
-    "write": "Files.write",
-    "writeString": "Files.writeString",
-    "newInputStream": "Files.newInputStream",
-}
+_UNICODE_ESCAPE = re.compile(r"(?<!\\)((?:\\\\)*)\\u+([0-9a-fA-F]{4})")
 
 _MIN_JUSTIFICATION_CHARS = 20
+
+
+def decode_unicode_escapes(source: str) -> str:
+    """Decode unicode escapes before lexing, as the Java compiler does (an escaped backslash is not one)."""
+    return _UNICODE_ESCAPE.sub(lambda match: match.group(1) + chr(int(match.group(2), 16)), source)
 
 
 def strip_comments_and_literals(source: str) -> str:
@@ -121,13 +138,16 @@ def strip_comments_and_literals(source: str) -> str:
 
 def count_occurrences(source: str) -> dict[str, int]:
     """Occurrences of each forbidden call in one Java source, comments and literals ignored."""
-    code = strip_comments_and_literals(source)
+    code = strip_comments_and_literals(decode_unicode_escapes(source))
     counts = {name: 0 for name in FORBIDDEN}
+    for match in _STATIC_IMPORT.finditer(code):
+        key = "Files.*" if match.group(1) == "*" else f"Files.{match.group(1)}"
+        if key in counts:
+            counts[key] += 1
+    code = _IMPORT.sub("", code)
     for name, patterns in _PATTERNS.items():
         for pattern in patterns:
             counts[name] += len(pattern.findall(code))
-    for match in _STATIC_IMPORT.finditer(code):
-        counts[_STATIC_IMPORT_KEY[match.group(1)]] += 1
     return {name: count for name, count in counts.items() if count}
 
 

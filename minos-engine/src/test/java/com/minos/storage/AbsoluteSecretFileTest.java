@@ -53,16 +53,28 @@ class AbsoluteSecretFileTest {
         assertFalse(failure.getMessage().contains(secret.toString()), "the message names the path: " + failure.getMessage());
     }
 
+    /** A Kubernetes secret volume: key -> ..data/key, ..data -> a timestamped directory. */
     @Test
-    void aLinkToAnAbsoluteSecretIsRefusedWithoutNamingAnyPath(@TempDir Path temp) throws Exception {
-        Path target = Files.writeString(temp.resolve("real.password"), "linked-secret\n");
-        Path link = temp.resolve("link.password");
-        Files.createSymbolicLink(link, target);
+    void aLeafLinkToARegularSecretFileIsFollowedForTheOperatorDesignatedPath(@TempDir Path temp) throws Exception {
+        Path generation = Files.createDirectories(temp.resolve("..2026_10_01"));
+        Files.writeString(generation.resolve("password"), "mounted-secret\n");
+        Path data = Files.createSymbolicLink(temp.resolve("..data"), generation.getFileName());
+        Path key = Files.createSymbolicLink(temp.resolve("password"), Path.of("..data", "password"));
 
-        IOException failure = assertThrows(IOException.class, () -> resolve(temp.resolve("home"), link));
+        assertEquals("mounted-secret", resolve(temp.resolve("home"), key).postgresPassword());
+        assertEquals(data.getFileName().toString(), "..data");
+    }
 
-        assertFalse(failure.getMessage().contains(temp.toString()), "the message names a path: " + failure.getMessage());
-        assertFalse(failure.getMessage().contains("linked-secret"));
+    @Test
+    void aLeafLinkToADirectoryOrToNothingIsRefusedWithoutNamingAnyPath(@TempDir Path temp) throws Exception {
+        Path directory = Files.createDirectories(temp.resolve("a-directory"));
+        Path toDirectory = Files.createSymbolicLink(temp.resolve("to-directory"), directory);
+        Path dangling = Files.createSymbolicLink(temp.resolve("dangling"), temp.resolve("nothing"));
+
+        for (Path link : new Path[]{toDirectory, dangling}) {
+            IOException failure = assertThrows(IOException.class, () -> resolve(temp.resolve("home"), link));
+            assertFalse(failure.getMessage().contains(temp.toString()), "the message names a path: " + failure.getMessage());
+        }
     }
 
     @Test
