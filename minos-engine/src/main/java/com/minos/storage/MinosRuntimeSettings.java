@@ -26,7 +26,8 @@ import java.util.Properties;
  * <p>Secret values are never required in the properties file. Password-file indirection is
  * supported so installers can ACL the secret independently from the human-readable config.
  * Relative secret paths are confined to the physical MINOS home even when symlinks are involved;
- * absolute secret paths remain an explicit operator escape hatch for mounted secret stores.</p>
+ * absolute secret paths remain an explicit operator escape hatch for mounted secret stores: a leaf link
+ * is followed there (secret volumes are made of links) provided it resolves to a regular file.</p>
  */
 public final class MinosRuntimeSettings {
     public static final String CONFIG_DIRECTORY = "config";
@@ -118,18 +119,29 @@ public final class MinosRuntimeSettings {
     }
 
     /**
-     * Reads an operator-supplied absolute secret path (a mounted secret store). The file is opened once,
-     * with no link followed, and the bytes come from that open stream; no failure carries the path.
+     * Reads an operator-designated absolute secret path (a mounted secret store).
+     *
+     * <p>Unlike everything under MINOS_HOME, a link at the leaf is followed here, because the operator chose
+     * this path and secret volumes are built from links (a Kubernetes volume maps {@code key} to
+     * {@code ..data/key}). The exception is narrow: the path is resolved once, and what it resolves to must be
+     * a regular file, which is then opened with no link followed and read from that single open stream. A
+     * directory, a dangling link or any other object is refused. No failure carries the path.</p>
      */
     private String readAbsoluteSecret(Path secretPath) throws IOException {
-        try (InputStream stream = ConfinedFileOpener.openRegularFileNoFollow(secretPath)) {
-            return BoundedProperties.readUtf8(stream, MAX_SECRET_BYTES, "MINOS secret file");
+        try {
+            Path resolved = secretPath.toRealPath();
+            try (InputStream stream = ConfinedFileOpener.openRegularFileNoFollow(resolved)) {
+                return BoundedProperties.readUtf8(stream, MAX_SECRET_BYTES, "MINOS secret file");
+            }
         } catch (NoSuchFileException absent) {
             throw new IOException(SECRET_DOES_NOT_EXIST);
         } catch (AccessDeniedException denied) {
             throw new IOException("configured MINOS secret file is not readable");
         } catch (ConfinedFileOpener.ConfinementException refused) {
-            throw new IOException("configured MINOS secret file must be a regular non-symlink file");
+            throw new IOException("configured MINOS secret file must resolve to a regular file");
+        } catch (java.nio.file.FileSystemException unreadable) {
+            // A link loop or any other resolution failure: its message names the path.
+            throw new IOException("configured MINOS secret file cannot be resolved");
         }
     }
 
