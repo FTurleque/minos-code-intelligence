@@ -52,6 +52,9 @@ final class LinuxCgroupJob implements AutoCloseable {
     /** Residues named in the single qualification WARNING; the remainder is counted, not listed. */
     static final int MAX_REPORTED_RESIDUES = 32;
     private static final int MAX_DESCRIBED_CAUSES = 4;
+    /** Depth and size bounds of the cgroup tree below a job that is read or removed. */
+    private static final int MAX_SUBTREE_DEPTH = 16;
+    private static final int MAX_SUBTREE_CGROUPS = 1_024;
     private static final int MAX_REDACTION_DEPTH = 16;
 
     private static final Object DISCOVERY_LOCK = new Object();
@@ -177,99 +180,226 @@ final class LinuxCgroupJob implements AutoCloseable {
     }
 
     /**
-     * Kills and removes cgroups left behind by a MINOS process that was itself killed.
+     * Reclaims cgroups left behind by a MINOS process that was itself killed.
      * The delegated root must never accumulate residue a provider could rely on.
      *
      * <p>Several MINOS processes (CLI, MCP server, IDE plugin) share one delegated root, so a
-     * discovered cgroup is only reclaimed when {@link CgroupJobOwnership} proves its owner is dead:
-     * the owner PID carried in the cgroup name is gone or was reused by another process. Cgroups of
-     * a live MINOS process, of this process, or unmarked cgroups that still hold processes are left
-     * intact. An orphaned boundary that still contains processes but cannot be killed, or whose
-     * membership cannot be read, is a containment failure and rejects the delegated root. Only
-     * deletion of an already empty cgroup remains best-effort because it cannot hide surviving
-     * provider processes.</p>
+     * discovered cgroup is only touched when {@link CgroupJobOwnership} has a positive proof: its owner is
+     * dead (the owner PID is absent from a process table proven readable, or was reused as shown by
+     * complete, different start ticks, in the same PID and time namespaces as this process), and then the
+     * cgroup, the cgroups below it and every process in them are killed and removed; or it holds no process
+     * at all, and then it is only removed, never killed. Everything else is left intact and named in the
+     * result: a live MINOS process, this process, a mark of another namespace or without one, an owner the
+     * process table cannot verify, an unmarked cgroup that holds processes. An orphaned boundary that still
+     * contains processes but cannot be killed, or whose membership cannot be read, is a containment failure
+     * and rejects the delegated root. A cgroup that could not be removed after being reclaimed is a residue
+     * like any other: it is named in the result, never counted as reclaimed.</p>
      *
-     * <p>This sweep does not journal what it leaves intact; {@link #reclaimAndReportStaleJobs} does.</p>
+     * <p>The membership that is read is that of the cgroup and of every cgroup below it: the processes of a
+     * job may sit in a cgroup the job itself created. At most {@link #MAX_STALE_JOB_SWEEP} entries of the
+     * root are examined; the others are counted in {@link StaleSweep#notExamined()}.</p>
+     *
+     * <p>This sweep does not journal; {@link #reclaimAndReportStaleJobs} does.</p>
      */
     static StaleSweep reclaimStaleJobs(Path root) throws IOException {
+        return reclaimStaleJobs(root, SweepContext.system());
+    }
+
+    /** Package-private variant with injectable ownership evidence, removal and bound, for deterministic tests. */
+    static StaleSweep reclaimStaleJobs(Path root, SweepContext context) throws IOException {
         List<String> reclaimed = new ArrayList<>();
         List<Residue> leftIntact = new ArrayList<>();
+        int notExamined = 0;
+        long entries = 0L;
         try (java.util.stream.Stream<Path> children = Files.list(root)) {
-            for (Path child : children.limit(MAX_STALE_JOB_SWEEP).toList()) {
+            for (java.util.Iterator<Path> iterator = children.iterator(); iterator.hasNext();) {
+                Path child = iterator.next();
+                if (entries++ >= context.maximumEntries()) {
+                    notExamined++;
+                    continue;
+                }
                 if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) continue;
                 String name = String.valueOf(child.getFileName());
                 if (!name.startsWith("minos-")) continue;
                 if (CONTROLLER_DIRECTORY.equals(name)) continue;
-                CgroupJobOwnership.Verdict verdict = reclaimStaleJob(child, name);
+                CgroupJobOwnership.Verdict verdict = reclaimStaleJob(child, name, context);
                 if (verdict.reclaim()) reclaimed.add(name);
                 else leftIntact.add(new Residue(name, verdict.reason()));
             }
         }
-        return new StaleSweep(List.copyOf(reclaimed), List.copyOf(leftIntact));
+        return new StaleSweep(List.copyOf(reclaimed), List.copyOf(leftIntact), notExamined);
     }
 
     /**
-     * Sweeps the delegated root during its qualification and reports, in a single WARNING, every
-     * cgroup the sweep leaves intact.
+     * Sweeps the delegated root during its qualification and reports what it did: one INFO line naming
+     * the cgroups it reclaimed, and one WARNING naming every cgroup it leaves in place with the reason,
+     * and counting the entries it did not examine.
      *
      * <p>The sweep never kills a cgroup whose owner may be alive (a live MINOS instance, an unmarked
-     * cgroup that still holds processes). Such residues still consume the {@code pids} and
-     * {@code memory} budget of the delegated root, so the operator is told about each of them once
-     * per qualification: its name relative to the root and the reason it was left intact. The report
-     * is bounded to {@link #MAX_REPORTED_RESIDUES} named residues; the others are counted.</p>
+     * cgroup that still holds processes, an owner it cannot verify). Such residues still consume the
+     * {@code pids} and {@code memory} budget of the delegated root, so the operator is told about each of
+     * them once per qualification: its name relative to the root and the reason it was left intact. The
+     * report is bounded to {@link #MAX_REPORTED_RESIDUES} named residues; the others are counted. No entry
+     * of either line carries an absolute path.</p>
      */
     static StaleSweep reclaimAndReportStaleJobs(Path root) throws IOException {
-        StaleSweep sweep = reclaimStaleJobs(root);
-        if (!sweep.residues().isEmpty()) {
-            LOGGER.log(System.Logger.Level.WARNING, residueReport(root, sweep.residues()));
+        return reclaimAndReportStaleJobs(root, SweepContext.system());
+    }
+
+    /** Package-private variant with injectable ownership evidence, removal and bound, for deterministic tests. */
+    static StaleSweep reclaimAndReportStaleJobs(Path root, SweepContext context) throws IOException {
+        StaleSweep sweep = reclaimStaleJobs(root, context);
+        if (!sweep.reclaimed().isEmpty()) {
+            LOGGER.log(System.Logger.Level.INFO, reclaimReport(root, sweep.reclaimed()));
+        }
+        if (!sweep.residues().isEmpty() || sweep.notExamined() > 0) {
+            LOGGER.log(System.Logger.Level.WARNING, residueReport(root, sweep));
         }
         return sweep;
     }
 
-    static String residueReport(Path root, List<Residue> residues) {
-        StringBuilder report = new StringBuilder("MINOS left ")
-                .append(residues.size())
-                .append(" cgroup(s) intact under the delegated cgroup root ")
+    static String reclaimReport(Path root, List<String> reclaimed) {
+        StringBuilder report = new StringBuilder("MINOS reclaimed ")
+                .append(reclaimed.size())
+                .append(" stale cgroup(s) under the delegated cgroup root ")
                 .append(displayRoot(root))
-                .append("; they keep consuming its pids and memory budget until their owner exits or an operator"
-                        + " removes them: ");
-        int listed = Math.min(residues.size(), MAX_REPORTED_RESIDUES);
-        for (int index = 0; index < listed; index++) {
-            Residue residue = residues.get(index);
-            if (index > 0) report.append("; ");
-            report.append(residue.name()).append(" (").append(residue.reason()).append(')');
+                .append(": ");
+        int listed = Math.min(reclaimed.size(), MAX_REPORTED_RESIDUES);
+        report.append(String.join("; ", reclaimed.subList(0, listed)));
+        if (reclaimed.size() > listed) {
+            report.append("; and ").append(reclaimed.size() - listed).append(" more");
         }
-        if (residues.size() > listed) {
-            report.append("; and ").append(residues.size() - listed).append(" more");
+        return report.toString();
+    }
+
+    static String residueReport(Path root, StaleSweep sweep) {
+        List<Residue> residues = sweep.residues();
+        StringBuilder report = new StringBuilder("MINOS ");
+        if (!residues.isEmpty()) {
+            report.append("left ")
+                    .append(residues.size())
+                    .append(" cgroup(s) intact under the delegated cgroup root ")
+                    .append(displayRoot(root))
+                    .append("; they keep consuming its pids and memory budget until their owner exits or an operator"
+                            + " removes them: ");
+            int listed = Math.min(residues.size(), MAX_REPORTED_RESIDUES);
+            for (int index = 0; index < listed; index++) {
+                Residue residue = residues.get(index);
+                if (index > 0) report.append("; ");
+                report.append(residue.name()).append(" (").append(residue.reason()).append(')');
+            }
+            if (residues.size() > listed) {
+                report.append("; and ").append(residues.size() - listed).append(" more");
+            }
+        }
+        if (sweep.notExamined() > 0) {
+            if (!residues.isEmpty()) report.append(". ");
+            report.append(sweep.notExamined())
+                    .append(" entries were not examined under the delegated cgroup root ")
+                    .append(displayRoot(root))
+                    .append(" (the sweep is bounded); they may hold residues too");
         }
         return report.toString();
     }
 
     /** Applies the ownership decision to one discovered cgroup and reclaims it when the decision says so. */
-    private static CgroupJobOwnership.Verdict reclaimStaleJob(Path child, String name) {
+    private static CgroupJobOwnership.Verdict reclaimStaleJob(Path child, String name, SweepContext context) {
         LinuxCgroupJob stale = new LinuxCgroupJob(child);
         Optional<CgroupJobOwnership.Mark> mark = CgroupJobOwnership.Mark.parse(name);
         CgroupJobOwnership.Verdict verdict = CgroupJobOwnership.decide(
-                mark, CgroupJobOwnership.CURRENT, CgroupJobOwnership.OwnerLookup.SYSTEM, stale::aliveProcesses);
+                mark, context.self(), context.owners().apply(child), stale::aliveProcesses);
         if (!verdict.reclaim()) {
             // Reported once, together with every other residue, by reclaimAndReportStaleJobs.
             return verdict;
         }
         LOGGER.log(System.Logger.Level.DEBUG, "MINOS reclaims stale cgroup " + name + ": " + verdict.reason());
-        if (stale.aliveProcesses() > 0L) {
-            stale.kill();
+        // Only an owner proven dead authorizes a kill. An empty cgroup is removed and nothing else: the
+        // membership that found it empty is a moment, and whoever joins it afterwards is not proven dead.
+        if (verdict.kills() && stale.aliveProcesses() > 0L) {
+            stale.kill(context.killPolls(), context.killPollMillis());
         }
         try {
-            Files.deleteIfExists(child);
+            context.removal().remove(child);
         } catch (IOException exception) {
-            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not remove already-empty stale cgroup " + name
-                    + ": " + describeFailure(exception, child.getParent()));
+            // Still in place, so not reclaimed: a residue the report names, with the reason it is one.
+            return new CgroupJobOwnership.Verdict(CgroupJobOwnership.Decision.LEAVE, verdict.reason()
+                    + "; MINOS could not remove it: " + describeFailure(exception, child.getParent()));
         }
         return verdict;
     }
 
-    /** Outcome of one stale sweep, by cgroup name (never a path), for diagnostics and tests. */
-    record StaleSweep(List<String> reclaimed, List<Residue> residues) {
+    /**
+     * Removes a cgroup directory together with the cgroups below it, deepest first; the kernel refuses
+     * while a process or a file-system entry that is not a cgroup remains in one of them.
+     */
+    @FunctionalInterface
+    interface CgroupRemoval {
+
+        CgroupRemoval KERNEL = LinuxCgroupJob::removeCgroupTree;
+
+        void remove(Path cgroup) throws IOException;
+    }
+
+    /** Removes {@code cgroup} and the cgroups below it, deepest first. Only directories are removed, never files. */
+    static void removeCgroupTree(Path cgroup) throws IOException {
+        removeCgroupTree(cgroup, 0);
+    }
+
+    private static void removeCgroupTree(Path cgroup, int depth) throws IOException {
+        if (depth > MAX_SUBTREE_DEPTH) throw new IOException("cgroup tree is too deep to remove");
+        for (Path nested : nestedCgroups(cgroup)) {
+            removeCgroupTree(nested, depth + 1);
+        }
+        Files.deleteIfExists(cgroup);
+    }
+
+    private static List<Path> nestedCgroups(Path cgroup) throws IOException {
+        if (!Files.isDirectory(cgroup, LinkOption.NOFOLLOW_LINKS)) return List.of();
+        List<Path> nested = new ArrayList<>();
+        try (java.nio.file.DirectoryStream<Path> children = Files.newDirectoryStream(
+                cgroup, child -> Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS))) {
+            for (Path child : children) nested.add(child);
+        }
+        return nested;
+    }
+
+    /**
+     * Everything a sweep consults besides the directory it walks: the mark of the sweeping process, how
+     * the process table is read for a given cgroup, how a cgroup is removed, how many entries are
+     * examined and how long a kill is verified. {@link #system()} is the production wiring; tests inject
+     * each part so that the decision is exercised on any host.
+     */
+    record SweepContext(
+            CgroupJobOwnership.Mark self,
+            java.util.function.Function<Path, CgroupJobOwnership.OwnerLookup> owners,
+            CgroupRemoval removal,
+            long maximumEntries,
+            int killPolls,
+            long killPollMillis) {
+
+        SweepContext {
+            Objects.requireNonNull(self, "self");
+            Objects.requireNonNull(owners, "owners");
+            Objects.requireNonNull(removal, "removal");
+            if (maximumEntries < 1L) throw new IllegalArgumentException("maximumEntries must be positive");
+            if (killPolls < 1) throw new IllegalArgumentException("killPolls must be positive");
+            if (killPollMillis < 0L) throw new IllegalArgumentException("killPollMillis must not be negative");
+        }
+
+        static SweepContext system() {
+            return new SweepContext(CgroupJobOwnership.CURRENT, CgroupJobOwnership.OwnerLookup::system,
+                    CgroupRemoval.KERNEL, MAX_STALE_JOB_SWEEP, MAX_KILL_POLLS, KILL_POLL_MILLIS);
+        }
+    }
+
+    /**
+     * Outcome of one stale sweep, by cgroup name (never a path), for diagnostics and tests.
+     *
+     * @param reclaimed   cgroups removed, after a kill when their owner was proven dead
+     * @param residues    cgroups left in place, with the reason: each costs the root pids and memory
+     * @param notExamined entries of the root past the sweep bound, which were not looked at
+     */
+    record StaleSweep(List<String> reclaimed, List<Residue> residues, int notExamined) {
         StaleSweep {
             reclaimed = List.copyOf(reclaimed);
             residues = List.copyOf(residues);
@@ -474,9 +604,17 @@ final class LinuxCgroupJob implements AutoCloseable {
         }
     }
 
+    /** Processes in this cgroup and in every cgroup below it: a job's processes may sit in a cgroup it made. */
     private List<Long> members() throws IOException {
         List<Long> result = new ArrayList<>();
-        for (String line : Files.readAllLines(directory.resolve(PROCS_FILE), StandardCharsets.UTF_8)) {
+        collectMembers(directory, result, 0, new int[] {0});
+        return List.copyOf(result);
+    }
+
+    private static void collectMembers(Path cgroup, List<Long> result, int depth, int[] visited) throws IOException {
+        if (depth > MAX_SUBTREE_DEPTH) throw new IOException("cgroup tree is too deep to verify its membership");
+        if (++visited[0] > MAX_SUBTREE_CGROUPS) throw new IOException("cgroup tree is too large to verify its membership");
+        for (String line : Files.readAllLines(cgroup.resolve(PROCS_FILE), StandardCharsets.UTF_8)) {
             if (line.isBlank()) continue;
             String value = line.trim();
             try {
@@ -487,7 +625,9 @@ final class LinuxCgroupJob implements AutoCloseable {
                 throw new IOException("invalid PID in cgroup.procs: " + value, exception);
             }
         }
-        return List.copyOf(result);
+        for (Path nested : nestedCgroups(cgroup)) {
+            collectMembers(nested, result, depth + 1, visited);
+        }
     }
 
     private Path requireKillSwitch() throws IOException {

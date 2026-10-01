@@ -91,15 +91,19 @@ class LinuxCgroupJobOwnershipIsolationTest {
 
     /** R2 on a real cgroup: the mark written by this JVM carries the kernel start ticks of its process. */
     @Test
-    void theMarkCarriesTheKernelStartTicksOfItsOwner() throws Exception {
-        requireDelegatedRoot();
+    void theMarkCarriesTheKernelStartTicksAndNamespacesOfItsOwner() {
+        Path root = requireDelegatedRoot();
         OptionalLong ticks = CgroupJobOwnership.startTicks(CgroupJobOwnership.PROC, ProcessHandle.current().pid());
 
         assertTrue(ticks.isPresent(), "/proc/self/stat must expose the start ticks on Linux");
         assertEquals(ticks.getAsLong(), CgroupJobOwnership.CURRENT.start());
         assertEquals(CgroupJobOwnership.StartClock.BOOT_TICKS, CgroupJobOwnership.CURRENT.clock());
-        assertEquals(ticks, CgroupJobOwnership.OwnerLookup.SYSTEM.find(ProcessHandle.current().pid())
-                .orElseThrow().startTicks(), "the sweep reads the same ticks for the same live process");
+        CgroupJobOwnership.OwnerStatus self = CgroupJobOwnership.OwnerLookup.system(root)
+                .find(ProcessHandle.current().pid());
+        assertEquals(CgroupJobOwnership.OwnerStatus.Presence.PRESENT, self.presence(), self.reason());
+        assertEquals(ticks, self.startTicks(), "the sweep reads the same ticks for the same live process");
+        assertTrue(CgroupJobOwnership.CURRENT.namespaces().known(),
+                "/proc/self/ns/pid must be readable on Linux: the mark is stamped with it");
     }
 
     /**
@@ -111,7 +115,7 @@ class LinuxCgroupJobOwnershipIsolationTest {
         Path root = requireDelegatedRoot();
         long pid = ProcessHandle.current().pid();
         long ticks = CgroupJobOwnership.startTicks(CgroupJobOwnership.PROC, pid).orElseThrow();
-        Mark reused = new Mark(pid, ticks + 1L, "0f1e2d3c");
+        Mark reused = new Mark(pid, ticks + 1L, "0f1e2d3c").withNamespaces(CgroupJobOwnership.CURRENT.namespaces());
         Path directory = root.resolve(reused.markedName("minos-reused-" + UUID.randomUUID()));
         Files.createDirectory(directory);
         LinuxCgroupJob job = new LinuxCgroupJob(directory);
@@ -148,6 +152,98 @@ class LinuxCgroupJobOwnershipIsolationTest {
         } finally {
             sleeper.destroyForcibly();
             if (Files.exists(directory)) job.close();
+        }
+    }
+
+    /**
+     * A PID is only meaningful in the PID namespace it was written in: an owner of another namespace looks
+     * absent here (or is another process here), which proves nothing about its death. Its job is left alone.
+     */
+    @Test
+    void aJobStampedWithAnotherPidNamespaceIsNeverKilled() throws Exception {
+        Path root = requireDelegatedRoot();
+        CgroupJobOwnership.Namespaces ours = CgroupJobOwnership.CURRENT.namespaces();
+        Mark foreign = deadOwnerMark().withNamespaces(
+                new CgroupJobOwnership.Namespaces(ours.pid() + 1L, ours.time()));
+        Path directory = root.resolve(foreign.markedName("minos-foreign-pidns-" + UUID.randomUUID()));
+        Files.createDirectory(directory);
+        LinuxCgroupJob job = new LinuxCgroupJob(directory);
+        try {
+            Process sleeper = start(job, "sleep", "600");
+            try {
+                awaitMembership(job);
+
+                LinuxCgroupJob.StaleSweep sweep = LinuxCgroupJob.reclaimStaleJobs(root);
+
+                assertTrue(sleeper.isAlive(), "a job of another PID namespace must never be killed");
+                assertTrue(Files.isDirectory(directory));
+                assertTrue(sweep.leftIntact().contains(String.valueOf(directory.getFileName())), sweep.toString());
+            } finally {
+                sleeper.destroyForcibly();
+                sleeper.waitFor(10, TimeUnit.SECONDS);
+            }
+        } finally {
+            if (Files.exists(directory)) job.close();
+        }
+    }
+
+    /** Start ticks read in another time namespace are shifted: a live owner must not look like a PID reuse. */
+    @Test
+    void aJobStampedWithAnotherTimeNamespaceIsNeverKilled() throws Exception {
+        Path root = requireDelegatedRoot();
+        long pid = ProcessHandle.current().pid();
+        long ticks = CgroupJobOwnership.startTicks(CgroupJobOwnership.PROC, pid).orElseThrow();
+        CgroupJobOwnership.Namespaces ours = CgroupJobOwnership.CURRENT.namespaces();
+        Mark shifted = new Mark(pid, ticks + 100_000L, "0f1e2d3c")
+                .withNamespaces(new CgroupJobOwnership.Namespaces(ours.pid(), ours.time() + 1L));
+        Path directory = root.resolve(shifted.markedName("minos-foreign-timens-" + UUID.randomUUID()));
+        Files.createDirectory(directory);
+        LinuxCgroupJob job = new LinuxCgroupJob(directory);
+        try {
+            Process sleeper = start(job, "sleep", "600");
+            try {
+                awaitMembership(job);
+
+                LinuxCgroupJob.reclaimStaleJobs(root);
+
+                assertTrue(sleeper.isAlive(), "ticks of another time namespace are not comparable: never kill");
+                assertTrue(Files.isDirectory(directory));
+            } finally {
+                sleeper.destroyForcibly();
+                sleeper.waitFor(10, TimeUnit.SECONDS);
+            }
+        } finally {
+            if (Files.exists(directory)) job.close();
+        }
+    }
+
+    /**
+     * A dead owner's job whose processes sit in a cgroup below it: the membership of the job itself is
+     * empty, but the processes are its. The kernel kill reaches them, and the job is removed with its
+     * nested cgroup, instead of being reported reclaimed while everything is still there.
+     */
+    @Test
+    void aDeadOwnersNestedCgroupIsKilledAndRemovedWithIt() throws Exception {
+        Path root = requireDelegatedRoot();
+        Mark deadOwner = deadOwnerMark();
+        Path directory = root.resolve(deadOwner.markedName("minos-nested-" + UUID.randomUUID()));
+        Files.createDirectory(directory);
+        Path innerDirectory = Files.createDirectory(directory.resolve("inner"));
+        LinuxCgroupJob inner = new LinuxCgroupJob(innerDirectory);
+        Process sleeper = start(inner, "sleep", "600");
+        try {
+            awaitMembership(inner);
+
+            LinuxCgroupJob.StaleSweep sweep = LinuxCgroupJob.reclaimStaleJobs(root);
+
+            assertTrue(sleeper.waitFor(10, TimeUnit.SECONDS), "the nested process of a dead owner must be killed");
+            assertFalse(Files.exists(directory), "the job and its nested cgroup must be removed");
+            assertTrue(sweep.reclaimed().contains(String.valueOf(directory.getFileName())), sweep.toString());
+        } finally {
+            sleeper.destroyForcibly();
+            sleeper.waitFor(10, TimeUnit.SECONDS);
+            if (Files.exists(innerDirectory)) inner.close();
+            Files.deleteIfExists(directory);
         }
     }
 
@@ -236,7 +332,7 @@ class LinuxCgroupJobOwnershipIsolationTest {
         assertTrue(shortLived.waitFor(10, TimeUnit.SECONDS));
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (ProcessHandle.of(shortLived.pid()).isPresent() && System.nanoTime() < deadline) Thread.sleep(20L);
-        return new Mark(shortLived.pid(), start, "0dead0aa");
+        return new Mark(shortLived.pid(), start, "0dead0aa").withNamespaces(CgroupJobOwnership.CURRENT.namespaces());
     }
 
     private static Process start(LinuxCgroupJob job, String... command) throws Exception {
