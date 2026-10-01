@@ -611,6 +611,36 @@ Tests propres à Windows ajoutés par cette revue : 4 (`WindowsLauncherRootTrust
 **ignorés sous Linux : 7** (portent le total du lot à 23) ; 14 tests multiplateformes neufs (`SddlReplaceRightsTest` 9,
 `WriteDenyClassificationTest` 5).
 
+### Seconde passe `verif-sec` du lot 5 (2026-10-02) : F1 clos, F13 à F22
+
+| Id | Constat | Résolution |
+|---|---|---|
+| F13 | le lecteur de SDDL ignorait toute ACE de type autre que `A` ; une condition (parenthèses imbriquées) coupait mal les entrées : `(XA;OICI;0x1301bf;;;WD;(Member_of {SID(WD)}))` donnait « personne » | **corrigé** : toute ACE autre que `A`/`D` est refusée (échec fermé) ; découpe en respectant l'imbrication et les chaînes |
+| F14 | `D:PAINO_ACCESS_CONTROL` (DACL nulle : accès total à tous) concluait « personne n'a de droit » | **corrigé** : refusée |
+| F15 | le propriétaire du parent (`%LOCALAPPDATA%`) n'était pas contrôlé (`icacls /save` n'émet que le `D:`) | **corrigé** : principal courant, SYSTEM ou Administrateurs, à la création et dans `verify()` |
+| F16 | `setAcl` sauté quand les entrées visibles par Java égalent l'attendu ; `getAcl()` ne voit pas une ACE `XA` héritée, que `/inheritance:d` rend explicite | **corrigé** : la première prise en main d'un objet par une JVM réécrit toujours sa DACL |
+| F17 | indicateurs d'héritage lus par `contains("IO")` | **corrigé** : paires de 2 caractères, indicateur inconnu refusé |
+| F18 | `discover` n'attrapait ni `IllegalStateException` (SID) ni `InvalidPathException` (`LOCALAPPDATA`) ; `whoami` sans délai | **corrigé** (code ; **non testé** : on ne peut pas injecter un `whoami` défaillant ni une variable d'environnement invalide dans la JVM de test) ; `whoami` borné à 10 s |
+| F19 | DACL du parent lue sans cohérence avec le SDDL | **corrigé** : l'ACL vivante lue avant et après le SDDL doit être identique, sinon refus |
+| F21 | Javadoc du cache inexacte | **corrigée** : oublié seulement aux créations par `PrivateLocalStorage`, vidé à 8 192 entrées |
+| F22 | pas d'entrée utilisateur pour les refus du lanceur | `docs/user/troubleshooting.md` ; **le désinstalleur ne purge pas** `%LOCALAPPDATA%\minos-launchers` (aucune règle dans `minos-installer.iss.template`), dit dans le guide |
+
+**Rouge → vert.** Tests écrits et commités avant les correctifs (`test(security): F13 F14 F15 F17…`, `test(security): F16…`) :
+- `SddlReplaceRightsTest` : **8 échecs sur 18** avant (chaînes exactes de la revue : ACE `XA` de Tout le monde, ACE `XA` entre deux ACE `A`,
+  ACE `OA`, DACL nulle (2 formes), `CIOI` lu comme inherit-only, `OIX` accepté, et trois cas de `ownerTrusted` : propriétaire étranger
+  accepté, propriétaire sans entrée accepté, ACL qui ne s'aligne pas sur son SDDL acceptée), tous verts après. **Réserve honnête sur F15** :
+  `ownerTrusted` n'existait pas ; la couture de test (retourne `true`) a fait de ces tests un rouge, mais c'est une brique unitaire, pas la
+  vraie machine : on ne crée pas, sans privilège, un répertoire qu'un autre compte possède. Le chemin réel (`materialize`/`verify`) lit
+  le propriétaire de `%LOCALAPPDATA%` (l'utilisateur ici) et passe.
+- F16 : `aConditionalEntryInheritedFromTheParentIsNotKeptByHardening`, une vraie ACE `XA` posée avec `Set-Acl` (SDDL) sur un parent,
+  répertoire et fichier enfants : l'ACE survivait (rouge), disparaît (vert), DACL protégée.
+
+**Ce que le correctif de F16 change** : le test « une DACL déjà bonne n'est pas réécrite » devient « réécrite à la première prise en
+main d'une JVM, jamais ensuite si rien n'a changé » (`hardeningRewritesTheDaclOnTheFirstTouchOfAJvmAndNeverWhenNothingChanged`). La
+décision 1 reste vraie dans ces termes (aucune réécriture répétée) ; le premier passage écrit déjà la DACL pour `icacls /inheritance:d`.
+**Limite assumée** : un DENY conditionnel (`XD`) est lui aussi invisible à Java, donc supprimé par la réécriture. MINOS ne peut pas
+garder une restriction qu'il ne voit pas ; le lire demanderait un `icacls /save` par objet (un processus de plus).
+
 ## À traiter plus tard
 
 - **Clone shallow à profondeur 1 (S9 point 6)** : voir décision 8.
@@ -641,3 +671,8 @@ Tests propres à Windows ajoutés par cette revue : 4 (`WindowsLauncherRootTrust
 - **Lot 5, autres écritures d'ACL** : `requireAclGrantable` / `isAclGrantable` / `runIcacls` de `WindowsAppContainerWorkerSandboxBackend`
   écrivent encore des ACE (grants de lecture AppContainer sur les racines d'outils) hors de `PrivateLocalStorage` ; antérieur au lot,
   non touché, et le message de `requireAclGrantable` nomme encore un chemin.
+- **Lot 5, `XD`** : un DENY conditionnel (invisible à `getAcl()`) est supprimé par la réécriture de la DACL ; le conserver demande de
+  lire le SDDL brut de chaque objet (un `icacls /save` de plus par objet et par JVM) ou un appel natif.
+- **Lot 5, désinstalleur** : `minos-installer.iss.template` ne supprime pas `%LOCALAPPDATA%\minos-launchers` ; à ajouter si on veut
+  que la désinstallation soit complète.
+- **Lot 5, F18** : le repli de `discover` sur un SID inconnu ou un `LOCALAPPDATA` invalide n'a pas de test (rien à injecter).
