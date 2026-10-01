@@ -12,8 +12,8 @@ S9 et S12 sont les deux seuls qui donnent quelque chose à un attaquant aujourd'
 | 1 | `sec/s9-git` | S9 | #317 | brouillon |
 | 2 | `sec/s12-audit` | S12 | #318 | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
 | 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | #319 | brouillon |
-| 4 | `sec/s8-gitignore` | S8 | à ouvrir | code terminé |
-| 5 | `sec/s7-s15-windows` | S7, S15 | à ouvrir | **code terminé** (S15 et S7 a, b, c corrigés ; S7 d documenté), non poussé |
+| 4 | `sec/s8-gitignore` | S8 | #320 | brouillon |
+| 5 | `sec/s7-s15-windows` | S7, S15 | à ouvrir | **code terminé** (S15 et S7 a, b, c corrigés ; S7 d documenté), revue verif-sec traitée |
 
 Base : `origin/develop` au 2026-10-01 (b991ffd2). Une branche, un worktree (`minos-wt/sec-lotN`) par lot, rebasés l'un sur l'autre.
 
@@ -345,13 +345,26 @@ Trois scripts de `scripts/quality/` que `impl-sec` n'avait pas rejoués exigeaie
 2. **Les classes de caractères sont une entrée, pas de la syntaxe regex.** Chaque membre est échappé ; un intervalle inversé (`[z-a]`) ou une classe vide (`[!]`) rend la règle inutilisable ; `[[]` et `[a&&b]` (intersection regex Java) deviennent des littéraux, comme dans Git.
 3. **Le coût est borné par un mécanisme, pas par une horloge** :
    - à la compilation : `MAX_RULE_CHARS` = 1 024 caractères, `MAX_WILDCARDS_PER_RULE` = 8 groupes d'étoiles, les `**/` consécutifs sont repliés en un seul (sémantiquement identique, et c'est le vecteur de répétition `(?:.*/)?(?:.*/)?…`) ;
-   - à l'évaluation : le chemin est lu par un `CharSequence` à budget (`MATCH_STEP_BUDGET` = 100 000 lectures par règle et par chemin). Au-delà, la règle est **désactivée** (échec fermé sur la règle, pas sur le chargement), comptée par `exhaustedRuleCount()`, et plus jamais évaluée.
+   - à l'évaluation : le chemin est lu par un `CharSequence` à budget (`MATCH_STEP_BUDGET` = 100 000 lectures par règle et par chemin). Au-delà, **le chemin est traité comme ignoré** (échec fermé : un chemin qu'on ne sait pas classer n'est pas indexé sur une supposition), compté par `exhaustedEvaluationCount()`, avec un seul WARNING par instance (compte seulement). Le verdict appartient à ce chemin et à lui seul : aucun état n'est conservé, il ne dépend ni de l'ordre d'évaluation ni des threads. (Première version : une règle épuisée était désactivée pour tous les chemins, donc un nom de fichier hostile éteignait l'exclusion d'un secret, constat V1 de `verif-sec`.)
 4. **`.gitignore` imbriqués et `.git/info/exclude` : écart assumé et documenté** (Javadoc de `load`). Les lire est un élargissement fonctionnel qui exige la sémantique complète de Git (précédence entre fichiers, négation, portée du répertoire) ; une demi-sémantique serait pire que l'écart. À traiter plus tard si demandé.
 5. Les règles `**` non suivies de `/` gardent leur sémantique historique (`.*`, franchit les `/`) : la changer modifierait le périmètre d'indexation, hors périmètre.
 
 ### Preuve rouge (2026-10-01, `src/main` d'avant)
 
 Test jetable hors dépôt rejoué : `[z-a]x` et `[[]open` font échouer `ProjectIgnoreRules.load` (`PatternSyntaxException`, CONFIRMÉ) ; `*a*a*a*a*a*a*a*a*a*b` contre 200 `a` **ne termine pas en 20 s** (`assertTimeoutPreemptively` dans ce seul essai de preuve ; le test commité n'a aucune assertion de durée) : **le ReDoS est reproduit**, la part PLAUSIBLE de S8 est donc CONFIRMÉE. Tests commités (`ProjectIgnoreRulesHostileInputTest`, 5 tests) : vérifient les compteurs et les résultats, pas la durée.
+
+### Constats de `verif-sec` (lot 4)
+
+| Id | Constat | Sévérité | Résolution |
+|---|---|---|---|
+| V1 | drapeau `exhausted` global et définitif : un nom hostile désactive la règle pour tous les chemins (reproduit : `*secret*key*.pem`, `secret.key.pem` n'était plus exclu) | à corriger | corrigé : verdict par chemin, échec fermé, aucun état ; test `anExclusionRuleIsNotSwitchedOffForEveryoneByOneHostileFileName` |
+| V2 | épuisement silencieux | à corriger | un WARNING par instance (compte seulement) ; `exhaustedEvaluationCount()` |
+| V3 | plage hors plan de base (`[😀-😎]`) écartée à tort | remarque | corrigé : parcours en code points, test dédié |
+| V4 | `[[:alpha:]]` compilée à tort | remarque | corrigé : classe POSIX refusée (règle écartée et comptée) |
+| V5 | une règle légitime peut approcher le budget sur un chemin long et répétitif ; coût global non borné pour 10 000 règles × N chemins | remarque | assumé : borne par appel, l'attaquant doit écrire le `.gitignore` |
+| V6, V7 | le WARNING ne nomme pas le fichier ; les bornes d'octets, de lignes et de règles lèvent toujours `IOException` (antérieur) | remarque | assumés : « ne casse plus le chargement » vaut par règle |
+
+`verif-sec` a aussi comparé 263 règles réelles de 8 dépôts locaux (minos et sept autres) : 0 écartée, 0 divergence de verdict. Cela comble la comparaison « deux dépôts publics » laissée ouverte ci-dessous.
 
 ### Effet sur le périmètre d'indexation (mesuré)
 
@@ -364,9 +377,11 @@ Ancienne et nouvelle implémentation comparées, mêmes entrées :
 
 Aucun fichier gagné ni perdu. Les `.gitignore` de deux dépôts publics n'ont **pas** été comparés (pas de téléchargement sans demande explicite) : à faire par `verif-sec` sur les dépôts qu'il a déjà en local, ou à la demande.
 
-### Windows / Linux
+### Résultats de fin de lot 4 (2026-10-01, Windows 10, JDK 24)
 
-Tout exécuté sous Windows (logique pure, sans dépendance de plateforme). Linux : par la CI. Tests ignorés ajoutés : 0.
+- `./mvnw -B clean verify` : **BUILD SUCCESS**, 15 modules, 1 917 tests, 0 échec, 54 ignorés (tous antérieurs ; 0 ajouté par ce lot).
+- Gates `remediation/`, `quality/`, `architecture/` : verts (hors `check-jacoco.py`).
+- Windows : tout exécuté ici (logique pure, sans dépendance de plateforme). Linux : par la CI.
 
 ## 5. Lot 5 : S15 et S7, Windows (ACL, script du bac à sable, environnement des lanceurs)
 
