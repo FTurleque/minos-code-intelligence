@@ -10,7 +10,7 @@ S9 et S12 sont les deux seuls qui donnent quelque chose à un attaquant aujourd'
 | Lot | Branche | Constats | PR | État |
 |---|---|---|---|---|
 | 1 | `sec/s9-git` | S9 | à ouvrir | en cours |
-| 2 | `sec/s12-audit` | S12 | – | – |
+| 2 | `sec/s12-audit` | S12 | à ouvrir | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
 | 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | – | – |
 | 4 | `sec/s8-gitignore` | S8 | – | – |
 | 5 | `sec/s7-s15-windows` | S7, S15 | – | – |
@@ -106,6 +106,37 @@ Avec les correctifs, les mêmes tests passent (12 + 8 tests ciblés, plus `CliVa
 - `./mvnw -B clean verify` : **BUILD SUCCESS**, 15 modules, 1 876 tests, 0 échec, 54 ignorés (déjà ignorés avant ce lot ; aucun ajouté par le lot).
 - Gates : `check-module-boundaries.py` SUCCESS (modules=14, sources=508) ; `check-milestone-artifact-references.py` SUCCESS (95 scripts) ; `check-workflow-pins.py` SUCCESS (70 `uses`).
 - Windows : tout a été exécuté sous Windows. Linux : non exécuté localement (la CI le fait).
+
+## 2. Lot 2 : S12, le constat est périmé
+
+**Le correctif existe déjà dans `develop`.** `c380baa3` (« fix(hosted): S12 », chantier Résidus du sprint 1, décrit dans
+`RESIDUS-SPRINT-1-SUIVI.md`) a remplacé la garde `auditEvents().size() < deniedAuditCapacity()` par
+`HostedRetentionPolicy.admitsChainedDenial(chainedDenials, chainSize)` : la réserve de refus est comptée sur les
+événements `DENIED` retenus (`HostedAuthorizationService.chainedDenials`), jamais sur le total. L'audit local non
+commité qui décrit S12 comme ouvert est antérieur à ce correctif. S13 est dans le même cas (`f0f70b6d`, refus non
+chaîné marqué `UNCHAINED`, séquence 0, HMAC dans un domaine séparé), et n'est de toute façon pas dans ce chantier.
+
+**Vérification par l'attaque, sans toucher au code** (2026-10-01, `HostedDeniedAuditReserveTest`,
+`HostedDenialSaturationTest`, `HostedModelTest` : 19 tests, tous verts sur `develop`).
+Mutation témoin : la condition remise à l'ancienne forme (`chainSize < deniedAuditCapacity()`), tests rejoués, **7 échecs sur
+19** (puis fichier restauré, `git status` propre) :
+
+- `firstAttackRefusalIsChainedAfterNinetyPercentOfAuthorizedEvents` : attendu `DENIED`, reçu `ALLOWED` (le premier refus d'une
+  attaque, après 90 % d'événements autorisés, n'est plus chaîné) ;
+- `firstAttackRefusalIsChainedWhileAuthorizedEventsAwaitAnExplicitRetention`, `reserveCountsOnlyChainedRefusals`,
+  `explicitRetentionReleasesTheReserveAndKeepsTheChainContiguous`, `chainedDenialAdmissionCountsRefusalsAndKeepsAuthorizedHeadroom` ;
+- `refusalsNeverConsumeTheAuthorizedHeadroomBelowTheHardCapacity` et
+  `refusalsStopBeingChainedAtTheDeniedCapacityEvenAcrossProcesses` : la borne dans l'autre sens (un attaquant qui ne
+  produit que des refus) est elle aussi gardée : 90 refus chaînés au plus, la chaîne ne grossit pas sans fin, la marge
+  d'un dixième sous la capacité dure reste aux mutations autorisées.
+
+**Ce qui arrive quand la réserve de refus est épuisée** : le refus est appliqué (`SecurityException`
+« hosted permission denied »), livré au puits d'audit comme événement non chaîné, l'état du tenant est intact (pas de
+version consommée).
+
+**S13** : un correctif existe ; l'embarquer ici n'a pas de sens, il est fermé. Rien à signaler.
+
+**Conséquence pour le chantier** : lot 2 sans changement de code, PR de documentation seule portant cette preuve.
 
 ## À traiter plus tard
 
