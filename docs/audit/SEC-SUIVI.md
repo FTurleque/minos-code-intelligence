@@ -9,8 +9,8 @@ S9 et S12 sont les deux seuls qui donnent quelque chose à un attaquant aujourd'
 
 | Lot | Branche | Constats | PR | État |
 |---|---|---|---|---|
-| 1 | `sec/s9-git` | S9 | à ouvrir | en cours |
-| 2 | `sec/s12-audit` | S12 | à ouvrir | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
+| 1 | `sec/s9-git` | S9 | #317 | brouillon, CI en cours |
+| 2 | `sec/s12-audit` | S12 | #318 | **déjà corrigé** (`c380baa3`), preuve par mutation, aucun code |
 | 3 | `sec/s5-s6-primitives` | S5, S6 (ferme aussi R9) | à ouvrir | **code terminé**, non poussé ; gate `check-private-io` |
 | 4 | `sec/s8-gitignore` | S8 | – | – |
 | 5 | `sec/s7-s15-windows` | S7, S15 | – | – |
@@ -100,6 +100,16 @@ Correctifs de production retirés (`git stash` de `src/main`), tests rejoués :
 
 Avec les correctifs, les mêmes tests passent (12 + 8 tests ciblés, plus `CliValidInvocationsTest`,
 `ExecutionCommandsArgumentRulesTest`, `RemoteIndexCommandTest`).
+
+### Gates qui exigent du texte littéral (CI, run 36917741879)
+
+`check-post-mne.py` exigeait `Files.walkFileTree` dans `JGitRemoteRepositoryMaterializer` ; l'effaceur local ayant disparu au profit de la primitive, l'exigence devient `FileTreeOperations.deleteRecursively` (la primitive reste gardée par la ligne `FileTreeOperations.java` du même script : `Files.walkFileTree`, `NOFOLLOW_LINKS`, `postVisitDirectory`). `check-remote-distributed-consistency.py` exigeait le nom de test `MISSING_REMOTE_TOKEN`, renommé `MINOS_REMOTE_TOKEN_MISSING` (liste blanche) ; l'énumération `GITHUB("github.com")` / `GITLAB("gitlab.com")` est conservée à l'identique. Aucun contrôle n'a été retiré. Tous les `check-*.py` de `remediation/` et `quality/` rejoués : verts (hors `check-jacoco.py`, qui a besoin des rapports JaCoCo).
+
+### Résultats de fin de lot (2026-10-01, Windows 10, JDK 24)
+
+- `./mvnw -B clean verify` : **BUILD SUCCESS**, 15 modules, 1 876 tests, 0 échec, 54 ignorés (déjà ignorés avant ce lot ; aucun ajouté par le lot).
+- Gates : `check-module-boundaries.py` SUCCESS (modules=14, sources=508) ; `check-milestone-artifact-references.py` SUCCESS (95 scripts) ; `check-workflow-pins.py` SUCCESS (70 `uses`).
+- Windows : tout a été exécuté sous Windows. Linux : non exécuté localement (la CI le fait).
 
 ## 2. Lot 2 : S12, le constat est périmé
 

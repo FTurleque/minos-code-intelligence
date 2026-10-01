@@ -171,18 +171,24 @@ public record RemoteRepositoryRequest(
     }
 
     public enum RemoteHost {
-        GITHUB("github.com", "MINOS_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"),
-        GITLAB("gitlab.com", "MINOS_GITLAB_TOKEN", "GITLAB_TOKEN");
+        GITHUB("github.com"),
+        GITLAB("gitlab.com");
 
         /** Dedicated namespace: variables created for MINOS, never an ambient secret. */
         private static final String DEDICATED_PREFIX = "MINOS_REMOTE_TOKEN";
 
         private final String hostname;
-        private final Set<String> credentialVariables;
 
-        RemoteHost(String hostname, String... credentialVariables) {
+        RemoteHost(String hostname) {
             this.hostname = hostname;
-            this.credentialVariables = Set.of(credentialVariables);
+        }
+
+        /** The conventional token variables of this host only; never another host's. */
+        private Set<String> credentialVariables() {
+            return switch (this) {
+                case GITHUB -> Set.of("MINOS_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN");
+                case GITLAB -> Set.of("MINOS_GITLAB_TOKEN", "GITLAB_TOKEN");
+            };
         }
 
         /**
@@ -194,11 +200,11 @@ public record RemoteRepositoryRequest(
         public boolean isAllowedCredentialVariable(String name) {
             if (name == null) return false;
             if (name.equals(DEDICATED_PREFIX) || name.startsWith(DEDICATED_PREFIX + "_")) return true;
-            return credentialVariables.contains(name);
+            return credentialVariables().contains(name);
         }
 
         String allowedCredentialVariablesDescription() {
-            List<String> names = new ArrayList<>(credentialVariables);
+            List<String> names = new ArrayList<>(credentialVariables());
             names.sort(null);
             names.add(0, DEDICATED_PREFIX + "[_SUFFIX]");
             return String.join(", ", names);
