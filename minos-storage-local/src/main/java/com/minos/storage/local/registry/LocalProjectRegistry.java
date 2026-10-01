@@ -394,11 +394,6 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         return new Scan(List.copyOf(projects), List.copyOf(failures));
     }
 
-    private static String entryName(Path file) {
-        String name = file.getFileName().toString();
-        return name.substring(0, name.length() - PROPERTIES_SUFFIX.length());
-    }
-
     private static void writePropertiesAtomically(Path target, Properties properties) throws IOException {
         DurableAtomicFile.ensureDirectory(target.getParent(), "local registry metadata directory");
         Path temporary = Files.createTempFile(target.getParent(), target.getFileName().toString() + ".", ".tmp");
@@ -452,6 +447,11 @@ public final class LocalProjectRegistry implements ProjectRegistry {
                 if (failure.cause() instanceof IOException io) throw io;
                 if (failure.cause() instanceof RuntimeException runtime) throw runtime;
             }
+        }
+
+        private static String entryName(Path file) {
+            String name = file.getFileName().toString();
+            return name.substring(0, name.length() - PROPERTIES_SUFFIX.length());
         }
 
         private static DegradedEntry describe(EntryFailure failure) {
