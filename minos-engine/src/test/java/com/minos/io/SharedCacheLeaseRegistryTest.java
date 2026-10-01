@@ -154,4 +154,35 @@ class SharedCacheLeaseRegistryTest {
         registry.release("entry");
         assertEquals(0L, done.getCount());
     }
+
+    @Test
+    void theLeaseFileIsOwnerOnlyLikeEveryOtherLockFile(@TempDir Path root) throws Exception {
+        SharedCacheLeaseRegistry registry = registry(root);
+        registry.acquire("entry");
+        try {
+            assertEquals(PrivateLocalStorage.Privacy.ENFORCED,
+                    PrivateLocalStorage.privacyOf(root.resolve("entry.lease")));
+        } finally {
+            registry.release("entry");
+        }
+    }
+
+    @Test
+    void aSymbolicLinkLeaseFileIsRefusedNotFollowed(@TempDir Path root) throws Exception {
+        Path outside = Files.writeString(root.resolve("outside.txt"), "outside");
+        Files.createSymbolicLink(root.resolve("entry.lease"), outside);
+        SharedCacheLeaseRegistry registry = registry(root);
+
+        assertThrows(IOException.class, () -> registry.acquire("entry"));
+        assertFalse(registry.isHeld("entry"));
+        assertEquals("outside", Files.readString(outside));
+    }
+
+    @Test
+    void anEvictionLeaseOnASymbolicLinkIsRefusedToo(@TempDir Path root) throws Exception {
+        Path outside = Files.writeString(root.resolve("outside.txt"), "outside");
+        Files.createSymbolicLink(root.resolve("entry.lease"), outside);
+
+        assertThrows(IOException.class, () -> registry(root).tryAcquireEviction("entry"));
+    }
 }

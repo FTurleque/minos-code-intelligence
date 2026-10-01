@@ -5,7 +5,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -151,7 +150,7 @@ public final class SharedCacheLeaseRegistry {
         if (!leasesRoot.equals(leaseFile.getParent())) {
             throw new IOException(description + " lease key escapes the lease directory: " + cacheKey);
         }
-        return FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        return BoundedFileLease.openPrivateLockChannel(leaseFile, description + " lease");
     }
 
     private static FileLock tryFileLock(FileChannel channel) throws IOException {

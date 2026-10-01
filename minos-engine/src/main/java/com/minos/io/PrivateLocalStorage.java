@@ -1,10 +1,12 @@
 package com.minos.io;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.AclEntry;
 import java.nio.file.attribute.AclEntryPermission;
 import java.nio.file.attribute.AclEntryType;
@@ -130,6 +132,56 @@ public final class PrivateLocalStorage {
         Path temporary = Files.createTempFile(parent, prefix, suffix, privateFileAttributes(parent));
         hardenOrDeleteAndThrow(temporary);
         return temporary;
+    }
+
+    /**
+     * Creates a uniquely named owner-only temporary directory inside {@code parent}, which is itself
+     * ensured private first. On ACL platforms the new directory is hardened and verified before it
+     * is returned, exactly as {@link #ensurePrivateDirectory} does for a named one.
+     */
+    public static Path createPrivateTempDirectory(Path parent, String prefix) throws IOException {
+        Path root = ensurePrivateDirectory(parent);
+        Path temporary = Files.createTempDirectory(root, prefix, privateDirectoryAttributes(root));
+        try {
+            hardenDirectory(temporary);
+            verifyPrivateDirectory(temporary);
+        } catch (IOException failure) {
+            deleteEmptyDirectoryBestEffort(temporary);
+            throw failure;
+        }
+        return temporary;
+    }
+
+    /**
+     * Writes {@code content} as the whole content of the owner-only file {@code file}: created
+     * private when absent, hardened in place when it already exists, never through a link (a
+     * symbolic link or special object is refused, and the write itself is opened with
+     * {@link LinkOption#NOFOLLOW_LINKS}).
+     *
+     * @return the normalised absolute file
+     */
+    public static Path writePrivateFile(Path file, byte[] content) throws IOException {
+        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        Objects.requireNonNull(content, "content");
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+            hardenExistingFile(target);
+        } else {
+            try {
+                createPrivateFile(target);
+            } catch (FileAlreadyExistsException concurrentCreate) {
+                try {
+                    hardenExistingFile(target);
+                } catch (IOException unsafeWinner) {
+                    unsafeWinner.addSuppressed(concurrentCreate);
+                    throw unsafeWinner;
+                }
+            }
+        }
+        try (OutputStream output = Files.newOutputStream(target,
+                StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS)) {
+            output.write(content);
+        }
+        return target;
     }
 
     /**
