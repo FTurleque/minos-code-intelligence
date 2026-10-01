@@ -77,12 +77,12 @@ class LazyWiringGuardTest {
     private record Launch(int exit, String output, String error, List<String> opened) { }
 
     /** Lance la ligne de commande par le vrai lanceur, sur le vrai stockage, en notant chaque ouverture de l'application. */
-    private Launch launch(Path home, String... arguments) throws IOException {
+    private Launch launch(Path home, String... arguments) {
         return launch(home, MinosApplication::open, arguments);
     }
 
     /** Idem avec l'ouvreur donné : chaque demande d'ouverture est notée avant d'être transmise. */
-    private Launch launch(Path home, MinosLauncher.ApplicationOpener opener, String... arguments) throws IOException {
+    private Launch launch(Path home, MinosLauncher.ApplicationOpener opener, String... arguments) {
         List<String> opened = new ArrayList<>();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         ByteArrayOutputStream error = new ByteArrayOutputStream();
