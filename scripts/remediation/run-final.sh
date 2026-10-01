@@ -32,6 +32,8 @@ python3 scripts/quality/check-vertical-decomposition-consistency.py
 python3 scripts/docs/product-facts.py --check
 python3 scripts/quality/check-current-docs-vertical-extension.py
 python3 scripts/architecture/check-module-boundaries.py
+python3 scripts/architecture/check-private-io.py
+python3 scripts/architecture/test_check_private_io.py
 
 if [[ "$MODE" == "--targeted" ]]; then
   ./mvnw -pl minos-application,minos-runtime-local -am test

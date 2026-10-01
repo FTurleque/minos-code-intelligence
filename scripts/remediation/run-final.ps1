@@ -51,6 +51,12 @@ try {
     python scripts/architecture/check-module-boundaries.py
     if ($LASTEXITCODE -ne 0) { throw 'architecture dependency gate failed' }
 
+    python scripts/architecture/check-private-io.py
+    if ($LASTEXITCODE -ne 0) { throw 'private I/O primitives gate failed' }
+
+    python scripts/architecture/test_check_private_io.py
+    if ($LASTEXITCODE -ne 0) { throw 'private I/O gate self-test failed' }
+
     if (-not $SkipCleanVerify) {
         .\mvnw.cmd clean verify
         if ($LASTEXITCODE -ne 0) { throw 'Maven clean verify failed' }

@@ -69,6 +69,12 @@ jobs:
       - name: Module-boundary checker self-test (A3 packages, A7 reactor)
         run: python scripts/architecture/test_check_module_boundaries.py -v
 
+      - name: Private I/O primitives gate (no raw createDirectories, write, newInputStream or channel lock)
+        run: python scripts/architecture/check-private-io.py
+
+      - name: Private I/O gate self-test (one witness mutation per forbidden call)
+        run: python scripts/architecture/test_check_private_io.py -v
+
       - name: Current documentation consistency
         run: python scripts/docs/check-current-docs.py
 
