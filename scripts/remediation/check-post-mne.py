@@ -151,7 +151,7 @@ def main() -> int:
         require("RemoteRepositoryCachePolicy.java", clone_policy,
                 "maxBytes", "maxFiles", "maxDirectories", "maxTraversalEntries", "cloneTimeout")
         require("JGitRemoteRepositoryMaterializer.java", clone,
-                "new CloneBudget(repositoryRoot, cachePolicy)", "Files.walkFileTree",
+                "new CloneBudget(repositoryRoot, cachePolicy)", "FileTreeOperations.deleteRecursively",
                 "MAX_CACHE_ROOT_SCAN_ENTRIES", "LinkOption.NOFOLLOW_LINKS")
         require("RemoteCloneBudget.java", clone_budget,
                 "files > maxFiles", "directories > maxDirectories",

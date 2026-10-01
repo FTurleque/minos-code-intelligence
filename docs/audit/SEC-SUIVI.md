@@ -101,6 +101,10 @@ Correctifs de production retirés (`git stash` de `src/main`), tests rejoués :
 Avec les correctifs, les mêmes tests passent (12 + 8 tests ciblés, plus `CliValidInvocationsTest`,
 `ExecutionCommandsArgumentRulesTest`, `RemoteIndexCommandTest`).
 
+### Gates qui exigent du texte littéral (CI, run 36917741879)
+
+`check-post-mne.py` exigeait `Files.walkFileTree` dans `JGitRemoteRepositoryMaterializer` ; l'effaceur local ayant disparu au profit de la primitive, l'exigence devient `FileTreeOperations.deleteRecursively` (la primitive reste gardée par la ligne `FileTreeOperations.java` du même script : `Files.walkFileTree`, `NOFOLLOW_LINKS`, `postVisitDirectory`). `check-remote-distributed-consistency.py` exigeait le nom de test `MISSING_REMOTE_TOKEN`, renommé `MINOS_REMOTE_TOKEN_MISSING` (liste blanche) ; l'énumération `GITHUB("github.com")` / `GITLAB("gitlab.com")` est conservée à l'identique. Aucun contrôle n'a été retiré. Tous les `check-*.py` de `remediation/` et `quality/` rejoués : verts (hors `check-jacoco.py`, qui a besoin des rapports JaCoCo).
+
 ### Résultats de fin de lot (2026-10-01, Windows 10, JDK 24)
 
 - `./mvnw -B clean verify` : **BUILD SUCCESS**, 15 modules, 1 876 tests, 0 échec, 54 ignorés (déjà ignorés avant ce lot ; aucun ajouté par le lot).
