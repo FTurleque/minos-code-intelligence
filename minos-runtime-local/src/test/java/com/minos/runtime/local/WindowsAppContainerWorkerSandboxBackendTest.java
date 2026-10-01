@@ -177,7 +177,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         assertTrue(Files.readString(run.resolve("windows-appcontainer-plan.txt"), StandardCharsets.UTF_8)
                 .contains("networkPolicy=ALLOW"));
         String launcher = Files.readString(
-                home.resolve("sandbox/windows-appcontainer-sandbox-v4.ps1"), StandardCharsets.UTF_8);
+                Path.of(sandboxed.command().get(sandboxed.command().indexOf("-File") + 1)), StandardCharsets.UTF_8);
         assertTrue(launcher.contains("S-1-15-3-1"));
         assertTrue(launcher.contains("GetAppContainerFolderPath"));
         assertTrue(launcher.contains("DenyPrivateRegistryWrites"));

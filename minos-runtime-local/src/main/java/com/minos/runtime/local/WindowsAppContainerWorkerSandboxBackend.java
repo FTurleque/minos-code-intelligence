@@ -10,12 +10,9 @@ import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -76,7 +73,6 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
 
     private static final String SANDBOX_DIRECTORY = "sandbox";
     private static final String LAUNCHER_SCRIPT_NAME = "windows-appcontainer-sandbox-v4.ps1";
-    private static final String RESOURCE = "/com/minos/runtime/local/" + LAUNCHER_SCRIPT_NAME;
     private static final Map<Path, Boolean> CAPABILITY_PROBE_CACHE = new ConcurrentHashMap<>();
 
     private static final System.Logger LOGGER =
@@ -84,12 +80,14 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
 
     private final Path minosHome;
     private final Path powershell;
-    private final Path launcher;
+    private final SandboxLauncherScript launcher;
 
     public WindowsAppContainerWorkerSandboxBackend(Path minosHome, Path powershell) throws IOException {
         this.minosHome = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.powershell = regularExecutable(powershell, "powershell");
-        this.launcher = installLauncher(this.minosHome);
+        // The launcher is a script that gets executed: it lives outside MINOS_HOME (see SandboxLauncherScript).
+        SandboxLauncherScript.removeLegacyCopy(this.minosHome, LAUNCHER_SCRIPT_NAME);
+        this.launcher = SandboxLauncherScript.materialize(LAUNCHER_SCRIPT_NAME);
     }
 
     public static Optional<WindowsAppContainerWorkerSandboxBackend> discover(Path minosHome) {
@@ -326,6 +324,9 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 networkPolicy,
                 jobCpuSeconds(plan.timeout()));
 
+        // Checked here, at the last host-controlled step before the plan is handed out: a launcher that is
+        // no longer the script the jar produces is refused, not run, and not replaced by a weaker backend.
+        launcher.verify();
         List<String> wrapper = List.of(
                 powershell.toString(),
                 "-NoLogo",
@@ -334,7 +335,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                launcher.toString(),
+                launcher.file().toString(),
                 "-Plan",
                 planFile.toString());
         return new IndexerProcessPlan(
@@ -414,52 +415,6 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         LOGGER.log(System.Logger.Level.WARNING,
                 "MINOS Windows AppContainer capability probe failed (exit=" + process.exitValue() + "): " + output);
         return false;
-    }
-
-    /**
-     * Bounded tolerance for a transient replace failure while publishing the launcher (e.g. a
-     * real-time antivirus scan briefly holding the just-written or the previous script). This is
-     * MINOS' own trusted, MINOS-authored script content, not attacker-controlled input, so
-     * retrying a plain filesystem replace here carries none of the containment implications a
-     * provider-controlled path would.
-     */
-    private static final int LAUNCHER_INSTALL_RETRY_ATTEMPTS = 5;
-    private static final long LAUNCHER_INSTALL_RETRY_DELAY_MILLIS = 50L;
-
-    private static Path installLauncher(Path minosHome) throws IOException {
-        Path directory = minosHome.resolve(SANDBOX_DIRECTORY).toAbsolutePath().normalize();
-        PrivateLocalStorage.ensurePrivateDirectory(directory);
-        Path target = directory.resolve(LAUNCHER_SCRIPT_NAME);
-        // Assembled from its template and the shared Win32 fragments, then published as one
-        // self-contained file: the script that executes still has a single hash and no include path.
-        String launcher = WindowsContainmentScript.assemble(LAUNCHER_SCRIPT_NAME);
-        Path partial = PrivateLocalStorage.createPrivateTempFile(directory, ".windows-appcontainer-", ".ps1");
-        try {
-            PrivateLocalStorage.writePrivateFile(partial, launcher.getBytes(StandardCharsets.UTF_8));
-            replaceWithRetry(partial, target);
-        } finally {
-            Files.deleteIfExists(partial);
-        }
-        return target;
-    }
-
-    private static void replaceWithRetry(Path source, Path target) throws IOException {
-        for (int attempt = 1; attempt <= LAUNCHER_INSTALL_RETRY_ATTEMPTS; attempt++) {
-            try {
-                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                return;
-            } catch (FileSystemException failure) {
-                if (attempt == LAUNCHER_INSTALL_RETRY_ATTEMPTS) {
-                    throw failure;
-                }
-                try {
-                    Thread.sleep(LAUNCHER_INSTALL_RETRY_DELAY_MILLIS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    throw failure;
-                }
-            }
-        }
     }
 
     private static void writePlan(

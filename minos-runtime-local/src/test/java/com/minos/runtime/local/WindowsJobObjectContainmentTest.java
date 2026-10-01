@@ -140,7 +140,7 @@ class WindowsJobObjectContainmentTest {
                 run.resolve("index.scip"),
                 Duration.ofSeconds(30));
 
-        discovered.orElseThrow().sandboxPlan(plan, run, WorkerNetworkPolicy.DENY);
+        IndexerProcessPlan sandboxed = discovered.orElseThrow().sandboxPlan(plan, run, WorkerNetworkPolicy.DENY);
 
         String planText = Files.readString(run.resolve("windows-appcontainer-plan.txt"), StandardCharsets.UTF_8);
         assertTrue(planText.contains("jobMemoryBytes="
@@ -152,7 +152,7 @@ class WindowsJobObjectContainmentTest {
                 + WindowsAppContainerWorkerSandboxBackend.jobCpuSeconds(Duration.ofSeconds(30))));
 
         String launcher = Files.readString(
-                home.resolve("sandbox/windows-appcontainer-sandbox-v4.ps1"), StandardCharsets.UTF_8);
+                Path.of(sandboxed.command().get(sandboxed.command().indexOf("-File") + 1)), StandardCharsets.UTF_8);
         assertTrue(launcher.contains("IsProcessInJob"), "job membership must be verified before resume");
         assertTrue(launcher.contains("TerminateJobObject"), "the job must be terminated on every exit path");
         assertTrue(launcher.contains("JOB_OBJECT_LIMIT_BREAKAWAY_OK"), "breakaway must be explicitly refused");
