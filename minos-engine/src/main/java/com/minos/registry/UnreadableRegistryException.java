@@ -15,7 +15,8 @@ import java.util.Optional;
  */
 public final class UnreadableRegistryException extends IOException {
 
-    private final List<DegradedEntry> unreadable;
+    /** Transient: an exception is serializable, a {@link DegradedEntry} is not; the count stays in the message. */
+    private final transient List<DegradedEntry> unreadable;
 
     private UnreadableRegistryException(List<DegradedEntry> unreadable, String consequence) {
         super(describe(unreadable.size()) + ", so " + consequence);
