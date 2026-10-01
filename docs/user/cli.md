@@ -16,34 +16,6 @@ java -jar .\target\minos-code-intelligence-1.3.0-SNAPSHOT-all.jar <commande>
 
 `--help` reste la source de vérité exécutable. Les commandes d'aide n'ont pas besoin d'initialiser un projet MINOS pour afficher leur syntaxe : `--help` est reconnu à n'importe quelle position après le nom d'une commande (`minos find-symbol p S --limit 5 --help`), et ni l'aide ni une erreur d'usage (code 2) n'ouvrent `MINOS_HOME`. Une commande n'ouvre `MINOS_HOME` qu'une fois ses arguments compris, et ne construit que ce dont elle a besoin : une commande de lecture ne crée pas de répertoire d'indexation distante dans `MINOS_HOME`.
 
-## Codes de sortie
-
-| Code | Sens |
-|---|---|
-| `0` | succès |
-| `1` | échec d'exécution (projet inexistant, `MINOS_HOME` inutilisable, mutation refusée, `doctor` à corriger) |
-| `2` | erreur d'usage (option inconnue, valeur manquante, borne violée) : rien n'a été ouvert ni modifié |
-| `3` | **résultat partiel** : la sortie est valide pour ce qui a pu être lu, mais des entrées du registre étaient illisibles et ont été écartées ; elles sont comptées et affichées, jamais ignorées en silence |
-
-Le code `3` a un seul sens, quelle que soit la commande. Aujourd'hui il est rendu par `project list` (le registre est listé,
-les entrées abîmées sont comptées et montrées) et par la résolution **par nom** de `inspect`, `project inspect` et
-`index-status` :
-
-- le nom est trouvé parmi les entrées lisibles : le projet est affiché et le code est `3`, avec
-  `warning: N registry entries are unreadable, so this name cannot be proven unique` sur la sortie d'erreur ;
-- le nom n'est pas trouvé alors que des entrées sont illisibles : `N registry entries are unreadable, so it cannot be told
-  whether this project exists` et le code `3`. Ce n'est pas « projet inexistant » (`unknown project`, code `1`, registre
-  sain) : le projet existe peut-être parmi les entrées illisibles.
-
-Une résolution par **identifiant** (UUID) ne lit que l'entrée demandée : une entrée voisine abîmée ne la concerne pas.
-Les mutations restent strictes : `project add` échoue (`1`) avec `N registry entries are unreadable, so the uniqueness of
-the registration cannot be guaranteed`, de même que les autres commandes qui résolvent un projet par nom (`N registry
-entries are unreadable, so the project name cannot be resolved with certainty; use its UUID`). Un registre qui ne peut pas
-être listé du tout (stockage inaccessible) est un échec (`1`), jamais un résultat partiel.
-
-En automatisation, un script qui traite tout code non nul comme un échec doit accepter `3` pour ces commandes : la sortie
-standard reste exploitable, c'est le verdict qui dit qu'elle est incomplète.
-
 ## Version
 
 ```text
@@ -94,7 +66,7 @@ Les lectures d'état (`index-status`, `inspect`, `project list`, outils MCP `min
 
 `project list` isole les entrées abîmées : un fichier du registre illisible (date ou identifiant invalides, fichier tronqué, entrée remplacée par un répertoire), un historique d'indexation abîmé ou un répertoire illisible sous la racine d'un projet dégradent **ce** projet et pas l'inventaire. Le projet concerné reste une ligne de la liste, à l'état `UNREADABLE` (`-` pour son nom et sa racine quand c'est le registre lui-même qui est illisible), et la commande **sort avec le code 3** au lieu de 0. En texte, les lignes sont suivies d'un pied `degraded: <N>` puis d'une ligne `  <entrée>: <raison>` par entrée dégradée ; en JSON, les clés `degradedCount` et `degraded` (`[{"entry": …, "reason": …}]`) suivent `count` et `projects`. `count` compte toutes les lignes, dégradées comprises. Un avertissement `warning: project inventory is partial: <N> of <total> entries are degraded` est écrit sur la sortie d'erreur. Les raisons ne portent aucun chemin absolu ; `minos inspect <identifiant>` sur le projet concerné donne l'erreur complète. Sans entrée dégradée, la sortie et le code 0 sont inchangés, sans aucune de ces clés. Un registre qui ne peut pas être listé du tout (le répertoire `registry/projects` lui-même est illisible) échoue en bloc avec le code 1 : il n'y a alors rien à rapporter entrée par entrée.
 
-Les commandes qui écrivent ou résolvent par nom (`project add`, `inspect <nom>`) continuent d'échouer (code 1) tant qu'une entrée du registre est illisible : elles ne peuvent pas prouver qu'elles n'agissent pas sur l'entrée abîmée. Adresser un projet sain par son identifiant reste possible.
+`project add` reste stricte (code 1) tant qu'une entrée du registre est illisible : elle ne peut pas prouver qu'elle n'écrase pas l'entrée abîmée, et le dit (`N registry entries are unreadable, so the uniqueness of the registration cannot be guaranteed`). La résolution **par nom** de `inspect`, `project inspect` et `index-status` répond avec ce qu'elle a lu mais sort `3` (voir [Codes de sortie](#codes-de-sortie)) ; les autres commandes qui prennent un projet par nom restent strictes (code 1, `use its UUID`). Adresser un projet sain par son identifiant reste toujours possible.
 
 Le catalogue provider courant couvre Java/Kotlin, TypeScript, Python, C/C++, C#, Go et Rust selon les profils et plateformes explicitement qualifiés. Une détection de langage/build ne vaut jamais preuve qu'un provider donné offre toutes les capabilities avancées.
 
@@ -482,11 +454,24 @@ Toutes les commandes partagent le même analyseur d'arguments :
 ```text
 0  succès
 1  erreur d'exécution / diagnostic action requise
-2  erreur d'usage
-3  résultat partiel (`project list` seulement)
+2  erreur d'usage : rien n'a été ouvert ni modifié
+3  résultat partiel
 ```
 
-Le code 3 distingue « tout va bien » de « inventaire partiel » : la sortie standard est valide et complète pour ce qui a pu être lu, mais au moins une entrée a été dégradée (comptée et affichée, voir [Administration des projets](#administration-des-projets)). Seule `project list` le rend ; aucune autre commande ne change de code. Un script qui traite tout code non nul comme un échec doit donc accepter 3 s'il veut lire l'inventaire partiel.
+Le code `3` a **un seul sens**, quelle que soit la commande : la sortie est valide pour ce qui a pu être lu, mais des entrées du
+registre étaient illisibles et ont été écartées ; elles sont comptées et affichées, jamais ignorées en silence. Il est rendu par :
+
+- `project list` : le registre est listé, les entrées abîmées sont comptées et montrées (voir [Administration des projets](#administration-des-projets)) ;
+  si **toutes** les entrées sont abîmées, la liste n'a aucune ligne lisible et N lignes dégradées, toujours code `3`. Un registre qui ne peut pas être
+  listé du tout (stockage inaccessible) est un échec (`1`), jamais un résultat partiel ;
+- la résolution **par nom** de `inspect`, `project inspect` et `index-status` : le nom est trouvé parmi les entrées lisibles, le projet est affiché et
+  le code est `3` avec `warning: N registry entries are unreadable, so this name cannot be proven unique` sur la sortie d'erreur ; le nom n'est pas
+  trouvé alors que des entrées sont illisibles : `N registry entries are unreadable, so it cannot be told whether this project exists`, code `3`.
+  Ce n'est pas « projet inexistant » (`unknown project: <nom>`, code `1`, registre sain) : le projet existe peut-être parmi les entrées illisibles.
+  Une résolution par **identifiant** (UUID) ne lit que l'entrée demandée et sort `0`.
+
+Un script qui traite tout code non nul comme un échec doit accepter `3` pour ces commandes s'il veut lire leur sortie : la sortie standard reste
+exploitable, c'est le verdict qui dit qu'elle est incomplète.
 
 Le code 2 est réservé aux erreurs d'usage détectées à l'analyse des arguments, avant tout appel de service. Une erreur levée ensuite par un service (projet inconnu, par exemple) est une erreur d'exécution (code 1), y compris pour les opérations `ide`.
 
