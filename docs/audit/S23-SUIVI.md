@@ -6,7 +6,7 @@ encore ouverts. Après ce chantier il ne reste que des constats d'échéance **T
 | Lot | Branche | Constats | PR | État |
 |---|---|---|---|---|
 | 1 | `sec/s11-chaine-et-conteneurs` | S11 | — | implémenté, validé en local (`clean verify`), en attente de PR |
-| 2 | `rel/d1-distribution-auto-portante` | D1 | — | en cours |
+| 2 | `rel/d1-distribution-auto-portante` | D1 | — | implémenté, validé en local (`clean verify`), en attente de PR |
 | 3 | `ci/c2-un-seul-build` | C2 | — | à faire |
 | 4 | `sec/s14-assainissement` | S14 | — | à faire |
 
@@ -310,7 +310,7 @@ Aucune licence n'interdit la redistribution : aucun composant ne sort de la char
 | scip-java : classpath résolu (74 jars, dont `kotlin-compiler-embeddable` 56 Mo) | 75,9 Mio |
 | scip-typescript : `node_modules` | 4,6 Mio |
 | **Charge d'outils** (5 composants, `TOOLS-MANIFEST.json`) | **154,3 Mio (161,8 Mo)**, déjà compressée |
-| Zip Windows APRÈS (estimation : 67 + 162) | **environ 229 Mo** (x 3,4) |
+| Zip Windows APRÈS (estimation, remplacée par la mesure de « Tailles finales » : 220,3 Mo) | environ 229 Mo |
 
 Reproductibilité : deux constructions successives de la charge donnent les mêmes empreintes pour les deux arbres assemblés (`dabb6d92…`, `7e869314…`). Le SBOM passe de 28 à 112 composants, 0 licence inconnue.
 
@@ -319,6 +319,65 @@ Reproductibilité : deux constructions successives de la charge donnent les mêm
 Prouvé : amorçage depuis une charge factice sur `MINOS_HOME` vide, idempotent, concurrent (4 fils), artefact altéré refusé (jamais de repli réseau), arbre altéré après amorçage refusé, hors ligne (sonde réseau locale : 0 connexion avec la charge, témoin positif), gate `check-tools-manifest.py` (18 cas + dépôt réel), builder (9 cas), charge réelle construite (5 composants). Reste : zip complet reconstruit et gate `--distribution`, installateur/`update-installation.ps1`, guides, qualification « machine vierge sans réseau », preuve hors ligne réelle, `clean verify`.
 
 Décisions qui exigent le propriétaire : (1) distribution « sans outils » à côté (recommandé : oui, non implémenté) ; (2) taille x 3,4 acceptable ? ; (3) embarquer un JDK pour Java (+190 Mo) ? aujourd'hui JDK et Git Bash restent des prérequis du poste ; (4) preuve hors ligne physique : aucune des deux voies sans réglage système n'existe ici (pas de Windows Sandbox ni Hyper-V, non élevé) : désactiver la carte réseau quelques minutes (à demander) ; (5) réserve de licence `coursier/launchers` ; (6) constat préexistant : `minos index` Java échoue sous AppContainer sur ce poste (D1-L1).
+
+### Décisions du propriétaire (relayées par le pilote)
+
+1. **Zip « lite » : OUI**, publié à côté du complet (même script `-Variant lite -ReuseBuild`, même gate `--variant lite`). Artefacts : `minos-<v>-windows-x64-lite.zip`, `minos-<v>-lite.cdx.json`, `MINOS-<v>-lite-THIRD-PARTY-NOTICES.txt` et leurs `.sha256` ; `VERSION` porte `variant=`. La mise à jour d'une installation complète par un lite supprime `tools/` de façon transactionnelle (test 6c : supprimé, restauré au rollback, lite sur lite sans `tools/`). `publish-windows-release.ps1` construit, vérifie (sha256, installation portable, absence de `tools/`) et publie le lite. Pas de setup `.exe` lite (D1-L7).
+2. **Pas de JDK embarqué** : prérequis du poste documentés (JDK complet avec `javac` et `jar`, Git Bash, PowerShell 5.1, `csc.exe`) dans le `README.txt` généré, les guides et les diagnostics `machine prerequisite (not shipped by MINOS)` de `doctor` et `tools verify`. Le critère « machine neuve sans réseau » vaut pour TypeScript (zéro prérequis) et pour Java si ces prérequis sont déjà là.
+3. **Preuve hors ligne physique** : le propriétaire coupera lui-même la carte réseau ; procédure ci-dessous.
+
+### Tailles finales (mesurées le 2026-10-02)
+
+| Artefact | Taille |
+|---|---|
+| Zip complet AVANT | 67,13 Mo |
+| Zip complet APRÈS (`minos-1.3.0-SNAPSHOT-windows-x64.zip`) | **220,3 Mo** (x 3,3) ; charge d'outils 154,3 Mio |
+| Zip lite (`…-windows-x64-lite.zip`) | **67,2 Mo** (même taille qu'avant, +0,06 Mo : README et `VERSION`) |
+
+### Journal du lot 2
+
+| # | Commit | Contenu | Preuve |
+|---|---|---|---|
+| 1 | `0803cfe8` | relocalisation, décisions, licences avant le code | — |
+| 2 | `1ab978e0` | `embedded-tools.json`, `EmbeddedToolsCatalog`, `PinnedArtifactSource` (paquet puis réseau, même SHA-256), amorçage des arbres assemblés, `MINOS_TOOLS_OFFLINE`, classpath scip-java livré (`-ClasspathFile`), diagnostics d'origine et de prérequis | mutation : comparaison SHA-256 neutralisée -> 4 tests rouges ; garde d'intégrité d'arbre neutralisée -> rouge ; restaurées -> 28/28 verts ; sonde réseau locale : 0 connexion avec la charge, témoin positif >= 1 |
+| 3 | `cb41c4e7` | gate `check-tools-manifest.py` (+ 22 cas d'auto-test), `sync-tools-manifest.py`, Dockerfile aligné (Node Linux épinglé), câblage `pr-ci.yml`, `run-final.*`, `quality-gates.md` | rouge sur l'arbre de base (`57eb4455` : « tools catalogue is missing ») ; rouge si un `ARG` du Dockerfile diverge (SHA-256 Maven modifié) ; vert sur la branche |
+| 4 | `c1214ec2` | `build-embedded-tools.py` (zips déterministes, manifeste, SBOM étendu), `build-windows-distribution.ps1`, README sans `tools install` | 9 tests ; deux constructions -> mêmes empreintes pour les deux arbres assemblés |
+| 5 | `0409f776` | `EmbeddedToolsCatalog` utilise `Preconditions.requireText` | `DuplicationGuardTest` rouge (2 tests) -> vert |
+| 6 | `0d268eab`, `52c05b73` | `tools` répertoire géré puis optionnel de `update-installation.ps1`, `.iss`, `verify-installer-template.ps1`, fixtures et scénarios 6b et 6c de `verify-windows-upgrade-transaction.ps1`, listes de build/publication | `tools` retiré de la liste -> le vérificateur échoue ; entrée optionnelle non enregistrée -> « tools directory survived a lite upgrade » ; restauré -> `WINDOWS_UPGRADE_TRANSACTION_VALID` |
+| 7 | `5a43b9ee` | variante lite (script, gate, publication) | 4 cas d'auto-test du gate ; deux zips construits, gate `--distribution` vert sur les deux |
+| 8 | `2d029eda` | notices : offre de sources (EPL, CDDL, GPL+CPE, jna) et réserve coursier/launchers | notices du zip complet : 112 composants, section « Source availability » |
+| 9 | `c32c7c28`, `04fc1d4a` | guides, ADR 0040 accepté, ROADMAP, « à traiter plus tard » D1-L1 à L7 | `check-current-docs.py` vert |
+| 10 | `bc20c997`, `4ac36c59`, `fd2a5b55`, `f2c94656`, `437c74a1`, `d8f60763` | scripts de qualification hors ligne et de preuve conteneur | voir ci-dessous |
+
+### Preuves hors ligne : ce qui est prouvé, ce qui ne l'est pas encore
+
+Prouvé, en ligne mais sans que MINOS touche le réseau (`qualify-offline-install.ps1 -AllowOnline`, zip complet réel, PowerShell 5.1) : installation depuis le zip dans un répertoire jetable ; les outils sont amorcés depuis `<installation>\tools` vers `MINOS_HOME\tools` ; `tools verify --all --format json` : scip-typescript `READY` avec `tools origin: nodejs=embedded, scip-typescript-modules=embedded`, scip-java `READY` (JDK et Git présents sur ce poste) avec `coursier=embedded, maven=embedded, scip-java-classpath=embedded` ; indexation de `fixtures/typescript/typescript-simple` : `SUCCEEDED` (sous AppContainer, Node géré) ; un proxy canari local (JVM et variables de proxy), dont le témoin positif est vu (1 connexion), enregistre **0** tentative ; `MINOS_TOOLS_OFFLINE=1` ; les fichiers de `tools/` de l'installation sont inchangés.
+
+Prouvé en conteneur `docker run --network none` (`qualify-seeding-container.ps1`) : la charge Windows valide est copiée, vérifiée et extraite (`nodejs`, `scip-typescript-modules`, `maven`, `scip-java-classpath` : origine `embedded`) ; la même charge dont une archive Node.js a un octet modifié est refusée (`INVALID`, « embedded tool nodejs does not match its pinned SHA-256 and was refused »), rien n'est extrait, aucun téléchargement.
+
+NON prouvé : une exécution sur une machine dont le réseau est réellement coupé (le propriétaire la fera) ; l'indexation Java par `minos index` (D1-L1, préexistant). Le critère « indexation qui réussit » est établi sur TypeScript, qui n'exige aucun prérequis du poste.
+
+**Procédure pour le propriétaire (poste sans réseau)** : 1) désactiver la carte réseau (et le Wi-Fi) ; 2) dans un terminal Windows PowerShell 5.1 ouvert dans le dépôt : `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\release\qualify-offline-install.ps1 -Package <chemin>\minos-1.3.0-SNAPSHOT-windows-x64.zip` ; 3) lire la dernière ligne : `OFFLINE QUALIFICATION PASS` (preuves dans `evidence.json`), `FAIL` (détail par contrôle) ou `NOT RUN` (le réseau est encore atteignable : le script s'arrête avant d'installer) ; 4) réactiver la carte réseau. Le script ne modifie ni PATH, ni Docker, ni client MCP, ni l'installation MINOS existante (tout est dans un répertoire jetable).
+
+### Résultats de fin de lot (2026-10-02, Windows, JDK 24)
+
+| Contrôle | Résultat |
+|---|---|
+| `./mvnw clean verify` (complet, une seule fois, depuis Bash) | **BUILD SUCCESS**, 17 min 23 s, 0 échec |
+| `check-jacoco.py` | SUCCESS, **y compris m24** (`m24-polyglot-provider-platform` PASS, line 0,707) : le rouge préexistant sous Windows n'apparaît pas sur cette exécution |
+| `check-module-boundaries.py` | SUCCESS (14 modules, **517** sources, 45 packages) : +6 classes neuves par rapport à la baseline 511 |
+| `check-private-io.py` | SUCCESS (517 sources, **37** occurrences en liste blanche, 8 interdits, 4 primitives) : liste blanche inchangée, aucune entrée ajoutée ; `test_check_private_io.py` OK |
+| `check-current-docs.py`, `product-facts.py --check` | SUCCESS, SUCCESS |
+| `check-milestone-artifact-references.py` | SUCCESS (109 scripts) |
+| `check-workflow-pins.py` | SUCCESS (70 usages externes, identique) |
+| `check-image-pins.py`, `check-compose-limits.py` (lot 1) | SUCCESS, SUCCESS, non modifiés |
+| `check-tools-manifest.py` + auto-test (22 cas) + `test_build_embedded_tools.py` (9 cas) | SUCCESS, OK, OK ; `--distribution` vert sur les deux zips |
+| `check-audit-remediation-v2.py` | SUCCESS |
+| `verify-windows-upgrade-transaction.ps1`, `verify-installer-template.ps1` | `WINDOWS_UPGRADE_TRANSACTION_VALID`, SUCCESS |
+| 12 golden de `characterization/`, liste blanche d'E/S privées | inchangés (`git diff 57eb4455` : 0 fichier) |
+| Aucun push, aucune PR, aucun workflow | respecté |
+
+Constats d'environnement : Maven doit se lancer depuis Bash (depuis PowerShell 7, `PSModulePath` fuit et casse `PrivateLocalStorageWindowsAclTest`) ; un `MINOS_HOME` sous le scratchpad de session échoue (« cannot protect private storage », ACL des SID du harnais) : travail sous `%LOCALAPPDATA%\minos-d1-scratch`.
 
 ## Constats de `verif-s23`
 
