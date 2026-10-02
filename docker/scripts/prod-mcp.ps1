@@ -37,6 +37,13 @@ $metadataFile = Join-Path $runtimeDirectory 'installation.json'
 $composeProject = 'minos-mcp-prod'
 $containerName = 'minos-mcp-prod'
 
+# Resource-ceiling overrides an operator put in the runtime .env (MINOS_<ROLE>_CPUS|MEM_LIMIT|PIDS_LIMIT)
+# survive an Install/update: the .env is regenerated, these lines are carried over unchanged.
+function Get-PreservedCeilingOverrides([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
+    return @(Get-Content -LiteralPath $Path | Where-Object { $_ -match '^MINOS_(MCP|ADMIN|JOB|POSTGRES|OLLAMA)_(CPUS|MEM_LIMIT|PIDS_LIMIT)=' })
+}
+
 function Assert-CommandAvailable {
     param([Parameter(Mandatory = $true)][string]$Name)
 
@@ -210,6 +217,7 @@ switch ($Action) {
 
         Copy-Item -LiteralPath (Join-Path $projectRoot 'docker\compose.mcp.prod.yaml') `
             -Destination $composeFile -Force
+        $preservedOverrides = @(Get-PreservedCeilingOverrides -Path $environmentFile)
         $environmentContent = @"
 MINOS_COMPOSE_PROJECT=$composeProject
 MINOS_CONTAINER_NAME=$containerName
@@ -219,6 +227,9 @@ MINOS_PROJECTS_DIR=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -
 MINOS_VERSION=$version
 MINOS_GIT_COMMIT=$commit
 "@
+        if ($preservedOverrides.Count -gt 0) {
+            $environmentContent = $environmentContent.TrimEnd() + [Environment]::NewLine + ($preservedOverrides -join [Environment]::NewLine) + [Environment]::NewLine
+        }
         Write-MinosUtf8File -Path $environmentFile -Content $environmentContent.TrimStart()
         Invoke-MinosCompose -Arguments @('config', '--quiet') `
             -FailureMessage 'La configuration Docker Compose MINOS est invalide'
