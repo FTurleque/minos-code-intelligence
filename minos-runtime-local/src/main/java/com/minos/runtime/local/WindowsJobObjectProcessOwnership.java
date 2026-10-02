@@ -5,8 +5,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
@@ -22,12 +20,11 @@ final class WindowsJobObjectProcessOwnership {
             System.getLogger(WindowsJobObjectProcessOwnership.class.getName());
 
     private static final String LAUNCHER_NAME = "windows-job-object-owner-v1.ps1";
-    private static final String RESOURCE = "/com/minos/runtime/local/" + LAUNCHER_NAME;
 
     private final Path powershell;
-    private final Path launcher;
+    private final SandboxLauncherScript launcher;
 
-    private WindowsJobObjectProcessOwnership(Path powershell, Path launcher) {
+    private WindowsJobObjectProcessOwnership(Path powershell, SandboxLauncherScript launcher) {
         this.powershell = powershell;
         this.launcher = launcher;
     }
@@ -40,9 +37,12 @@ final class WindowsJobObjectProcessOwnership {
         Optional<Path> powershell = CommandLocator.windowsPowerShell();
         if (powershell.isEmpty()) return Optional.empty();
         try {
-            return Optional.of(new WindowsJobObjectProcessOwnership(
-                    powershell.orElseThrow(), installLauncher(minosHome.toAbsolutePath().normalize())));
-        } catch (IOException failure) {
+            // The launcher is a script that gets executed: it lives outside MINOS_HOME (see SandboxLauncherScript).
+            SandboxLauncherScript.removeLegacyCopy(minosHome, LAUNCHER_NAME);
+            SandboxLauncherScript launcher = SandboxLauncherScript.materialize(LAUNCHER_NAME);
+            SandboxLauncherScript.requireOutsideMinosHome(launcher.file(), minosHome);
+            return Optional.of(new WindowsJobObjectProcessOwnership(powershell.orElseThrow(), launcher));
+        } catch (IOException | IllegalArgumentException | IllegalStateException failure) {
             // Not just "PowerShell missing": this can also mean the launcher could not be installed
             // as owner-only (e.g. the private-storage filesystem could not enforce or verify
             // ownership). The caller reports this as an ordinary "capability unavailable" diagnostic,
@@ -63,6 +63,7 @@ final class WindowsJobObjectProcessOwnership {
                 Map<String, String> environment = ProviderProcessEnvironment.sanitize(
                         new ProcessBuilder().environment(), plan.environment());
                 writePlan(planFile, command, environment, plan.workingDirectory());
+                launcher.verify();
                 return new IndexerProcessPlan(
                         List.of(
                                 powershell.toString(),
@@ -72,7 +73,7 @@ final class WindowsJobObjectProcessOwnership {
                                 "-ExecutionPolicy",
                                 "Bypass",
                                 "-File",
-                                launcher.toString(),
+                                launcher.file().toString(),
                                 "-Plan",
                                 planFile.toString()),
                         plan.workingDirectory(),
@@ -82,7 +83,7 @@ final class WindowsJobObjectProcessOwnership {
             }
 
             @Override
-            public boolean trustedLauncherRequiresParentEnvironment() {
+            public boolean isTrustedLauncher() {
                 return true;
             }
         };
@@ -104,23 +105,6 @@ final class WindowsJobObjectProcessOwnership {
         }
         command.set(0, executable.toString());
         return List.copyOf(command);
-    }
-
-    private static Path installLauncher(Path minosHome) throws IOException {
-        Path directory = minosHome.resolve("sandbox").toAbsolutePath().normalize();
-        PrivateLocalStorage.ensurePrivateDirectory(directory);
-        Path target = directory.resolve(LAUNCHER_NAME);
-        // Assembled from its template and the shared Win32 fragments, then published as one
-        // self-contained file: the script that executes still has a single hash and no include path.
-        String launcher = WindowsContainmentScript.assemble(LAUNCHER_NAME);
-        Path partial = PrivateLocalStorage.createPrivateTempFile(directory, ".windows-job-owner-", ".ps1");
-        try {
-            PrivateLocalStorage.writePrivateFile(partial, launcher.getBytes(StandardCharsets.UTF_8));
-            Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING);
-        } finally {
-            Files.deleteIfExists(partial);
-        }
-        return target;
     }
 
     private static void writePlan(

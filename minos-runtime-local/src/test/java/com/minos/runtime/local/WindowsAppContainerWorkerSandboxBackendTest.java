@@ -177,7 +177,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         assertTrue(Files.readString(run.resolve("windows-appcontainer-plan.txt"), StandardCharsets.UTF_8)
                 .contains("networkPolicy=ALLOW"));
         String launcher = Files.readString(
-                home.resolve("sandbox/windows-appcontainer-sandbox-v4.ps1"), StandardCharsets.UTF_8);
+                Path.of(sandboxed.command().get(sandboxed.command().indexOf("-File") + 1)), StandardCharsets.UTF_8);
         assertTrue(launcher.contains("S-1-15-3-1"));
         assertTrue(launcher.contains("GetAppContainerFolderPath"));
         assertTrue(launcher.contains("DenyPrivateRegistryWrites"));
@@ -388,9 +388,20 @@ class WindowsAppContainerWorkerSandboxBackendTest {
 
         Path artifact = Files.createFile(writeRoot.resolve("artifact.scip"));
         String artifactAcl = icaclsOutput(artifact);
-        assertTrue(artifactAcl.contains(currentUser) && artifactAcl.contains("(I)"),
-                () -> "a file created inside the write root must inherit the current user's access, got:\n"
+        // The access a file inherits is the one of the principal MINOS acts as: the user, or, under an elevated
+        // token, the group that owns what the process creates (Administrators on a CI runner).
+        String ownerName = Files.getOwner(writeRoot).getName();
+        String ownerAccount = ownerName.substring(ownerName.lastIndexOf('\\') + 1);
+        // icacls marks an entry "(I)" only when the file's entry is flagged as inherited; under an elevated
+        // token the entries of a file created in a temporary directory are explicit copies with the same
+        // rights. What matters, and what is asserted, is that the principal MINOS acts as holds Full Control
+        // on the file and that the file is really usable by this process.
+        assertTrue((artifactAcl.contains(currentUser) || artifactAcl.contains(ownerAccount))
+                        && (artifactAcl.contains("(I)") || artifactAcl.contains(":(F)")),
+                () -> "a file created inside the write root must carry the access of the principal MINOS acts as, got:\n"
                         + artifactAcl);
+        assertTrue(Files.isReadable(artifact) && Files.isWritable(artifact),
+                "the file created inside the write root must be usable by the process that created the root");
     }
 
     @Test

@@ -10,12 +10,9 @@ import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -74,7 +71,6 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
 
     private static final String SANDBOX_DIRECTORY = "sandbox";
     private static final String LAUNCHER_SCRIPT_NAME = "windows-appcontainer-sandbox-v4.ps1";
-    private static final String RESOURCE = "/com/minos/runtime/local/" + LAUNCHER_SCRIPT_NAME;
     private static final Map<Path, Boolean> CAPABILITY_PROBE_CACHE = new ConcurrentHashMap<>();
 
     private static final System.Logger LOGGER =
@@ -82,12 +78,15 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
 
     private final Path minosHome;
     private final Path powershell;
-    private final Path launcher;
+    private final SandboxLauncherScript launcher;
 
     public WindowsAppContainerWorkerSandboxBackend(Path minosHome, Path powershell) throws IOException {
         this.minosHome = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.powershell = regularExecutable(powershell, "powershell");
-        this.launcher = installLauncher(this.minosHome);
+        // The launcher is a script that gets executed: it lives outside MINOS_HOME (see SandboxLauncherScript).
+        SandboxLauncherScript.removeLegacyCopy(this.minosHome, LAUNCHER_SCRIPT_NAME);
+        this.launcher = SandboxLauncherScript.materialize(LAUNCHER_SCRIPT_NAME);
+        SandboxLauncherScript.requireOutsideMinosHome(this.launcher.file(), this.minosHome);
     }
 
     public static Optional<WindowsAppContainerWorkerSandboxBackend> discover(Path minosHome) {
@@ -109,7 +108,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 return Optional.empty();
             }
             return Optional.of(candidate);
-        } catch (IOException | IllegalArgumentException exception) {
+        } catch (IOException | IllegalArgumentException | IllegalStateException exception) {
             // Not just "PowerShell missing": this can also mean the launcher could not be installed
             // as owner-only (e.g. the private-storage filesystem could not enforce or verify
             // ownership) or another environmental failure. WorkerSandboxBackends.selectForUntrustedCode()
@@ -227,7 +226,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                     }
 
                     @Override
-                    public boolean trustedLauncherRequiresParentEnvironment() {
+                    public boolean isTrustedLauncher() {
                         return true;
                     }
 
@@ -324,6 +323,9 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 networkPolicy,
                 jobCpuSeconds(plan.timeout()));
 
+        // Checked here, at the last host-controlled step before the plan is handed out: a launcher that is
+        // no longer the script the jar produces is refused, not run, and not replaced by a weaker backend.
+        launcher.verify();
         List<String> wrapper = List.of(
                 powershell.toString(),
                 "-NoLogo",
@@ -332,7 +334,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                launcher.toString(),
+                launcher.file().toString(),
                 "-Plan",
                 planFile.toString());
         return new IndexerProcessPlan(
@@ -412,52 +414,6 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         LOGGER.log(System.Logger.Level.WARNING,
                 "MINOS Windows AppContainer capability probe failed (exit=" + process.exitValue() + "): " + output);
         return false;
-    }
-
-    /**
-     * Bounded tolerance for a transient replace failure while publishing the launcher (e.g. a
-     * real-time antivirus scan briefly holding the just-written or the previous script). This is
-     * MINOS' own trusted, MINOS-authored script content, not attacker-controlled input, so
-     * retrying a plain filesystem replace here carries none of the containment implications a
-     * provider-controlled path would.
-     */
-    private static final int LAUNCHER_INSTALL_RETRY_ATTEMPTS = 5;
-    private static final long LAUNCHER_INSTALL_RETRY_DELAY_MILLIS = 50L;
-
-    private static Path installLauncher(Path minosHome) throws IOException {
-        Path directory = minosHome.resolve(SANDBOX_DIRECTORY).toAbsolutePath().normalize();
-        PrivateLocalStorage.ensurePrivateDirectory(directory);
-        Path target = directory.resolve(LAUNCHER_SCRIPT_NAME);
-        // Assembled from its template and the shared Win32 fragments, then published as one
-        // self-contained file: the script that executes still has a single hash and no include path.
-        String launcher = WindowsContainmentScript.assemble(LAUNCHER_SCRIPT_NAME);
-        Path partial = PrivateLocalStorage.createPrivateTempFile(directory, ".windows-appcontainer-", ".ps1");
-        try {
-            PrivateLocalStorage.writePrivateFile(partial, launcher.getBytes(StandardCharsets.UTF_8));
-            replaceWithRetry(partial, target);
-        } finally {
-            Files.deleteIfExists(partial);
-        }
-        return target;
-    }
-
-    private static void replaceWithRetry(Path source, Path target) throws IOException {
-        for (int attempt = 1; attempt <= LAUNCHER_INSTALL_RETRY_ATTEMPTS; attempt++) {
-            try {
-                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                return;
-            } catch (FileSystemException failure) {
-                if (attempt == LAUNCHER_INSTALL_RETRY_ATTEMPTS) {
-                    throw failure;
-                }
-                try {
-                    Thread.sleep(LAUNCHER_INSTALL_RETRY_DELAY_MILLIS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    throw failure;
-                }
-            }
-        }
     }
 
     private static void writePlan(
@@ -598,21 +554,51 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
      * successfully-generated SCIP artifact reported as "missing or unreadable" moments later.
      */
     static void requireInheritableOwnerAccess(Path writeRoot) {
-        String identity = System.getProperty("user.name");
-        if (identity == null || identity.isBlank()) {
-            throw new IllegalStateException("cannot determine the current user to secure write root: " + writeRoot);
-        }
+        // The identity is the one of the process token, read from the operating system. It is never the
+        // user.name system property: the command line can set that to anything, and icacls resolves a
+        // name or a SID alike (-Duser.name=*S-1-1-0 would grant Everyone Full Control of the write root).
+        // A root whose owner already holds an inheritable Full Control entry (every directory private
+        // storage made: that entry is the owner's) needs nothing more, and must not get an entry for a
+        // second principal: under an elevated token the owner is the Administrators group, not the user, so
+        // the extra entry would make the ACL differ from the one private storage expects, and the next
+        // hardening of that directory would rewrite the ACL and take the sandbox's grants with it.
+        if (ownerHoldsInheritableFullControl(writeRoot)) return;
+        String sid = ProcessIdentity.sid();
         boolean granted;
         try {
-            granted = runIcacls(writeRoot.toString(), "/grant", identity + ":(OI)(CI)F");
+            granted = runIcacls(writeRoot.toString(), "/grant", "*" + sid + ":(OI)(CI)F");
         } catch (IOException | InterruptedException failure) {
             if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
             granted = false;
         }
         if (!granted) {
-            throw new IllegalStateException(
-                    "Unable to secure inheritable owner access on sandbox write root: " + writeRoot);
+            throw new IllegalStateException("Unable to secure inheritable owner access on a sandbox write root");
         }
+    }
+
+    static boolean ownerHoldsInheritableFullControl(Path directory) {
+        try {
+            java.nio.file.attribute.AclFileAttributeView view = Files.getFileAttributeView(
+                    directory, java.nio.file.attribute.AclFileAttributeView.class,
+                    java.nio.file.LinkOption.NOFOLLOW_LINKS);
+            if (view == null) return false;
+            java.nio.file.attribute.UserPrincipal owner = view.getOwner();
+            for (java.nio.file.attribute.AclEntry entry : view.getAcl()) {
+                if (entry.type() == java.nio.file.attribute.AclEntryType.ALLOW
+                        && entry.principal().equals(owner)
+                        && entry.flags().containsAll(java.util.EnumSet.of(
+                                java.nio.file.attribute.AclEntryFlag.FILE_INHERIT,
+                                java.nio.file.attribute.AclEntryFlag.DIRECTORY_INHERIT))
+                        && !entry.flags().contains(java.nio.file.attribute.AclEntryFlag.INHERIT_ONLY)
+                        && entry.permissions().containsAll(
+                                java.util.EnumSet.allOf(java.nio.file.attribute.AclEntryPermission.class))) {
+                    return true;
+                }
+            }
+        } catch (IOException unreadable) {
+            // Not provably covered: fall through to the explicit grant.
+        }
+        return false;
     }
 
     /**

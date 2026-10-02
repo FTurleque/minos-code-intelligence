@@ -173,6 +173,26 @@ public final class DurableAtomicFile {
         }
     }
 
+    /**
+     * Forces the directory entry of a rename or a deletion to stable storage, where Java can.
+     *
+     * <p><b>Inert on Windows, by limitation and not by choice.</b> Java opens a directory only with
+     * {@code FileChannel.open}, and Windows refuses that handle ({@code AccessDeniedException} for
+     * {@code READ} and for {@code WRITE}, measured on JDK 24): flushing a directory needs
+     * {@code CreateFile} with {@code FILE_FLAG_BACKUP_SEMANTICS} and {@code FlushFileBuffers}, which are
+     * reachable only through native code (FFM or JNA), and no clean pure-Java equivalent exists. Nothing is
+     * simulated here: on Windows this method does nothing.</p>
+     *
+     * <p>What that means for durability. The data is not at stake: {@link #forceFile} flushes the file
+     * before the rename, on every platform. The rename itself is an NTFS metadata operation, and NTFS
+     * journals its metadata, so after a crash the volume is consistent: the rename is either applied or
+     * not, never torn, and the target is never a half-written file. What is not guaranteed, because the
+     * journal tail is flushed lazily, is that a rename that already returned survives a power loss that
+     * follows it closely: the previous content (or, for a publication, the absence of the entry) may be
+     * what the next start sees. That is a lost last write, not corruption, and it is the same
+     * observable state as a crash just before the call. The JDK's own atomic move
+     * ({@code MoveFileEx} with {@code MOVEFILE_REPLACE_EXISTING}) does not request write-through either.</p>
+     */
     static void forceDirectory(Path directory) throws IOException {
         if (directory == null || windows()) return;
         try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
