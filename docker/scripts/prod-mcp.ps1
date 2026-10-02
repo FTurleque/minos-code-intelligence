@@ -32,6 +32,9 @@ $runtimeDirectory = Join-Path $InstallRoot 'runtime'
 $dataDirectory = Join-Path $InstallRoot 'data'
 $backupDirectory = Join-Path $InstallRoot 'backups'
 $composeFile = Join-Path $runtimeDirectory 'compose-mcp.prod.yaml'
+# Name of the runtime copy before the compose files were renamed (audit S11, Dependabot visibility): an existing
+# developer installation still has it. See Move-LegacyMinosComposeFile.
+$legacyComposeFile = Join-Path $runtimeDirectory 'compose.mcp.prod.yaml'
 $environmentFile = Join-Path $runtimeDirectory '.env'
 $metadataFile = Join-Path $runtimeDirectory 'installation.json'
 $composeProject = 'minos-mcp-prod'
@@ -139,6 +142,19 @@ function Invoke-MinosCompose {
         -FailureMessage $FailureMessage
 }
 
+# The runtime directory is outside the repository, so a rename in the repository does not reach it. The Compose
+# project is fixed by `name: ${MINOS_COMPOSE_PROJECT}` and nothing persisted names the file: the old file is moved
+# to the new name, content intact. If both exist the new name wins and the old one is left alone, with a warning.
+function Move-LegacyMinosComposeFile {
+    if (-not (Test-Path -LiteralPath $legacyComposeFile -PathType Leaf)) { return }
+    if (Test-Path -LiteralPath $composeFile -PathType Leaf) {
+        Write-Warning "$composeFile et l'ancien $legacyComposeFile existent tous deux ; $composeFile est utilise. Supprimez l'ancien une fois verifie."
+        return
+    }
+    Move-Item -LiteralPath $legacyComposeFile -Destination $composeFile
+    Write-Host "Fichier compose du runtime migre vers son nouveau nom : $composeFile" -ForegroundColor Cyan
+}
+
 function Assert-MinosProdInstalled {
     foreach ($requiredFile in @($composeFile, $environmentFile, $metadataFile)) {
         if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
@@ -193,6 +209,7 @@ function Invoke-MinosDockerSmoke {
 }
 
 Assert-CommandAvailable -Name 'docker'
+Move-LegacyMinosComposeFile
 
 switch ($Action) {
     'Install' {
@@ -241,6 +258,7 @@ switch ($Action) {
 
         Copy-Item -LiteralPath (Join-Path $projectRoot 'docker\compose-mcp.prod.yaml') `
             -Destination $composeFile -Force
+        Remove-Item -LiteralPath $legacyComposeFile -Force -ErrorAction SilentlyContinue
         $preservedOverrides = @(Get-PreservedCeilingOverrides -Path $environmentFile)
         $environmentContent = @"
 MINOS_COMPOSE_PROJECT=$composeProject

@@ -208,14 +208,24 @@ try {
     New-Item -ItemType Directory -Force -Path $EvidenceRoot | Out-Null
     # Each candidate installs itself with its OWN Dockerfile/Compose recipe (real upgrade fidelity),
     # but both are driven by this repo's current mcp-lifecycle.ps1 - see Invoke-DockerWorkflow.
+    # The candidate must carry the current compose name. The previous release may predate the rename of the compose
+    # files (compose.mcp.prod.yaml -> compose-mcp.prod.yaml, audit S11): it keeps ITS names, which is what a real user
+    # upgrading from that release has. The qualification stays as strict as before - both recipes must exist - and
+    # additionally proves the upgrade of the pre-rename runtime directory (see below).
     foreach ($Required in @(
         (Join-Path $PreviousWorktree 'docker\Dockerfile.mcp.release'),
-        (Join-Path $PreviousWorktree 'docker\compose-mcp.prod.yaml'),
         (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'),
         (Join-Path $RepoRoot 'docker\compose-mcp.prod.yaml')
     )) {
         if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "Missing real Docker release recipe: $Required" }
     }
+    $PreviousHasCurrentCompose = Test-Path -LiteralPath (Join-Path $PreviousWorktree 'docker\compose-mcp.prod.yaml') -PathType Leaf
+    $PreviousHasLegacyCompose = Test-Path -LiteralPath (Join-Path $PreviousWorktree 'docker\compose.mcp.prod.yaml') -PathType Leaf
+    if (-not $PreviousHasCurrentCompose -and -not $PreviousHasLegacyCompose) {
+        throw "Missing real Docker release recipe: no compose file under $(Join-Path $PreviousWorktree 'docker')"
+    }
+    $PreviousPredatesComposeRename = -not $PreviousHasCurrentCompose
+    $RuntimeComposeMigration = 'not-applicable'
 
     $VersionA = "qualification-a-$($PreviousSha.Substring(0, 12))"
     $VersionB = "qualification-b-$($CandidateSha.Substring(0, 12))"
@@ -243,7 +253,22 @@ public final class UpgradeFixture {
 
     # Candidate A: real provider-complete image, real Compose, real admin plane and real MCP handshake.
     Invoke-DockerWorkflow -SourceRoot $PreviousWorktree -Action Install -Jar $JarA -Version $VersionA -Commit $PreviousSha -ImageTag $TagA
+    if ($PreviousPredatesComposeRename) {
+        # This repo's driver (the only one that runs, see Invoke-DockerWorkflow) writes the CURRENT runtime file name,
+        # whereas the previous release's own driver left runtime\compose.mcp.prod.yaml. Put the on-disk state of a real
+        # pre-rename installation back, then let the next action - Start, the first thing a user does after updating
+        # the program files - migrate it. Nothing is relaxed: B below is still installed over the migrated runtime.
+        $RuntimeCurrentCompose = Join-Path $InstallRoot 'runtime\compose-mcp.prod.yaml'
+        $RuntimeLegacyCompose = Join-Path $InstallRoot 'runtime\compose.mcp.prod.yaml'
+        Move-Item -LiteralPath $RuntimeCurrentCompose -Destination $RuntimeLegacyCompose
+    }
     Invoke-DockerWorkflow -Action Start
+    if ($PreviousPredatesComposeRename) {
+        if (-not (Test-Path -LiteralPath $RuntimeCurrentCompose -PathType Leaf) -or (Test-Path -LiteralPath $RuntimeLegacyCompose)) {
+            throw 'The pre-rename runtime compose file was not migrated to its new name by the first action after the update.'
+        }
+        $RuntimeComposeMigration = 'verified'
+    }
     Assert-RunningCandidate -ExpectedImage $ImageA -ExpectedCommit $PreviousSha
     Invoke-McpSmoke -SourceRoot $PreviousWorktree -Label 'a'
 
@@ -344,6 +369,7 @@ public final class UpgradeFixture {
         persistentDataPreserved = $true
         registeredProjectPreserved = $true
         failedNextCandidatePreservedB = $true
+        runtimeComposeMigration = $RuntimeComposeMigration
         result = 'PASS'
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'qualification.json') -Encoding utf8
 
