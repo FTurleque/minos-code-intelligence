@@ -52,8 +52,8 @@ class WindowsJobObjectContainmentTest {
                 param([string] $Artifact, [string] $Descendants, [string] $PowerShell)
                 $ErrorActionPreference = 'Continue'
                 [Console]::Error.WriteLine('DIAGT0 ' + [DateTime]::UtcNow.ToString('o'))
-                [Console]::Error.WriteLine('DIAGENV ' + ((Get-ChildItem Env: | ForEach-Object { $_.Name + '=' + $_.Value.Length }) -join ','))
-                [Console]::Error.WriteLine('DIAGWHO ' + [Environment]::UserName + ' ' + [Environment]::CurrentDirectory + ' ' + $PSVersionTable.PSVersion)
+                [Console]::Error.WriteLine('DIAGENV2 ' + [string]::Join(',', [System.Environment]::GetEnvironmentVariables().Keys))
+                [Console]::Error.WriteLine('DIAGPSM ' + [System.Environment]::GetEnvironmentVariable('PSModulePath') + ' | TEMP=' + [System.Environment]::GetEnvironmentVariable('TEMP') + ' | LOCALAPPDATA=' + [System.Environment]::GetEnvironmentVariable('LOCALAPPDATA'))
                 $journal = "begin`r`n"
                 [System.IO.File]::WriteAllText($Descendants, $journal)
                 foreach ($index in 1, 2) {
