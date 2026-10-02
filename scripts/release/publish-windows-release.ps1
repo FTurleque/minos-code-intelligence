@@ -197,7 +197,7 @@ $NoticesChecksum = "$Notices.sha256"
 $RequiredInstalledFiles = @(
     'minos.cmd','minos-mcp.cmd','VERSION','RUNTIME-MODULES.txt','RELEASE-MANIFEST.json','install.ps1',
     'app\minos.exe','app\runtime\bin\java.exe','app\runtime\bin\server\jvm.dll','app\runtime\lib\modules',
-    'lib\minos.jar','supply-chain\minos.cdx.json','supply-chain\THIRD-PARTY-NOTICES.txt',
+    'lib\minos.jar','supply-chain\minos.cdx.json','supply-chain\THIRD-PARTY-NOTICES.txt','tools\TOOLS-MANIFEST.json',
     'integration\configure-mcp-clients.ps1','integration\configure-mcp-clients-setup.ps1',
     'integration\configure-codex-mcp.ps1','integration\detect-mcp-clients.ps1','integration\uninstall-mcp-clients.ps1',
     'integration\update-installation.ps1','integration\switch-mcp-backend.ps1','integration\probe-mcp-backend.ps1',

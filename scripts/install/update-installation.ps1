@@ -67,7 +67,9 @@ $OwnershipMarkerPath = Join-Path $InstallRoot '.minos-installation.json'
 # Directory-level entries are moved (not merged) whole -- any file present in an
 # old version's directory but absent from the new package's directory is
 # implicitly discarded along with the rest of that directory's rollback backup.
-$StagedDirectoryRelativePaths = @('app', 'lib', 'docker', 'integration', 'supply-chain')
+# tools\ is the payload of embedded indexers (TOOLS-MANIFEST.json and the archives it lists): staged, activated
+# and rolled back like every other directory, so an upgrade never leaves tools of two versions mixed.
+$StagedDirectoryRelativePaths = @('app', 'lib', 'docker', 'integration', 'supply-chain', 'tools')
 # install.ps1 is the portable/ZIP distribution's own bootstrapper; it has no
 # function once already Inno-installed, but the pre-transactional-engine
 # wildcard [Files] copy always shipped it into {app} too. Keep staging it so
@@ -260,6 +262,7 @@ function Assert-Package {
         'docker\scripts\configure-m30-docker-services.ps1',
         'supply-chain\minos.cdx.json',
         'supply-chain\THIRD-PARTY-NOTICES.txt',
+        'tools\TOOLS-MANIFEST.json',
         'minos.cmd',
         'minos-mcp.cmd',
         'RUNTIME-MODULES.txt',
