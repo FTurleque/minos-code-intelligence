@@ -72,4 +72,20 @@ class ProviderProcessEnvironmentTest {
         assertFalse(environment.containsKey("MINOS_TEAM_TOKEN"));
         assertFalse(environment.containsKey("GITHUB_TOKEN"));
     }
+
+    @Test
+    void aTrustedLauncherKeepsThePowerShellModuleAnalysisCachePathAndNoSecretNextToIt() {
+        // Measured on a CI runner: without this path PowerShell rebuilds its module cache on every start
+        // (about 23 s of CPU before the launcher compiles anything); with it the start takes a third of a second.
+        ProcessBuilder builder = new ProcessBuilder();
+        builder.environment().clear();
+        builder.environment().put("PSModuleAnalysisCachePath", "C:\\cache\\ModuleAnalysisCache");
+        builder.environment().put("PATH", "/usr/bin");
+        builder.environment().put("AWS_SECRET_ACCESS_KEY", "secret");
+
+        ProviderProcessEnvironment.applyForTrustedLauncher(builder, Map.of());
+
+        assertEquals("C:\\cache\\ModuleAnalysisCache", builder.environment().get("PSModuleAnalysisCachePath"));
+        assertFalse(builder.environment().containsKey("AWS_SECRET_ACCESS_KEY"));
+    }
 }

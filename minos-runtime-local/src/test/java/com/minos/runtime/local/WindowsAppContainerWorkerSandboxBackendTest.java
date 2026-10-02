@@ -242,12 +242,9 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         Path providerScript = project.resolve("provider-child.ps1");
         Files.writeString(providerScript, """
                 param([string] $Artifact)
-                [Console]::Error.WriteLine('DIAGT0 ' + [DateTime]::UtcNow.ToString('o'))
-                [Console]::Error.WriteLine('DIAGENV ' + (($env:Path -split ';').Count) + ' ' + ((Get-ChildItem Env: | ForEach-Object { $_.Name }) -join ','))
                 if ($env:MINOS_TEST_PROVIDER_EXPLICIT -ne 'allowed') { exit 51 }
                 if (-not [string]::IsNullOrEmpty($env:MAVEN_ARGS)) { exit 52 }
                 [System.IO.File]::WriteAllText($Artifact, 'process-sandbox-artifact')
-                [Console]::Error.WriteLine('DIAGT1 ' + [DateTime]::UtcNow.ToString('o'))
                 exit 0
                 """, StandardCharsets.US_ASCII);
         IndexingExecutionRequest request = executionRequest(project);
@@ -273,38 +270,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                             Duration.ofSeconds(20));
                 });
 
-        IndexingArtifact artifact;
-        try {
-            artifact = backend.execute(executor, request, WorkerNetworkPolicy.ALLOW);
-        } catch (RuntimeException diagnostic) { // TEMPORARY DIAGNOSTIC, removed once the CI-only failure is understood
-            try (java.util.stream.Stream<Path> dirs = Files.walk(home, 3)) {
-                for (Path dir : (Iterable<Path>) dirs.filter(Files::isDirectory)::iterator) {
-                    Process acl = new ProcessBuilder(Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString(),
-                            dir.toString()).redirectErrorStream(true).start();
-                    System.err.println("DIAGACL " + new String(acl.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
-                    acl.waitFor();
-                }
-                for (Path probe : new Path[]{project, providerScript}) {
-                    Process acl = new ProcessBuilder(Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString(),
-                            probe.toString()).redirectErrorStream(true).start();
-                    System.err.println("DIAGACL " + new String(acl.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
-                    acl.waitFor();
-                }
-            } catch (Exception ignored) {
-                System.err.println("DIAGACL failed " + ignored);
-            }
-            try (java.util.stream.Stream<Path> walk = Files.walk(home)) {
-                for (Path file : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
-                    String name = file.getFileName().toString();
-                    if (name.startsWith("provider.std") || name.endsWith(".plan") || name.endsWith(".txt")) {
-                        byte[] bytes = Files.readAllBytes(file);
-                        System.err.println("DIAG " + name + " [" + bytes.length + " bytes]: "
-                                + new String(bytes, 0, Math.min(bytes.length, 1500), StandardCharsets.UTF_8));
-                    }
-                }
-            }
-            throw diagnostic;
-        }
+        IndexingArtifact artifact = backend.execute(executor, request, WorkerNetworkPolicy.ALLOW);
 
         assertEquals("fixture-provider", artifact.indexerId());
         assertTrue(Files.isRegularFile(artifact.finalArtifact()));
@@ -422,8 +388,13 @@ class WindowsAppContainerWorkerSandboxBackendTest {
 
         Path artifact = Files.createFile(writeRoot.resolve("artifact.scip"));
         String artifactAcl = icaclsOutput(artifact);
-        assertTrue(artifactAcl.contains(currentUser) && artifactAcl.contains("(I)"),
-                () -> "a file created inside the write root must inherit the current user's access, got:\n"
+        // The access a file inherits is the one of the principal MINOS acts as: the user, or, under an elevated
+        // token, the group that owns what the process creates (Administrators on a CI runner).
+        String ownerName = Files.getOwner(writeRoot).getName();
+        String ownerAccount = ownerName.substring(ownerName.lastIndexOf('\\') + 1);
+        assertTrue((artifactAcl.contains(currentUser) || artifactAcl.contains(ownerAccount))
+                        && artifactAcl.contains("(I)"),
+                () -> "a file created inside the write root must inherit the access of the principal MINOS acts as, got:\n"
                         + artifactAcl);
     }
 

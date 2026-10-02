@@ -51,9 +51,6 @@ class WindowsJobObjectContainmentTest {
         Files.writeString(providerScript, """
                 param([string] $Artifact, [string] $Descendants, [string] $PowerShell)
                 $ErrorActionPreference = 'Continue'
-                [Console]::Error.WriteLine('DIAGT0 ' + [DateTime]::UtcNow.ToString('o'))
-                [Console]::Error.WriteLine('DIAGENV2 ' + [string]::Join(',', [System.Environment]::GetEnvironmentVariables().Keys))
-                [Console]::Error.WriteLine('DIAGPSM ' + [System.Environment]::GetEnvironmentVariable('PSModulePath') + ' | TEMP=' + [System.Environment]::GetEnvironmentVariable('TEMP') + ' | LOCALAPPDATA=' + [System.Environment]::GetEnvironmentVariable('LOCALAPPDATA'))
                 $journal = "begin`r`n"
                 [System.IO.File]::WriteAllText($Descendants, $journal)
                 foreach ($index in 1, 2) {
@@ -99,38 +96,14 @@ class WindowsJobObjectContainmentTest {
                             Duration.ofSeconds(60));
                 });
 
-        // TEMPORARY DIAGNOSTIC: which processes run under the JVM while the provider starts
-        java.util.concurrent.atomic.AtomicBoolean sampling = new java.util.concurrent.atomic.AtomicBoolean(true);
-        java.util.concurrent.ConcurrentLinkedQueue<String> seen = new java.util.concurrent.ConcurrentLinkedQueue<>();
-        Thread sampler = new Thread(() -> {
-            java.util.Set<Long> known = new java.util.HashSet<>();
-            while (sampling.get()) {
-                ProcessHandle.current().descendants().forEach(handle -> {
-                    if (known.add(handle.pid())) {
-                        String command = handle.info().commandLine().orElse(handle.info().command().orElse("?"));
-                        seen.add(java.time.Instant.now() + " pid=" + handle.pid() + " " + command.substring(0, Math.min(150, command.length())));
-                    }
-                });
-                if (System.currentTimeMillis() % 2000 < 120) {
-                    ProcessHandle.current().descendants().forEach(handle -> seen.add(java.time.Instant.now() + " CPU pid=" + handle.pid()
-                            + " cpuMs=" + handle.info().totalCpuDuration().map(java.time.Duration::toMillis).orElse(-1L)));
-                }
-                try { Thread.sleep(100); } catch (InterruptedException stop) { return; }
-            }
-        });
-        sampler.setDaemon(true);
-        sampler.start();
         IndexingArtifact artifact;
         try {
             artifact = backend.execute(executor, executionRequest(project), WorkerNetworkPolicy.ALLOW);
-            sampling.set(false);
-            seen.forEach(line -> System.err.println("DIAGPROC " + line));
         } catch (Exception failure) {
             throw new AssertionError(
                     failure.getMessage() + "\nprovider diagnostics:\n" + providerDiagnostics(home), failure);
         }
 
-        System.err.println("DIAGJOB " + providerDiagnostics(home)); // TEMPORARY DIAGNOSTIC
         assertEquals("contained-windows-artifact",
                 Files.readString(artifact.finalArtifact(), StandardCharsets.UTF_8));
         assertTrue(Files.isRegularFile(descendants), "the provider must report the descendants it spawned");
@@ -216,7 +189,7 @@ class WindowsJobObjectContainmentTest {
         try (var entries = Files.walk(runs, 6)) {
             for (Path candidate : entries.filter(Files::isRegularFile).toList()) {
                 String name = String.valueOf(candidate.getFileName());
-                if (!name.equals("provider.stderr.log") && !name.equals("provider.stdout.log") && !name.equals("process.txt")) continue;
+                if (!name.equals("provider.stderr.log") && !name.equals("provider.stdout.log")) continue;
                 diagnostics.append(name).append(": ")
                         .append(Files.readString(candidate, StandardCharsets.UTF_8)).append('\n');
             }

@@ -85,6 +85,12 @@ final class ProviderProcessEnvironment {
      * configuration that differs from the one it was measured on (a roaming or domain profile): kept as a
      * margin, each of them a path or a name, none of them a secret. The provider itself never sees this
      * environment: it receives the one the sandbox plan carries.
+     *
+     * <p>{@code PSModuleAnalysisCachePath} is there because it was measured, on a machine whose image
+     * ships many PowerShell modules (a CI runner): without it the launcher's PowerShell rebuilds its module
+     * analysis cache on every start and spends about 23 seconds of CPU before it compiles anything, with it
+     * (or with the whole environment) the same start takes a third of a second. It names a file, nothing
+     * more.</p>
      */
     private static final Set<String> TRUSTED_LAUNCHER_KEYS = Set.of(
             "PATH",
@@ -101,7 +107,8 @@ final class ProviderProcessEnvironment {
             "ProgramData",
             "USERNAME",
             "USERDOMAIN",
-            "COMPUTERNAME"
+            "COMPUTERNAME",
+            "PSModuleAnalysisCachePath"
     );
 
     private ProviderProcessEnvironment() {
