@@ -277,8 +277,18 @@ def embedded_entries(catalog: dict, platform: str) -> dict[str, dict]:
     return entries
 
 
-def check_distribution(distribution: Path, catalog: dict, failures: list[str]) -> None:
+def check_distribution(distribution: Path, catalog: dict, failures: list[str], variant: str = "full") -> None:
     tools = distribution / "tools"
+    if variant == "lite":
+        if tools.exists():
+            failures.append("tools/: the lite distribution must not ship a tools directory")
+        sbom = distribution / "supply-chain" / "minos.cdx.json"
+        if sbom.is_file():
+            names = {component.get("name") for component in json.loads(sbom.read_text(encoding="utf-8")).get("components", [])}
+            for source in embedded_entries(catalog, "windows-x64").values():
+                if source["id"] in names and source["kind"] == "artifact":
+                    failures.append(f"supply-chain/minos.cdx.json: the lite SBOM names the embedded tool {source['id']}")
+        return
     manifest_path = tools / MANIFEST_NAME
     if not manifest_path.is_file():
         failures.append(f"tools/{MANIFEST_NAME}: missing from the distribution")
@@ -352,7 +362,7 @@ def check_distribution_evidence(distribution: Path, expected: dict[str, dict], f
         failures.append("supply-chain/THIRD-PARTY-NOTICES.txt: missing from the distribution")
 
 
-def check(root: Path, distribution: Path | None = None) -> tuple[list[str], int]:
+def check(root: Path, distribution: Path | None = None, variant: str = "full") -> tuple[list[str], int]:
     failures: list[str] = []
     catalog = load_catalog(root, failures)
     if catalog is None:
@@ -363,7 +373,7 @@ def check(root: Path, distribution: Path | None = None) -> tuple[list[str], int]
     check_java_sources(root, failures)
     check_consumers(root, failures)
     if distribution is not None:
-        check_distribution(distribution, catalog, failures)
+        check_distribution(distribution, catalog, failures, variant)
     return failures, len(catalog.get("artifacts", [])) + len(catalog.get("assembled", []))
 
 
@@ -372,8 +382,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--distribution", type=Path, default=None,
                         help="a built distribution directory whose tools/ payload must match the catalogue")
+    parser.add_argument("--variant", choices=("full", "lite"), default="full",
+                        help="full ships tools/ and must match the catalogue; lite must ship no tools/")
     args = parser.parse_args(argv)
-    failures, components = check(args.root.resolve(), args.distribution.resolve() if args.distribution else None)
+    failures, components = check(args.root.resolve(), args.distribution.resolve() if args.distribution else None, args.variant)
     if failures:
         for failure in failures:
             print(f"TOOLS MANIFEST FAILURE: {failure}", file=sys.stderr)

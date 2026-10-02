@@ -92,12 +92,12 @@ class CheckToolsManifestTest(unittest.TestCase):
     def minimal_provider_catalog() -> str:
         return PROVIDER_CATALOG
 
-    def run_gate(self, distribution=None, **overrides) -> list[str]:
+    def run_gate(self, distribution=None, variant: str = "full", **overrides) -> list[str]:
         with tempfile.TemporaryDirectory() as directory:
             root = self.tree(Path(directory), **overrides)
             if callable(distribution):
                 distribution = distribution(root)
-            failures, _ = gate.check(root, distribution)
+            failures, _ = gate.check(root, distribution, variant)
             return failures
 
     def test_a_consistent_tree_passes(self):
@@ -204,6 +204,33 @@ class CheckToolsManifestTest(unittest.TestCase):
     def test_an_embedded_component_without_a_notice_is_refused(self):
         failures = self.run_gate(distribution=lambda root: self.write_distribution(root, notices="maven:3.9.16\n"))
         self.assertTrue(any("has no notice" in failure for failure in failures), failures)
+
+
+    @staticmethod
+    def write_lite(root: Path, with_tools: bool = False, sbom_names=()) -> Path:
+        distribution = root / "dist-lite"
+        (distribution / "supply-chain").mkdir(parents=True)
+        (distribution / "supply-chain" / "minos.cdx.json").write_text(
+            json.dumps({"components": [{"name": name, "version": "1"} for name in sbom_names]}), encoding="utf-8")
+        if with_tools:
+            (distribution / "tools").mkdir()
+            (distribution / "tools" / "TOOLS-MANIFEST.json").write_text("{}", encoding="utf-8")
+        return distribution
+
+    def test_a_lite_distribution_without_tools_passes(self):
+        self.assertEqual([], self.run_gate(distribution=lambda root: self.write_lite(root), variant="lite"))
+
+    def test_a_lite_distribution_that_ships_tools_is_refused(self):
+        failures = self.run_gate(distribution=lambda root: self.write_lite(root, with_tools=True), variant="lite")
+        self.assertTrue(any("lite distribution must not ship" in failure for failure in failures), failures)
+
+    def test_a_lite_sbom_that_names_an_embedded_tool_is_refused(self):
+        failures = self.run_gate(distribution=lambda root: self.write_lite(root, sbom_names=("maven",)), variant="lite")
+        self.assertTrue(any("lite SBOM names" in failure for failure in failures), failures)
+
+    def test_a_full_distribution_without_tools_is_refused(self):
+        failures = self.run_gate(distribution=lambda root: self.write_lite(root), variant="full")
+        self.assertTrue(any("missing from the distribution" in failure for failure in failures), failures)
 
 
 class ShippedTreeTest(unittest.TestCase):
