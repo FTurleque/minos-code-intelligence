@@ -243,7 +243,7 @@ Chaque service des deux fichiers compose a un plafond CPU, mémoire et PID, déf
 |---|---|---|---|---|
 | requêtes | `minos-mcp` | `MINOS_MCP_CPUS` = `4` | `MINOS_MCP_MEM_LIMIT` = `3g` | `MINOS_MCP_PIDS_LIMIT` = `1024` |
 | administration | `minos-admin` | `MINOS_ADMIN_CPUS` = `4` | `MINOS_ADMIN_MEM_LIMIT` = `2g` | `MINOS_ADMIN_PIDS_LIMIT` = `256` |
-| tâches ponctuelles | `minos-bootstrap`, `minos-data-bootstrap`, `minos-tools-bootstrap`, `minos-provider-probe` | `MINOS_JOB_CPUS` = `2` | `MINOS_JOB_MEM_LIMIT` = `512m` | `MINOS_JOB_PIDS_LIMIT` = `128` |
+| tâches ponctuelles | `minos-bootstrap`, `minos-data-bootstrap`, `minos-tools-bootstrap`, `minos-provider-probe`, `minos-ollama-bootstrap` | `MINOS_JOB_CPUS` = `2` | `MINOS_JOB_MEM_LIMIT` = `512m` | `MINOS_JOB_PIDS_LIMIT` = `128` |
 | PostgreSQL géré | `minos-postgres` | `MINOS_POSTGRES_CPUS` = `2` | `MINOS_POSTGRES_MEM_LIMIT` = `1g` | `MINOS_POSTGRES_PIDS_LIMIT` = `128` |
 | Ollama géré | `minos-ollama` | `MINOS_OLLAMA_CPUS` = `4` | `MINOS_OLLAMA_MEM_LIMIT` = `2g` | `MINOS_OLLAMA_PIDS_LIMIT` = `256` |
 
@@ -262,6 +262,14 @@ Mesurées le 2026-10-02 (cgroup v2 : `memory.peak`, `pids.peak`) ; la mémoire d
 | Ollama | `ollama pull nomic-embed-text`, chargement et requête d'embedding sous plafond ; production après 37 h : 416 Mio, 26 PID | 593 Mio, 39 PID | non cherché | 2 Gio, 256 PID | ×3,4 mémoire, ×6,5 PID |
 
 Limites des mesures : le plan `minos-admin` ne lance aucun provider (voir [disposition des sandboxes](../developer/remote-worker-sandbox-disposition.md)), il n'y a donc pas d'indexation réelle à mesurer dans Docker ; la planification d'indexation (`index --dry-run`) en tient lieu. Une indexation sémantique par `minos-admin` n'a pas été mesurée (aucun instantané d'index n'est construisible dans le conteneur) : la marge de 2 Gio sur un pic de 344 Mio est la réserve prévue pour elle. Le plafond CPU ne se mesure pas en pic : il borne l'usage de l'hôte (la JVM voit 4 CPU et crée moins de threads).
+
+## Ollama sans privilèges
+
+`minos-ollama` s'exécute sous l'uid `10002`, sans capacité, avec `no-new-privileges` et un système de fichiers racine en lecture seule ; son `HOME` est `/home/ollama` et le volume de modèles est monté sur `/home/ollama/.ollama` (même disposition que l'ancien `/root/.ollama` : les modèles déjà téléchargés sont retrouvés tels quels).
+
+Les volumes de modèles créés par les versions précédentes appartiennent à `root`. Le service ponctuel `minos-ollama-bootstrap` (image MINOS, `user: 0:0`, capacités `CHOWN` et `FOWNER` seulement, aucun réseau) remet le volume à l'uid `10002` avant le démarrage d'Ollama ; il ne touche rien quand la propriété est déjà correcte. Aucune action n'est requise sur un volume existant : le prochain `up` le migre. Retour arrière vers une version antérieure (Ollama en `root`, sans capacité `DAC_OVERRIDE`) : remettre d'abord la propriété du volume à `root` (`docker run --rm --user 0:0 -v <volume>:/v --entrypoint chown <image-minos> -R 0:0 /v`), sans quoi la clé privée de l'instance (mode `0600`, propriétaire `10002`) n'est plus lisible.
+
+Prouvé en local avec `ollama/ollama:0.32.0` : volume neuf (téléchargement de `nomic-embed-text` par `docker exec ollama pull`, chargement, requête d'embedding de 768 valeurs) ; volume préexistant créé en `root` (migration, `ollama list`, embedding sans nouveau téléchargement) ; second démarrage sans rien changer. Sans l'amorçage, le même conteneur échoue sur un volume appartenant à `root` : `Error: remove /home/ollama/.ollama/models/manifests: permission denied`.
 
 ## Qualification et historique M29
 

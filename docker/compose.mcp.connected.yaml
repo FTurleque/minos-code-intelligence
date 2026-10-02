@@ -312,17 +312,63 @@ services:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
       io.minos.runtime-plane: storage
 
+  # Ollama runs as the unprivileged uid 10002 (audit S11). Model volumes created by earlier
+  # versions are owned by root (they were mounted on /root/.ollama): this one-shot service, which
+  # reuses the MINOS image rather than a second copy of the Ollama image, hands the volume to
+  # 10002 before Ollama starts. It touches nothing when the ownership already matches, so a fresh
+  # volume (empty) and an already migrated one cost one `find`. The mount keeps the layout Ollama
+  # expects under HOME (`~/.ollama`), so models already pulled are found as they are.
+  minos-ollama-bootstrap:
+    <<: *limits-job
+    profiles: [ollama]
+    image: "${MINOS_IMAGE}"
+    entrypoint: [/bin/sh, -c]
+    command:
+      - |
+        set -eu
+        target=/home/ollama/.ollama
+        if [ -n "$$(find "$$target" -xdev \( ! -user 10002 -o ! -group 10002 \) -print -quit)" ]; then
+          chown -R 10002:10002 "$$target"
+          echo "MINOS Ollama model volume ownership handed to uid 10002."
+        else
+          echo "MINOS Ollama model volume ownership already matches uid 10002."
+        fi
+    user: "0:0"
+    init: true
+    network_mode: none
+    volumes:
+      - type: volume
+        source: minos-ollama-models
+        target: /home/ollama/.ollama
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.runtime-plane: semantic-bootstrap
+
   minos-ollama:
     <<: *limits-ollama
     profiles: [ollama]
     # The ONLY place that names this image (see minos-postgres). Gate: scripts/quality/check-image-pins.py.
     image: "${MINOS_OLLAMA_IMAGE:-ollama/ollama:0.32.0@sha256:57f573b47f1f71ebb445789f279fe3e596a8beab182f7cf486db9205bad87c5a}"
+    # Unprivileged: no root inside the container, no capability, no privilege gain. HOME is the
+    # only writable place Ollama needs besides /tmp, and it is the model volume itself.
+    user: "10002:10002"
+    depends_on:
+      minos-ollama-bootstrap:
+        condition: service_completed_successfully
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
+      HOME: /home/ollama
     volumes:
       - type: volume
         source: minos-ollama-models
-        target: /root/.ollama
+        target: /home/ollama/.ollama
     networks: [minos-runtime]
     healthcheck:
       test: [CMD, ollama, list]
