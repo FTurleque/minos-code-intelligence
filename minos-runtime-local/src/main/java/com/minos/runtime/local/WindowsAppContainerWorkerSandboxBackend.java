@@ -508,13 +508,32 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             Path real = candidate.toRealPath();
             if (isWindowsSystemRoot(real)) return;
             if (real.startsWith(tools)) {
-                addReadRoot(roots, managedRuntimeRoot(real, tools));
+                Path root = managedRuntimeRoot(real, tools);
+                addReadRoot(roots, root);
+                addProtectedParentReadRoot(roots, real, root);
             } else if (Files.isRegularFile(real)) {
                 addReadFile(files, real);
             }
         } catch (IOException | InvalidPathException ignored) {
             // Non-path provider arguments intentionally stay opaque.
         }
+    }
+
+    /**
+     * A directory MINOS made through private storage does not inherit from its parent, so the
+     * inheritable entry granted on the provider root never reaches a file kept in such a directory
+     * (the scip-java runner sits in {@code runtime}, next to the file it reads). The directory holding
+     * a managed file argument therefore gets its own grant when it is not the root itself. The path is
+     * a real path under the provider root, so its parent is under that root too: the grant never
+     * widens to {@code tools} or to the MINOS home, and a link leaving the root never reaches here.
+     */
+    private static void addProtectedParentReadRoot(Set<Path> roots, Path realFile, Path providerRoot) {
+        if (!Files.isRegularFile(realFile)) return;
+        Path parent = realFile.getParent();
+        if (parent == null) return;
+        Path normalizedParent = parent.toAbsolutePath().normalize();
+        if (normalizedParent.equals(providerRoot) || !normalizedParent.startsWith(providerRoot)) return;
+        addReadRoot(roots, normalizedParent);
     }
 
     private static Path managedRuntimeRoot(Path value, Path tools) {
