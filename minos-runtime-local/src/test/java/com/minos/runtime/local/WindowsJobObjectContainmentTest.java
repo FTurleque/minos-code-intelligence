@@ -99,9 +99,28 @@ class WindowsJobObjectContainmentTest {
                             Duration.ofSeconds(60));
                 });
 
+        // TEMPORARY DIAGNOSTIC: which processes run under the JVM while the provider starts
+        java.util.concurrent.atomic.AtomicBoolean sampling = new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.concurrent.ConcurrentLinkedQueue<String> seen = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        Thread sampler = new Thread(() -> {
+            java.util.Set<Long> known = new java.util.HashSet<>();
+            while (sampling.get()) {
+                ProcessHandle.current().descendants().forEach(handle -> {
+                    if (known.add(handle.pid())) {
+                        String command = handle.info().commandLine().orElse(handle.info().command().orElse("?"));
+                        seen.add(java.time.Instant.now() + " pid=" + handle.pid() + " " + command.substring(0, Math.min(150, command.length())));
+                    }
+                });
+                try { Thread.sleep(100); } catch (InterruptedException stop) { return; }
+            }
+        });
+        sampler.setDaemon(true);
+        sampler.start();
         IndexingArtifact artifact;
         try {
             artifact = backend.execute(executor, executionRequest(project), WorkerNetworkPolicy.ALLOW);
+            sampling.set(false);
+            seen.forEach(line -> System.err.println("DIAGPROC " + line));
         } catch (Exception failure) {
             throw new AssertionError(
                     failure.getMessage() + "\nprovider diagnostics:\n" + providerDiagnostics(home), failure);
