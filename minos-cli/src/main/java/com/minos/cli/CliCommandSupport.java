@@ -168,8 +168,14 @@ final class CliCommandSupport {
                 PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName()));
     }
 
+    /**
+     * The one rule for a diagnostic written on a public output: no path or secret ({@link PublicErrorMessages}) and
+     * no control sequence that a terminal would execute ({@link DegradedEntry#printable}, as {@link #failureMessage}).
+     */
     static String publicDiagnostic(String diagnostic) {
-        return diagnostic == null ? null : PublicErrorMessages.sanitize(diagnostic, REDACTED_DIAGNOSTIC);
+        return diagnostic == null
+                ? null
+                : DegradedEntry.printable(PublicErrorMessages.sanitize(diagnostic, REDACTED_DIAGNOSTIC));
     }
 
     static List<String> publicDiagnostics(List<String> diagnostics) {
