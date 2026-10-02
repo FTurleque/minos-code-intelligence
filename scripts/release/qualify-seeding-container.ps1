@@ -46,8 +46,10 @@ for p in json.load(open('/tmp/verify.json'))['providers']:
         print(p['id'], p['state']); [print('   ', d) for d in p['diagnostics']]
 " 2>/dev/null || cat /tmp/verify.json
 '@
+    $ScriptFile = Join-Path $Work ('qualify-' + [Guid]::NewGuid().ToString('N').Substring(0, 6) + '.sh')
+    [System.IO.File]::WriteAllText($ScriptFile, ($Script -replace "`r", ''), (New-Object System.Text.UTF8Encoding($false)))
     $Output = & docker run --rm --network none --entrypoint sh `
-        -v "${Jar}:/minos.jar:ro" -v "${ToolsDirectory}:/payload:ro" $Image -c $Script 2>&1 | Out-String
+        -v "${Jar}:/minos.jar:ro" -v "${ToolsDirectory}:/payload:ro" -v "${ScriptFile}:/qualify.sh:ro" $Image /qualify.sh 2>&1 | Out-String
     Write-Host "== $Name" -ForegroundColor Cyan
     Write-Host $Output
     return $Output
