@@ -21,8 +21,10 @@ param(
     [string] $PostgresDatabase = 'minos',
     [string] $PostgresSchema = 'minos',
 
-    [string] $PostgresImage = 'pgvector/pgvector:0.8.2-pg17',
-    [string] $OllamaImage = 'ollama/ollama:0.32.0',
+    # Empty (the default) = the image pinned by digest in the connected compose file, the single
+    # place that names it. Pass a reference only to override it deliberately.
+    [string] $PostgresImage = '',
+    [string] $OllamaImage = '',
 
     [switch] $ProvisionOllamaModel,
     [switch] $Start
@@ -334,7 +336,10 @@ if ($StorageBackend -eq 'postgresql') {
     $Environment['MINOS_POSTGRES_USER'] = $PostgresUser
     $Environment['MINOS_POSTGRES_DATABASE'] = $PostgresDatabase
     $Environment['MINOS_POSTGRES_PASSWORD_FILE'] = $SecretFile.Replace('\', '/')
-    $Environment['MINOS_POSTGRES_IMAGE'] = $PostgresImage
+    # No override: drop any value left by an older configure run (a bare tag) so that the digest
+    # pinned in the compose file applies again.
+    if ([string]::IsNullOrWhiteSpace($PostgresImage)) { $Environment.Remove('MINOS_POSTGRES_IMAGE') }
+    else { $Environment['MINOS_POSTGRES_IMAGE'] = $PostgresImage }
 }
 
 if ($SemanticProvider -eq 'ollama') {
@@ -347,7 +352,8 @@ if ($SemanticProvider -eq 'ollama') {
     $Environment['MINOS_SEMANTIC_MODEL'] = $SemanticModel
     $Environment['MINOS_SEMANTIC_DIMENSIONS'] = [string]$SemanticDimensions
     $Environment['MINOS_SEMANTIC_ENDPOINT'] = 'http://minos-ollama:11434/api/embed'
-    $Environment['MINOS_OLLAMA_IMAGE'] = $OllamaImage
+    if ([string]::IsNullOrWhiteSpace($OllamaImage)) { $Environment.Remove('MINOS_OLLAMA_IMAGE') }
+    else { $Environment['MINOS_OLLAMA_IMAGE'] = $OllamaImage }
 } else {
     $Environment['MINOS_SEMANTIC_PROVIDER'] = $SemanticProvider
 }

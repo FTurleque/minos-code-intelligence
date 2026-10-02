@@ -63,6 +63,12 @@ jobs:
       - name: Immutable workflow supply-chain gate
         run: python scripts/quality/check-workflow-pins.py
 
+      - name: Container image pin gate (image:tag@sha256, one source per managed-service image)
+        run: python scripts/quality/check-image-pins.py
+
+      - name: Container image pin gate self-test
+        run: python scripts/quality/test_check_image_pins.py -v
+
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
 

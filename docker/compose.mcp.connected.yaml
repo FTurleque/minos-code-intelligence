@@ -240,7 +240,10 @@ services:
 
   minos-postgres:
     profiles: [postgresql]
-    image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17}"
+    # The ONLY place that names this image (docker/scripts/configure-m30-docker-services.ps1 and the
+    # PostgreSQL integration tests read it from here). <tag>@<index digest>: the digest is the pin,
+    # the tag is what a human or Dependabot reads. Gate: scripts/quality/check-image-pins.py.
+    image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17@sha256:feb68f4f15446397d8cac7f4fe48fe4586de83160d1fc48b46283312d1a33966}"
     environment:
       POSTGRES_DB: "${MINOS_POSTGRES_DATABASE:-minos}"
       POSTGRES_USER: "${MINOS_POSTGRES_USER:-minos}"
@@ -273,7 +276,8 @@ services:
 
   minos-ollama:
     profiles: [ollama]
-    image: "${MINOS_OLLAMA_IMAGE:-ollama/ollama:0.32.0}"
+    # The ONLY place that names this image (see minos-postgres). Gate: scripts/quality/check-image-pins.py.
+    image: "${MINOS_OLLAMA_IMAGE:-ollama/ollama:0.32.0@sha256:57f573b47f1f71ebb445789f279fe3e596a8beab182f7cf486db9205bad87c5a}"
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
     volumes:

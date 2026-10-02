@@ -57,6 +57,12 @@ try {
     python scripts/architecture/test_check_private_io.py
     if ($LASTEXITCODE -ne 0) { throw 'private I/O gate self-test failed' }
 
+    python scripts/quality/check-image-pins.py
+    if ($LASTEXITCODE -ne 0) { throw 'container image pin gate failed' }
+
+    python scripts/quality/test_check_image_pins.py
+    if ($LASTEXITCODE -ne 0) { throw 'container image pin gate self-test failed' }
+
     if (-not $SkipCleanVerify) {
         .\mvnw.cmd clean verify
         if ($LASTEXITCODE -ne 0) { throw 'Maven clean verify failed' }
