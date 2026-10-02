@@ -122,7 +122,8 @@ def artifact_component(entry: dict) -> dict:
         "name": entry["id"],
         "version": entry["version"],
         "purl": f"pkg:generic/{quote(entry['id'])}@{quote(entry['version'])}",
-        "description": f"Pinned artifact shipped in the MINOS distribution ({entry['url']})",
+        "description": f"Pinned artifact shipped in the MINOS distribution ({entry['url']})"
+        + (f". {entry['notice']}" if entry.get("notice") else ""),
         "licenses": [spdx_license(entry["license"])],
     }
 

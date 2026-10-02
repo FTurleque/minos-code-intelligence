@@ -89,6 +89,7 @@
       "sha256": "d6b375ea3f1c58312912af96260cca0c975bc873dc430820e2d67d50b294be3a",
       "sizeBytes": 30508363,
       "license": "Apache-2.0",
+      "notice": "The coursier/launchers repository publishes this native launcher without a license file of its own; it is built from the coursier project, which is licensed under Apache-2.0.",
       "embedded": true,
       "dockerArgs": {
         "version": "COURSIER_LAUNCHERS_COMMIT"
@@ -103,6 +104,7 @@
       "url": "https://raw.githubusercontent.com/coursier/launchers/15f36c167c30be237105f923151adaf177e7ee61/cs-x86_64-pc-linux.gz",
       "sha256": "62b141b186e4dfdef03af64c36bdcdfeaab2df30de14950ca220e6e43e72c26b",
       "license": "Apache-2.0",
+      "notice": "The coursier/launchers repository publishes this native launcher without a license file of its own; it is built from the coursier project, which is licensed under Apache-2.0.",
       "embedded": false,
       "dockerArgs": {
         "version": "COURSIER_LAUNCHERS_COMMIT",
