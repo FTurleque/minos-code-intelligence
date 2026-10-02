@@ -64,7 +64,17 @@ class CheckComposeLimitsTest(unittest.TestCase):
                 compose = GOOD.replace("MINOS_MCP_MEM_LIMIT:-3g", f"MINOS_MCP_MEM_LIMIT:-{bad}")
                 failures = [f for f in self.run_gate({"docker/compose.mcp.prod.yaml": compose}) if "refused" in f]
                 self.assertEqual(2, len(failures), failures)  # mem_limit and memswap_limit
-                self.assertIn("strictly positive", failures[0])
+                self.assertIn("real limit", failures[0])
+
+    def test_a_valid_byte_count_is_accepted_and_one_below_dockers_minimum_is_refused(self):
+        compose = GOOD.replace("MINOS_MCP_MEM_LIMIT:-3g", "MINOS_MCP_MEM_LIMIT:-536870912")
+        example = EXAMPLE.replace("MINOS_MCP_MEM_LIMIT=3g", "MINOS_MCP_MEM_LIMIT=536870912")
+        doc = DOC.replace("`MINOS_MCP_MEM_LIMIT` = `3g`", "`MINOS_MCP_MEM_LIMIT` = `536870912`")
+        self.assertEqual([], self.run_gate({"docker/compose.mcp.prod.yaml": compose}, doc, example))
+        tiny = GOOD.replace("MINOS_MCP_MEM_LIMIT:-3g", "MINOS_MCP_MEM_LIMIT:-4194304")
+        failures = [f for f in self.run_gate({"docker/compose.mcp.prod.yaml": tiny}) if "refused" in f]
+        self.assertEqual(2, len(failures), failures)
+        self.assertIn("6291456", failures[0])
 
     def test_pid_defaults_that_mean_unlimited_or_nothing_are_refused(self):
         for bad in ("0", "-1", "", "1k", "1.5"):
@@ -174,6 +184,28 @@ class CheckComposeLimitsTest(unittest.TestCase):
         self.assertEqual(2, len(failures), failures)
         commented = PR_CI.replace("- run:", "# - run:")
         self.assertEqual(2, len(self.run_gate({"docker/compose.mcp.prod.yaml": GOOD}, pr_ci=commented)))
+
+    def test_steps_that_live_in_another_job_do_not_count(self):
+        other_job = PR_CI.replace("  invariants:", "  elsewhere:")
+        failures = self.run_gate({"docker/compose.mcp.prod.yaml": GOOD}, pr_ci=other_job)
+        self.assertTrue(any("job `invariants` not found" in f for f in failures), failures)
+        two_jobs = PR_CI + "  invariants:\n    steps: []\n"
+        failures = self.run_gate({"docker/compose.mcp.prod.yaml": GOOD}, pr_ci=PR_CI.replace("jobs:\n  invariants:", "jobs:\n  elsewhere:") + "  invariants:\n    steps: []\n")
+        self.assertEqual(2, len([f for f in failures if "no step running" in f]), failures)
+
+    def test_a_condition_on_the_step_or_on_the_job_is_refused(self):
+        step_if = PR_CI.replace("run: python scripts/quality/check-compose-limits.py\n", "run: python scripts/quality/check-compose-limits.py\n        if: false\n")
+        failures = self.run_gate({"docker/compose.mcp.prod.yaml": GOOD}, pr_ci=step_if)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("has an `if:` condition", failures[0])
+        job_if = PR_CI.replace("  invariants:\n", "  invariants:\n    if: github.event_name == 'push'\n")
+        failures = self.run_gate({"docker/compose.mcp.prod.yaml": GOOD}, pr_ci=job_if)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("job `invariants` has an `if:` condition", failures[0])
+
+    def test_a_condition_on_a_neighbouring_step_or_job_is_not_confused_with_ours(self):
+        neighbour = PR_CI + "  verify:\n    if: false\n    steps:\n      - name: x\n        if: false\n        run: echo\n"
+        self.assertEqual([], self.run_gate({"docker/compose.mcp.prod.yaml": GOOD}, pr_ci=neighbour))
 
     def test_a_tree_without_compose_files_does_not_pass_silently(self):
         failures = self.run_gate({"README.md": "x\n"})

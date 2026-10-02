@@ -124,6 +124,28 @@ class CheckImagePinsTest(unittest.TestCase):
         self.assertEqual(2, len(self.run_gate(files, pr_ci=NO_STEPS_CI)))
         self.assertEqual(2, len(self.run_gate(files, pr_ci=PR_CI.replace("run:", "# run:"))))
 
+    def test_steps_that_live_in_another_job_do_not_count(self):
+        other_job = PR_CI.replace("  invariants:", "  elsewhere:")
+        failures = self.run_gate({"docker/Dockerfile.mcp": PINNED_DOCKERFILE}, pr_ci=other_job)
+        self.assertTrue(any("job `invariants` not found" in f for f in failures), failures)
+        two_jobs = PR_CI + "  invariants:\n    steps: []\n"
+        failures = self.run_gate({"docker/Dockerfile.mcp": PINNED_DOCKERFILE}, pr_ci=PR_CI.replace("jobs:\n  invariants:", "jobs:\n  elsewhere:") + "  invariants:\n    steps: []\n")
+        self.assertEqual(2, len([f for f in failures if "no step running" in f]), failures)
+
+    def test_a_condition_on_the_step_or_on_the_job_is_refused(self):
+        step_if = PR_CI.replace("run: python scripts/quality/check-image-pins.py\n", "run: python scripts/quality/check-image-pins.py\n        if: false\n")
+        failures = self.run_gate({"docker/Dockerfile.mcp": PINNED_DOCKERFILE}, pr_ci=step_if)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("has an `if:` condition", failures[0])
+        job_if = PR_CI.replace("  invariants:\n", "  invariants:\n    if: github.event_name == 'push'\n")
+        failures = self.run_gate({"docker/Dockerfile.mcp": PINNED_DOCKERFILE}, pr_ci=job_if)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("job `invariants` has an `if:` condition", failures[0])
+
+    def test_a_condition_on_a_neighbouring_step_or_job_is_not_confused_with_ours(self):
+        neighbour = PR_CI + "  verify:\n    if: false\n    steps:\n      - name: x\n        if: false\n        run: echo\n"
+        self.assertEqual([], self.run_gate({"docker/Dockerfile.mcp": PINNED_DOCKERFILE}, pr_ci=neighbour))
+
     def test_a_tree_without_docker_files_does_not_pass_silently(self):
         failures = self.run_gate({"README.md": "x\n"})
         self.assertEqual(1, len(failures), failures)

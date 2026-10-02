@@ -6,9 +6,9 @@ Contract of docker/compose.mcp.prod.yaml and docker/compose.mcp.connected.yaml (
 * each file declares its ceilings once, as top-level ``x-limits-<role>: &limits-<role>`` blocks of
   ``mem_limit``, ``memswap_limit``, ``pids_limit`` and optionally ``cpus``; every value is
   ``"${MINOS_<ROLE>_<KIND>:-<default>}"`` (overridable from the runtime .env, default documented);
-* memory and PID defaults are strictly positive: ``mem_limit`` and ``memswap_limit`` a non-zero size
-  (``[1-9][0-9]*[kmg]``), ``pids_limit`` a positive integer; empty, ``0`` and ``-1`` all mean
-  "unlimited" to Docker and are refused;
+* memory and PID defaults are real ceilings: ``mem_limit`` and ``memswap_limit`` a non-zero size
+  (``<n>k``, ``<n>m``, ``<n>g``) or a byte count of at least 6 MiB (Docker's minimum memory limit),
+  ``pids_limit`` a positive integer; empty, ``0`` and ``-1`` mean "unlimited" to Docker and are refused;
 * CPU is the opposite rule, on purpose. The Docker daemon refuses to create a container whose ``cpus``
   exceeds the host's CPU count ("range of CPUs is from 0.01 to N"), so a hard default of 4 breaks every
   2-CPU Docker Desktop/WSL2 host, and 1 CPU is the only value that starts everywhere. A default CPU
@@ -44,9 +44,28 @@ DOC = "docs/user/docker-runtime.md"
 ENV_EXAMPLE = "docker/.env.example"
 KEYS = ("cpus", "mem_limit", "memswap_limit", "pids_limit")
 REQUIRED_KEYS = ("mem_limit", "memswap_limit", "pids_limit")
+MIN_MEMORY_BYTES = 6 * 1024 * 1024  # the smallest memory limit the Docker daemon accepts
+SIZE_WITH_UNIT = re.compile(r"^[1-9][0-9]*[kKmMgG]$")
+BARE_BYTES = re.compile(r"^[1-9][0-9]*$")
+
+
+def acceptable_memory(default: str) -> bool:
+    if SIZE_WITH_UNIT.match(default):
+        return True
+    return bool(BARE_BYTES.match(default)) and int(default) >= MIN_MEMORY_BYTES
+
+
+class _MemoryRule:
+    """Quacks like a compiled pattern so the table below stays uniform."""
+
+    @staticmethod
+    def match(default: str):
+        return acceptable_memory(default)
+
+
 POSITIVE_DEFAULT = {
-    "mem_limit": re.compile(r"^[1-9][0-9]*[kKmMgG]$"),
-    "memswap_limit": re.compile(r"^[1-9][0-9]*[kKmMgG]$"),
+    "mem_limit": _MemoryRule,
+    "memswap_limit": _MemoryRule,
     "pids_limit": re.compile(r"^[1-9][0-9]*$"),
     # 0 = no CPU ceiling (Docker's meaning); otherwise a positive number no larger than 1.
     "cpus": re.compile(r"^(0|1(\.0+)?|0?\.[0-9]*[1-9][0-9]*)$"),
@@ -101,8 +120,9 @@ def parse(path: Path, root: Path):
                     f"Compose. Do not raise it: operators set MINOS_<ROLE>_CPUS in the runtime .env.")
             elif key in POSITIVE_DEFAULT and not POSITIVE_DEFAULT[key].match(default):
                 failures.append(
-                    f"{relative}: x-limits-{role}: {key} default {default!r} refused: a memory or PID ceiling must be "
-                    f"strictly positive (empty, 0 and -1 mean unlimited to Docker); sizes are <n>k, <n>m or <n>g")
+                    f"{relative}: x-limits-{role}: {key} default {default!r} refused: a memory or PID ceiling must be a "
+                    f"real limit (empty, 0 and -1 mean unlimited to Docker). Memory: <n>k, <n>m, <n>g, or a byte count "
+                    f"of at least 6291456 (Docker's 6 MiB minimum); PID: a positive integer")
             values[key] = (value.group("var"), default)
         if not set(REQUIRED_KEYS) <= set(values) or not set(values) <= set(KEYS):
             failures.append(f"{relative}: x-limits-{role} must define {', '.join(REQUIRED_KEYS)} (and optionally cpus)")
@@ -140,13 +160,40 @@ def parse(path: Path, root: Path):
 
 
 def find_ci_wiring_violations(root: Path) -> list[str]:
+    """Each CI step must be a step of the ``invariants`` job, with no ``if:`` on the step or the job.
+
+    Line-based (no YAML parser): the job is the block under ``  invariants:``; a step is a ``- `` item
+    of that block; ``if:`` is looked for at job level and at step level. What it does not prove: that the
+    job runs on the events you care about (``on:``), or that an enclosing workflow-level condition is absent.
+    """
     workflow = root / PR_CI
     if not workflow.is_file():
         return [f"{PR_CI} not found: the gate would not run in CI"]
-    runs = [line.strip() for line in workflow.read_text(encoding="utf-8").splitlines()
-            if not line.lstrip().startswith("#")]
-    return [f"{PR_CI} does not run `python {step}`" for step in CI_STEPS
-            if not any(line.removeprefix("- ").startswith(f"run: python {step}") for line in runs)]
+    lines = [line for line in workflow.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+    start = next((i for i, line in enumerate(lines) if re.match(r"^  invariants:\s*$", line)), None)
+    if start is None:
+        return [f"{PR_CI}: job `invariants` not found"]
+    end = next((i for i in range(start + 1, len(lines)) if re.match(r"^  [A-Za-z0-9_-]+:\s*$", lines[i])), len(lines))
+    job = lines[start + 1:end]
+    failures: list[str] = []
+    if any(re.match(r"^    if:", line) for line in job):
+        failures.append(f"{PR_CI}: job `invariants` has an `if:` condition; its gates may be skipped")
+    items = [len(line) - len(line.lstrip()) for line in job if re.match(r"^\s*- ", line)]
+    step_indent = min(items) if items else 0
+    steps: list[list[str]] = []
+    for line in job:
+        if re.match(r"^\s*- ", line) and len(line) - len(line.lstrip()) == step_indent:
+            steps.append([line])
+        elif steps:
+            steps[-1].append(line)
+    for step in CI_STEPS:
+        owner = [block for block in steps
+                 if any(line.strip().removeprefix("- ").startswith(f"run: python {step}") for line in block)]
+        if not owner:
+            failures.append(f"{PR_CI}: job `invariants` has no step running `python {step}`")
+        elif any(re.match(r"^\s*(- )?if:", line) for line in owner[0]):
+            failures.append(f"{PR_CI}: the step running `python {step}` has an `if:` condition; it may be skipped")
+    return failures
 
 
 def check(root: Path) -> tuple[list[str], int]:
