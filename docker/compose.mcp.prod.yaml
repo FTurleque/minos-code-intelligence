@@ -2,21 +2,24 @@ name: "${MINOS_COMPOSE_PROJECT}"
 
 # Resource ceilings (audit S11), one definition per role, overridable from the runtime .env.
 # Merged into each service with `<<: *limits-<role>`. `memswap_limit` equals `mem_limit`: no swap.
+# `cpus` defaults to 0 = no CPU ceiling: a hard default above the host's CPU count makes the Docker
+# daemon refuse to create the container ("range of CPUs is from 0.01 to N"). Set MINOS_<ROLE>_CPUS
+# (for example 2) in the runtime .env to cap a role on a shared host.
 # docker/compose.mcp.prod.yaml and docker/compose.mcp.connected.yaml carry the same blocks; a gate
 # (scripts/quality/check-compose-limits.py) refuses any divergence. Values and the measurements
 # behind them: docs/user/docker-runtime.md, "Limites de ressources".
 x-limits-query: &limits-query
-  cpus: "${MINOS_MCP_CPUS:-4}"
+  cpus: "${MINOS_MCP_CPUS:-0}"
   mem_limit: "${MINOS_MCP_MEM_LIMIT:-3g}"
   memswap_limit: "${MINOS_MCP_MEM_LIMIT:-3g}"
   pids_limit: "${MINOS_MCP_PIDS_LIMIT:-1024}"
 x-limits-admin: &limits-admin
-  cpus: "${MINOS_ADMIN_CPUS:-4}"
+  cpus: "${MINOS_ADMIN_CPUS:-0}"
   mem_limit: "${MINOS_ADMIN_MEM_LIMIT:-2g}"
   memswap_limit: "${MINOS_ADMIN_MEM_LIMIT:-2g}"
   pids_limit: "${MINOS_ADMIN_PIDS_LIMIT:-256}"
 x-limits-job: &limits-job
-  cpus: "${MINOS_JOB_CPUS:-2}"
+  cpus: "${MINOS_JOB_CPUS:-0}"
   mem_limit: "${MINOS_JOB_MEM_LIMIT:-512m}"
   memswap_limit: "${MINOS_JOB_MEM_LIMIT:-512m}"
   pids_limit: "${MINOS_JOB_PIDS_LIMIT:-128}"
