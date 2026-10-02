@@ -10,6 +10,7 @@ import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
 import com.minos.io.Sha256;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -41,7 +42,7 @@ final class ScipSymbolNormalizer {
                 projectId,
                 moduleId,
                 fileId,
-                fact == null ? null : fact.relativePath(),
+                Objects.requireNonNull(fact, "fact").relativePath(),
                 "",
                 declarationLocation,
                 providerId,
@@ -89,6 +90,7 @@ final class ScipSymbolNormalizer {
             String providerVersion,
             String indexRunId,
             boolean generated) {
+        Objects.requireNonNull(fact, "fact");
         requireText(projectId, "projectId");
         requireText(providerId, "providerId");
 
