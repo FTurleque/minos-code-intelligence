@@ -3,10 +3,18 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+# The runtime image is eclipse-temurin 24 (maven.compiler.release), written <image>:<tag>@sha256:<digest>.
+# The tag is deliberately a PATTERN, not a literal: a Dependabot bump to another 24.x JRE (new tag, new
+# digest) must keep this gate green, while a floating tag (24-jre), another major (25.x), a tag without a
+# digest and a digest without a tag must all stay red.
+TEMURIN_JRE_FROM = re.compile(r"^FROM eclipse-temurin:24\.[0-9._]+-jre@sha256:[0-9a-f]{64}\s*$", re.MULTILINE)
 
 
 def read(path: str) -> str:
@@ -30,6 +38,23 @@ def forbid(path: str, *tokens: str) -> None:
     for token in tokens:
         if token.casefold() in text:
             raise RuntimeError(f"{path}: stale/unsafe audit-v2 text remains: {token}")
+
+
+def read_job_block(path: str, job_name: str) -> str:
+    """Slice out one top-level job's YAML text (its key through the next 2-space-indented key)."""
+    text = read(path)
+    lines = text.splitlines()
+    marker = f"  {job_name}:"
+    start = next((i for i, line in enumerate(lines) if line == marker), None)
+    if start is None:
+        raise RuntimeError(f"{path}: no top-level job named {job_name!r}")
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        line = lines[i]
+        if line.startswith("  ") and not line.startswith("   ") and line.rstrip().endswith(":"):
+            end = i
+            break
+    return "\n".join(lines[start:end])
 
 
 def main() -> int:
@@ -69,16 +94,17 @@ def main() -> int:
         )
         forbid("docs/ROADMAP.md", "Vérification manuelle encore ouverte")
 
-        post228 = require(
-            ".github/workflows/post-228-hardening.yml",
-            "Verify post-228 static hardening",
-            "runs-on: ubuntu-24.04",
-            "check-current-docs.py",
-            "check-post228-hardening.py",
-        )
+        # Post-228 hardening was its own workflow file; C1 (docs/adr/0043) folded it into pr-ci.yml
+        # as the dedicated "invariants" job so it runs once instead of in a separate parallel
+        # workflow. The property this protects is unchanged: these are fast, ubuntu-only, non-Maven
+        # checks that must never grow into (or duplicate) the OS-matrixed Maven verify job.
+        invariants_job = read_job_block(".github/workflows/pr-ci.yml", "invariants")
+        for token in ("runs-on: ubuntu-24.04", "check-current-docs.py", "check-post228-hardening.py"):
+            if token.casefold() not in invariants_job.casefold():
+                raise RuntimeError(f".github/workflows/pr-ci.yml (invariants job): missing audit-v2 invariant: {token}")
         for stale in ("mvnw", "check-jacoco.py", "windows-2022", "matrix:"):
-            if stale.casefold() in post228.casefold():
-                raise RuntimeError(f"post-228 workflow duplicated current PR validation responsibility: {stale}")
+            if stale.casefold() in invariants_job.casefold():
+                raise RuntimeError(f"pr-ci.yml invariants job duplicated the Maven verify job's responsibility: {stale}")
 
         require(
             ".github/workflows/pr-ci.yml",
@@ -91,7 +117,10 @@ def main() -> int:
             "Targeted JaCoCo gate (full)",
         )
 
-        dockerfile = require("docker/Dockerfile.mcp", "FROM eclipse-temurin@sha256:")
+        dockerfile = read("docker/Dockerfile.mcp")
+        if not TEMURIN_JRE_FROM.search(dockerfile):
+            raise RuntimeError(
+                "docker/Dockerfile.mcp: FROM must be eclipse-temurin:24.<x>-jre@sha256:<digest> (tag and digest)")
         if "FROM eclipse-temurin:24-jre" in dockerfile:
             raise RuntimeError("docker/Dockerfile.mcp still uses a floating 24-jre tag")
 
@@ -101,11 +130,11 @@ def main() -> int:
             "requireCapacity",
         )
         require(
-            "minos-storage-local/src/main/java/com/minos/store/SnapshotBinaryCodecSupport.java",
+            "minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotBinaryCodecSupport.java",
             "BoundedInputStream",
             "BoundedOutputStream",
             "MAX_PERSISTED_SNAPSHOT_BYTES",
-            "Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)",
+            "ConfinedFileOpener.openRegularFileNoFollow(file)",
         )
         require(
             "minos-engine/src/main/java/com/minos/io/BoundedProperties.java",
@@ -113,16 +142,16 @@ def main() -> int:
             "public static String readUtf8(InputStream source",
         )
         require(
-            "minos-application/src/main/java/com/minos/storage/MinosRuntimeSettings.java",
+            "minos-engine/src/main/java/com/minos/storage/MinosRuntimeSettings.java",
             "BoundedProperties.readUtf8(stream, MAX_SECRET_BYTES",
             "ConfinedFileOpener.openConfinedRegularFile",
         )
         forbid(
-            "minos-application/src/main/java/com/minos/storage/MinosRuntimeSettings.java",
+            "minos-engine/src/main/java/com/minos/storage/MinosRuntimeSettings.java",
             "new String(input.readAllBytes(), StandardCharsets.UTF_8)",
         )
         require(
-            "minos-storage-local/src/main/java/com/minos/store/EnvironmentHostedTenantKeyProvider.java",
+            "minos-storage-local/src/main/java/com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider.java",
             "if (derived != null) Arrays.fill(derived, (byte) 0)",
             "Arrays.fill(master, (byte) 0)",
         )

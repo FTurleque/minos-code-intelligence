@@ -142,6 +142,7 @@ Require 'SaveStringToFile(ExpandScriptPath, ExpandScriptText, False)' 'Payload e
 # every PowerShell invocation here must use -File.
 Forbid '-ExecutionPolicy Bypass -Command' 'Every PowerShell invocation in this template must use -File, not -Command -- -Command re-parses trailing arguments as script text and corrupts on a path containing an apostrophe.'
 Require '''''app'''',''''lib'''',''''docker'''',''''integration'''',''''supply-chain''''' 'Uninstall payload cleanup does not enumerate the managed program directories.'
+Require '''''supply-chain'''',''''tools''''' 'Uninstall payload cleanup does not remove the embedded tools payload directory.'
 # Inno's own "remove {app} if empty" pass runs during usUninstall, before
 # this usPostUninstall cleanup has emptied it -- without an explicit final
 # removal here, the (now genuinely empty) install root is left behind.

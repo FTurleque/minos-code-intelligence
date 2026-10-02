@@ -6,7 +6,17 @@ param(
 
     [string] $OutputRoot = '',
 
-    [switch] $SkipVerify
+    [switch] $SkipVerify,
+
+    # full: the package embeds the indexers (tools\), nothing to install.
+    # lite: the same package without tools\ (a fraction of the size) for machines that manage their own
+    #       tools; `minos tools install <provider>` installs one on demand and needs the network.
+    [ValidateSet('full', 'lite')]
+    [string] $Variant = 'full',
+
+    # Reuse the shaded JAR and the SBOM left by a previous build of the same version (no `mvnw clean`, which would
+    # also delete the other variant's artifacts under target\dist).
+    [switch] $ReuseBuild
 )
 
 $ErrorActionPreference = 'Stop'
@@ -174,48 +184,50 @@ if ($JavaVersion -notmatch '"24(?:\.|"|-)') {
 # M15-S2 makes the repository POM a real multi-module reactor. Release versions
 # are supplied through Maven's CI-friendly `revision` property so every module
 # sees one coherent version; do not generate a temporary mono-module POM.
-Push-Location $RepoRoot
-try {
-    $MavenArgs = @("-Drevision=$Version")
-    if ($SkipVerify) {
-        $MavenArgs += '-DskipTests'
-    }
-    $MavenArgs += 'clean'
-    $MavenArgs += if ($SkipVerify) { 'package' } else { 'verify' }
-    & '.\mvnw.cmd' @MavenArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "MINOS Maven build failed with exit code $LASTEXITCODE"
-    }
+if (-not $ReuseBuild) {
+    Push-Location $RepoRoot
+    try {
+        $MavenArgs = @("-Drevision=$Version")
+        if ($SkipVerify) {
+            $MavenArgs += '-DskipTests'
+        }
+        $MavenArgs += 'clean'
+        $MavenArgs += if ($SkipVerify) { 'package' } else { 'verify' }
+        & '.\mvnw.cmd' @MavenArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "MINOS Maven build failed with exit code $LASTEXITCODE"
+        }
 
-    $RootPomContent = Get-Content -LiteralPath (Join-Path $RepoRoot 'pom.xml') -Raw
-    if ($RootPomContent -notmatch '<cyclonedx\.maven\.plugin\.version>\s*([^<]+)\s*</cyclonedx\.maven\.plugin\.version>') {
-        throw 'Unable to resolve cyclonedx.maven.plugin.version from root pom.xml.'
-    }
-    $CycloneDxVersion = $Matches[1].Trim()
-    $SbomOutputDirectory = Join-Path $RepoRoot 'target\sbom'
-    Remove-Item -LiteralPath $SbomOutputDirectory -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Force -Path $SbomOutputDirectory | Out-Null
+        $RootPomContent = Get-Content -LiteralPath (Join-Path $RepoRoot 'pom.xml') -Raw
+        if ($RootPomContent -notmatch '<cyclonedx\.maven\.plugin\.version>\s*([^<]+)\s*</cyclonedx\.maven\.plugin\.version>') {
+            throw 'Unable to resolve cyclonedx.maven.plugin.version from root pom.xml.'
+        }
+        $CycloneDxVersion = $Matches[1].Trim()
+        $SbomOutputDirectory = Join-Path $RepoRoot 'target\sbom'
+        Remove-Item -LiteralPath $SbomOutputDirectory -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path $SbomOutputDirectory | Out-Null
 
-    $CycloneDxArgs = @(
-        "-Drevision=$Version",
-        '-DschemaVersion=1.6',
-        '-DoutputFormat=json',
-        '-DoutputName=minos-cyclonedx',
-        "-DoutputDirectory=$SbomOutputDirectory",
-        '-DoutputReactorProjects=false',
-        '-DincludeTestScope=false',
-        '-DincludeLicenseText=false',
-        '-Dcyclonedx.skipAttach=true',
-        '-DprojectType=application',
-        "org.cyclonedx:cyclonedx-maven-plugin:${CycloneDxVersion}:makeAggregateBom"
-    )
-    & '.\mvnw.cmd' @CycloneDxArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "CycloneDX aggregate SBOM generation failed with exit code $LASTEXITCODE"
+        $CycloneDxArgs = @(
+            "-Drevision=$Version",
+            '-DschemaVersion=1.6',
+            '-DoutputFormat=json',
+            '-DoutputName=minos-cyclonedx',
+            "-DoutputDirectory=$SbomOutputDirectory",
+            '-DoutputReactorProjects=false',
+            '-DincludeTestScope=false',
+            '-DincludeLicenseText=false',
+            '-Dcyclonedx.skipAttach=true',
+            '-DprojectType=application',
+            "org.cyclonedx:cyclonedx-maven-plugin:${CycloneDxVersion}:makeAggregateBom"
+        )
+        & '.\mvnw.cmd' @CycloneDxArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "CycloneDX aggregate SBOM generation failed with exit code $LASTEXITCODE"
+        }
     }
-}
-finally {
-    Pop-Location
+    finally {
+        Pop-Location
+    }
 }
 
 $Jar = Join-Path $RepoRoot "target\minos-code-intelligence-$Version-all.jar"
@@ -233,13 +245,14 @@ if (-not (Test-Path -LiteralPath $SbomSource -PathType Leaf)) {
 
 $Stage = Join-Path $OutputRoot '.jpackage-input'
 $AppImages = Join-Path $OutputRoot '.jpackage-output'
-$DistributionName = "minos-$Version-windows-x64"
+$VariantSuffix = if ($Variant -eq 'lite') { '-lite' } else { '' }
+$DistributionName = "minos-$Version-windows-x64$VariantSuffix"
 $Distribution = Join-Path $OutputRoot $DistributionName
 $Zip = Join-Path $OutputRoot "$DistributionName.zip"
 $Checksum = "$Zip.sha256"
-$SbomSidecar = Join-Path $OutputRoot "minos-$Version.cdx.json"
+$SbomSidecar = Join-Path $OutputRoot "minos-$Version$VariantSuffix.cdx.json"
 $SbomSidecarChecksum = "$SbomSidecar.sha256"
-$NoticesSidecar = Join-Path $OutputRoot "MINOS-$Version-THIRD-PARTY-NOTICES.txt"
+$NoticesSidecar = Join-Path $OutputRoot "MINOS-$Version$VariantSuffix-THIRD-PARTY-NOTICES.txt"
 $NoticesSidecarChecksum = "$NoticesSidecar.sha256"
 
 Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
@@ -295,14 +308,14 @@ New-Item -ItemType Directory -Force -Path $LibDirectory, $DockerScripts, $Integr
 Copy-Item -LiteralPath $Jar -Destination (Join-Path $LibDirectory 'minos.jar') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release') `
     -Destination (Join-Path $DockerDirectory 'Dockerfile.mcp.release') -Force
-Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml') `
-    -Destination (Join-Path $DockerDirectory 'compose.mcp.prod.yaml') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose-mcp.prod.yaml') `
+    -Destination (Join-Path $DockerDirectory 'compose-mcp.prod.yaml') -Force
 # The M30 connected profile (managed PostgreSQL/pgvector + Ollama sidecars) must ship
 # alongside the base profile: configure-docker-mcp.ps1 delegates to the M30 configurator
 # whenever StorageBackend=postgresql or SemanticProvider=ollama is selected, and that
 # configurator resolves the connected template relative to its own directory.
-Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.connected.yaml') `
-    -Destination (Join-Path $DockerDirectory 'compose.mcp.connected.yaml') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose-mcp.connected.yaml') `
+    -Destination (Join-Path $DockerDirectory 'compose-mcp.connected.yaml') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1') `
     -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
 # prod-mcp-release.ps1 delegates every action to this portable core; both must ship together or an
@@ -350,15 +363,65 @@ exit /b %ERRORLEVEL%
 
 $ResolvedRuntimeModules | Set-Content -LiteralPath (Join-Path $Distribution 'RUNTIME-MODULES.txt') -Encoding ascii
 
-@"
-MINOS Code Intelligence $Version
+$FullToolsSection = @'
+Quick start (the indexers for TypeScript and Java are shipped in this package, nothing to install for them):
+  minos.cmd --version
+  minos.cmd doctor
+  minos.cmd project add C:\path\to\my-project --name my-project
+  minos.cmd index my-project
+
+Tools shipped in this package (tools\TOOLS-MANIFEST.json), verified against pinned SHA-256 digests
+before their first use, with no network access:
+  scip-java        Coursier, Apache Maven, the scip-java classpath
+  scip-typescript  Node.js and the scip-typescript packages
+Their licenses are listed in supply-chain\THIRD-PARTY-NOTICES.txt. A shipped tool that is altered, deleted
+or replaced by a link is refused (minos.cmd doctor says so): reinstall this package to restore it.
+
+NOT shipped, and never installed by MINOS: the toolchain of the project you analyse.
+"minos.cmd doctor" names what is missing on your machine:
+  TypeScript projects  nothing more is required
+  Java projects        a full JDK (JAVA_HOME with javac and jar), Git for Windows (Git Bash),
+                       Windows PowerShell 5.1 and csc.exe (both part of Windows); the build of
+                       your project resolves its own Maven dependencies
+
+Other languages: their indexers are NOT in this package. Install the toolchain, then the indexer on demand
+(this needs the network):
+  Python projects      Python 3.10 or newer with pip, and Node.js 16 or newer with npm;
+                       then: minos.cmd tools install scip-python
+  Go projects          the Go toolchain; then: minos.cmd tools install scip-go
+  C# projects          the .NET SDK 10; then: minos.cmd tools install scip-dotnet
+  Rust projects        cargo, rustc and rust-analyzer 0.3.2989 (release 2026-07-27) on the PATH:
+                       MINOS installs none of them
+  C and C++ projects   scip-clang publishes no Windows binary (Linux x86-64 only): not available here
+
+For a shipped tool, "minos.cmd tools install" downloads nothing new: it reuses the files of this package.
+Newer versions of the shipped tools come with a newer MINOS package.
+Set MINOS_TOOLS_OFFLINE=1 to forbid any download.
+'@
+
+$LiteToolsSection = @'
+This is the LITE package: it does not contain the indexers (no tools\ directory). Use the full package
+(minos-<version>-windows-x64.zip) when the machine has no network access or you want nothing to install.
 
 Quick start:
   minos.cmd --version
   minos.cmd doctor
-  minos.cmd tools install scip-java
-  minos.cmd project add N:\workspace-dev\my-project --name my-project
+  minos.cmd tools install scip-typescript     (or scip-java: downloads pinned, SHA-256 verified tools)
+  minos.cmd project add C:\path\to\my-project --name my-project
   minos.cmd index my-project
+
+The toolchain of the project you analyse is never installed by MINOS ("minos.cmd doctor" names what is
+missing): a full JDK (JAVA_HOME with javac and jar), Git for Windows (Git Bash), Windows PowerShell 5.1
+and csc.exe for Java projects; Python 3.10+ with Node.js 16+, Go, the .NET SDK 10, or cargo, rustc and
+rust-analyzer for the other languages. C and C++: scip-clang has no Windows binary.
+'@
+
+$ReadmeToolsSection = if ($Variant -eq 'lite') { $LiteToolsSection } else { $FullToolsSection }
+
+@"
+MINOS Code Intelligence $Version
+
+$ReadmeToolsSection
 
 Default data directory:
   %LOCALAPPDATA%\MINOS\data
@@ -394,6 +457,7 @@ $Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()
 version=$Version
 commit=$Commit
 java=$JavaVersion
+variant=$Variant
 runtimeModuleRoots=$JdkModuleList
 runtimeModules=$ResolvedRuntimeModuleList
 builtAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
@@ -403,6 +467,17 @@ manifest=RELEASE-MANIFEST.json
 
 Copy-Item -LiteralPath $SbomSource -Destination (Join-Path $SupplyChainDirectory 'minos.cdx.json') -Force
 $Python = Resolve-Python
+# The tools payload comes from embedded-tools.json, the single description shared with the Docker release
+# image: this script owns no list and no hash of its own (scripts/quality/check-tools-manifest.py checks it).
+if ($Variant -eq 'full') {
+    Invoke-NativeChecked -File $Python -Arguments @(
+        (Join-Path $RepoRoot 'scripts\release\build-embedded-tools.py'),
+        '--platform', 'windows-x64',
+        '--output', (Join-Path $Distribution 'tools'),
+        '--cache', (Join-Path $RepoRoot 'target\tools-cache'),
+        '--sbom', (Join-Path $SupplyChainDirectory 'minos.cdx.json')
+    ) -Failure 'Embedded tools payload build failed'
+}
 Invoke-NativeChecked -File $Python -Arguments @(
     'scripts/release/generate-third-party-notices.py',
     '--sbom', (Join-Path $SupplyChainDirectory 'minos.cdx.json'),
@@ -423,6 +498,12 @@ Invoke-NativeChecked -File $Python -Arguments @(
     '--commit', $Commit,
     '--strict-licenses'
 ) -Failure 'Release supply-chain evidence validation failed'
+Invoke-NativeChecked -File $Python -Arguments @(
+    (Join-Path $RepoRoot 'scripts\quality\check-tools-manifest.py'),
+    '--root', $RepoRoot,
+    '--distribution', $Distribution,
+    '--variant', $Variant
+) -Failure 'The embedded tools payload diverges from the tools catalogue'
 
 Copy-Item -LiteralPath (Join-Path $SupplyChainDirectory 'minos.cdx.json') -Destination $SbomSidecar -Force
 Copy-Item -LiteralPath (Join-Path $SupplyChainDirectory 'THIRD-PARTY-NOTICES.txt') -Destination $NoticesSidecar -Force
@@ -444,6 +525,7 @@ Remove-Item -LiteralPath $AppImages -Recurse -Force -ErrorAction SilentlyContinu
 
 Write-Host ''
 Write-Host 'MINOS Windows distribution SUCCESS' -ForegroundColor Green
+Write-Host "Variant      : $Variant"
 Write-Host "Distribution : $Distribution"
 Write-Host "Runtime roots : $JdkModuleList"
 Write-Host "Runtime count : $($ResolvedRuntimeModules.Count)"

@@ -1,7 +1,7 @@
 package com.minos.cli;
 
-import com.minos.integration.nexus.NexusExportContract;
-import com.minos.integration.nexus.NexusExportService;
+import com.minos.nexus.NexusExportContract;
+import com.minos.nexus.NexusExportService;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -28,6 +28,8 @@ public final class NexusExportCommand {
               -h, --help     Show this help
             """.stripTrailing();
 
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--root");
+
     private final ExportOperation exportOperation;
 
     public NexusExportCommand(NexusExportService exportService) {
@@ -43,7 +45,7 @@ public final class NexusExportCommand {
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
 
-        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
+        if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
@@ -60,6 +62,8 @@ public final class NexusExportCommand {
         NexusExportContract.ExportSnapshot snapshot;
         try {
             snapshot = exportOperation.export(root);
+        } catch (LazyApplication.OpenFailure openFailure) {
+            throw openFailure;
         } catch (Exception exception) {
             error.append("error: nexus-export failed: ")
                     .append(exportFailureMessage(exception))
@@ -76,14 +80,11 @@ public final class NexusExportCommand {
     }
 
     private static Path parseRoot(String[] arguments) {
-        if (arguments.length != 2 || !"--root".equals(arguments[0])) {
+        String root = OPTIONS.parse(arguments, 0).text("--root");
+        if (root == null) {
             throw new IllegalArgumentException("expected --root <project-root>");
         }
-        String rawRoot = arguments[1];
-        if (rawRoot == null || rawRoot.isBlank() || rawRoot.startsWith("--")) {
-            throw new IllegalArgumentException("missing value for --root");
-        }
-        return Path.of(rawRoot);
+        return Path.of(root);
     }
 
     private static String exportFailureMessage(Exception exception) {

@@ -49,7 +49,7 @@ class PostgresAuthoritativeSnapshotConsistencyTest extends PostgresTestSupport {
                 emptyAuthority,
                 states);
 
-        assertThrows(IllegalStateException.class, () -> lifecycle.projectState(project.id()));
+        assertThrows(IllegalStateException.class, () -> lifecycle.recoverProjectState(project.id()));
         assertEquals(Optional.of("snapshot-ghost"),
                 states.findProjectState(project.id()).orElseThrow().activeSnapshotId());
     }

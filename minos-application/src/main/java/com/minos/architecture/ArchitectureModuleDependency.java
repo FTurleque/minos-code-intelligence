@@ -7,6 +7,8 @@ import com.minos.domain.ProbabilityInvariant;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Agrégat explicable d'un ensemble de dépendances symbole→symbole entre deux
  * modules découverts.
@@ -48,12 +50,6 @@ public record ArchitectureModuleDependency(
         evidence = List.copyOf(Objects.requireNonNull(evidence, "evidence"));
         if (evidence.isEmpty()) {
             throw new IllegalArgumentException("module dependency aggregate requires evidence");
-        }
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
         }
     }
 

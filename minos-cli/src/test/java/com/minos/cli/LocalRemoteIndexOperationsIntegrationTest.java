@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.bootstrap.LocalRemoteIndexingRuntimeFixtures;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerCapability;
@@ -16,9 +17,9 @@ import com.minos.remote.DistributedIndexing.WorkerResponse;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;
-import com.minos.runtime.DistributedArtifactBundleStore;
-import com.minos.runtime.IndexerProcessPlan;
-import com.minos.runtime.ProcessIndexerExecutor;
+import com.minos.runtime.local.DistributedArtifactBundleStore;
+import com.minos.runtime.local.IndexerProcessPlan;
+import com.minos.runtime.local.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 import org.junit.jupiter.api.Test;
@@ -74,8 +75,10 @@ class LocalRemoteIndexOperationsIntegrationTest {
         LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
                 application,
                 ignored -> materialization,
-                store,
-                (workerId, delegate, artifactStore) -> trustedFixtureWorker(workerId, delegate, artifactStore, temp));
+                LocalRemoteIndexingRuntimeFixtures.withSelection(
+                        store,
+                        (workerId, delegate, artifactStore) -> trustedFixtureWorker(workerId, delegate, artifactStore, temp),
+                        QualifiedSandboxForTests.selection()));
 
         RemoteIndexOperations.RemoteIndexView result = operations.index(
                 request, "remote-fixture", "fixture-provider", "worker-one", WorkerNetworkPolicy.ALLOW);
@@ -136,10 +139,11 @@ class LocalRemoteIndexOperationsIntegrationTest {
 
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
         LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
-                application, materializer, store,
-                (workerId, delegate, artifactStore) -> {
-                    throw new AssertionError("worker must never be created when the lease is never acquired");
-                });
+                application, materializer, LocalRemoteIndexingRuntimeFixtures.withSelection(store,
+                        (workerId, delegate, artifactStore) -> {
+                            throw new AssertionError("worker must never be created when the lease is never acquired");
+                        },
+                        QualifiedSandboxForTests.selection()));
 
         // Force RemoteIndexLease.acquire(...) to fail deterministically and without waiting on its
         // real timeout: its lock directory cannot be created because a regular file already occupies

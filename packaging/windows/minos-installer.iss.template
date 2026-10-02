@@ -1279,7 +1279,7 @@ begin
   // call in this template.
   ScriptText :=
     'param([Parameter(Mandatory = $true)][string] $InstallRoot)' + #13#10 +
-    '$Names = @(''app'',''lib'',''docker'',''integration'',''supply-chain'',''minos.cmd'',''minos-mcp.cmd'',''RUNTIME-MODULES.txt'',''RELEASE-MANIFEST.json'',''VERSION'',''README.txt'',''install.ps1'',''.install-staging'',''.install-rollback'',''.minos-installation.json'')' + #13#10 +
+    '$Names = @(''app'',''lib'',''docker'',''integration'',''supply-chain'',''tools'',''minos.cmd'',''minos-mcp.cmd'',''RUNTIME-MODULES.txt'',''RELEASE-MANIFEST.json'',''VERSION'',''README.txt'',''install.ps1'',''.install-staging'',''.install-rollback'',''.minos-installation.json'')' + #13#10 +
     'foreach ($name in $Names) {' + #13#10 +
     '    $p = Join-Path $InstallRoot $name' + #13#10 +
     '    if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }' + #13#10 +

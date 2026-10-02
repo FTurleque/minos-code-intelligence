@@ -20,11 +20,14 @@ import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingLifecycleService;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRequirements;
+import com.minos.orchestration.IndexingResumePolicy;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.ProjectIndexState;
+import com.minos.orchestration.ResumableRunMarkers;
+import com.minos.orchestration.ResumableRunSummary;
 import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
@@ -42,7 +45,8 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 /** Autonomous indexing adapter over the selected MINOS storage backend. */
-public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations, AutoCloseable {
+public final class LocalAutonomousIndexOperations
+        implements AutonomousIndexOperations, IndexResumeStatusSource, AutoCloseable {
     private final MinosApplication application;
     private final MinosApplication ownedApplication;
     private final ProjectResolver projectResolver;
@@ -57,6 +61,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     private final ProjectInvalidationService invalidationService;
     private final IncrementalIndexingPlanner planner;
     private final UnaryOperator<IndexerExecutor> executorDecorator;
+    private final ResumableRunMarkers resumableRunMarkers;
 
     public LocalAutonomousIndexOperations(Path minosHome) throws IOException {
         this(MinosApplication.open(minosHome), UnaryOperator.identity(), true);
@@ -92,30 +97,51 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         this.invalidationService = application.invalidationService();
         this.planner = application.incrementalIndexingPlanner();
         this.executorDecorator = Objects.requireNonNull(executorDecorator, "executorDecorator");
+        // ADR 0042 : marqueurs de run créés au même moment qu'avant, par la racine de composition.
+        this.resumableRunMarkers = application.compositionRoot().resumableRunMarkers(application.home());
     }
 
     @Override
-    public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
-        RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
-            return prepare(projectIdentifier, providerOverride, forceFull).view();
+    public Optional<ResumableRunSummary> resumableRun(String projectId) {
+        try {
+            return ResumableRunSummary.of(stateStore, UUID.fromString(projectId));
+        } catch (IllegalArgumentException notAProjectId) {
+            return Optional.empty();
         }
     }
 
     @Override
+    public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+        // A dry run writes nothing (no lease, no state, no repair): with nothing to serialize against,
+        // it observes like every other read instead of taking the project lifecycle lease.
+        return prepare(projectIdentifier, providerOverride, forceFull, false).view();
+    }
+
+    @Override
     public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+        return execute(projectIdentifier, providerOverride, forceFull, IndexingResumePolicy.RESUME);
+    }
+
+    @Override
+    public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull,
+                                      IndexingResumePolicy resumePolicy) throws Exception {
+        Objects.requireNonNull(resumePolicy, "resumePolicy");
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
-            return executeLocked(projectIdentifier, providerOverride, forceFull);
+            // ADR 0039 sec. 6: --no-resume forces a complete run (it supersedes the interrupted run and indexes
+            // everything), it is not only a resume policy: on an unchanged project it must not answer NO_CHANGES.
+            boolean complete = forceFull || resumePolicy == IndexingResumePolicy.NO_RESUME;
+            return executeLocked(projectIdentifier, providerOverride, complete, resumePolicy);
         }
     }
 
     private IndexExecutionView executeLocked(
             String projectIdentifier,
             String providerOverride,
-            boolean forceFull
+            boolean forceFull,
+            IndexingResumePolicy resumePolicy
     ) throws Exception {
-        Prepared prepared = prepare(projectIdentifier, providerOverride, forceFull);
+        Prepared prepared = prepare(projectIdentifier, providerOverride, forceFull, true);
         for (ProviderView runtime : prepared.view().providerRuntimes()) {
             if (!"READY".equals(runtime.state())) {
                 throw new IllegalStateException("provider runtime is not ready: " + runtime.id()
@@ -123,36 +149,46 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
             }
         }
         if (prepared.view().mode() == IndexingMode.NONE && !forceFull) {
+            if (resumePolicy == IndexingResumePolicy.RESUME_ONLY) {
+                throw new IllegalStateException("resume-only indexing refused: no changes to index");
+            }
             String semanticDiagnostic = synchronizeSemanticIfConfigured(prepared.project().id());
-            application.retentionService().compact(prepared.project().id());
+            String retentionDiagnostic = compactAfterSuccess(prepared.project().id());
             return new IndexExecutionView(prepared.view(), null, "NO_CHANGES",
-                    prepared.indexState().activeSnapshotId().orElse(null), true, semanticDiagnostic);
+                    prepared.indexState().activeSnapshotId().orElse(null), true,
+                    combineDiagnostics(semanticDiagnostic, retentionDiagnostic));
         }
         var executors = prepared.negotiation().selections().stream()
                 .map(selection -> runtimeManager.executor(selection.indexer().id()))
                 .map(executorDecorator)
                 .map(executor -> Objects.requireNonNull(executor, "decorated executor"))
                 .toList();
-        IndexingLifecycleService lifecycle = new IndexingLifecycleService(executors, snapshotStager, snapshotPromoter, stateStore);
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(
+                executors, snapshotStager, snapshotPromoter, stateStore, resumableRunMarkers);
         IndexingRun run = forceFull
                 ? lifecycle.execute(
                         prepared.project().id(),
                         prepared.project().rootPath(),
                         prepared.discovery(),
-                        prepared.negotiation()
+                        prepared.negotiation(),
+                        resumePolicy
                 )
                 : lifecycle.executePlanned(
                                 prepared.project().id(),
                                 prepared.project().rootPath(),
                                 prepared.discovery(),
                                 prepared.negotiation(),
-                                prepared.plan()
+                                prepared.plan(),
+                                resumePolicy
                         )
                         .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
         run = recoverPromotedRunIfNeeded(run);
         if (run.status() != IndexingRun.Status.SUCCEEDED) {
+            String outcome = run.status() == IndexingRun.Status.INTERRUPTED
+                    ? " was interrupted and can be resumed: "
+                    : " failed: ";
             IllegalStateException failure = new IllegalStateException(
-                    "indexing run " + run.id() + " failed: "
+                    "indexing run " + run.id() + outcome
                             + run.message().orElse("provider/staging/promotion failure"));
             try {
                 application.retentionService().compact(prepared.project().id());
@@ -183,9 +219,16 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
             diagnostic = "workspace changed during indexing; fingerprint baseline was not promoted";
         }
         diagnostic = combineDiagnostics(diagnostic, synchronizeSemanticIfConfigured(prepared.project().id()));
-        application.retentionService().compact(prepared.project().id());
+        diagnostic = combineDiagnostics(diagnostic, compactAfterSuccess(prepared.project().id()));
         return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
-                run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic);
+                run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic, resumeView(run));
+    }
+
+    private static ResumeView resumeView(IndexingRun run) {
+        return run.resume()
+                .map(trace -> new ResumeView(trace.attempt(), trace.reusedTargets(), trace.reexecutedTargets(),
+                        trace.refusalReason().orElse(null)))
+                .orElse(null);
     }
 
     private IndexingRun recoverPromotedRunIfNeeded(IndexingRun run) throws IOException {
@@ -211,7 +254,8 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                 run.stagedSnapshotId(),
                 run.activeSnapshotBefore(),
                 Optional.of(activeSnapshotId),
-                Optional.of("run recovered from authoritative snapshot after post-promotion state persistence failure"));
+                Optional.of("run recovered from authoritative snapshot after post-promotion state persistence failure"),
+                run.runFormatVersion());
         stateStore.saveRun(recovered);
         stateStore.saveProjectState(new ProjectIndexState(
                 run.projectId(),
@@ -233,7 +277,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         if (application.semanticIndexService().embeddingProvider().isEmpty()) return null;
         try {
             var report = application.semanticIndexService().synchronize(projectId);
-            return report.state() == com.minos.semantic.SemanticIndexService.State.READY
+            return report.state() == com.minos.application.semantic.SemanticIndexService.State.READY
                     ? null
                     : "semantic index state after structured indexing: " + report.state();
         } catch (Exception exception) {
@@ -243,17 +287,33 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         }
     }
 
+    /**
+     * Retention is maintenance after an index that already succeeded. Its lock is bounded, so it can time out
+     * behind a concurrent compaction: that must not turn a successful index into a failure. The diagnostic
+     * never carries the cause, which may name a path.
+     */
+    private String compactAfterSuccess(java.util.UUID projectId) {
+        try {
+            application.retentionService().compact(projectId);
+            return null;
+        } catch (IOException retentionFailure) {
+            return "storage retention did not run (its lock was busy or unavailable); it runs after the next indexing";
+        }
+    }
+
     private static String combineDiagnostics(String first, String second) {
         if (first == null || first.isBlank()) return second;
         if (second == null || second.isBlank()) return first;
         return first + "; " + second;
     }
 
-    private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull) throws IOException {
+    /** {@code persist} is false for a dry run: the state is observed (a repair or a first state is computed, never saved). */
+    private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull, boolean persist)
+            throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         ProjectDiscovery discovery = application.discoveryService().discover(project.rootPath());
         ProjectFingerprint current = fingerprintService.capture(project.rootPath());
-        ProjectIndexState indexState = alignedIndexState(project.id());
+        ProjectIndexState indexState = alignedIndexState(project.id(), persist);
         Optional<ProjectFingerprintSnapshot> baseline;
         ProjectInvalidationAssessment invalidation;
         try {
@@ -290,13 +350,17 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         return new Prepared(project, discovery, negotiation, plan, indexState, current, view);
     }
 
-    private ProjectIndexState alignedIndexState(UUID projectId) throws IOException {
-        ProjectIndexStateReconciler.Reconciliation reconciliation = projectIndexStateReconciler.reconcile(projectId);
+    private ProjectIndexState alignedIndexState(UUID projectId, boolean persist) throws IOException {
+        ProjectIndexStateReconciler.Reconciliation reconciliation = persist
+                ? projectIndexStateReconciler.reconcile(projectId)
+                : projectIndexStateReconciler.observe(projectId);
         if (reconciliation.projectState().isPresent()) {
             return reconciliation.projectState().orElseThrow();
         }
         ProjectIndexState neverIndexed = ProjectIndexState.neverIndexed(projectId, Instant.now());
-        stateStore.saveProjectState(neverIndexed);
+        if (persist) {
+            stateStore.saveProjectState(neverIndexed);
+        }
         return neverIndexed;
     }
 

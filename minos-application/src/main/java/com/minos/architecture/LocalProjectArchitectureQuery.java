@@ -17,81 +17,27 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
     private final ProjectResolver projectResolver;
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final ProjectDiscoveryService discoveryService;
-    private final ArchitectureTopologyService topologyService;
-    private final ArchitectureDependencyService dependencyService;
-    private final ArchitectureConcentrationService concentrationService;
-    private final ArchitectureCentralityService centralityService;
-    private final ArchitectureTechnologyService technologyService;
+    private final ArchitectureTopologyService topologyService = new ArchitectureTopologyService();
+    private final ArchitectureDependencyService dependencyService = new ArchitectureDependencyService();
+    private final ArchitectureConcentrationService concentrationService = new ArchitectureConcentrationService();
+    private final ArchitectureCentralityService centralityService = new ArchitectureCentralityService();
+    private final ArchitectureTechnologyService technologyService = new ArchitectureTechnologyService();
     private final ArchitectureIntelligenceService intelligenceService = new ArchitectureIntelligenceService();
 
-    public LocalProjectArchitectureQuery(ProjectRegistry projectRegistry, CodeKnowledgeSnapshotStore snapshotStore) {
-        this(new ProjectResolver(projectRegistry), snapshotStore, new ProjectDiscoveryService(), new ArchitectureTopologyService(),
-                new ArchitectureDependencyService(), new ArchitectureConcentrationService(), new ArchitectureCentralityService(),
-                new ArchitectureTechnologyService());
-    }
-
-    public LocalProjectArchitectureQuery(ProjectRegistry projectRegistry, CodeKnowledgeSnapshotStore snapshotStore,
-                                         ProjectDiscoveryService discoveryService) {
-        this(new ProjectResolver(projectRegistry), snapshotStore, discoveryService, new ArchitectureTopologyService(),
-                new ArchitectureDependencyService(), new ArchitectureConcentrationService(), new ArchitectureCentralityService(),
-                new ArchitectureTechnologyService());
-    }
-
-    public LocalProjectArchitectureQuery(ProjectResolver projectResolver, CodeKnowledgeSnapshotStore snapshotStore,
-                                         ProjectDiscoveryService discoveryService) {
-        this(projectResolver, snapshotStore, discoveryService, new ArchitectureTopologyService(), new ArchitectureDependencyService(),
-                new ArchitectureConcentrationService(), new ArchitectureCentralityService(), new ArchitectureTechnologyService());
-    }
-
-    LocalProjectArchitectureQuery(ProjectRegistry projectRegistry, CodeKnowledgeSnapshotStore snapshotStore,
-                                  ProjectDiscoveryService discoveryService, ArchitectureTopologyService topologyService) {
-        this(new ProjectResolver(projectRegistry), snapshotStore, discoveryService, topologyService,
-                new ArchitectureDependencyService(), new ArchitectureConcentrationService(), new ArchitectureCentralityService(),
-                new ArchitectureTechnologyService());
-    }
-
-    LocalProjectArchitectureQuery(ProjectRegistry projectRegistry, CodeKnowledgeSnapshotStore snapshotStore,
-                                  ProjectDiscoveryService discoveryService, ArchitectureTopologyService topologyService,
-                                  ArchitectureDependencyService dependencyService) {
-        this(new ProjectResolver(projectRegistry), snapshotStore, discoveryService, topologyService, dependencyService,
-                new ArchitectureConcentrationService(), new ArchitectureCentralityService(), new ArchitectureTechnologyService());
-    }
-
-    LocalProjectArchitectureQuery(ProjectRegistry projectRegistry, CodeKnowledgeSnapshotStore snapshotStore,
-                                  ProjectDiscoveryService discoveryService, ArchitectureTopologyService topologyService,
-                                  ArchitectureDependencyService dependencyService, ArchitectureConcentrationService concentrationService) {
-        this(new ProjectResolver(projectRegistry), snapshotStore, discoveryService, topologyService, dependencyService,
-                concentrationService, new ArchitectureCentralityService(), new ArchitectureTechnologyService());
-    }
-
-    LocalProjectArchitectureQuery(ProjectRegistry projectRegistry, CodeKnowledgeSnapshotStore snapshotStore,
-                                  ProjectDiscoveryService discoveryService, ArchitectureTopologyService topologyService,
-                                  ArchitectureDependencyService dependencyService, ArchitectureConcentrationService concentrationService,
-                                  ArchitectureCentralityService centralityService) {
-        this(new ProjectResolver(projectRegistry), snapshotStore, discoveryService, topologyService, dependencyService,
-                concentrationService, centralityService, new ArchitectureTechnologyService());
-    }
-
-    LocalProjectArchitectureQuery(ProjectRegistry projectRegistry, CodeKnowledgeSnapshotStore snapshotStore,
-                                  ProjectDiscoveryService discoveryService, ArchitectureTopologyService topologyService,
-                                  ArchitectureDependencyService dependencyService, ArchitectureConcentrationService concentrationService,
-                                  ArchitectureCentralityService centralityService, ArchitectureTechnologyService technologyService) {
-        this(new ProjectResolver(projectRegistry), snapshotStore, discoveryService, topologyService, dependencyService,
-                concentrationService, centralityService, technologyService);
+    /**
+     * Point d'entrée unique (ADR 0045) : résolution par le registre, analyseurs par défaut (sans état).
+     * La découverte est celle de l'appelant ; la racine de composition passe la sienne.
+     */
+    public static LocalProjectArchitectureQuery defaults(ProjectRegistry projectRegistry, CodeKnowledgeSnapshotStore snapshotStore,
+                                                         ProjectDiscoveryService discoveryService) {
+        return new LocalProjectArchitectureQuery(new ProjectResolver(projectRegistry), snapshotStore, discoveryService);
     }
 
     private LocalProjectArchitectureQuery(ProjectResolver projectResolver, CodeKnowledgeSnapshotStore snapshotStore,
-                                          ProjectDiscoveryService discoveryService, ArchitectureTopologyService topologyService,
-                                          ArchitectureDependencyService dependencyService, ArchitectureConcentrationService concentrationService,
-                                          ArchitectureCentralityService centralityService, ArchitectureTechnologyService technologyService) {
+                                          ProjectDiscoveryService discoveryService) {
         this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
-        this.topologyService = Objects.requireNonNull(topologyService, "topologyService");
-        this.dependencyService = Objects.requireNonNull(dependencyService, "dependencyService");
-        this.concentrationService = Objects.requireNonNull(concentrationService, "concentrationService");
-        this.centralityService = Objects.requireNonNull(centralityService, "centralityService");
-        this.technologyService = Objects.requireNonNull(technologyService, "technologyService");
     }
 
     @Override public ArchitectureOverview getArchitectureOverview(String projectIdentifier) throws IOException {

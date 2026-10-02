@@ -30,13 +30,24 @@ minos.cmd remote materialize https://github.com/acme/private-project `
 
 MINOS ne persiste ni le token ni le nom de sa variable. Utilisez un token read-only.
 
+Le nom de la variable n'est pas libre : seules `MINOS_REMOTE_TOKEN` (ou `MINOS_REMOTE_TOKEN_<SUFFIXE>`) et la variable usuelle de l'hôte visé (`MINOS_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN` pour github.com ; `MINOS_GITLAB_TOKEN`, `GITLAB_TOKEN` pour gitlab.com) sont acceptées. Toute autre variable est **refusée avant tout accès réseau**, avec un message qui liste les noms admis : une configuration ne peut pas faire partir une clé cloud ou le jeton d'un autre hôte. Si vous utilisiez un autre nom, renommez simplement la variable.
+
 ## État de `remote index`
 
-`remote materialize` est utilisable indépendamment de la sandbox provider. En revanche, `remote index` n’exécute du code distant que si **toutes** les dimensions de confinement exigées sont qualifiées au niveau OS. Une **sandbox OS qualifiée** désigne ici une frontière qui satisfait réellement toutes ces exigences ; les backends intégrés actuels n’atteignent pas encore cette qualification complète.
+`remote materialize` est utilisable indépendamment de la sandbox provider. En revanche, `remote index` n’exécute du code distant que si **toutes** les dimensions de confinement exigées sont qualifiées au niveau OS. Une **sandbox OS qualifiée** désigne ici une frontière qui satisfait réellement toutes ces exigences ; **aucun backend intégré ne l’est, par décision** ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md), 2026-09-26).
 
-Les backends locaux intégrés bornent aujourd’hui la mémoire, les processus, la CPU et la durée via les primitives OS prévues (cgroup v2/bubblewrap sous Linux, AppContainer/Job Object sous Windows). Le quota d’écriture bytes/entrées reste supervisé par MINOS et n’est pas encore un quota stockage `OS_ENFORCED`. La qualification `UNTRUSTED_CODE_SUPPORTED` exigeant un quota stockage OS-enforced, les backends intégrés actuels restent **fail-closed pour `remote index`**. Il n’existe pas d’option unsafe permettant de contourner cette exigence.
+Les backends locaux intégrés bornent la mémoire, les processus, la CPU et la durée via les primitives OS prévues (cgroup v2/bubblewrap sous Linux, AppContainer/Job Object sous Windows). Le quota d’écriture bytes/entrées reste **supervisé par MINOS** (`SUPERVISED_HARD_KILL`), pas un quota stockage `OS_ENFORCED` : l’ADR 0041 explique pourquoi cette limite est assumée plutôt que comblée (aucune primitive non privilégiée sous Windows ; quota de projet XFS/ext4 sous Linux seulement, chiffré et reporté). La qualification `UNTRUSTED_CODE_SUPPORTED` exigeant un quota stockage OS-enforced, les backends intégrés restent **fail-closed pour `remote index`**, sur tous les OS. Il n’existe pas d’option unsafe permettant de contourner cette exigence.
 
-La commande suivante décrit donc le contrat cible et ne réussira que sur un backend futur réellement qualifié pour toutes les dimensions :
+Le refus est explicite et diagnosticable :
+
+- `remote index` refuse **avant** toute matérialisation, prise de bail, enregistrement de projet ou épinglage, avec un message sans chemin dont le contenu dépend de la cause (`WorkerSandboxSelection`) :
+  - `REJECTED_BY_DECISION` — un backend OS a été découvert mais est écarté par décision (ADR 0041) : le message cite ce backend et les codes exacts des dimensions non OS-enforced (`FILESYSTEM_WRITE_BYTES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL`, `FILESYSTEM_WRITE_ENTRIES_…`) ;
+  - `NO_OS_BACKEND_AVAILABLE` — aucun backend OS n'a été découvert : le message cite le prérequis manquant (`LINUX_BUBBLEWRAP_NOT_FOUND`, `WINDOWS_POWERSHELL_NOT_FOUND`, …) ou la plateforme sans backend (`PLATFORM_OTHER_HAS_NO_OS_SANDBOX_BACKEND`) ;
+  - `EXECUTOR_NOT_SANDBOX_CAPABLE` — l'exécuteur du provider n'expose aucune capacité sandbox (`EXECUTOR_NOT_PROCESS_SANDBOX_CAPABLE`) : ce refus est opposé en profondeur par le worker (`LocalIsolatedIndexWorker`), pas par le contrôle précoce ;
+- le sélecteur journalise en WARNING, sans chemin, chaque backend OS écarté avec ses codes de dimension, et l'absence de tout backend OS avec les codes du prérequis manquant ou de la plateforme sans backend ;
+- `minos doctor` (section `workerSandbox`) dit si l’indexation distante est disponible et, sinon, distingue un **prérequis manquant** (aucun backend OS découvert : `LINUX_BUBBLEWRAP_NOT_FOUND`, `LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING`, `WINDOWS_POWERSHELL_NOT_FOUND`, …) de la **décision** (`REJECTED_BY_DECISION`, marqueur `ADR 0041`).
+
+La commande suivante décrit donc le contrat cible et ne réussira que sur un backend futur réellement qualifié pour toutes les dimensions (nouvel ADR requis) :
 
 ```powershell
 minos.cmd remote index https://github.com/acme/project `
@@ -56,9 +67,11 @@ minos.cmd remote index https://github.com/acme/project `
 
 Sous Linux, la qualification CPU/mémoire/processus exige notamment une racine cgroup v2 déléguée : soit le cgroup du processus MINOS lui-même (unité systemd avec `Delegate=yes`), soit un sous-arbre explicitement désigné par `MINOS_SANDBOX_CGROUP_ROOT`. Cette condition ne remplace pas l’exigence distincte de quota stockage OS-enforced.
 
-### Prérequis opérateur — sandbox Linux
+### Prérequis opérateur — sandbox Linux (indexation locale gérée)
 
-La qualification `linux-bubblewrap-cgroup2-v5` (voir [`remote-worker-sandbox-disposition.md`](../developer/remote-worker-sandbox-disposition.md)) sonde réellement les primitives disponibles sur l'hôte avant toute revendication. Sans elles, MINOS reste fail-closed sur `remote index` — il n'existe aucun contournement. Sur un hôte opérateur (hors CI, où `pr-ci.yml`/`scripts/ci/delegate-linux-cgroup.sh` provisionnent déjà tout ceci), il faut réunir explicitement :
+Ces prérequis servent l'**indexation locale gérée** (providers gérés lancés sous sandbox OS). Ils **ne rouvrent pas `remote index`**, fermé par décision ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md)) : une fois réunis, `minos doctor` passe seulement de la cause `NO_OS_BACKEND_AVAILABLE` (prérequis manquant) à `REJECTED_BY_DECISION`, et `remote index` refuse toujours.
+
+La qualification `linux-bubblewrap-cgroup2-v5` (voir [`remote-worker-sandbox-disposition.md`](../developer/remote-worker-sandbox-disposition.md)) sonde réellement les primitives disponibles sur l'hôte avant toute revendication. Sans elles, aucun backend OS Linux n'est découvert : les providers locaux gérés n'ont pas de sandbox OS et `remote index` refuse avec la cause `NO_OS_BACKEND_AVAILABLE` — il n'existe aucun contournement. Sur un hôte opérateur (hors CI, où `pr-ci.yml`/`scripts/ci/delegate-linux-cgroup.sh` provisionnent déjà tout ceci), il faut réunir explicitement :
 
 1. **`bwrap` et `prlimit`** — installez `bubblewrap` et `util-linux` avec le gestionnaire de paquets de la distribution, par exemple :
 
@@ -103,7 +116,22 @@ cgroup v2 n'autorise un délégataire non privilégié à migrer un processus qu
 
 L'unique migration nécessaire est effectuée par le script pendant sa phase privilégiée (`--attach-pid`). MINOS se retrouve déjà dans le cgroup contrôleur, n'a aucune migration à faire, et n'écrit que dans le sous-arbre qu'il possède réellement. C'est exactement la forme que produit nativement `Delegate=yes`.
 
-Sans l'une de ces deux options, le backend Linux se déclare `BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY` et `remote index` échoue avant tout lancement de provider — jamais par un repli silencieux vers une exécution non confinée. En particulier, si le shell n'a pas été attaché, la qualification de la racine déléguée échoue et MINOS reste fail-closed au lieu de tenter une migration privilégiée.
+Sans l'une de ces deux options, le backend Linux se déclare `BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY` et les providers locaux gérés n'ont pas de sandbox OS ; `remote index` échoue (ici avec la cause `NO_OS_BACKEND_AVAILABLE`, et par décision une fois la racine déléguée) avant tout lancement de provider — jamais par un repli silencieux vers une exécution non confinée. En particulier, si le shell n'a pas été attaché, la qualification de la racine déléguée échoue et MINOS reste fail-closed au lieu de tenter une migration privilégiée.
+
+#### Mise à jour : arrêter les instances plus anciennes qui partagent la racine déléguée
+
+À partir de la version qui suit 1.2.0 (`1.3.0-SNAPSHOT` sur `develop` au moment du changement), chaque cgroup créé par MINOS porte dans son nom une marque d'appartenance `<job>.own-<pid>-t<ticks>-n<espace PID>_<espace temps>-<jeton>` : le PID du MINOS propriétaire, son instant de démarrage en ticks noyau depuis le boot (`/proc/<pid>/stat`, champ 22, insensible aux sauts d'horloge murale), les identifiants de ses espaces de noms PID et temps (`/proc/<pid>/ns/pid` et `ns/time`) et un jeton propre à l'instance.
+
+**En cas de doute, MINOS ne récupère pas.** Un résidu laissé derrière coûte de la mémoire et des `pids` de la racine déléguée, et il est signalé ; un processus vivant tué serait une régression grave. Le balayage exécuté à la qualification de la racine ne tue donc un cgroup que sur une preuve positive que son propriétaire est mort : son PID est absent d'une table des processus qui a montré qu'elle fonctionne (`/proc` lisible, celle de cet espace de PID, sans masquage `hidepid` des processus d'un autre compte), ou son PID existe avec des ticks de démarrage complets et différents (réutilisation du PID), dans les mêmes espaces de noms PID et temps que le balayeur. Un cgroup qui ne contient aucun processus (ni en dessous) est supprimé, jamais tué. Tout le reste est laissé intact : propriétaire vivant, `/proc` illisible ou partiel, lecture de `stat` tronquée ou mal formée, propriétaire d'un autre espace de noms, marque sans espaces de noms, cgroup non marqué encore peuplé.
+
+Ce que voit l'opérateur : chaque qualification écrit au plus deux lignes, sans aucun chemin absolu. Un INFO « MINOS reclaimed N stale cgroup(s) … » nomme les cgroups récupérés. Un WARNING « MINOS left N cgroup(s) intact … » nomme chaque cgroup laissé en place, avec sa raison, y compris un cgroup récupéré qu'il a été impossible de supprimer ; il ajoute « N entries were not examined » quand la racine contient plus de 4 096 entrées.
+
+Avant de lancer cette version sur une racine déléguée partagée (le même `MINOS_SANDBOX_CGROUP_ROOT`, ou la même unité `Delegate=yes`), **arrêtez** :
+
+- toute instance **MINOS ≤ 1.2.0** (CLI, serveur MCP, plugin IntelliJ) : à la qualification de la racine, elle tue **tout** cgroup `minos-*` peuplé qu'elle trouve, y compris les jobs en cours d'une instance plus récente ;
+- tout **build `develop` antérieur** à ce changement de format : ces builds écrivent une marque `.own-<pid>-<epochMillis>-<jeton>` (instant mural, qui peut faire passer une instance vivante pour morte après un saut d'horloge NTP) ou `.own-<pid>-t<ticks>-<jeton>` (sans espaces de noms). Ils lisent la marque du nouveau format comme « non marqué » : ils ne tuent jamais un cgroup peuplé, mais prennent un cgroup encore vide pour un cgroup « non marqué et vide » et le suppriment.
+
+Compatibilité dans l'autre sens : un cgroup marqué par ces builds `develop` antérieurs n'est **jamais** récupéré automatiquement, même si son PID propriétaire semble mort : rien dans sa marque ne prouve que ce PID se lit dans le même espace de noms que celui du balayeur. Il est signalé dans le WARNING, avec son nom et la raison, et c'est à l'opérateur de le supprimer (`cgroup.kill`, puis `rmdir`) après avoir arrêté l'instance qui l'a créé. Il en va de même d'un cgroup `minos-*` sans marque qui contient encore des processus.
 
 Le transport vérifié utilise `minos-distributed-artifact-v2` et lie chaque artefact à son `projectRelativeRoot`. Le format historique `minos-distributed-artifact-v1` reste reconnu comme fait de compatibilité/documentation, mais il ne transporte pas le scope et n’est donc pas accepté comme provenance vérifiée pour une nouvelle exécution. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau, les SHA-256 vérifiés et le scope du module indexé.
 

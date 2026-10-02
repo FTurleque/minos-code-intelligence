@@ -36,9 +36,9 @@ echo "HEAD: $HEAD_SHA"
 echo "Java: $JAVA_VERSION"
 
 echo '[1/7] M27 static, documentation and previous milestone contracts...'
-"$PYTHON" scripts/m27/check-hosted.py
+"$PYTHON" scripts/quality/check-hosted-control-plane-consistency.py
 "$PYTHON" scripts/docs/check-current-docs.py
-"$PYTHON" scripts/m26/check-runtime-dynamic.py
+"$PYTHON" scripts/quality/check-runtime-dynamic-consistency.py
 
 echo '[2/7] Full Java 24 Maven reactor...'
 run_clean_env ./mvnw clean verify
@@ -47,16 +47,16 @@ echo '[3/7] JaCoCo including M27 scope...'
 "$PYTHON" scripts/quality/check-jacoco.py
 
 echo '[4/7] Historical polyglot, remote and runtime regression contracts...'
-"$PYTHON" scripts/m24/check-polyglot.py
-"$PYTHON" scripts/m25/check-remote-distributed.py
-"$PYTHON" scripts/m26/check-runtime-dynamic.py
+"$PYTHON" scripts/quality/check-polyglot-provider-consistency.py
+"$PYTHON" scripts/quality/check-remote-distributed-consistency.py
+"$PYTHON" scripts/quality/check-runtime-dynamic-consistency.py
 
 echo '[5/7] Shaded CLI tenant/auth/RBAC/encryption/audit/retention e2e...'
 run_clean_env "$PYTHON" scripts/m27/run-hosted-e2e.py --expected-head "$HEAD_SHA" \
   --output target/m27/hosted-e2e-linux.json
 
 echo '[6/7] Detailed evidence recheck...'
-"$PYTHON" scripts/m27/check-hosted.py
+"$PYTHON" scripts/quality/check-hosted-control-plane-consistency.py
 "$PYTHON" scripts/docs/check-current-docs.py
 "$PYTHON" - "$HEAD_SHA" <<'PY'
 import json, sys

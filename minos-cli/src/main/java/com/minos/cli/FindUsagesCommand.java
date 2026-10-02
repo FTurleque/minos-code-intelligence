@@ -1,14 +1,13 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.output.CodeIntelligenceResultRenderer;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.query.UsageResult;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Commande CLI M3 de recherche des usages résolus d'un symbole.
@@ -16,7 +15,9 @@ import java.util.Set;
 public final class FindUsagesCommand {
 
     public static final String NAME = "find-usages";
-    private static final Set<String> SUPPORTED_OPTIONS = Set.of("--limit", "--format");
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec()
+            .text("--format")
+            .integer("--limit", 1, FindSymbolCommand.MAX_LIMIT);
     private static final String USAGE = """
             Usage: minos find-usages <project> <symbol-id> [options]
 
@@ -61,33 +62,9 @@ public final class FindUsagesCommand {
             }
             String projectId = CliCommandSupport.operand(arguments[0], "project");
             String symbolId = CliCommandSupport.operand(arguments[1], "symbol-id");
-            int limit = FindSymbolCommand.DEFAULT_LIMIT;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Set<String> seen = new HashSet<>();
-            for (int index = 2; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (option == null || !SUPPORTED_OPTIONS.contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if (++index >= arguments.length) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                String value = arguments[index];
-                if (value == null || value.isBlank() || value.startsWith("--")) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                if ("--limit".equals(option)) {
-                    limit = CliCommandSupport.parseLimit(value, FindSymbolCommand.MAX_LIMIT);
-                } else {
-                    format = SymbolOutputFormat.parse(value);
-                }
-            }
-            return new Options(projectId, symbolId, limit, format);
+            CliOptions options = OPTIONS.parse(arguments, 2);
+            return new Options(projectId, symbolId, options.integer("--limit", FindSymbolCommand.DEFAULT_LIMIT),
+                    options.format());
         }
-
-
     }
 }

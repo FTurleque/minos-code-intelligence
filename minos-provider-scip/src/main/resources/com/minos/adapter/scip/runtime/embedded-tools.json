@@ -1,0 +1,242 @@
+{
+  "formatVersion": 1,
+  "description": "Single description of the tools MINOS ships or installs: read by the Java runtime managers, by the Docker release image (docker/Dockerfile.mcp.release, kept in sync by scripts/release/sync-tools-manifest.py) and by the Windows distribution build (scripts/release/build-embedded-tools.py). Verified by scripts/quality/check-tools-manifest.py.",
+  "providers": [
+    {
+      "id": "scip-java",
+      "version": "0.13.1",
+      "license": "Apache-2.0",
+      "dockerArgs": {
+        "version": "SCIP_JAVA_VERSION"
+      },
+      "components": [
+        "coursier",
+        "maven",
+        "scip-java-classpath"
+      ]
+    },
+    {
+      "id": "scip-typescript",
+      "version": "0.4.0",
+      "license": "Apache-2.0",
+      "dockerArgs": {
+        "version": "SCIP_TYPESCRIPT_VERSION"
+      },
+      "components": [
+        "nodejs",
+        "scip-typescript-modules"
+      ]
+    },
+    {
+      "id": "scip-python",
+      "version": "0.6.6",
+      "license": "MIT",
+      "dockerArgs": {
+        "version": "SCIP_PYTHON_VERSION"
+      },
+      "components": []
+    },
+    {
+      "id": "scip-clang",
+      "version": "0.4.0",
+      "license": "Apache-2.0",
+      "dockerArgs": {
+        "version": "SCIP_CLANG_VERSION"
+      },
+      "components": [
+        "scip-clang"
+      ]
+    },
+    {
+      "id": "scip-dotnet",
+      "version": "0.2.14",
+      "license": "Apache-2.0",
+      "dockerArgs": {
+        "version": "SCIP_DOTNET_VERSION"
+      },
+      "components": [
+        "scip-dotnet-nupkg"
+      ]
+    },
+    {
+      "id": "scip-go",
+      "version": "0.2.7",
+      "license": "Apache-2.0",
+      "dockerArgs": {
+        "version": "SCIP_GO_VERSION"
+      },
+      "components": []
+    },
+    {
+      "id": "rust-analyzer-scip",
+      "version": "0.3.2989",
+      "license": "MIT OR Apache-2.0",
+      "dockerArgs": {
+        "version": "RUST_ANALYZER_VERSION"
+      },
+      "components": [
+        "rust-analyzer"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "coursier",
+      "platform": "windows-x64",
+      "version": "15f36c167c30be237105f923151adaf177e7ee61",
+      "format": "zip",
+      "url": "https://raw.githubusercontent.com/coursier/launchers/15f36c167c30be237105f923151adaf177e7ee61/cs-x86_64-pc-win32.zip",
+      "sha256": "d6b375ea3f1c58312912af96260cca0c975bc873dc430820e2d67d50b294be3a",
+      "sizeBytes": 30508363,
+      "license": "Apache-2.0",
+      "notice": "The coursier/launchers repository publishes this native launcher without a license file of its own; it is built from the coursier project, which is licensed under Apache-2.0.",
+      "embedded": true,
+      "dockerArgs": {
+        "version": "COURSIER_LAUNCHERS_COMMIT"
+      },
+      "payload": "artifacts/coursier-15f36c167c30be237105f923151adaf177e7ee61-windows-x64.zip"
+    },
+    {
+      "id": "coursier",
+      "platform": "linux-x64",
+      "version": "15f36c167c30be237105f923151adaf177e7ee61",
+      "format": "gz",
+      "url": "https://raw.githubusercontent.com/coursier/launchers/15f36c167c30be237105f923151adaf177e7ee61/cs-x86_64-pc-linux.gz",
+      "sha256": "62b141b186e4dfdef03af64c36bdcdfeaab2df30de14950ca220e6e43e72c26b",
+      "license": "Apache-2.0",
+      "notice": "The coursier/launchers repository publishes this native launcher without a license file of its own; it is built from the coursier project, which is licensed under Apache-2.0.",
+      "embedded": false,
+      "dockerArgs": {
+        "version": "COURSIER_LAUNCHERS_COMMIT",
+        "sha256": "COURSIER_LINUX_SHA256"
+      }
+    },
+    {
+      "id": "maven",
+      "platform": "any",
+      "version": "3.9.16",
+      "format": "zip",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.16/apache-maven-3.9.16-bin.zip",
+      "sha256": "5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce",
+      "sizeBytes": 9395475,
+      "license": "Apache-2.0",
+      "embedded": true,
+      "dockerArgs": {
+        "version": "MAVEN_VERSION",
+        "sha256": "MAVEN_ZIP_SHA256"
+      },
+      "payload": "artifacts/maven-3.9.16-any.zip"
+    },
+    {
+      "id": "nodejs",
+      "platform": "windows-x64",
+      "version": "24.20.0",
+      "format": "zip",
+      "url": "https://nodejs.org/dist/v24.20.0/node-v24.20.0-win-x64.zip",
+      "sha256": "6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e545ba",
+      "sizeBytes": 37539751,
+      "license": "MIT",
+      "embedded": true,
+      "payload": "artifacts/nodejs-24.20.0-windows-x64.zip"
+    },
+    {
+      "id": "nodejs",
+      "platform": "linux-x64",
+      "version": "20.20.2",
+      "format": "tar.xz",
+      "url": "https://nodejs.org/dist/v20.20.2/node-v20.20.2-linux-x64.tar.xz",
+      "sha256": "df770b2a6f130ed8627c9782c988fda9669fa23898329a61a871e32f965e007d",
+      "sizeBytes": 26169540,
+      "license": "MIT",
+      "embedded": false,
+      "dockerArgs": {
+        "version": "NODE_VERSION",
+        "sha256": "NODE_LINUX_SHA256"
+      }
+    },
+    {
+      "id": "scip-clang",
+      "platform": "linux-x64",
+      "version": "0.4.0",
+      "format": "binary",
+      "url": "https://github.com/sourcegraph/scip-clang/releases/download/v0.4.0/scip-clang-x86_64-linux",
+      "sha256": "06fd18c576f979a726c651594644ec4a35db4f471f2160b3f72eb89fa6001784",
+      "sizeBytes": 149130216,
+      "license": "Apache-2.0",
+      "embedded": false,
+      "dockerArgs": {
+        "version": "SCIP_CLANG_VERSION",
+        "sha256": "SCIP_CLANG_LINUX_SHA256"
+      }
+    },
+    {
+      "id": "rust-analyzer",
+      "platform": "linux-x64",
+      "version": "2026-07-27",
+      "format": "gz",
+      "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+      "sha256": "ac4f42ddbbd040d75d847e991894776485783e28beb744b9719a660a99abe115",
+      "sizeBytes": 15035345,
+      "license": "MIT OR Apache-2.0",
+      "embedded": false,
+      "dockerArgs": {
+        "version": "RUST_ANALYZER_RELEASE",
+        "sha256": "RUST_ANALYZER_LINUX_GZ_SHA256"
+      }
+    },
+    {
+      "id": "rust-analyzer",
+      "platform": "windows-x64",
+      "version": "2026-07-27",
+      "format": "zip",
+      "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-pc-windows-msvc.zip",
+      "sha256": "7abdf50734026de963b3b25eba7714be8acf43a15ffb7f4f9d8b041e796ce2c9",
+      "sizeBytes": 17612036,
+      "license": "MIT OR Apache-2.0",
+      "embedded": false,
+      "dockerArgs": {
+        "version": "RUST_ANALYZER_RELEASE"
+      }
+    },
+    {
+      "id": "scip-dotnet-nupkg",
+      "platform": "any",
+      "version": "0.2.14",
+      "format": "nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/scip-dotnet/0.2.14/scip-dotnet.0.2.14.nupkg",
+      "sha256": "e2d183fe39b9a56cb8bb2ed2d8b96828fb5434c6db084002bf8a5c6009391b52",
+      "sizeBytes": 81754100,
+      "license": "Apache-2.0",
+      "embedded": false,
+      "dockerArgs": {
+        "version": "SCIP_DOTNET_VERSION",
+        "sha256": "SCIP_DOTNET_NUPKG_SHA256"
+      }
+    }
+  ],
+  "assembled": [
+    {
+      "id": "scip-typescript-modules",
+      "platform": "windows-x64",
+      "provider": "scip-typescript",
+      "version": "0.4.0",
+      "recipe": "npm-ci",
+      "package": "@sourcegraph/scip-typescript",
+      "lock": "scip-typescript-package-lock.json",
+      "license": "Apache-2.0",
+      "embedded": true,
+      "payload": "assembled/scip-typescript-modules-0.4.0-windows-x64.zip"
+    },
+    {
+      "id": "scip-java-classpath",
+      "platform": "windows-x64",
+      "provider": "scip-java",
+      "version": "0.13.1",
+      "recipe": "coursier-fetch",
+      "coordinate": "org.scip-code:scip-java:0.13.1",
+      "license": "Apache-2.0",
+      "embedded": true,
+      "payload": "assembled/scip-java-classpath-0.13.1-windows-x64.zip"
+    }
+  ]
+}

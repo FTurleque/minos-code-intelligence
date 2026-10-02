@@ -3,6 +3,8 @@ package com.minos.api;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Additive, provider-independent public M19 contract. Existing MinosApi v1 remains unchanged. */
 public interface AdvancedCodeIntelligenceApi {
 
@@ -155,10 +157,6 @@ public interface AdvancedCodeIntelligenceApi {
             observedPaths = immutable(observedPaths);
             limitations = immutable(limitations);
         }
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
     }
 
     private static void requireRange(int value, int minimum, int maximum, String name) {

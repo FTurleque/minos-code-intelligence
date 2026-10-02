@@ -1,7 +1,7 @@
 package com.minos.api;
 
 import com.minos.application.MinosApplication;
-import com.minos.git.GitIntelligenceService;
+import com.minos.git.GitIntelligence;
 import com.minos.workspace.WorkspaceIntelligenceService;
 
 import java.nio.file.Path;
@@ -16,7 +16,7 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     private final MinosApplication application;
     private final boolean ownsApplication;
     private final LocalMinosApi delegate;
-    private final GitIntelligenceService gitIntelligence;
+    private final GitIntelligence gitIntelligence;
     private final WorkspaceIntelligenceService workspaceIntelligence;
 
     public LocalMinosMultiRepositoryApi(Path home) throws MinosApiException {
@@ -175,7 +175,7 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
             GitActivityQuery value = required(query, "query");
             return gitActivity(gitIntelligence.analyze(
                     Path.of(project.rootPath()),
-                    new GitIntelligenceService.ActivityQuery(
+                    new GitIntelligence.ActivityQuery(
                             value.since(), value.maxCommits(), value.maxFiles(), value.zoneDepth()
                     )
             ));
@@ -212,14 +212,14 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
         );
     }
 
-    private static GitRepositoryDto repository(GitIntelligenceService.RepositoryView value) {
+    private static GitRepositoryDto repository(GitIntelligence.RepositoryView value) {
         return new GitRepositoryDto(
                 value.repositoryId(), value.workTree(), value.originRemote(), value.branch(), value.headCommit(),
                 value.detachedHead(), value.shallow(), value.clean(), value.limitations()
         );
     }
 
-    private static GitActivityDto gitActivity(GitIntelligenceService.ActivityReport report) {
+    private static GitActivityDto gitActivity(GitIntelligence.ActivityReport report) {
         return new GitActivityDto(
                 repository(report.repository()),
                 report.query().since().toString(),
@@ -236,21 +236,21 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
         );
     }
 
-    private static GitCommitDto commit(GitIntelligenceService.CommitActivity value) {
+    private static GitCommitDto commit(GitIntelligence.CommitActivity value) {
         return new GitCommitDto(
                 value.commitId(), value.committedAt().toString(), value.authorName(), value.authorEmail(),
                 value.message(), value.changedPaths()
         );
     }
 
-    private static GitFileActivityDto fileActivity(GitIntelligenceService.FileActivity value) {
+    private static GitFileActivityDto fileActivity(GitIntelligence.FileActivity value) {
         return new GitFileActivityDto(
                 value.path(), value.commitCount(), value.uniqueAuthorCount(), value.lastChangedAt().toString(),
                 value.lastCommitId()
         );
     }
 
-    private static GitZoneActivityDto zoneActivity(GitIntelligenceService.ZoneActivity value) {
+    private static GitZoneActivityDto zoneActivity(GitIntelligence.ZoneActivity value) {
         return new GitZoneActivityDto(
                 value.zone(), value.commitTouches(), value.distinctFileCount(), value.lastChangedAt().toString()
         );

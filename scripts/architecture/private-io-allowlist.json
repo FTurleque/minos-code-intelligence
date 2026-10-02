@@ -1,0 +1,74 @@
+[
+  {
+    "file": "minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java",
+    "method": "Files.newInputStream",
+    "max": 1,
+    "justification": "Lit une source du projet de l'utilisateur (chemin déjà résolu par la découverte confinée), pas une donnée MINOS_HOME ; à migrer vers ConfinedFileOpener, hors S5 nommé."
+  },
+  {
+    "file": "minos-application/src/main/java/com/minos/program/analysis/JavaSourceWorkspace.java",
+    "method": "Files.newInputStream",
+    "max": 1,
+    "justification": "Empreinte des sources du projet de l'utilisateur (options d'ouverture fixées par l'appelant) ; à migrer vers ConfinedFileOpener, hors S5 nommé."
+  },
+  {
+    "file": "minos-engine/src/main/java/com/minos/io/SharedCacheLeaseRegistry.java",
+    "method": "FileChannel.lock",
+    "max": 18,
+    "justification": "Registre de baux à compte de références : garde un canal et un verrou par clé de cache (types FileChannel et FileLock) ; l'ouverture passe par BoundedFileLease.openPrivateLockChannel, plafonné car il n'est pas une primitive d'ouverture."
+  },
+  {
+    "file": "minos-mcp/src/main/java/com/minos/mcp/MinosMcpHandshakeProbe.java",
+    "method": "Files.createDirectories",
+    "max": 1,
+    "justification": "Sonde de poignée de main : crée MINOS_HOME lui-même, avant qu'un MINOS existe, à un chemin explicite donné en argument."
+  },
+  {
+    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java",
+    "method": "Files.createDirectories",
+    "max": 2,
+    "justification": "Sous-répertoires d'extraction d'une archive d'outil vérifiée, sous une racine d'installation déjà rendue privée (ensurePrivateDirectory) ; durcir chaque entrée coûterait des milliers d'ACL, à migrer si besoin."
+  },
+  {
+    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory.java",
+    "method": "Files.createDirectories",
+    "max": 1,
+    "justification": "Répertoire de travail cargo du provider, sous le répertoire de run privé ; sur Windows le conteneur du sandbox y écrit par héritage d'ACL, un ACL propriétaire seul casserait cet accès."
+  },
+  {
+    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java",
+    "method": "Files.createDirectories",
+    "max": 4,
+    "justification": "Sortie du provider et arbre de travail (copie du projet) sous le répertoire de run privé : écrits par le provider sandboxé qui y accède par héritage d'ACL, un ACL propriétaire seul casserait cet accès."
+  },
+  {
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/DistributedArtifactBundleStore.java",
+    "method": "Files.createDirectories",
+    "max": 1,
+    "justification": "createBundle écrit vers le chemin de sortie explicite de l'appelant ; durcir son répertoire parent changerait les droits d'un répertoire que MINOS ne possède pas."
+  },
+  {
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java",
+    "method": "Files.createDirectories",
+    "max": 1,
+    "justification": "Parent de l'artefact dans l'arbre de travail du provider sandboxé : ses droits sont ceux du sandbox, pas une donnée privée MINOS_HOME ; à revoir, hors S5 nommé."
+  },
+  {
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/LinuxCgroupJob.java",
+    "method": "Files.writeString",
+    "max": 4,
+    "justification": "Écritures dans l'interface noyau cgroup v2 (cgroup.subtree_control, cgroup.kill, limites) : ce ne sont pas des fichiers MINOS, ni créés, ni durcissables."
+  },
+  {
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/ProviderWorkspaceFiles.java",
+    "method": "Files.createDirectories",
+    "max": 2,
+    "justification": "Copie du projet dans l'arbre de travail du provider sandboxé : le conteneur y accède par héritage d'ACL, un ACL propriétaire seul sur chaque répertoire casserait cet accès."
+  },
+  {
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java",
+    "method": "Files.createDirectories",
+    "max": 1,
+    "justification": "Parent de l'artefact dans l'arbre de travail du provider sandboxé : ses droits sont ceux du sandbox (AppContainer), pas une donnée privée MINOS_HOME ; à revoir, hors S5 nommé."
+  }
+]

@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.ProviderReference;
@@ -9,9 +10,9 @@ import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.query.SymbolResult;
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

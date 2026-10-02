@@ -1,5 +1,6 @@
 package com.minos.program.analysis;
 
+import com.minos.io.ConfinedFileOpener;
 import com.minos.domain.InformationNature;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
@@ -10,6 +11,7 @@ import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedLineReader;
 import com.minos.io.BoundedProperties;
 import com.minos.io.FixedTsv;
+import com.minos.io.Sha256;
 import com.minos.program.ProgramEdgeKind;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphCapability;
@@ -27,11 +29,9 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -159,7 +159,7 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
         List<ProgramGraphNode> result = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
         try (BoundedInputStream input = new BoundedInputStream(
-                     Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), MAX_FILE_BYTES, "advanced program nodes");
+                     ConfinedFileOpener.openRegularFileNoFollow(file), MAX_FILE_BYTES, "advanced program nodes");
              BoundedLineReader reader = new BoundedLineReader(
                      new InputStreamReader(input, StandardCharsets.UTF_8), MAX_LINE_CHARS)) {
             String header = reader.readLine();
@@ -197,7 +197,7 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
         List<ProgramGraphEdge> result = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
         try (BoundedInputStream input = new BoundedInputStream(
-                     Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), MAX_FILE_BYTES, "advanced program edges");
+                     ConfinedFileOpener.openRegularFileNoFollow(file), MAX_FILE_BYTES, "advanced program edges");
              BoundedLineReader reader = new BoundedLineReader(
                      new InputStreamReader(input, StandardCharsets.UTF_8), MAX_LINE_CHARS)) {
             String header = reader.readLine();
@@ -330,21 +330,17 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
     private static IOException rowFailure(Path file, int line, String message) { return new IOException(file.getFileName() + ":" + line + ": " + message); }
 
     private static String sha256(Path... files) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] buffer = new byte[8192];
-            for (Path file : files) {
-                digest.update(file.getFileName().toString().getBytes(StandardCharsets.UTF_8));
-                try (BoundedInputStream input = new BoundedInputStream(
-                        Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), MAX_FILE_BYTES, "advanced program sidecar hash")) {
-                    int read;
-                    while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
-                }
+        MessageDigest digest = Sha256.newDigest();
+        byte[] buffer = new byte[8192];
+        for (Path file : files) {
+            digest.update(file.getFileName().toString().getBytes(StandardCharsets.UTF_8));
+            try (BoundedInputStream input = new BoundedInputStream(
+                    ConfinedFileOpener.openRegularFileNoFollow(file), MAX_FILE_BYTES, "advanced program sidecar hash")) {
+                int read;
+                while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
             }
-            return HexFormat.of().formatHex(digest.digest());
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
+        return Sha256.hex(digest);
     }
 
     private record Metadata(String snapshotId, String providerId, String providerType,

@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.domain.RelationshipDirection;
 import com.minos.domain.RelationshipKind;
 import com.minos.domain.RelationshipSearchCriteria;

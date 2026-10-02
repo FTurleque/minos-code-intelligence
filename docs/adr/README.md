@@ -53,6 +53,15 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) | Converger par mesures et interdire les claims sandbox/hosted non qualifiés | Proposed | M28 |
 | [0037](0037-first-class-native-and-docker-runtime-backends.md) | Router `minos mcp` vers un backend natif ou Docker explicite, versionné et fail-closed | Accepted — parity pending | M29-S1 |
 | [0038](0038-aggregate-worker-resource-containment.md) | Confiner les ressources des workers non fiables de manière agrégée et fail-closed | Accepted | MINOS-01 |
+| [0039](0039-reprise-indexation-apres-interruption.md) | Reprendre une indexation interrompue au lieu de tout réindexer | Accepted | — |
+| [0040](0040-distribution-auto-portante-indexeurs-embarques.md) | Livrer les indexeurs dans le paquet, pas après l'installation | Accepted | — |
+| [0041](0041-indexation-distante-de-code-non-fiable.md) | Indexation distante de code non fiable : quota d'écriture OS ou fermeture assumée | Accepted (option b : fermeture par décision) | Audit 2026-09, A1 |
+| [0042](0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Accepted (option c : module minos-bootstrap) | Audit 2026-09, A2 |
+| [0043](0043-retrait-des-artefacts-de-jalon.md) | Politique de retrait des scripts et workflows de jalon (permanent / gelé par assertion / archivé) | Accepted | Audit 2026-09, G3 |
+| [0044](0044-un-package-un-module.md) | Un package, un module : replier les packages éclatés par déplacement, renommer le côté interne | Accepted | Audit 2026-09, A3 (et A7) |
+| [0045](0045-constructeur-unique-et-point-d-entree-nomme.md) | Constructeur unique et point d'entrée nommé ; racine de composition regroupée par domaine, sans cache d'architecture | Accepted | Audit 2026-09, A4 |
+| [0046](0046-format-de-snapshot-v3-chaines-utf8.md) | Format de snapshot V3 : chaînes UTF-8, repli V2 pour les surrogates isolés, lecture de tous les formats antérieurs | Accepted | Audit 2026-09, A6 |
+| [0047](0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) | Snapshot en mémoire : dédoublonnage des chaînes au décodage, table de chaînes, pagination ou mappage, dans cet ordre et sous mesure | Proposed | Audit 2026-09, A6 |
 
 ## Règle de rédaction
 

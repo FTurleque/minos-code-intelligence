@@ -6,9 +6,7 @@ import com.minos.output.ArchitectureResultRenderer;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
 
 /** CLI adapter for M6 architecture intelligence. */
 public final class ArchitectureCommand {
@@ -24,6 +22,8 @@ public final class ArchitectureCommand {
                                         Output format (default: text)
               -h, --help                Show this help
             """.stripTrailing();
+
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--module", "--format");
 
     private final ProjectArchitectureQuery query;
 
@@ -70,28 +70,10 @@ public final class ArchitectureCommand {
                 throw new IllegalArgumentException("expected <project>");
             }
             String project = CliCommandSupport.operand(arguments[0], "project");
-            String module = null;
-            ArchitectureOutputFormat format = ArchitectureOutputFormat.TEXT;
-            Set<String> seen = new HashSet<>();
-            for (int index = 1; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (!Set.of("--module", "--format").contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if (++index >= arguments.length || arguments[index] == null || arguments[index].isBlank()) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                if ("--module".equals(option)) {
-                    module = arguments[index];
-                } else {
-                    format = ArchitectureOutputFormat.parse(arguments[index]);
-                }
-            }
-            return new Options(project, module, format);
+            CliOptions options = OPTIONS.parse(arguments, 1);
+            String format = options.text("--format");
+            return new Options(project, options.text("--module"),
+                    format == null ? ArchitectureOutputFormat.TEXT : ArchitectureOutputFormat.parse(format));
         }
-
     }
 }

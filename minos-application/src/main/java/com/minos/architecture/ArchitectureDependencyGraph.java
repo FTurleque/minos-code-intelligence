@@ -6,6 +6,8 @@ import com.minos.domain.InformationNature;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Vue compacte des dépendances persistées agrégées au niveau module.
  */
@@ -44,12 +46,6 @@ public record ArchitectureDependencyGraph(
 
     public int moduleEdgeCount() {
         return dependencies.size();
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
     }
 
     private static void requireNonNegative(int value, String fieldName) {

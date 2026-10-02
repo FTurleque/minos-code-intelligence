@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **30 août 2026**.
+Dernière mise à jour : **31 août 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit courant. Les réconciliations détaillées antérieures restent archivées sous [`history/reconciliations/`](history/reconciliations/). Une capacité présente sur une branche ou une PR n'est dite intégrée dans `develop` qu'après merge ; le présent document décrit néanmoins les garanties du HEAD qui le contient afin qu'il reste exact avant et après promotion.
 
@@ -10,11 +10,11 @@ Ce fichier est la synthèse autoritative de l'état produit courant. Les réconc
 - **M29 issue #107** : **CLOSED** ; **M29 PR #108** intégrée.
 - **M30 PR #110** et **M30 promotion PR #111** intégrées.
 - **hardening PR #113** intégré ; **M28 Windows CI PR #117** intégré.
-- **#98 sandbox OS réelle** : **IMPLÉMENTÉE + QUALIFIÉE** sur Linux et Windows dans la campagne de convergence.
+- **#98 sandbox OS réelle** : primitives **implémentées** sur Linux (bubblewrap/cgroup v2) et Windows (AppContainer/Job Object) ; qualification code non fiable **refusée** par décision (ADR 0041, 2026-09-26) — le quota d'écriture reste supervisé, pas appliqué par l'OS ; `remote index` fail-closed sur tous les OS, refus journalisé et exposé par `minos doctor` (audit 2026-09, constat A1).
 - **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement **intégrés**.
 - **#224–#248** : campagne de confinement provider/filesystem, provenance, egress, installateur et Windows non-admin intégrée.
 - **#258/#260** : audit du 28 août 2026 — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.
-- Ligne de développement : **1.2.0-SNAPSHOT**.
+- Ligne de développement : **1.3.0-SNAPSHOT**.
 
 ## Release 1.0.1
 
@@ -46,7 +46,23 @@ La release **v1.1.0 est PUBLIÉE et immuable**.
 - workflow de publication : `33116192634` ;
 - setup Windows, distribution et plugin IntelliJ restent soumis aux gates OSV, provenance et **Plugin Verifier** applicables.
 
-Aucune release 1.2.0 n'est publiée à ce jour ; la ligne `1.2.0-SNAPSHOT` couvre notamment la remédiation d'audit `develop` (fuite de `RemoteMaterialization` sur échec d'acquisition du lease de réindexation distante, résolution PATH POSIX acceptant un fichier non exécutable, gates JaCoCo d'orchestration critique) promue vers `main` par la PR #259.
+## Release 1.2.0
+
+La release **MINOS v1.2.0** a été publiée le **31 août 2026**.
+
+```text
+v1.2.0 → 730b760020b8ed9d69666c32a35fcff05bf21bdb
+```
+
+La release **v1.2.0 est PUBLIÉE et immuable**.
+
+- URL : https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.2.0
+- publication : **8 assets**, soit **4 paires** artefact/checksum ;
+- workflow de publication : `33339951562` ;
+- couvre la remédiation d'audit `develop` (fuite de `RemoteMaterialization` sur échec d'acquisition du lease de réindexation distante, résolution PATH POSIX acceptant un fichier non exécutable, gates JaCoCo d'orchestration critique) et le rafraîchissement Dependabot (jackson, mcp-sdk, testcontainers, jgit, junit-jupiter, actions GitHub) promus vers `main` par les PR #259, #284 ;
+- setup Windows, distribution et plugin IntelliJ restent soumis aux gates OSV, provenance et **Plugin Verifier** applicables.
+
+Aucune release 1.3.0 n'est publiée à ce jour.
 
 ## Répartition autoritative des gates CI
 
@@ -54,19 +70,12 @@ La qualification courante est volontairement séparée entre gates produit actue
 
 ### PR Validation
 
-`.github/workflows/pr-ci.yml` porte les contrôles produit exact-head actuels :
+`.github/workflows/pr-ci.yml` est le pipeline de PR unique (constat C1 de l'audit 2026-09, voir [`docs/audit/CI-HYGIENE-SUIVI.md`](audit/CI-HYGIENE-SUIVI.md)), avec deux jobs qui tournent en parallèle :
 
-- scan de vulnérabilités OSV ;
-- Maven `clean verify` sous Ubuntu 24.04 et Windows Server 2022 ;
-- PostgreSQL obligatoire sur Linux ;
-- tests sandbox/cgroup/AppContainer applicables ;
-- seuils JaCoCo ciblés Linux/Windows ;
-- invariants architecture, supply-chain et documentation ;
-- invariant d'ascendance : `main` doit être ancêtre du candidat afin d'empêcher une nouvelle divergence silencieuse `main/develop`.
+- **`invariants`** : un unique **gate statique ciblé Ubuntu**, sans Maven ni Java — épinglage supply-chain des workflows, frontières de modules, cohérence documentaire courante, `product-facts`, garde-fou de non-réaccumulation d'artefacts de jalon, invariants MND/MNE/post-MNE (y compris les neuf gates de jalon actifs M21–M28), invariants post-#228, invariants d'audit-remédiation v2/P0-P2/MINOS-01, provenance Inno Setup, tests unitaires du vérificateur Docker upgrade — chaque contrôle une seule fois, quel que soit l'OS de `verify` ;
+- **`verify`** (Ubuntu 24.04 et Windows Server 2022), **seul build Maven d'une PR** (les workflows M19 et M20, qui en répétaient une copie filtrée par chemins, sont retirés : constat C2, gardé par `scripts/quality/check-single-execution.py`) : `clean verify` Maven complet, PostgreSQL obligatoire sur Linux, tests sandbox/cgroup/AppContainer applicables, seuils JaCoCo ciblés Linux/Windows, invariant d'ascendance (`main` doit être ancêtre du candidat, afin d'empêcher une nouvelle divergence silencieuse `main/develop`).
 
-### Post-228 Hardening Invariants
-
-`.github/workflows/post-228-hardening.yml` est désormais un **gate statique ciblé Ubuntu**. Il vérifie les invariants post-#228 sans dupliquer Maven, Windows ou JaCoCo, qui restent sous l'autorité de **PR Validation**.
+Les workflows `mnd-remediation.yml`, `mne-remediation.yml`, `post-mne-remediation.yml` et `post-228-hardening.yml`, qui dupliquaient chacun leur propre checkout et leur propre vérification d'épinglage, ont été retirés : leurs invariants vivent désormais dans le job `invariants` ci-dessus.
 
 Les preuves historiques Post-#228 restent explicitement conservées : candidat qualifié `1a551ff72f95db4e14e8a9597d897491b9c1589a`, puis merge `a042e97ac5e3e2ab7207fa603d85563ea1f71712`. Ces SHA décrivent l'intégration historique #228 ; ils ne changent pas la répartition actuelle des responsabilités CI.
 

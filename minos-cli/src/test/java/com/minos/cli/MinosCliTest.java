@@ -14,10 +14,10 @@ class MinosCliTest {
     @Test
     void dispatchesFindSymbolWithoutOwningProjectBootstrap() throws IOException {
         AtomicReference<String> projectId = new AtomicReference<>();
-        MinosCli cli = new MinosCli((project, criteria) -> {
+        MinosCli cli = MinosCli.builder((project, criteria) -> {
             projectId.set(project);
             return List.of();
-        });
+        }).build();
         StringBuilder output = new StringBuilder();
 
         int exitCode = cli.run(new String[]{
@@ -31,9 +31,9 @@ class MinosCliTest {
 
     @Test
     void rendersRootHelpWithoutDispatching() throws IOException {
-        MinosCli cli = new MinosCli((project, criteria) -> {
+        MinosCli cli = MinosCli.builder((project, criteria) -> {
             throw new AssertionError("query must not be invoked");
-        });
+        }).build();
         StringBuilder output = new StringBuilder();
 
         int exitCode = cli.run(new String[]{"--help"}, output, new StringBuilder());
@@ -44,7 +44,7 @@ class MinosCliTest {
 
     @Test
     void rejectsMissingAndUnknownCommands() throws IOException {
-        MinosCli cli = new MinosCli((project, criteria) -> List.of());
+        MinosCli cli = MinosCli.builder((project, criteria) -> List.of()).build();
 
         StringBuilder missingError = new StringBuilder();
         int missingExitCode = cli.run(new String[]{}, new StringBuilder(), missingError);

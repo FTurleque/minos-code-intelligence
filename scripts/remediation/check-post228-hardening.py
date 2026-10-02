@@ -27,7 +27,7 @@ def forbid(relative: str, text: str, token: str) -> None:
 
 
 def validate_runtime_contracts() -> None:
-    supervisor_path = "minos-runtime-local/src/main/java/com/minos/runtime/ProviderWriteQuotaSupervisor.java"
+    supervisor_path = "minos-runtime-local/src/main/java/com/minos/runtime/local/ProviderWriteQuotaSupervisor.java"
     supervisor = read(supervisor_path)
     for token in (
         "provider write quota visibility lost",
@@ -39,7 +39,7 @@ def validate_runtime_contracts() -> None:
         require(supervisor_path, supervisor, token)
     forbid(supervisor_path, supervisor, "catch (IOException | RuntimeException ignored)")
 
-    windows_path = "minos-runtime-local/src/main/java/com/minos/runtime/WindowsAppContainerWorkerSandboxBackend.java"
+    windows_path = "minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java"
     windows = read(windows_path)
     for token in (
         "PRIVATE_STORAGE_MAX_BYTES",
@@ -53,7 +53,7 @@ def validate_runtime_contracts() -> None:
         require(windows_path, windows, token)
 
     template_path = (
-        "minos-runtime-local/src/main/resources/com/minos/runtime/"
+        "minos-runtime-local/src/main/resources/com/minos/runtime/local/"
         "windows-appcontainer-sandbox-v4.ps1.template"
     )
     template = read(template_path)
@@ -66,7 +66,7 @@ def validate_runtime_contracts() -> None:
         require(template_path, template, token)
 
     storage_path = (
-        "minos-runtime-local/src/main/resources/com/minos/runtime/windows-fragments/"
+        "minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-fragments/"
         "appcontainer-private-storage.ps1frag"
     )
     storage = read(storage_path)

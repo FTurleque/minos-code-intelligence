@@ -7,6 +7,7 @@ import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
+import com.minos.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -27,10 +28,13 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Shared read-only project/index view used by transport adapters. */
 public final class ProjectInspectionService {
 
     private static final long MAX_HISTORY_PROPERTIES_BYTES = 64L * 1024L;
+    private static final String PLACEHOLDER = "-";
 
     private final ProjectRegistry registry;
     private final ProjectResolver projectResolver;
@@ -73,13 +77,56 @@ public final class ProjectInspectionService {
     }
 
     public List<ProjectView> listProjects() throws IOException {
-        List<ProjectView> projects = new ArrayList<>();
-        for (RegisteredProject project : registry.listProjects()) projects.add(view(project));
-        return List.copyOf(projects);
+        return inventory().projects();
+    }
+
+    /**
+     * Every project of the registry, each in its own failure domain (Q8): an entry the registry cannot read, or a
+     * project whose view cannot be assembled (unreadable history or state, unreadable directory under its root),
+     * is a row in the state {@value ProjectSummary#UNREADABLE_STATE} and one {@link DegradedEntry}, never a failure of the whole
+     * inventory and never a row that vanishes. A registry that cannot be listed at all still fails. An
+     * interruption is not a damaged entry: it is rethrown.
+     */
+    public Inventory inventory() throws IOException {
+        ProjectRegistry.Inventory registered = registry.inventory();
+        List<ProjectView> views = new ArrayList<>();
+        List<DegradedEntry> degraded = new ArrayList<>(registered.unreadable());
+        registered.unreadable().forEach(entry -> views.add(unreadableView(entry.entry(), PLACEHOLDER, PLACEHOLDER)));
+        for (RegisteredProject project : registered.projects()) {
+            try {
+                views.add(view(project));
+            } catch (IOException | RuntimeException failure) {
+                if (Thread.currentThread().isInterrupted()) throw failure;
+                String id = project.id().toString();
+                views.add(unreadableView(id, project.displayName(), project.rootPath().toString()));
+                degraded.add(DegradedEntry.of(id, "project view could not be assembled", failure));
+            }
+        }
+        views.sort(Comparator.comparing(ProjectView::id));
+        degraded.sort(Comparator.comparing(DegradedEntry::entry));
+        return new Inventory(views, degraded);
+    }
+
+    private static ProjectView unreadableView(String id, String name, String rootPath) {
+        return new ProjectView(id, name, rootPath, false, List.of(), List.of(), 0, ProjectSummary.UNREADABLE_STATE,
+                null, null, null, null);
     }
 
     public ProjectView inspectProject(String projectIdentifier) throws IOException {
         return view(projectResolver.resolve(projectIdentifier));
+    }
+
+    /** {@link #inspectProject} that reports the unreadable registry entries it ignored instead of failing on them (Q24). */
+    public Inspection inspection(String projectIdentifier) throws IOException {
+        ProjectResolver.Resolution resolution = projectResolver.resolveTolerantly(projectIdentifier);
+        return new Inspection(view(resolution.project()), resolution.unreadable());
+    }
+
+    public record Inspection(ProjectView project, List<DegradedEntry> unreadable) {
+        public Inspection {
+            Objects.requireNonNull(project, "project");
+            unreadable = List.copyOf(Objects.requireNonNull(unreadable, "unreadable"));
+        }
     }
 
     public ProjectView view(RegisteredProject project) throws IOException {
@@ -95,7 +142,9 @@ public final class ProjectInspectionService {
             moduleCount = discovery.modules().size();
         }
 
-        ProjectIndexStateReconciler.Reconciliation consistency = reconciler.reconcile(project.id());
+        // A status read takes no lifecycle lease and writes nothing: it reports the last state published
+        // by the indexing run, brought in line with the authoritative snapshot in memory only (lot 2, P1).
+        ProjectIndexStateReconciler.Reconciliation consistency = reconciler.observeStatus(project.id());
         Optional<CodeKnowledgeSnapshot> active = consistency.activeSnapshot();
         String activeSnapshotId = active.map(CodeKnowledgeSnapshot::snapshotId).orElse(null);
         Optional<ProjectIndexState> persistedState = consistency.projectState();
@@ -154,13 +203,18 @@ public final class ProjectInspectionService {
     }
 
     private static String blankToNull(String value) { return value == null || value.isBlank() ? null : value; }
-    private static void requireText(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
+
+    public record Inventory(List<ProjectView> projects, List<DegradedEntry> degraded) {
+        public Inventory {
+            projects = List.copyOf(Objects.requireNonNull(projects, "projects"));
+            degraded = List.copyOf(Objects.requireNonNull(degraded, "degraded"));
+        }
     }
 
     public record ProjectView(String id, String name, String rootPath, boolean rootAvailable, List<String> languages,
                               List<String> buildSystems, int moduleCount, String indexState, String activeSnapshotId,
-                              String lastSuccessfulIndexAt, String providerId, String providerVersion) {
+                              String lastSuccessfulIndexAt, String providerId, String providerVersion)
+            implements ProjectSummary {
         public ProjectView {
             requireText(id, "id"); requireText(name, "name"); requireText(rootPath, "rootPath");
             languages = List.copyOf(Objects.requireNonNull(languages, "languages"));

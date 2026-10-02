@@ -6,6 +6,8 @@ import com.minos.domain.InformationNature;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Module factuel issu de la découverte, enrichi d'agrégats de connaissance.
  */
@@ -73,11 +75,5 @@ public record ArchitectureModule(
 
     public int namespaceCount() {
         return namespaces.size();
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
     }
 }

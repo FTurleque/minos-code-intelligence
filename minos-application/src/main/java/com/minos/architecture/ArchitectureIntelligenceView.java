@@ -6,6 +6,8 @@ import com.minos.domain.InformationNature;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Vue métier composée de l'intelligence d'architecture d'un snapshot MINOS.
  *
@@ -71,12 +73,6 @@ public record ArchitectureIntelligenceView(
         }
         if (!snapshotId.equals(candidateSnapshotId)) {
             throw new IllegalArgumentException(label + " snapshotId must match composed view");
-        }
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
         }
     }
 }

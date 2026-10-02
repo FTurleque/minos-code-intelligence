@@ -6,21 +6,28 @@ import com.minos.remote.RemoteRepositoryRequest;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
-/** Opt-in CLI surface for immutable remote materialization and worker-backed indexing. */
+/**
+ * Opt-in CLI surface for immutable remote materialization and worker-backed indexing.
+ *
+ * <p>{@code remote materialize} is fully available. {@code remote index} is <strong>closed by
+ * decision (ADR 0041)</strong>: it refuses before any side effect, with the rejected sandbox
+ * backend and its unmet dimension codes in the {@code remote index failed: …} line, and
+ * {@code minos doctor} reports the same cause. The command stays in place as the contract a future
+ * qualified backend must honour.</p>
+ */
 public final class RemoteIndexCommand {
 
     public static final String NAME = "remote";
-    private static final Set<String> COMMON_OPTIONS = Set.of(
-            "--ref", "--commit", "--subdir", "--credential-env", "--format");
-    private static final Set<String> INDEX_OPTIONS = Set.of(
-            "--name", "--provider", "--worker", "--worker-network");
+    private static final CliOptions.Spec MATERIALIZE_OPTIONS = CliOptions.spec()
+            .text("--ref", "--commit", "--subdir", "--credential-env", "--format");
+    private static final CliOptions.Spec INDEX_OPTIONS = CliOptions.spec()
+            .text("--ref", "--commit", "--subdir", "--credential-env", "--format")
+            .text("--name", "--provider", "--worker", "--worker-network");
     private static final String USAGE = """
             Usage:
               minos remote materialize <https-url> --ref <branch|tag> --commit <sha> [options]
@@ -29,7 +36,7 @@ public final class RemoteIndexCommand {
 
             Common options:
               --subdir <relative-path>       Project root inside the repository
-              --credential-env <NAME>        Environment variable containing an HTTPS token
+              --credential-env <NAME>        MINOS_REMOTE_TOKEN[_SUFFIX] or the host's token variable
               --format <text|json>           Output format (default: text)
 
             Index options:
@@ -199,54 +206,24 @@ public final class RemoteIndexCommand {
                 default -> throw new IllegalArgumentException("unknown remote action: " + arguments[0]);
             };
             String repository = CliCommandSupport.operand(arguments[1], "https-url");
-            String reference = null;
-            String commit = null;
-            String subdirectory = null;
-            String credential = null;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            String displayName = null;
-            String provider = null;
-            String workerId = "local-qualified";
-            WorkerNetworkPolicy workerNetwork = null;
-            Set<String> seen = new HashSet<>();
-            Set<String> supported = new HashSet<>(COMMON_OPTIONS);
-            if (action == Action.INDEX) supported.addAll(INDEX_OPTIONS);
-            for (int index = 2; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (!supported.contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if (++index >= arguments.length || arguments[index] == null || arguments[index].isBlank()
-                        || arguments[index].startsWith("--")) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                String value = arguments[index];
-                switch (option) {
-                    case "--ref" -> reference = value;
-                    case "--commit" -> commit = value;
-                    case "--subdir" -> subdirectory = value;
-                    case "--credential-env" -> credential = value;
-                    case "--format" -> format = SymbolOutputFormat.parse(value);
-                    case "--name" -> displayName = value;
-                    case "--provider" -> provider = value;
-                    case "--worker" -> workerId = value;
-                    case "--worker-network" -> workerNetwork = parseNetwork(value);
-                    default -> throw new IllegalStateException("unhandled option: " + option);
-                }
-            }
+            CliOptions options = (action == Action.INDEX ? INDEX_OPTIONS : MATERIALIZE_OPTIONS).parse(arguments, 2);
+            String reference = options.text("--ref");
+            String commit = options.text("--commit");
             if (reference == null) throw new IllegalArgumentException("--ref is required");
             if (commit == null) throw new IllegalArgumentException("--commit is required");
+            String displayName = action == Action.INDEX ? options.text("--name") : null;
             if (action == Action.INDEX && (displayName == null || displayName.isBlank())) {
                 throw new IllegalArgumentException("--name is required for remote index");
             }
-            if (action == Action.INDEX && workerNetwork == null) {
+            String network = action == Action.INDEX ? options.text("--worker-network") : null;
+            if (action == Action.INDEX && network == null) {
                 throw new IllegalArgumentException("--worker-network is required for remote index");
             }
-            return new Options(action, repository, reference, commit, subdirectory, credential, format,
-                    displayName, provider, workerId, workerNetwork);
+            return new Options(action, repository, reference, commit, options.text("--subdir"),
+                    options.text("--credential-env"), options.format(), displayName,
+                    action == Action.INDEX ? options.text("--provider") : null,
+                    action == Action.INDEX ? options.text("--worker", "local-qualified") : "local-qualified",
+                    network == null ? null : parseNetwork(network));
         }
 
         private static WorkerNetworkPolicy parseNetwork(String value) {

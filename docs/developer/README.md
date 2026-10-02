@@ -53,7 +53,7 @@ flowchart TB
     REMOTE[remote source cache] --> ORCH
     ORCH --> WORKER[isolated worker]
     WORKER --> STORE
-    STORE --> NEXUS[integration.nexus]
+    STORE --> NEXUS[nexus]
     SEM --> NEXUS
 ```
 
@@ -62,27 +62,37 @@ flowchart TB
 | Package | Responsabilité |
 |---|---|
 | `com.minos.discovery` | découverte de projet, langages, builds, modules |
-| `com.minos.registry` | projets et workspaces persistés |
+| `com.minos.registry` | ports et modèles du registre de projets et workspaces (moteur) |
+| `com.minos.storage.local.registry` | registre local persisté des projets, workspaces et correspondances de chemins (adaptateur `minos-storage-local`) |
 | `com.minos.orchestration` | négociation, lifecycle et promotion |
+| `com.minos.storage.local.orchestration` | état d'indexation persisté, bail projet inter-JVM et rétention des runs (adaptateur `minos-storage-local`) |
 | `com.minos.incremental` | fingerprints, invalidation, plans NONE/FULL/INCREMENTAL |
+| `com.minos.storage.local.incremental` | snapshots d'empreintes persistés (adaptateur `minos-storage-local`) |
 | `com.minos.adapter.scip` | lecture et normalisation SCIP |
 | `com.minos.domain` | symboles, relations, origine, preuves et critères |
 | `com.minos.program` | modèle provider-independent des graphes de programme M19 |
-| `com.minos.semantic` | documents, embeddings, recherche sémantique/hybride, provider learned local et budgets M20/M23 |
-| `com.minos.store` | snapshots, persistance locale et index reconstruisibles |
+| `com.minos.semantic` | modèle sémantique : documents, vecteurs et port de stockage vectoriel (domaine) |
+| `com.minos.application.semantic` | embeddings, indexation et recherche sémantique/hybride, provider learned local et budgets M20/M23 (services applicatifs) |
+| `com.minos.store` | ports et modèles de snapshots, index reconstruisibles (moteur) |
+| `com.minos.storage.local.store` | persistance locale des snapshots, vecteurs, observations runtime et plan de contrôle (adaptateur `minos-storage-local`) |
+| `com.minos.storage.local` | backend de stockage local, rétention persistante et observations runtime sérialisées (adaptateur `minos-storage-local`) |
 | `com.minos.query` | requêtes symboles/relations/tests |
 | `com.minos.context` | recherche compacte, extraits et budgets |
 | `com.minos.architecture` | topologie, dépendances, centralité, technologies |
 | `com.minos.impact` | propagation d’impact potentielle |
 | `com.minos.api` | contrats Java publics versionnés |
-| `com.minos.cli` | exposition CLI stable |
+| `com.minos.cli` | exposition CLI stable, points d'entrée `MinosLauncher` et `DockerRuntimeBootstrap` |
+| `com.minos.app` | route `minos mcp` de l'assemblage final : router backend natif/Docker (`minos-app`) |
 | `com.minos.mcp` | exposition MCP STDIO read-only |
-| `com.minos.git` | faits Git via JGit |
+| `com.minos.git` | port Git du moteur (`GitIntelligence`) |
+| `com.minos.integration.git` | faits Git via JGit (adaptateur `minos-integration-git`) |
 | `com.minos.workspace` | intelligence cross-repository |
-| `com.minos.integration.nexus` | projections versionnées vers NEXUS |
+| `com.minos.nexus` | projections versionnées vers NEXUS (`minos-nexus`) |
+| `com.minos.integration.nexus` | point d'entrée de processus de NEXUS, `NexusExportBridgeMain` (`minos-app`) |
 | `com.minos.output` | rendus texte/JSON |
 | `com.minos.hosted` | identité, RBAC, espaces partagés, audit, rétention et frontières opérateur M27/M28 |
-| `com.minos.runtime` | worker local, bundles distribués et disposition d’isolation remote M25/M28 |
+| `com.minos.runtime` | ports d'exécution des providers (`ProviderRuntimeManager`, `WorkerSandboxProbe`, `HostCommandLocator`) |
+| `com.minos.runtime.local` | worker local, bundles distribués et disposition d’isolation remote M25/M28 (adaptateur `minos-runtime-local`) |
 
 ## Parcours de lecture conseillé
 

@@ -1,11 +1,11 @@
 package com.minos.api;
 
 import com.minos.application.MinosApplication;
-import com.minos.semantic.HybridContextBuilder;
-import com.minos.semantic.HybridSearchService;
+import com.minos.application.semantic.HybridContextBuilder;
+import com.minos.application.semantic.HybridSearchService;
 import com.minos.semantic.SemanticDocument;
-import com.minos.semantic.SemanticIndexService;
-import com.minos.semantic.SemanticSearchService;
+import com.minos.application.semantic.SemanticIndexService;
+import com.minos.application.semantic.SemanticSearchService;
 
 import java.util.Objects;
 

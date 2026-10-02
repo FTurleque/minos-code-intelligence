@@ -88,7 +88,7 @@ Prérequis lorsque la plateforme est supportée :
 
 En juillet 2026, la matrice officielle .NET 10 ne prend pas en charge Windows 10 Pro 22H2. Sur cet hôte, M24 **n'impose pas** l'installation d'un SDK non supporté : `scip-dotnet` reste `BLOCKED/NOT_RUN` côté Windows et sa preuve e2e est portée par Linux ou par un Windows officiellement supporté.
 
-Installation locale sur une plateforme supportée :
+Installation locale sur une plateforme supportée (le nupkg de 82 Mo n'est pas embarqué dans la distribution Windows : il exige le SDK .NET du poste) :
 
 ```powershell
 minos.cmd tools install scip-dotnet
@@ -100,7 +100,7 @@ MINOS utilise `dotnet tool install --tool-path` sous `MINOS_HOME/tools`; aucune 
 
 Prérequis : une toolchain Go disponible dans `PATH`.
 
-Installation locale :
+Installation locale (scip-go n'est pas embarqué : le projet amont ne publie aucun binaire Windows et l'indexeur exige la toolchain Go du poste) :
 
 ```powershell
 minos.cmd tools install scip-go

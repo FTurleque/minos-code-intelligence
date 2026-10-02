@@ -20,4 +20,20 @@
             <version>${project.version}</version>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <environmentVariables>
+                        <!-- A dummy "secret" in the environment of the test JVM: the launcher tests prove that it never
+                             reaches a trusted launcher (a real MINOS process may carry tokens and passwords). -->
+                        <MINOS_TEST_SECRET_SENTINEL>dummy-value-that-must-never-reach-a-launcher</MINOS_TEST_SECRET_SENTINEL>
+                    </environmentVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

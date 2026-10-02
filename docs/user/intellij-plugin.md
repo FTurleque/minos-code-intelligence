@@ -371,6 +371,13 @@ Le plugin et le moteur n'utilisent pas une version compatible du protocole. Mett
 
 Cliquer **Register** ou exécuter `minos project add` sur la racine exacte ouverte par IntelliJ.
 
+### `N registry entries are unreadable` (notification MINOS)
+
+`minos project list` sort `3` (résultat partiel) quand des fichiers du registre MINOS sont abîmés : sa sortie reste valide pour les
+projets lisibles. Le plugin l'accepte pour cette commande, retrouve le projet ouvert et le signale par une notification discrète.
+Le projet fonctionne ; exécuter `minos project list` pour voir quelles entrées sont illisibles. Si le projet ouvert n'est pas parmi
+les entrées lisibles, le plugin ne dit pas qu'il n'est pas enregistré : il peut être l'une des entrées illisibles.
+
 ### Projet enregistré mais état `STALE`
 
 Cliquer **Plan** pour comprendre la raison, puis **Index** ou **Reindex Full** si nécessaire.

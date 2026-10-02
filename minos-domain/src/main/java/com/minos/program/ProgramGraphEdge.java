@@ -8,6 +8,8 @@ import com.minos.domain.ProbabilityInvariant;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Provider-independent directed edge in a reconstructible program graph. */
 public record ProgramGraphEdge(
         String id,
@@ -35,12 +37,6 @@ public record ProgramGraphEdge(
         }
         if (nature != InformationNature.FACTUAL && evidence.isEmpty()) {
             throw new IllegalArgumentException("derived or heuristic edge requires evidence");
-        }
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
         }
     }
 }

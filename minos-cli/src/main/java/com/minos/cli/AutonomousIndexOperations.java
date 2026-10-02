@@ -1,9 +1,12 @@
 package com.minos.cli;
 
 import com.minos.orchestration.IndexingMode;
+import com.minos.orchestration.IndexingResumePolicy;
 
 import java.util.List;
 import java.util.Objects;
+
+import static com.minos.domain.Preconditions.requireText;
 
 /** CLI port for autonomous indexing and provider runtime administration. */
 public interface AutonomousIndexOperations {
@@ -11,6 +14,24 @@ public interface AutonomousIndexOperations {
     IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception;
 
     IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception;
+
+    /**
+     * Executes with an explicit resume policy (ADR 0039 §6). Backends without resume control accept
+     * only {@link IndexingResumePolicy#RESUME}, which is the default behaviour of {@link #execute}.
+     * {@link IndexingResumePolicy#NO_RESUME} is a complete run: it never reopens an interrupted run,
+     * supersedes it and indexes everything, as if {@code forceFull} were set.
+     */
+    default IndexExecutionView execute(
+            String projectIdentifier,
+            String providerOverride,
+            boolean forceFull,
+            IndexingResumePolicy resumePolicy
+    ) throws Exception {
+        if (Objects.requireNonNull(resumePolicy, "resumePolicy") != IndexingResumePolicy.RESUME) {
+            throw new IllegalStateException("resume control is not supported by this indexing backend");
+        }
+        return execute(projectIdentifier, providerOverride, forceFull);
+    }
 
     List<ProviderView> providers();
 
@@ -65,24 +86,42 @@ public interface AutonomousIndexOperations {
         }
     }
 
+    /** Outcome of the resume considered for a run (ADR 0039 §6); {@code refusalReason} is public text. */
+    record ResumeView(int attempt, int reusedTargets, int reexecutedTargets, String refusalReason) {
+        public ResumeView {
+            if (attempt < 1) throw new IllegalArgumentException("attempt must be positive");
+            if (reusedTargets < 0 || reexecutedTargets < 0) {
+                throw new IllegalArgumentException("target counts must not be negative");
+            }
+            refusalReason = CliCommandSupport.publicDiagnostic(refusalReason);
+        }
+    }
+
     record IndexExecutionView(
             IndexPlanView plan,
             String runId,
             String status,
             String activeSnapshotId,
             boolean fingerprintPromoted,
-            String diagnostic
+            String diagnostic,
+            ResumeView resumed
     ) {
         public IndexExecutionView {
             Objects.requireNonNull(plan, "plan");
             requireText(status, "status");
             diagnostic = CliCommandSupport.publicDiagnostic(diagnostic);
         }
-    }
 
-    private static void requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
+        /** Compatibility constructor: no resume was considered. */
+        public IndexExecutionView(
+                IndexPlanView plan,
+                String runId,
+                String status,
+                String activeSnapshotId,
+                boolean fingerprintPromoted,
+                String diagnostic
+        ) {
+            this(plan, runId, status, activeSnapshotId, fingerprintPromoted, diagnostic, null);
         }
     }
 }

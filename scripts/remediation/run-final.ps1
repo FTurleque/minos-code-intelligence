@@ -39,17 +39,50 @@ try {
     python scripts/remediation/check-minos-01.py
     if ($LASTEXITCODE -ne 0) { throw 'MINOS-01 worker resource containment gate failed' }
 
-    python scripts/m28/check-m28.py
+    python scripts/quality/check-vertical-decomposition-consistency.py
     if ($LASTEXITCODE -ne 0) { throw 'M28 convergence/decomposition gate failed' }
 
     python scripts/docs/product-facts.py --check
     if ($LASTEXITCODE -ne 0) { throw 'product facts gate failed' }
 
-    python scripts/m28/check-current-docs.py
+    python scripts/quality/check-current-docs-vertical-extension.py
     if ($LASTEXITCODE -ne 0) { throw 'M28 current documentation gate failed' }
 
     python scripts/architecture/check-module-boundaries.py
     if ($LASTEXITCODE -ne 0) { throw 'architecture dependency gate failed' }
+
+    python scripts/architecture/check-private-io.py
+    if ($LASTEXITCODE -ne 0) { throw 'private I/O primitives gate failed' }
+
+    python scripts/architecture/test_check_private_io.py
+    if ($LASTEXITCODE -ne 0) { throw 'private I/O gate self-test failed' }
+
+    python scripts/quality/check-image-pins.py
+    if ($LASTEXITCODE -ne 0) { throw 'container image pin gate failed' }
+
+    python scripts/quality/test_check_image_pins.py
+    if ($LASTEXITCODE -ne 0) { throw 'container image pin gate self-test failed' }
+
+    python scripts/quality/check-compose-limits.py
+    if ($LASTEXITCODE -ne 0) { throw 'compose resource limits gate failed' }
+
+    python scripts/quality/test_check_compose_limits.py
+    if ($LASTEXITCODE -ne 0) { throw 'compose resource limits gate self-test failed' }
+
+    python scripts/quality/check-tools-manifest.py
+    if ($LASTEXITCODE -ne 0) { throw 'shipped tools gate failed' }
+
+    python scripts/quality/test_check_tools_manifest.py
+    if ($LASTEXITCODE -ne 0) { throw 'shipped tools gate self-test failed' }
+
+    python scripts/release/test_build_embedded_tools.py
+    if ($LASTEXITCODE -ne 0) { throw 'embedded tools payload builder self-test failed' }
+
+    python scripts/quality/check-single-execution.py
+    if ($LASTEXITCODE -ne 0) { throw 'single execution gate failed' }
+
+    python scripts/quality/test_check_single_execution.py
+    if ($LASTEXITCODE -ne 0) { throw 'single execution gate self-test failed' }
 
     if (-not $SkipCleanVerify) {
         .\mvnw.cmd clean verify

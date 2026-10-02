@@ -4,23 +4,22 @@ import com.minos.context.CodeContextResult;
 import com.minos.context.CodeSearchResponse;
 import com.minos.context.ContextRelationshipResult;
 import com.minos.context.SourceExcerpt;
-import com.minos.domain.CodeEntityRef;
 import com.minos.domain.Evidence;
-import com.minos.domain.Origin;
-import com.minos.domain.SymbolLocation;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.StringJoiner;
+
+import static com.minos.output.DeterministicJson.object;
+import static com.minos.output.DeterministicJson.quote;
 
 /**
  * Rendu compact TEXT/JSON des recherches et sources M4.
  */
 public final class CodeSearchRenderer {
-
-    private static final char[] HEX = "0123456789abcdef".toCharArray();
 
     private CodeSearchRenderer() {
     }
@@ -38,9 +37,7 @@ public final class CodeSearchRenderer {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(format, "format");
         if (format == SymbolOutputFormat.JSON) {
-            StringBuilder output = new StringBuilder("{\"source\":");
-            appendSource(output, source);
-            return output.append('}').toString();
+            return DeterministicJson.render(object("source", sourceMap(source)));
         }
         StringJoiner lines = new StringJoiner("\n");
         lines.add("source:");
@@ -104,196 +101,90 @@ public final class CodeSearchRenderer {
     }
 
     private static String renderJson(CodeSearchResponse response) {
-        StringBuilder output = new StringBuilder("{");
-        stringField(output, "projectId", response.projectId());
-        stringField(output, "query", response.query());
-        numberField(output, "count", response.count());
-        numberField(output, "maxDepth", response.maxDepth());
-        numberField(output, "tokenBudget", response.tokenBudget());
-        numberField(output, "estimatedTokens", response.estimatedTokens());
-        numberField(output, "estimatedTokensAvoided", response.estimatedTokensAvoided());
-        booleanField(output, "truncated", response.truncated());
-        name(output, "contexts");
-        output.append('[');
-        for (int index = 0; index < response.contexts().size(); index++) {
-            if (index > 0) {
-                output.append(',');
-            }
-            appendContext(output, response.contexts().get(index));
-        }
-        return output.append("]}").toString();
+        return DeterministicJson.render(object(
+                "projectId", response.projectId(),
+                "query", response.query(),
+                "count", response.count(),
+                "maxDepth", response.maxDepth(),
+                "tokenBudget", response.tokenBudget(),
+                "estimatedTokens", response.estimatedTokens(),
+                "estimatedTokensAvoided", response.estimatedTokensAvoided(),
+                "truncated", response.truncated(),
+                "contexts", response.contexts().stream().map(CodeSearchRenderer::contextMap).toList()));
     }
 
-    private static void appendContext(StringBuilder output, CodeContextResult context) {
-        output.append('{');
-        name(output, "symbol");
-        appendSymbol(output, context.symbol());
-        output.append(',');
-        name(output, "source");
-        if (context.source() == null) {
-            output.append("null");
-        } else {
-            appendSource(output, context.source());
-        }
-        output.append(',');
-        name(output, "relationships");
-        output.append('[');
-        for (int index = 0; index < context.relationships().size(); index++) {
-            if (index > 0) {
-                output.append(',');
-            }
-            appendRelationship(output, context.relationships().get(index));
-        }
-        output.append("],");
-        name(output, "usages");
-        output.append('[');
-        for (int index = 0; index < context.usages().size(); index++) {
-            if (index > 0) {
-                output.append(',');
-            }
-            appendUsage(output, context.usages().get(index));
-        }
-        output.append("],");
-        numberField(output, "estimatedTokens", context.estimatedTokens());
-        booleanField(output, "truncated", context.truncated());
-        trimComma(output);
-        output.append('}');
+    private static Map<String, Object> contextMap(CodeContextResult context) {
+        return object(
+                "symbol", symbolMap(context.symbol()),
+                "source", context.source() == null ? null : sourceMap(context.source()),
+                "relationships", context.relationships().stream().map(CodeSearchRenderer::relationshipMap).toList(),
+                "usages", context.usages().stream().map(CodeSearchRenderer::usageMap).toList(),
+                "estimatedTokens", context.estimatedTokens(),
+                "truncated", context.truncated());
     }
 
-    private static void appendSymbol(StringBuilder output, SymbolResult symbol) {
-        output.append('{');
-        stringField(output, "id", symbol.id());
-        stringField(output, "name", symbol.name());
-        stringField(output, "qualifiedName", symbol.qualifiedName());
-        stringField(output, "signature", symbol.signature());
-        stringField(output, "kind", symbol.kind().name());
-        stringField(output, "language", symbol.language());
-        stringField(output, "fileId", symbol.fileId());
-        name(output, "location");
-        appendLocation(output, symbol.location());
-        output.append(',');
-        stringField(output, "resolutionStatus", symbol.resolutionStatus().name());
-        name(output, "origin");
-        appendOrigin(output, symbol.origin());
-        trimComma(output);
-        output.append('}');
+    private static Map<String, Object> symbolMap(SymbolResult symbol) {
+        return object(
+                "id", symbol.id(),
+                "name", symbol.name(),
+                "qualifiedName", symbol.qualifiedName(),
+                "signature", symbol.signature(),
+                "kind", symbol.kind().name(),
+                "language", symbol.language(),
+                "fileId", symbol.fileId(),
+                "location", JsonShapes.location(symbol.location()),
+                "resolutionStatus", symbol.resolutionStatus().name(),
+                "origin", JsonShapes.origin(symbol.origin()));
     }
 
-    private static void appendSource(StringBuilder output, SourceExcerpt source) {
-        output.append('{');
-        stringField(output, "fileId", source.fileId());
-        numberField(output, "startLine", source.startLine());
-        numberField(output, "endLine", source.endLine());
-        booleanField(output, "fullFile", source.fullFile());
-        booleanField(output, "truncated", source.truncated());
-        numberField(output, "estimatedTokens", source.estimatedTokens());
-        numberField(output, "totalFileLines", source.totalFileLines());
-        numberField(output, "totalFileTokens", source.totalFileTokens());
-        stringField(output, "content", source.content());
-        trimComma(output);
-        output.append('}');
+    private static Map<String, Object> sourceMap(SourceExcerpt source) {
+        return object(
+                "fileId", source.fileId(),
+                "startLine", source.startLine(),
+                "endLine", source.endLine(),
+                "fullFile", source.fullFile(),
+                "truncated", source.truncated(),
+                "estimatedTokens", source.estimatedTokens(),
+                "totalFileLines", source.totalFileLines(),
+                "totalFileTokens", source.totalFileTokens(),
+                "content", source.content());
     }
 
-    private static void appendRelationship(
-            StringBuilder output,
-            ContextRelationshipResult context
-    ) {
+    private static Map<String, Object> relationshipMap(ContextRelationshipResult context) {
         var relationship = context.relationship();
-        output.append('{');
-        numberField(output, "depth", context.depth());
-        stringField(output, "direction", context.direction().name());
-        stringField(output, "id", relationship.id());
-        stringField(output, "kind", relationship.kind().name());
-        name(output, "source");
-        appendEntity(output, relationship.source());
-        output.append(',');
-        name(output, "target");
-        if (relationship.target() == null) {
-            output.append("null");
-        } else {
-            appendEntity(output, relationship.target());
-        }
-        output.append(',');
-        stringField(output, "unresolvedTarget", relationship.unresolvedTarget());
-        stringField(output, "resolutionStatus", relationship.resolutionStatus().name());
-        stringField(output, "nature", relationship.nature().name());
-        nullableNumberField(output, "confidence", relationship.confidence());
-        name(output, "origin");
-        appendOrigin(output, relationship.origin());
-        output.append(',');
-        name(output, "evidence");
-        output.append('[');
-        List<Evidence> evidence = relationship.evidence();
-        for (int index = 0; index < evidence.size(); index++) {
-            if (index > 0) {
-                output.append(',');
-            }
-            Evidence item = evidence.get(index);
-            output.append('{');
-            stringField(output, "type", item.type().name());
-            stringField(output, "description", item.description());
-            nullableNumberField(output, "weight", item.weight());
-            trimComma(output);
-            output.append('}');
-        }
-        output.append(']');
-        output.append('}');
+        List<Map<String, Object>> evidence = relationship.evidence().stream()
+                .map(CodeSearchRenderer::evidenceMap)
+                .toList();
+        return object(
+                "depth", context.depth(),
+                "direction", context.direction().name(),
+                "id", relationship.id(),
+                "kind", relationship.kind().name(),
+                "source", JsonShapes.entity(relationship.source()),
+                "target", JsonShapes.entity(relationship.target()),
+                "unresolvedTarget", relationship.unresolvedTarget(),
+                "resolutionStatus", relationship.resolutionStatus().name(),
+                "nature", relationship.nature().name(),
+                "confidence", relationship.confidence(),
+                "origin", JsonShapes.origin(relationship.origin()),
+                "evidence", evidence);
     }
 
-    private static void appendUsage(StringBuilder output, UsageResult usage) {
-        output.append('{');
-        stringField(output, "id", usage.id());
-        stringField(output, "fileId", usage.location().fileId());
-        numberField(output, "startLine", usage.location().startLine());
-        numberField(output, "startColumn", usage.location().startColumn());
-        name(output, "roles");
-        output.append('[');
-        List<String> roles = usage.roles().stream().sorted().map(Enum::name).toList();
-        for (int index = 0; index < roles.size(); index++) {
-            if (index > 0) {
-                output.append(',');
-            }
-            output.append(quote(roles.get(index)));
-        }
-        output.append("],");
-        stringField(output, "resolutionStatus", usage.resolutionStatus().name());
-        trimComma(output);
-        output.append('}');
+    private static Map<String, Object> evidenceMap(Evidence item) {
+        return object(
+                "type", item.type().name(),
+                "description", item.description(),
+                "weight", item.weight());
     }
 
-    private static void appendEntity(StringBuilder output, CodeEntityRef entity) {
-        output.append('{');
-        stringField(output, "type", entity.type().name());
-        stringField(output, "id", entity.id());
-        trimComma(output);
-        output.append('}');
-    }
-
-    private static void appendLocation(StringBuilder output, SymbolLocation location) {
-        if (location == null) {
-            output.append("null");
-            return;
-        }
-        output.append('{');
-        stringField(output, "fileId", location.fileId());
-        numberField(output, "startLine", location.startLine());
-        numberField(output, "startColumn", location.startColumn());
-        numberField(output, "endLine", location.endLine());
-        numberField(output, "endColumn", location.endColumn());
-        stringField(output, "positionEncoding", location.positionEncoding().name());
-        trimComma(output);
-        output.append('}');
-    }
-
-    private static void appendOrigin(StringBuilder output, Origin origin) {
-        output.append('{');
-        stringField(output, "providerId", origin.providerId());
-        stringField(output, "providerType", origin.providerType());
-        stringField(output, "providerVersion", origin.providerVersion());
-        stringField(output, "indexRunId", origin.indexRunId());
-        stringField(output, "sourceType", origin.sourceType().name());
-        trimComma(output);
-        output.append('}');
+    private static Map<String, Object> usageMap(UsageResult usage) {
+        return object(
+                "id", usage.id(),
+                "fileId", usage.location().fileId(),
+                "startLine", usage.location().startLine(),
+                "startColumn", usage.location().startColumn(),
+                "roles", JsonShapes.roles(usage.roles()),
+                "resolutionStatus", usage.resolutionStatus().name());
     }
 
     private static void field(StringJoiner output, int indent, String name, Object value) {
@@ -302,67 +193,5 @@ public final class CodeSearchRenderer {
 
     private static String nullable(String value) {
         return value == null ? "null" : quote(value);
-    }
-
-    private static void stringField(StringBuilder output, String name, String value) {
-        name(output, name);
-        output.append(value == null ? "null" : quote(value)).append(',');
-    }
-
-    private static void numberField(StringBuilder output, String name, int value) {
-        name(output, name);
-        output.append(value).append(',');
-    }
-
-    private static void nullableNumberField(StringBuilder output, String name, Double value) {
-        name(output, name);
-        output.append(value == null ? "null" : Double.toString(value)).append(',');
-    }
-
-    private static void booleanField(StringBuilder output, String name, boolean value) {
-        name(output, name);
-        output.append(value).append(',');
-    }
-
-    private static void name(StringBuilder output, String value) {
-        output.append(quote(value)).append(':');
-    }
-
-    private static void trimComma(StringBuilder output) {
-        if (!output.isEmpty() && output.charAt(output.length() - 1) == ',') {
-            output.setLength(output.length() - 1);
-        }
-    }
-
-    private static String quote(String value) {
-        StringBuilder escaped = new StringBuilder(value.length() + 2).append('"');
-        for (int index = 0; index < value.length(); index++) {
-            char current = value.charAt(index);
-            switch (current) {
-                case '"' -> escaped.append("\\\"");
-                case '\\' -> escaped.append("\\\\");
-                case '\b' -> escaped.append("\\b");
-                case '\f' -> escaped.append("\\f");
-                case '\n' -> escaped.append("\\n");
-                case '\r' -> escaped.append("\\r");
-                case '\t' -> escaped.append("\\t");
-                default -> {
-                    if (Character.isHighSurrogate(current) && index + 1 < value.length()
-                            && Character.isLowSurrogate(value.charAt(index + 1))) {
-                        escaped.append(current).append(value.charAt(++index));
-                    } else if (Character.isSurrogate(current) || current < 0x20
-                            || current == '\u2028' || current == '\u2029') {
-                        escaped.append("\\u")
-                                .append(HEX[current >>> 12 & 0xF])
-                                .append(HEX[current >>> 8 & 0xF])
-                                .append(HEX[current >>> 4 & 0xF])
-                                .append(HEX[current & 0xF]);
-                    } else {
-                        escaped.append(current);
-                    }
-                }
-            }
-        }
-        return escaped.append('"').toString();
     }
 }

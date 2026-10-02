@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.semantic.SemanticIndexService;
+import com.minos.application.semantic.SemanticIndexService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

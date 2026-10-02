@@ -1,20 +1,19 @@
 package com.minos.cli;
 
-import com.minos.dynamic.RuntimeIntelligenceService;
-import com.minos.dynamic.RuntimeIntelligenceService.HotPath;
-import com.minos.dynamic.RuntimeIntelligenceService.RuntimeReport;
-import com.minos.dynamic.RuntimeIntelligenceService.SessionView;
-import com.minos.dynamic.RuntimeIntelligenceService.SymbolRuntimeReport;
-import com.minos.dynamic.RuntimeObservationEnvelopeCodec;
+import com.minos.application.dynamic.RuntimeIntelligenceService;
+import com.minos.application.dynamic.RuntimeIntelligenceService.HotPath;
+import com.minos.application.dynamic.RuntimeIntelligenceService.RuntimeReport;
+import com.minos.application.dynamic.RuntimeIntelligenceService.SessionView;
+import com.minos.application.dynamic.RuntimeIntelligenceService.SymbolRuntimeReport;
+import com.minos.application.dynamic.RuntimeObservationEnvelopeCodec;
 import com.minos.output.RuntimeIntelligenceRenderer;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.function.Supplier;
 
 /** CLI import and read surface for explicitly partial M26 runtime observations. */
 public final class RuntimeCommand {
@@ -36,7 +35,14 @@ public final class RuntimeCommand {
               runtime observations never mutate static snapshots or provider capabilities.
             """.stripTrailing();
 
-    private final RuntimeIntelligenceService service;
+    private static final CliOptions.Spec IMPORT_OPTIONS = CliOptions.spec().text("--file", "--format");
+    private static final CliOptions.Spec SESSIONS_OPTIONS = CliOptions.spec().text("--format").integer("--limit", 1, 128);
+    private static final CliOptions.Spec REPORT_OPTIONS = CliOptions.spec()
+            .text("--session", "--format").integer("--limit", 1, 1_000);
+    private static final CliOptions.Spec SYMBOL_OPTIONS = CliOptions.spec()
+            .text("--symbol", "--session", "--format").integer("--limit", 1, 1_000);
+
+    private final Supplier<RuntimeIntelligenceService> service;
     private final RuntimeObservationEnvelopeCodec codec;
 
     public RuntimeCommand(RuntimeIntelligenceService service) {
@@ -44,9 +50,19 @@ public final class RuntimeCommand {
     }
 
     RuntimeCommand(RuntimeIntelligenceService service, RuntimeObservationEnvelopeCodec codec) {
+        this(CliCommandSupport.constant(service, "service"), codec);
+    }
+
+    /** The service is built on its first call, that is after the arguments have been analysed. */
+    RuntimeCommand(Supplier<RuntimeIntelligenceService> service) {
+        this(service, new RuntimeObservationEnvelopeCodec());
+    }
+
+    private RuntimeCommand(Supplier<RuntimeIntelligenceService> service, RuntimeObservationEnvelopeCodec codec) {
         this.service = java.util.Objects.requireNonNull(service, "service");
         this.codec = java.util.Objects.requireNonNull(codec, "codec");
     }
+
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse,
@@ -67,7 +83,8 @@ public final class RuntimeCommand {
     public static String usage() { return USAGE; }
 
     private String renderImport(Options options) throws IOException {
-        var result = service.importSession(options.project(), codec.read(options.file()));
+        var envelope = codec.read(options.file());
+        var result = service.get().importSession(options.project(), envelope);
         if (options.format() == SymbolOutputFormat.JSON) return RuntimeIntelligenceRenderer.renderImport(result);
         return String.join("\n",
                 "nature: " + result.nature(),
@@ -85,7 +102,7 @@ public final class RuntimeCommand {
     }
 
     private String renderSessions(Options options) throws IOException {
-        List<SessionView> sessions = service.listSessions(options.project(), options.limit());
+        List<SessionView> sessions = service.get().listSessions(options.project(), options.limit());
         if (options.format() == SymbolOutputFormat.JSON) return RuntimeIntelligenceRenderer.renderSessions(sessions);
         List<String> lines = new ArrayList<>();
         lines.add("nature: OBSERVED_PARTIAL");
@@ -101,7 +118,7 @@ public final class RuntimeCommand {
     }
 
     private String renderReport(Options options) throws IOException {
-        RuntimeReport report = service.report(options.project(), options.sessionId(), options.limit());
+        RuntimeReport report = service.get().report(options.project(), options.sessionId(), options.limit());
         if (options.format() == SymbolOutputFormat.JSON) return RuntimeIntelligenceRenderer.renderReport(report);
         List<String> lines = new ArrayList<>();
         lines.add("nature: " + report.nature());
@@ -122,7 +139,7 @@ public final class RuntimeCommand {
     }
 
     private String renderSymbol(Options options) throws IOException {
-        SymbolRuntimeReport report = service.symbolReport(
+        SymbolRuntimeReport report = service.get().symbolReport(
                 options.project(), options.symbolId(), options.sessionId(), options.limit());
         if (options.format() == SymbolOutputFormat.JSON) return RuntimeIntelligenceRenderer.renderSymbol(report);
         return String.join("\n",
@@ -164,51 +181,24 @@ public final class RuntimeCommand {
                 default -> throw new IllegalArgumentException("unknown runtime action: " + arguments[0]);
             };
             String project = CliCommandSupport.operand(arguments[1], "project");
-            Path file = null;
-            String session = null;
-            String symbol = null;
-            // Every action defaults to 20; only the accepted ceiling is action-specific (see --limit).
-            int limit = 20;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Set<String> seen = new HashSet<>();
-            Set<String> allowed = switch (action) {
-                case IMPORT -> Set.of("--file", "--format");
-                case SESSIONS -> Set.of("--limit", "--format");
-                case REPORT -> Set.of("--session", "--limit", "--format");
-                case SYMBOL -> Set.of("--symbol", "--session", "--limit", "--format");
+            CliOptions.Spec spec = switch (action) {
+                case IMPORT -> IMPORT_OPTIONS;
+                case SESSIONS -> SESSIONS_OPTIONS;
+                case REPORT -> REPORT_OPTIONS;
+                case SYMBOL -> SYMBOL_OPTIONS;
             };
-            for (int index = 2; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (!allowed.contains(option)) throw new IllegalArgumentException("unknown option: " + option);
-                if (!seen.add(option)) throw new IllegalArgumentException("duplicate option: " + option);
-                if (++index >= arguments.length || arguments[index] == null || arguments[index].isBlank()
-                        || arguments[index].startsWith("--")) throw new IllegalArgumentException("missing value for " + option);
-                String value = arguments[index];
-                switch (option) {
-                    case "--file" -> file = Path.of(value);
-                    case "--session" -> session = value;
-                    case "--symbol" -> symbol = value;
-                    case "--limit" -> limit = boundedInt(value, action == Action.SESSIONS ? 128 : 1_000);
-                    case "--format" -> format = SymbolOutputFormat.parse(value);
-                    default -> throw new IllegalStateException("unhandled runtime option: " + option);
-                }
-            }
+            CliOptions options = spec.parse(arguments, 2);
+            String file = action == Action.IMPORT ? options.text("--file") : null;
+            String symbol = action == Action.SYMBOL ? options.text("--symbol") : null;
             if (action == Action.IMPORT && file == null) throw new IllegalArgumentException("--file is required for runtime import");
             if (action == Action.SYMBOL && (symbol == null || symbol.isBlank())) {
                 throw new IllegalArgumentException("--symbol is required for runtime symbol");
             }
-            return new Options(action, project, file, session, symbol, limit, format);
-        }
-
-
-        private static int boundedInt(String value, int maximum) {
-            try {
-                int parsed = Integer.parseInt(value);
-                if (parsed < 1 || parsed > maximum) throw new IllegalArgumentException("--limit must be between 1 and " + maximum);
-                return parsed;
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("--limit must be an integer");
-            }
+            // Every action defaults to 20; only the accepted ceiling is action-specific (see the specs).
+            int limit = action == Action.IMPORT ? 20 : options.integer("--limit", 20);
+            String session = action == Action.REPORT || action == Action.SYMBOL ? options.text("--session") : null;
+            return new Options(action, project, file == null ? null : Path.of(file), session, symbol, limit,
+                    options.format());
         }
     }
 }

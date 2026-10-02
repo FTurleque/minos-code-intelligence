@@ -1,5 +1,7 @@
 package com.minos.api;
 
+import com.minos.orchestration.ProviderConformanceKit;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,7 +32,7 @@ public interface ProviderPlatformApi {
             if (version == null || version.isBlank()) throw new IllegalArgumentException("version must not be blank");
             languages = List.copyOf(Objects.requireNonNull(languages, "languages"));
             buildSystems = List.copyOf(Objects.requireNonNull(buildSystems, "buildSystems"));
-            capabilities = Map.copyOf(Objects.requireNonNull(capabilities, "capabilities"));
+            capabilities = ProviderConformanceKit.sortedCopy(Objects.requireNonNull(capabilities, "capabilities"));
             limitations = List.copyOf(Objects.requireNonNull(limitations, "limitations"));
             runtimeDiagnostics = List.copyOf(Objects.requireNonNull(runtimeDiagnostics, "runtimeDiagnostics"));
         }

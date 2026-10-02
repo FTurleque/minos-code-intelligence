@@ -39,25 +39,26 @@ def main() -> int:
         remote = read("minos-cli/src/main/java/com/minos/cli/LocalRemoteIndexOperations.java")
         remote_lease = read("minos-cli/src/main/java/com/minos/cli/RemoteIndexLease.java")
         bounded_file_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
-        linux = read("minos-runtime-local/src/main/java/com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend.java")
-        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/WindowsAppContainerWorkerSandboxBackend.java")
-        windows_script = read("minos-runtime-local/src/main/resources/com/minos/runtime/windows-appcontainer-sandbox-v4.ps1")
-        snapshots = read("minos-storage-local/src/main/java/com/minos/store/FileSymbolSnapshotStore.java")
-        retention = read("minos-storage-local/src/main/java/com/minos/store/SnapshotRetentionService.java")
-        runtime_codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
+        linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java")
+        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java")
+        windows_script = read("minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1")
+        snapshots = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")
+        retention = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java")
+        runtime_codec = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeObservationEnvelopeCodec.java")
         graph_sidecar = read("minos-application/src/main/java/com/minos/program/analysis/FileProgramGraphProvider.java")
-        hosted = read("minos-storage-local/src/main/java/com/minos/store/FileHostedControlPlaneStore.java")
-        local_storage = read("minos-application/src/main/java/com/minos/storage/LocalStorageBackend.java")
-        semantic_budget = read("minos-application/src/main/java/com/minos/semantic/SemanticIndexBudget.java")
+        hosted = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileHostedControlPlaneStore.java")
+        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
+        semantic_budget = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java")
         postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java")
         graph_service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
         fingerprints = read("minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java")
-        hybrid = read("minos-application/src/main/java/com/minos/semantic/HybridSearchService.java")
+        hybrid = read("minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java")
         polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
-        discovery = read("minos-application/src/main/java/com/minos/discovery/ProjectIgnorePolicy.java")
-        plugins = read("minos-application/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java")
-        registry = read("minos-application/src/main/java/com/minos/registry/InterProcessLocalProjectRegistry.java")
+        discovery = read("minos-engine/src/main/java/com/minos/discovery/ProjectIgnorePolicy.java")
+        plugins = read("minos-engine/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java")
+        registry = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java")
         coursier = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
+        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/PinnedArtifactSource.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
 
         require("LocalRemoteIndexOperations.java", remote,
@@ -89,7 +90,7 @@ def main() -> int:
                 "BoundedInputStream", "BoundedLineReader", "FixedTsv.splitExact")
         forbid("FileProgramGraphProvider.java", graph_sidecar, 'split("\\t", -1)')
 
-        require("FileHostedControlPlaneStore.java", hosted, "ReentrantLock[] JVM_LOCKS", "jvmLock.lock()")
+        require("FileHostedControlPlaneStore.java", hosted, "ReentrantLock[] JVM_LOCKS", "BoundedFileLease.acquire")
         require("LocalStorageBackend.java", local_storage, "SerializedRuntimeObservationStore")
 
         require("SemanticIndexBudget.java", semantic_budget, "Double.BYTES")
@@ -112,9 +113,14 @@ def main() -> int:
         require("InterProcessLocalProjectRegistry.java", registry, "ReentrantLock[] JVM_LOCKS", "JVM_LOCK_STRIPES")
         forbid("InterProcessLocalProjectRegistry.java", registry, "ConcurrentMap<Path, ReentrantLock>")
 
+        # D1: the pinned downloads (Coursier, Maven, Node, nupkg) go through PinnedArtifactSource, which streams the body
+        # through a BoundedInputStream; the manager keeps the per-artifact byte ceiling it passes to it.
         require("ManagedScipProviderRuntimeManager.java", coursier,
-                "MAX_COURSIER_ARCHIVE_BYTES", "BodyHandlers.ofInputStream()", "BoundedInputStream")
+                "MAX_COURSIER_ARCHIVE_BYTES", "source().acquire(", "coursierArtifact(), archivePartial, MAX_COURSIER_ARCHIVE_BYTES")
+        require("PinnedArtifactSource.java", pinned,
+                "BodyHandlers.ofInputStream()", "BoundedInputStream", "maxBytes")
         forbid("ManagedScipProviderRuntimeManager.java", coursier, "BodyHandlers.ofFile(archivePartial)")
+        forbid("PinnedArtifactSource.java", pinned, "BodyHandlers.ofFile(", "BodyHandlers.ofByteArray(")
 
         require("MinosMcpServer.java", mcp_server,
                 "MAX_INBOUND_MESSAGE_BYTES", "currentMessageBytes",

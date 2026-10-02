@@ -16,9 +16,9 @@ from windows_launcher import assemble, is_assembled_launcher  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 
-RUNTIME = "minos-runtime-local/src/main/java/com/minos/runtime"
-RUNTIME_TESTS = "minos-runtime-local/src/test/java/com/minos/runtime"
-WINDOWS_LAUNCHER = "minos-runtime-local/src/main/resources/com/minos/runtime/windows-appcontainer-sandbox-v4.ps1"
+RUNTIME = "minos-runtime-local/src/main/java/com/minos/runtime/local"
+RUNTIME_TESTS = "minos-runtime-local/src/test/java/com/minos/runtime/local"
+WINDOWS_LAUNCHER = "minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1"
 
 ADVERSARIAL_TESTS = {
     f"{RUNTIME_TESTS}/LinuxCgroupJobContainmentTest.java": (
@@ -199,10 +199,9 @@ def main() -> int:
                 "MINOS_SANDBOX_CGROUP_ROOT", "cgroup.subtree_control", "cgroup.procs")
         require(".github/workflows/pr-ci.yml", read(".github/workflows/pr-ci.yml"),
                 "scripts/remediation/check-minos-01.py", "scripts/ci/delegate-linux-cgroup.sh")
-        for relative in (
-            ".github/workflows/m19-advanced-code-intelligence.yml",
-            ".github/workflows/m20-semantic-hybrid-intelligence.yml",
-        ):
+        # M19 and M20 once repeated pr-ci's Linux job (audit C2); the only other workflow that runs the
+        # qualified Linux sandbox workload today is the manual historical replay.
+        for relative in (".github/workflows/historical-qualification.yml",):
             require(relative, read(relative), "scripts/ci/delegate-linux-cgroup.sh")
 
         print("MINOS-01 WORKER RESOURCE CONTAINMENT INVARIANTS SUCCESS")

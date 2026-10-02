@@ -25,9 +25,11 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <!-- A2 / ADR 0042: composition root for tests that open a real MinosApplication; test only -->
             <groupId>com.minos</groupId>
-            <artifactId>minos-storage-local</artifactId>
+            <artifactId>minos-bootstrap</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

@@ -1,0 +1,53 @@
+$ minos doctor --format text
+exit: 1
+--- stdout
+MINOS_HOME: <TEMP>/home
+Java runtime: <host>
+Java home: <host>
+command[java]: <host>
+command[javac]: <host>
+command[mvn]: <host>
+command[node]: <host>
+command[npm]: <host>
+command[python]: <host>
+command[docker]: <host>
+rust-analyzer-scip 0.3.2989 — <host> [optional]
+  diagnostic: <host>
+scip-clang 0.4.0 — <host> [optional]
+  diagnostic: <host>
+scip-dotnet 0.2.14 — <host> [optional]
+  diagnostic: <host>
+scip-go 0.2.7 — <host> [optional]
+  diagnostic: <host>
+scip-java 0.13.1 — <host> [required]
+  diagnostic: <host>
+scip-python 0.6.6 — <host> [optional]
+  diagnostic: <host>
+scip-typescript 0.4.0 — <host> [required]
+  diagnostic: <host>
+privateStorage[MINOS_HOME]: <host>
+privateStorage[snapshots]: <host>
+privateStorage[projects]: <host>
+privateStorage[runs]: <host>
+privateStorage[semantic-vectors]: <host>
+privateStorage[runtime-observations]: <host>
+privateStorage[remote-cache]: <host>
+privateStorage[remote-cache/repositories]: <host>
+privateStorage[distributed-artifacts]: <host>
+privateStorage[postgresql-snapshot-scratch]: <host>
+workerSandbox[managedLocalProvider]: <host>
+workerSandbox[untrustedCode]: <host>
+workerSandbox[remoteIndexing]: UNAVAILABLE<host>
+workerSandbox[cause]: <host>
+workerSandbox[reason]: <host>
+verdict: ACTION_REQUIRED
+
+--- stderr
+
+$ minos doctor --format json
+exit: 1
+--- stdout
+{"minosHome":"<TEMP>/home","javaRuntime":"<host>","javaHome":"<host>","commands":<host>,"providers":[{"id":"rust-analyzer-scip","version":"0.3.2989","state":"<host>","requiredByDefault":false,"executable":"<host>","diagnostics":<host>},{"id":"scip-clang","version":"0.4.0","state":"<host>","requiredByDefault":false,"executable":"<host>","diagnostics":<host>},{"id":"scip-dotnet","version":"0.2.14","state":"<host>","requiredByDefault":false,"executable":"<host>","diagnostics":<host>},{"id":"scip-go","version":"0.2.7","state":"<host>","requiredByDefault":false,"executable":"<host>","diagnostics":<host>},{"id":"scip-java","version":"0.13.1","state":"<host>","requiredByDefault":true,"executable":"<host>","diagnostics":<host>},{"id":"scip-python","version":"0.6.6","state":"<host>","requiredByDefault":false,"executable":"<host>","diagnostics":<host>},{"id":"scip-typescript","version":"0.4.0","state":"<host>","requiredByDefault":true,"executable":"<host>","diagnostics":<host>}],"privateStoragePermissions":<host>,"workerSandbox":{"managedLocalProvider":<host>,"untrustedCode":{"backend":"<host>","available":false},"remoteIndexing":"UNAVAILABLE","cause":"<host>","rejectedBackend":"<host>","reasons":<host>,"reason":"<host>","decision":"<host>"},"ready":false}
+
+--- stderr
+

@@ -78,7 +78,7 @@ try {
     $Python = Resolve-Python
 
     Write-Host '[1/7] Checking M22 Java provider contract and controlled ground truth...'
-    & $Python 'scripts\m22\check-provider.py'
+    & $Python 'scripts\quality\check-java-ast-provider-consistency.py'
     if ($LASTEXITCODE -ne 0) { throw "M22 provider consistency gate failed (exit=$LASTEXITCODE)" }
 
     Write-Host '[2/7] Replaying authoritative local core, module boundaries, full Maven tests and JaCoCo...'
@@ -116,7 +116,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "M22 IntelliJ parity qualification failed (exit=$LASTEXITCODE)" }
 
     Write-Host '[6/7] Rechecking M22 and current documentation consistency after all generated/build gates...'
-    & $Python 'scripts\m22\check-provider.py'
+    & $Python 'scripts\quality\check-java-ast-provider-consistency.py'
     if ($LASTEXITCODE -ne 0) { throw "M22 provider consistency recheck failed (exit=$LASTEXITCODE)" }
     & $Python 'scripts\docs\check-current-docs.py'
     if ($LASTEXITCODE -ne 0) { throw "Current documentation consistency failed (exit=$LASTEXITCODE)" }

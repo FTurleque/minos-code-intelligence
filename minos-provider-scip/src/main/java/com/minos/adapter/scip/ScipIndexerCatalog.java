@@ -84,7 +84,8 @@ public final class ScipIndexerCatalog {
                         IndexerCapability.IMPLEMENTATION_RELATIONS,
                         IndexerCapability.MULTI_MODULE,
                         IndexerCapability.TEST_SOURCES,
-                        IndexerCapability.RUNTIME_INSTALLATION),
+                        IndexerCapability.RUNTIME_INSTALLATION,
+                        IndexerCapability.RESUMABLE_ARTIFACT),
                 IndexerQualification.QUALIFIED_WITH_CONSTRAINTS, 100,
                 List.of(
                         "qualified runtime execution remains restricted to Maven projects on Windows",
@@ -242,7 +243,10 @@ public final class ScipIndexerCatalog {
                 entry(IndexerCapability.PARTIAL_INDEX_ON_BUILD_FAILURE, CapabilitySupportLevel.UNSUPPORTED),
                 entry(IndexerCapability.INCREMENTAL_INDEXING, CapabilitySupportLevel.UNSUPPORTED),
                 entry(IndexerCapability.POSITION_UTF16, CapabilitySupportLevel.EXPERIMENTAL),
-                entry(IndexerCapability.RUNTIME_INSTALLATION, CapabilitySupportLevel.FULL)));
+                entry(IndexerCapability.RUNTIME_INSTALLATION, CapabilitySupportLevel.FULL),
+                // ADR 0039: sources + Maven descriptors are covered by the scope fingerprint; only a
+                // same-coordinates SNAPSHOT dependency swap in the local repository escapes it.
+                entry(IndexerCapability.RESUMABLE_ARTIFACT, CapabilitySupportLevel.FULL)));
     }
 
     public static ProviderCapabilityProfile scipTypeScriptProfile() {
@@ -259,7 +263,8 @@ public final class ScipIndexerCatalog {
                 entry(IndexerCapability.PARTIAL_INDEX_ON_BUILD_FAILURE, CapabilitySupportLevel.FULL),
                 entry(IndexerCapability.INCREMENTAL_INDEXING, CapabilitySupportLevel.UNSUPPORTED),
                 entry(IndexerCapability.POSITION_UTF16, CapabilitySupportLevel.EXPERIMENTAL),
-                entry(IndexerCapability.RUNTIME_INSTALLATION, CapabilitySupportLevel.FULL)));
+                entry(IndexerCapability.RUNTIME_INSTALLATION, CapabilitySupportLevel.FULL),
+                entry(IndexerCapability.RESUMABLE_ARTIFACT, CapabilitySupportLevel.UNSUPPORTED)));
     }
 
     public static ProviderCapabilityProfile scipPythonProfile() {
@@ -276,7 +281,8 @@ public final class ScipIndexerCatalog {
                 entry(IndexerCapability.PARTIAL_INDEX_ON_BUILD_FAILURE, CapabilitySupportLevel.EXPERIMENTAL),
                 entry(IndexerCapability.INCREMENTAL_INDEXING, CapabilitySupportLevel.UNSUPPORTED),
                 entry(IndexerCapability.POSITION_UTF16, CapabilitySupportLevel.EXPERIMENTAL),
-                entry(IndexerCapability.RUNTIME_INSTALLATION, CapabilitySupportLevel.FULL)));
+                entry(IndexerCapability.RUNTIME_INSTALLATION, CapabilitySupportLevel.FULL),
+                entry(IndexerCapability.RESUMABLE_ARTIFACT, CapabilitySupportLevel.UNSUPPORTED)));
     }
 
     public static ProviderCapabilityProfile scipClangProfile() {
@@ -320,7 +326,8 @@ public final class ScipIndexerCatalog {
                 entry(IndexerCapability.PARTIAL_INDEX_ON_BUILD_FAILURE, partialFailureSupport),
                 entry(IndexerCapability.INCREMENTAL_INDEXING, CapabilitySupportLevel.UNSUPPORTED),
                 entry(IndexerCapability.POSITION_UTF16, CapabilitySupportLevel.EXPERIMENTAL),
-                entry(IndexerCapability.RUNTIME_INSTALLATION, runtimeInstallSupport)));
+                entry(IndexerCapability.RUNTIME_INSTALLATION, runtimeInstallSupport),
+                entry(IndexerCapability.RESUMABLE_ARTIFACT, CapabilitySupportLevel.UNSUPPORTED)));
     }
 
     private static ProviderOperationalProfile scipJavaOperationalProfile() {

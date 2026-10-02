@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Public, provider-independent Java contract for consuming MINOS Code Intelligence.
  *
@@ -243,11 +245,33 @@ public interface MinosApi extends AutoCloseable {
             String activeSnapshotId,
             String lastSuccessfulIndexAt,
             String providerId,
-            String providerVersion
+            String providerVersion,
+            String resumableRunId,
+            Long resumableCheckpointAgeSeconds,
+            Integer resumableTargets
     ) {
         public ProjectDto {
             languages = immutable(languages);
             buildSystems = immutable(buildSystems);
+        }
+
+        /** Compatibility constructor: a project without any run offered for resume (ADR 0039 §6). */
+        public ProjectDto(
+                String id,
+                String name,
+                String rootPath,
+                boolean rootAvailable,
+                List<String> languages,
+                List<String> buildSystems,
+                int moduleCount,
+                String indexState,
+                String activeSnapshotId,
+                String lastSuccessfulIndexAt,
+                String providerId,
+                String providerVersion
+        ) {
+            this(id, name, rootPath, rootAvailable, languages, buildSystems, moduleCount, indexState,
+                    activeSnapshotId, lastSuccessfulIndexAt, providerId, providerVersion, null, null, null);
         }
     }
 
@@ -555,12 +579,6 @@ public interface MinosApi extends AutoCloseable {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
     }
 
     private static void requireLimit(int value, int maximum, String name) {

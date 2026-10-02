@@ -1,6 +1,6 @@
 # 0038 — Confiner les ressources des workers non fiables de manière agrégée et fail-closed
 
-Status: Accepted — MINOS-01 (P1).
+Status: Accepted — MINOS-01 (P1). Amendé par [0041](0041-indexation-distante-de-code-non-fiable.md) (2026-09-26) sur la §4 : le quota d'écriture reste une supervision et l'indexation distante de code non fiable est fermée par décision.
 
 Complète [0033](0033-immutable-remote-revisions-and-verified-worker-artifacts.md) et précise la section « Real OS worker sandbox » de [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md).
 
@@ -34,6 +34,8 @@ Sans racine cgroup déléguée réellement sondée, le backend Linux n'existe pa
 Le Job Object est créé et configuré **avant** le processus contenu, qui est créé suspendu, vérifié `TokenIsAppContainer`, assigné puis vérifié par `IsProcessInJob` avant `ResumeThread`. Les limites appliquées sont relues via `QueryInformationJobObject`, tout breakaway est explicitement refusé, une limite de temps CPU de job est ajoutée et `TerminateJobObject` est appelé sur tous les chemins de sortie.
 
 ### 4. Assumer le quota d'écriture comme supervision, pas comme garantie OS
+
+*Amendé par [0041](0041-indexation-distante-de-code-non-fiable.md) : cette supervision n'est pas un état transitoire « en attente d'une primitive » mais une décision. `UNTRUSTED_CODE_SUPPORTED` exige un quota `OS_ENFORCED` sur les octets **et** les entrées ; aucun backend intégré ne l'atteint, et l'indexation distante reste fermée sur tous les OS, avec un refus journalisé et diagnosticable.*
 
 Aucune des deux plateformes n'offre de quota disque par job à un utilisateur non privilégié. MINOS applique donc un budget d'octets **et** d'entrées pendant l'exécution, sur toutes les racines accessibles en écriture, avec destruction de la frontière de job au dépassement, et le déclare `SUPERVISED_HARD_KILL` — jamais `OS_ENFORCED`.
 

@@ -1,13 +1,15 @@
 package com.minos.cli;
 
+import com.minos.application.LocalProjectOperations;
+import com.minos.application.ProjectOperations;
 import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
 import com.minos.discovery.ProjectDiscovery.Language;
-import com.minos.orchestration.FileIndexStateStore;
+import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

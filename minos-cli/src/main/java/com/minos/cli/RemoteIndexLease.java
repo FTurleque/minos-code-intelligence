@@ -1,15 +1,12 @@
 package com.minos.cli;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.BoundedFileLease;
+import com.minos.io.Sha256;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.HexFormat;
 import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -31,8 +28,8 @@ final class RemoteIndexLease implements AutoCloseable {
             throw new IllegalArgumentException("sourceIdentity must not be blank");
         }
         Path directory = home.resolve("remote-index-leases");
-        Files.createDirectories(directory);
-        String digest = sha256(sourceIdentity);
+        PrivateLocalStorage.ensurePrivateDirectory(directory);
+        String digest = Sha256.hex(sourceIdentity);
         Path lockFile = directory.resolve(digest + ".lock");
         ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(lockFile.hashCode(), JVM_LOCKS.length)];
         return new RemoteIndexLease(BoundedFileLease.acquire(
@@ -45,15 +42,6 @@ final class RemoteIndexLease implements AutoCloseable {
     @Override
     public void close() throws IOException {
         lease.close();
-    }
-
-    private static String sha256(String value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
     }
 
     private static ReentrantLock[] locks() {

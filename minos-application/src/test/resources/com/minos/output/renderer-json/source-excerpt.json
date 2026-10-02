@@ -1,0 +1,1 @@
+{"source":{"fileId":"src/été/Test.java","startLine":2,"endLine":9,"fullFile":false,"truncated":true,"estimatedTokens":12,"totalFileLines":40,"totalFileTokens":300,"content":"class \"A\" {\n\t// \u0001 \u2028 \ud800 é\n}\\"}}

@@ -1,8 +1,10 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
-import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
+import com.minos.io.Sha256;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.io.FileTreeOperations;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
@@ -15,15 +17,11 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,8 +59,8 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
             }
         }
         this.descriptors = Map.copyOf(values);
-        Files.createDirectories(stagingRoot);
-        Files.createDirectories(runsRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(stagingRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(runsRoot);
     }
 
     @Override
@@ -70,7 +68,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
         Objects.requireNonNull(request, "request");
         Path runRoot = runRoot(request.runId());
         deleteRecursively(runRoot);
-        Files.createDirectories(runRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(runRoot);
         Map<String, Symbol> symbols = new LinkedHashMap<>();
         Map<String, SymbolOccurrence> occurrences = new LinkedHashMap<>();
         Map<String, Relationship> relationships = new LinkedHashMap<>();
@@ -189,13 +187,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
     private static String scopeKey(Path relativeRoot) {
         String portable = portable(relativeRoot);
         if (portable.isBlank()) return "root";
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            String hash = HexFormat.of().formatHex(digest.digest(portable.getBytes(StandardCharsets.UTF_8)));
-            return "module-" + hash.substring(0, 16);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
+        return "module-" + Sha256.hex(portable).substring(0, 16);
     }
 
     private static String portable(Path path) {

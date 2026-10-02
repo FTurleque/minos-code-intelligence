@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.minos</groupId>
+        <artifactId>minos-parent</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>minos-bootstrap</artifactId>
+    <name>MINOS Bootstrap</name>
+    <description>Composition root (ADR 0042): the only non-adapter module that wires concrete adapters behind the ports of minos-application.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-domain</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-engine</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-application</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-runtime-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-storage-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-provider-scip</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-integration-git</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+          A2 / ADR 0042 (C5): application x PostgreSQL integration tests live in the composition root,
+          the module where the application meets its adapters. PostgreSQL stays optional in production
+          (discovered by ServiceLoader, see StorageBackendSelection): every dependency below is test-only,
+          which check-module-boundaries.py enforces for minos-storage-postgresql. Versions are those of
+          minos-storage-postgresql/pom.xml; the test-jar carries PostgresTestSupport (Docker/pgvector).
+        -->
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-storage-postgresql</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-storage-postgresql</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>2.0.5</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>1.21.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>1.21.4</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <!--
+                  A1-3 / A2: test fixtures (LocalRemoteIndexingRuntimeFixtures, and ResumableRunFixtures for A4) are published
+                  as a test-jar for the minos-cli and minos-mcp tests, so the production jar keeps no public injection point.
+                -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${maven.jar.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals><goal>test-jar</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Same Docker Desktop hints as minos-storage-postgresql, for the PostgreSQL tests above. -->
+        <profile>
+            <id>windows-docker-desktop-testcontainers</id>
+            <activation>
+                <os><family>Windows</family></os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <api.version>1.44</api.version>
+                            </systemPropertyVariables>
+                            <environmentVariables>
+                                <DOCKER_HOST>npipe:////./pipe/dockerDesktopLinuxEngine</DOCKER_HOST>
+                                <TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>//./pipe/dockerDesktopLinuxEngine</TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>
+                                <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                            </environmentVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

@@ -6,6 +6,8 @@ import com.minos.domain.InformationNature;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Classement relatif et directionnel d'un module dans le graphe d'architecture.
  *
@@ -48,12 +50,6 @@ public record ArchitectureModuleCentrality(
         evidence = List.copyOf(Objects.requireNonNull(evidence, "evidence"));
         if (evidence.isEmpty()) {
             throw new IllegalArgumentException("module centrality requires evidence");
-        }
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
         }
     }
 

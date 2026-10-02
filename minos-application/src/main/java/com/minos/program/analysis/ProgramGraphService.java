@@ -32,8 +32,8 @@ public final class ProgramGraphService {
     public static final long DEFAULT_MAX_CACHE_WEIGHT = 256L * 1024L * 1024L;
     public static final int DEFAULT_MAX_NODES = 10_000;
     public static final int DEFAULT_MAX_EDGES = 50_000;
-    private static final int PUBLIC_MAX_NODES = 100_000;
-    private static final int PUBLIC_MAX_EDGES = 500_000;
+    public static final int PUBLIC_MAX_NODES = 100_000;
+    public static final int PUBLIC_MAX_EDGES = 500_000;
     private static final int BUILD_LOCK_STRIPES = 64;
 
     private final ProjectResolver projectResolver;

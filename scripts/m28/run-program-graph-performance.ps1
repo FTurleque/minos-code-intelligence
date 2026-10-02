@@ -23,7 +23,7 @@ Remove-Item -LiteralPath $output -Force -ErrorAction SilentlyContinue
 Push-Location $RepoRoot
 try {
     & $maven `
-        '-pl' 'minos-application' `
+        '-pl' 'minos-bootstrap' `
         '-am' `
         '-Dtest=ProgramGraphPerformanceQualificationTest' `
         '-Dsurefire.failIfNoSpecifiedTests=false' `

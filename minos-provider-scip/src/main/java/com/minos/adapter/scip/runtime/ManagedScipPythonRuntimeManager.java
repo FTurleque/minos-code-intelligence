@@ -1,11 +1,12 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.runtime.BoundedProcessOutput;
-import com.minos.runtime.CommandLocator;
-import com.minos.runtime.IndexerProcessPlan;
+import com.minos.runtime.local.BoundedProcessOutput;
+import com.minos.runtime.local.CommandLocator;
+import com.minos.runtime.local.IndexerProcessPlan;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
@@ -73,13 +74,13 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
     public ProviderRuntimeStatus inspect(String providerId) {
         requireProvider(providerId);
         List<String> diagnostics = new ArrayList<>();
-        if (CommandLocator.find("node").isEmpty()) diagnostics.add("Node.js 16+ is required by scip-python");
-        if (CommandLocator.find("npm").isEmpty()) diagnostics.add("npm is required to install scip-python");
+        if (CommandLocator.find("node").isEmpty()) diagnostics.add(ExternalPrerequisite.of("Node.js 16+ is required by scip-python"));
+        if (CommandLocator.find("npm").isEmpty()) diagnostics.add(ExternalPrerequisite.of("npm is required to install scip-python"));
         Optional<Path> python = pythonExecutable();
         if (python.isEmpty()) {
-            diagnostics.add("Python 3.10+ is required in PATH by scip-python");
+            diagnostics.add(ExternalPrerequisite.of("Python 3.10+ is required in PATH by scip-python"));
         } else if (pipExecutable(python.orElseThrow()).isEmpty()) {
-            diagnostics.add("pip is required by scip-python and must be available with the selected Python runtime");
+            diagnostics.add(ExternalPrerequisite.of("pip is required by scip-python and must be available with the selected Python runtime"));
         }
         Path executable = executable();
         boolean installed = Files.isRegularFile(executable);
@@ -110,11 +111,11 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
                 .orElseThrow(() -> new IllegalStateException(
                         "pip is required by scip-python and must be available with the selected Python runtime"));
 
-        Files.createDirectories(toolsRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(toolsRoot);
         Path destination = root();
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
         deleteRecursively(partial);
-        Files.createDirectories(partial);
+        PrivateLocalStorage.ensurePrivateDirectory(partial);
         try {
             LockedNpmPackage.prepare(
                     ManagedScipPythonRuntimeManager.class,
@@ -140,8 +141,8 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
                 if (!Files.isRegularFile(entryPoint)) {
                     throw new IllegalStateException("scip-python package entry point was not created: " + entryPoint);
                 }
-                Files.writeString(partial.resolve(WINDOWS_COMPATIBILITY_PRELOAD),
-                        WINDOWS_COMPATIBILITY_SOURCE, StandardCharsets.UTF_8);
+                PrivateLocalStorage.writePrivateFile(partial.resolve(WINDOWS_COMPATIBILITY_PRELOAD),
+                        WINDOWS_COMPATIBILITY_SOURCE.getBytes(StandardCharsets.UTF_8));
             }
             deleteRecursively(destination);
             move(partial, destination);
@@ -249,7 +250,7 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
 
     private static void run(List<String> command, Path workingDirectory, Path log, Duration timeout)
             throws IOException, InterruptedException {
-        Files.createDirectories(log.toAbsolutePath().normalize().getParent());
+        PrivateLocalStorage.ensurePrivateDirectory(log.toAbsolutePath().normalize().getParent());
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(workingDirectory.toFile());
         builder.redirectErrorStream(true);
@@ -276,7 +277,7 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
     }
 
     private static void move(Path source, Path target) throws IOException {
-        Files.createDirectories(target.toAbsolutePath().normalize().getParent());
+        PrivateLocalStorage.ensurePrivateDirectory(target.toAbsolutePath().normalize().getParent());
         Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
     }
 }

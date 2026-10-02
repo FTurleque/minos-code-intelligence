@@ -1,0 +1,83 @@
+package com.minos.orchestration;
+
+import java.time.Instant;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+
+import static com.minos.domain.Preconditions.requireText;
+
+/**
+ * État observable de l'index actif d'un projet.
+ *
+ * <p>Un rafraîchissement peut échouer sans rendre l'ancien snapshot indisponible :
+ * l'état devient alors {@link Availability#STALE} et l'identifiant du snapshot
+ * actif précédent est conservé.</p>
+ *
+ * <p>{@code resumableRunId} (ADR 0039 §2) désigne l'unique run {@code INTERRUPTED} que le projet
+ * offre à la reprise. Il n'existe que dans un état {@link Availability#STALE} ou
+ * {@link Availability#FAILED} : un projet en cours d'indexation ou à jour n'a rien à reprendre.</p>
+ */
+public record ProjectIndexState(
+        UUID projectId,
+        Availability availability,
+        Optional<String> activeSnapshotId,
+        Optional<UUID> latestRunId,
+        Instant updatedAt,
+        Optional<String> detail,
+        Optional<UUID> resumableRunId
+) {
+
+    public ProjectIndexState {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(availability, "availability");
+        activeSnapshotId = Objects.requireNonNull(activeSnapshotId, "activeSnapshotId")
+                .map(value -> requireText(value, "text value"));
+        latestRunId = Objects.requireNonNull(latestRunId, "latestRunId");
+        Objects.requireNonNull(updatedAt, "updatedAt");
+        detail = Objects.requireNonNull(detail, "detail")
+                .map(value -> requireText(value, "text value"));
+        resumableRunId = Objects.requireNonNull(resumableRunId, "resumableRunId");
+
+        if ((availability == Availability.READY || availability == Availability.STALE)
+                && activeSnapshotId.isEmpty()) {
+            throw new IllegalArgumentException(availability + " requires an active snapshot");
+        }
+        if (resumableRunId.isPresent()
+                && availability != Availability.STALE && availability != Availability.FAILED) {
+            throw new IllegalArgumentException(availability + " must not offer a resumable run");
+        }
+    }
+
+    /** Constructeur de compatibilité : aucun run reprenable. */
+    public ProjectIndexState(
+            UUID projectId,
+            Availability availability,
+            Optional<String> activeSnapshotId,
+            Optional<UUID> latestRunId,
+            Instant updatedAt,
+            Optional<String> detail
+    ) {
+        this(projectId, availability, activeSnapshotId, latestRunId, updatedAt, detail, Optional.empty());
+    }
+
+    public static ProjectIndexState neverIndexed(UUID projectId, Instant observedAt) {
+        return new ProjectIndexState(
+                projectId,
+                Availability.NEVER_INDEXED,
+                Optional.empty(),
+                Optional.empty(),
+                observedAt,
+                Optional.empty()
+        );
+    }
+
+    public enum Availability {
+        NEVER_INDEXED,
+        INDEXING,
+        REFRESHING,
+        READY,
+        STALE,
+        FAILED
+    }
+}
