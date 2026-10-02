@@ -32,6 +32,14 @@ PR_CI = """jobs:
       - name: self-test
         run: python scripts/quality/test_check_image_pins.py -v
 """
+DEPENDABOT = """version: 2
+updates:
+  - package-ecosystem: "docker"
+    directory: "/docker"
+  - package-ecosystem: "docker-compose"
+    directory: "/docker"
+    target-branch: "develop"
+"""
 NO_STEPS_CI = """jobs:
   invariants:
     steps: []
@@ -40,10 +48,13 @@ NO_STEPS_CI = """jobs:
 
 class CheckImagePinsTest(unittest.TestCase):
 
-    def run_gate(self, files: dict[str, str], pr_ci: str = PR_CI) -> list[str]:
+    def run_gate(self, files: dict[str, str], pr_ci: str = PR_CI, dependabot: str | None = DEPENDABOT) -> list[str]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for name, content in {".github/workflows/pr-ci.yml": pr_ci, **files}.items():
+            base = {".github/workflows/pr-ci.yml": pr_ci}
+            if dependabot is not None:
+                base[".github/dependabot.yml"] = dependabot
+            for name, content in {**base, **files}.items():
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content, encoding="utf-8")
@@ -53,7 +64,7 @@ class CheckImagePinsTest(unittest.TestCase):
     def test_a_fully_pinned_tree_passes(self):
         self.assertEqual([], self.run_gate({
             "docker/Dockerfile.mcp": PINNED_DOCKERFILE,
-            "docker/compose.mcp.connected.yaml": PINNED_COMPOSE,
+            "docker/compose-mcp.connected.yaml": PINNED_COMPOSE,
         }))
 
     def test_digest_without_tag_is_refused_because_dependabot_would_move_it_to_latest(self):
@@ -86,26 +97,26 @@ class CheckImagePinsTest(unittest.TestCase):
 
     def test_compose_default_without_digest_is_refused(self):
         failures = self.run_gate({
-            "docker/compose.mcp.connected.yaml":
+            "docker/compose-mcp.connected.yaml":
                 'services:\n  o:\n    image: "${MINOS_OLLAMA_IMAGE:-ollama/ollama:0.32.0}"\n'})
         self.assertEqual(1, len(failures), failures)
         self.assertIn("default must be pinned", failures[0])
 
     def test_literal_compose_image_without_digest_is_refused(self):
-        failures = self.run_gate({"docker/compose.mcp.prod.yaml": "services:\n  s:\n    image: redis:7\n"})
+        failures = self.run_gate({"docker/compose-mcp.prod.yaml": "services:\n  s:\n    image: redis:7\n"})
         self.assertEqual(1, len(failures), failures)
 
     def test_a_variable_without_default_other_than_the_minos_image_is_refused(self):
-        failures = self.run_gate({"docker/compose.mcp.prod.yaml": 'services:\n  s:\n    image: "${OTHER_IMAGE}"\n'})
+        failures = self.run_gate({"docker/compose-mcp.prod.yaml": 'services:\n  s:\n    image: "${OTHER_IMAGE}"\n'})
         self.assertEqual(1, len(failures), failures)
 
     def test_the_minos_image_variable_is_the_only_unpinned_reference_allowed(self):
-        self.assertEqual([], self.run_gate({"docker/compose.mcp.prod.yaml": 'services:\n  s:\n    image: "${MINOS_IMAGE}"\n'}))
+        self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml": 'services:\n  s:\n    image: "${MINOS_IMAGE}"\n'}))
 
     def test_a_second_copy_of_a_compose_pinned_service_image_is_refused(self):
         failures = self.run_gate({
             "docker/Dockerfile.mcp": PINNED_DOCKERFILE,
-            "docker/compose.mcp.connected.yaml": PINNED_COMPOSE,
+            "docker/compose-mcp.connected.yaml": PINNED_COMPOSE,
             "docker/scripts/configure.ps1": "[string] $PostgresImage = 'pgvector/pgvector:0.8.2-pg17',\n",
         })
         self.assertEqual(1, len(failures), failures)
@@ -115,7 +126,7 @@ class CheckImagePinsTest(unittest.TestCase):
     def test_prose_under_docs_may_quote_the_reference(self):
         self.assertEqual([], self.run_gate({
             "docker/Dockerfile.mcp": PINNED_DOCKERFILE,
-            "docker/compose.mcp.connected.yaml": PINNED_COMPOSE,
+            "docker/compose-mcp.connected.yaml": PINNED_COMPOSE,
             "docs/user/docker-runtime.md": "Image pgvector/pgvector:0.8.2-pg17 is managed.\n",
         }))
 
@@ -145,6 +156,38 @@ class CheckImagePinsTest(unittest.TestCase):
     def test_a_condition_on_a_neighbouring_step_or_job_is_not_confused_with_ours(self):
         neighbour = PR_CI + "  verify:\n    if: false\n    steps:\n      - name: x\n        if: false\n        run: echo\n"
         self.assertEqual([], self.run_gate({"docker/Dockerfile.mcp": PINNED_DOCKERFILE}, pr_ci=neighbour))
+
+    # ---- Dependabot must be able to see the compose files (a pin nobody updates is a security regression) ----
+
+    def test_a_compose_file_named_outside_dependabots_pattern_is_refused(self):
+        # Two dotted segments: the name the compose files had before the rename, invisible to docker-compose.
+        for name in ("compose.mcp.prod.yaml", "compose-mcp-prod.yaml", "compose.a.b.yml"):
+            with self.subTest(name=name):
+                failures = self.run_gate({f"docker/{name}": PINNED_COMPOSE})
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn("FILENAME_REGEX", failures[0])
+
+    def test_the_names_dependabot_reads_are_accepted(self):
+        for name in ("compose-mcp.prod.yaml", "compose-mcp.connected.yaml", "compose.yaml", "compose.yml"):
+            with self.subTest(name=name):
+                self.assertEqual([], self.run_gate({f"docker/{name}": PINNED_COMPOSE}))
+
+    def test_a_missing_or_misdirected_docker_compose_entry_is_refused(self):
+        compose = {"docker/compose-mcp.connected.yaml": PINNED_COMPOSE}
+        without_entry = DEPENDABOT.split('  - package-ecosystem: "docker-compose"')[0]
+        entry = DEPENDABOT[len(without_entry):]
+        wrong_directory = without_entry + entry.replace('directory: "/docker"', 'directory: "/"')
+        commented = without_entry + "".join("  # " + line + "\n" for line in entry.splitlines())
+        # `directory: "/docker"` is present, but it belongs to the maven entry that follows, not to docker-compose.
+        directory_of_another_entry = (without_entry + entry.replace('directory: "/docker"', 'directory: "/elsewhere"')
+                                      + '  - package-ecosystem: "maven"\n    directory: "/docker"\n')
+        for label, config in (("no entry", without_entry), ("other directory", wrong_directory),
+                              ("commented out", commented), ("directory belongs to another entry", directory_of_another_entry),
+                              ("no file", None)):
+            with self.subTest(case=label):
+                failures = self.run_gate(compose, dependabot=config)
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn("dependabot.yml", failures[0])
 
     def test_a_tree_without_docker_files_does_not_pass_silently(self):
         failures = self.run_gate({"README.md": "x\n"})

@@ -15,7 +15,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $ProjectsRoot,
 
-    # Where docker/Dockerfile.mcp.release and docker/compose.mcp.prod.yaml are read from for this
+    # Where docker/Dockerfile.mcp.release and docker/compose-mcp.prod.yaml are read from for this
     # Install. Defaults to this script's own repo (the normal case: installing whatever version of
     # MINOS this checkout is). The Docker A -> B upgrade qualification overrides this per candidate
     # so each candidate installs itself with its OWN contemporary Dockerfile/Compose recipe - the
@@ -67,7 +67,11 @@ $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 
 $RuntimeRoot = Join-Path $InstallRoot 'runtime'
 $BackupsRoot = Join-Path $InstallRoot 'backups'
-$ComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
+$ComposeFile = Join-Path $RuntimeRoot 'compose-mcp.prod.yaml'
+# The runtime copy was named compose.mcp.prod.yaml until the compose files were renamed so that Dependabot's
+# docker-compose ecosystem can see them (audit S11). An installation made before that still holds the old name,
+# possibly with the connected profile swapped in by configure-m30-docker-services.ps1: see Move-LegacyRuntimeCompose.
+$LegacyComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
 $EnvironmentFile = Join-Path $RuntimeRoot '.env'
 $MetadataFile = Join-Path $RuntimeRoot 'installation.json'
 $ProviderInventoryFile = Join-Path $RuntimeRoot 'provider-inventory.json'
@@ -77,7 +81,7 @@ function ConvertTo-DockerPath([string] $Path) {
     return ([System.IO.Path]::GetFullPath($Path)).Replace('\', '/')
 }
 
-# Unlike docker\Dockerfile.mcp.release and docker\compose.mcp.prod.yaml -- which are shipped
+# Unlike docker\Dockerfile.mcp.release and docker\compose-mcp.prod.yaml -- which are shipped
 # verbatim under {app}\docker\ and so remain reachable via a $RepoRoot-relative path from both a
 # git checkout and an installed distribution -- the npm lockfiles below live under a Maven
 # module's src/main/resources tree. That tree is compiled INTO minos.jar and never itself shipped
@@ -122,7 +126,7 @@ function Compose([string[]] $Arguments, [int[]] $AcceptedExitCodes = @(0)) {
     if ($LASTEXITCODE -notin $AcceptedExitCodes) { throw "docker compose failed (exit $LASTEXITCODE): $($Arguments -join ' ')" }
 }
 
-# Resource ceilings (docker/compose.mcp.*.yaml, x-limits-<role>; defaults in docker/.env.example). Hitting
+# Resource ceilings (docker/compose-mcp.*.yaml, x-limits-<role>; defaults in docker/.env.example). Hitting
 # one is not reported by Compose as anything but a failed command (exit 137 for a kill; for a PID ceiling
 # a JVM stack trace saying OutOfMemoryError: unable to create native thread), and a process killed inside
 # a still-running container (an Ollama model runner) only surfaces as an HTTP 500 from that service. These
@@ -266,6 +270,34 @@ function Assert-DockerJavaRuntime([string] $Image, [string] $Failure) {
     if (-not [string]::IsNullOrWhiteSpace($Output)) { Write-Host $Output }
 }
 
+# Where the compose recipe of $Root (a checkout, a distribution, or the worktree of a previous release) lives.
+# Current trees ship compose-mcp.prod.yaml only. A tree older than the rename ships compose.mcp.prod.yaml: the Docker
+# A -> B upgrade qualification (scripts/ci/qualify-docker-upgrade.ps1) installs the PREVIOUS release with its own
+# recipe, and must keep doing so. When both exist, the new name wins.
+function Resolve-ComposeSource([string] $Root) {
+    foreach ($Name in @('compose-mcp.prod.yaml', 'compose.mcp.prod.yaml')) {
+        $Candidate = Join-Path $Root (Join-Path 'docker' $Name)
+        if (Test-Path -LiteralPath $Candidate -PathType Leaf) { return $Candidate }
+    }
+    throw "No MINOS Docker compose recipe under $Root\docker (expected compose-mcp.prod.yaml)."
+}
+
+# Upgrade of an existing installation: the runtime directory (outside the installed program tree, so never replaced by
+# update-installation.ps1) may still hold the pre-rename file. Nothing persisted names the compose file (.env,
+# installation.json, .docker-mcp-managed carry the project, container and image, not the file), and the Compose
+# project is fixed by `name: ${MINOS_COMPOSE_PROJECT}`: renaming the file keeps the containers and volumes. So the old
+# file is MOVED to the new name, content intact (it may be the connected profile). If both exist the new name wins
+# (it is the one every action runs) and the old one is left alone, with a warning, rather than guessed at.
+function Move-LegacyRuntimeCompose {
+    if (-not (Test-Path -LiteralPath $LegacyComposeFile -PathType Leaf)) { return }
+    if (Test-Path -LiteralPath $ComposeFile -PathType Leaf) {
+        Write-Warning "Both $ComposeFile and the pre-rename $LegacyComposeFile exist; $ComposeFile is the one used. Remove the old file once you have checked it is not needed."
+        return
+    }
+    Move-Item -LiteralPath $LegacyComposeFile -Destination $ComposeFile
+    Write-Host "Migrated the runtime compose file to its new name: $ComposeFile" -ForegroundColor Cyan
+}
+
 function Require-Installed {
     foreach ($File in @($ComposeFile, $EnvironmentFile, $MetadataFile, $ProviderInventoryFile, $ProviderChecksumsFile)) {
         if (-not (Test-Path -LiteralPath $File -PathType Leaf)) { throw "MINOS Docker PROD is not installed: missing $File" }
@@ -311,6 +343,8 @@ function Test-ExactImage([string] $Image, [string] $ExpectedVersion, [string] $E
         [string]$PreparedLabel.Value -eq 'true'
 }
 
+Move-LegacyRuntimeCompose
+
 switch ($Action) {
     'Install' {
         if ([string]::IsNullOrWhiteSpace($Jar)) { throw '-Jar is required for Install. Use the shaded JAR from the same MINOS release.' }
@@ -352,7 +386,8 @@ switch ($Action) {
             Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
         }
 
-        Copy-Item -LiteralPath (Join-Path $SourceRoot 'docker\compose.mcp.prod.yaml') -Destination $ComposeFile -Force
+        Copy-Item -LiteralPath (Resolve-ComposeSource $SourceRoot) -Destination $ComposeFile -Force
+        Remove-Item -LiteralPath $LegacyComposeFile -Force -ErrorAction SilentlyContinue
         $PreservedOverrides = @(Get-PreservedCeilingOverrides -Path $EnvironmentFile)
         @"
 MINOS_COMPOSE_PROJECT=$ComposeProject

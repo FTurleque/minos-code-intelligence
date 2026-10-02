@@ -4,7 +4,7 @@ Set-StrictMode -Version 2.0
 $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $scriptDirectory '..\..'))
 $runDirectory = Join-Path $projectRoot '.run'
-$composeTemplate = Join-Path $projectRoot 'docker\compose.mcp.prod.yaml'
+$composeTemplate = Join-Path $projectRoot 'docker\compose-mcp.prod.yaml'
 $dockerfile = Join-Path $projectRoot 'docker\Dockerfile.mcp'
 $prodScript = Join-Path $projectRoot 'docker\scripts\prod-mcp.ps1'
 $devScript = Join-Path $projectRoot 'scripts\intellij\run-minos.ps1'

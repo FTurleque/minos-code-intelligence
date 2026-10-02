@@ -169,7 +169,7 @@ function Invoke-Compose([string[]] $Arguments, [string[]] $Profiles = @()) {
 # design). Pulling the embedding model needs outbound access exactly once, at provisioning
 # time. The compose-declared minos-admin-egress network cannot serve that here: it is
 # attached only to the ephemeral minos-admin service, so Compose has not materialized it at
-# this point (the base compose.mcp.prod.yaml profile declares no networks at all, and the
+# this point (the base compose-mcp.prod.yaml profile declares no networks at all, and the
 # connected profile's up commands only bring up minos-runtime members). Own a dedicated
 # provisioning network instead -- created immediately before the pull and removed right
 # after, so no persistent egress path is left attached to the runtime topology.
@@ -247,8 +247,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop daemon does not respond.' }
 
 $RuntimeRoot = Join-Path $InstallRoot 'runtime'
 $EnvironmentFile = Join-Path $RuntimeRoot '.env'
-$ComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
-$ConnectedTemplate = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\compose.mcp.connected.yaml'))
+$ComposeFile = Join-Path $RuntimeRoot 'compose-mcp.prod.yaml'
+# Pre-rename name of the runtime copy (see Move-LegacyRuntimeCompose in mcp-lifecycle.ps1): superseded below by the
+# connected profile written under the new name, and restored with the rest of the state if this script fails.
+$LegacyComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
+$ConnectedTemplate = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\compose-mcp.connected.yaml'))
 foreach ($Required in @($EnvironmentFile, $ConnectedTemplate)) {
     if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "MINOS Docker runtime is incomplete: $Required" }
 }
@@ -302,7 +305,7 @@ function Restore-RuntimeStateSnapshot([object[]] $Snapshot) {
     }
 }
 
-$RuntimeStateSnapshot = New-RuntimeStateSnapshot @($ComposeFile, $EnvironmentFile, $PropertiesPath)
+$RuntimeStateSnapshot = New-RuntimeStateSnapshot @($ComposeFile, $LegacyComposeFile, $EnvironmentFile, $PropertiesPath)
 trap {
     if ($null -ne $RuntimeStateSnapshot) {
         Restore-RuntimeStateSnapshot $RuntimeStateSnapshot
@@ -312,6 +315,7 @@ trap {
 }
 
 Copy-Item -LiteralPath $ConnectedTemplate -Destination $ComposeFile -Force
+Remove-Item -LiteralPath $LegacyComposeFile -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $DataRoot | Out-Null
 
 $PostgresVolume = "$ComposeProject-postgres-data"

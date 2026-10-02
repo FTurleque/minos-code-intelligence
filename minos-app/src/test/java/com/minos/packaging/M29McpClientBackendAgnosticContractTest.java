@@ -127,7 +127,7 @@ class M29McpClientBackendAgnosticContractTest {
         Path candidate = Path.of("").toAbsolutePath().normalize();
         for (int i = 0; i < 5 && candidate != null; i++, candidate = candidate.getParent()) {
             if (Files.isRegularFile(candidate.resolve("pom.xml"))
-                    && Files.isRegularFile(candidate.resolve("docker/compose.mcp.prod.yaml"))) {
+                    && Files.isRegularFile(candidate.resolve("docker/compose-mcp.prod.yaml"))) {
                 return candidate;
             }
         }

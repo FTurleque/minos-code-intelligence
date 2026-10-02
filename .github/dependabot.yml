@@ -46,13 +46,7 @@ updates:
   # Base images of docker/Dockerfile.mcp and docker/Dockerfile.mcp.release, written as
   # <image>:<tag>@sha256:<digest> (enforced by scripts/quality/check-image-pins.py). Dependabot
   # follows the tag and rewrites tag and digest together; a reference with a digest and no tag
-  # would be moved to `latest`.
-  #
-  # Known limit: the managed-service images (pgvector, ollama) live in docker/compose.mcp.*.yaml.
-  # The docker-compose ecosystem only reads files named like [docker-]compose[-x][.x].yaml (one
-  # optional dotted segment), so `compose.mcp.prod.yaml` and `compose.mcp.connected.yaml` are not
-  # seen and no docker-compose entry is declared here (it would fail on every run with "no
-  # docker-compose file"). Until those files are renamed those two pins are bumped by hand.
+  # would be moved to `latest`. The compose files are covered by the docker-compose entry below.
   - package-ecosystem: "docker"
     directory: "/docker"
     target-branch: "develop"
@@ -70,3 +64,26 @@ updates:
       # The JRE/JDK major must match `maven.compiler.release` (24): a major bump is a deliberate change.
       - dependency-name: "eclipse-temurin"
         update-types: ["version-update:semver-major"]
+
+  # Managed-service images (pgvector, ollama) are the ${VAR:-<image>:<tag>@sha256:<digest>} defaults of
+  # docker/compose-mcp.connected.yaml. The docker-compose ecosystem only reads files named like
+  # [docker-]compose[-x][.x].yaml (at most one dotted segment, FILENAME_REGEX of dependabot-core's
+  # docker_compose/file_fetcher.rb): `compose-mcp.prod.yaml` and `compose-mcp.connected.yaml` are seen, the
+  # former `compose.mcp.*.yaml` (two dotted segments) were not. scripts/quality/check-image-pins.py fails
+  # if a compose file under docker/ is named outside that pattern or if this entry disappears.
+  # It rewrites tag and digest together (and refreshes the digest of an unchanged tag); the tag suffix
+  # (`-pg17`) is part of what it compares, so a PostgreSQL major is never proposed. It does not know the
+  # reason for a bump: the PR must pass the qualification (docs/developer/supply-chain.md).
+  - package-ecosystem: "docker-compose"
+    directory: "/docker"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 10
+    groups:
+      docker-compose-images:
+        patterns:
+          - "*"

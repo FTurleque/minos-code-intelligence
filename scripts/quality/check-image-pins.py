@@ -11,6 +11,12 @@ Scope (the whole container supply chain of this repository):
   second time, with a tag, anywhere else in scripts, workflows or sources: the compose file is
   its single source.
 
+* Dependabot must be able to see the compose files: every ``docker/compose*.y*ml`` must be named like
+  dependabot-core's ``docker_compose/file_fetcher.rb`` ``FILENAME_REGEX`` (``compose.mcp.prod.yaml``, with two
+  dotted segments, is invisible to it; ``compose-mcp.prod.yaml`` is seen), and ``.github/dependabot.yml``
+  must declare a ``docker-compose`` entry for ``/docker``. Without either, the digests pinned here would
+  never be proposed for update.
+
 The gate and its self-test must be run by the ``invariants`` job of .github/workflows/pr-ci.yml
 (checked here, so removing the step turns the gate red wherever it still runs).
 
@@ -38,6 +44,12 @@ IMAGE_KEY = re.compile(r"^\s*image:\s*(?P<value>.+?)\s*(?:#.*)?$")
 VARIABLE_WITH_DEFAULT = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:-(?P<default>[^}]+)\}$")
 VARIABLE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}$")
 UNPINNED_ALLOWED_VARIABLES = frozenset({"MINOS_IMAGE"})
+
+# dependabot-core, docker/lib/dependabot/docker_compose/file_fetcher.rb (read 2026-10-02): the fetcher keeps a file of the
+# configured directory when ``f.name.match?(FILENAME_REGEX)`` (a search, not a full match). Python >= 3.11 for the
+# atomic group; CI runs 3.13.
+DEPENDABOT_COMPOSE_FILENAME = re.compile(r"(docker-)?compose(-[\w]+)?(?>\.[\w-]+)?\.ya?ml", re.IGNORECASE)
+DEPENDABOT_CONFIG = ".github/dependabot.yml"
 
 PR_CI = ".github/workflows/pr-ci.yml"
 CI_STEPS = ("scripts/quality/check-image-pins.py", "scripts/quality/test_check_image_pins.py")
@@ -143,6 +155,36 @@ def find_duplicate_violations(root: Path, repositories: set[str]) -> list[str]:
     return failures
 
 
+def find_dependabot_violations(root: Path, compose_files: list[Path]) -> list[str]:
+    """Dependabot (docker-compose ecosystem) must see every compose file and be configured for ``/docker``.
+
+    Line-based (no YAML parser): the entry is the block that starts at ``- package-ecosystem: "docker-compose"``
+    and stops at the next ``- package-ecosystem``; it must carry ``directory: "/docker"``. What it does not prove:
+    that Dependabot runs, or what it proposes (its registry lookups cannot be replayed offline).
+    """
+    failures: list[str] = []
+    if not compose_files:
+        return failures
+    for path in compose_files:
+        if not DEPENDABOT_COMPOSE_FILENAME.search(path.name):
+            failures.append(
+                f"{path.relative_to(root).as_posix()}: the name is not matched by Dependabot's docker-compose "
+                f"FILENAME_REGEX ([docker-]compose[-x][.x].yaml, at most one dotted segment): the images pinned "
+                f"in it would never be proposed for update")
+    config = root / DEPENDABOT_CONFIG
+    if not config.is_file():
+        return failures + [f"{DEPENDABOT_CONFIG} not found: nothing would update the compose image pins"]
+    lines = [line for line in config.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+    starts = [i for i, line in enumerate(lines) if re.match(r"^\s*-\s+package-ecosystem:", line)]
+    blocks = [lines[start:(starts[n + 1] if n + 1 < len(starts) else len(lines))] for n, start in enumerate(starts)]
+    entries = [block for block in blocks
+               if re.match(r"^\s*-\s+package-ecosystem:\s*[\"']?docker-compose[\"']?\s*$", block[0])]
+    if not any(any(re.match(r"^\s+directory:\s*[\"']?/docker[\"']?\s*$", line) for line in block) for block in entries):
+        failures.append(f'{DEPENDABOT_CONFIG}: no `package-ecosystem: "docker-compose"` entry with `directory: "/docker"`: '
+                        f"the digests of the compose images would never be proposed for update")
+    return failures
+
+
 def find_ci_wiring_violations(root: Path) -> list[str]:
     """Each CI step must be a step of the ``invariants`` job, with no ``if:`` on the step or the job.
 
@@ -185,16 +227,19 @@ def check(root: Path) -> tuple[list[str], int]:
     failures: list[str] = find_ci_wiring_violations(root)
     inspected = 0
     repositories: set[str] = set()
+    compose_files: list[Path] = []
     if docker.is_dir():
         for path in sorted(docker.glob("Dockerfile*")):
             inspected += 1
             failures += find_dockerfile_violations(path, root)
         for path in sorted(list(docker.glob("compose*.yaml")) + list(docker.glob("compose*.yml"))):
             inspected += 1
+            compose_files.append(path)
             compose_failures, names = find_compose_violations(path, root)
             failures += compose_failures
             repositories |= names
     failures += find_duplicate_violations(root, repositories)
+    failures += find_dependabot_violations(root, compose_files)
     if inspected == 0:
         failures.append("no docker/Dockerfile* or docker/compose*.yaml found: the gate would check nothing")
     return failures, inspected

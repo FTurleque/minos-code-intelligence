@@ -18,7 +18,7 @@ class M29DockerAdministrationContractTest {
 
     @Test
     void composeSeparatesReadOnlyQueryPlaneFromWritableEphemeralAdminPlane() throws Exception {
-        String compose = normalizedText(repoRoot().resolve("docker/compose.mcp.prod.yaml"));
+        String compose = normalizedText(repoRoot().resolve("docker/compose-mcp.prod.yaml"));
         String query = section(compose, "  minos-mcp:", "  minos-admin:");
         String admin = section(compose, "  minos-admin:", "  minos-bootstrap:");
         String bootstrap = section(compose, "  minos-bootstrap:", "  minos-tools-bootstrap:");
@@ -296,8 +296,8 @@ class M29DockerAdministrationContractTest {
     // PostgreSQL/Ollama failed with "no such service: minos-data-bootstrap".
     @Test
     void connectedProfileDefinesEveryBaseProfileService() throws Exception {
-        String base = normalizedText(repoRoot().resolve("docker/compose.mcp.prod.yaml"));
-        String connected = normalizedText(repoRoot().resolve("docker/compose.mcp.connected.yaml"));
+        String base = normalizedText(repoRoot().resolve("docker/compose-mcp.prod.yaml"));
+        String connected = normalizedText(repoRoot().resolve("docker/compose-mcp.connected.yaml"));
 
         List<String> baseServices = serviceNames(base);
         assertTrue(baseServices.contains("minos-data-bootstrap"),
@@ -349,7 +349,7 @@ class M29DockerAdministrationContractTest {
         Path candidate = Path.of("").toAbsolutePath().normalize();
         for (int i = 0; i < 5 && candidate != null; i++, candidate = candidate.getParent()) {
             if (Files.isRegularFile(candidate.resolve("pom.xml"))
-                    && Files.isRegularFile(candidate.resolve("docker/compose.mcp.prod.yaml"))) {
+                    && Files.isRegularFile(candidate.resolve("docker/compose-mcp.prod.yaml"))) {
                 return candidate;
             }
         }
