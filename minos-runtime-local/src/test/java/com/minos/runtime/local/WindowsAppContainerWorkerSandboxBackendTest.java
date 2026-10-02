@@ -274,6 +274,22 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         try {
             artifact = backend.execute(executor, request, WorkerNetworkPolicy.ALLOW);
         } catch (RuntimeException diagnostic) { // TEMPORARY DIAGNOSTIC, removed once the CI-only failure is understood
+            try (java.util.stream.Stream<Path> dirs = Files.walk(home, 3)) {
+                for (Path dir : (Iterable<Path>) dirs.filter(Files::isDirectory)::iterator) {
+                    Process acl = new ProcessBuilder(Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString(),
+                            dir.toString()).redirectErrorStream(true).start();
+                    System.err.println("DIAGACL " + new String(acl.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+                    acl.waitFor();
+                }
+                for (Path probe : new Path[]{project, providerScript}) {
+                    Process acl = new ProcessBuilder(Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString(),
+                            probe.toString()).redirectErrorStream(true).start();
+                    System.err.println("DIAGACL " + new String(acl.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+                    acl.waitFor();
+                }
+            } catch (Exception ignored) {
+                System.err.println("DIAGACL failed " + ignored);
+            }
             try (java.util.stream.Stream<Path> walk = Files.walk(home)) {
                 for (Path file : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
                     String name = file.getFileName().toString();
