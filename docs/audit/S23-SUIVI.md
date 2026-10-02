@@ -120,11 +120,31 @@ l'index déjà construit.
   admin ; réaligner les gates de documentation qui verrouillent ce texte (sans les retirer).
 - **D5.4 — hors périmètre, noté** : API latente à 2 arguments / `ProcessIndexerExecutor.execute` public (ligne 6).
 
+### Point 2 — Dependabot `docker`
+
+**Ce que la source officielle dit** (code de `dependabot/dependabot-core`, lu le 2026-10-02 ; `docs.github.com` confirme les deux écosystèmes `docker` et `docker-compose`) :
+
+| Question | Réponse vérifiée |
+|---|---|
+| `docker` met-il à jour une image épinglée par digest dans un `Dockerfile` ? | **Oui, à condition qu'elle ait un tag.** `FileFetcher` prend les fichiers dont le nom contient `dockerfile`/`containerfile` (donc `Dockerfile.mcp` et `Dockerfile.mcp.release` : un répertoire à la fois, non récursif). `FROM_LINE` lit `image:tag@sha256:<64 hex>`. Pour `image@sha256:…` **sans tag**, la « version » est le digest seul et l'`UpdateChecker` le propose vers le digest de **`latest`** (« Pure digest pin (no tag): the proposed digest resolves from `latest` ») : pour `eclipse-temurin` ce serait un autre JDK/JRE. **Constat de verif-s23 (2) confirmé et aggravé** : l'ancienne forme `FROM eclipse-temurin@sha256:…` aurait été déplacée vers `latest`. |
+| `docker` lit-il les `compose*.yaml` ? | **Non.** Les YAML qu'il prend ne sont retenus que s'ils portent `apiVersion` et `kind` (manifestes Kubernetes). |
+| `docker-compose` lit-il un `image:` épinglé par digest ? | Oui (`tag@sha256` ou `digest` seul, fixtures `digest_and_tag`, `literal_digest`…). |
+| … et une valeur `${VAR:-image:tag}` ? | **Oui, contrairement à l'hypothèse de départ** : `service_image` extrait la valeur par défaut d'un `${VAR:-défaut}` (regex `ENV_VAR`), et le `FileUpdater` réécrit ce défaut (`(?:\$\{[^\}:]+:-)?`). `${MINOS_IMAGE}` sans défaut est ignoré. |
+| … mais voit-il nos deux fichiers compose ? | **Non.** `FILENAME_REGEX = /(docker-)?compose(-[\w]+)?(?>\.[\w-]+)?\.ya?ml/i` n'accepte qu'**un** segment pointé : `compose.mcp.prod.yaml` et `compose.mcp.connected.yaml` (deux segments) ne correspondent pas (vérifié en exécutant la regex : `compose.yaml`, `compose.prod.yaml`, `docker-compose.mcp.yaml`, `compose-mcp.prod.yaml` passent ; les deux nôtres non). Déclarer `docker-compose` ferait échouer chaque exécution (« no docker-compose file »). |
+
+**Décisions.**
+- **D2.1** — écosystème `docker` sur `/docker` (hebdo lundi 05:45 Europe/Paris, `target-branch: develop`, `open-pull-requests-limit: 10`, groupe `docker-base-images`), qui couvre les 5 `FROM` des deux Dockerfile.
+- **D2.2** — tous les `FROM` passent de `image@sha256:…` à `image:tag@sha256:…` **sans changer un seul digest** (le build produit exactement les mêmes images) : tags `eclipse-temurin:24.0.2_12-jre`, `eclipse-temurin:24.0.2_12-jdk`, `rust:1.97.1-bookworm`, `golang:1.26.5-bookworm`, `mcr.microsoft.com/dotnet/sdk:10.0.302-noble`, tirés des commentaires d'origine. Vérifié au registre : `24.0.2_12-jdk` et `10.0.302-noble` pointent encore sur le digest épinglé ; `24.0.2_12-jre`, `1.97.1-bookworm`, `1.26.5-bookworm` ont été **reconstruits** depuis (digests d'index actuels `8cb2387a…`, `0e2bcaef…`, `53eeac89…`), alors que les digests épinglés (`b416d023…`, `14bc9c59…`, `6c5605ab…`) existent toujours et portent bien JDK 24.0.2+12, Rust 1.97.1 et Go 1.26.5 (config d'image lue). Dependabot proposera donc d'emblée une PR de rafraîchissement de digest : voulue, à relire.
+- **D2.3** — `ignore` du saut de **majeure** pour `eclipse-temurin` : le JRE/JDK doit rester celui de `maven.compiler.release` (24) ; une majeure est un changement délibéré, pas une PR automatique.
+- **D2.4 (dette nommée)** — les images `pgvector` et `ollama`, dans `compose.mcp.connected.yaml`, restent hors de portée de Dependabot tant que ces fichiers gardent leur nom. **Décision du propriétaire demandée** : renommer en `compose-mcp.prod.yaml` / `compose-mcp.connected.yaml` (le motif accepte `compose-mcp.prod.yaml`) rendrait le défaut `${VAR:-image:tag@digest}` lisible et mettable à jour, mais touche l'installateur, les scripts de mise à jour et 12 scripts/tests (38 références) : hors périmètre S11, risqué pour les installations existantes. Alternative écartée : un `Dockerfile` miroir des deux images (une seconde copie, contraire à « une seule source »). Les digests se mettent à jour à la main, procédure dans `docs/developer/quality-gates.md`.
+- Gates réalignés **sans les retirer** et durcis (exigent tag **et** digest) : `docker/scripts/verify-run-configurations.ps1`, `M29DockerAdministrationContractTest`, `scripts/remediation/check-audit-remediation-v2.py`.
+
 ### Journal du lot 1 (un commit = une entrée)
 
 | # | Commit | Contenu | Preuve |
 |---|---|---|---|
 | 1 | `fix(s11): le plan admin ne lance aucun provider, garde verrouillee par test (point 5)` | couture package-private `StrongProcessOwnershipIndexerExecutor(…, Function<Path, WorkerSandboxBackend>)` ; 3 tests (`nativeOnlyHostRefusesManagedProviderBeforeCopyingTheProjectOrCreatingARun`, `managedSandboxWithoutNetworkDenyProofRefusesDenyBeforeCopyingTheProject`, témoin positif `qualifiedManagedSandboxIsReachedOnlyThroughTheSelectedBackend`) ; docs `remote-worker-sandbox-disposition.md` et `docker-runtime.md` alignées sur le code | **mutation** : les deux gardes d'`executeLocallyIsolated` neutralisées (`if (false)`) → 2 tests sur 7 rouges (`managedSandbox…`: « fixture sandbox reached ==> expected true but was false » ; `nativeOnly…` : « native worker cannot prove OS-level network denial » car le provider natif est alors atteint) ; gardes restaurées → 7/7 verts. Pas de test rouge « avant correctif » : il n'y a pas de défaut de sécurité (issue iii). |
+| 2 | `build(s11): Dependabot docker et references image:tag@digest dans les Dockerfile (point 2)` | `.github/dependabot.yml` (écosystème `docker`, `/docker`) ; 5 `FROM` réécrits `image:tag@sha256` à digest identique ; gates `verify-run-configurations.ps1`, `M29DockerAdministrationContractTest`, `check-audit-remediation-v2.py` réalignés et durcis | lecture de la source Dependabot (cf. tableau point 2) ; digests inchangés (`git diff` : seules les parties `:tag` s'ajoutent) ; `M29Docker*ContractTest` 5/5 verts, `check-audit-remediation-v2.py` SUCCESS |
 
 ## Constats de `verif-s23`
 

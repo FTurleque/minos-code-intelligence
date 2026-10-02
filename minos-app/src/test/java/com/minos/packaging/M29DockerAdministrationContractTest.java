@@ -135,11 +135,11 @@ class M29DockerAdministrationContractTest {
         assertTrue(workflow.contains("semanticProvider = $ResolvedSemanticProvider"));
         assertTrue(workflow.contains("'--volumes'"));
 
-        assertTrue(dockerfile.matches("(?s).*FROM eclipse-temurin@sha256:[0-9a-f]{64}.*"),
-                "runtime base image must be pinned by OCI digest");
-        assertTrue(dockerfile.matches("(?s).*FROM rust@sha256:[0-9a-f]{64} AS rust-toolchain.*"));
-        assertTrue(dockerfile.matches("(?s).*FROM golang@sha256:[0-9a-f]{64} AS go-toolchain.*"));
-        assertTrue(dockerfile.matches("(?s).*FROM mcr\\.microsoft\\.com/dotnet/sdk@sha256:[0-9a-f]{64} AS dotnet-toolchain.*"));
+        assertTrue(dockerfile.matches("(?s).*FROM eclipse-temurin:[\\w.-]+@sha256:[0-9a-f]{64}.*"),
+                "runtime base image must be pinned by tag and OCI digest (Dependabot follows the tag)");
+        assertTrue(dockerfile.matches("(?s).*FROM rust:[\\w.-]+@sha256:[0-9a-f]{64} AS rust-toolchain.*"));
+        assertTrue(dockerfile.matches("(?s).*FROM golang:[\\w.-]+@sha256:[0-9a-f]{64} AS go-toolchain.*"));
+        assertTrue(dockerfile.matches("(?s).*FROM mcr\\.microsoft\\.com/dotnet/sdk:[\\w.-]+@sha256:[0-9a-f]{64} AS dotnet-toolchain.*"));
         assertTrue(dockerfile.contains("UBUNTU_APT_SNAPSHOT=20260814T000000Z"));
         assertTrue(dockerfile.contains("snapshot.ubuntu.com/ubuntu/${UBUNTU_APT_SNAPSHOT}"),
                 "OS packages must resolve from one dated Ubuntu archive snapshot");

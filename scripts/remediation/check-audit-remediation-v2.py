@@ -109,7 +109,7 @@ def main() -> int:
             "Targeted JaCoCo gate (full)",
         )
 
-        dockerfile = require("docker/Dockerfile.mcp", "FROM eclipse-temurin@sha256:")
+        dockerfile = require("docker/Dockerfile.mcp", "FROM eclipse-temurin:24.0.2_12-jre@sha256:")
         if "FROM eclipse-temurin:24-jre" in dockerfile:
             raise RuntimeError("docker/Dockerfile.mcp still uses a floating 24-jre tag")
 

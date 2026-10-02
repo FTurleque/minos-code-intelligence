@@ -109,8 +109,8 @@ foreach ($script in @($prodScript, $devScript, $windowsFunctions, $MyInvocation.
 $dockerfileContent = Read-Utf8Text -Path $dockerfile
 $composeContent = Read-Utf8Text -Path $composeTemplate
 $smokeContent = Read-Utf8Text -Path $smokeSource
-Assert-Condition -Condition ($dockerfileContent.Contains('FROM eclipse-temurin@sha256:')) `
-    -Message "L'image MCP doit utiliser Eclipse Temurin Java 24 par digest immuable."
+Assert-Condition -Condition ($dockerfileContent -match 'FROM eclipse-temurin:24\.0\.2_12-jre@sha256:[0-9a-f]{64}') `
+    -Message "L'image MCP doit utiliser Eclipse Temurin Java 24 sous la forme tag@digest immuable (le tag est suivi par Dependabot)."
 Assert-Condition -Condition (-not $dockerfileContent.Contains('FROM eclipse-temurin:24-jre')) `
     -Message "L'image MCP ne doit pas revenir au tag flottant eclipse-temurin:24-jre."
 Assert-Condition -Condition ($dockerfileContent.Contains('USER 10001:10001')) `
