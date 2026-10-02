@@ -270,7 +270,22 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                             Duration.ofSeconds(20));
                 });
 
-        IndexingArtifact artifact = backend.execute(executor, request, WorkerNetworkPolicy.ALLOW);
+        IndexingArtifact artifact;
+        try {
+            artifact = backend.execute(executor, request, WorkerNetworkPolicy.ALLOW);
+        } catch (RuntimeException diagnostic) { // TEMPORARY DIAGNOSTIC, removed once the CI-only failure is understood
+            try (java.util.stream.Stream<Path> walk = Files.walk(home)) {
+                for (Path file : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
+                    String name = file.getFileName().toString();
+                    if (name.startsWith("provider.std") || name.endsWith(".plan") || name.endsWith(".txt")) {
+                        byte[] bytes = Files.readAllBytes(file);
+                        System.err.println("DIAG " + name + " [" + bytes.length + " bytes]: "
+                                + new String(bytes, 0, Math.min(bytes.length, 1500), StandardCharsets.UTF_8));
+                    }
+                }
+            }
+            throw diagnostic;
+        }
 
         assertEquals("fixture-provider", artifact.indexerId());
         assertTrue(Files.isRegularFile(artifact.finalArtifact()));
