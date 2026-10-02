@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -446,7 +447,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-appcontainer-aliased-home-");
         Path alias = aliasOf(home);
-        assertFalse(alias.equals(home.toRealPath()), "the alias must differ from the real path of the home");
+        assertNotEquals(alias, home.toRealPath(), "the alias must differ from the real path of the home");
         assertProtectedRuntimeReachable(home, alias);
     }
 
