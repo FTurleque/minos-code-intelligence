@@ -43,13 +43,7 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
             Path minosHome,
             WorkerNetworkPolicy networkPolicy
     ) {
-        Path home = normalizedHome(minosHome);
-        this.delegate = Objects.requireNonNull(delegate, DELEGATE_PARAMETER);
-        this.boundaryProvider = platformBoundary(home);
-        this.localIsolation = new LocalIsolation(
-                home,
-                Objects.requireNonNull(networkPolicy, "networkPolicy"),
-                WorkerSandboxBackends::strongestAvailableForManagedLocalProvider);
+        this(delegate, minosHome, networkPolicy, WorkerSandboxBackends::strongestAvailableForManagedLocalProvider);
     }
 
     /**
