@@ -8,7 +8,7 @@
 #   Set-NetworkObserverPhase $o 'minos'         -> hits are tagged with the phase in which they were seen
 #   Stop-NetworkObserver $o                     -> a summary (ticks, tree size, hits, other non-loopback connections)
 #
-# Limits, by construction: a TCP connection that opens and closes between two samples (about 150 ms) is not seen
+# Limits, by construction: a TCP connection that opens and closes between two samples (250 to 320 ms measured) is not seen
 # (it may still show as an unattributed TIME_WAIT entry, listed as information), and UDP has no connection to observe,
 # only endpoints, which are listed as information. A positive control (a direct connect held open from the same tree)
 # must be seen before "zero connections" means anything.

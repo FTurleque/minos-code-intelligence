@@ -244,6 +244,10 @@ try {
         }
         else {
             Write-Host '  observation: the machine is offline, the positive control is skipped (the offline probe is the evidence)'
+            # Offline there is no positive control, so be strict instead: ANY external TCP entry that appears during the run,
+            # attributed to the tree or not (a refused SYN_SENT, a TIME_WAIT left behind by a very short attempt), fails.
+            $AnyExternal = @($Summary.Hits) + @($Summary.OtherExternal)
+            Add-Result 'offline: no external TCP entry at all appeared during the run (attributed or not)' ($AnyExternal.Count -eq 0) $(if ($AnyExternal.Count -eq 0) { 'none' } else { ($AnyExternal | Select-Object -First 5 | ForEach-Object { "$($_.Process) pid $($_.ProcessId) -> $($_.Remote) $($_.State)" }) -join '; ' })
         }
         Add-Result 'no non-loopback TCP connection owned by the MINOS process tree during the run' ($RunHits.Count -eq 0) $(if ($RunHits.Count -eq 0) { "0 in $($Summary.Ticks) samples" } else { ($RunHits | Select-Object -First 5 | ForEach-Object { "$($_.Process) pid $($_.ProcessId) -> $($_.Remote) $($_.State)" }) -join '; ' })
         Add-Result 'no DNS resolution of a tool download host caused by the run' ($Cause.Count -eq 0) $(if ($Cause.Count -eq 0) { 'DNS cache unchanged for the download hosts' } else { $Cause -join ', ' })

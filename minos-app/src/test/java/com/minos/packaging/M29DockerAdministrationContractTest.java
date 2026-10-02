@@ -1,5 +1,6 @@
 package com.minos.packaging;
 
+import com.minos.adapter.scip.runtime.EmbeddedToolsCatalog;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -144,11 +145,13 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("snapshot.ubuntu.com/ubuntu/${UBUNTU_APT_SNAPSHOT}"),
                 "OS packages must resolve from one dated Ubuntu archive snapshot");
         assertTrue(dockerfile.contains("COURSIER_LAUNCHERS_COMMIT=15f36c167c30be237105f923151adaf177e7ee61"));
-        assertTrue(dockerfile.contains("COURSIER_LINUX_SHA256=62b141b186e4dfdef03af64c36bdcdfeaab2df30de14950ca220e6e43e72c26b"));
-        assertTrue(dockerfile.contains("SCIP_CLANG_LINUX_SHA256=06fd18c576f979a726c651594644ec4a35db4f471f2160b3f72eb89fa6001784"));
-        assertTrue(dockerfile.contains("RUST_ANALYZER_LINUX_GZ_SHA256=ac4f42ddbbd040d75d847e991894776485783e28beb744b9719a660a99abe115"));
+        // The pinned hashes are written once, in embedded-tools.json; the image must carry exactly those.
+        EmbeddedToolsCatalog catalog = EmbeddedToolsCatalog.load();
+        assertTrue(dockerfile.contains("COURSIER_LINUX_SHA256=" + catalog.artifact("coursier", "linux-x64").sha256()));
+        assertTrue(dockerfile.contains("SCIP_CLANG_LINUX_SHA256=" + catalog.artifact("scip-clang", "linux-x64").sha256()));
+        assertTrue(dockerfile.contains("RUST_ANALYZER_LINUX_GZ_SHA256=" + catalog.artifact("rust-analyzer", "linux-x64").sha256()));
         assertTrue(dockerfile.contains("MAVEN_VERSION=3.9.16"));
-        assertTrue(dockerfile.contains("MAVEN_ZIP_SHA256=5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce"));
+        assertTrue(dockerfile.contains("MAVEN_ZIP_SHA256=" + EmbeddedToolsCatalog.load().artifact("maven", "any").sha256()));
         assertTrue(dockerfile.contains("apache-maven-${MAVEN_VERSION}-bin.zip"));
         assertTrue(dockerfile.contains("${MAVEN_ZIP_SHA256}"));
         assertTrue(dockerfile.contains("sha256sum -c -"));
@@ -161,7 +164,8 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("SCIP_PYTHON_VERSION=0.6.6"));
         assertTrue(dockerfile.contains("SCIP_CLANG_VERSION=0.4.0"));
         assertTrue(dockerfile.contains("SCIP_DOTNET_VERSION=0.2.14"));
-        assertTrue(dockerfile.contains("SCIP_DOTNET_NUPKG_SHA256=e2d183fe39b9a56cb8bb2ed2d8b96828fb5434c6db084002bf8a5c6009391b52"));
+        assertTrue(dockerfile.contains("SCIP_DOTNET_NUPKG_SHA256="
+                + EmbeddedToolsCatalog.load().artifact("scip-dotnet-nupkg", "any").sha256()));
         assertTrue(dockerfile.contains("v3-flatcontainer/scip-dotnet/${SCIP_DOTNET_VERSION}"));
         assertTrue(dockerfile.contains("<packageSources><clear/><add key=\"minos-pinned\""));
         assertTrue(dockerfile.contains("--configfile /tmp/minos-nuget.config --no-cache --ignore-failed-sources"));
