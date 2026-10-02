@@ -5,7 +5,7 @@ encore ouverts. Après ce chantier il ne reste que des constats d'échéance **T
 
 | Lot | Branche | Constats | PR | État |
 |---|---|---|---|---|
-| 1 | `sec/s11-chaine-et-conteneurs` | S11 | — | en cours |
+| 1 | `sec/s11-chaine-et-conteneurs` | S11 | — | implémenté, validé en local (`clean verify`), en attente de PR |
 | 2 | `rel/d1-distribution-auto-portante` | D1 | — | à faire |
 | 3 | `ci/c2-un-seul-build` | C2 | — | à faire |
 | 4 | `sec/s14-assainissement` | S14 | — | à faire |
@@ -210,6 +210,26 @@ Calage sur la production : le conteneur `minos-mcp-prod` de l'utilisateur (37 h 
 
 Non prouvé : GPU (aucun GPU ici ; la configuration n'en monte pas) ; volume nommé sous SELinux (`:Z`) ; l'installateur Windows complet (`configure-m30-docker-services.ps1` de bout en bout : il demande une installation réelle, voir « à traiter plus tard »). Le retour arrière vers une version antérieure demande de remettre le volume à root (commande dans `docker-runtime.md`) : sans `DAC_OVERRIDE`, root ne lit plus la clé 0600 de l'uid 10002.
 
+### Résultats de fin de lot (le 2026-10-02, Windows, JDK 24)
+
+| Contrôle | Résultat |
+|---|---|
+| `./mvnw clean verify` (complet) | **BUILD SUCCESS**, 15 min 01 s, 0 échec. Un premier passage a échoué sur `HybridCorpusWeightTest.estimateBoundsTheRetainedHeapForEveryAlphabetAndLineLength` (« estimate below retained heap: latin1-long estimate=12061681 retained=12138968 ratio=0.99 ») : test de mesure de tas, au ras de la borne (0,99), étranger au lot (aucun fichier de `minos-bootstrap` touché) ; il passe seul (1/1) et au second `clean verify` complet. Noté en S11-L10. |
+| `check-jacoco.py` | 25 jalons PASS, **m24-polyglot-provider-platform FAIL** (`ManagedPolyglotScipRuntimeManager` line 0,227 < 0,280, branch 0,146 < 0,200) : rouge préexistant sous Windows (classe non touchée par le lot) |
+| `check-module-boundaries.py` | SUCCESS (14 modules, 511 sources, 45 packages), identique à la baseline |
+| `check-private-io.py` | SUCCESS (511 sources, **37** occurrences en liste blanche, 8 interdits, 4 primitives) : identique, aucune entrée ajoutée ; `test_check_private_io.py` OK |
+| `check-current-docs.py` / `product-facts.py --check` | SUCCESS / SUCCESS |
+| `check-milestone-artifact-references.py` | SUCCESS (102 scripts, 98 à la baseline + les 4 nouveaux scripts de gate) |
+| `check-workflow-pins.py` | SUCCESS (70 usages externes, identique) |
+| `check-image-pins.py` (nouveau) / auto-test 15 cas | SUCCESS / OK |
+| `check-compose-limits.py` (nouveau) / auto-test 13 cas | SUCCESS / OK |
+| `check-audit-remediation-v2.py` | SUCCESS |
+| 12 golden de `characterization/` | inchangés (`git diff --name-only origin/develop -- minos-app/src/test/resources/characterization` : 0 fichier) |
+| `docker buildx build --check` des deux Dockerfile | « no warnings found » |
+| Aucun push, aucune PR, aucun workflow lancé | respecté |
+
+**Prod de l'utilisateur** : `minos-mcp-prod`, `…-ollama-1`, `…-postgres-1` jamais redémarrés ni modifiés (lecture des compteurs cgroup par `docker exec cat`). Ressources Docker de la mesure (`minos-s11-*`, `s11lim*`, conteneurs de test) supprimées.
+
 ### Journal du lot 1 (un commit = une entrée)
 
 | # | Commit | Contenu | Preuve |
@@ -219,6 +239,8 @@ Non prouvé : GPU (aucun GPU ici ; la configuration n'en monte pas) ; volume nom
 | 3 | `build(s11): pgvector et ollama epingles par digest, source unique, gate check-image-pins (point 3)` | défauts du compose connecté en `tag@sha256` ; `configure-m30-docker-services.ps1` ne les réécrit plus ; `PostgresTestSupport` les lit dans le compose ; gate + auto-test branchés dans `pr-ci.yml`, `run-final.*`, `quality-gates.md` | rouge sur `origin/develop` (7 violations), vert sur la branche ; 15 tests d'auto-test ; `docker compose config` ; `PostgresSchemaMigratorTest` 6/6 sur le conteneur épinglé |
 | 4 | `build(s11): plafonds CPU, memoire et PID sur tous les services compose (point 4)` | blocs `x-limits-<role>` dans `compose.mcp.prod.yaml` et `compose.mcp.connected.yaml` ; gate `check-compose-limits.py` + auto-test branchés (`pr-ci.yml`, `run-final.*`, `quality-gates.md`) ; section « Limites de ressources » de `docker-runtime.md` | mesures et planchers ci-dessus ; plafonds vérifiés par `docker inspect` et cgroup ; gate rouge sur `origin/develop` (14 services), vert ici ; `M29*ContractTest` 12/12 |
 | 5 | `fix(s11): Ollama s'execute en non-root, migration du volume de modeles (point 1)` | `minos-ollama` sous `10002:10002`, `HOME=/home/ollama`, volume sur `/home/ollama/.ollama` ; service ponctuel `minos-ollama-bootstrap` (chown conditionnel) ; section « Ollama sans privilèges » de `docker-runtime.md` | rouge (permission denied sans amorçage), puis vert : volume neuf, volume créé en root par l'ancienne config, second démarrage ; modèle téléchargé **et** chargé, embedding 768 valeurs |
+
+Commits du lot, dans l'ordre : `ffa09905` (1, point 5), `53da76e7` (2, point 2), `bc8ddfdb` (3, point 3), `56937d49` (4, point 4), `ac8aeda7` (5, point 1), puis les commits de suivi (`f59bae27` et le dernier).
 
 ## Constats de `verif-s23`
 
@@ -241,3 +263,4 @@ Non prouvé : GPU (aucun GPU ici ; la configuration n'en monte pas) ; volume nom
 - **S11-L7 (point 4)** — `docker/scripts/verify-run-configurations.ps1` échoue dès sa première assertion (« Le conteneur PROD doit rester disponible entre deux sessions STDIO »), y compris sur `origin/develop` : script périmé, non branché ; son assertion Dockerfile a été réalignée (vérifiée à part).
 - **S11-L8 (point 4)** — indexation sémantique par `minos-admin` non mesurée (aucun instantané d'index dans le conteneur) ; Postgres et Ollama : plancher non cherché ; plafond CPU non mesuré en pic. À réviser si les plafonds par défaut gênent un usage réel (surcharge par `.env`).
 - **S11-L9 (point 3)** — la première exécution de Dependabot proposera des PR de rafraîchissement de digest (tags `24.0.2_12-jre`, `1.97.1-bookworm`, `1.26.5-bookworm` reconstruits depuis l'épinglage) : à relire, ce sont des changements de la chaîne de build de l'image release.
+- **S11-L10 (fin de lot)** — `HybridCorpusWeightTest` (`minos-bootstrap`) est instable au ras de sa borne (ratio 0,99 vu une fois sous la charge d'un `clean verify`) : à reprendre côté qualité (marge de l'estimation du tas).
