@@ -264,17 +264,20 @@ public final class PrivateLocalStorage {
     public static void verifyOwnedByCurrentUser(Path path) throws IOException {
         Path target = Objects.requireNonNull(path, "path").toAbsolutePath().normalize();
         UserPrincipal owner = Files.getOwner(target, LinkOption.NOFOLLOW_LINKS);
-        if (!owner.equals(currentOwner())) {
+        if (!owner.equals(currentOwner(target))) {
             throw new IOException("private storage location is owned by another principal");
         }
     }
 
     private static volatile UserPrincipal currentOwner;
 
-    private static UserPrincipal currentOwner() throws IOException {
+    private static UserPrincipal currentOwner(Path near) throws IOException {
         UserPrincipal known = currentOwner;
         if (known != null) return known;
-        Path probe = Files.createTempFile("minos-owner-", ".probe");
+        // The probe lives next to the object being checked, never in the shared temporary directory: the
+        // owner the system gives a new file does not depend on the directory it is created in.
+        Path directory = near.getParent() != null ? near.getParent() : near;
+        Path probe = Files.createTempFile(directory, "minos-owner-", ".probe");
         try {
             currentOwner = Files.getOwner(probe, LinkOption.NOFOLLOW_LINKS);
             return currentOwner;
@@ -459,13 +462,29 @@ public final class PrivateLocalStorage {
             if (entry.type() != AclEntryType.DENY) continue;
             if (entry.flags().contains(AclEntryFlag.INHERIT_ONLY)) continue;
             boolean applies = entry.principal().equals(owner)
-                    || entry.principal() instanceof java.nio.file.attribute.GroupPrincipal;
+                    || entry.principal() instanceof java.nio.file.attribute.GroupPrincipal
+                    || namesTheProcessUser(entry.principal());
             if (!applies) continue;
             for (AclEntryPermission right : entry.permissions()) {
                 if (WRITE_RIGHTS.contains(right)) return true;
             }
         }
         return false;
+    }
+
+    /**
+     * Whether {@code principal} is the account this process runs as. An elevated token owns what it creates
+     * as the Administrators group, not as the user, so a DENY placed on the user never equals the owner.
+     * Used only to word a diagnostic, never to decide access: the name is compared case-insensitively
+     * after its domain part.
+     */
+    private static boolean namesTheProcessUser(java.nio.file.attribute.UserPrincipal principal) {
+        String user = System.getProperty("user.name");
+        if (user == null || user.isBlank()) return false;
+        String name = principal.getName();
+        int separator = name.lastIndexOf('\\');
+        String account = separator >= 0 ? name.substring(separator + 1) : name;
+        return account.equalsIgnoreCase(user);
     }
 
     /** Rethrows {@code denied} as the write-protected failure when one of {@code locations} carries a write DENY. */

@@ -647,6 +647,10 @@ garder une restriction qu'il ne voit pas ; le lire demanderait un `icacls /save`
 - Gates `remediation/`, `quality/` et `architecture/` verts (hors `check-jacoco.py`) ; golden `characterization/` inchangés.
 - Sous Windows : bac à sable réel (AppContainer, Job Object), qualification et `minos doctor` rejoués après chaque changement du lot par `impl-sec`. Linux : par la CI uniquement ; les tests Windows n'y tournent pas.
 
+### Corrections après la première CI (runner `windows-2022`, jeton administrateur)
+
+Quatre tests de `PrivateLocalStorageWindowsAclTest` échouaient sur le runner et passaient sur la machine de développement. Cause commune : un jeton élevé possède ce qu'il crée en tant que **groupe `Administrators`**, pas en tant qu'utilisateur ; les tests (et la détection du refus d'écriture, F6) comparaient le DENY au seul propriétaire. Corrections : `carriesWriteDenyForOwner` reconnaît aussi un DENY nommant le compte du processus (diagnostic uniquement, jamais décision d'accès) ; les helpers de test font de même ; la sonde de comptage du test de première prise en main délègue `protectFromInheritance` (sinon la DACL réécrite restait non protégée). Sonar : `currentOwner` n'utilise plus le dossier temporaire partagé (S5443, sonde créée à côté de l'objet contrôlé) ; une lambda à deux appels levant `IOException` extraite (S5783). Les tests rejoués ici sont verts ; **le comportement sous jeton élevé n'est vérifié que par la CI**, pas reproductible sur cette machine.
+
 ## À traiter plus tard
 
 - **Clone shallow à profondeur 1 (S9 point 6)** : voir décision 8.

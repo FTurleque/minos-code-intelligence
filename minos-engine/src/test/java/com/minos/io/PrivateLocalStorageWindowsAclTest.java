@@ -255,12 +255,19 @@ class PrivateLocalStorageWindowsAclTest {
         UserPrincipal owner = view.getOwner();
         for (AclEntry entry : view.getAcl()) {
             if (entry.type() == AclEntryType.DENY
-                    && entry.principal().equals(owner)
+                    && (entry.principal().equals(owner) || namesTheCurrentUser(entry.principal()))
                     && entry.permissions().contains(permission)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** An elevated token (CI runners) owns what it creates as the Administrators group, not as the user. */
+    private static boolean namesTheCurrentUser(UserPrincipal principal) {
+        String name = principal.getName();
+        String account = name.substring(name.lastIndexOf('\\') + 1);
+        return account.equalsIgnoreCase(System.getProperty("user.name"));
     }
 
     private static boolean denyPrecedesEveryAllow(Path path) throws IOException {
@@ -335,6 +342,11 @@ class PrivateLocalStorageWindowsAclTest {
         @Override
         public boolean supportsPosix(Path target) {
             return false;
+        }
+
+        @Override
+        public void protectFromInheritance(Path target) throws IOException {
+            PrivateLocalStorage.CapabilityProbe.real().protectFromInheritance(target);
         }
 
         @Override

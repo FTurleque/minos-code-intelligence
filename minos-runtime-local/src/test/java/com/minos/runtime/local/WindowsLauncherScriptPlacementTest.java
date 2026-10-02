@@ -73,8 +73,10 @@ class WindowsLauncherScriptPlacementTest {
         Files.setAttribute(launcher, "dos:readonly", false);
         Files.writeString(launcher, "Write-Output 'substituted'", StandardCharsets.UTF_8);
 
+        var again = plan();
+        Path run = runDirectory();
         IOException refusal = assertThrows(IOException.class,
-                () -> backend.sandboxPlan(plan(), runDirectory(), WorkerNetworkPolicy.DENY));
+                () -> backend.sandboxPlan(again, run, WorkerNetworkPolicy.DENY));
 
         assertTrue(refusal.getMessage().contains("integrity"), refusal.getMessage());
         assertFalse(refusal.getMessage().contains(temporary.toString()), "no absolute path in the message");
