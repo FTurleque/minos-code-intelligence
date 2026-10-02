@@ -23,6 +23,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -39,17 +40,26 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
     private final String coordinate;
     private final Path windowsRunner;
     private final Path windowsManagedMaven;
+    private final Path windowsClasspathFile;
 
     public ScipJavaProcessPlanFactory(Path coursier, String coordinate, Path windowsRunner) {
         this(coursier, coordinate, windowsRunner, null);
     }
 
+    public ScipJavaProcessPlanFactory(Path coursier, String coordinate, Path windowsRunner, Path windowsManagedMaven) {
+        this(coursier, coordinate, windowsRunner, windowsManagedMaven, null);
+    }
+
     /**
+     * @param windowsClasspathFile the pre-resolved scip-java classpath shipped with the distribution
+     *     (one jar per line, relative to the file), read by the runner instead of asking Coursier; null
+     *     when the classpath is resolved through Coursier. Unused off Windows.
      * @param windowsManagedMaven MINOS-managed Maven executable used on Windows so the sandboxed
      *     runner never has to discover a wrapper or host {@code mvn} itself — both are unreachable
      *     from inside the AppContainer sandbox in general. Unused off Windows.
      */
-    public ScipJavaProcessPlanFactory(Path coursier, String coordinate, Path windowsRunner, Path windowsManagedMaven) {
+    public ScipJavaProcessPlanFactory(
+            Path coursier, String coordinate, Path windowsRunner, Path windowsManagedMaven, Path windowsClasspathFile) {
         this.coursier = Objects.requireNonNull(coursier, "coursier").toAbsolutePath().normalize();
         if (coordinate == null || coordinate.isBlank()) {
             throw new IllegalArgumentException("coordinate must not be blank");
@@ -58,6 +68,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         this.windowsRunner = Objects.requireNonNull(windowsRunner, "windowsRunner")
                 .toAbsolutePath().normalize();
         this.windowsManagedMaven = windowsManagedMaven == null ? null : windowsManagedMaven.toAbsolutePath().normalize();
+        this.windowsClasspathFile = windowsClasspathFile == null ? null : windowsClasspathFile.toAbsolutePath().normalize();
     }
 
     @Override
@@ -91,20 +102,23 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             }
             Path providerOutput = normalizedRunDirectory.resolve("scip-java-output");
             Files.createDirectories(providerOutput);
+            List<String> runner = new ArrayList<>(List.of(
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy", "Bypass",
+                    "-File", windowsRunner.toString(),
+                    "-ProjectPath", root.toString(),
+                    "-CoursierCommand", coursier.toString(),
+                    "-Coordinate", coordinate,
+                    "-Language", request.selection().language().name(),
+                    "-OutputDirectory", providerOutput.toString(),
+                    "-MavenCommand", windowsManagedMaven.toString()));
+            if (windowsClasspathFile != null && Files.isRegularFile(windowsClasspathFile, LinkOption.NOFOLLOW_LINKS)) {
+                runner.add("-ClasspathFile");
+                runner.add(windowsClasspathFile.toString());
+            }
             return new IndexerProcessPlan(
-                    CommandLocator.invocation(
-                            powershell,
-                            "-NoProfile",
-                            "-NonInteractive",
-                            "-ExecutionPolicy", "Bypass",
-                            "-File", windowsRunner.toString(),
-                            "-ProjectPath", root.toString(),
-                            "-CoursierCommand", coursier.toString(),
-                            "-Coordinate", coordinate,
-                            "-Language", request.selection().language().name(),
-                            "-OutputDirectory", providerOutput.toString(),
-                            "-MavenCommand", windowsManagedMaven.toString()
-                    ),
+                    CommandLocator.invocation(powershell, runner.toArray(String[]::new)),
                     root,
                     Map.of(),
                     providerOutput.resolve("index.scip"),
