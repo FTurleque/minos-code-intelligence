@@ -41,6 +41,8 @@ python3 scripts/quality/test_check_compose_limits.py
 python3 scripts/quality/check-tools-manifest.py
 python3 scripts/quality/test_check_tools_manifest.py
 python3 scripts/release/test_build_embedded_tools.py
+python3 scripts/quality/check-single-execution.py
+python3 scripts/quality/test_check_single_execution.py
 
 if [[ "$MODE" == "--targeted" ]]; then
   ./mvnw -pl minos-application,minos-runtime-local -am test

@@ -78,6 +78,12 @@ try {
     python scripts/release/test_build_embedded_tools.py
     if ($LASTEXITCODE -ne 0) { throw 'embedded tools payload builder self-test failed' }
 
+    python scripts/quality/check-single-execution.py
+    if ($LASTEXITCODE -ne 0) { throw 'single execution gate failed' }
+
+    python scripts/quality/test_check_single_execution.py
+    if ($LASTEXITCODE -ne 0) { throw 'single execution gate self-test failed' }
+
     if (-not $SkipCleanVerify) {
         .\mvnw.cmd clean verify
         if ($LASTEXITCODE -ne 0) { throw 'Maven clean verify failed' }

@@ -63,6 +63,12 @@ jobs:
       - name: Immutable workflow supply-chain gate
         run: python scripts/quality/check-workflow-pins.py
 
+      - name: Single execution gate (Maven verify, product facts, JaCoCo and sandbox toolchain run once per OS, here only)
+        run: python scripts/quality/check-single-execution.py
+
+      - name: Single execution gate self-test
+        run: python scripts/quality/test_check_single_execution.py -v
+
       - name: Container image pin gate (image:tag@sha256, one source per managed-service image)
         run: python scripts/quality/check-image-pins.py
 
@@ -132,6 +138,11 @@ jobs:
       - name: Docker upgrade evidence checker unit tests
         run: python scripts/release/test_check_docker_upgrade_evidence.py -v
 
+  # The ONLY Maven build of a pull request, and so the only executor of the JaCoCo gate, the
+  # Linux sandbox toolchain and the delegated cgroup. The path-filtered
+  # M19 and M20 workflows used to repeat this exact job on a subset of paths (audit C2); they were
+  # retired because nothing they asserted was missing here (docs/audit/S23-SUIVI.md, "Lot 3").
+  # scripts/quality/check-single-execution.py keeps a second copy from coming back.
   verify:
     name: Verify (${{ matrix.os }})
     strategy:
