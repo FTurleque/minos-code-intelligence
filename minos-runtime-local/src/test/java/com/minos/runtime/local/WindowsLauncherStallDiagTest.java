@@ -45,6 +45,14 @@ class WindowsLauncherStallDiagTest {
         long full1 = run(script, full);
         long slim = run(script, whitelisted);
         System.err.println("DIAGSTALL full=" + full1 + "ms whitelisted=" + slim + "ms");
+        // The real launcher, with a plan that does not exist: how long until it fails, per placement and environment.
+        SandboxLauncherScript launcher = SandboxLauncherScript.materialize("windows-appcontainer-sandbox-v4.ps1");
+        Path copy = temporary.resolve("copy.ps1");
+        Files.copy(launcher.file(), copy);
+        System.err.println("DIAGSTALL launcher materialised-whitelist=" + runWithPlan(launcher.file(), whitelisted)
+                + "ms copy-whitelist=" + runWithPlan(copy, whitelisted)
+                + "ms materialised-full=" + runWithPlan(launcher.file(), full)
+                + "ms copy-full=" + runWithPlan(copy, full) + "ms");
         if (slim < 6000 || full1 >= 6000) {
             System.err.println("DIAGSTALL not reproduced in isolation (full=" + full1 + " slim=" + slim + ")");
             return;
@@ -71,6 +79,23 @@ class WindowsLauncherStallDiagTest {
             return;
         }
         System.err.println("DIAGSTALL the variable that fixes the start: " + suspects);
+    }
+
+    private static long runWithPlan(Path script, Map<String, String> environment) throws Exception {
+        Path powershell = Path.of(System.getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+        ProcessBuilder builder = new ProcessBuilder(powershell.toString(), "-NoLogo", "-NoProfile", "-NonInteractive",
+                "-ExecutionPolicy", "Bypass", "-File", script.toString(), "-Plan", "Z:\no-such-plan.txt");
+        builder.environment().clear();
+        builder.environment().putAll(environment);
+        builder.redirectErrorStream(true);
+        long started = System.nanoTime();
+        Process process = builder.start();
+        if (!process.waitFor(60, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            return 60_000;
+        }
+        process.getInputStream().readAllBytes();
+        return (System.nanoTime() - started) / 1_000_000L;
     }
 
     private static Map<String, String> add(Map<String, String> base, Map<String, String> full, List<String> names) {
