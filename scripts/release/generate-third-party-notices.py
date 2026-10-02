@@ -17,6 +17,7 @@ class ComponentNotice:
     version: str
     purl: str
     licenses: tuple[str, ...]
+    note: str = ""
 
 
 def parse_args() -> argparse.Namespace:
@@ -74,8 +75,44 @@ def load_components(sbom: Path) -> list[ComponentNotice]:
         if key in seen:
             continue
         seen.add(key)
-        notices.append(ComponentNotice(group, name, version, purl, license_labels(component)))
+        description = str(component.get("description") or "").strip()
+        note = description if description.startswith("Pinned artifact shipped") else ""
+        notices.append(ComponentNotice(group, name, version, purl, license_labels(component), note))
     return sorted(notices)
+
+
+COPYLEFT_MARKERS = ("eclipse public license", "cddl", "gpl", "lgpl", "mozilla public license")
+
+
+def source_location(component: ComponentNotice) -> str | None:
+    """Where the corresponding source of a Maven component can be obtained (its published -sources jar)."""
+    if not component.purl.startswith("pkg:maven/") or not component.group:
+        return None
+    path = component.group.replace(".", "/")
+    return (f"https://repo1.maven.org/maven2/{path}/{component.name}/{component.version}/"
+            f"{component.name}-{component.version}-sources.jar")
+
+
+def copyleft_section(components: list[ComponentNotice]) -> list[str]:
+    covered = [item for item in components
+               if any(marker in label.lower() for label in item.licenses for marker in COPYLEFT_MARKERS)]
+    if not covered:
+        return []
+    lines = [
+        "Source availability",
+        "",
+        "The components below are distributed under licenses that require the corresponding source to be",
+        "available (Eclipse Public License, CDDL, GPL with Classpath Exception, ...). MINOS redistributes",
+        "their binaries unmodified; the source of each one is published at the address given, and the",
+        "MINOS maintainers will also provide it on request (https://github.com/FTurleque/minos-code-intelligence).",
+        "",
+    ]
+    for item in covered:
+        coordinate = ":".join(value for value in (item.group, item.name, item.version) if value)
+        lines.append(coordinate)
+        lines.append(f"  Source: {source_location(item) or 'UNAVAILABLE'}")
+        lines.append("")
+    return lines
 
 
 def render(components: list[ComponentNotice]) -> str:
@@ -94,7 +131,10 @@ def render(components: list[ComponentNotice]) -> str:
         lines.append(coordinate)
         lines.append(f"  PURL: {component.purl or 'UNAVAILABLE'}")
         lines.append(f"  License: {', '.join(component.licenses) if component.licenses else 'UNKNOWN'}")
+        if component.note:
+            lines.append(f"  Note: {component.note}")
         lines.append("")
+    lines.extend(copyleft_section(components))
     return "\n".join(lines).rstrip() + "\n"
 
 

@@ -2,10 +2,10 @@ package com.minos.adapter.scip.runtime;
 
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
+import com.minos.io.BoundedFileLease;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedLineReader;
 import com.minos.io.FileTreeOperations;
-import com.minos.io.Sha256;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.local.BoundedProcessOutput;
 import com.minos.runtime.local.CommandLocator;
@@ -16,10 +16,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -28,15 +24,16 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -45,7 +42,6 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     private static final int MAX_INSTALL_LOG_LINE_CHARS = 64 * 1024;
     private static final String NODE_MODULES_DIR = "node_modules";
-    private static final String USER_AGENT_HEADER = "User-Agent";
     private static final String MINOS_USER_AGENT = "MINOS-Code-Intelligence";
 
     public static final String SCIP_TYPESCRIPT_ID = "scip-typescript";
@@ -55,27 +51,37 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     public static final String SCIP_JAVA_COORDINATE = "org.scip-code:scip-java:" + SCIP_JAVA_VERSION;
     static final String SCIP_JAVA_MAIN_CLASS = "org.scip_code.scip_java.ScipJava";
 
-    private static final String COURSIER_LAUNCHERS_COMMIT = "15f36c167c30be237105f923151adaf177e7ee61";
-    private static final String COURSIER_LAUNCHER_ID = "windows-x64-" + COURSIER_LAUNCHERS_COMMIT.substring(0, 12);
-    private static final String COURSIER_WINDOWS_SHA256 = "d6b375ea3f1c58312912af96260cca0c975bc873dc430820e2d67d50b294be3a";
-    private static final long MAX_COURSIER_ARCHIVE_BYTES = 64L * 1024L * 1024L;
-    private static final URI COURSIER_WINDOWS_URI = URI.create(
-            "https://raw.githubusercontent.com/coursier/launchers/" + COURSIER_LAUNCHERS_COMMIT + "/cs-x86_64-pc-win32.zip");
+    // The URL, version and SHA-256 of every pinned artifact below live in embedded-tools.json (the one
+    // description shared with the Docker release image and the Windows distribution build); nothing here
+    // repeats them.
+    private static final String COURSIER_ID = "coursier";
 
     // A project's own Maven wrapper or a host-installed `mvn` cannot be reached by the Windows
     // AppContainer sandbox in general: wrapper discovery walks ancestor directories the sandbox
     // never grants, and a host `mvn` may sit anywhere PATH names, most of which carry no MINOS
     // grant either. scip-java on Windows therefore gets its own MINOS-managed Maven, mirroring how
     // Coursier and scip-typescript are already fetched, checksummed and confined to MINOS_HOME/tools
-    // — a location the sandbox already grants through the existing managed-tools root.
-    private static final String MAVEN_VERSION = "3.9.16";
-    private static final String MAVEN_SHA256 = "5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce";
+    // -- a location the sandbox already grants through the existing managed-tools root.
+    private static final String MAVEN_ID = "maven";
+    private static final String NODE_ID = "nodejs";
+    private static final String TYPESCRIPT_MODULES_ID = "scip-typescript-modules";
+    private static final String JAVA_CLASSPATH_ID = "scip-java-classpath";
+    private static final String EMBEDDED_TREE_SOURCE = "embedded-tools-manifest-sha256";
+    private static final String CLASSPATH_DIRECTORY = "classpath";
+    private static final String CLASSPATH_FILE = "classpath.txt";
+    private static final long MAX_COURSIER_ARCHIVE_BYTES = 64L * 1024L * 1024L;
     private static final long MAX_MAVEN_ARCHIVE_BYTES = 16L * 1024L * 1024L;
     private static final long MAX_MAVEN_ARCHIVE_ENTRIES = 4_096L;
     private static final long MAX_MAVEN_EXTRACTED_BYTES = 64L * 1024L * 1024L;
-    private static final URI MAVEN_DISTRIBUTION_URI = URI.create(
-            "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/" + MAVEN_VERSION
-                    + "/apache-maven-" + MAVEN_VERSION + "-bin.zip");
+    private static final long MAX_NODE_ARCHIVE_BYTES = 128L * 1024L * 1024L;
+    private static final long MAX_NODE_ARCHIVE_ENTRIES = 8_192L;
+    private static final long MAX_NODE_EXTRACTED_BYTES = 256L * 1024L * 1024L;
+    private static final long MAX_ASSEMBLED_ARCHIVE_BYTES = 256L * 1024L * 1024L;
+    private static final long MAX_ASSEMBLED_ENTRIES = 50_000L;
+    private static final long MAX_ASSEMBLED_EXTRACTED_BYTES = 512L * 1024L * 1024L;
+    private static final ReentrantLock SEED_LOCK = new ReentrantLock();
+    private static final Duration SEED_LOCK_TIMEOUT = Duration.ofMinutes(5);
+
     private static final String SCIP_TYPESCRIPT_NPM_LOCK_RESOURCE = "scip-typescript-package-lock.json";
     private static final String SCIP_TYPESCRIPT_NPM_INTEGRITY = "sha512-k+AtsrqmS41Sd5qjkZlHcmvoSQIvBOonRj4jpgp0KNFM6aqvMGpdSuPUqrUcg8ENTKjUbfaUVszgQwq3bCOvwA==";
 
@@ -86,23 +92,50 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     // Windows therefore gets its own MINOS-managed, portable Node.js, invoked directly against the
     // package's entry script (bypassing the cmd.exe shim, and cmd.exe entirely) so both the
     // interpreter and the script are ordinary, sandbox-grantable paths under MINOS_HOME/tools.
-    private static final String NODE_VERSION = "24.20.0";
-    private static final String NODE_DISTRIBUTION_ID = "node-v" + NODE_VERSION + "-win-x64";
-    private static final String NODE_SHA256 = "6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e545ba";
-    private static final long MAX_NODE_ARCHIVE_BYTES = 128L * 1024L * 1024L;
-    private static final long MAX_NODE_ARCHIVE_ENTRIES = 8_192L;
-    private static final long MAX_NODE_EXTRACTED_BYTES = 256L * 1024L * 1024L;
-    private static final URI NODE_DISTRIBUTION_URI = URI.create(
-            "https://nodejs.org/dist/v" + NODE_VERSION + "/" + NODE_DISTRIBUTION_ID + ".zip");
     private static final String WINDOWS_RUNNER_RESOURCE = "scip-java-windows-runner.ps1";
     private static final String WINDOWS_PATCH_RESOURCE = "ScipWriter.java";
 
+    private static final EmbeddedToolsCatalog CATALOG = EmbeddedToolsCatalog.load();
+
     private final Path home;
     private final Path toolsRoot;
+    private final ToolOriginLedger origins;
+    private volatile PinnedArtifactSource source;
 
     public ManagedScipProviderRuntimeManager(Path minosHome) {
         this.home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.toolsRoot = home.resolve("tools");
+        this.origins = new ToolOriginLedger(toolsRoot);
+    }
+
+    /** The distribution payload of this installation, looked up once and only when a tool is needed. */
+    private PinnedArtifactSource source() {
+        PinnedArtifactSource current = source;
+        if (current == null) {
+            current = PinnedArtifactSource.forHost();
+            source = current;
+        }
+        return current;
+    }
+
+    private static EmbeddedToolsCatalog.Artifact coursierArtifact() {
+        return CATALOG.artifact(COURSIER_ID, EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64);
+    }
+
+    private static EmbeddedToolsCatalog.Artifact mavenArtifact() {
+        return CATALOG.artifact(MAVEN_ID, EmbeddedToolsCatalog.PLATFORM_ANY);
+    }
+
+    private static EmbeddedToolsCatalog.Artifact nodeArtifact() {
+        return CATALOG.artifact(NODE_ID, EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64);
+    }
+
+    private static String coursierLauncherId() {
+        return "windows-x64-" + coursierArtifact().version().substring(0, 12);
+    }
+
+    private static String nodeDistributionId() {
+        return "node-v" + nodeArtifact().version() + "-win-x64";
     }
 
     @Override public List<ProviderRuntimeStatus> list() { return List.of(inspect(SCIP_JAVA_ID), inspect(SCIP_TYPESCRIPT_ID)); }
@@ -141,12 +174,19 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             case SCIP_JAVA_ID -> StrongOwnedProcessExecutors.required(
                     providerId, home, new ScipJavaProcessPlanFactory(
                             status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner(),
-                            CommandLocator.isWindows() ? mavenExecutable() : null));
+                            CommandLocator.isWindows() ? mavenExecutable() : null,
+                            Files.isRegularFile(scipJavaClasspathFile(), LinkOption.NOFOLLOW_LINKS)
+                                    ? scipJavaClasspathFile() : null));
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
         };
     }
 
     private ProviderRuntimeStatus inspectTypeScript() {
+        SeedOutcome seeded = seedFromPayload(SCIP_TYPESCRIPT_ID);
+        return seeded.applyTo(inspectTypeScriptInstalled(), originDiagnostic(SCIP_TYPESCRIPT_ID));
+    }
+
+    private ProviderRuntimeStatus inspectTypeScriptInstalled() {
         List<String> diagnostics = new ArrayList<>();
         boolean packageInstalled = Files.isRegularFile(typeScriptMainScript());
         if (!packageInstalled) diagnostics.add("managed scip-typescript " + SCIP_TYPESCRIPT_VERSION + " is not installed");
@@ -155,13 +195,13 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         if (CommandLocator.isWindows()) {
             executable = nodeExecutable();
             if (!Files.isRegularFile(executable)) {
-                diagnostics.add("managed Node.js " + NODE_VERSION + " runtime is not installed in MINOS_HOME/tools");
+                diagnostics.add("managed Node.js " + nodeArtifact().version() + " runtime is not installed in MINOS_HOME/tools");
             }
         } else {
             Optional<Path> node = CommandLocator.find("node");
             Optional<Path> npm = CommandLocator.find("npm");
-            if (node.isEmpty()) diagnostics.add("Node.js is not available in PATH");
-            if (npm.isEmpty()) diagnostics.add("npm is not available in PATH");
+            if (node.isEmpty()) diagnostics.add(ExternalPrerequisite.of("Node.js is not available in PATH"));
+            if (npm.isEmpty()) diagnostics.add(ExternalPrerequisite.of("npm is not available in PATH"));
             executable = typeScriptExecutable();
         }
         ProviderRuntimeStatus.State state;
@@ -178,24 +218,29 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     }
 
     private ProviderRuntimeStatus inspectJava() {
+        SeedOutcome seeded = seedFromPayload(SCIP_JAVA_ID);
+        return seeded.applyTo(inspectJavaInstalled(), originDiagnostic(SCIP_JAVA_ID));
+    }
+
+    private ProviderRuntimeStatus inspectJavaInstalled() {
         List<String> diagnostics = new ArrayList<>();
         Optional<Path> coursier = coursierExecutable();
         boolean windowsRuntimeInstalled = !CommandLocator.isWindows() || windowsRuntimeInstalled();
         boolean mavenInstalled = !CommandLocator.isWindows() || Files.isRegularFile(mavenExecutable());
         if (coursier.isEmpty()) diagnostics.add("Coursier is not installed in MINOS_HOME/tools and was not found in PATH");
         if (!windowsRuntimeInstalled) diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION + " Windows compatibility runtime is not installed");
-        if (!mavenInstalled) diagnostics.add("managed Maven " + MAVEN_VERSION + " is not installed in MINOS_HOME/tools");
+        if (!mavenInstalled) diagnostics.add("managed Maven " + mavenArtifact().version() + " is not installed in MINOS_HOME/tools");
         if (CommandLocator.isWindows()) {
-            if (powerShellExecutable().isEmpty()) diagnostics.add("PowerShell (powershell.exe or pwsh.exe) is required for scip-java on Windows");
-            if (!gitBashAvailable()) diagnostics.add("Git Bash (bash.exe) is required for scip-java on Windows");
-            if (!cSharpCompilerAvailable()) diagnostics.add("csc.exe is required to build scip-java Windows command shims");
+            if (powerShellExecutable().isEmpty()) diagnostics.add(ExternalPrerequisite.of("PowerShell (powershell.exe or pwsh.exe) is required for scip-java on Windows"));
+            if (!gitBashAvailable()) diagnostics.add(ExternalPrerequisite.of("Git Bash (bash.exe) is required for scip-java on Windows"));
+            if (!cSharpCompilerAvailable()) diagnostics.add(ExternalPrerequisite.of("csc.exe is required to build scip-java Windows command shims"));
         }
         String javaHome = System.getenv("JAVA_HOME");
         if (javaHome == null || javaHome.isBlank()) {
-            diagnostics.add("JAVA_HOME is not set to the project JDK");
+            diagnostics.add(ExternalPrerequisite.of("JAVA_HOME is not set to the project JDK"));
         } else {
             Path javac = Path.of(javaHome).resolve("bin").resolve(CommandLocator.isWindows() ? "javac.exe" : "javac");
-            if (!Files.isRegularFile(javac)) diagnostics.add("JAVA_HOME does not contain javac: " + javaHome);
+            if (!Files.isRegularFile(javac)) diagnostics.add(ExternalPrerequisite.of("JAVA_HOME does not contain javac: " + javaHome));
         }
         boolean installed = coursier.isPresent() && windowsRuntimeInstalled && mavenInstalled;
         ProviderRuntimeStatus.State state = !installed
@@ -205,12 +250,16 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     }
 
     private ProviderRuntimeStatus installTypeScript() throws Exception {
+        PrivateLocalStorage.ensurePrivateDirectory(toolsRoot);
+        seedFromPayload(SCIP_TYPESCRIPT_ID).requireAccepted();
+        ProviderRuntimeStatus seededStatus = inspectTypeScript();
+        if (seededStatus.ready()) return seededStatus;
         Path npm = CommandLocator.find("npm")
                 .orElseThrow(() -> new IllegalStateException("npm is required to install scip-typescript"));
         CommandLocator.find("node").orElseThrow(() -> new IllegalStateException("Node.js is required to run scip-typescript"));
         PrivateLocalStorage.ensurePrivateDirectory(toolsRoot);
         if (CommandLocator.isWindows()) {
-            ensureNode();
+            ensureNode(true);
         }
         Path destination = typeScriptRoot();
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
@@ -242,15 +291,18 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     private ProviderRuntimeStatus installJava() throws Exception {
         PrivateLocalStorage.ensurePrivateDirectory(toolsRoot);
-        Path coursier = ensureCoursier();
+        seedFromPayload(SCIP_JAVA_ID).requireAccepted();
+        Path coursier = ensureCoursier(true);
         if (CommandLocator.isWindows()) {
             installJavaWindowsRuntime();
-            ensureMaven();
+            ensureMaven(true);
         }
-        run(List.of(coursier.toString(), "--help"), home, toolsRoot.resolve("coursier-verify.log"), Duration.ofMinutes(1));
-        Path scipJavaLog = toolsRoot.resolve("scip-java-install.log");
-        run(scipJavaInstallationProbe(coursier), home, scipJavaLog, Duration.ofMinutes(10));
-        requireExpectedScipJavaVersion(scipJavaLog);
+        if (!Files.isRegularFile(scipJavaClasspathFile(), LinkOption.NOFOLLOW_LINKS)) {
+            run(List.of(coursier.toString(), "--help"), home, toolsRoot.resolve("coursier-verify.log"), Duration.ofMinutes(1));
+            Path scipJavaLog = toolsRoot.resolve("scip-java-install.log");
+            run(scipJavaInstallationProbe(coursier), home, scipJavaLog, Duration.ofMinutes(10));
+            requireExpectedScipJavaVersion(scipJavaLog);
+        }
         ProviderRuntimeStatus status = inspectJava();
         if (!status.ready()) throw new IllegalStateException("scip-java installation is incomplete: " + String.join("; ", status.diagnostics()));
         return status;
@@ -300,13 +352,13 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         }
     }
 
-    private Path ensureCoursier() throws Exception {
+    private Path ensureCoursier(boolean allowNetwork) throws Exception {
         Optional<Path> existing = coursierExecutable();
         if (existing.isPresent()) return existing.orElseThrow();
         if (!CommandLocator.isWindows()) {
             throw new IllegalStateException("automatic Coursier installation is currently packaged for Windows x64; install `cs` in PATH");
         }
-        Path directory = toolsRoot.resolve("coursier").resolve(COURSIER_LAUNCHER_ID);
+        Path directory = toolsRoot.resolve("coursier").resolve(coursierLauncherId());
         PrivateLocalStorage.ensurePrivateDirectory(directory);
         Path destination = directory.resolve("cs.exe");
         Path archive = directory.resolve("cs-x86_64-pc-win32.zip");
@@ -315,45 +367,15 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         Files.deleteIfExists(archivePartial);
         Files.deleteIfExists(executablePartial);
 
-        HttpClient client = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .connectTimeout(Duration.ofSeconds(30)).build();
-        HttpRequest request = HttpRequest.newBuilder(COURSIER_WINDOWS_URI)
-                .timeout(Duration.ofMinutes(2))
-                .header(USER_AGENT_HEADER, MINOS_USER_AGENT).build();
-        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            try (InputStream ignored = response.body()) { /* close error response */ }
-            throw new IllegalStateException("Coursier launcher download failed with HTTP " + response.statusCode());
-        }
-        try (InputStream responseBody = response.body();
-             BoundedInputStream bounded = new BoundedInputStream(
-                     responseBody, MAX_COURSIER_ARCHIVE_BYTES, "Coursier launcher archive");
-             OutputStream output = Files.newOutputStream(archivePartial)) {
-            byte[] buffer = new byte[64 * 1024];
-            int read;
-            while ((read = bounded.read(buffer)) >= 0) if (read > 0) output.write(buffer, 0, read);
-        } catch (Exception exception) {
-            Files.deleteIfExists(archivePartial);
-            throw exception;
-        }
-        if (!Files.isRegularFile(archivePartial, LinkOption.NOFOLLOW_LINKS) || Files.size(archivePartial) == 0L) {
-            Files.deleteIfExists(archivePartial);
-            throw new IllegalStateException("Coursier launcher download produced an empty archive");
-        }
-        String actualDigest = sha256(archivePartial);
-        if (!COURSIER_WINDOWS_SHA256.equals(actualDigest)) {
-            Files.deleteIfExists(archivePartial);
-            throw new IllegalStateException("Coursier launcher checksum mismatch: expected="
-                    + COURSIER_WINDOWS_SHA256 + " actual=" + actualDigest);
-        }
+        PinnedArtifactSource.Origin origin = source().acquire(
+                coursierArtifact(), archivePartial, MAX_COURSIER_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
         move(archivePartial, archive);
 
         int executableEntries = 0;
         try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(archive); ZipInputStream zip = new ZipInputStream(input)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
-                if (!entry.isDirectory() && entry.getName().toLowerCase().endsWith(".exe")) {
+                if (!entry.isDirectory() && entry.getName().toLowerCase(Locale.ROOT).endsWith(".exe")) {
                     executableEntries++;
                     if (executableEntries == 1) Files.copy(zip, executablePartial, StandardCopyOption.REPLACE_EXISTING);
                 }
@@ -364,57 +386,29 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             throw new IllegalStateException("Coursier launcher ZIP did not contain a Windows executable");
         }
         move(executablePartial, destination);
+        origins.record(COURSIER_ID, origin);
         return destination;
     }
 
-    private Path mavenRoot() { return toolsRoot.resolve("maven").resolve(MAVEN_VERSION); }
+    private Path mavenRoot() { return toolsRoot.resolve("maven").resolve(mavenArtifact().version()); }
 
     Path mavenExecutable() {
-        return mavenRoot().resolve("apache-maven-" + MAVEN_VERSION).resolve("bin")
+        return mavenRoot().resolve("apache-maven-" + mavenArtifact().version()).resolve("bin")
                 .resolve(CommandLocator.isWindows() ? "mvn.cmd" : "mvn");
     }
 
-    private Path ensureMaven() throws Exception {
+    private Path ensureMaven(boolean allowNetwork) throws Exception {
         Path existing = mavenExecutable();
         if (Files.isRegularFile(existing)) return existing;
         Path root = mavenRoot();
         PrivateLocalStorage.ensurePrivateDirectory(root);
-        Path archive = root.resolve("apache-maven-" + MAVEN_VERSION + "-bin.zip");
-        Path archivePartial = root.resolve("apache-maven-" + MAVEN_VERSION + "-bin.partial.zip");
+        String archiveName = "apache-maven-" + mavenArtifact().version() + "-bin";
+        Path archive = root.resolve(archiveName + ".zip");
+        Path archivePartial = root.resolve(archiveName + ".partial.zip");
         Files.deleteIfExists(archivePartial);
 
-        HttpClient client = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .connectTimeout(Duration.ofSeconds(30)).build();
-        HttpRequest request = HttpRequest.newBuilder(MAVEN_DISTRIBUTION_URI)
-                .timeout(Duration.ofMinutes(3))
-                .header(USER_AGENT_HEADER, MINOS_USER_AGENT).build();
-        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            try (InputStream ignored = response.body()) { /* close error response */ }
-            throw new IllegalStateException("Maven distribution download failed with HTTP " + response.statusCode());
-        }
-        try (InputStream responseBody = response.body();
-             BoundedInputStream bounded = new BoundedInputStream(
-                     responseBody, MAX_MAVEN_ARCHIVE_BYTES, "Maven distribution archive");
-             OutputStream output = Files.newOutputStream(archivePartial)) {
-            byte[] buffer = new byte[64 * 1024];
-            int read;
-            while ((read = bounded.read(buffer)) >= 0) if (read > 0) output.write(buffer, 0, read);
-        } catch (Exception exception) {
-            Files.deleteIfExists(archivePartial);
-            throw exception;
-        }
-        if (!Files.isRegularFile(archivePartial, LinkOption.NOFOLLOW_LINKS) || Files.size(archivePartial) == 0L) {
-            Files.deleteIfExists(archivePartial);
-            throw new IllegalStateException("Maven distribution download produced an empty archive");
-        }
-        String actualDigest = sha256(archivePartial);
-        if (!MAVEN_SHA256.equalsIgnoreCase(actualDigest)) {
-            Files.deleteIfExists(archivePartial);
-            throw new IllegalStateException("Maven distribution checksum mismatch: expected="
-                    + MAVEN_SHA256 + " actual=" + actualDigest);
-        }
+        PinnedArtifactSource.Origin origin = source().acquire(
+                mavenArtifact(), archivePartial, MAX_MAVEN_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
         move(archivePartial, archive);
 
         extractZipBounded(archive, root, MAX_MAVEN_EXTRACTED_BYTES, MAX_MAVEN_ARCHIVE_ENTRIES);
@@ -431,56 +425,27 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 // Non-POSIX filesystem: the archive's own permission bits are used as-is.
             }
         }
+        origins.record(MAVEN_ID, origin);
         return mvn;
     }
 
-    private Path nodeRoot() { return toolsRoot.resolve("nodejs").resolve(NODE_VERSION); }
+    private Path nodeRoot() { return toolsRoot.resolve("nodejs").resolve(nodeArtifact().version()); }
 
     Path nodeExecutable() {
-        return nodeRoot().resolve(NODE_DISTRIBUTION_ID).resolve("node.exe");
+        return nodeRoot().resolve(nodeDistributionId()).resolve("node.exe");
     }
 
-    private Path ensureNode() throws IOException, InterruptedException {
+    private Path ensureNode(boolean allowNetwork) throws IOException, InterruptedException {
         Path existing = nodeExecutable();
         if (Files.isRegularFile(existing)) return existing;
         Path root = nodeRoot();
         PrivateLocalStorage.ensurePrivateDirectory(root);
-        Path archive = root.resolve(NODE_DISTRIBUTION_ID + ".zip");
-        Path archivePartial = root.resolve(NODE_DISTRIBUTION_ID + ".partial.zip");
+        Path archive = root.resolve(nodeDistributionId() + ".zip");
+        Path archivePartial = root.resolve(nodeDistributionId() + ".partial.zip");
         Files.deleteIfExists(archivePartial);
 
-        HttpClient client = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .connectTimeout(Duration.ofSeconds(30)).build();
-        HttpRequest request = HttpRequest.newBuilder(NODE_DISTRIBUTION_URI)
-                .timeout(Duration.ofMinutes(3))
-                .header(USER_AGENT_HEADER, MINOS_USER_AGENT).build();
-        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            try (InputStream ignored = response.body()) { /* close error response */ }
-            throw new IllegalStateException("Node.js distribution download failed with HTTP " + response.statusCode());
-        }
-        try (InputStream responseBody = response.body();
-             BoundedInputStream bounded = new BoundedInputStream(
-                     responseBody, MAX_NODE_ARCHIVE_BYTES, "Node.js distribution archive");
-             OutputStream output = Files.newOutputStream(archivePartial)) {
-            byte[] buffer = new byte[64 * 1024];
-            int read;
-            while ((read = bounded.read(buffer)) >= 0) if (read > 0) output.write(buffer, 0, read);
-        } catch (IOException exception) {
-            Files.deleteIfExists(archivePartial);
-            throw exception;
-        }
-        if (!Files.isRegularFile(archivePartial, LinkOption.NOFOLLOW_LINKS) || Files.size(archivePartial) == 0L) {
-            Files.deleteIfExists(archivePartial);
-            throw new IllegalStateException("Node.js distribution download produced an empty archive");
-        }
-        String actualDigest = sha256(archivePartial);
-        if (!NODE_SHA256.equalsIgnoreCase(actualDigest)) {
-            Files.deleteIfExists(archivePartial);
-            throw new IllegalStateException("Node.js distribution checksum mismatch: expected="
-                    + NODE_SHA256 + " actual=" + actualDigest);
-        }
+        PinnedArtifactSource.Origin origin = source().acquire(
+                nodeArtifact(), archivePartial, MAX_NODE_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
         move(archivePartial, archive);
 
         extractZipBounded(archive, root, MAX_NODE_EXTRACTED_BYTES, MAX_NODE_ARCHIVE_ENTRIES);
@@ -488,7 +453,200 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         if (!Files.isRegularFile(node)) {
             throw new IllegalStateException("Node.js distribution archive did not contain " + node);
         }
+        origins.record(NODE_ID, origin);
         return node;
+    }
+
+    /** What the distribution payload did for a provider on this inspection. */
+    private record SeedOutcome(boolean refused, List<String> diagnostics) {
+        static final SeedOutcome NONE = new SeedOutcome(false, List.of());
+
+        /** Adds the seeding diagnostics, and turns an altered payload into a refusal, never a silent fallback. */
+        ProviderRuntimeStatus applyTo(ProviderRuntimeStatus status, Optional<String> origin) {
+            List<String> merged = new ArrayList<>(status.diagnostics());
+            merged.addAll(diagnostics);
+            origin.ifPresent(merged::add);
+            ProviderRuntimeStatus.State state = refused ? ProviderRuntimeStatus.State.INVALID : status.state();
+            if (merged.equals(status.diagnostics()) && state == status.state()) return status;
+            return new ProviderRuntimeStatus(
+                    status.providerId(), status.version(), state, status.executable(), merged, status.requiredByDefault());
+        }
+
+        void requireAccepted() {
+            if (refused) throw new PinnedArtifactSource.EmbeddedToolIntegrityException(String.join("; ", diagnostics));
+        }
+    }
+
+    /**
+     * Seeds {@code MINOS_HOME/tools} from the tools shipped with the installation, without any network access,
+     * for a provider whose components are missing there. Idempotent and safe under concurrency (a bounded
+     * lease serialises the processes); an altered payload is refused, never replaced by a download.
+     */
+    private SeedOutcome seedFromPayload(String providerId) {
+        if (!EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64.equals(EmbeddedToolsCatalog.currentPlatform())) {
+            return SeedOutcome.NONE;
+        }
+        try {
+            SeedOutcome tampered = verifyInstalledEmbeddedTrees(providerId);
+            if (tampered != null) return tampered;
+            if (!needsSeeding(providerId)) return SeedOutcome.NONE;
+            PrivateLocalStorage.ensurePrivateDirectory(toolsRoot);
+            try (BoundedFileLease ignored = BoundedFileLease.acquire(
+                    toolsRoot.resolve(".embedded-seed.lock"), SEED_LOCK, SEED_LOCK_TIMEOUT, "embedded tools seeding")) {
+                if (needsSeeding(providerId)) seedComponents(providerId);
+            }
+            return SeedOutcome.NONE;
+        } catch (PinnedArtifactSource.EmbeddedToolIntegrityException refused) {
+            return new SeedOutcome(true, List.of("embedded tools were refused: " + refused.getMessage()));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return new SeedOutcome(false, List.of("embedded tools seeding was interrupted"));
+        } catch (Exception failure) {
+            return new SeedOutcome(false, List.of("embedded tools could not be seeded: " + failure.getClass().getSimpleName()));
+        }
+    }
+
+    private boolean needsSeeding(String providerId) throws IOException {
+        for (String component : CATALOG.provider(providerId).components()) {
+            if (shippedAndMissing(component)) return true;
+        }
+        return false;
+    }
+
+    private boolean shippedAndMissing(String component) throws IOException {
+        String platform = EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64;
+        Optional<EmbeddedToolsCatalog.Artifact> artifact = CATALOG.findArtifact(component, platform);
+        if (artifact.isPresent()) {
+            return source().ships(artifact.orElseThrow()) && !installed(component);
+        }
+        Optional<EmbeddedToolsCatalog.Assembled> assembled = CATALOG.findAssembled(component, platform);
+        return assembled.isPresent() && source().shipsAssembled(assembled.orElseThrow()) && !installed(component);
+    }
+
+    private boolean installed(String component) {
+        return switch (component) {
+            case COURSIER_ID -> coursierExecutable().isPresent();
+            case MAVEN_ID -> Files.isRegularFile(mavenExecutable());
+            case NODE_ID -> Files.isRegularFile(nodeExecutable());
+            case TYPESCRIPT_MODULES_ID -> Files.isRegularFile(typeScriptMainScript());
+            case JAVA_CLASSPATH_ID -> Files.isRegularFile(scipJavaClasspathFile(), LinkOption.NOFOLLOW_LINKS);
+            default -> true;
+        };
+    }
+
+    private void seedComponents(String providerId) throws Exception {
+        for (String component : CATALOG.provider(providerId).components()) {
+            if (!shippedAndMissing(component)) continue;
+            switch (component) {
+                case COURSIER_ID -> ensureCoursier(false);
+                case MAVEN_ID -> ensureMaven(false);
+                case NODE_ID -> ensureNode(false);
+                case TYPESCRIPT_MODULES_ID -> seedAssembledTree(
+                        CATALOG.findAssembled(component, EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64).orElseThrow(),
+                        typeScriptRoot(), SCIP_TYPESCRIPT_VERSION);
+                case JAVA_CLASSPATH_ID -> {
+                    installJavaWindowsRuntime();
+                    seedAssembledTree(
+                            CATALOG.findAssembled(component, EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64).orElseThrow(),
+                            scipJavaClasspathRoot(), SCIP_JAVA_VERSION);
+                }
+                default -> { }
+            }
+        }
+    }
+
+    /**
+     * Extracts an assembled component into a private partial directory, stamps the integrity markers the
+     * other managed trees carry, and swaps it in. The archive is verified against the manifest of the
+     * distribution (no upstream pins its bytes) before a single entry is extracted.
+     */
+    private void seedAssembledTree(EmbeddedToolsCatalog.Assembled component, Path destination, String version)
+            throws Exception {
+        Path archivePartial = toolsRoot.resolve(".seed-" + component.id() + ".partial.zip");
+        Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
+        Files.deleteIfExists(archivePartial);
+        deleteRecursively(partial);
+        try {
+            source().copyAssembled(component, archivePartial, MAX_ASSEMBLED_ARCHIVE_BYTES);
+            extractZipBounded(archivePartial, partial, MAX_ASSEMBLED_EXTRACTED_BYTES, MAX_ASSEMBLED_ENTRIES);
+            ManagedPolyglotScipRuntimeManager.writeManagedMarkers(partial, version, EMBEDDED_TREE_SOURCE);
+            deleteRecursively(destination);
+            move(partial, destination);
+            origins.record(component.id(), PinnedArtifactSource.Origin.EMBEDDED);
+        } finally {
+            Files.deleteIfExists(archivePartial);
+            deleteRecursively(partial);
+        }
+    }
+
+    /**
+     * An embedded tree that no longer matches the digest stamped when it was seeded, that lost its markers, or that
+     * contains a link (symbolic link, junction, any reparse point) is refused: every failure to verify is a refusal,
+     * never "not provided". A tree without markers and without an embedded origin is a legacy download, left alone.
+     */
+    private SeedOutcome verifyInstalledEmbeddedTrees(String providerId) {
+        for (String component : CATALOG.provider(providerId).components()) {
+            Path tree = switch (component) {
+                case TYPESCRIPT_MODULES_ID -> typeScriptRoot();
+                case JAVA_CLASSPATH_ID -> scipJavaClasspathRoot();
+                default -> null;
+            };
+            if (tree == null || !Files.isDirectory(tree, LinkOption.NOFOLLOW_LINKS)) continue;
+            boolean embedded = origins.origin(component).filter("embedded"::equals).isPresent()
+                    || ManagedPolyglotScipRuntimeManager.installSourceMatches(tree, EMBEDDED_TREE_SOURCE);
+            if (!embedded) continue;
+            String problem = embeddedTreeProblem(tree);
+            if (problem != null) {
+                return new SeedOutcome(true, List.of("embedded tools were refused: " + component + " " + problem
+                        + PinnedArtifactSource.REINSTALL_HINT));
+            }
+        }
+        return null;
+    }
+
+    private static String embeddedTreeProblem(Path tree) {
+        if (!ManagedPolyglotScipRuntimeManager.installSourceMatches(tree, EMBEDDED_TREE_SOURCE)) {
+            return "lost its embedded-origin marker";
+        }
+        if (containsLink(tree)) return "contains a link or a reparse point";
+        if (!ManagedPolyglotScipRuntimeManager.integrityManifestMatches(tree)) return "no longer matches its integrity manifest";
+        return null;
+    }
+
+    private static boolean containsLink(Path tree) {
+        boolean[] found = {false};
+        try {
+            Files.walkFileTree(tree, new java.nio.file.SimpleFileVisitor<>() {
+                @Override
+                public java.nio.file.FileVisitResult preVisitDirectory(Path directory, java.nio.file.attribute.BasicFileAttributes attributes) {
+                    return flag(attributes);
+                }
+
+                @Override
+                public java.nio.file.FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attributes) {
+                    return flag(attributes);
+                }
+
+                private java.nio.file.FileVisitResult flag(java.nio.file.attribute.BasicFileAttributes attributes) {
+                    if (attributes.isSymbolicLink() || attributes.isOther()) {
+                        found[0] = true;
+                        return java.nio.file.FileVisitResult.TERMINATE;
+                    }
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException | RuntimeException unreadable) {
+            return true;
+        }
+        return found[0];
+    }
+
+    private Optional<String> originDiagnostic(String providerId) {
+        List<String> parts = new ArrayList<>();
+        for (String component : CATALOG.provider(providerId).components()) {
+            origins.origin(component).ifPresent(origin -> parts.add(component + "=" + origin));
+        }
+        return parts.isEmpty() ? Optional.empty() : Optional.of("tools origin: " + String.join(", ", parts));
     }
 
     /**
@@ -496,7 +654,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
      * outside it (zip-slip) and bounding both entry count and total extracted bytes so a corrupted
      * or oversized archive cannot turn installation into unbounded disk consumption.
      */
-    private static void extractZipBounded(
+    static void extractZipBounded(
             Path archive, Path destinationRoot, long maxTotalBytes, long maxEntries
     ) throws IOException {
         Path root = destinationRoot.toAbsolutePath().normalize();
@@ -533,18 +691,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         }
     }
 
-    private static String sha256(Path file) throws IOException {
-        MessageDigest digest = Sha256.newDigest();
-        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
-        }
-        return Sha256.hex(digest);
-    }
-
     private Optional<Path> coursierExecutable() {
-        Path managed = toolsRoot.resolve("coursier").resolve(COURSIER_LAUNCHER_ID)
+        Path managed = toolsRoot.resolve("coursier").resolve(coursierLauncherId())
                 .resolve(CommandLocator.isWindows() ? "cs.exe" : "cs");
         return Files.isRegularFile(managed) ? Optional.of(managed) : CommandLocator.find("cs");
     }
@@ -563,6 +711,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     private Path scipJavaRuntimeRoot() { return toolsRoot.resolve("scip-java").resolve(SCIP_JAVA_VERSION).resolve("runtime"); }
     private Path scipJavaWindowsRunner() { return scipJavaRuntimeRoot().resolve(WINDOWS_RUNNER_RESOURCE); }
+    private Path scipJavaRoot() { return toolsRoot.resolve("scip-java").resolve(SCIP_JAVA_VERSION); }
+    private Path scipJavaClasspathRoot() { return scipJavaRoot().resolve(CLASSPATH_DIRECTORY); }
+    Path scipJavaClasspathFile() { return scipJavaClasspathRoot().resolve(CLASSPATH_FILE); }
 
     private boolean windowsRuntimeInstalled() {
         Path runtime = scipJavaRuntimeRoot();

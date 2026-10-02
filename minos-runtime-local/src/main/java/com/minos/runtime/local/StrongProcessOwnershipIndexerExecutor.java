@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * Fail-closed wrapper for provider executions that require kernel-backed descendant ownership.
@@ -42,12 +43,27 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
             Path minosHome,
             WorkerNetworkPolicy networkPolicy
     ) {
+        this(delegate, minosHome, networkPolicy, WorkerSandboxBackends::strongestAvailableForManagedLocalProvider);
+    }
+
+    /**
+     * Test seam: same managed-provider boundary with the sandbox selection supplied by the caller,
+     * so the fail-closed refusal can be exercised on a host whose real selection is qualified.
+     * Not reachable from the production jar: the constructor is package-private.
+     */
+    StrongProcessOwnershipIndexerExecutor(
+            ProcessIndexerExecutor delegate,
+            Path minosHome,
+            WorkerNetworkPolicy networkPolicy,
+            Function<Path, WorkerSandboxBackend> sandboxSelector
+    ) {
         Path home = normalizedHome(minosHome);
         this.delegate = Objects.requireNonNull(delegate, DELEGATE_PARAMETER);
         this.boundaryProvider = platformBoundary(home);
         this.localIsolation = new LocalIsolation(
                 home,
-                Objects.requireNonNull(networkPolicy, "networkPolicy"));
+                Objects.requireNonNull(networkPolicy, "networkPolicy"),
+                Objects.requireNonNull(sandboxSelector, "sandboxSelector"));
     }
 
     StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, BoundaryProvider boundaryProvider) {
@@ -86,8 +102,8 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
             IndexingExecutionRequest request,
             LocalIsolation isolation
     ) throws Exception {
-        WorkerSandboxBackend backend = WorkerSandboxBackends
-                .strongestAvailableForManagedLocalProvider(isolation.minosHome());
+        WorkerSandboxBackend backend = Objects.requireNonNull(
+                isolation.sandboxSelector().apply(isolation.minosHome()), "managed local provider sandbox");
         if (!backend.supportsManagedLocalProvider()) {
             throw unavailable("qualified managed local provider sandbox is unavailable: " + backend.id());
         }
@@ -246,10 +262,15 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
         ProcessIndexerExecutor.ProcessPlanTransformer transformer(IndexingExecutionRequest request);
     }
 
-    private record LocalIsolation(Path minosHome, WorkerNetworkPolicy networkPolicy) {
+    private record LocalIsolation(
+            Path minosHome,
+            WorkerNetworkPolicy networkPolicy,
+            Function<Path, WorkerSandboxBackend> sandboxSelector
+    ) {
         private LocalIsolation {
             minosHome = normalizedHome(minosHome);
             Objects.requireNonNull(networkPolicy, "networkPolicy");
+            Objects.requireNonNull(sandboxSelector, "sandboxSelector");
         }
     }
 

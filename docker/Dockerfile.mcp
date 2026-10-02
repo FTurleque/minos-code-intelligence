@@ -1,5 +1,7 @@
-# eclipse-temurin:24.0.2_12-jre / 24-jre (immutable multi-platform index digest)
-FROM eclipse-temurin@sha256:b416d02335e702b0403ff280de9475a3348e29382285969c9d4e17862ce632e7
+# <image>:<tag>@sha256:<index digest>: the digest is the immutable pin, the tag is what Dependabot
+# (docker ecosystem) follows to propose digest and version updates. A digest without a tag is not
+# followed by a tag: it would be moved to `latest`. Enforced by scripts/quality/check-image-pins.py.
+FROM eclipse-temurin:24.0.2_12-jre@sha256:b416d02335e702b0403ff280de9475a3348e29382285969c9d4e17862ce632e7
 
 ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown

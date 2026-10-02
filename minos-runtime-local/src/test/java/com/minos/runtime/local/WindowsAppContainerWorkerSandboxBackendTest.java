@@ -2,6 +2,7 @@ package com.minos.runtime.local;
 
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexerCapability;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
@@ -25,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -420,6 +422,184 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                         + "probe, got:\n" + finalAcl);
     }
 
+    /**
+     * A directory that private storage protects (owner only, no inheritance) below a managed provider root
+     * does not receive the entry the sandbox grants on that root. The runner of scip-java lives in such a
+     * directory, with the file it reads next to it. The test applies the planned grants to a stand-in
+     * principal, the way the launcher applies them to the AppContainer identity, and reads the resulting
+     * access on the files themselves.
+     */
+    @Test
+    void aProtectedDirectoryBelowTheManagedRootStaysReadableByTheSandboxIdentity() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        Path home = Files.createTempDirectory("minos-appcontainer-protected-home-");
+        assertProtectedRuntimeReachable(home, home);
+    }
+
+    /**
+     * The MINOS home reaches the backend through a spelling that is not its real path: an 8.3 short name
+     * (a CI runner's profile, a temporary directory) or, where the volume has none, a junction. The files
+     * the provider names are then resolved to their real path, and the managed root must still be
+     * recognized as their ancestor, or the runner falls back to a lone file grant.
+     */
+    @Test
+    void aHomeSpelledWithAShortNameOrALinkStillGrantsTheProtectedRuntimeDirectory() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        Path home = Files.createTempDirectory("minos-appcontainer-aliased-home-");
+        Path alias = aliasOf(home);
+        assertNotEquals(alias, home.toRealPath(), "the alias must differ from the real path of the home");
+        assertProtectedRuntimeReachable(home, alias);
+    }
+
+    /**
+     * {@code home} is where the files really are, {@code viaHome} the spelling of the MINOS home the
+     * backend is given and the provider command uses.
+     */
+    private static void assertProtectedRuntimeReachable(Path home, Path viaHome) throws Exception {
+        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(viaHome);
+        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
+        Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
+        Path root = Files.createDirectories(
+                home.resolve("tools").resolve("fixture-protected-provider").resolve("1.0.0"));
+        Path runtime = PrivateLocalStorage.ensurePrivateDirectory(root.resolve("runtime"));
+        Path runner = Files.writeString(runtime.resolve("runner.ps1"), "exit 0\n", StandardCharsets.US_ASCII);
+        Path neighbour = Files.writeString(runtime.resolve("Neighbour.java"), "class Neighbour {}\n",
+                StandardCharsets.US_ASCII);
+        Path runnerArgument = viaHome.resolve(home.relativize(runner));
+
+        PlannedGrants grants = plannedGrants(backend, childPowerShell, runnerArgument);
+
+        assertFalse(holdsEntryFor(runner, STAND_IN_SID), "the stand-in principal must start without access");
+        grantLikeLauncher(grants, STAND_IN_SID);
+        assertTrue(holdsEntryFor(runner, STAND_IN_SID),
+                () -> "the runner must be reachable by the sandbox identity, planned grants: " + grants);
+        assertTrue(holdsEntryFor(neighbour, STAND_IN_SID),
+                () -> "the file the runner reads next to itself must be reachable too, planned grants: " + grants);
+    }
+
+    /** The 8.3 short spelling of a directory, or a junction to it on a volume that has no short names. */
+    private static Path aliasOf(Path directory) throws Exception {
+        Path script = Files.createTempFile("minos-short-name-", ".cmd");
+        Files.writeString(script, "@for %%I in (\"%~1\") do @echo %%~sI\r\n", StandardCharsets.US_ASCII);
+        Process process = new ProcessBuilder("cmd.exe", "/c", script.toString(), directory.toString())
+                .redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.Charset.defaultCharset())
+                .strip();
+        assertEquals(0, process.waitFor(), output);
+        Files.deleteIfExists(script);
+        Path shortName = Path.of(output);
+        if (!shortName.equals(directory) && Files.isSameFile(shortName, directory)) return shortName;
+        Path link = directory.resolveSibling(directory.getFileName() + "-link");
+        Process mklink = new ProcessBuilder("cmd.exe", "/c", "mklink", "/J", link.toString(), directory.toString())
+                .redirectErrorStream(true).start();
+        mklink.getInputStream().readAllBytes();
+        assertEquals(0, mklink.waitFor(), "the junction must be created");
+        return link;
+    }
+
+    @Test
+    void aFileDirectlyInTheManagedRootAddsNoGrantBeyondTheRoot() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        Path home = Files.createTempDirectory("minos-appcontainer-rootfile-home-");
+        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
+        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
+        Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
+        Path root = Files.createDirectories(home.resolve("tools").resolve("fixture-flat-provider").resolve("1.0.0"));
+        Path script = Files.writeString(root.resolve("runner.ps1"), "exit 0\n", StandardCharsets.US_ASCII);
+
+        PlannedGrants grants = plannedGrants(backend, childPowerShell, script);
+
+        Path realHome = home.toRealPath();
+        assertTrue(grants.readRoots().contains(root.toRealPath()), () -> "the provider root is granted, got " + grants);
+        assertEquals(List.of(root.toRealPath()),
+                grants.readRoots().stream().filter(path -> path.startsWith(realHome)).toList(),
+                () -> "nothing else under MINOS_HOME is granted for a file that sits in the root, got " + grants);
+        assertTrue(grants.readFiles().isEmpty(), () -> "no file grant is needed, got " + grants);
+    }
+
+    @Test
+    void aLinkLeavingTheManagedRootGrantsTheFileAloneNeverItsDirectory() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        Path home = Files.createTempDirectory("minos-appcontainer-link-home-");
+        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
+        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
+        Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
+        Path outside = Files.createTempDirectory("minos-appcontainer-link-outside-");
+        Path outsideScript = Files.writeString(outside.resolve("runner.ps1"), "exit 0\n", StandardCharsets.US_ASCII);
+        Path root = Files.createDirectories(home.resolve("tools").resolve("fixture-link-provider").resolve("1.0.0"));
+        Path link = root.resolve("runtime");
+        Process mklink = new ProcessBuilder("cmd.exe", "/c", "mklink", "/J", link.toString(), outside.toString())
+                .redirectErrorStream(true).start();
+        mklink.getInputStream().readAllBytes();
+        assertEquals(0, mklink.waitFor(), "the junction must be created");
+
+        PlannedGrants grants = plannedGrants(backend, childPowerShell, link.resolve("runner.ps1"));
+
+        Path realOutside = outside.toRealPath();
+        assertTrue(grants.readRoots().stream().noneMatch(path -> path.startsWith(realOutside)),
+                () -> "a link leaving the managed root must not make its target directory a read root, got " + grants);
+        assertTrue(grants.readFiles().contains(outsideScript.toRealPath()),
+                () -> "the real file behind the link is granted on its own, got " + grants);
+    }
+
+    /** A principal no temporary directory carries an entry for, standing for the AppContainer identity. */
+    private static final String STAND_IN_SID = "S-1-5-32-546";
+
+    private record PlannedGrants(List<Path> readRoots, List<Path> readFiles) { }
+
+    private static PlannedGrants plannedGrants(
+            WindowsAppContainerWorkerSandboxBackend backend,
+            Path childPowerShell,
+            Path scriptArgument
+    ) throws Exception {
+        Path working = Files.createTempDirectory("minos-appcontainer-grants-working-");
+        Path run = Files.createTempDirectory("minos-appcontainer-grants-run-");
+        backend.sandboxPlan(new IndexerProcessPlan(
+                List.of(childPowerShell.toString(), "-NoLogo", "-NoProfile", "-NonInteractive",
+                        "-ExecutionPolicy", "Bypass", "-File", scriptArgument.toString()),
+                working,
+                Map.of(),
+                run.resolve("index.scip"),
+                Duration.ofSeconds(30)), run);
+        Map<String, String> plan = new java.util.LinkedHashMap<>();
+        for (String line : Files.readAllLines(run.resolve("windows-appcontainer-plan.txt"), StandardCharsets.UTF_8)) {
+            int separator = line.indexOf('=');
+            if (separator > 0) plan.put(line.substring(0, separator), line.substring(separator + 1));
+        }
+        return new PlannedGrants(planPaths(plan, "read"), planPaths(plan, "readFile"));
+    }
+
+    private static List<Path> planPaths(Map<String, String> plan, String prefix) {
+        List<Path> paths = new ArrayList<>();
+        int count = Integer.parseInt(plan.getOrDefault(prefix + ".count", "0"));
+        for (int index = 0; index < count; index++) {
+            byte[] decoded = java.util.Base64.getDecoder().decode(plan.get(prefix + "." + index));
+            paths.add(Path.of(new String(decoded, StandardCharsets.UTF_8)).toAbsolutePath().normalize());
+        }
+        return paths;
+    }
+
+    /** Applies the planned read grants with the rights the sandbox launcher uses for a root and for a file. */
+    private static void grantLikeLauncher(PlannedGrants grants, String sid) throws Exception {
+        for (Path root : grants.readRoots()) {
+            assertEquals(0, runIcacls(root, "/grant", "*" + sid + ":(OI)(CI)RX"), "root grant must succeed");
+        }
+        for (Path file : grants.readFiles()) {
+            assertEquals(0, runIcacls(file, "/grant", "*" + sid + ":RX"), "file grant must succeed");
+        }
+    }
+
+    /**
+     * Whether the file carries an entry for the SID. {@code icacls /findsid} names the file only when it
+     * does; its wording is localized, the path it prints is not.
+     */
+    private static boolean holdsEntryFor(Path file, String sid) throws Exception {
+        return icaclsOutput(file, "/findsid", "*" + sid).contains(file.toString());
+    }
+
     private static int runIcacls(Path target, String... arguments) throws Exception {
         List<String> command = new java.util.ArrayList<>();
         command.add(Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString());
@@ -431,10 +611,12 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         return process.waitFor();
     }
 
-    private static String icaclsOutput(Path target) throws Exception {
-        Process process = new ProcessBuilder(
+    private static String icaclsOutput(Path target, String... arguments) throws Exception {
+        List<String> command = new ArrayList<>(List.of(
                 Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString(),
-                target.toString())
+                target.toString()));
+        command.addAll(List.of(arguments));
+        Process process = new ProcessBuilder(command)
                 .redirectErrorStream(true).start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         process.waitFor();

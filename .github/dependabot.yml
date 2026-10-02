@@ -42,3 +42,31 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # Base images of docker/Dockerfile.mcp and docker/Dockerfile.mcp.release, written as
+  # <image>:<tag>@sha256:<digest> (enforced by scripts/quality/check-image-pins.py). Dependabot
+  # follows the tag and rewrites tag and digest together; a reference with a digest and no tag
+  # would be moved to `latest`.
+  #
+  # Known limit: the managed-service images (pgvector, ollama) live in docker/compose.mcp.*.yaml.
+  # The docker-compose ecosystem only reads files named like [docker-]compose[-x][.x].yaml (one
+  # optional dotted segment), so `compose.mcp.prod.yaml` and `compose.mcp.connected.yaml` are not
+  # seen and no docker-compose entry is declared here (it would fail on every run with "no
+  # docker-compose file"). Until those files are renamed those two pins are bumped by hand.
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:45"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 10
+    groups:
+      docker-base-images:
+        patterns:
+          - "*"
+    ignore:
+      # The JRE/JDK major must match `maven.compiler.release` (24): a major bump is a deliberate change.
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]

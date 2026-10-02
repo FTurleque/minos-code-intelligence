@@ -97,11 +97,7 @@ Runner :
 scripts/m19/run-final.ps1
 ```
 
-Workflow :
-
-```text
-.github/workflows/m19-advanced-code-intelligence.yml
-```
+Workflow (retiré, constat C2) : `.github/workflows/m19-advanced-code-intelligence.yml` répétait le job `verify` Ubuntu de `.github/workflows/pr-ci.yml` sur une partie des chemins ; `pr-ci.yml` qualifie désormais seul ces chemins (voir `docs/developer/quality-gates.md`).
 
 Qualification Windows exact-head autoritative :
 

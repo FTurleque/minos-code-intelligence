@@ -174,6 +174,11 @@ $DistributionParameters = @{ Version = $Version }
 if ($SkipMavenVerify) { $DistributionParameters['SkipVerify'] = $true }
 & $BuildDistribution @DistributionParameters
 
+# The release publishes a lite zip (no tools\) next to the full one and publish-windows-release.ps1 verifies both, so a
+# candidate has to carry both. The lite build reuses the JAR and the SBOM of the build above: no second Maven run.
+$LiteParameters = @{ Version = $Version; Variant = 'lite'; ReuseBuild = $true }
+& $BuildDistribution @LiteParameters
+
 $DistRoot = Join-Path $RepoRoot "target\dist\minos-$Version-windows-x64"
 $Launcher = Join-Path $DistRoot 'minos.cmd'
 $RuntimeModules = Join-Path $DistRoot 'RUNTIME-MODULES.txt'

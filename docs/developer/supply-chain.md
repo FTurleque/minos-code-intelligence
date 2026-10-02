@@ -109,6 +109,17 @@ Le runner :
 8. vérifie le statut Authenticode selon la politique locale ;
 9. confirme HEAD inchangé et worktree propre.
 
+## Images de conteneur : étape manuelle de péremption des digests
+
+Toutes les images sont écrites `<image>:<tag>@sha256:<digest d'index>` (gate `scripts/quality/check-image-pins.py`). Dependabot (écosystème `docker`, `.github/dependabot.yml`) met à jour les `FROM` de `docker/Dockerfile.mcp` et `docker/Dockerfile.mcp.release`. **Il ne voit pas** `docker/compose.mcp.prod.yaml` ni `docker/compose.mcp.connected.yaml` (le motif de nom de son écosystème `docker-compose` n'accepte qu'un segment pointé), donc les images **`pgvector/pgvector` et `ollama/ollama`** du compose connecté ne sont jamais proposées à la mise à jour : tant que les fichiers ne sont pas renommés (`compose-mcp.prod.yaml`, `compose-mcp.connected.yaml`, PR séparée du chantier sprints 2-3), **vérifier leur péremption à la main avant chaque release** :
+
+1. relever le tag courant dans le défaut de `MINOS_POSTGRES_IMAGE` et de `MINOS_OLLAMA_IMAGE` (`docker/compose.mcp.connected.yaml`) ;
+2. `docker buildx imagetools inspect <image>:<tag>` : le `Digest:` d'index doit être celui du compose ; sinon le tag a été reconstruit, rafraîchir le digest ;
+3. regarder les tags plus récents de la même branche (`pg17` pour pgvector, la dernière version stable d'Ollama), lire les notes de version, et si une montée est voulue, remplacer le tag **et** le digest ensemble ;
+4. rejouer `python scripts/quality/check-image-pins.py` et la qualification Docker avant de fusionner.
+
+Cette étape est nommée dans la description de la PR qui introduit l'épinglage (point S11 de l'audit) et disparaît quand le renommage des fichiers compose est fusionné.
+
 ## Frontière avec la CI
 
 Aucune modification de workflow GitHub Actions n'est incluse dans S5 en juillet 2026. L'épinglage immuable des actions, les checks distants et la branch protection restent dans M21-S2, explicitement en pause jusqu'en août.
