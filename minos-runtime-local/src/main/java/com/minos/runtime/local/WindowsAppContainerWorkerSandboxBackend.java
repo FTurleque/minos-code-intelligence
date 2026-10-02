@@ -557,6 +557,12 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         // The identity is the one of the process token, read from the operating system. It is never the
         // user.name system property: the command line can set that to anything, and icacls resolves a
         // name or a SID alike (-Duser.name=*S-1-1-0 would grant Everyone Full Control of the write root).
+        // A root whose owner already holds an inheritable Full Control entry (every directory private
+        // storage made: that entry is the owner's) needs nothing more, and must not get an entry for a
+        // second principal: under an elevated token the owner is the Administrators group, not the user, so
+        // the extra entry would make the ACL differ from the one private storage expects, and the next
+        // hardening of that directory would rewrite the ACL and take the sandbox's grants with it.
+        if (ownerHoldsInheritableFullControl(writeRoot)) return;
         String sid = ProcessIdentity.sid();
         boolean granted;
         try {
@@ -568,6 +574,31 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         if (!granted) {
             throw new IllegalStateException("Unable to secure inheritable owner access on a sandbox write root");
         }
+    }
+
+    static boolean ownerHoldsInheritableFullControl(Path directory) {
+        try {
+            java.nio.file.attribute.AclFileAttributeView view = Files.getFileAttributeView(
+                    directory, java.nio.file.attribute.AclFileAttributeView.class,
+                    java.nio.file.LinkOption.NOFOLLOW_LINKS);
+            if (view == null) return false;
+            java.nio.file.attribute.UserPrincipal owner = view.getOwner();
+            for (java.nio.file.attribute.AclEntry entry : view.getAcl()) {
+                if (entry.type() == java.nio.file.attribute.AclEntryType.ALLOW
+                        && entry.principal().equals(owner)
+                        && entry.flags().containsAll(java.util.EnumSet.of(
+                                java.nio.file.attribute.AclEntryFlag.FILE_INHERIT,
+                                java.nio.file.attribute.AclEntryFlag.DIRECTORY_INHERIT))
+                        && !entry.flags().contains(java.nio.file.attribute.AclEntryFlag.INHERIT_ONLY)
+                        && entry.permissions().containsAll(
+                                java.util.EnumSet.allOf(java.nio.file.attribute.AclEntryPermission.class))) {
+                    return true;
+                }
+            }
+        } catch (IOException unreadable) {
+            // Not provably covered: fall through to the explicit grant.
+        }
+        return false;
     }
 
     /**
