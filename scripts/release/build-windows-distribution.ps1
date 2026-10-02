@@ -353,12 +353,26 @@ $ResolvedRuntimeModules | Set-Content -LiteralPath (Join-Path $Distribution 'RUN
 @"
 MINOS Code Intelligence $Version
 
-Quick start:
+Quick start (nothing to install: the indexers are shipped in this package):
   minos.cmd --version
   minos.cmd doctor
-  minos.cmd tools install scip-java
   minos.cmd project add N:\workspace-dev\my-project --name my-project
   minos.cmd index my-project
+
+Tools shipped in this package (tools\TOOLS-MANIFEST.json), verified against pinned SHA-256 digests
+before their first use, with no network access:
+  scip-java        Coursier, Apache Maven, the scip-java classpath
+  scip-typescript  Node.js and the scip-typescript packages
+Their licenses are listed in supply-chain\THIRD-PARTY-NOTICES.txt.
+
+Not shipped: the toolchain of the project you analyse. MINOS never installs it, and
+`minos.cmd doctor` names what is missing on your machine:
+  Java projects        a JDK (JAVA_HOME with javac and jar) and Git for Windows (Git Bash);
+                       the build of your project resolves its own Maven dependencies
+  Go / C# / Rust / C++ / Python projects
+                       Go, the .NET SDK 10, cargo, a C++ toolchain, Python 3.10 or newer
+`minos.cmd tools install <provider>` remains available to update one tool explicitly.
+Set MINOS_TOOLS_OFFLINE=1 to forbid any download.
 
 Default data directory:
   %LOCALAPPDATA%\MINOS\data
@@ -403,6 +417,15 @@ manifest=RELEASE-MANIFEST.json
 
 Copy-Item -LiteralPath $SbomSource -Destination (Join-Path $SupplyChainDirectory 'minos.cdx.json') -Force
 $Python = Resolve-Python
+# The tools payload comes from embedded-tools.json, the single description shared with the Docker release
+# image: this script owns no list and no hash of its own (scripts/quality/check-tools-manifest.py checks it).
+Invoke-NativeChecked -File $Python -Arguments @(
+    (Join-Path $RepoRoot 'scripts\release\build-embedded-tools.py'),
+    '--platform', 'windows-x64',
+    '--output', (Join-Path $Distribution 'tools'),
+    '--cache', (Join-Path $RepoRoot 'target\tools-cache'),
+    '--sbom', (Join-Path $SupplyChainDirectory 'minos.cdx.json')
+) -Failure 'Embedded tools payload build failed'
 Invoke-NativeChecked -File $Python -Arguments @(
     'scripts/release/generate-third-party-notices.py',
     '--sbom', (Join-Path $SupplyChainDirectory 'minos.cdx.json'),
@@ -423,6 +446,11 @@ Invoke-NativeChecked -File $Python -Arguments @(
     '--commit', $Commit,
     '--strict-licenses'
 ) -Failure 'Release supply-chain evidence validation failed'
+Invoke-NativeChecked -File $Python -Arguments @(
+    (Join-Path $RepoRoot 'scripts\quality\check-tools-manifest.py'),
+    '--root', $RepoRoot,
+    '--distribution', $Distribution
+) -Failure 'The embedded tools payload diverges from the tools catalogue'
 
 Copy-Item -LiteralPath (Join-Path $SupplyChainDirectory 'minos.cdx.json') -Destination $SbomSidecar -Force
 Copy-Item -LiteralPath (Join-Path $SupplyChainDirectory 'THIRD-PARTY-NOTICES.txt') -Destination $NoticesSidecar -Force
