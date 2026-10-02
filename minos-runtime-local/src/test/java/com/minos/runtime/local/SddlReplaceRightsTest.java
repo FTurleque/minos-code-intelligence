@@ -164,4 +164,16 @@ class SddlReplaceRightsTest {
                 .setPermissions(java.nio.file.attribute.AclEntryPermission.READ_DATA)
                 .build();
     }
+
+    @Test
+    void theBuiltInAdministratorAliasIsTheProcessOnlyWhenTheProcessIsThatAccount() {
+        String builtIn = "S-1-5-21-111-222-333-500";
+        String ordinary = "S-1-5-21-111-222-333-1001";
+        String sddl = "D:PAI(A;OICI;FA;;;LA)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)";
+
+        assertNull(SddlReplaceRights.firstForeignReplaceGrant(sddl, SandboxLauncherScript.trustedSids(builtIn)),
+                "LA is the process itself when the process runs as the RID 500 account");
+        assertEquals("LA", SddlReplaceRights.firstForeignReplaceGrant(sddl, SandboxLauncherScript.trustedSids(ordinary)),
+                "LA is another principal for any other account");
+    }
 }

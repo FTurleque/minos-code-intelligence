@@ -229,7 +229,7 @@ record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl,
             if (!view.getAcl().equals(before) || !view.getOwner().equals(owner)) {
                 throw new IOException("sandbox launcher root: its directory changed while it was being checked");
             }
-            Set<String> trusted = Set.of(ProcessIdentity.sid(), "S-1-5-18", "S-1-5-32-544");
+            Set<String> trusted = trustedSids(ProcessIdentity.sid());
             String foreign = SddlReplaceRights.firstForeignReplaceGrant(sddl, trusted);
             if (foreign != null) {
                 // A SID names an account, never a path or a secret: it is what an administrator needs to act.
@@ -250,6 +250,18 @@ record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl,
         } finally {
             Files.deleteIfExists(saved);
         }
+    }
+
+    /**
+     * The principals allowed to replace what is under the launcher root's parent: the process account,
+     * SYSTEM and Administrators. SDDL writes the built-in local Administrator account (RID 500) as the
+     * alias {@code LA}, never as its SID, so when the process runs as that account the alias names the
+     * process itself (this is the account of a CI runner and of a default Windows install).
+     */
+    static Set<String> trustedSids(String processSid) {
+        Set<String> trusted = new java.util.HashSet<>(Set.of(processSid, "S-1-5-18", "S-1-5-32-544"));
+        if (processSid.startsWith("S-1-5-21-") && processSid.endsWith("-500")) trusted.add("LA");
+        return Set.copyOf(trusted);
     }
 
     private static void publish(Path directory, Path target, byte[] content) throws IOException {
