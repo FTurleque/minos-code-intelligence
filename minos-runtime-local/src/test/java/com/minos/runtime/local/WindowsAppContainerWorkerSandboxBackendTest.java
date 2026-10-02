@@ -242,9 +242,12 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         Path providerScript = project.resolve("provider-child.ps1");
         Files.writeString(providerScript, """
                 param([string] $Artifact)
+                [Console]::Error.WriteLine('DIAGT0 ' + [DateTime]::UtcNow.ToString('o'))
+                [Console]::Error.WriteLine('DIAGENV ' + (($env:Path -split ';').Count) + ' ' + ((Get-ChildItem Env: | ForEach-Object { $_.Name }) -join ','))
                 if ($env:MINOS_TEST_PROVIDER_EXPLICIT -ne 'allowed') { exit 51 }
                 if (-not [string]::IsNullOrEmpty($env:MAVEN_ARGS)) { exit 52 }
                 [System.IO.File]::WriteAllText($Artifact, 'process-sandbox-artifact')
+                [Console]::Error.WriteLine('DIAGT1 ' + [DateTime]::UtcNow.ToString('o'))
                 exit 0
                 """, StandardCharsets.US_ASCII);
         IndexingExecutionRequest request = executionRequest(project);
