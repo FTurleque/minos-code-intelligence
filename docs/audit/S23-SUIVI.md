@@ -7,7 +7,7 @@ encore ouverts. Après ce chantier il ne reste que des constats d'échéance **T
 |---|---|---|---|---|
 | 1 | `sec/s11-chaine-et-conteneurs` | S11 | — | implémenté, validé en local (`clean verify`), en attente de PR |
 | 2 | `rel/d1-distribution-auto-portante` | D1 | — | implémenté, validé en local (`clean verify`), en attente de PR |
-| 3 | `ci/c2-un-seul-build` | C2 | — | à faire |
+| 3 | `ci/c2-un-seul-build` | C2 | — | inventaire avant écrit, consolidation en cours |
 | 4 | `sec/s14-assainissement` | S14 | — | à faire |
 
 Base : `origin/develop` au 2026-10-02 (`2663bbda`, merge de #321). Une branche, un worktree (`minos-wt/…`) par lot, lots
@@ -394,6 +394,80 @@ Le proxy canari ne voit que le trafic qui passe par un proxy : un `connect()` di
 Sortie sur le zip complet reconstruit après rebase (`-AllowOnline -ObserveNetwork`) : 154 échantillons, environ 275 ms d'écart, 93 processus dans l'arbre ; témoin positif connexion : `powershell.exe pid 40404 -> 140.82.121.3:443 ESTABLISHED` vu ; témoin positif DNS : le nom inédit apparaît dans le cache ; **0 connexion TCP non bouclée de l'arbre pendant la run MINOS** (installation, `tools verify`, indexation TypeScript, amorçage) ; **aucune résolution d'hôte de téléchargement causée par la run** ; 0 point de terminaison UDP non bouclé de l'arbre ; 9 connexions externes d'autres processus de la machine (information, hors arbre).
 
 Prouvé ainsi : en conditions où le réseau est joignable, la run MINOS n'ouvre aucune connexion directe visible et ne résout aucun hôte de téléchargement, avec des témoins positifs qui montrent que l'observateur les verrait. Non prouvé : (a) une connexion ouverte et refermée entre deux échantillons (écart ~275 ms ; elle laisserait au mieux une entrée TIME_WAIT non attribuée) ; (b) le comportement sur une machine dont le réseau est réellement coupé : coupure physique par le propriétaire, seule à valider « machine is offline ».
+
+## Lot 3 — C2 (chaque gate exactement une fois)
+
+Implémenteur : `impl-s23`. Branche `ci/c2-un-seul-build` (empilée sur `rel/d1-distribution-auto-portante`, PR #326, elle-même sur le lot 1, PR #324),
+worktree `minos-wt/ci-c2`. Règle de CI du lot : **aucun workflow lancé, aucun push** ; la validation se fait hors CI (lecture du YAML,
+`rhysd/actionlint` par docker, rejeu local de tous les gates Python). Ce lot ne touche **aucun Java** : pas de `clean verify` local.
+**L'inventaire est le livrable** : il est écrit AVANT toute modification de workflow (commit 1), complété après (commit 3).
+
+### Ce que j'ai observé (le 2026-10-02) avant de choisir la voie
+
+| Observation | Relevé |
+|---|---|
+| Le prompt dit « M19 et M20 ne se sont déclenchés sur aucune des dix dernières PR » | **Faux aujourd'hui.** `gh run list --workflow m19-… --limit 300` : 300 exécutions entre le 2026-08-14 et le 2026-10-02, **toutes `pull_request`** (65 sur `develop`, 17 sur `sec/s7-s15-windows`, 37 sur `agent/fix-audit-findings-sonar-20260815`…) ; M20 : 300 entre le 2026-08-15 et le 2026-10-02. Conclusions M19 : 199 réussites, 77 annulées, 24 échecs. |
+| Les PR récentes | `gh pr checks` : **#322** (`develop`→`main`) porte `M19 Java 24 qualification` **et** `M20 Java 24 qualification` ; **#324** (S11) porte `M20 Java 24 qualification` seul ; **#326** (D1) porte `M20 Java 24 qualification` (en cours) ; **#325** n'en porte aucun ; #321 (`sec/s7-s15-windows`) a déclenché M19 et M20 17 fois. |
+| Pourquoi elles se déclenchent encore | le jalon 4 groupe n de la CI (ARCHI-SUIVI, `0ef46b12`) a ajouté `minos-engine/**` aux deux filtres ; M20 filtre en plus `docs/developer/**` et `docs/user/**` : **une PR qui ne touche que ces deux répertoires de documentation déclenche déjà un `clean verify` complet de M20**. Le filtre de M19 (cœur : `minos-domain`, `minos-engine`, `minos-application`, `minos-api`, `minos-mcp`) est atteint par toute PR touchant le cœur. |
+| Conséquence pour le choix de la voie | M19/M20 ne sont pas dormants : le coût est réel, et il est payé à chaque PR du cœur (deux `clean verify` de 4 à 5 minutes de plus, plus deux installations de la chaîne de bac à sable et deux délégations cgroup). |
+| Contrôle de branche (lu par `gh api repos/…/rules/branches/develop`, le 2026-10-02) | ruleset « Protect main & develop » : **4 checks exigés** : `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `SonarCloud Code Analysis`. `strict_required_status_checks_policy: true` (branche à jour exigée), 0 approbation exigée, fils de discussion résolus exigés. **`M19 Java 24 qualification`, `M20 Java 24 qualification` et `Static invariants (single run)` ne sont PAS exigés** (un check qui n'apparaît que sur certains chemins ne peut d'ailleurs pas l'être). Second ruleset « Release promotion gate (main only) » : déjà hors du pipeline de PR vers `develop`. |
+| `M0 Java CI` (`m0-java-ci.yml`) | `workflow_dispatch` seul (« aucun déclenchement automatique », commentaire du fichier) : ne participe à aucune PR, hors périmètre. Il lance `./mvnw verify` (sans `clean`) à la demande ; non modifié. |
+| `historical-qualification.yml` et le constat G4 | `workflow_dispatch` seul, choix `m28` (Linux et Windows : `scripts/remediation/run-final.{sh,ps1}`) ou `m15` (`scripts/m15/run-final.ps1`). **Ne rejoue ni M19, ni M20, ni M21** : `scripts/history/m21/check-m21-parity.py` n'est rejoué par aucun workflow et échoue toujours (`missing required file: minos-cli/src/main/java/com/minos/cli/IdeCommand.java`), ce qui est exactement G4, **préexistant et hors C2**. Ce lot n'y touche pas et n'ajoute aucun script orphelin : voir « Aucun gate orphelin créé » plus bas. |
+| Baseline des gates Python sur le HEAD de départ (`50fc1b6e`) | tous SUCCESS **sauf deux, rouges avant mon premier commit** : `check-mnd.py` (`ManagedScipProviderRuntimeManager.java: missing MND invariant: BodyHandlers.ofInputStream()`) et `check-mne.py` (`ManagedPolyglotScipRuntimeManager.java: missing MNE invariant: DOTNET_PACKAGE_SHA256`). Cause : le lot 2 (D1) a déplacé les téléchargements épinglés dans `PinnedArtifactSource`, et ces deux gates exigent encore le texte à l'ancien endroit. C'est la cause du rouge de `Static invariants (single run)` sur la PR #326 (run 37027450574). **Non corrigé ici** : c'est un défaut du lot 2, à corriger sur sa branche (puis ce lot se rebase) ; ce lot ne le masque pas. |
+
+### Inventaire AVANT (état de `ci/c2-un-seul-build` au 2026-10-02, avant tout changement de workflow)
+
+#### Déclencheurs et noms de checks (ce que voit le contrôle de branche)
+
+| Workflow (fichier) | `on:` | Filtre de chemins | Concurrence | Jobs → nom du check |
+|---|---|---|---|---|
+| `pr-ci.yml` (nom : « PR Validation ») | `pull_request` (`main`, `develop`), `push` (`main`, `develop`), `workflow_dispatch` | **aucun** | `pr-validation-<PR ou ref>`, annule les doublons de PR seulement | `vulnerability-scan` → `Dependency vulnerability gate / osv-scan` (exigé) ; `invariants` → `Static invariants (single run)` ; `verify` (matrice) → `Verify (ubuntu-24.04)` (exigé), `Verify (windows-2022)` (exigé) |
+| `m19-advanced-code-intelligence.yml` | `pull_request` (`main`, `develop`), `workflow_dispatch` | `minos-domain/**`, `minos-engine/**`, `minos-application/**`, `minos-api/**`, `minos-mcp/**`, `docs/roadmap/M19_EXECUTION.md`, ADR 0028, `docs/developer/public-surfaces.md`, `docs/user/mcp.md`, `docs/generated/product-facts.md`, le workflow lui-même | `m19-advanced-code-intelligence-<PR ou ref>` | `java` → `M19 Java 24 qualification` (45 min) |
+| `m20-semantic-hybrid-intelligence.yml` | `pull_request` (`main`, `develop`), `workflow_dispatch` | `minos-domain/**`, `minos-engine/**`, `minos-storage-local/**`, `minos-application/**`, `minos-api/**`, `minos-mcp/**`, `minos-nexus/**`, `docs/roadmap/M20_EXECUTION.md`, ADR 0029, `docs/adr/README.md`, `docs/developer/**`, `docs/user/**`, `docs/generated/product-facts.md`, le workflow lui-même | `m20-semantic-hybrid-intelligence-<PR ou ref>` | `java` → `M20 Java 24 qualification` (45 min) |
+| `m0-java-ci.yml` | `workflow_dispatch` seul | — | — | `verify` → `Java 24 / Maven Wrapper verify` |
+| `historical-qualification.yml` | `workflow_dispatch` seul | — | par suite et révision | `m28-linux`, `m28-windows`, `m15-windows` (jamais sur une PR) |
+
+#### Job par job, étape par étape
+
+`pr-ci.yml` / `invariants` (`ubuntu-24.04`, sans Java ni Maven, Python 3.13) : checkout exact (`fetch-depth: 0`), assertion du HEAD exact, puis, **une fois chacun** : `check-workflow-pins.py` ; `check-image-pins.py` + `test_check_image_pins.py` ; `check-compose-limits.py` + `test_check_compose_limits.py` ; `check-tools-manifest.py` + `test_check_tools_manifest.py` + `test_build_embedded_tools.py` ; `check-module-boundaries.py` + `test_check_module_boundaries.py` ; `check-private-io.py` + `test_check_private_io.py` ; `check-current-docs.py` ; **`product-facts.py --check`** ; `check-milestone-artifact-references.py` ; `check-mnd.py` ; `check-mne.py` ; `check-post-mne.py` (exécute aussi par sous-processus les neuf gates de jalon actifs) ; `check-post228-hardening.py` ; `check-audit-remediation-v2.py` ; `check-p0-p2.py` ; `check-minos-01.py` ; `test-iscc-provenance.ps1` ; `test_check_docker_upgrade_evidence.py`.
+
+`pr-ci.yml` / `verify` (Ubuntu 24.04 puis Windows Server 2022, `fail-fast: false`) : checkout exact (`fetch-depth: 0`) ; assertion du HEAD exact (deux variantes) ; Linux seul : ascendance de `main` ; Java 24 Temurin avec cache Maven ; Python 3.13 ; Linux seul : **installation de la chaîne de bac à sable** (`install-linux-sandbox-toolchain.sh`, 10 min), **délégation d'un cgroup v2** (`delegate-linux-cgroup.sh`), `chmod +x mvnw` ; **`./mvnw -B -ntp -Dminos.postgresql.tests.required=true clean verify`** (Linux, avec `delegate-linux-cgroup.sh --attach-pid $$`, PostgreSQL exigé) / **`.\mvnw.cmd -B -ntp clean verify`** (Windows) ; **`check-jacoco.py`** complet (Linux) ou `--skip-scope m30-postgresql-pgvector` (Windows) ; analyse SonarCloud optionnelle (désactivée sans `SONAR_CI_ANALYSIS_ENABLED`) ; dépôt des diagnostics (`pr-validation-<OS>-<tentative>`).
+
+`m19-…yml` / `java` (`ubuntu-24.04`, 45 min) : checkout **par défaut** (fusion de la PR avec sa base, `refs/pull/N/merge`) ; Java 24 Temurin **sans cache** ; Python 3.13 ; **installation de la chaîne de bac à sable** ; **délégation d'un cgroup v2** ; `chmod +x mvnw` ; **`product-facts.py --check`** ; **`./mvnw -B -ntp clean verify`** (avec `--attach-pid $$`, **sans** `-Dminos.postgresql.tests.required=true`) ; **`check-jacoco.py`** complet. Aucun `upload-artifact`. Aucun test, aucun profil ni module propre à M19 : le build est le reactor entier.
+
+`m20-…yml` / `java` : **identique ligne à ligne** à M19 (seuls diffèrent le nom, le filtre de chemins et le groupe de concurrence).
+
+#### Le même gate, combien de fois par PR (avant)
+
+| Contrôle | PR touchant le cœur (`minos-domain`/`engine`/`application`/`api`/`mcp`) | PR ne touchant que `docs/developer/**` ou `docs/user/**` | PR ne touchant rien de ces chemins |
+|---|---|---|---|
+| `./mvnw clean verify` Linux | **3** (`pr-ci`, M19, M20) | 2 (`pr-ci`, M20) | 1 |
+| `./mvnw clean verify` Windows | 1 | 1 | 1 |
+| installation de la chaîne de bac à sable Linux | **3** | 2 | 1 |
+| délégation cgroup v2 | **3** | 2 | 1 |
+| `product-facts.py --check` | **3** (`invariants`, M19, M20) | 2 | 1 |
+| `check-jacoco.py` Linux (complet) | **3** | 2 | 1 |
+| `check-jacoco.py` Windows (hors périmètre PostgreSQL) | 1 | 1 | 1 |
+| `check-workflow-pins.py`, tous les gates statiques de `invariants` | 1 chacun | 1 | 1 |
+
+(Une exécution par OS est la matrice voulue : la suite Windows est la seule à exercer AppContainer, Job Objects et les chemins Windows ; ce n'est pas un doublon.)
+
+#### Comparaison M19/M20 contre `Verify (ubuntu-24.04)` + `Static invariants` (le critère : « tout contrôle sans exécutant est bloquant »)
+
+| Affirmation de M19 ou M20 | Exécutant qui la porte déjà (identique ou plus strict) | Écart |
+|---|---|---|
+| Déclenchement sur les PR de `main`/`develop` touchant les chemins filtrés | `pr-ci` : mêmes branches, **sans filtre**, plus `push` | `pr-ci` est un sur-ensemble |
+| `workflow_dispatch` (rejeu manuel) | `pr-ci` a aussi `workflow_dispatch` | aucun |
+| Java 24 Temurin, Python 3.13, `ubuntu-24.04` | `verify` Ubuntu : mêmes versions, plus cache Maven | aucun |
+| Chaîne de bac à sable Linux + cgroup v2 + `--attach-pid $$` | `verify` Ubuntu : mêmes scripts, même étape | aucun |
+| `product-facts.py --check` | `invariants` (une fois, sans Maven) | aucun |
+| `./mvnw -B -ntp clean verify` (reactor entier) | `verify` Ubuntu : `clean verify` du même reactor **avec `-Dminos.postgresql.tests.required=true`** | `pr-ci` est **plus strict** (PostgreSQL réel exigé) |
+| `check-jacoco.py` complet | `verify` Ubuntu : même appel, mêmes arguments | aucun |
+| Vérification sur la **fusion** de la PR avec sa base (checkout par défaut) | `pr-ci` vérifie le HEAD exact de la PR ; avec `strict_required_status_checks_policy: true`, la PR est à jour de sa base avant fusion : la fusion et le HEAD ne diffèrent pas à la fusion | **seule nuance** : pendant la vie d'une PR non à jour, M19/M20 testaient la fusion et `pr-ci` le HEAD ; le contrôle de branche impose déjà la mise à jour. Écrit, non perdu |
+| Les noms de checks `M19 Java 24 qualification`, `M20 Java 24 qualification` | aucun (non exigés par le contrôle de branche) | les deux noms disparaissent ; voir « Noms de checks » |
+| Les filtres `paths` | sans objet : `pr-ci` n'a pas de filtre | **aucun filtre élargi** : on supprime un déclencheur, `pr-ci` couvrait déjà ses chemins |
+
+Verdict avant décision : **aucune assertion de M19 ou de M20 n'est absente de `pr-ci`**. Les deux workflows ne portent qu'une copie moins stricte du build et des gates que `pr-ci` exécute déjà pour toute PR. Les deux voies proposées par le prompt (workflows réutilisables, ou jobs de `pr-ci` réutilisant le build) laissent chacune un exécutant qui n'a plus rien à vérifier : voir « Voie choisie ».
 
 ## Constats de `verif-s23`
 
