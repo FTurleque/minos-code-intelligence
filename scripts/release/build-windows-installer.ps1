@@ -66,7 +66,6 @@ foreach ($Required in @(
     'lib\minos.jar',
     'supply-chain\minos.cdx.json',
     'supply-chain\THIRD-PARTY-NOTICES.txt',
-    'tools\TOOLS-MANIFEST.json',
     'integration\configure-mcp-clients.ps1',
     'integration\configure-mcp-clients-setup.ps1',
     'integration\configure-codex-mcp.ps1',
