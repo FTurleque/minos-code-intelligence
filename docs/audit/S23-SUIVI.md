@@ -299,6 +299,27 @@ quoi que ce soit ; `minos tools verify` rapporte les outils embarqués présents
 
 Aucune licence n'interdit la redistribution : aucun composant ne sort de la charge pour ce motif. Réserve unique : l'absence de fichier LICENSE dans `coursier/launchers`.
 
+### Tailles (mesurées le 2026-10-02 ; l'état « après » est une estimation tant que le zip complet n'est pas reconstruit)
+
+| Composant | Taille livrée (zip/archive) |
+|---|---|
+| Zip Windows AVANT (construit tel quel, `build-windows-distribution.ps1 -SkipVerify`, 1.3.0-SNAPSHOT) | **67,13 Mo** (dossier développé : `app` 112,4 Mo, `lib` 17,7 Mo) |
+| Coursier (`cs`) | 29,1 Mio |
+| Apache Maven 3.9.16 | 9,0 Mio |
+| Node.js 24.20.0 | 35,8 Mio |
+| scip-java : classpath résolu (74 jars, dont `kotlin-compiler-embeddable` 56 Mo) | 75,9 Mio |
+| scip-typescript : `node_modules` | 4,6 Mio |
+| **Charge d'outils** (5 composants, `TOOLS-MANIFEST.json`) | **154,3 Mio (161,8 Mo)**, déjà compressée |
+| Zip Windows APRÈS (estimation : 67 + 162) | **environ 229 Mo** (x 3,4) |
+
+Reproductibilité : deux constructions successives de la charge donnent les mêmes empreintes pour les deux arbres assemblés (`dabb6d92…`, `7e869314…`). Le SBOM passe de 28 à 112 composants, 0 licence inconnue.
+
+### Point d'étape (avant les parties longues)
+
+Prouvé : amorçage depuis une charge factice sur `MINOS_HOME` vide, idempotent, concurrent (4 fils), artefact altéré refusé (jamais de repli réseau), arbre altéré après amorçage refusé, hors ligne (sonde réseau locale : 0 connexion avec la charge, témoin positif), gate `check-tools-manifest.py` (18 cas + dépôt réel), builder (9 cas), charge réelle construite (5 composants). Reste : zip complet reconstruit et gate `--distribution`, installateur/`update-installation.ps1`, guides, qualification « machine vierge sans réseau », preuve hors ligne réelle, `clean verify`.
+
+Décisions qui exigent le propriétaire : (1) distribution « sans outils » à côté (recommandé : oui, non implémenté) ; (2) taille x 3,4 acceptable ? ; (3) embarquer un JDK pour Java (+190 Mo) ? aujourd'hui JDK et Git Bash restent des prérequis du poste ; (4) preuve hors ligne physique : aucune des deux voies sans réglage système n'existe ici (pas de Windows Sandbox ni Hyper-V, non élevé) : désactiver la carte réseau quelques minutes (à demander) ; (5) réserve de licence `coursier/launchers` ; (6) constat préexistant : `minos index` Java échoue sous AppContainer sur ce poste (D1-L1).
+
 ## Constats de `verif-s23`
 
 | Id | Lot | Fichier:ligne | Constat | Sévérité | Résolution |
