@@ -9,7 +9,7 @@ M29 sépare volontairement le runtime Docker en plusieurs plans afin que l'admin
 | Plan | Service Compose | Durée | État MINOS | Provider tools | Projets | Réseau |
 |---|---|---:|---|---|---|---|
 | MCP query | `minos-mcp` | persistant | read-only | read-only | read-only | `none` |
-| Administration / indexation | `minos-admin` | éphémère | read-write | read-only | read-only | egress dépendances projet |
+| Administration | `minos-admin` | éphémère | read-write | read-only | read-only | egress (outils, dépendances) |
 | Bootstrap mapping | `minos-bootstrap` | éphémère | read-write | non requis | non requis | `none` |
 | Bootstrap providers | `minos-tools-bootstrap` | éphémère | non requis | initialise le volume géré | non requis | `none` |
 | Probe providers | `minos-provider-probe` | éphémère | non requis | read-only | non requis | `none` |
@@ -24,7 +24,7 @@ bounded tmpfs
 MINOS_RUNTIME_LOCATION=docker
 ```
 
-Le serveur MCP persistant, les bootstraps et le probe provider gardent `network_mode: none`. Le plan admin/indexation est éphémère et peut résoudre les dépendances propres au projet ; cette exception réseau ne sert jamais à installer implicitement les providers MINOS.
+Le serveur MCP persistant, les bootstraps et le probe provider gardent `network_mode: none`. Le plan admin est éphémère et dispose d'une sortie réseau ; cette exception ne sert jamais à installer implicitement les providers MINOS. **Il ne lance aucun provider** : faute de sandbox OS réalisable dans le conteneur, chaque provider y est rapporté `UNSUPPORTED_BY_BACKEND` et `minos index` y est refusé (`provider runtime is not ready`), de même que `remote index` ; aucun code de projet n'y est compilé ni exécuté. L'indexation par provider se fait sur l'hôte natif ; le plan Docker administre et sert l'index construit (voir [disposition des sandboxes](../developer/remote-worker-sandbox-disposition.md)).
 
 Le plan admin n'obtient jamais le droit de modifier le code source. Il écrit état métier, caches et staging uniquement sous `/var/lib/minos`.
 
@@ -227,13 +227,13 @@ $Docker = '.\docker\scripts\prod-mcp-release.ps1'
 & $Docker -Action Admin -MinosArguments @('doctor', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('tools', 'verify', '--all', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('project', 'add', '/workspace/projects/my-project', '--name', 'my-project', '--format', 'json')
-& $Docker -Action Admin -MinosArguments @('index', 'my-project', '--format', 'json')
+# `index` est refusé dans ce plan (aucun provider n'y tourne) : indexer sur l'hôte natif.
 & $Docker -Action Admin -MinosArguments @('index-status', 'my-project', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('semantic', 'status', 'my-project', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('hybrid', 'status', 'my-project', '--format', 'json')
 ```
 
-Les sorties provider Java, TypeScript, C/C++, C#, Go et Rust restent sous le run directory MINOS. Tout provider exigeant une écriture dans `/workspace/projects` doit échouer et être corrigé ; le mount projet ne doit pas être rendu writable.
+Quand un provider s'exécute (hôte natif), ses sorties Java, TypeScript, C/C++, C#, Go et Rust restent sous le run directory MINOS. Tout provider exigeant une écriture dans `/workspace/projects` doit échouer et être corrigé ; le mount projet ne doit pas être rendu writable.
 
 ## Qualification et historique M29
 

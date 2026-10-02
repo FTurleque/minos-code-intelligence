@@ -5,7 +5,11 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 import com.minos.orchestration.IndexerQualification;
 import com.minos.orchestration.IndexingMode;
+import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+import com.minos.remote.DistributedIndexing.WorkerIsolation;
+import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -196,6 +200,126 @@ class StrongProcessOwnershipIndexerExecutorTest {
         assertTrue(killed.get(), "successful provider completion must still terminate remaining job members");
         assertTrue(released.get(), "release must be attempted on every exit path");
         assertTrue(failure.getMessage().contains("fixture release failure"));
+    }
+
+    /**
+     * ADR 0041 / audit S11 point 5. The Docker admin plane has no OS sandbox (no bwrap, no user
+     * namespaces, read-only cgroup), so managed-local selection falls back to the native
+     * process-only backend there. This is the line that keeps project code from running in that
+     * case, independently of the provider readiness check upstream: it must refuse before the
+     * project is copied and before any run directory exists.
+     */
+    @Test
+    void nativeOnlyHostRefusesManagedProviderBeforeCopyingTheProjectOrCreatingARun() {
+        for (WorkerNetworkPolicy policy : WorkerNetworkPolicy.values()) {
+            Path home = temporary.resolve("native-only-home-" + policy);
+            Path project = temporary.resolve("native-only-project-" + policy);
+            AtomicBoolean planBuilt = new AtomicBoolean();
+            ProcessIndexerExecutor delegate = new ProcessIndexerExecutor(
+                    "fake-provider",
+                    home,
+                    (request, runDirectory) -> {
+                        planBuilt.set(true);
+                        throw new AssertionError("a provider plan must never be built without a managed sandbox");
+                    });
+            StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(
+                    delegate, home, policy, selectedHome -> WorkerSandboxBackend.nativeEphemeralWorkspace());
+
+            IllegalStateException failure = assertThrows(
+                    IllegalStateException.class,
+                    () -> executor.execute(request(project)));
+
+            assertTrue(failure.getMessage().contains("qualified managed local provider sandbox is unavailable"),
+                    failure.getMessage());
+            assertFalse(planBuilt.get(), policy + ": no provider plan");
+            assertFalse(Files.exists(home.resolve("local-provider-workspaces")), policy + ": no project copy");
+            assertFalse(Files.exists(home.resolve("runs")), policy + ": no run directory");
+        }
+    }
+
+    @Test
+    void managedSandboxWithoutNetworkDenyProofRefusesDenyBeforeCopyingTheProject() {
+        Path home = temporary.resolve("no-deny-proof-home");
+        AtomicBoolean sandboxReached = new AtomicBoolean();
+        WorkerSandboxBackend backend = managedBackend(false, sandboxReached);
+        ProcessIndexerExecutor delegate = new ProcessIndexerExecutor(
+                "fake-provider", home,
+                (request, runDirectory) -> {
+                    throw new AssertionError("a provider plan must never be built here");
+                });
+        StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(
+                delegate, home, WorkerNetworkPolicy.DENY, selectedHome -> backend);
+
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> executor.execute(request(temporary.resolve("no-deny-proof-project"))));
+
+        assertTrue(failure.getMessage().contains("cannot prove OS-level network denial"), failure.getMessage());
+        assertFalse(sandboxReached.get());
+        assertFalse(Files.exists(home.resolve("local-provider-workspaces")));
+    }
+
+    /** Positive control: the guards above are not a blanket refusal, a qualified sandbox is reached. */
+    @Test
+    void qualifiedManagedSandboxIsReachedOnlyThroughTheSelectedBackend() {
+        Path home = temporary.resolve("qualified-home");
+        AtomicBoolean sandboxReached = new AtomicBoolean();
+        WorkerSandboxBackend backend = managedBackend(true, sandboxReached);
+        ProcessIndexerExecutor delegate = new ProcessIndexerExecutor(
+                "fake-provider", home,
+                (request, runDirectory) -> {
+                    throw new AssertionError("the fixture sandbox never starts the delegate");
+                });
+        StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(
+                delegate, home, WorkerNetworkPolicy.DENY, selectedHome -> backend);
+
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> executor.execute(request(temporary.resolve("qualified-project"))));
+
+        assertTrue(sandboxReached.get(), "a managed-qualified sandbox must receive the copied request");
+        assertTrue(failure.getMessage().contains("fixture sandbox reached"), failure.getMessage());
+    }
+
+    private static WorkerSandboxBackend managedBackend(boolean enforcesNetworkDeny, AtomicBoolean reached) {
+        WorkerResourceContainment containment = new WorkerResourceContainment(
+                "fixture-managed-job",
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                List.of("fixture"));
+        WorkerSandboxQualification qualification = new WorkerSandboxQualification(
+                "fixture-managed-sandbox",
+                WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE,
+                WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED,
+                WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
+                containment,
+                Map.of(WorkerSandboxQualification.currentPlatform(),
+                        WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
+                List.of());
+        return new WorkerSandboxBackend() {
+            @Override public String id() { return qualification.backendId(); }
+            @Override public WorkerIsolation isolation() { return qualification.isolation(); }
+            @Override public NetworkGuarantee networkGuarantee() { return qualification.networkGuarantee(); }
+            @Override public WorkerSandboxQualification qualification() { return qualification; }
+            @Override public boolean enforcesNetworkDeny() { return enforcesNetworkDeny; }
+
+            @Override
+            public IndexingArtifact execute(
+                    IndexerExecutor delegate,
+                    IndexingExecutionRequest request,
+                    WorkerNetworkPolicy networkPolicy
+            ) {
+                reached.set(true);
+                throw new IllegalStateException("fixture sandbox reached");
+            }
+        };
     }
 
     private static StrongProcessOwnershipIndexerExecutor.BoundaryProvider strongFixtureBoundary(
