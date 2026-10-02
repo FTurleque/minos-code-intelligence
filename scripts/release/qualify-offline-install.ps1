@@ -14,6 +14,13 @@ param(
     # cannot qualify the release). The real qualification refuses to start unless the machine is offline.
     [switch] $AllowOnline,
 
+    # Read-only observation of the TCP/UDP connections and of the DNS cache of the whole process tree started here
+    # (netstat -ano, process table, Get-DnsClientCache), to complete the loopback-proxy canary, which a direct connect()
+    # bypasses. Online it first needs a positive control (a direct connect to github.com seen by the sampler), then
+    # requires ZERO non-loopback connection and no DNS resolution of a tool download host caused by the MINOS run.
+    # It changes no setting; it does not replace the offline probe above.
+    [switch] $ObserveNetwork,
+
     # Keep the working directory afterwards.
     [switch] $Keep
 )
@@ -138,6 +145,34 @@ try {
     Update-Canary
     Add-Result 'the canary sees a deliberate connection (positive control)' ($Attempts.Count -ge 1) "$($Attempts.Count) connection(s) recorded"
     $Attempts.Clear()
+
+    # ---- optional: read-only observation of the process tree (netstat, process table, DNS cache) ---------------------
+    $Observer = $null
+    $DnsBefore = $null
+    $DnsAfterControl = $null
+    $ControlHost = 'github.com'
+    $ControlName = 'minos-observe-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.example.com'
+    if ($ObserveNetwork) {
+        . (Join-Path $PSScriptRoot 'network-observer.ps1')
+        $DnsBefore = Get-DnsCacheSnapshot
+        $Observer = Start-NetworkObserver -RootProcessId $PID
+        $Observer.State.Phase = 'control'
+        if ($null -ne $Reachable) {
+            # Positive control, from this very process tree and without any proxy: a direct connect() held open, and a
+            # DNS resolution of a name nobody resolved before.
+            try { [void][System.Net.Dns]::GetHostAddresses($ControlName) } catch { }
+            $Control = New-Object System.Net.Sockets.TcpClient
+            try {
+                $Pending = $Control.BeginConnect($ControlHost, 443, $null, $null)
+                [void]$Pending.AsyncWaitHandle.WaitOne(8000)
+                Start-Sleep -Milliseconds 1200
+            }
+            catch { }
+            finally { $Control.Close() }
+        }
+        Set-NetworkObserverPhase $Observer 'minos'
+        $DnsAfterControl = Get-DnsCacheSnapshot
+    }
     $Environment = @{
         MINOS_HOME          = $MinosHome
         MINOS_TOOLS_OFFLINE = '1'
@@ -190,6 +225,30 @@ try {
     Add-Result 'the installation directory stayed read-only in practice' ($BeforeTools -eq $AfterTools) "tools files before=$BeforeTools after=$AfterTools"
     $Seeded = Join-Path $MinosHome 'tools'
     Add-Result 'tools were seeded under MINOS_HOME' (Test-Path -LiteralPath $Seeded) 'executed from MINOS_HOME\tools, never from the installation directory'
+
+    if ($ObserveNetwork) {
+        $Summary = Stop-NetworkObserver $Observer
+        $DnsAfterRun = Get-DnsCacheSnapshot
+        $ToolHosts = @('github.com', 'githubusercontent.com', 'repo1.maven.org', 'repo.maven.apache.org', 'maven.org',
+                       'nodejs.org', 'npmjs.org', 'npmjs.com', 'nuget.org', 'golang.org', 'sonatype.com', 'jitpack.io')
+        $Cause = @(Compare-DnsCacheSnapshots $DnsAfterControl $DnsAfterRun | Where-Object {
+            $Name = $_; @($ToolHosts | Where-Object { $Name -eq $_ -or $Name.EndsWith('.' + $_) }).Count -gt 0 })
+        $ControlHits = @($Summary.Hits | Where-Object { $_.Phase -eq 'control' })
+        $RunHits = @($Summary.Hits | Where-Object { $_.Phase -eq 'minos' })
+        Write-Host ("  observation: {0} samples, about {1} ms apart, {2} processes in the tree, {3} external TCP connection(s) of other processes (information), {4} UDP endpoint(s) of the tree (information)" -f $Summary.Ticks, $Summary.MeanIntervalMs, $Summary.TreeSize, $Summary.OtherExternal.Count, $Summary.UdpEndpoints.Count)
+        if ($null -ne $Summary.Error) { Write-Host "  observation warning: $($Summary.Error)" -ForegroundColor Yellow }
+        if ($null -ne $Reachable) {
+            Add-Result 'observation positive control: a direct connect() from the tree is seen by the sampler' ($ControlHits.Count -ge 1) $(if ($ControlHits.Count -ge 1) { "seen: $($ControlHits[0].Process) pid $($ControlHits[0].ProcessId) -> $($ControlHits[0].Remote) $($ControlHits[0].State)" } else { 'NOT seen: the zero below proves nothing' })
+            $DnsControlSeen = @(Compare-DnsCacheSnapshots $DnsBefore $DnsAfterControl | Where-Object { $_ -eq $ControlName -or $_ -eq $ControlHost }).Count -ge 1
+            Add-Result 'observation positive control: a DNS resolution from the tree shows in the DNS cache' $DnsControlSeen $(if ($DnsControlSeen) { 'the control name was cached' } else { 'NOT seen: the DNS verdict below proves nothing' })
+        }
+        else {
+            Write-Host '  observation: the machine is offline, the positive control is skipped (the offline probe is the evidence)'
+        }
+        Add-Result 'no non-loopback TCP connection owned by the MINOS process tree during the run' ($RunHits.Count -eq 0) $(if ($RunHits.Count -eq 0) { "0 in $($Summary.Ticks) samples" } else { ($RunHits | Select-Object -First 5 | ForEach-Object { "$($_.Process) pid $($_.ProcessId) -> $($_.Remote) $($_.State)" }) -join '; ' })
+        Add-Result 'no DNS resolution of a tool download host caused by the run' ($Cause.Count -eq 0) $(if ($Cause.Count -eq 0) { 'DNS cache unchanged for the download hosts' } else { $Cause -join ', ' })
+        $Summary | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $WorkDirectory 'network-observation.json') -Encoding utf8
+    }
 }
 catch {
     Add-Result 'qualification script completed' $false ("aborted: " + $_.Exception.Message)
