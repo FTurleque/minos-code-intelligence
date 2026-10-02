@@ -60,6 +60,22 @@ accordée :
 | `tools\scip-typescript\<v>` | racine accordée (un `partial` protégé y est déplacé) ; les sous-dossiers viennent de `npm` et héritent | non |
 | `tools\scip-java\<v>` et `tools\scip-java` | la racine reçoit l'ACE directement | non |
 
+## Preuve
+
+* **Test, rouge puis vert.** `WindowsAppContainerWorkerSandboxBackendTest
+  .aProtectedDirectoryBelowTheManagedRootStaysReadableByTheSandboxIdentity` crée `runtime\` par
+  `PrivateLocalStorage.ensurePrivateDirectory` sous une racine de provider, calcule le plan du bac à sable, applique les
+  grants planifiés à un principal de substitution avec les droits du lanceur (`(OI)(CI)RX` pour une racine, `RX` pour un
+  fichier) et lit l'ACL réelle du runner et de son voisin. Avant le correctif : `the runner must be reachable by the
+  sandbox identity ... expected: <true> but was: <false>`. Après : vert. Deux tests gardent les bornes (fichier
+  directement dans la racine : aucun grant en plus ; jonction qui sort de la racine : le fichier seul, jamais son
+  dossier).
+* **Bout en bout partiel** (MINOS_HOME jetable, `tools install scip-java`, `index` d'une copie de `fixtures/java/java-simple`).
+  Sans le correctif : `L'argument ...untime\scip-java-windows-runner.ps1 du paramètre -File n'existe pas`, code
+  `-196608`. Avec : le runner s'exécute et échoue plus loin, à la ligne `Install-CommandShims`
+  (`Microsoft.PowerShell.Core\FileSystem`), c'est le défaut distinct ci-dessous. Après l'exécution, aucune ACE de
+  l'AppContainer ne reste sur `runtime\` ni sur le runner : la révocation fonctionne sur le dossier accordé.
+
 ## À traiter plus tard (hors périmètre, constatés, non corrigés ici)
 
 1. **Défaut plus profond sous AppContainer** : PowerShell 5.1 ne peut pas changer de répertoire courant sous
