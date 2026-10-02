@@ -432,7 +432,30 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     void aProtectedDirectoryBelowTheManagedRootStaysReadableByTheSandboxIdentity() throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-appcontainer-protected-home-");
-        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
+        assertProtectedRuntimeReachable(home, home);
+    }
+
+    /**
+     * The MINOS home reaches the backend through a spelling that is not its real path: an 8.3 short name
+     * (a CI runner's profile, a temporary directory) or, where the volume has none, a junction. The files
+     * the provider names are then resolved to their real path, and the managed root must still be
+     * recognized as their ancestor, or the runner falls back to a lone file grant.
+     */
+    @Test
+    void aHomeSpelledWithAShortNameOrALinkStillGrantsTheProtectedRuntimeDirectory() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        Path home = Files.createTempDirectory("minos-appcontainer-aliased-home-");
+        Path alias = aliasOf(home);
+        assertFalse(alias.equals(home.toRealPath()), "the alias must differ from the real path of the home");
+        assertProtectedRuntimeReachable(home, alias);
+    }
+
+    /**
+     * {@code home} is where the files really are, {@code viaHome} the spelling of the MINOS home the
+     * backend is given and the provider command uses.
+     */
+    private static void assertProtectedRuntimeReachable(Path home, Path viaHome) throws Exception {
+        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(viaHome);
         assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
@@ -442,8 +465,9 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         Path runner = Files.writeString(runtime.resolve("runner.ps1"), "exit 0\n", StandardCharsets.US_ASCII);
         Path neighbour = Files.writeString(runtime.resolve("Neighbour.java"), "class Neighbour {}\n",
                 StandardCharsets.US_ASCII);
+        Path runnerArgument = viaHome.resolve(home.relativize(runner));
 
-        PlannedGrants grants = plannedGrants(backend, childPowerShell, runner);
+        PlannedGrants grants = plannedGrants(backend, childPowerShell, runnerArgument);
 
         assertFalse(holdsEntryFor(runner, STAND_IN_SID), "the stand-in principal must start without access");
         grantLikeLauncher(grants, STAND_IN_SID);
@@ -451,6 +475,26 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                 () -> "the runner must be reachable by the sandbox identity, planned grants: " + grants);
         assertTrue(holdsEntryFor(neighbour, STAND_IN_SID),
                 () -> "the file the runner reads next to itself must be reachable too, planned grants: " + grants);
+    }
+
+    /** The 8.3 short spelling of a directory, or a junction to it on a volume that has no short names. */
+    private static Path aliasOf(Path directory) throws Exception {
+        Path script = Files.createTempFile("minos-short-name-", ".cmd");
+        Files.writeString(script, "@for %%I in (\"%~1\") do @echo %%~sI\r\n", StandardCharsets.US_ASCII);
+        Process process = new ProcessBuilder("cmd.exe", "/c", script.toString(), directory.toString())
+                .redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.Charset.defaultCharset())
+                .strip();
+        assertEquals(0, process.waitFor(), output);
+        Files.deleteIfExists(script);
+        Path shortName = Path.of(output);
+        if (!shortName.equals(directory) && Files.isSameFile(shortName, directory)) return shortName;
+        Path link = directory.resolveSibling(directory.getFileName() + "-link");
+        Process mklink = new ProcessBuilder("cmd.exe", "/c", "mklink", "/J", link.toString(), directory.toString())
+                .redirectErrorStream(true).start();
+        mklink.getInputStream().readAllBytes();
+        assertEquals(0, mklink.waitFor(), "the junction must be created");
+        return link;
     }
 
     @Test
