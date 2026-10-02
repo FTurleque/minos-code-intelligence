@@ -111,6 +111,10 @@ class WindowsJobObjectContainmentTest {
                         seen.add(java.time.Instant.now() + " pid=" + handle.pid() + " " + command.substring(0, Math.min(150, command.length())));
                     }
                 });
+                if (System.currentTimeMillis() % 2000 < 120) {
+                    ProcessHandle.current().descendants().forEach(handle -> seen.add(java.time.Instant.now() + " CPU pid=" + handle.pid()
+                            + " cpuMs=" + handle.info().totalCpuDuration().map(java.time.Duration::toMillis).orElse(-1L)));
+                }
                 try { Thread.sleep(100); } catch (InterruptedException stop) { return; }
             }
         });
