@@ -364,27 +364,38 @@ exit /b %ERRORLEVEL%
 $ResolvedRuntimeModules | Set-Content -LiteralPath (Join-Path $Distribution 'RUNTIME-MODULES.txt') -Encoding ascii
 
 $FullToolsSection = @'
-Quick start (nothing to install: the indexers are shipped in this package):
+Quick start (the indexers for TypeScript and Java are shipped in this package, nothing to install for them):
   minos.cmd --version
   minos.cmd doctor
-  minos.cmd project add N:\workspace-dev\my-project --name my-project
+  minos.cmd project add C:\path\to\my-project --name my-project
   minos.cmd index my-project
 
 Tools shipped in this package (tools\TOOLS-MANIFEST.json), verified against pinned SHA-256 digests
 before their first use, with no network access:
   scip-java        Coursier, Apache Maven, the scip-java classpath
   scip-typescript  Node.js and the scip-typescript packages
-Their licenses are listed in supply-chain\THIRD-PARTY-NOTICES.txt.
+Their licenses are listed in supply-chain\THIRD-PARTY-NOTICES.txt. A shipped tool that is altered, deleted
+or replaced by a link is refused (minos.cmd doctor says so): reinstall this package to restore it.
 
-Not shipped: the toolchain of the project you analyse. MINOS never installs it, and
+NOT shipped, and never installed by MINOS: the toolchain of the project you analyse.
 "minos.cmd doctor" names what is missing on your machine:
   TypeScript projects  nothing more is required
   Java projects        a full JDK (JAVA_HOME with javac and jar), Git for Windows (Git Bash),
                        Windows PowerShell 5.1 and csc.exe (both part of Windows); the build of
                        your project resolves its own Maven dependencies
-  Go / C# / Rust / C++ / Python projects
-                       Go, the .NET SDK 10, cargo, a C++ toolchain, Python 3.10 or newer
-"minos.cmd tools install <provider>" remains available to update one tool explicitly.
+
+Other languages: their indexers are NOT in this package. Install the toolchain, then the indexer on demand
+(this needs the network):
+  Python projects      Python 3.10 or newer with pip, and Node.js 16 or newer with npm;
+                       then: minos.cmd tools install scip-python
+  Go projects          the Go toolchain; then: minos.cmd tools install scip-go
+  C# projects          the .NET SDK 10; then: minos.cmd tools install scip-dotnet
+  Rust projects        cargo, rustc and rust-analyzer 0.3.2989 (release 2026-07-27) on the PATH:
+                       MINOS installs none of them
+  C and C++ projects   scip-clang publishes no Windows binary (Linux x86-64 only): not available here
+
+For a shipped tool, "minos.cmd tools install" downloads nothing new: it reuses the files of this package.
+Newer versions of the shipped tools come with a newer MINOS package.
 Set MINOS_TOOLS_OFFLINE=1 to forbid any download.
 '@
 
@@ -396,12 +407,13 @@ Quick start:
   minos.cmd --version
   minos.cmd doctor
   minos.cmd tools install scip-typescript     (or scip-java: downloads pinned, SHA-256 verified tools)
-  minos.cmd project add N:\workspace-dev\my-project --name my-project
+  minos.cmd project add C:\path\to\my-project --name my-project
   minos.cmd index my-project
 
 The toolchain of the project you analyse is never installed by MINOS ("minos.cmd doctor" names what is
 missing): a full JDK (JAVA_HOME with javac and jar), Git for Windows (Git Bash), Windows PowerShell 5.1
-and csc.exe for Java projects; Go, the .NET SDK 10, cargo or Python for the other languages.
+and csc.exe for Java projects; Python 3.10+ with Node.js 16+, Go, the .NET SDK 10, or cargo, rustc and
+rust-analyzer for the other languages. C and C++: scip-clang has no Windows binary.
 '@
 
 $ReadmeToolsSection = if ($Variant -eq 'lite') { $LiteToolsSection } else { $FullToolsSection }
