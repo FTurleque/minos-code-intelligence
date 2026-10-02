@@ -6,7 +6,7 @@ encore ouverts. Après ce chantier il ne reste que des constats d'échéance **T
 | Lot | Branche | Constats | PR | État |
 |---|---|---|---|---|
 | 1 | `sec/s11-chaine-et-conteneurs` | S11 | — | implémenté, validé en local (`clean verify`), en attente de PR |
-| 2 | `rel/d1-distribution-auto-portante` | D1 | — | à faire |
+| 2 | `rel/d1-distribution-auto-portante` | D1 | — | en cours |
 | 3 | `ci/c2-un-seul-build` | C2 | — | à faire |
 | 4 | `sec/s14-assainissement` | S14 | — | à faire |
 
@@ -247,6 +247,57 @@ Non prouvé : GPU (aucun GPU ici ; la configuration n'en monte pas) ; volume nom
 | 5 | `fix(s11): Ollama s'execute en non-root, migration du volume de modeles (point 1)` | `minos-ollama` sous `10002:10002`, `HOME=/home/ollama`, volume sur `/home/ollama/.ollama` ; service ponctuel `minos-ollama-bootstrap` (chown conditionnel) ; section « Ollama sans privilèges » de `docker-runtime.md` | rouge (permission denied sans amorçage), puis vert : volume neuf, volume créé en root par l'ancienne config, second démarrage ; modèle téléchargé **et** chargé, embedding 768 valeurs |
 
 Commits du lot, dans l'ordre : `ffa09905` (1, point 5), `53da76e7` (2, point 2), `bc8ddfdb` (3, point 3), `56937d49` (4, point 4), `ac8aeda7` (5, point 1), puis les commits de suivi (`f59bae27` et le dernier).
+
+## Lot 2 — D1 (distribution auto-portante : le zip installe tout)
+
+Implémenteur : `impl-s23`. Branche `rel/d1-distribution-auto-portante` (depuis `sec/s11-chaine-et-conteneurs`), worktree `minos-wt/rel-d1`.
+Exigence du propriétaire, dite deux fois : « je ne veux plus être obligé d'installer les tools de MINOS pour pouvoir l'exécuter ».
+Critère : poste neuf SANS réseau, installation depuis le zip, une indexation réussit ; le `README.txt` généré ne demande plus d'installer
+quoi que ce soit ; `minos tools verify` rapporte les outils embarqués présents, sans réseau.
+
+### Relocalisation (l'ADR 0040 date du 24 septembre)
+
+| ADR 0040 | Réalité du dépôt au 2026-10-02 |
+|---|---|
+| « versions exactement celles de `ScipIndexerCatalog` » | `ScipIndexerCatalog` ne porte QUE les versions des providers. Les empreintes et URL épinglées vivent dans les gestionnaires (`ManagedScipProviderRuntimeManager` : Coursier Windows, Maven, Node 24.20.0 ; `ManagedPolyglotScipRuntimeManager` : nupkg scip-dotnet) ET, recopiées, dans `docker/Dockerfile.mcp.release` (Maven, Coursier Linux, scip-clang, rust-analyzer, nupkg dotnet). Deux copies de l'empreinte Maven et de celle du nupkg : le piège central. |
+| « amorçage via `StampManagedProviderMarkers` » | cette classe n'est qu'un `main` de l'image Docker (marqueurs `.minos-version`, `.minos-install-source`, `.minos-integrity.sha256` de scip-dotnet et scip-go). Les gestionnaires vérifient l'empreinte de l'archive après téléchargement puis l'extraient avec `extractZipBounded` (anti zip-slip, plafonds d'entrées et d'octets) : c'est le point de passage à réutiliser, pas à dupliquer. |
+| « lot 3 : repli téléchargement » | il existe déjà : `minos tools install <provider>` télécharge des artefacts épinglés (SHA-256, HTTPS, bornes d'octets). Ce qui manque est un mode hors ligne explicite (`MINOS_TOOLS_OFFLINE=1`). |
+| « `doctor` à quatre états » | `ProviderRuntimeStatus` a cinq états (`READY`, `NOT_INSTALLED`, `BLOCKED`, `INVALID`, `UNSUPPORTED_BY_BACKEND`) mais aucune notion d'origine (embarqué ou téléchargé). |
+| `scripts/release/build-windows-distribution.ps1` | jpackage + `lib` + `docker` + `integration` + `supply-chain` ; `update-installation.ps1` liste en dur ses répertoires gérés (`app`, `lib`, `docker`, `integration`, `supply-chain`) : `tools` doit y entrer. |
+
+### Ce qu'une machine neuve exige RÉELLEMENT (mesuré sur ce poste, le 2026-10-02)
+
+- **scip-typescript, Windows** : aujourd'hui `tools install scip-typescript` exige Node.js et npm sur le PATH du poste (même si l'exécution utilise ensuite le Node géré 24.20.0) et télécharge npm puis Node. Une machine neuve ne peut donc pas l'installer, même en ligne. Une fois installé, l'index d'une fixture TypeScript réussit sous le bac à sable AppContainer sans aucun autre prérequis (mesuré : `typescript-simple`, statut SUCCEEDED).
+- **scip-java, Windows** : l'exécutable (`cs.exe`), Maven 3.9.16 et le runner sont gérés par MINOS, MAIS le runner exige du poste : un JDK complet (`JAVA_HOME` avec `javac` et `jar`), Git Bash (`<Git>\bin\bash.exe`), PowerShell 5.1 et `csc.exe` (livrés par Windows). Il résout le classpath de scip-java par Coursier dans le cache Coursier de l'utilisateur (réseau au premier usage), puis lance le build Maven du projet (greffons et dépendances du projet : réseau ou `~/.m2` déjà rempli). Ce sont des prérequis de projet, pas des outils MINOS ; seul le cache Coursier de scip-java est un outil MINOS à embarquer.
+- **Constat préexistant à signaler** : sur ce poste, `minos index` d'un projet Java échoue sous le bac à sable AppContainer (PowerShell dit que le fichier `-File … scip-java-windows-runner.ps1` n'existe pas, code de sortie -196608) alors que le même runner appelé directement réussit (BUILD SUCCESS, `index.scip` de 11 777 octets). L'échec existe sur le JAR de la branche non modifiée : il n'est pas causé par ce lot. Il décide de ce qu'on peut prouver pour Java (voir « À traiter plus tard », D1-L1).
+- Hors Windows x64 : `scip-clang` n'a aucun binaire Windows (Linux x86-64 seulement) ; `scip-go` n'a aucune version publiée pour Windows (releases : darwin et linux seulement) et exige de toute façon une chaîne Go ; `scip-dotnet` est un nupkg de 82 Mo qui exige le SDK .NET 10 pour s'installer et s'exécuter ; `scip-python` exige Python 3.10+, pip et Node/npm du poste.
+
+### Décisions (écrites avant le code)
+
+- **D1.1 — une seule description : `embedded-tools.json`** (ressource de `minos-provider-scip`, `com/minos/adapter/scip/runtime/`). Pour chaque composant : `id`, `version`, `platform` (`windows-x64`, `linux-x64`, `any`), `delivery`, `url`, `sha256`, `sizeBytes`, `license`, `embedded` (livré dans le zip), et pour l'image Docker le nom de l'`ARG` correspondant. Elle est lue par (1) les gestionnaires Java, qui perdent toutes leurs empreintes littérales ; (2) le gate `check-tools-manifest.py`, qui exige que le `Dockerfile.mcp.release` porte exactement ces valeurs (script `sync-tools-manifest.py --write` pour les y réécrire) et que les versions des providers de `ScipIndexerCatalog` y soient égales ; (3) `build-embedded-tools.py`, appelé par `build-windows-distribution.ps1`, qui n'a aucune liste propre. Écart catalogue, Dockerfile, Java ou paquet = échec de build.
+- **D1.2 — embarquer, c'est fournir localement l'artefact épinglé** : le zip porte les archives telles que publiées (empreinte du catalogue, pas du serveur). L'amorçage lit l'archive du paquet, la copie dans un fichier partiel privé en calculant son SHA-256, la compare à celle du catalogue (embarqué dans le JAR), puis la fait passer par le même chemin que le téléchargement (`extractZipBounded`, marqueurs, remplacement atomique). Un artefact embarqué altéré est refusé (état `INVALID`, jamais de repli silencieux vers le réseau) ; `tools install` reste la mise à jour explicite (réutilise le paquet s'il est sain, sinon télécharge l'épinglé).
+- **D1.3 — deux natures de composant** : les artefacts épinglés (Coursier, Maven, Node, rust-analyzer éventuel) sont vérifiés contre le catalogue ; les arbres assemblés à la construction (`node_modules` de scip-typescript produit par `npm ci --ignore-scripts` avec le verrou du dépôt ; cache Coursier de scip-java produit par `cs fetch`) ont une empreinte calculée à la construction et consignée dans `TOOLS-MANIFEST.json` du paquet (aucun amont ne les épingle ; le graphe transitif de scip-java n'a pas de verrou, l'ADR l'a déjà noté). Niveau de confiance plus faible, dit dans la documentation : le manifeste du paquet est couvert par `RELEASE-MANIFEST.json` et par la signature de l'installateur, pas par le JAR.
+- **D1.4 — emplacement du paquet** : `<installation>/tools/` (lecture seule), localisé par la propriété `jpackage.app-path` du lanceur (ou `MINOS_EMBEDDED_TOOLS_DIR` pour les tests et l'image). Les outils sont ensuite extraits sous `MINOS_HOME/tools` (même disposition qu'un `tools install`), et c'est de là, jamais du répertoire d'installation, qu'ils s'exécutent. Aucune élévation.
+- **D1.5 — amorçage paresseux dans `inspect`** : tout `doctor`, `tools verify`, `tools list` ou `index` qui inspecte un provider dont les composants embarqués manquent sous `MINOS_HOME/tools` les amorce (idempotent, verrou de bail pour la concurrence). Aucune commande à lancer.
+- **D1.6 — `MINOS_TOOLS_OFFLINE=1`** : interdit tout accès réseau des gestionnaires ; un composant manquant sans paquet échoue vite avec la raison, sans attendre un délai. L'option `--offline` de la CLI est reportée (voir « À traiter plus tard »).
+- **D1.7 — périmètre du paquet Windows x64** : Coursier, Maven, Node 24.20.0, `node_modules` de scip-typescript, cache Coursier de scip-java. Non embarqués, avec leur raison : scip-go (aucun binaire Windows amont, exige Go), scip-dotnet (82 Mo, exige le SDK .NET 10), scip-clang (aucun binaire Windows), scip-python (exige Python et Node/npm du poste, `requiredByDefault=false`), rust-analyzer (le gestionnaire le cherche sur le PATH ; son binaire Windows a une empreinte amont, mais il exige cargo : reporté, voir « À traiter plus tard »). Ils restent installables comme avant ; `doctor` dit que c'est une dépendance du poste.
+- **D1.8 — conformité** : pas de numéro de jalon dans les noms ; un seul constructeur public par classe ; aucune entrée de liste blanche d'E/S privées : l'extraction réutilise `ManagedScipProviderRuntimeManager.extractZipBounded` (déjà listée, seule la visibilité change), les classes neuves n'emploient que les primitives.
+- **Question produit — une distribution « sans outils » doit-elle rester disponible ?** Voir « Tailles » : le zip passe d'environ 50 Mo à plus de 200 Mo. **Recommandation** : oui, un second artefact `minos-<v>-windows-x64-lite.zip` sans `tools/` (même script, même gate, manifeste d'outils vide) pour les postes qui gèrent déjà leurs outils ou manquent de place ; le paquet par défaut est celui avec les outils. **Non implémenté** : décision du propriétaire demandée au pilote.
+
+### Licences des composants embarqués (sources primaires, vérifiées le 2026-10-02)
+
+| Composant | Licence | Source primaire | Redistribution | Mentions obligatoires |
+|---|---|---|---|---|
+| Coursier (`cs.exe`, dépôt `coursier/launchers`) | Apache-2.0 (projet `coursier/coursier`) ; l'exécutable est une image native GraalVM | API GitHub `/license` de `coursier/coursier`, README de `coursier/launchers` | oui | texte Apache-2.0 et NOTICE. Réserve : le dépôt `launchers` ne porte pas de fichier LICENSE propre |
+| Apache Maven 3.9.16 | Apache-2.0 | `apache/maven` (LICENSE) ; le zip contient `LICENSE` et `NOTICE` | oui | conserver `LICENSE` et `NOTICE` du zip (ils restent dans l'arbre extrait) |
+| Node.js 24.20.0 | MIT et licences des composants intégrés (fichier `LICENSE` du zip) | `nodejs/node` (LICENSE) | oui | conserver le `LICENSE` du zip |
+| scip-java 0.13.1 et son graphe Coursier | Apache-2.0 (scip-java) ; dépendances : licences de leurs POM (Apache-2.0, BSD-3-Clause, `jna` LGPL-2.1+ OU Apache-2.0, etc.) | `scip-code/scip-java` ; POM du cache | oui (Apache-2.0 ; `jna` sous l'option Apache-2.0) | notices générées depuis les POM du cache, une entrée par jar |
+| scip-typescript 0.4.0 (npm : commander MIT, progress MIT, google-protobuf BSD-3-Clause AND Apache-2.0, typescript Apache-2.0) | Apache-2.0 | registre npm (champ `license`), verrou du dépôt | oui | notices générées depuis le verrou |
+| scip-go, scip-clang, scip-dotnet | Apache-2.0 | API GitHub `/license` | oui, non embarqués | sans objet |
+| scip-python | MIT (champ npm ; `LICENSE.txt` du dépôt : Pyright, Microsoft) | registre npm, `sourcegraph/scip-python` | oui, non embarqué | sans objet |
+| rust-analyzer | MIT OU Apache-2.0 | README de `rust-lang/rust-analyzer` | oui, non embarqué | sans objet |
+
+Aucune licence n'interdit la redistribution : aucun composant ne sort de la charge pour ce motif. Réserve unique : l'absence de fichier LICENSE dans `coursier/launchers`.
 
 ## Constats de `verif-s23`
 
