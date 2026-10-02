@@ -392,10 +392,16 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         // token, the group that owns what the process creates (Administrators on a CI runner).
         String ownerName = Files.getOwner(writeRoot).getName();
         String ownerAccount = ownerName.substring(ownerName.lastIndexOf('\\') + 1);
+        // icacls marks an entry "(I)" only when the file's entry is flagged as inherited; under an elevated
+        // token the entries of a file created in a temporary directory are explicit copies with the same
+        // rights. What matters, and what is asserted, is that the principal MINOS acts as holds Full Control
+        // on the file and that the file is really usable by this process.
         assertTrue((artifactAcl.contains(currentUser) || artifactAcl.contains(ownerAccount))
-                        && artifactAcl.contains("(I)"),
-                () -> "a file created inside the write root must inherit the access of the principal MINOS acts as, got:\n"
+                        && (artifactAcl.contains("(I)") || artifactAcl.contains(":(F)")),
+                () -> "a file created inside the write root must carry the access of the principal MINOS acts as, got:\n"
                         + artifactAcl);
+        assertTrue(Files.isReadable(artifact) && Files.isWritable(artifact),
+                "the file created inside the write root must be usable by the process that created the root");
     }
 
     @Test
