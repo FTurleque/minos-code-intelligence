@@ -365,6 +365,7 @@ Aucun ADR ni `CHANGELOG` ne cite l'ancien nom. `docs/roadmap/M14_EXECUTION.md` (
 | analyse syntaxique PowerShell des 12 `.ps1` touchés | 0 erreur (7 et 5.1) |
 | `M29*ContractTest` (12 tests, dont `M29Docker*` : 7) | verts |
 | goldens `minos-app/src/test/resources/characterization/` | inchangés (aucun fichier touché) |
+| `./mvnw clean verify` complet (Git Bash, une seule fois, en fin de branche) | BUILD SUCCESS, 18 min 45 s, aucun échec ; `check-jacoco.py` : 26 PASS, m24 FAIL (line 0,617, branch 0,375) **préexistant sous Windows** (même résultat qu'en fin de lot 1), `HybridCorpusWeightTest` n'a pas été instable cette fois |
 | `rhysd/actionlint` | non applicable : **aucun workflow touché** (le workflow `docker-upgrade-qualification.yml` appelle `qualify-docker-upgrade.ps1` sans changement) |
 | `docker/scripts/verify-run-configurations.ps1` | échoue dès sa première assertion sur `- infinity`, **comme sur `origin/develop`** (S11-L7, préexistant, non branché) ; l'ancien nom n'y apparaît plus |
 
