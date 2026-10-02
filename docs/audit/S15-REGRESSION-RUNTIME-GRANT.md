@@ -38,6 +38,11 @@ la plus petite portée qui couvre le script et ce qu'il lit à côté de lui. Au
 d'ACE : un AppContainer traverse sans droit sur les dossiers parents (privilège de contournement du parcours), c'est
 déjà ce que `readFile` suppose pour un fichier hors de `tools`.
 
+Comparaison sur des chemins réels : la racine `tools` est résolue par `toRealPath` (repli sur le chemin normalisé quand
+elle n'existe pas encore), comme les chemins des fichiers du provider. Sans cela, un `MINOS_HOME` écrit avec un nom
+court 8.3, une jonction ou un `subst` ne reconnaîtrait pas la racine et le runner retomberait sur un grant de fichier
+seul. Un test couvre ce cas (nom court, ou jonction sur un volume sans noms courts).
+
 Bornes :
 
 * seul un chemin **réel** sous `tools` déclenche l'ajout : un lien ou une jonction qui sort de `tools` retombe sur
@@ -45,7 +50,8 @@ Bornes :
 * le parent d'un chemin réel sous la racine du provider est lui-même sous cette racine : jamais d'élargissement à
   `tools` ni à `MINOS_HOME` ;
 * seuls les **arguments** sont concernés, pas l'exécutable : aucun exécutable géré ne vit dans un dossier protégé qui ne
-  soit pas la racine (voir plus bas).
+  soit pas la racine. Cette affirmation n'est vérifiée que pour Coursier, Maven et Node (les autres providers n'ont pas
+  été examinés).
 
 ## Autres chemins du même type
 
@@ -59,6 +65,7 @@ accordée :
 | `tools\maven\<v>`, `tools\nodejs\<v>` | sont la racine accordée ; les sous-dossiers de l'archive sont créés sans protection et héritent | non |
 | `tools\scip-typescript\<v>` | racine accordée (un `partial` protégé y est déplacé) ; les sous-dossiers viennent de `npm` et héritent | non |
 | `tools\scip-java\<v>` et `tools\scip-java` | la racine reçoit l'ACE directement | non |
+| `pinned-nuget-source` (provider dotnet, `ManagedPolyglotScipRuntimeManager.installDotnet`) | sous-dossier protégé d'un répertoire d'installation ; chemin d'installation, jamais un argument de l'exécution, et supprimé avant la fin de l'installation | non |
 
 ## Preuve
 
@@ -83,3 +90,9 @@ accordée :
    encore (`Install-CommandShims`, `Microsoft.PowerShell.Core\FileSystem`).
 2. **Message d'erreur final** de l'indexation sans le détail `index failed: IllegalStateException`.
 3. **Le runner masque le vrai échec** derrière un message plus général.
+4. **Le test réapplique les droits à la main** (`(OI)(CI)RX` pour une racine, `RX` pour un fichier) au lieu de les tirer
+   du template du lanceur : une divergence future entre les deux ne ferait pas échouer le test.
+5. **Gardes défensives non discriminantes** : dans `addProtectedParentReadRoot`, les tests `parent == null` et
+   `startsWith(providerRoot)` ne peuvent pas échouer pour un chemin réel sous la racine ; aucun test ne les distingue.
+6. **Le test principal substitue `BUILTIN\Guests`** à l'identité AppContainer et suppose, comme `readFile`, que
+   l'AppContainer traverse les dossiers sans droit explicite ; non vérifié contre un vrai AppContainer ici.
