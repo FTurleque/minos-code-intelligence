@@ -225,9 +225,10 @@ class StrongProcessOwnershipIndexerExecutorTest {
             StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(
                     delegate, home, policy, selectedHome -> WorkerSandboxBackend.nativeEphemeralWorkspace());
 
+            var submitted = request(project);
             IllegalStateException failure = assertThrows(
                     IllegalStateException.class,
-                    () -> executor.execute(request(project)));
+                    () -> executor.execute(submitted));
 
             assertTrue(failure.getMessage().contains("qualified managed local provider sandbox is unavailable"),
                     failure.getMessage());
@@ -250,9 +251,10 @@ class StrongProcessOwnershipIndexerExecutorTest {
         StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(
                 delegate, home, WorkerNetworkPolicy.DENY, selectedHome -> backend);
 
+        var submitted = request(temporary.resolve("no-deny-proof-project"));
         IllegalStateException failure = assertThrows(
                 IllegalStateException.class,
-                () -> executor.execute(request(temporary.resolve("no-deny-proof-project"))));
+                () -> executor.execute(submitted));
 
         assertTrue(failure.getMessage().contains("cannot prove OS-level network denial"), failure.getMessage());
         assertFalse(sandboxReached.get());
@@ -273,9 +275,10 @@ class StrongProcessOwnershipIndexerExecutorTest {
         StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(
                 delegate, home, WorkerNetworkPolicy.DENY, selectedHome -> backend);
 
+        var submitted = request(temporary.resolve("qualified-project"));
         IllegalStateException failure = assertThrows(
                 IllegalStateException.class,
-                () -> executor.execute(request(temporary.resolve("qualified-project"))));
+                () -> executor.execute(submitted));
 
         assertTrue(sandboxReached.get(), "a managed-qualified sandbox must receive the copied request");
         assertTrue(failure.getMessage().contains("fixture sandbox reached"), failure.getMessage());
