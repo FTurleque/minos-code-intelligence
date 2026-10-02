@@ -132,6 +132,12 @@ function Update-Canary {
 
 try {
     $ProxyUrl = "http://127.0.0.1:$CanaryPort"
+    # Positive control: a request sent through the proxy must be seen by the listener, otherwise "0 attempts" proves nothing.
+    try { Invoke-WebRequest -Uri 'http://control.invalid/' -Proxy $ProxyUrl -TimeoutSec 5 -UseBasicParsing | Out-Null } catch { }
+    Start-Sleep -Milliseconds 300
+    Update-Canary
+    Add-Result 'the canary sees a deliberate connection (positive control)' ($Attempts.Count -ge 1) "$($Attempts.Count) connection(s) recorded"
+    $Attempts.Clear()
     $Environment = @{
         MINOS_HOME          = $MinosHome
         MINOS_TOOLS_OFFLINE = '1'
@@ -149,7 +155,7 @@ try {
     Expand-Archive -LiteralPath $Package -DestinationPath $Expanded -Force
     $Distribution = Get-ChildItem -LiteralPath $Expanded -Directory | Select-Object -First 1
     $Installer = Join-Path $Distribution.FullName 'install.ps1'
-    $InstallOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Installer -Package $Package -InstallRoot $InstallRoot 2>&1 | Out-String
+    $InstallOutput = & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -NoProfile -ExecutionPolicy Bypass -File $Installer -Package $Package -InstallRoot $InstallRoot 2>&1 | Out-String
     $Launcher = Join-Path $InstallRoot 'minos.cmd'
     Add-Result 'installed from the zip' (Test-Path -LiteralPath $Launcher) 'portable installer, no PATH, no MCP client, no Docker'
     $ToolsManifest = Join-Path $InstallRoot 'tools\TOOLS-MANIFEST.json'
@@ -184,6 +190,9 @@ try {
     Add-Result 'the installation directory stayed read-only in practice' ($BeforeTools -eq $AfterTools) "tools files before=$BeforeTools after=$AfterTools"
     $Seeded = Join-Path $MinosHome 'tools'
     Add-Result 'tools were seeded under MINOS_HOME' (Test-Path -LiteralPath $Seeded) 'executed from MINOS_HOME\tools, never from the installation directory'
+}
+catch {
+    Add-Result 'qualification script completed' $false ("aborted: " + $_.Exception.Message)
 }
 finally {
     $Listener.Stop()
