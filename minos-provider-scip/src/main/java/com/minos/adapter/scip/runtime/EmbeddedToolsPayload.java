@@ -19,8 +19,9 @@ import java.util.regex.Pattern;
 /**
  * The tools shipped next to the installation ({@code <installation>/tools}): read only, never executed
  * from, and never trusted by birth. Every byte that leaves it is verified against the packaged catalogue
- * (pinned artifacts) or against the manifest of the signed distribution (assembled trees) before MINOS
- * extracts it under {@code MINOS_HOME/tools}.
+ * (pinned artifacts) or against the manifest shipped with the distribution (assembled trees; that manifest is
+ * itself covered by the release manifest and by the installer signature) before MINOS extracts it under
+ * {@code MINOS_HOME/tools}. A file the manifest lists but that is missing, or replaced by a link, is a refusal.
  */
 final class EmbeddedToolsPayload {
 
@@ -132,9 +133,12 @@ final class EmbeddedToolsPayload {
      * comes from the packaged catalogue, not from the payload's own manifest.
      */
     Optional<Path> artifactFile(EmbeddedToolsCatalog.Artifact artifact) throws IOException {
-        if (!artifact.embedded() || !platformServes(artifact.platform())) return Optional.empty();
+        if (!artifact.embedded() || !platformServes(artifact.platform()) || !provides(artifact.id())) return Optional.empty();
         Path resolved = confined(artifact.payload());
-        return Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS) ? Optional.of(resolved) : Optional.empty();
+        if (!Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("a tool listed by the distribution manifest is missing or is not a regular file: " + artifact.id());
+        }
+        return Optional.of(resolved);
     }
 
     private boolean platformServes(String artifactPlatform) {

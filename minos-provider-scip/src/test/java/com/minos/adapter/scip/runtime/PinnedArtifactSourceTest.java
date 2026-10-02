@@ -83,11 +83,17 @@ class PinnedArtifactSourceTest {
                 "Apache-2.0", true, "artifacts/sample-tool-1.0-any.zip");
     }
 
+    /** The manifest of a distribution that ships the sample tool (as the build always writes it). */
+    private static String manifestListingTheTool() {
+        return "{\"formatVersion\":1,\"platform\":\"windows-x64\",\"files\":[{\"id\":\"sample-tool\",\"kind\":\"artifact\","
+                + "\"version\":\"1.0\",\"path\":\"artifacts/sample-tool-1.0-any.zip\",\"sha256\":\"" + Sha256.hex(TOOL)
+                + "\",\"sizeBytes\":" + TOOL.length + "}]}";
+    }
+
     private Path payloadWith(byte[] content) throws IOException {
         Path payload = directory.resolve("payload");
         Files.createDirectories(payload.resolve("artifacts"));
-        Files.writeString(payload.resolve(EmbeddedToolsPayload.MANIFEST_FILE),
-                "{\"formatVersion\":1,\"platform\":\"windows-x64\",\"files\":[]}");
+        Files.writeString(payload.resolve(EmbeddedToolsPayload.MANIFEST_FILE), manifestListingTheTool());
         Files.write(payload.resolve("artifacts").resolve("sample-tool-1.0-any.zip"), content);
         return payload;
     }
@@ -127,8 +133,7 @@ class PinnedArtifactSourceTest {
             Path root = Files.createTempDirectory(directory, "payload-case");
             Path payload = root.resolve("payload");
             Files.createDirectories(payload.resolve("artifacts"));
-            Files.writeString(payload.resolve(EmbeddedToolsPayload.MANIFEST_FILE),
-                    "{\"formatVersion\":1,\"platform\":\"windows-x64\",\"files\":[]}");
+            Files.writeString(payload.resolve(EmbeddedToolsPayload.MANIFEST_FILE), manifestListingTheTool());
             Files.write(payload.resolve("artifacts").resolve("sample-tool-1.0-any.zip"), wrong);
             PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payload);
 
@@ -136,6 +141,32 @@ class PinnedArtifactSourceTest {
                     () -> source.acquire(artifact(TOOL), root.resolve("tool.partial"), 1024, "test", true));
             assertFalse(Files.exists(root.resolve("tool.partial")));
         }
+        assertEquals(0, attempts.get());
+    }
+
+    @Test
+    void aShippedToolThatWentMissingIsARefusalWithARepairInstructionNeverASilentDownload() throws Exception {
+        Path payload = payloadWith(TOOL);
+        Files.delete(payload.resolve("artifacts").resolve("sample-tool-1.0-any.zip"));
+        PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payload);
+
+        EmbeddedToolIntegrityException refusal = assertThrows(EmbeddedToolIntegrityException.class,
+                () -> source.acquire(artifact(TOOL), directory.resolve("tool.partial"), 1024, "test", true));
+
+        assertTrue(refusal.getMessage().contains("reinstall the MINOS package"), refusal.getMessage());
+        assertEquals(0, attempts.get(), "a damaged payload must not fall back to the network");
+    }
+
+    @Test
+    void aShippedToolReplacedByALinkIsARefusal() throws Exception {
+        Path payload = payloadWith(TOOL);
+        Path file = payload.resolve("artifacts").resolve("sample-tool-1.0-any.zip");
+        Files.delete(file);
+        TestLinks.directoryLink(file, directory.resolve("elsewhere"));
+        PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payload);
+
+        assertThrows(EmbeddedToolIntegrityException.class,
+                () -> source.acquire(artifact(TOOL), directory.resolve("tool.partial"), 1024, "test", true));
         assertEquals(0, attempts.get());
     }
 

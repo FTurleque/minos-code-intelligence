@@ -579,7 +579,11 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         }
     }
 
-    /** An embedded tree that no longer matches the digest stamped when it was seeded is refused. */
+    /**
+     * An embedded tree that no longer matches the digest stamped when it was seeded, that lost its markers, or that
+     * contains a link (symbolic link, junction, any reparse point) is refused: every failure to verify is a refusal,
+     * never "not provided". A tree without markers and without an embedded origin is a legacy download, left alone.
+     */
     private SeedOutcome verifyInstalledEmbeddedTrees(String providerId) {
         for (String component : CATALOG.provider(providerId).components()) {
             Path tree = switch (component) {
@@ -588,13 +592,53 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 default -> null;
             };
             if (tree == null || !Files.isDirectory(tree, LinkOption.NOFOLLOW_LINKS)) continue;
-            if (!ManagedPolyglotScipRuntimeManager.installSourceMatches(tree, EMBEDDED_TREE_SOURCE)) continue;
-            if (!ManagedPolyglotScipRuntimeManager.integrityManifestMatches(tree)) {
-                return new SeedOutcome(true, List.of(
-                        "embedded tools were refused: " + component + " no longer matches its integrity manifest"));
+            boolean embedded = origins.origin(component).filter("embedded"::equals).isPresent()
+                    || ManagedPolyglotScipRuntimeManager.installSourceMatches(tree, EMBEDDED_TREE_SOURCE);
+            if (!embedded) continue;
+            String problem = embeddedTreeProblem(tree);
+            if (problem != null) {
+                return new SeedOutcome(true, List.of("embedded tools were refused: " + component + " " + problem
+                        + PinnedArtifactSource.REINSTALL_HINT));
             }
         }
         return null;
+    }
+
+    private static String embeddedTreeProblem(Path tree) {
+        if (!ManagedPolyglotScipRuntimeManager.installSourceMatches(tree, EMBEDDED_TREE_SOURCE)) {
+            return "lost its embedded-origin marker";
+        }
+        if (containsLink(tree)) return "contains a link or a reparse point";
+        if (!ManagedPolyglotScipRuntimeManager.integrityManifestMatches(tree)) return "no longer matches its integrity manifest";
+        return null;
+    }
+
+    private static boolean containsLink(Path tree) {
+        boolean[] found = {false};
+        try {
+            Files.walkFileTree(tree, new java.nio.file.SimpleFileVisitor<>() {
+                @Override
+                public java.nio.file.FileVisitResult preVisitDirectory(Path directory, java.nio.file.attribute.BasicFileAttributes attributes) {
+                    return flag(attributes);
+                }
+
+                @Override
+                public java.nio.file.FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attributes) {
+                    return flag(attributes);
+                }
+
+                private java.nio.file.FileVisitResult flag(java.nio.file.attribute.BasicFileAttributes attributes) {
+                    if (attributes.isSymbolicLink() || attributes.isOther()) {
+                        found[0] = true;
+                        return java.nio.file.FileVisitResult.TERMINATE;
+                    }
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException | RuntimeException unreadable) {
+            return true;
+        }
+        return found[0];
     }
 
     private Optional<String> originDiagnostic(String providerId) {

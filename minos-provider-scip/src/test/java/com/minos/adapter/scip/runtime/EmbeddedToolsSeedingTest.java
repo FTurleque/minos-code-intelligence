@@ -157,6 +157,76 @@ class EmbeddedToolsSeedingTest {
                 String.valueOf(status.diagnostics()));
     }
 
+    private ProviderRuntimeStatus seedThenDamage(java.util.function.Consumer<Path> damage) throws Exception {
+        byte[] archive = modulesZip();
+        writePayload(archive, Sha256.hex(archive));
+        inspect();
+        damage.accept(modulesRoot());
+        return inspect();
+    }
+
+    private void assertRefusedWithRepairInstruction(ProviderRuntimeStatus status) {
+        assertEquals(ProviderRuntimeStatus.State.INVALID, status.state(), String.valueOf(status.diagnostics()));
+        assertTrue(status.diagnostics().stream().anyMatch(line -> line.contains("reinstall the MINOS package")),
+                String.valueOf(status.diagnostics()));
+    }
+
+    @Test
+    void aFileRemovedFromTheSeededTreeIsRefused() throws Exception {
+        assertRefusedWithRepairInstruction(seedThenDamage(root -> {
+            try {
+                Files.delete(root.resolve("node_modules/@sourcegraph/scip-typescript/dist/src/main.js"));
+            } catch (IOException failure) {
+                throw new IllegalStateException(failure);
+            }
+        }));
+    }
+
+    @Test
+    void aJunctionOrLinkAddedToTheSeededTreeIsRefusedNotMistakenForReady() throws Exception {
+        assertRefusedWithRepairInstruction(seedThenDamage(root -> {
+            try {
+                TestLinks.directoryLink(root.resolve("node_modules").resolve("injected"), directory.resolve("outside"));
+            } catch (IOException | InterruptedException failure) {
+                throw new IllegalStateException(failure);
+            }
+        }));
+    }
+
+    @Test
+    void theEmbeddedMarkerRemovedFromTheSeededTreeIsRefused() throws Exception {
+        assertRefusedWithRepairInstruction(seedThenDamage(root -> {
+            try {
+                Files.delete(root.resolve(".minos-install-source"));
+            } catch (IOException failure) {
+                throw new IllegalStateException(failure);
+            }
+        }));
+    }
+
+    @Test
+    void anArchiveListedByTheManifestThatWentMissingIsRefusedWithARepairInstruction() throws Exception {
+        byte[] archive = modulesZip();
+        writePayload(archive, Sha256.hex(archive));
+        Files.delete(payload.resolve(MODULES_ARCHIVE));
+
+        ProviderRuntimeStatus status = inspect();
+
+        assertRefusedWithRepairInstruction(status);
+        assertFalse(Files.exists(modulesRoot()));
+    }
+
+    @Test
+    void anArchiveReplacedByALinkIsRefusedWithARepairInstruction() throws Exception {
+        byte[] archive = modulesZip();
+        writePayload(archive, Sha256.hex(archive));
+        Path file = payload.resolve(MODULES_ARCHIVE);
+        Files.delete(file);
+        TestLinks.directoryLink(file, directory.resolve("elsewhere"));
+
+        assertRefusedWithRepairInstruction(inspect());
+    }
+
     @Test
     void concurrentFirstUsesSeedOnceAndAllEndValid() throws Exception {
         byte[] archive = modulesZip();

@@ -156,7 +156,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         if (!sdk.success() || majorVersion(sdk.output()).orElse(-1) < 10) {
             return status(ScipIndexerCatalog.SCIP_DOTNET_ID, ScipIndexerCatalog.SCIP_DOTNET_VERSION,
                     ProviderRuntimeStatus.State.BLOCKED, Optional.empty(),
-                    "scip-dotnet 0.2.14 requires .NET SDK 10+; dotnet --version=" + sanitize(sdk.output()));
+                    ExternalPrerequisite.of("scip-dotnet 0.2.14 requires .NET SDK 10+; the dotnet found on PATH is older or cannot report its version"));
         }
         Path directory = dotnetDirectory();
         Path executable = managedExecutable(directory, "scip-dotnet");
@@ -365,7 +365,8 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
                     && !Files.isSymbolicLink(marker)
                     && readBoundedText(marker, 4L * 1024L, "managed runtime integrity marker")
                             .trim().equals(directoryDigest(directory));
-        } catch (IOException exception) {
+        } catch (IOException | RuntimeException exception) {
+            // A junction or a vanished entry makes Files.walk throw UncheckedIOException: that is a failed verification.
             return false;
         }
     }

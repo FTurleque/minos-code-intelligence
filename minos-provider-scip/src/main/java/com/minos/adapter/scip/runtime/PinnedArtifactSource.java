@@ -37,6 +37,9 @@ final class PinnedArtifactSource {
 
     enum Origin { EMBEDDED, DOWNLOADED }
 
+    /** What to do about a refused or damaged payload. */
+    static final String REINSTALL_HINT = "; reinstall the MINOS package to restore the shipped tools";
+
     private static final String USER_AGENT_HEADER = "User-Agent";
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration REQUEST_TIMEOUT = Duration.ofMinutes(3);
@@ -96,9 +99,15 @@ final class PinnedArtifactSource {
             boolean allowNetwork
     ) throws IOException, InterruptedException {
         if (artifact.embedded() && payloadFailure != null) {
-            throw new EmbeddedToolIntegrityException(payloadFailure);
+            throw new EmbeddedToolIntegrityException(payloadFailure + REINSTALL_HINT);
         }
-        Optional<Path> shipped = payload == null ? Optional.empty() : payload.artifactFile(artifact);
+        Optional<Path> shipped;
+        try {
+            shipped = payload == null ? Optional.empty() : payload.artifactFile(artifact);
+        } catch (IOException damaged) {
+            throw new EmbeddedToolIntegrityException(
+                    "embedded tool " + artifact.id() + " is missing from the distribution or is not a regular file" + REINSTALL_HINT);
+        }
         if (shipped.isPresent()) {
             copyAndVerify(artifact, shipped.orElseThrow(), partial, maxBytes);
             return Origin.EMBEDDED;
@@ -130,7 +139,14 @@ final class PinnedArtifactSource {
             throw new EmbeddedToolIntegrityException(
                     "the distribution manifest does not list the embedded component " + component.id());
         }
-        copyVerified(payload.file(entry), partial, entry.sha256(), entry.sizeBytes(), maxBytes, component.id());
+        Path file;
+        try {
+            file = payload.file(entry);
+        } catch (IOException damaged) {
+            throw new EmbeddedToolIntegrityException(
+                    "embedded component " + component.id() + " is missing from the distribution or is not a regular file" + REINSTALL_HINT);
+        }
+        copyVerified(file, partial, entry.sha256(), entry.sizeBytes(), maxBytes, component.id());
     }
 
     private static void copyAndVerify(
@@ -157,14 +173,14 @@ final class PinnedArtifactSource {
         } catch (IOException failure) {
             Files.deleteIfExists(partial);
             throw new EmbeddedToolIntegrityException(
-                    "embedded tool " + label + " is larger than the pinned artifact or unreadable");
+                    "embedded tool " + label + " is larger than the pinned artifact or unreadable" + REINSTALL_HINT);
         }
         String actual = Sha256.hex(digest);
         boolean sizeOk = expectedSize <= 0L || Files.size(partial) == expectedSize;
         if (!sizeOk || !expectedSha256.equals(actual)) {
             Files.deleteIfExists(partial);
             throw new EmbeddedToolIntegrityException("embedded tool " + label
-                    + " does not match its pinned SHA-256 and was refused");
+                    + " does not match its pinned SHA-256 and was refused" + REINSTALL_HINT);
         }
     }
 
