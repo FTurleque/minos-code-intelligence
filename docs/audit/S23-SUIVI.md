@@ -385,7 +385,7 @@ Rebase fait par le pilote (un conflit, dans ce fichier, résolu : les listes « 
 
 `./mvnw clean verify` complet unique sur le HEAD rebasé (depuis Bash) : **BUILD SUCCESS**, 15 min 25 s, 0 échec ; `check-jacoco.py` SUCCESS (m24 PASS).
 
-Zips reconstruits depuis le HEAD rebasé, dans `%LOCALAPPDATA%\minos-d1-scratch\dist-final` : complet `minos-1.3.0-SNAPSHOT-windows-x64.zip` (220,31 Mio, SHA-256 `CA348592AF3C7E20322195143C140A2DAFAB6104B138927B80A04F36CD85E0CF`), lite `minos-1.3.0-SNAPSHOT-windows-x64-lite.zip` (67,20 Mio, SHA-256 `1D2DDA41C12691898898DE9876A0BAB5F86C3E30E55649B8D98636A761344EA1`) ; `check-tools-manifest.py --distribution` vert sur les deux (`--variant lite` pour le lite) ; `qualify-offline-install.ps1 -AllowOnline` sur le nouveau zip complet : tous les contrôles PASS (témoin positif du canari 1 connexion, 0 tentative pendant la run, scip-typescript READY embarqué, indexation TypeScript SUCCEEDED).
+Zips reconstruits depuis le HEAD rebasé, dans `%LOCALAPPDATA%\minos-d1-scratch\dist-final` : complet `minos-1.3.0-SNAPSHOT-windows-x64.zip` (220,32 Mio après les correctifs V25 à V34 et de CI, SHA-256 `FF494F3CDBBA3739F76ECBF74EDCFE8390C6F716C01AB4B05393FFE6074BC040`), lite `minos-1.3.0-SNAPSHOT-windows-x64-lite.zip` (67,20 Mio, SHA-256 `BEF9DF4697B686EE74F0DC834796B6F9930593C846585005888BCD04CE058AF9`) ; `check-tools-manifest.py --distribution` vert sur les deux (`--variant lite` pour le lite) ; `qualify-offline-install.ps1 -AllowOnline` sur le nouveau zip complet : tous les contrôles PASS (témoin positif du canari 1 connexion, 0 tentative pendant la run, scip-typescript READY embarqué, indexation TypeScript SUCCEEDED).
 
 ### Observation réseau en lecture seule (complément du canari)
 
