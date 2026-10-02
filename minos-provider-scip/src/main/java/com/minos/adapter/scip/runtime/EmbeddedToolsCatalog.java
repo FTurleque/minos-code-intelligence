@@ -14,6 +14,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * The single description of the tools MINOS ships or installs, loaded from the packaged
  * {@code embedded-tools.json}.
@@ -224,9 +226,5 @@ public final class EmbeddedToolsCatalog {
         JsonNode value = node.path(field);
         if (!value.isTextual()) throw new IllegalArgumentException("tools catalogue field must be text: " + field);
         return value.asText();
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
     }
 }
