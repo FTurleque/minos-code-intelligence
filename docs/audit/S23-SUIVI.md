@@ -234,6 +234,8 @@ Non prouvé : GPU (aucun GPU ici ; la configuration n'en monte pas) ; volume nom
 
 **Prod de l'utilisateur** : `minos-mcp-prod`, `…-ollama-1`, `…-postgres-1` jamais redémarrés ni modifiés (lecture des compteurs cgroup par `docker exec cat`). Ressources Docker de la mesure (`minos-s11-*`, `s11lim*`, conteneurs de test) supprimées.
 
+**Passage 2 (révision V6 à V17 et demandes du propriétaire)** : `./mvnw clean verify` complet rejoué après tous les changements (Java touché : constructeur délégué, V12) : **BUILD SUCCESS, 17 min 32 s**, aucun test instable cette fois ; `check-jacoco.py` : 25 PASS, m24 FAIL préexistant (inchangé) ; gates identiques à la baseline (14/511/45 ; 511/37/8/4 ; 70) ; `check-image-pins.py` (18 cas d'auto-test) et `check-compose-limits.py` (21 cas) verts ; `rhysd/actionlint` sur `pr-ci.yml` : code 0 ; 12 golden inchangés. Commits : `4991aef4` (V6, V10), `560663d4` (V7, câblage), `afa287e3` (diagnostics, surcharges), `120e8ac4` (V12), `2f4ee385` (docs, suivi), puis le commit de ce relevé.
+
 ### Journal du lot 1 (un commit = une entrée)
 
 | # | Commit | Contenu | Preuve |
