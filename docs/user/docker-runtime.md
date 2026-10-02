@@ -235,6 +235,10 @@ $Docker = '.\docker\scripts\prod-mcp-release.ps1'
 
 Quand un provider s'exécute (hôte natif), ses sorties Java, TypeScript, C/C++, C#, Go et Rust restent sous le run directory MINOS. Tout provider exigeant une écriture dans `/workspace/projects` doit échouer et être corrigé ; le mount projet ne doit pas être rendu writable.
 
+### Mise à jour d'une installation existante : nom du fichier compose
+
+Les fichiers compose livrés s'appellent `compose-mcp.prod.yaml` et `compose-mcp.connected.yaml` (ils s'appelaient `compose.mcp.prod.yaml` et `compose.mcp.connected.yaml`). La copie active du runtime (`%LOCALAPPDATA%\MINOS\docker\runtime`) est **renommée automatiquement**, contenu intact (profil connecté compris), par la première action qui suit la mise à jour (`Start`, `Status`, `Install`...) : les conteneurs, volumes et le projet Compose (`MINOS_COMPOSE_PROJECT`) ne changent pas, rien n'est recréé du seul fait du renommage. Si l'ancien et le nouveau fichier coexistent, le nouveau est utilisé, l'ancien n'est ni supprimé ni écrasé et un avertissement le signale : le supprimer à la main après vérification. Un `Install` retire l'ancien fichier.
+
 ## Limites de ressources
 
 Chaque service des deux fichiers compose a un plafond **mémoire** et **PID**, défini une fois par rôle (blocs `x-limits-<rôle>` en tête de `docker/compose-mcp.prod.yaml` et `docker/compose-mcp.connected.yaml`, identiques dans les deux) et surchargeable depuis le `.env` du runtime. `memswap_limit` égale `mem_limit` : aucun swap. Les variables, leurs défauts et leurs unités sont aussi listés dans [`docker/.env.example`](../../docker/.env.example). Une ligne `MINOS_<RÔLE>_…` ajoutée au `.env` survit à une mise à jour (l'installation régénère le `.env` et reporte ces lignes). Docker applique ces clés hors Swarm : vérifié par `docker inspect` et par les fichiers cgroup du conteneur (`memory.max`, `memory.swap.max`, `pids.max`).
