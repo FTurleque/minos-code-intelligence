@@ -266,7 +266,10 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Set<Path> readRoots = new LinkedHashSet<>();
         Set<Path> readFiles = new LinkedHashSet<>();
         Set<Path> writeRoots = new LinkedHashSet<>();
-        Path tools = minosHome.resolve("tools").toAbsolutePath().normalize();
+        // Compared with real paths (every provider path below is resolved with toRealPath), so the managed
+        // root is also recognized when MINOS_HOME is spelled with an 8.3 short name, a junction or a drive
+        // substitution; a root that does not exist yet keeps its normalized spelling.
+        Path tools = realOrNormalized(minosHome.resolve("tools"));
         // The JVM running MINOS itself (System.getProperty("java.home")) is never added here: it is
         // the host process, not a provider runtime, and no IndexerProcessPlan ever invokes it. Adding
         // it unconditionally used to grant AppContainer ACL access to whatever JDK happens to be
@@ -534,6 +537,15 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Path normalizedParent = parent.toAbsolutePath().normalize();
         if (normalizedParent.equals(providerRoot) || !normalizedParent.startsWith(providerRoot)) return;
         addReadRoot(roots, normalizedParent);
+    }
+
+    private static Path realOrNormalized(Path path) {
+        Path normalized = path.toAbsolutePath().normalize();
+        try {
+            return normalized.toRealPath();
+        } catch (IOException notResolvable) {
+            return normalized;
+        }
     }
 
     private static Path managedRuntimeRoot(Path value, Path tools) {
