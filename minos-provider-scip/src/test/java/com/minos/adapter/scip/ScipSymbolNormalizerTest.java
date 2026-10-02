@@ -282,4 +282,12 @@ class ScipSymbolNormalizerTest {
             }
         }
     }
+
+    @Test
+    void aNullFactIsRefusedWithAMessageNotWithALaterNullPointer() {
+        org.junit.jupiter.api.Assertions.assertEquals("fact",
+                org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
+                        () -> normalizer.normalize(null, PROJECT_ONE, null, "file", null, JAVA_PROVIDER, "1", RUN_ONE, false))
+                        .getMessage());
+    }
 }
