@@ -2,6 +2,7 @@
 """Fail-closed invariants for the MNE-01..MNE-17 remediation campaign."""
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -126,12 +127,18 @@ def main() -> int:
         forbid("TokenEstimator.java", token, "getBytes(StandardCharsets.UTF_8)", "while (low < high)")
 
         # MNE-15/16: exact NuGet package pin and bounded managed-runtime integrity traversal.
+        # D1: the nupkg SHA-256 is no longer a Java literal: it is the pinned hash of embedded-tools.json (the single
+        # description of the shipped tools), compared by PinnedArtifactSource before anything is installed.
         require("ManagedPolyglotScipRuntimeManager.java", polyglot,
-                "DOTNET_PACKAGE_SHA256", "downloadPinnedDotnetPackage", "pinned-nuget-source",
+                "DOTNET_PACKAGE_ID", "downloadPinnedDotnetPackage", "pinned-nuget-source",
+                "MAX_DOTNET_PACKAGE_BYTES", "PinnedArtifactSource.forHost().acquire(",
                 "MAX_MANAGED_TRAVERSAL_ENTRIES", "MAX_MANAGED_FILES", "MAX_MANAGED_BYTES")
-        match = re.search(r'DOTNET_PACKAGE_SHA256 = "([0-9a-f]{64})"', polyglot)
-        if not match:
-            raise RuntimeError("ManagedPolyglotScipRuntimeManager.java: scip-dotnet SHA-256 is not immutable")
+        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/PinnedArtifactSource.java")
+        require("PinnedArtifactSource.java", pinned, "artifact.sha256().equals(actual)")
+        catalogue = json.loads(read("minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/embedded-tools.json"))
+        nupkg = [a for a in catalogue["artifacts"] if a["id"] == "scip-dotnet-nupkg"]
+        if len(nupkg) != 1 or not re.fullmatch(r"[0-9a-f]{64}", nupkg[0]["sha256"]):
+            raise RuntimeError("embedded-tools.json: scip-dotnet SHA-256 is not immutable")
         forbid("ManagedPolyglotScipRuntimeManager.java", polyglot,
                'DOTNET_SOURCE = "https://api.nuget.org/v3/index.json"', ".sorted(Comparator.comparing(path -> portable(directory.relativize(path))))\n                    .toList()")
 

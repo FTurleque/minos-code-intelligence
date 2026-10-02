@@ -33,11 +33,13 @@ function New-FixturePackage {
         [string] $Root,
         [string] $Version,
         [switch] $IncludeObsoleteFile,
-        [switch] $IncludeNewMarker
+        [switch] $IncludeNewMarker,
+        [switch] $Lite
     )
     foreach ($Directory in @('app', 'lib', 'docker\scripts', 'integration', 'supply-chain')) {
         New-Item -ItemType Directory -Force -Path (Join-Path $Root $Directory) | Out-Null
     }
+    if (-not $Lite) { New-Item -ItemType Directory -Force -Path (Join-Path $Root 'tools\artifacts') | Out-Null }
     "fake-exe-$Version" | Set-Content -LiteralPath (Join-Path $Root 'app\minos.exe') -Encoding ascii
     "fake-jar-$Version" | Set-Content -LiteralPath (Join-Path $Root 'lib\minos.jar') -Encoding ascii
     "# switch-mcp-backend $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\switch-mcp-backend.ps1') -Encoding ascii
@@ -58,6 +60,11 @@ function New-FixturePackage {
     "# configure-m30-docker-services $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\configure-m30-docker-services.ps1') -Encoding ascii
     '{"bomFormat":"CycloneDX"}' | Set-Content -LiteralPath (Join-Path $Root 'supply-chain\minos.cdx.json') -Encoding ascii
     "Third party notices $Version" | Set-Content -LiteralPath (Join-Path $Root 'supply-chain\THIRD-PARTY-NOTICES.txt') -Encoding ascii
+    if (-not $Lite) {
+        ([ordered]@{ formatVersion = 1; platform = 'windows-x64'; files = @() } | ConvertTo-Json) |
+            Set-Content -LiteralPath (Join-Path $Root 'tools\TOOLS-MANIFEST.json') -Encoding ascii
+        "tool-payload-$Version" | Set-Content -LiteralPath (Join-Path $Root 'tools\artifacts\payload.bin') -Encoding ascii
+    }
     "@echo off`r`nrem minos $Version" | Set-Content -LiteralPath (Join-Path $Root 'minos.cmd') -Encoding ascii
     "@echo off`r`nrem minos-mcp $Version" | Set-Content -LiteralPath (Join-Path $Root 'minos-mcp.cmd') -Encoding ascii
     "java.base" | Set-Content -LiteralPath (Join-Path $Root 'RUNTIME-MODULES.txt') -Encoding ascii
@@ -72,6 +79,7 @@ function New-FixturePackage {
 
     if ($IncludeObsoleteFile) {
         'obsolete' | Set-Content -LiteralPath (Join-Path $Root 'app\obsolete.txt') -Encoding ascii
+        if (-not $Lite) { 'obsolete tool' | Set-Content -LiteralPath (Join-Path $Root 'tools\artifacts\obsolete-tool.bin') -Encoding ascii }
     }
     if ($IncludeNewMarker) {
         "new-$Version" | Set-Content -LiteralPath (Join-Path $Root 'app\new.txt') -Encoding ascii
@@ -191,6 +199,8 @@ try {
     Assert-True ((Get-Content -LiteralPath (Join-Path $OutsideDataRoot 'preserve.marker') -Raw).Trim() -eq 'user-data') 'Data outside InstallRoot was touched by the upgrade.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot '.install-staging'))) 'Staging residue left after a clean upgrade.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot '.install-rollback'))) 'Rollback residue left after a clean upgrade.'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot 'tools\artifacts\obsolete-tool.bin'))) 'Stale tool payload file from v1 survived the upgrade to v2.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $MainRoot 'tools\artifacts\payload.bin') -Raw).Trim() -eq 'tool-payload-1.1.0') 'The v2 tools payload was not activated.'
     Write-Host 'Scenario 3/5 (fresh install + clean upgrade, stale-file cleanup, preservation) PASS' -ForegroundColor Green
 
     # --- Scenario 6: synchronous rollback on an injected activation failure ---
@@ -207,6 +217,43 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot '.install-staging'))) 'Staging residue left after rollback.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot '.install-rollback'))) 'Rollback residue left after rollback.'
     Write-Host 'Scenario 6 (synchronous rollback on injected activation failure) PASS' -ForegroundColor Green
+
+    # --- Scenario 6b: the tools directory is activated (entry 6 of the staged directories), then the
+    # activation fails: rollback must put the previous tools payload back, not leave v3 tools beside v2 ---
+    $Threw6b = $false
+    try { Invoke-UpdaterInProcess -PackageRoot $PackageV3 -InstallRoot $MainRoot -TestFailActivationAfterEntries 6 }
+    catch {
+        $Threw6b = $true
+        Assert-True ($_.Exception.Message -like '*MINOS_UPDATE_TEST_ACTIVATION_FAILURE*') "Expected MINOS_UPDATE_TEST_ACTIVATION_FAILURE, got: $($_.Exception.Message)"
+    }
+    Assert-True $Threw6b 'Injected activation failure after the tools directory did not propagate.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $MainRoot 'tools\artifacts\payload.bin') -Raw).Trim() -eq 'tool-payload-1.1.0') 'The tools payload was not restored to its pre-upgrade content after rollback.'
+    Assert-True ((Get-VersionLine $MainRoot) -eq $PreFailureVersion) 'Install root was not restored after a rollback that had already activated tools.'
+    Write-Host 'Scenario 6b (rollback restores the tools payload) PASS' -ForegroundColor Green
+
+    # --- Scenario 6c: a lite package (no tools\) installed over a full installation removes the managed
+    # tools\ transactionally: gone after the upgrade, restored when the activation fails afterwards ---
+    $LiteRoot = Join-Path $Sandbox 'scenario6c-lite-over-full'
+    $PackageFull = Join-Path $Sandbox 'package-full-6c'
+    $PackageLite = Join-Path $Sandbox 'package-lite-6c'
+    New-FixturePackage -Root $PackageFull -Version '2.0.0'
+    New-FixturePackage -Root $PackageLite -Version '2.1.0' -Lite
+    Invoke-UpdaterInProcess -PackageRoot $PackageFull -InstallRoot $LiteRoot
+    Assert-True (Test-Path -LiteralPath (Join-Path $LiteRoot 'tools\artifacts\payload.bin')) 'Full package did not install its tools payload.'
+    $Threw6c = $false
+    try { Invoke-UpdaterInProcess -PackageRoot $PackageLite -InstallRoot $LiteRoot -TestFailActivationAfterEntries 6 }
+    catch { $Threw6c = $true }
+    Assert-True $Threw6c 'Injected activation failure during the lite upgrade did not propagate.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $LiteRoot 'tools\artifacts\payload.bin') -Raw).Trim() -eq 'tool-payload-2.0.0') 'The removed tools payload was not restored by the rollback.'
+    Invoke-UpdaterInProcess -PackageRoot $PackageLite -InstallRoot $LiteRoot
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $LiteRoot 'tools'))) 'The managed tools directory survived a lite upgrade.'
+    Assert-True ((Get-VersionLine $LiteRoot) -match '2\.1\.0') 'The lite package was not activated.'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $LiteRoot '.install-rollback'))) 'Rollback residue left after the lite upgrade.'
+    $PackageLite2 = Join-Path $Sandbox 'package-lite-6c-second'
+    New-FixturePackage -Root $PackageLite2 -Version '2.2.0' -Lite
+    Invoke-UpdaterInProcess -PackageRoot $PackageLite2 -InstallRoot $LiteRoot
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $LiteRoot 'tools'))) 'A lite over lite upgrade created a tools directory.'
+    Write-Host 'Scenario 6c (lite over full: tools removed, restored on rollback) PASS' -ForegroundColor Green
 
     # --- Scenario 7: crash mid-activation (FailFast, detached child process),
     # then next-launch recovery converges to a clean, requested state ---

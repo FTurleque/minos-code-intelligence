@@ -116,8 +116,7 @@ def require_contained_cgroup_delegation() -> None:
     # inside the delegated subtree, otherwise the cgroup path silently degrades to SKIPPED tests.
     for relative in (
         ".github/workflows/pr-ci.yml",
-        ".github/workflows/m19-advanced-code-intelligence.yml",
-        ".github/workflows/m20-semantic-hybrid-intelligence.yml",
+        ".github/workflows/historical-qualification.yml",
     ):
         require(relative, read(relative), "delegate-linux-cgroup.sh --attach-pid $$")
 

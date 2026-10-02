@@ -54,7 +54,7 @@ java -jar $minos doctor
 
 ## Parcours autonome
 
-La distribution actuelle n'embarque aucun indexeur : `tools install` télécharge le provider et ses dépendances (Coursier/Maven, Node.js/npm…) et nécessite un accès réseau. L'auto-portance (indexeurs embarqués, amorçage hors ligne) est décidée par l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md) mais n'est pas encore implémentée.
+Depuis le checkout, `tools install` télécharge le provider et ses dépendances (Coursier/Maven, Node.js/npm…) et nécessite un accès réseau. La **distribution Windows complète**, elle, embarque les indexeurs scip-java et scip-typescript et les amorce sans réseau (voir [l'installation de production](production-installation.md), §2 bis, et l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md)) : la commande ci-dessous n'est alors qu'une mise à jour explicite.
 
 ```powershell
 java -jar $minos tools install scip-java
@@ -96,7 +96,8 @@ Il :
 - exige notamment `java.xml` ;
 - écrit `RUNTIME-MODULES.txt` ;
 - génère SBOM/notices/manifest ;
-- produit le ZIP portable.
+- construit `tools\` (indexeurs embarqués) avec `scripts/release/build-embedded-tools.py`, qui lit `embedded-tools.json` (aucune liste ni empreinte propre au script), et vérifie le résultat avec `scripts/quality/check-tools-manifest.py --distribution` ;
+- produit le ZIP portable ; `-Variant lite` (avec `-ReuseBuild` pour ne pas relancer Maven) produit `minos-<version>-windows-x64-lite.zip`, sans `tools\`.
 
 ## Construire le setup local à vérifier avant release
 

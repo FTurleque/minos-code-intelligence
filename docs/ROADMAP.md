@@ -133,6 +133,6 @@ La ligne de développement courante est **1.1.0-SNAPSHOT**. Aucune release 1.1.0
 | Sujet | Décision | État |
 |---|---|---|
 | Reprise d'une indexation interrompue (crash, reboot, terminal fermé) sans tout réindexer | [ADR 0039](adr/0039-reprise-indexation-apres-interruption.md) | conception proposée |
-| Distribution auto-portante : les indexeurs sont livrés dans le paquet, plus aucune étape `tools install` à la charge de l'utilisateur | [ADR 0040](adr/0040-distribution-auto-portante-indexeurs-embarques.md) | conception proposée |
+| Distribution auto-portante : les indexeurs sont livrés dans le paquet, plus aucune étape `tools install` à la charge de l'utilisateur | [ADR 0040](adr/0040-distribution-auto-portante-indexeurs-embarques.md) | implémentée (scip-java, scip-typescript ; qualification hors ligne physique à confirmer) |
 
 Aucun nouveau jalon fonctionnel n'est ouvert. La dette durable de sécurité reste le hard filesystem quota pour une exécution réellement hostile : une primitive qui refuse l'écriture avant dépassement reste nécessaire avant de pouvoir renforcer cette claim. Les autres travaux doivent préserver les gates exact-head et la topologie `main ⊆ develop`.

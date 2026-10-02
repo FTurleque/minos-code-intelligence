@@ -266,7 +266,10 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Set<Path> readRoots = new LinkedHashSet<>();
         Set<Path> readFiles = new LinkedHashSet<>();
         Set<Path> writeRoots = new LinkedHashSet<>();
-        Path tools = minosHome.resolve("tools").toAbsolutePath().normalize();
+        // Compared with real paths (every provider path below is resolved with toRealPath), so the managed
+        // root is also recognized when MINOS_HOME is spelled with an 8.3 short name, a junction or a drive
+        // substitution; a root that does not exist yet keeps its normalized spelling.
+        Path tools = realOrNormalized(minosHome.resolve("tools"));
         // The JVM running MINOS itself (System.getProperty("java.home")) is never added here: it is
         // the host process, not a provider runtime, and no IndexerProcessPlan ever invokes it. Adding
         // it unconditionally used to grant AppContainer ACL access to whatever JDK happens to be
@@ -508,12 +511,40 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             Path real = candidate.toRealPath();
             if (isWindowsSystemRoot(real)) return;
             if (real.startsWith(tools)) {
-                addReadRoot(roots, managedRuntimeRoot(real, tools));
+                Path root = managedRuntimeRoot(real, tools);
+                addReadRoot(roots, root);
+                addProtectedParentReadRoot(roots, real, root);
             } else if (Files.isRegularFile(real)) {
                 addReadFile(files, real);
             }
         } catch (IOException | InvalidPathException ignored) {
             // Non-path provider arguments intentionally stay opaque.
+        }
+    }
+
+    /**
+     * A directory MINOS made through private storage does not inherit from its parent, so the
+     * inheritable entry granted on the provider root never reaches a file kept in such a directory
+     * (the scip-java runner sits in {@code runtime}, next to the file it reads). The directory holding
+     * a managed file argument therefore gets its own grant when it is not the root itself. The path is
+     * a real path under the provider root, so its parent is under that root too: the grant never
+     * widens to {@code tools} or to the MINOS home, and a link leaving the root never reaches here.
+     */
+    private static void addProtectedParentReadRoot(Set<Path> roots, Path realFile, Path providerRoot) {
+        if (!Files.isRegularFile(realFile)) return;
+        Path parent = realFile.getParent();
+        if (parent == null) return;
+        Path normalizedParent = parent.toAbsolutePath().normalize();
+        if (normalizedParent.equals(providerRoot) || !normalizedParent.startsWith(providerRoot)) return;
+        addReadRoot(roots, normalizedParent);
+    }
+
+    private static Path realOrNormalized(Path path) {
+        Path normalized = path.toAbsolutePath().normalize();
+        try {
+            return normalized.toRealPath();
+        } catch (IOException notResolvable) {
+            return normalized;
         }
     }
 

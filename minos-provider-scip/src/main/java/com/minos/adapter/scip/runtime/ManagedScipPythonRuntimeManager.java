@@ -74,13 +74,13 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
     public ProviderRuntimeStatus inspect(String providerId) {
         requireProvider(providerId);
         List<String> diagnostics = new ArrayList<>();
-        if (CommandLocator.find("node").isEmpty()) diagnostics.add("Node.js 16+ is required by scip-python");
-        if (CommandLocator.find("npm").isEmpty()) diagnostics.add("npm is required to install scip-python");
+        if (CommandLocator.find("node").isEmpty()) diagnostics.add(ExternalPrerequisite.of("Node.js 16+ is required by scip-python"));
+        if (CommandLocator.find("npm").isEmpty()) diagnostics.add(ExternalPrerequisite.of("npm is required to install scip-python"));
         Optional<Path> python = pythonExecutable();
         if (python.isEmpty()) {
-            diagnostics.add("Python 3.10+ is required in PATH by scip-python");
+            diagnostics.add(ExternalPrerequisite.of("Python 3.10+ is required in PATH by scip-python"));
         } else if (pipExecutable(python.orElseThrow()).isEmpty()) {
-            diagnostics.add("pip is required by scip-python and must be available with the selected Python runtime");
+            diagnostics.add(ExternalPrerequisite.of("pip is required by scip-python and must be available with the selected Python runtime"));
         }
         Path executable = executable();
         boolean installed = Files.isRegularFile(executable);

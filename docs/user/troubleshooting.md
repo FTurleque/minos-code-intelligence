@@ -69,7 +69,7 @@ Causes typiques :
 - aucun provider qualifié pour le langage/build détecté ;
 - runtime provider non installé ;
 - `JAVA_HOME` absent ou ne contenant pas `javac` pour `scip-java` ;
-- `node`/`npm` absents pour `scip-typescript` ;
+- `node`/`npm` absents pour `scip-typescript` hors Windows (sous Windows, Node.js est livré dans la distribution complète) ;
 - configuration projet non supportée par la qualification courante.
 
 Installer un provider :
@@ -82,7 +82,7 @@ minos.cmd tools install scip-typescript
 
 ## `scip-java` est `BLOCKED`
 
-`scip-java` utilise le JDK du projet, pas le runtime Java embarqué de MINOS.
+`scip-java` utilise le JDK du projet, pas le runtime Java embarqué de MINOS. Sur Windows, le poste doit fournir, en plus des outils livrés par MINOS (Coursier, Maven, classpath de scip-java) : un **JDK complet** (`JAVA_HOME` avec `javac.exe` et `jar.exe`), **Git for Windows** (`Git\bin\bash.exe`), **Windows PowerShell 5.1** et `csc.exe` (livrés par Windows). Chaque manque est nommé par `minos.cmd doctor` avec le préfixe `machine prerequisite (not shipped by MINOS)`.
 
 Vérifier :
 

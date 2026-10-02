@@ -199,10 +199,9 @@ def main() -> int:
                 "MINOS_SANDBOX_CGROUP_ROOT", "cgroup.subtree_control", "cgroup.procs")
         require(".github/workflows/pr-ci.yml", read(".github/workflows/pr-ci.yml"),
                 "scripts/remediation/check-minos-01.py", "scripts/ci/delegate-linux-cgroup.sh")
-        for relative in (
-            ".github/workflows/m19-advanced-code-intelligence.yml",
-            ".github/workflows/m20-semantic-hybrid-intelligence.yml",
-        ):
+        # M19 and M20 once repeated pr-ci's Linux job (audit C2); the only other workflow that runs the
+        # qualified Linux sandbox workload today is the manual historical replay.
+        for relative in (".github/workflows/historical-qualification.yml",):
             require(relative, read(relative), "scripts/ci/delegate-linux-cgroup.sh")
 
         print("MINOS-01 WORKER RESOURCE CONTAINMENT INVARIANTS SUCCESS")
