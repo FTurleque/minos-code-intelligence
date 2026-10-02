@@ -30,13 +30,13 @@ class JGitRemoteRepositoryMaterializerTest {
     void clonesOnceReusesAValidatedCacheAndNeverPersistsCredentialMaterial(@TempDir Path temp) throws Exception {
         Path source = createRepository(temp.resolve("source"));
         String commit = head(source);
-        RemoteRepositoryRequest request = request(commit, "MINOS_TEST_REMOTE_TOKEN");
+        RemoteRepositoryRequest request = request(commit, "MINOS_REMOTE_TOKEN");
         AtomicInteger clones = new AtomicInteger();
         AtomicReference<char[]> resolvedSecret = new AtomicReference<>();
         JGitRemoteRepositoryMaterializer materializer = materializer(
                 temp.resolve("home"), new RemoteRepositoryCachePolicy(2, 1024L * 1024L), source, clones,
                 name -> {
-                    assertEquals("MINOS_TEST_REMOTE_TOKEN", name);
+                    assertEquals("MINOS_REMOTE_TOKEN", name);
                     char[] value = "super-secret-token".toCharArray();
                     resolvedSecret.set(value);
                     return Optional.of(value);
@@ -55,7 +55,7 @@ class JGitRemoteRepositoryMaterializerTest {
             String metadata = Files.readString(first.repositoryRoot().getParent().resolve("entry.properties"));
             String gitConfig = Files.readString(first.repositoryRoot().resolve(".git/config"));
             assertFalse(metadata.contains("super-secret-token"));
-            assertFalse(metadata.contains("MINOS_TEST_REMOTE_TOKEN"));
+            assertFalse(metadata.contains("MINOS_REMOTE_TOKEN"));
             assertFalse(gitConfig.contains("super-secret-token"));
             assertEquals("https://github.com/acme/demo.git", request.canonicalRepositoryUri());
         } finally {
@@ -112,10 +112,10 @@ class JGitRemoteRepositoryMaterializerTest {
         }
         assertThrows(Exception.class, () -> materializer.materialize(request("c".repeat(40), null)));
         RemoteRepositoryRequest privateRequest = RemoteRepositoryRequest.of(
-                "https://github.com/acme/private", "main", secondCommit, "fixtures/java", "MISSING_REMOTE_TOKEN");
+                "https://github.com/acme/private", "main", secondCommit, "fixtures/java", "MINOS_REMOTE_TOKEN_MISSING");
         IllegalStateException missingSecret = assertThrows(
                 IllegalStateException.class, () -> materializer.materialize(privateRequest));
-        assertFalse(missingSecret.getMessage().contains("MISSING_REMOTE_TOKEN"));
+        assertFalse(missingSecret.getMessage().contains("MINOS_REMOTE_TOKEN_MISSING"));
     }
 
     @Test

@@ -159,7 +159,7 @@ class CliValidInvocationsTest {
         String commit = "0123456789012345678901234567890123456789";
         calls.clear();
         assertEquals(1, cli().run(("remote materialize https://github.com/a/b --ref main --commit " + commit
-                + " --subdir s --credential-env TOK --format json").split(" "), new StringBuilder(), new StringBuilder()));
+                + " --subdir s --credential-env MINOS_REMOTE_TOKEN --format json").split(" "), new StringBuilder(), new StringBuilder()));
         assertEquals(1, calls.size());
         assertTrue(calls.getFirst().startsWith("materialize["), calls.toString());
         assertTrue(calls.getFirst().contains("main") && calls.getFirst().contains(commit), calls.toString());

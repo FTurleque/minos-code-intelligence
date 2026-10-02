@@ -47,10 +47,10 @@ class ExecutionCommandsArgumentRulesTest {
         CliArgumentRules rules = new CliArgumentRules(home);
         rules.check(command("remote materialize",
                 "remote materialize https://github.com/a/b --ref main --commit " + COMMIT)
-                .text("--subdir", "s").text("--credential-env", "TOKEN").choice("--format", "json").refusalsOnly());
+                .text("--subdir", "s").text("--credential-env", "MINOS_REMOTE_TOKEN").choice("--format", "json").refusalsOnly());
         rules.check(command("remote index",
                 "remote index https://github.com/a/b --ref main --commit " + COMMIT + " --name n")
-                .text("--subdir", "s").text("--credential-env", "TOKEN").choice("--format", "json")
+                .text("--subdir", "s").text("--credential-env", "MINOS_REMOTE_TOKEN").choice("--format", "json")
                 .text("--provider", "scip-java").text("--worker", "w1").choice("--worker-network", "allow")
                 .refusalsOnly());
         rules.check(command("remote (ref)", "remote materialize https://github.com/a/b --commit " + COMMIT)

@@ -36,7 +36,7 @@ public final class RemoteIndexCommand {
 
             Common options:
               --subdir <relative-path>       Project root inside the repository
-              --credential-env <NAME>        Environment variable containing an HTTPS token
+              --credential-env <NAME>        MINOS_REMOTE_TOKEN[_SUFFIX] or the host's token variable
               --format <text|json>           Output format (default: text)
 
             Index options:

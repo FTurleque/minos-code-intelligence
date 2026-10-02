@@ -172,7 +172,7 @@ def main() -> int:
                       "token@github.com", "abc123", "../escape")
         require_facts("JGitRemoteRepositoryMaterializerTest.java", tests["JGitRemoteRepositoryMaterializerTest.java"],
                       "cache", "dirty", "evictsLeastRecentEntryAndRejectsUnexpectedCommitOrMissingSecret",
-                      "super-secret-token", "MISSING_REMOTE_TOKEN")
+                      "super-secret-token", "MINOS_REMOTE_TOKEN_MISSING")
         require_facts("DistributedArtifactManifestTest.java", tests["DistributedArtifactManifestTest.java"],
                       "v1ManifestRejectsNonRootScope", "v2AcceptsNonRootScopeAndNormalizesDot",
                       "rejectsAbsoluteBackslashNulAndOverscopedPaths")
