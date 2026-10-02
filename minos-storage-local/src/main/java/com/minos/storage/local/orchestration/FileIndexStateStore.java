@@ -1,5 +1,6 @@
 package com.minos.storage.local.orchestration;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
@@ -524,9 +525,9 @@ public final class FileIndexStateStore implements IndexStateStore {
                 }
             }
         }
-        Path temporary = Files.createTempFile(runLocatorRoot, ".ready-", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(runLocatorRoot, ".ready-", ".tmp");
         try {
-            Files.writeString(temporary, "format=1\n");
+            PrivateLocalStorage.writePrivateFile(temporary, ("format=1\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
             DurableAtomicFile.replace(temporary, ready, "run locator migration marker");
         } finally {
             Files.deleteIfExists(temporary);
@@ -646,7 +647,7 @@ public final class FileIndexStateStore implements IndexStateStore {
 
     private static void storeIo(Path file, Properties properties, String comment) throws IOException {
         DurableAtomicFile.ensureDirectory(file.getParent(), "index metadata directory");
-        Path temporary = Files.createTempFile(file.getParent(), ".state-", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(file.getParent(), ".state-", ".tmp");
         try {
             try (OutputStream output = Files.newOutputStream(temporary)) {
                 properties.store(output, comment);

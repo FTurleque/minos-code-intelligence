@@ -1,5 +1,6 @@
 package com.minos.integration.git;
 
+import com.minos.io.BoundedFileLease;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
 import com.minos.io.FileTreeOperations;
@@ -12,17 +13,13 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.Constants;
 
 import java.io.IOException;
-import java.io.Writer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
-import java.nio.channels.OverlappingFileLockException;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,7 +30,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * JGit HTTPS materializer with immutable revision checks, active-use leases and a bounded local cache.
@@ -49,7 +46,8 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private static final String REPOSITORY_DIRECTORY = "repository";
     private static final int MAX_CACHE_ROOT_SCAN_ENTRIES = 4_096;
     static final Duration LOCK_ACQUIRE_TIMEOUT = Duration.ofMinutes(2);
-    private static final long LOCK_POLL_MILLIS = 50L;
+    private static final int LOCK_STRIPES = 64;
+    private static final ReentrantLock[] JVM_LOCKS = locks();
 
     private final Path cacheRoot;
     private final Path locksRoot;
@@ -59,6 +57,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private final SecretResolver secretResolver;
     private final Clock clock;
     private final SharedCacheLeaseRegistry leases;
+    private final Duration lockTimeout;
 
     public JGitRemoteRepositoryMaterializer(Path minosHome) throws IOException {
         this(minosHome, RemoteRepositoryCachePolicy.DEFAULT);
@@ -76,6 +75,18 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             SecretResolver secretResolver,
             Clock clock
     ) throws IOException {
+        this(minosHome, cachePolicy, gitClient, secretResolver, clock, LOCK_ACQUIRE_TIMEOUT);
+    }
+
+    JGitRemoteRepositoryMaterializer(
+            Path minosHome,
+            RemoteRepositoryCachePolicy cachePolicy,
+            RemoteGitClient gitClient,
+            SecretResolver secretResolver,
+            Clock clock,
+            Duration lockTimeout
+    ) throws IOException {
+        this.lockTimeout = Objects.requireNonNull(lockTimeout, "lockTimeout");
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         Path remoteRoot = home.resolve("remote-cache");
         this.cacheRoot = remoteRoot.resolve("repositories");
@@ -100,9 +111,9 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         boolean success = false;
         try {
             Path lockFile = locksRoot.resolve(cacheKey + ".lock");
-            try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                 FileLock ignored = acquireFileLock(
-                         channel, LOCK_ACQUIRE_TIMEOUT, "remote materialization lock " + cacheKey)) {
+            ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(cacheKey.hashCode(), JVM_LOCKS.length)];
+            try (BoundedFileLease ignored = BoundedFileLease.acquire(
+                    lockFile, jvmLock, lockTimeout, "remote materialization lock " + cacheKey)) {
                 RemoteMaterialization result = materializeLocked(request, cacheKey);
                 success = true;
                 return result;
@@ -115,14 +126,9 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     @Override
     public void pin(RemoteMaterialization materialization) throws IOException {
         Path entry = validatedEntry(materialization);
-        Files.writeString(
+        PrivateLocalStorage.writePrivateFile(
                 entry.resolve(PIN_FILE),
-                "registeredAt=" + clock.instant() + System.lineSeparator(),
-                StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE
-        );
+                ("registeredAt=" + clock.instant() + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
     }
 
     @Override
@@ -192,56 +198,6 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         } finally {
             if (Files.exists(temporary)) deleteCacheTree(temporary);
         }
-    }
-
-    static FileLock acquireFileLock(FileChannel channel, Duration timeout, String description) throws IOException {
-        Objects.requireNonNull(channel, "channel");
-        Duration wait = Objects.requireNonNull(timeout, "timeout");
-        if (wait.isZero() || wait.isNegative()) throw new IllegalArgumentException("lock timeout must be positive");
-        String label = Objects.requireNonNull(description, "description");
-        long deadline = deadline(wait);
-        while (true) {
-            try {
-                FileLock lock = channel.tryLock();
-                if (lock != null) return lock;
-            } catch (OverlappingFileLockException unavailableInThisJvm) {
-                // A lock held through another channel in this JVM is still unavailable to this caller.
-            }
-            if (System.nanoTime() >= deadline) {
-                throw new IOException("timed out waiting for " + label + " after " + wait);
-            }
-            sleepUntilRetry(deadline, label);
-        }
-    }
-
-    private static long deadline(Duration timeout) {
-        long now = System.nanoTime();
-        long nanos;
-        try {
-            nanos = timeout.toNanos();
-        } catch (ArithmeticException overflow) {
-            return Long.MAX_VALUE;
-        }
-        return nanos > Long.MAX_VALUE - now ? Long.MAX_VALUE : now + nanos;
-    }
-
-    private static void sleepUntilRetry(long deadline, String description) throws IOException {
-        long remainingNanos = deadline - System.nanoTime();
-        if (remainingNanos <= 0L) return;
-        long convertedMillis = TimeUnit.NANOSECONDS.toMillis(remainingNanos);
-        long sleepMillis = boundedPollMillis(convertedMillis);
-        try {
-            Thread.sleep(sleepMillis);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("interrupted while waiting for " + description, interrupted);
-        }
-    }
-
-    private static long boundedPollMillis(long convertedMillis) {
-        if (convertedMillis <= 0L) return 1L;
-        if (convertedMillis > LOCK_POLL_MILLIS) return LOCK_POLL_MILLIS;
-        return convertedMillis;
     }
 
     private char[] resolveSecret(RemoteRepositoryRequest request) {
@@ -417,10 +373,9 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     }
 
     private static void writeProperties(Path file, Properties properties) throws IOException {
-        try (Writer writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
-            properties.store(writer, "MINOS remote cache metadata - no secrets");
-        }
+        StringWriter writer = new StringWriter();
+        properties.store(writer, "MINOS remote cache metadata - no secrets");
+        PrivateLocalStorage.writePrivateFile(file, writer.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     private static String required(Properties properties, String key) {
@@ -459,4 +414,10 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private record CacheEntry(Path repositoryRoot, Properties metadata, Instant materializedAt) { }
     private record EvictionCandidate(
             Path path, String cacheKey, Instant lastAccessAt, long size, boolean invalid) { }
+
+    private static ReentrantLock[] locks() {
+        ReentrantLock[] locks = new ReentrantLock[LOCK_STRIPES];
+        for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
+        return locks;
+    }
 }

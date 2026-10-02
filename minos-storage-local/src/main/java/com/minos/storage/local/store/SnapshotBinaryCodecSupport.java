@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.io.ConfinedFileOpener;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.Evidence;
@@ -162,7 +163,7 @@ final class SnapshotBinaryCodecSupport {
     static CodeKnowledgeSnapshot readKnowledgeSnapshotV3(Path file) throws IOException {
         requireSnapshotFileSize(file);
         try (BoundedInputStream boundedInput = new BoundedInputStream(
-                     Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS),
+                     ConfinedFileOpener.openRegularFileNoFollow(file),
                      MAX_PERSISTED_SNAPSHOT_BYTES,
                      KNOWLEDGE_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
@@ -176,7 +177,7 @@ final class SnapshotBinaryCodecSupport {
     static int readFormatVersion(Path file) throws IOException {
         requireSnapshotFileSize(file);
         // Unbuffered: exactly the eight header bytes are read, never the body.
-        try (DataInputStream input = new DataInputStream(Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS))) {
+        try (DataInputStream input = new DataInputStream(ConfinedFileOpener.openRegularFileNoFollow(file))) {
             return readHeaderVersion(input, SNAPSHOT_MAGIC, "snapshot");
         } catch (EOFException exception) {
             throw new IOException("truncated snapshot header", exception);
@@ -199,7 +200,7 @@ final class SnapshotBinaryCodecSupport {
     static SymbolSnapshot readSymbolSnapshotV1(Path file) throws IOException {
         requireSnapshotFileSize(file);
         try (BoundedInputStream boundedInput = new BoundedInputStream(
-                     Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS),
+                     ConfinedFileOpener.openRegularFileNoFollow(file),
                      MAX_PERSISTED_SNAPSHOT_BYTES,
                      SYMBOL_SNAPSHOT_LABEL);
              DataInputStream stream = new DataInputStream(new BufferedInputStream(boundedInput))) {
@@ -286,7 +287,7 @@ final class SnapshotBinaryCodecSupport {
     static CodeKnowledgeSnapshot readKnowledgeSnapshotV2(Path file) throws IOException {
         requireSnapshotFileSize(file);
         try (BoundedInputStream boundedInput = new BoundedInputStream(
-                     Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS),
+                     ConfinedFileOpener.openRegularFileNoFollow(file),
                      MAX_PERSISTED_SNAPSHOT_BYTES,
                      KNOWLEDGE_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {

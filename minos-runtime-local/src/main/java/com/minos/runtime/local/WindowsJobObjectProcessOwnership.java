@@ -108,15 +108,14 @@ final class WindowsJobObjectProcessOwnership {
 
     private static Path installLauncher(Path minosHome) throws IOException {
         Path directory = minosHome.resolve("sandbox").toAbsolutePath().normalize();
-        Files.createDirectories(directory);
+        PrivateLocalStorage.ensurePrivateDirectory(directory);
         Path target = directory.resolve(LAUNCHER_NAME);
         // Assembled from its template and the shared Win32 fragments, then published as one
         // self-contained file: the script that executes still has a single hash and no include path.
         String launcher = WindowsContainmentScript.assemble(LAUNCHER_NAME);
         Path partial = PrivateLocalStorage.createPrivateTempFile(directory, ".windows-job-owner-", ".ps1");
         try {
-            Files.writeString(partial, launcher, StandardCharsets.UTF_8,
-                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+            PrivateLocalStorage.writePrivateFile(partial, launcher.getBytes(StandardCharsets.UTF_8));
             Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING);
         } finally {
             Files.deleteIfExists(partial);
@@ -142,7 +141,7 @@ final class WindowsJobObjectProcessOwnership {
             out.append("environment.").append(index).append(".value=").append(encoded(entry.getValue())).append('\n');
         }
         out.append("working=").append(encoded(workingDirectory.toAbsolutePath().normalize().toString())).append('\n');
-        Files.writeString(target, out.toString(), StandardCharsets.UTF_8);
+        PrivateLocalStorage.writePrivateFile(target, out.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     private static void writeList(StringBuilder out, String prefix, List<String> values) {

@@ -437,6 +437,42 @@ class LocalIsolatedIndexWorkerTest {
         return worker(workerId, home, delegate, store, WorkerSandboxBackend.nativeEphemeralWorkspace());
     }
 
+    /** S5: every directory of the worker tree that holds a copy of the source is owner-only. */
+    @Test
+    void theWorkerDirectoriesHoldingTheSourceCopyAreOwnerOnly(@TempDir Path temp) throws Exception {
+        Fixture fixture = fixture(temp);
+        Path home = temp.resolve("home");
+        java.util.List<String> verdicts = new java.util.ArrayList<>();
+        IndexerExecutor delegate = new IndexerExecutor() {
+            @Override public String indexerId() { return "fixture-provider"; }
+
+            @Override
+            public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                Path providerRoot = request.projectRoot().getParent();
+                for (Path directory : List.of(providerRoot, providerRoot.getParent(),
+                        providerRoot.getParent().getParent())) {
+                    verdicts.add(directory.getFileName() + "=" + com.minos.io.PrivateLocalStorage.privacyOf(directory));
+                }
+                Path output = Files.writeString(
+                        temp.resolve("provider-" + UUID.randomUUID() + ".scip"), "valid-scip-fixture");
+                return new IndexingArtifact(Language.JAVA, indexerId(), output);
+            }
+        };
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
+        LocalIsolatedIndexWorker worker = worker(
+                "worker-one", home, delegate, store, qualifiedBackend(WorkerNetworkPolicy.ALLOW));
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
+
+        executor.execute(fixture.execution());
+
+        assertEquals(3, verdicts.size());
+        for (String verdict : verdicts) {
+            assertTrue(verdict.endsWith("=ENFORCED"), "worker directory not owner-only: " + verdict);
+        }
+    }
+
     private static IndexerExecutor delegate(Path temp, AtomicReference<Path> delegateRoot) {
         return new IndexerExecutor() {
             @Override public String indexerId() { return "fixture-provider"; }

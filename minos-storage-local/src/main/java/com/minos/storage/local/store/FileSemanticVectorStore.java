@@ -1,5 +1,7 @@
 package com.minos.storage.local.store;
 
+import com.minos.io.PrivateLocalStorage;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.BoundedFileLease;
 import com.minos.io.DurableAtomicFile;
 import com.minos.semantic.SemanticDocument;
@@ -99,7 +101,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         synchronized (cacheLock) { cacheMisses++; }
         DecodeBudget budget = new DecodeBudget();
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
+                ConfinedFileOpener.openRegularFileNoFollow(file)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
             int version = input.readInt();
             if (version != LEGACY_FORMAT_VERSION && version != FORMAT_VERSION) {
@@ -149,7 +151,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         requireIndexFileSize(file);
         DecodeBudget budget = new DecodeBudget();
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
+                ConfinedFileOpener.openRegularFileNoFollow(file)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
             int version = input.readInt();
             if (version != LEGACY_FORMAT_VERSION && version != FORMAT_VERSION) {
@@ -179,7 +181,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         if (snapshot.dimensions() > MAX_DIMENSIONS) throw new IOException("semantic index exceeds dimension limit");
         Path directory = ensureProjectDirectory(snapshot.projectId());
         Path target = directory.resolve(CURRENT_FILE);
-        Path temporary = Files.createTempFile(directory, "index-v2-", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(directory, "index-v2-", ".tmp");
         List<IndexedDocument> ordered = snapshot.documents().stream()
                 .sorted(Comparator.comparing(value -> value.document().stableKey()))
                 .toList();
@@ -275,7 +277,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         Path file = readableIndexFile(projectId);
         if (file == null) return 0;
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
+                ConfinedFileOpener.openRegularFileNoFollow(file)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
             return input.readInt();
         }

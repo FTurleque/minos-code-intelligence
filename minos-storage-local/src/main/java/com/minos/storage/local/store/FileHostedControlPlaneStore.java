@@ -1,6 +1,9 @@
 package com.minos.storage.local.store;
 
+import com.minos.io.BoundedFileLease;
 import com.minos.io.BoundedInputStream;
+import com.minos.io.ConfinedFileOpener;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.DurableAtomicFile;
 import com.minos.hosted.HostedAuditEvent;
 import com.minos.hosted.HostedControlPlaneStore;
@@ -23,15 +26,13 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,12 +50,15 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
     private static final int GCM_TAG_BITS = 128;
     private static final int MAX_STRING_BYTES = 128 * 1024;
     private static final int JVM_LOCK_STRIPES = 64;
+    /** The bound every other lock of the storage layer uses (project mutation lease, registry, vectors). */
+    static final Duration LOCK_TIMEOUT = Duration.ofSeconds(10);
     private static final ReentrantLock[] JVM_LOCKS = locks();
 
     private final Path root;
     private final HostedTenantKeyProvider keys;
     private final long maxTenantBytes;
     private final SecureRandom random;
+    private final Duration lockTimeout;
 
     public FileHostedControlPlaneStore(Path root, HostedTenantKeyProvider keys) throws IOException {
         this(root, keys, DEFAULT_MAX_TENANT_BYTES, new SecureRandom());
@@ -62,6 +66,17 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
 
     FileHostedControlPlaneStore(Path root, HostedTenantKeyProvider keys, long maxTenantBytes, SecureRandom random)
             throws IOException {
+        this(root, keys, maxTenantBytes, random, LOCK_TIMEOUT);
+    }
+
+    FileHostedControlPlaneStore(
+            Path root,
+            HostedTenantKeyProvider keys,
+            long maxTenantBytes,
+            SecureRandom random,
+            Duration lockTimeout
+    ) throws IOException {
+        this.lockTimeout = Objects.requireNonNull(lockTimeout, "lockTimeout");
         if (maxTenantBytes < 1024 || maxTenantBytes > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("invalid tenant byte limit");
         }
@@ -82,7 +97,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
     public void create(HostedTenantState state) throws IOException {
         Objects.requireNonNull(state, "state");
         if (state.version() != 0) throw new IllegalArgumentException("new tenant state version must be zero");
-        try (TenantLock ignored = lock(state.tenantId())) {
+        try (BoundedFileLease ignored = lock(state.tenantId())) {
             Path target = tenantFile(state.tenantId());
             rejectUnsafeEntry(target);
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
@@ -95,7 +110,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
     @Override
     public Optional<HostedTenantState> find(UUID tenantId) throws IOException {
         Objects.requireNonNull(tenantId, "tenantId");
-        try (TenantLock ignored = lock(tenantId)) {
+        try (BoundedFileLease ignored = lock(tenantId)) {
             Path target = tenantFile(tenantId);
             rejectUnsafeEntry(target);
             if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
@@ -109,7 +124,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         if (expectedVersion < 0 || state.version() != expectedVersion + 1) {
             throw new IllegalArgumentException("hosted tenant save requires version expectedVersion + 1");
         }
-        try (TenantLock ignored = lock(state.tenantId())) {
+        try (BoundedFileLease ignored = lock(state.tenantId())) {
             Path target = tenantFile(state.tenantId());
             rejectUnsafeEntry(target);
             if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
@@ -133,7 +148,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         requireRegularFile(file);
         byte[] bytes;
         try (BoundedInputStream input = new BoundedInputStream(
-                Files.newInputStream(file), maxTenantBytes, "hosted tenant file")) {
+                ConfinedFileOpener.openRegularFileNoFollow(file), maxTenantBytes, "hosted tenant file")) {
             bytes = input.readAllBytes();
         }
         if (bytes.length < 1) throw new IOException("hosted tenant file size is invalid");
@@ -196,9 +211,9 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
             envelope = buffer.toByteArray();
         }
         if (envelope.length > maxTenantBytes) throw new IOException("encoded hosted tenant exceeds byte limit");
-        Path temporary = Files.createTempFile(root, ".hosted-tenant-", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(root, ".hosted-tenant-", ".tmp");
         try {
-            Files.write(temporary, envelope, StandardOpenOption.TRUNCATE_EXISTING);
+            PrivateLocalStorage.writePrivateFile(temporary, envelope);
             if (replaceExisting) {
                 DurableAtomicFile.replace(temporary, target, "hosted tenant state replacement");
             } else {
@@ -357,22 +372,11 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         }
     }
 
-    private TenantLock lock(UUID tenantId) throws IOException {
+    private BoundedFileLease lock(UUID tenantId) throws IOException {
         Path lockPath = root.resolve(tenantId + ".lock");
         rejectUnsafeEntry(lockPath);
         ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(lockPath.hashCode(), JVM_LOCKS.length)];
-        jvmLock.lock();
-        FileChannel channel = null;
-        try {
-            channel = FileChannel.open(lockPath,
-                    StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
-            FileLock fileLock = channel.lock();
-            return new TenantLock(jvmLock, channel, fileLock);
-        } catch (IOException | RuntimeException exception) {
-            if (channel != null) channel.close();
-            jvmLock.unlock();
-            throw exception;
-        }
+        return BoundedFileLease.acquire(lockPath, jvmLock, lockTimeout, "hosted tenant lock");
     }
 
     private Path tenantFile(UUID tenantId) {
@@ -449,19 +453,5 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         ReentrantLock[] locks = new ReentrantLock[JVM_LOCK_STRIPES];
         for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
         return locks;
-    }
-
-    private record TenantLock(ReentrantLock jvmLock, FileChannel channel, FileLock lock) implements AutoCloseable {
-        @Override
-        public void close() throws IOException {
-            IOException failure = null;
-            try { lock.close(); } catch (IOException exception) { failure = exception; }
-            try { channel.close(); } catch (IOException exception) {
-                if (failure == null) failure = exception; else failure.addSuppressed(exception);
-            } finally {
-                jvmLock.unlock();
-            }
-            if (failure != null) throw failure;
-        }
     }
 }

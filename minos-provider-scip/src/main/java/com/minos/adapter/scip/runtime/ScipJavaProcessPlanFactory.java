@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
 import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingMode;
@@ -73,7 +74,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
 
         Path normalizedRunDirectory = runDirectory.toAbsolutePath().normalize();
         Path output = normalizedRunDirectory.resolve("index.scip");
-        Files.createDirectories(output.getParent());
+        PrivateLocalStorage.ensurePrivateDirectory(output.getParent());
         if (CommandLocator.isWindows()) {
             if (!Files.isRegularFile(coursier)) {
                 throw new IllegalStateException("Coursier executable is missing: " + coursier);

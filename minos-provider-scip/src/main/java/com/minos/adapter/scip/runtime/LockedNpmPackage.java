@@ -1,5 +1,7 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.PrivateLocalStorage;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.BoundedInputStream;
 
 import java.io.IOException;
@@ -34,12 +36,11 @@ final class LockedNpmPackage {
         requireText(packageName, "packageName");
         requireText(version, "version");
         requireText(expectedIntegrity, "expectedIntegrity");
-        Files.createDirectories(installRoot);
-        Files.writeString(
+        PrivateLocalStorage.ensurePrivateDirectory(installRoot);
+        PrivateLocalStorage.writePrivateFile(
                 installRoot.resolve("package.json"),
-                "{\n  \"private\": true,\n  \"dependencies\": {\n    \"" + packageName
-                        + "\": \"" + version + "\"\n  }\n}\n",
-                StandardCharsets.UTF_8);
+                ("{\n  \"private\": true,\n  \"dependencies\": {\n    \"" + packageName
+                        + "\": \"" + version + "\"\n  }\n}\n").getBytes(StandardCharsets.UTF_8));
         Path lock = installRoot.resolve("package-lock.json");
         try (InputStream input = resourceOwner.getResourceAsStream(lockResource)) {
             if (input == null) throw new IOException("packaged npm lockfile is missing: " + lockResource);
@@ -58,7 +59,7 @@ final class LockedNpmPackage {
         }
         String json;
         try (BoundedInputStream input = new BoundedInputStream(
-                Files.newInputStream(lock), MAX_LOCKFILE_BYTES, "managed npm lockfile")) {
+                ConfinedFileOpener.openRegularFileNoFollow(lock), MAX_LOCKFILE_BYTES, "managed npm lockfile")) {
             json = new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
         String marker = "\"node_modules/" + packageName + "\"";

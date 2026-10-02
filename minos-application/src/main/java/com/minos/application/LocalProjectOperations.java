@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.ScipSymbolSnapshotReport;
 import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
@@ -195,7 +196,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     private void writeHistory(UUID projectId, IndexHistory history) throws IOException {
         DurableAtomicFile.ensureDirectory(historyDirectory, "CLI import history directory");
         Path target = historyDirectory.resolve(projectId + ".properties");
-        Path temporary = Files.createTempFile(historyDirectory, projectId + ".", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(historyDirectory, projectId + ".", ".tmp");
         Properties properties = new Properties();
         properties.setProperty("snapshotId", history.snapshotId());
         properties.setProperty("providerId", history.providerId());

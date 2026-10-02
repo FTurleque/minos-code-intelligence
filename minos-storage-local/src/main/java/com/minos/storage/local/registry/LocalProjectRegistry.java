@@ -1,5 +1,6 @@
 package com.minos.storage.local.registry;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
 import com.minos.registry.DegradedEntry;
@@ -396,7 +397,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
 
     private static void writePropertiesAtomically(Path target, Properties properties) throws IOException {
         DurableAtomicFile.ensureDirectory(target.getParent(), "local registry metadata directory");
-        Path temporary = Files.createTempFile(target.getParent(), target.getFileName().toString() + ".", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(target.getParent(), target.getFileName().toString() + ".", ".tmp");
         try {
             try (Writer writer = Files.newBufferedWriter(
                     temporary, StandardCharsets.UTF_8,

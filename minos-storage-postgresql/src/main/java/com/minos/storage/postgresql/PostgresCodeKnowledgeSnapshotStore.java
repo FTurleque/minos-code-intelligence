@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql;
 
+import com.minos.io.ConfinedFileOpener;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
@@ -303,7 +304,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO knowledge_snapshots(project_id,snapshot_id,payload,sha256,symbol_count,"
                         + "occurrence_count,relationship_count) VALUES (?,?,?,?,?,?,?)");
-             InputStream input = Files.newInputStream(payload)) {
+             InputStream input = ConfinedFileOpener.openRegularFileNoFollow(payload)) {
             statement.setObject(1, snapshot.projectId());
             statement.setString(2, snapshot.snapshotId());
             statement.setBinaryStream(3, input, payloadBytes);

@@ -1,5 +1,7 @@
 package com.minos.runtime.local;
 
+import com.minos.io.PrivateLocalStorage;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.DurableAtomicFile;
 import com.minos.io.Sha256;
@@ -351,8 +353,9 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         Path temporary = null;
         try {
             String digest = sha256Bounded(finalArtifact);
-            temporary = Files.createTempFile(sidecar.getParent(), ".digest-", ".tmp");
-            Files.writeString(temporary, digest + "  " + finalArtifact.getFileName() + "\n", StandardCharsets.UTF_8);
+            temporary = PrivateLocalStorage.createPrivateTempFile(sidecar.getParent(), ".digest-", ".tmp");
+            PrivateLocalStorage.writePrivateFile(temporary,
+                    (digest + "  " + finalArtifact.getFileName() + "\n").getBytes(StandardCharsets.UTF_8));
             DurableAtomicFile.replace(temporary, sidecar, "provider artifact digest replacement");
         } catch (IOException | RuntimeException failure) {
             LOGGER.log(System.Logger.Level.WARNING,
@@ -376,7 +379,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
     private static String sha256Bounded(Path artifact) throws IOException {
         MessageDigest digest = Sha256.newDigest();
         byte[] buffer = new byte[64 * 1024];
-        try (InputStream raw = Files.newInputStream(artifact, LinkOption.NOFOLLOW_LINKS);
+        try (InputStream raw = ConfinedFileOpener.openRegularFileNoFollow(artifact);
              BoundedInputStream input = new BoundedInputStream(
                      raw, IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES, "SCIP artifact digest")) {
             int read;
@@ -399,7 +402,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         if (!runDirectory.toAbsolutePath().normalize().startsWith(providerRunDirectory)) {
             throw new IllegalStateException("provider scope directory escapes provider run root");
         }
-        Files.createDirectories(runDirectory);
+        PrivateLocalStorage.ensurePrivateDirectory(runDirectory);
         // A resumed run (ADR 0039 §3) re-executes this target inside the same run directory: the
         // temporary left by the provider that was interrupted mid-promotion must never be mistaken
         // for, or merged into, the artifact this execution is about to produce.
@@ -508,7 +511,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
 
     private static void copyArtifactBounded(Path source, Path target) throws IOException {
         Files.deleteIfExists(target);
-        try (InputStream raw = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS);
+        try (InputStream raw = ConfinedFileOpener.openRegularFileNoFollow(source);
              BoundedInputStream input = new BoundedInputStream(
                      raw, IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES, "SCIP artifact copy");
              OutputStream output = Files.newOutputStream(

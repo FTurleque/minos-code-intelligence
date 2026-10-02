@@ -7,7 +7,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
@@ -24,7 +26,8 @@ import java.util.Properties;
  * <p>Secret values are never required in the properties file. Password-file indirection is
  * supported so installers can ACL the secret independently from the human-readable config.
  * Relative secret paths are confined to the physical MINOS home even when symlinks are involved;
- * absolute secret paths remain an explicit operator escape hatch for mounted secret stores.</p>
+ * absolute secret paths remain an explicit operator escape hatch for mounted secret stores: a leaf link
+ * is followed there (secret volumes are made of links) provided it resolves to a regular file.</p>
  */
 public final class MinosRuntimeSettings {
     public static final String CONFIG_DIRECTORY = "config";
@@ -35,6 +38,7 @@ public final class MinosRuntimeSettings {
     private static final int MAX_CONFIGURATION_KEY_CHARS = 256;
     private static final int MAX_CONFIGURATION_VALUE_CHARS = 16 * 1024;
     private static final long MAX_SECRET_BYTES = 64L * 1024L;
+    private static final String SECRET_DOES_NOT_EXIST = "configured MINOS secret file does not exist";
 
     private final Path home;
     private final Properties fileProperties;
@@ -109,16 +113,36 @@ public final class MinosRuntimeSettings {
                 : readConfinedRelativeSecret(configuredSecretPath);
         secret = secret.trim();
         if (secret.isEmpty()) {
-            throw new IOException("configured MINOS secret file is empty: " + configuredSecretPath);
+            throw new IOException("configured MINOS secret file is empty");
         }
         return secret;
     }
 
+    /**
+     * Reads an operator-designated absolute secret path (a mounted secret store).
+     *
+     * <p>Unlike everything under MINOS_HOME, a link at the leaf is followed here, because the operator chose
+     * this path and secret volumes are built from links (a Kubernetes volume maps {@code key} to
+     * {@code ..data/key}). The exception is narrow: the path is resolved once, and what it resolves to must be
+     * a regular file, which is then opened with no link followed and read from that single open stream. A
+     * directory, a dangling link or any other object is refused. No failure carries the path.</p>
+     */
     private String readAbsoluteSecret(Path secretPath) throws IOException {
-        if (!Files.isRegularFile(secretPath)) {
-            throw new IOException("configured MINOS secret file does not exist: " + secretPath);
+        try {
+            Path resolved = secretPath.toRealPath();
+            try (InputStream stream = ConfinedFileOpener.openRegularFileNoFollow(resolved)) {
+                return BoundedProperties.readUtf8(stream, MAX_SECRET_BYTES, "MINOS secret file");
+            }
+        } catch (NoSuchFileException absent) {
+            throw new IOException(SECRET_DOES_NOT_EXIST);
+        } catch (AccessDeniedException denied) {
+            throw new IOException("configured MINOS secret file is not readable");
+        } catch (ConfinedFileOpener.ConfinementException refused) {
+            throw new IOException("configured MINOS secret file must resolve to a regular file");
+        } catch (java.nio.file.FileSystemException unreadable) {
+            // A link loop or any other resolution failure: its message names the path.
+            throw new IOException("configured MINOS secret file cannot be resolved");
         }
-        return BoundedProperties.readUtf8(secretPath, MAX_SECRET_BYTES, "MINOS secret file");
     }
 
     private String readConfinedRelativeSecret(Path configuredSecretPath) throws IOException {
@@ -127,7 +151,7 @@ public final class MinosRuntimeSettings {
             throw new IOException("relative MINOS secret file must stay inside MINOS_HOME: " + configuredSecretPath);
         }
         if (!Files.isRegularFile(candidate)) {
-            throw new IOException("configured MINOS secret file does not exist: " + candidate);
+            throw new IOException(SECRET_DOES_NOT_EXIST);
         }
 
         // Preserve the explicit diagnostic for a statically visible symlink escape, but do not rely

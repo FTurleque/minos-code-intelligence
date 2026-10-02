@@ -1,5 +1,6 @@
 package com.minos.runtime.local;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.FileTreeOperations;
 
 import java.io.IOException;
@@ -84,7 +85,7 @@ final class RunDirectoryRetention {
                 : protectedRunRoot.toAbsolutePath().normalize();
         Objects.requireNonNull(policy, "policy");
         Objects.requireNonNull(now, "now");
-        Files.createDirectories(root);
+        PrivateLocalStorage.ensurePrivateDirectory(root);
         if (protectedRoot != null && !protectedRoot.startsWith(root)) {
             throw new IOException("protected run root escapes MINOS runs root");
         }
@@ -183,7 +184,7 @@ final class RunDirectoryRetention {
     private static void quarantine(Path runsRoot, Path target) throws IOException {
         if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return;
         Path quarantine = runsRoot.resolve(QUARANTINE_DIRECTORY);
-        Files.createDirectories(quarantine);
+        PrivateLocalStorage.ensurePrivateDirectory(quarantine);
         Path destination = quarantine.resolve("run-" + UUID.randomUUID());
         Files.move(target, destination, StandardCopyOption.ATOMIC_MOVE);
     }

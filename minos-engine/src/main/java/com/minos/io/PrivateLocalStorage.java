@@ -1,11 +1,14 @@
 package com.minos.io;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryFlag;
 import java.nio.file.attribute.AclEntryPermission;
 import java.nio.file.attribute.AclEntryType;
 import java.nio.file.attribute.AclFileAttributeView;
@@ -32,7 +35,10 @@ import java.util.Set;
  * <h2>Policy</h2>
  * <ul>
  *   <li>POSIX: directories {@code 0700}, files {@code 0600} — no GROUP and no OTHERS bit.</li>
- *   <li>ACL platforms (Windows): a single explicit ALLOW entry for the owner.</li>
+ *   <li>ACL platforms (Windows): a single explicit ALLOW entry for the owner. On a directory that entry is
+ *       inheritable (file and directory inherit), so whatever a process of the owner creates in it later --
+ *       a sandboxed provider writing its artifact, a tool unpacking an archive -- is owner-only too instead of
+ *       taking the default ACL of its creator. Still no other principal.</li>
  * </ul>
  *
  * <h2>Guarantees</h2>
@@ -133,6 +139,56 @@ public final class PrivateLocalStorage {
     }
 
     /**
+     * Creates a uniquely named owner-only temporary directory inside {@code parent}, which is itself
+     * ensured private first. On ACL platforms the new directory is hardened and verified before it
+     * is returned, exactly as {@link #ensurePrivateDirectory} does for a named one.
+     */
+    public static Path createPrivateTempDirectory(Path parent, String prefix) throws IOException {
+        Path root = ensurePrivateDirectory(parent);
+        Path temporary = Files.createTempDirectory(root, prefix, privateDirectoryAttributes(root));
+        try {
+            hardenDirectory(temporary);
+            verifyPrivateDirectory(temporary);
+        } catch (IOException failure) {
+            deleteEmptyDirectoryBestEffort(temporary);
+            throw failure;
+        }
+        return temporary;
+    }
+
+    /**
+     * Writes {@code content} as the whole content of the owner-only file {@code file}: created
+     * private when absent, hardened in place when it already exists, never through a link (a
+     * symbolic link or special object is refused, and the write itself is opened with
+     * {@link LinkOption#NOFOLLOW_LINKS}).
+     *
+     * @return the normalised absolute file
+     */
+    public static Path writePrivateFile(Path file, byte[] content) throws IOException {
+        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        Objects.requireNonNull(content, "content");
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+            hardenExistingFile(target);
+        } else {
+            try {
+                createPrivateFile(target);
+            } catch (FileAlreadyExistsException concurrentCreate) {
+                try {
+                    hardenExistingFile(target);
+                } catch (IOException unsafeWinner) {
+                    unsafeWinner.addSuppressed(concurrentCreate);
+                    throw unsafeWinner;
+                }
+            }
+        }
+        try (OutputStream output = Files.newOutputStream(target,
+                StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS)) {
+            output.write(content);
+        }
+        return target;
+    }
+
+    /**
      * Hardens and verifies a just-created file, deleting it before propagating the failure so a
      * file this call created never lingers in a state that is not actually private.
      */
@@ -198,6 +254,12 @@ public final class PrivateLocalStorage {
         try {
             Files.createDirectory(target, privateDirectoryAttributes(target));
         } catch (FileAlreadyExistsException concurrentlyCreated) {
+            // A regular file occupying the name is not a lost race: it is refused in the same family
+            // Files.createDirectories uses, without naming the path. A link or a special object falls
+            // through to hardenDirectory, which refuses it with its own, more precise, diagnostic.
+            if (Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
+                throw new FileAlreadyExistsException(null, null, "private storage path exists and is not a directory");
+            }
             // Another writer won the race; hardening and verification below still apply to it, but
             // it is theirs, not ours -- it must not be deleted if hardening fails below.
             created = false;
@@ -225,14 +287,15 @@ public final class PrivateLocalStorage {
     }
 
     private static void hardenDirectory(Path target) throws IOException {
-        harden(target, DIRECTORY_PERMISSIONS);
+        harden(target, DIRECTORY_PERMISSIONS, true);
     }
 
     private static void hardenFile(Path target) throws IOException {
-        harden(target, FILE_PERMISSIONS);
+        harden(target, FILE_PERMISSIONS, false);
     }
 
-    private static void harden(Path target, Set<PosixFilePermission> permissions) throws IOException {
+    private static void harden(Path target, Set<PosixFilePermission> permissions, boolean directory)
+            throws IOException {
         BasicFileAttributes attributes = readAttributesNoFollow(target);
         if (attributes.isSymbolicLink() || attributes.isOther()) {
             throw new IOException("private storage path must not be a symbolic link or reparse/special object: " + target);
@@ -245,11 +308,17 @@ public final class PrivateLocalStorage {
         AclFileAttributeView acl = aclView(target);
         if (acl == null) throw unsupportedFilesystem(target);
         UserPrincipal owner = Files.getOwner(target, LinkOption.NOFOLLOW_LINKS);
-        acl.setAcl(List.of(AclEntry.newBuilder()
+        // The owner entry of a directory is inheritable: whatever any process of the owner creates in it
+        // (a sandboxed provider writing its artifact, a tool unpacking an archive) is owner-only too,
+        // instead of falling back to the default ACL of the creating process. Still no other principal.
+        AclEntry.Builder entry = AclEntry.newBuilder()
                 .setType(AclEntryType.ALLOW)
                 .setPrincipal(owner)
-                .setPermissions(EnumSet.allOf(AclEntryPermission.class))
-                .build()));
+                .setPermissions(EnumSet.allOf(AclEntryPermission.class));
+        if (directory) {
+            entry.setFlags(AclEntryFlag.FILE_INHERIT, AclEntryFlag.DIRECTORY_INHERIT);
+        }
+        acl.setAcl(List.of(entry.build()));
     }
 
     private static void verifyPrivacy(Path target) throws IOException {

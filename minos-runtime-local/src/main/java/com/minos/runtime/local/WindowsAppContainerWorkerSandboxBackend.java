@@ -311,7 +311,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Path planFile = run.resolve("windows-appcontainer-plan.txt").toAbsolutePath().normalize();
         Path recovery = minosHome.resolve(SANDBOX_DIRECTORY)
                 .resolve("appcontainer-recovery").toAbsolutePath().normalize();
-        Files.createDirectories(recovery);
+        PrivateLocalStorage.ensurePrivateDirectory(recovery);
         writePlan(
                 planFile,
                 providerCommand,
@@ -354,8 +354,8 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 .resolve("appcontainer-probe-" + Long.toHexString(System.nanoTime()))
                 .toAbsolutePath().normalize();
         try {
-            Path working = Files.createDirectories(probeRoot.resolve("working"));
-            Path run = Files.createDirectories(probeRoot.resolve("run"));
+            Path working = PrivateLocalStorage.ensurePrivateDirectory(probeRoot.resolve("working"));
+            Path run = PrivateLocalStorage.ensurePrivateDirectory(probeRoot.resolve("run"));
             IndexerProcessPlan original = new IndexerProcessPlan(
                     List.of(
                             powershell.toString(),
@@ -426,15 +426,14 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
 
     private static Path installLauncher(Path minosHome) throws IOException {
         Path directory = minosHome.resolve(SANDBOX_DIRECTORY).toAbsolutePath().normalize();
-        Files.createDirectories(directory);
+        PrivateLocalStorage.ensurePrivateDirectory(directory);
         Path target = directory.resolve(LAUNCHER_SCRIPT_NAME);
         // Assembled from its template and the shared Win32 fragments, then published as one
         // self-contained file: the script that executes still has a single hash and no include path.
         String launcher = WindowsContainmentScript.assemble(LAUNCHER_SCRIPT_NAME);
         Path partial = PrivateLocalStorage.createPrivateTempFile(directory, ".windows-appcontainer-", ".ps1");
         try {
-            Files.writeString(partial, launcher, StandardCharsets.UTF_8,
-                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+            PrivateLocalStorage.writePrivateFile(partial, launcher.getBytes(StandardCharsets.UTF_8));
             replaceWithRetry(partial, target);
         } finally {
             Files.deleteIfExists(partial);
@@ -489,7 +488,9 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         lines.add("privateStorageMaxBytes=" + PRIVATE_STORAGE_MAX_BYTES);
         lines.add("privateStorageMaxEntries=" + PRIVATE_STORAGE_MAX_ENTRIES);
         lines.add("privateStorageSampleMillis=" + PRIVATE_STORAGE_SAMPLE_MILLIS);
-        Files.write(target, lines, StandardCharsets.UTF_8);
+        StringBuilder content = new StringBuilder();
+        for (String line : lines) content.append(line).append(System.lineSeparator());
+        PrivateLocalStorage.writePrivateFile(target, content.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     /** Aggregate CPU seconds the whole job may burn, derived from the MINOS wall-clock timeout. */

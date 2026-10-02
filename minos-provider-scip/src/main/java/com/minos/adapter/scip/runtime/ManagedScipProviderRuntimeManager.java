@@ -1,5 +1,7 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.PrivateLocalStorage;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedLineReader;
 import com.minos.io.FileTreeOperations;
@@ -206,14 +208,14 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         Path npm = CommandLocator.find("npm")
                 .orElseThrow(() -> new IllegalStateException("npm is required to install scip-typescript"));
         CommandLocator.find("node").orElseThrow(() -> new IllegalStateException("Node.js is required to run scip-typescript"));
-        Files.createDirectories(toolsRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(toolsRoot);
         if (CommandLocator.isWindows()) {
             ensureNode();
         }
         Path destination = typeScriptRoot();
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
         deleteRecursively(partial);
-        Files.createDirectories(partial);
+        PrivateLocalStorage.ensurePrivateDirectory(partial);
         try {
             LockedNpmPackage.prepare(
                     ManagedScipProviderRuntimeManager.class,
@@ -239,7 +241,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     }
 
     private ProviderRuntimeStatus installJava() throws Exception {
-        Files.createDirectories(toolsRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(toolsRoot);
         Path coursier = ensureCoursier();
         if (CommandLocator.isWindows()) {
             installJavaWindowsRuntime();
@@ -266,7 +268,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         }
         boolean found = false;
         try (BoundedInputStream input = new BoundedInputStream(
-                     Files.newInputStream(log), BoundedProcessOutput.DEFAULT_MAX_BYTES_PER_STREAM,
+                     ConfinedFileOpener.openRegularFileNoFollow(log), BoundedProcessOutput.DEFAULT_MAX_BYTES_PER_STREAM,
                      "scip-java installation log");
              BoundedLineReader reader = new BoundedLineReader(
                      new InputStreamReader(input, StandardCharsets.UTF_8), MAX_INSTALL_LOG_LINE_CHARS)) {
@@ -283,7 +285,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     private void installJavaWindowsRuntime() throws IOException {
         Path runtime = scipJavaRuntimeRoot();
-        Files.createDirectories(runtime);
+        PrivateLocalStorage.ensurePrivateDirectory(runtime);
         copyPackagedResource(WINDOWS_RUNNER_RESOURCE, runtime.resolve(WINDOWS_RUNNER_RESOURCE));
         copyPackagedResource(WINDOWS_PATCH_RESOURCE, runtime.resolve(WINDOWS_PATCH_RESOURCE));
     }
@@ -305,7 +307,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             throw new IllegalStateException("automatic Coursier installation is currently packaged for Windows x64; install `cs` in PATH");
         }
         Path directory = toolsRoot.resolve("coursier").resolve(COURSIER_LAUNCHER_ID);
-        Files.createDirectories(directory);
+        PrivateLocalStorage.ensurePrivateDirectory(directory);
         Path destination = directory.resolve("cs.exe");
         Path archive = directory.resolve("cs-x86_64-pc-win32.zip");
         Path archivePartial = directory.resolve("cs-x86_64-pc-win32.partial.zip");
@@ -348,7 +350,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         move(archivePartial, archive);
 
         int executableEntries = 0;
-        try (InputStream input = Files.newInputStream(archive); ZipInputStream zip = new ZipInputStream(input)) {
+        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(archive); ZipInputStream zip = new ZipInputStream(input)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
                 if (!entry.isDirectory() && entry.getName().toLowerCase().endsWith(".exe")) {
@@ -376,7 +378,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         Path existing = mavenExecutable();
         if (Files.isRegularFile(existing)) return existing;
         Path root = mavenRoot();
-        Files.createDirectories(root);
+        PrivateLocalStorage.ensurePrivateDirectory(root);
         Path archive = root.resolve("apache-maven-" + MAVEN_VERSION + "-bin.zip");
         Path archivePartial = root.resolve("apache-maven-" + MAVEN_VERSION + "-bin.partial.zip");
         Files.deleteIfExists(archivePartial);
@@ -442,7 +444,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         Path existing = nodeExecutable();
         if (Files.isRegularFile(existing)) return existing;
         Path root = nodeRoot();
-        Files.createDirectories(root);
+        PrivateLocalStorage.ensurePrivateDirectory(root);
         Path archive = root.resolve(NODE_DISTRIBUTION_ID + ".zip");
         Path archivePartial = root.resolve(NODE_DISTRIBUTION_ID + ".partial.zip");
         Files.deleteIfExists(archivePartial);
@@ -498,10 +500,10 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             Path archive, Path destinationRoot, long maxTotalBytes, long maxEntries
     ) throws IOException {
         Path root = destinationRoot.toAbsolutePath().normalize();
-        Files.createDirectories(root);
+        PrivateLocalStorage.ensurePrivateDirectory(root);
         long totalBytes = 0L;
         long entries = 0L;
-        try (InputStream input = Files.newInputStream(archive); ZipInputStream zip = new ZipInputStream(input)) {
+        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(archive); ZipInputStream zip = new ZipInputStream(input)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
                 if (++entries > maxEntries) throw new IOException("archive has too many entries: " + archive);
@@ -533,7 +535,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     private static String sha256(Path file) throws IOException {
         MessageDigest digest = Sha256.newDigest();
-        try (InputStream input = Files.newInputStream(file)) {
+        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
             byte[] buffer = new byte[8192];
             int read;
             while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
@@ -593,7 +595,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     private static void run(List<String> command, Path workingDirectory, Path log, Duration timeout)
             throws IOException, InterruptedException {
-        Files.createDirectories(log.toAbsolutePath().normalize().getParent());
+        PrivateLocalStorage.ensurePrivateDirectory(log.toAbsolutePath().normalize().getParent());
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(workingDirectory.toFile());
         builder.redirectErrorStream(true);
@@ -616,7 +618,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     }
 
     private static void move(Path source, Path target) throws IOException {
-        Files.createDirectories(target.toAbsolutePath().normalize().getParent());
+        PrivateLocalStorage.ensurePrivateDirectory(target.toAbsolutePath().normalize().getParent());
         try { Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
         catch (AtomicMoveNotSupportedException exception) { Files.move(source, target, StandardCopyOption.REPLACE_EXISTING); }
     }

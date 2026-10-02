@@ -1,5 +1,6 @@
 package com.minos.orchestration;
 
+import com.minos.io.ConfinedFileOpener;
 import com.minos.incremental.ProjectFingerprintService;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.Sha256;
@@ -50,7 +51,7 @@ final class ExecutionCheckpoints {
         MessageDigest digest = Sha256.newDigest();
         byte[] buffer = new byte[64 * 1024];
         long bytes = 0L;
-        try (InputStream raw = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS);
+        try (InputStream raw = ConfinedFileOpener.openRegularFileNoFollow(path);
              BoundedInputStream input = new BoundedInputStream(
                      raw, IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES, "SCIP artifact digest")) {
             int read;
@@ -81,7 +82,7 @@ final class ExecutionCheckpoints {
             throw new Unavailable("artifact digest sidecar is not a regular file");
         }
         final String content;
-        try (InputStream raw = Files.newInputStream(sidecar, LinkOption.NOFOLLOW_LINKS);
+        try (InputStream raw = ConfinedFileOpener.openRegularFileNoFollow(sidecar);
              BoundedInputStream input = new BoundedInputStream(raw, MAX_SIDECAR_BYTES, "artifact digest sidecar")) {
             content = new String(input.readAllBytes(), StandardCharsets.UTF_8).strip();
         } catch (IOException failure) {

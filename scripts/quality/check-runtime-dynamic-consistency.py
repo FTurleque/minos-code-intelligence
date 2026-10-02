@@ -77,7 +77,7 @@ def main() -> int:
         require_facts("RuntimeObservationEnvelopeCodec.java", codec,
                       "MAX_INPUT_BYTES = 64L * 1024L * 1024L", "CodingErrorAction.REPORT",
                       "must not contain a BOM", "unknown runtime observation kind", "completeness must be PARTIAL",
-                      "Files.isSymbolicLink", "sha256")
+                      "ConfinedFileOpener.openRegularFileNoFollow", "sha256")
         require_facts("RuntimeIntelligenceService.java", service,
                       "runtime session projectId does not match", "runtime session snapshot does not match active snapshot",
                       "OBSERVED_PARTIAL", "absence of an observation never proves",
