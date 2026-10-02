@@ -26,8 +26,7 @@ $Work = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-seeding-container-' 
 $Altered = Join-Path $Work 'altered-tools'
 New-Item -ItemType Directory -Force -Path $Work | Out-Null
 Copy-Item -LiteralPath $Tools -Destination $Altered -Recurse
-$Victim = Join-Path $Altered 'artifacts
-odejs-24.20.0-windows-x64.zip'
+$Victim = Join-Path (Join-Path $Altered 'artifacts') 'nodejs-24.20.0-windows-x64.zip'
 $Bytes = [System.IO.File]::ReadAllBytes($Victim)
 $Bytes[1000] = $Bytes[1000] -bxor 1
 [System.IO.File]::WriteAllBytes($Victim, $Bytes)
