@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,12 +24,26 @@ PINNED_COMPOSE = f"""services:
 """
 
 
+PR_CI = """jobs:
+  invariants:
+    steps:
+      - name: gate
+        run: python scripts/quality/check-image-pins.py
+      - name: self-test
+        run: python scripts/quality/test_check_image_pins.py -v
+"""
+NO_STEPS_CI = """jobs:
+  invariants:
+    steps: []
+"""
+
+
 class CheckImagePinsTest(unittest.TestCase):
 
-    def run_gate(self, files: dict[str, str]) -> list[str]:
+    def run_gate(self, files: dict[str, str], pr_ci: str = PR_CI) -> list[str]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for name, content in files.items():
+            for name, content in {".github/workflows/pr-ci.yml": pr_ci, **files}.items():
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content, encoding="utf-8")
@@ -104,9 +119,53 @@ class CheckImagePinsTest(unittest.TestCase):
             "docs/user/docker-runtime.md": "Image pgvector/pgvector:0.8.2-pg17 is managed.\n",
         }))
 
+    def test_a_gate_that_pr_ci_does_not_run_is_refused(self):
+        files = {"docker/Dockerfile.mcp": PINNED_DOCKERFILE}
+        self.assertEqual(2, len(self.run_gate(files, pr_ci=NO_STEPS_CI)))
+        self.assertEqual(2, len(self.run_gate(files, pr_ci=PR_CI.replace("run:", "# run:"))))
+
     def test_a_tree_without_docker_files_does_not_pass_silently(self):
         failures = self.run_gate({"README.md": "x\n"})
         self.assertEqual(1, len(failures), failures)
+
+    # ---- simulated Dependabot diff on the runtime image (free, outside CI) ----
+    DIGEST_B = "sha256:" + "b" * 64
+
+    def temurin_patterns(self):
+        """The two places that pin the runtime base image by pattern, loaded from their real sources."""
+        spec = importlib.util.spec_from_file_location(
+            "remediation_v2", gate.DEFAULT_ROOT / "scripts/remediation/check-audit-remediation-v2.py")
+        remediation = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(remediation)
+        ps1 = (gate.DEFAULT_ROOT / "docker/scripts/verify-run-configurations.ps1").read_text(encoding="utf-8")
+        literal = re.search(r"-match '(\(\?m\)\^FROM eclipse-temurin[^']+)'", ps1)
+        self.assertIsNotNone(literal, "verify-run-configurations.ps1 must pin eclipse-temurin by pattern")
+        return [remediation.TEMURIN_JRE_FROM, re.compile(literal.group(1))]
+
+    def test_a_dependabot_bump_to_another_24_jre_with_a_new_digest_stays_green(self):
+        bumped = f"FROM eclipse-temurin:24.0.3_9-jre@{self.DIGEST_B}\nUSER 10001\n"
+        self.assertEqual([], self.run_gate({"docker/Dockerfile.mcp": bumped}))
+        for pattern in self.temurin_patterns():
+            self.assertTrue(pattern.search(bumped), pattern.pattern)
+            self.assertTrue(pattern.search(PINNED_DOCKERFILE), pattern.pattern)
+
+    def test_what_a_dependabot_bump_must_never_produce_stays_red(self):
+        red = {
+            "floating tag": "FROM eclipse-temurin:24-jre@" + DIGEST + "\n",
+            "major 25": f"FROM eclipse-temurin:25.0.1_8-jre@{self.DIGEST_B}\n",
+            "tag without digest": "FROM eclipse-temurin:24.0.3_9-jre\n",
+            "digest without tag": f"FROM eclipse-temurin@{self.DIGEST_B}\n",
+            "jdk instead of jre": f"FROM eclipse-temurin:24.0.3_9-jdk@{self.DIGEST_B}\n",
+            "short digest": "FROM eclipse-temurin:24.0.3_9-jre@sha256:abc\n",
+        }
+        for label, dockerfile in red.items():
+            for pattern in self.temurin_patterns():
+                with self.subTest(case=label, pattern=pattern.pattern[:30]):
+                    self.assertFalse(pattern.search(dockerfile))
+        # The generic gate refuses the shapes that Dependabot semantics make dangerous or mutable.
+        for label in ("tag without digest", "digest without tag", "short digest"):
+            with self.subTest(generic=label):
+                self.assertNotEqual([], self.run_gate({"docker/Dockerfile.mcp": red[label]}))
 
     def test_the_real_repository_is_pinned(self):
         failures, inspected = gate.check(gate.DEFAULT_ROOT)

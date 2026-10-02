@@ -11,6 +11,9 @@ Scope (the whole container supply chain of this repository):
   second time, with a tag, anywhere else in scripts, workflows or sources: the compose file is
   its single source.
 
+The gate and its self-test must be run by the ``invariants`` job of .github/workflows/pr-ci.yml
+(checked here, so removing the step turns the gate red wherever it still runs).
+
 Why both a tag and a digest: the digest is the immutable pin, the tag is what Dependabot (docker
 ecosystem) follows to propose a new digest. A reference with a digest and no tag is moved to
 ``latest`` by Dependabot; a tag without a digest is mutable.
@@ -35,6 +38,9 @@ IMAGE_KEY = re.compile(r"^\s*image:\s*(?P<value>.+?)\s*(?:#.*)?$")
 VARIABLE_WITH_DEFAULT = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:-(?P<default>[^}]+)\}$")
 VARIABLE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}$")
 UNPINNED_ALLOWED_VARIABLES = frozenset({"MINOS_IMAGE"})
+
+PR_CI = ".github/workflows/pr-ci.yml"
+CI_STEPS = ("scripts/quality/check-image-pins.py", "scripts/quality/test_check_image_pins.py")
 
 SKIPPED_DIRECTORIES = frozenset({".git", "target", "node_modules", "build", ".gradle", ".idea", "history"})
 SCANNED_SUFFIXES = frozenset({".ps1", ".py", ".sh", ".yml", ".yaml", ".java", ".json", ".properties", ".iss", ".xml"})
@@ -137,9 +143,19 @@ def find_duplicate_violations(root: Path, repositories: set[str]) -> list[str]:
     return failures
 
 
+def find_ci_wiring_violations(root: Path) -> list[str]:
+    workflow = root / PR_CI
+    if not workflow.is_file():
+        return [f"{PR_CI} not found: the gate would not run in CI"]
+    runs = [line.strip() for line in workflow.read_text(encoding="utf-8").splitlines()
+            if not line.lstrip().startswith("#")]
+    return [f"{PR_CI} does not run `python {step}`" for step in CI_STEPS
+            if not any(line.removeprefix("- ").startswith(f"run: python {step}") for line in runs)]
+
+
 def check(root: Path) -> tuple[list[str], int]:
     docker = root / "docker"
-    failures: list[str] = []
+    failures: list[str] = find_ci_wiring_violations(root)
     inspected = 0
     repositories: set[str] = set()
     if docker.is_dir():
