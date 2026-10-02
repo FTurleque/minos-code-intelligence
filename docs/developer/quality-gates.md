@@ -58,6 +58,17 @@ Un second gate, `python scripts/quality/check-compose-limits.py` (auto-test `tes
 
 Limite connue de Dependabot : l'écosystème `docker-compose` ne lit que les fichiers nommés `[docker-]compose[-x][.x].yaml` (au plus un segment pointé), donc `compose.mcp.prod.yaml` et `compose.mcp.connected.yaml` ne sont pas vus : les digests de pgvector et d'ollama se mettent à jour à la main (résoudre l'index avec `docker buildx imagetools inspect <image>:<tag>`), jusqu'à un éventuel renommage des fichiers.
 
+## Outils livrés : une seule description
+
+```text
+python scripts/quality/check-tools-manifest.py
+python scripts/quality/test_check_tools_manifest.py
+python scripts/release/test_build_embedded_tools.py
+python scripts/release/sync-tools-manifest.py            # --write pour réécrire les ARG du Dockerfile
+```
+
+`minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/embedded-tools.json` décrit une fois chaque outil que MINOS livre ou installe : version, artefact épinglé (URL HTTPS, SHA-256, taille, licence), et pour le zip Windows la mention `embedded`. Ses consommateurs : les gestionnaires Java (qui lisent le catalogue au démarrage et n'écrivent aucune empreinte), `docker/Dockerfile.mcp.release` (dont les lignes `ARG` doivent porter exactement ses valeurs, `sync-tools-manifest.py --write` les réécrit) et `scripts/release/build-embedded-tools.py` (appelé par `build-windows-distribution.ps1`, qui assemble `tools/` et `TOOLS-MANIFEST.json`). Le gate refuse : un `ARG` qui diffère ou une empreinte écrite deux fois dans le Dockerfile, un SHA-256 ou un commit littéral dans les sources Java du provider, une version qui diffère de `ScipIndexerCatalog`, un script de distribution qui porte sa propre liste. Avec `--distribution <dossier>` il vérifie aussi un paquet construit : `tools/` contient exactement les composants que le catalogue marque `embedded`, chaque fichier a la taille et le SHA-256 consignés (un artefact épinglé porte celui du catalogue), rien d'autre n'est livré, le SBOM et les notices nomment chaque composant.
+
 ## JaCoCo
 
 Le reactor exécute `jacoco:prepare-agent` et produit un rapport par module pendant `verify`. `minos-app` produit en plus le rapport agrégé :
