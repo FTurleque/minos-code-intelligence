@@ -63,6 +63,12 @@ try {
     python scripts/quality/test_check_image_pins.py
     if ($LASTEXITCODE -ne 0) { throw 'container image pin gate self-test failed' }
 
+    python scripts/quality/check-compose-limits.py
+    if ($LASTEXITCODE -ne 0) { throw 'compose resource limits gate failed' }
+
+    python scripts/quality/test_check_compose_limits.py
+    if ($LASTEXITCODE -ne 0) { throw 'compose resource limits gate self-test failed' }
+
     if (-not $SkipCleanVerify) {
         .\mvnw.cmd clean verify
         if ($LASTEXITCODE -ne 0) { throw 'Maven clean verify failed' }

@@ -69,6 +69,12 @@ jobs:
       - name: Container image pin gate self-test
         run: python scripts/quality/test_check_image_pins.py -v
 
+      - name: Compose resource limits gate (CPU, memory and PID ceiling on every service)
+        run: python scripts/quality/check-compose-limits.py
+
+      - name: Compose resource limits gate self-test
+        run: python scripts/quality/test_check_compose_limits.py -v
+
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
 

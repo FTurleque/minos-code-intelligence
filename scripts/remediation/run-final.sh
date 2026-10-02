@@ -36,6 +36,8 @@ python3 scripts/architecture/check-private-io.py
 python3 scripts/architecture/test_check_private_io.py
 python3 scripts/quality/check-image-pins.py
 python3 scripts/quality/test_check_image_pins.py
+python3 scripts/quality/check-compose-limits.py
+python3 scripts/quality/test_check_compose_limits.py
 
 if [[ "$MODE" == "--targeted" ]]; then
   ./mvnw -pl minos-application,minos-runtime-local -am test

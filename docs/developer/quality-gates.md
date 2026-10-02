@@ -54,6 +54,8 @@ Toute image référencée par `docker/Dockerfile*` (`FROM`) et `docker/compose*.
 
 Une image de service managé (pgvector, ollama) n'a **qu'une** source : le défaut de `MINOS_POSTGRES_IMAGE` / `MINOS_OLLAMA_IMAGE` dans `docker/compose.mcp.connected.yaml`. Le configurateur `configure-m30-docker-services.ps1` ne la réécrit que sur `-PostgresImage` / `-OllamaImage` explicites, et les tests PostgreSQL (`PostgresTestSupport`) la lisent dans ce fichier ; le gate refuse toute seconde copie dans les scripts, workflows ou sources.
 
+Un second gate, `python scripts/quality/check-compose-limits.py` (auto-test `test_check_compose_limits.py`), exige que chaque service des deux fichiers compose tire son plafond CPU, mémoire et PID d'un bloc `x-limits-<rôle>` (une seule définition par rôle, identique dans les deux fichiers, surchargeable par variable, documentée dans `docs/user/docker-runtime.md`), et refuse un plafond écrit dans un service.
+
 Limite connue de Dependabot : l'écosystème `docker-compose` ne lit que les fichiers nommés `[docker-]compose[-x][.x].yaml` (au plus un segment pointé), donc `compose.mcp.prod.yaml` et `compose.mcp.connected.yaml` ne sont pas vus : les digests de pgvector et d'ollama se mettent à jour à la main (résoudre l'index avec `docker buildx imagetools inspect <image>:<tag>`), jusqu'à un éventuel renommage des fichiers.
 
 ## JaCoCo

@@ -235,6 +235,34 @@ $Docker = '.\docker\scripts\prod-mcp-release.ps1'
 
 Quand un provider s'exécute (hôte natif), ses sorties Java, TypeScript, C/C++, C#, Go et Rust restent sous le run directory MINOS. Tout provider exigeant une écriture dans `/workspace/projects` doit échouer et être corrigé ; le mount projet ne doit pas être rendu writable.
 
+## Limites de ressources
+
+Chaque service des deux fichiers compose a un plafond CPU, mémoire et PID, défini **une fois par rôle** (blocs `x-limits-<rôle>` en tête de `docker/compose.mcp.prod.yaml` et `docker/compose.mcp.connected.yaml`, identiques dans les deux) et surchargeable depuis le `.env` du runtime. `memswap_limit` égale `mem_limit` : aucun swap. Le gate `scripts/quality/check-compose-limits.py` refuse un service sans plafond, un plafond écrit dans un service, ou deux fichiers qui divergent. Docker applique ces clés hors Swarm : vérifié par `docker inspect` et par les fichiers cgroup du conteneur (`memory.max`, `memory.swap.max`, `pids.max`, `cpu.max`).
+
+| Rôle | Services | CPU | Mémoire | PID |
+|---|---|---|---|---|
+| requêtes | `minos-mcp` | `MINOS_MCP_CPUS` = `4` | `MINOS_MCP_MEM_LIMIT` = `3g` | `MINOS_MCP_PIDS_LIMIT` = `1024` |
+| administration | `minos-admin` | `MINOS_ADMIN_CPUS` = `4` | `MINOS_ADMIN_MEM_LIMIT` = `2g` | `MINOS_ADMIN_PIDS_LIMIT` = `256` |
+| tâches ponctuelles | `minos-bootstrap`, `minos-data-bootstrap`, `minos-tools-bootstrap`, `minos-provider-probe` | `MINOS_JOB_CPUS` = `2` | `MINOS_JOB_MEM_LIMIT` = `512m` | `MINOS_JOB_PIDS_LIMIT` = `128` |
+| PostgreSQL géré | `minos-postgres` | `MINOS_POSTGRES_CPUS` = `2` | `MINOS_POSTGRES_MEM_LIMIT` = `1g` | `MINOS_POSTGRES_PIDS_LIMIT` = `128` |
+| Ollama géré | `minos-ollama` | `MINOS_OLLAMA_CPUS` = `4` | `MINOS_OLLAMA_MEM_LIMIT` = `2g` | `MINOS_OLLAMA_PIDS_LIMIT` = `256` |
+
+Les PID comptent les **threads** : une JVM MCP en pèse environ 35. Chaque client MCP (IDE, agent) lance sa propre JVM dans `minos-mcp`, donc la mémoire et les PID croissent avec le nombre de clients simultanés (environ 120 Mo et 35 PID chacun) : avec les plafonds par défaut, une vingtaine de clients. Un projet très volumineux, ou davantage de clients, se règle dans le `.env` (par exemple `MINOS_MCP_MEM_LIMIT=6g`). Une JVM dimensionne son tas à 25 % du plafond mémoire du conteneur.
+
+### Mesures et marges
+
+Mesurées le 2026-10-02 (cgroup v2 : `memory.peak`, `pids.peak`) ; la mémoire de pic inclut le cache de pages, que le noyau récupère avant tout OOM. Le « plancher » est le plus petit plafond pour lequel la charge réussit encore.
+
+| Rôle | Charge | Pic mesuré | Plancher mesuré | Plafond retenu | Marge |
+|---|---|---|---|---|---|
+| requêtes | 9 clients MCP simultanés (`initialize`, `tools/list`, `minos_index_status`, `minos_search_code`), sans plafond ; le conteneur de production, observé après 37 h, avait 1,0 Gio et 317 PID | 961 Mio, 292 PID | 1 Gio / 150 PID (512 Mio : un client tué par l'OOM) | 3 Gio, 1024 PID | ×3,1 mémoire, ×3,5 PID |
+| administration | `doctor`, `tools verify --all`, `project add` puis `index --dry-run` sur ce dépôt (45 modules), sans plafond | 344 Mio, 44 PID | moins de 64 Mio / 30 PID (24 PID : échec) | 2 Gio, 256 PID | ×6 mémoire, ×5,8 PID |
+| tâches ponctuelles | sonde providers (`java`, `mvn`, `node`, `dotnet`, `go`, `cargo`…), les quatre amorçages sous plafond via `docker compose run` | 52 Mio, 19 PID | 128 Mio / 32 PID | 512 Mio, 128 PID | ×9 mémoire, ×6,7 PID |
+| PostgreSQL | 30 000 vecteurs de 768 dimensions (121 Mo) et 8 recherches exactes simultanées ; production après 37 h : 120 Mio, 21 PID | 448 Mio, 29 PID | non cherché | 1 Gio, 128 PID | ×2,3 mémoire (×8 production), ×4,4 PID |
+| Ollama | `ollama pull nomic-embed-text`, chargement et requête d'embedding sous plafond ; production après 37 h : 416 Mio, 26 PID | 593 Mio, 39 PID | non cherché | 2 Gio, 256 PID | ×3,4 mémoire, ×6,5 PID |
+
+Limites des mesures : le plan `minos-admin` ne lance aucun provider (voir [disposition des sandboxes](../developer/remote-worker-sandbox-disposition.md)), il n'y a donc pas d'indexation réelle à mesurer dans Docker ; la planification d'indexation (`index --dry-run`) en tient lieu. Une indexation sémantique par `minos-admin` n'a pas été mesurée (aucun instantané d'index n'est construisible dans le conteneur) : la marge de 2 Gio sur un pic de 344 Mio est la réserve prévue pour elle. Le plafond CPU ne se mesure pas en pic : il borne l'usage de l'hôte (la JVM voit 4 CPU et crée moins de threads).
+
 ## Qualification et historique M29
 
 L'état produit courant est celui de [`STATUS.md`](../STATUS.md) : **M29 terminé et intégré**. Les lignes suivantes sont conservées uniquement comme checkpoints historiques de la montée en qualification :
