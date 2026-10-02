@@ -51,6 +51,7 @@ class WindowsJobObjectContainmentTest {
         Files.writeString(providerScript, """
                 param([string] $Artifact, [string] $Descendants, [string] $PowerShell)
                 $ErrorActionPreference = 'Continue'
+                [Console]::Error.WriteLine('DIAGT0 ' + [DateTime]::UtcNow.ToString('o'))
                 $journal = "begin`r`n"
                 [System.IO.File]::WriteAllText($Descendants, $journal)
                 foreach ($index in 1, 2) {
@@ -104,6 +105,7 @@ class WindowsJobObjectContainmentTest {
                     failure.getMessage() + "\nprovider diagnostics:\n" + providerDiagnostics(home), failure);
         }
 
+        System.err.println("DIAGJOB " + providerDiagnostics(home)); // TEMPORARY DIAGNOSTIC
         assertEquals("contained-windows-artifact",
                 Files.readString(artifact.finalArtifact(), StandardCharsets.UTF_8));
         assertTrue(Files.isRegularFile(descendants), "the provider must report the descendants it spawned");
@@ -189,7 +191,7 @@ class WindowsJobObjectContainmentTest {
         try (var entries = Files.walk(runs, 6)) {
             for (Path candidate : entries.filter(Files::isRegularFile).toList()) {
                 String name = String.valueOf(candidate.getFileName());
-                if (!name.equals("provider.stderr.log") && !name.equals("provider.stdout.log")) continue;
+                if (!name.equals("provider.stderr.log") && !name.equals("provider.stdout.log") && !name.equals("process.txt")) continue;
                 diagnostics.append(name).append(": ")
                         .append(Files.readString(candidate, StandardCharsets.UTF_8)).append('\n');
             }
