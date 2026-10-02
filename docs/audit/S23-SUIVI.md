@@ -189,6 +189,27 @@ Calage sur la production : le conteneur `minos-mcp-prod` de l'utilisateur (37 h 
 
 **Preuve du gate** : sur l'arbre `origin/develop` il échoue (14 services sans plafond) ; sur la branche : `COMPOSE RESOURCE LIMITS GATE SUCCESS (files checked=2)`.
 
+### Point 1 — Ollama en non-root
+
+**Relocalisation.** `docker/compose.mcp.connected.yaml`, service `minos-ollama` : image tournant en `root` (aucun `user:`), volume externe `minos-ollama-models` monté sur `/root/.ollama`. Aucun autre appelant du chemin `/root/.ollama` (grep). Les scripts qui interagissent avec le service (`configure-m30-docker-services.ps1` : `up --wait`, `docker exec … ollama pull`, `ollama list`) fonctionnent sous n'importe quel utilisateur et n'ont pas besoin de changer. Modèle par défaut de MINOS : `nomic-embed-text` (768 dimensions, 274 Mo), repris de la valeur par défaut `SemanticModel` du configurateur.
+
+**Décisions.**
+- **D1.1 — uid `10002:10002`** (distinct de l'uid `10001` de MINOS : un Ollama compromis ne partage aucun uid avec l'état MINOS ; haut numéro, sans entrée dans `/etc/passwd` de l'image, ce qui suffit à Go). `cap_drop: [ALL]`, `no-new-privileges`, racine en lecture seule conservés.
+- **D1.2 — `HOME=/home/ollama`, volume monté sur `/home/ollama/.ollama`** : c'est exactement la disposition de l'ancien `/root/.ollama` (clé `id_ed25519`, `models/`, `cache/` à la racine du volume) ; les modèles déjà téléchargés sont retrouvés sans `OLLAMA_MODELS` ni copie. Seul `.ollama` est inscriptible, plus `/tmp` (tmpfs).
+- **D1.3 — migration d'un volume créé en root** : service ponctuel `minos-ollama-bootstrap` (profil `ollama`, **image MINOS** déjà présente, donc pas de seconde copie de l'image Ollama dans le compose ; `user: 0:0`, `cap_add: [CHOWN, FOWNER]` seulement, `network_mode: none`, plafonds « tâches ») qui lance `chown -R 10002:10002` **seulement si** `find -xdev ! -user 10002 -o ! -group 10002` trouve quelque chose ; `minos-ollama` en dépend (`service_completed_successfully`). Idempotent, sans option ni script à lancer : le prochain `up` migre. Précédent suivi : `minos-data-bootstrap` (même schéma, mêmes capacités).
+
+**Preuves** (`ollama/ollama:0.32.0@sha256:57f573b4…` réel, via `docker compose` et les plafonds du point 4) :
+
+| Scénario | Résultat |
+|---|---|
+| Rouge : conteneur non-root sur un volume créé en root, sans amorçage | le conteneur s'arrête : `Error: remove /home/ollama/.ollama/models/manifests: permission denied` |
+| Volume préexistant créé en root par l'**ancienne** configuration (`ollama pull nomic-embed-text` fait en root, `/root/.ollama`) | l'amorçage log « ownership handed to uid 10002 » ; `id` = `uid=10002` ; `ollama list` retrouve `nomic-embed-text:latest` (274 Mo) sans nouveau téléchargement ; requête `/api/embed` : HTTP 200, vecteur de 768 valeurs ; le serveur charge le modèle (`llama-server`) |
+| Volume neuf | amorçage sur volume vide, `up --wait` sain ; réseau de provisionnement temporaire comme le script (`network create/connect`) ; `docker exec ollama pull nomic-embed-text` **en non-root** réussit ; `ollama list` ; embedding de 768 valeurs ; pic 593 Mio, 38 PID sous 2 Gio / 256 PID |
+| Second démarrage (`--force-recreate`) | « ownership already matches », embedding toujours 200 (768 valeurs) |
+| Conteneur | `user=10002:10002 ro=true capdrop=[ALL] no-new-privileges mem=2 Gio pids=256 cpus=4` |
+
+Non prouvé : GPU (aucun GPU ici ; la configuration n'en monte pas) ; volume nommé sous SELinux (`:Z`) ; l'installateur Windows complet (`configure-m30-docker-services.ps1` de bout en bout : il demande une installation réelle, voir « à traiter plus tard »). Le retour arrière vers une version antérieure demande de remettre le volume à root (commande dans `docker-runtime.md`) : sans `DAC_OVERRIDE`, root ne lit plus la clé 0600 de l'uid 10002.
+
 ### Journal du lot 1 (un commit = une entrée)
 
 | # | Commit | Contenu | Preuve |
@@ -197,13 +218,26 @@ Calage sur la production : le conteneur `minos-mcp-prod` de l'utilisateur (37 h 
 | 2 | `build(s11): Dependabot docker et references image:tag@digest dans les Dockerfile (point 2)` | `.github/dependabot.yml` (écosystème `docker`, `/docker`) ; 5 `FROM` réécrits `image:tag@sha256` à digest identique ; gates `verify-run-configurations.ps1`, `M29DockerAdministrationContractTest`, `check-audit-remediation-v2.py` réalignés et durcis | lecture de la source Dependabot (cf. tableau point 2) ; digests inchangés (`git diff` : seules les parties `:tag` s'ajoutent) ; `M29Docker*ContractTest` 5/5 verts, `check-audit-remediation-v2.py` SUCCESS |
 | 3 | `build(s11): pgvector et ollama epingles par digest, source unique, gate check-image-pins (point 3)` | défauts du compose connecté en `tag@sha256` ; `configure-m30-docker-services.ps1` ne les réécrit plus ; `PostgresTestSupport` les lit dans le compose ; gate + auto-test branchés dans `pr-ci.yml`, `run-final.*`, `quality-gates.md` | rouge sur `origin/develop` (7 violations), vert sur la branche ; 15 tests d'auto-test ; `docker compose config` ; `PostgresSchemaMigratorTest` 6/6 sur le conteneur épinglé |
 | 4 | `build(s11): plafonds CPU, memoire et PID sur tous les services compose (point 4)` | blocs `x-limits-<role>` dans `compose.mcp.prod.yaml` et `compose.mcp.connected.yaml` ; gate `check-compose-limits.py` + auto-test branchés (`pr-ci.yml`, `run-final.*`, `quality-gates.md`) ; section « Limites de ressources » de `docker-runtime.md` | mesures et planchers ci-dessus ; plafonds vérifiés par `docker inspect` et cgroup ; gate rouge sur `origin/develop` (14 services), vert ici ; `M29*ContractTest` 12/12 |
+| 5 | `fix(s11): Ollama s'execute en non-root, migration du volume de modeles (point 1)` | `minos-ollama` sous `10002:10002`, `HOME=/home/ollama`, volume sur `/home/ollama/.ollama` ; service ponctuel `minos-ollama-bootstrap` (chown conditionnel) ; section « Ollama sans privilèges » de `docker-runtime.md` | rouge (permission denied sans amorçage), puis vert : volume neuf, volume créé en root par l'ancienne config, second démarrage ; modèle téléchargé **et** chargé, embedding 768 valeurs |
 
 ## Constats de `verif-s23`
 
 | Id | Lot | Fichier:ligne | Constat | Sévérité | Résolution |
 |---|---|---|---|---|---|
-| — | — | — | aucun à ce stade | — | — |
+| V1 | 1 | `docker/compose.mcp.connected.yaml` (défauts `${MINOS_*_IMAGE:-…}`) et `docker/scripts/configure-m30-docker-services.ps1:24-25` | les tags pgvector et ollama sont écrits à deux endroits ; épingler un seul laisserait le script écraser le digest par le tag | bloquant | **traité (commit 3)** : constat confirmé (et un troisième endroit : `PostgresTestSupport`) ; une seule source, le défaut du compose ; le script ne réécrit plus (D3.2), les tests lisent le compose (D3.3), le gate refuse toute copie |
+| V2 | 1 | `docker/Dockerfile.mcp`, `docker/Dockerfile.mcp.release` | `FROM image@sha256:…` sans tag : Dependabot ne suit probablement pas ; il faut `image:tag@sha256` ; les défauts `${VAR:-image}` du compose probablement non lus | bloquant | **traité (commit 2)** : confirmé dans la source de Dependabot (une référence sans tag est déplacée vers `latest`) ; les 5 `FROM` passent en `image:tag@sha256` à digest identique. **Infirmé en partie** : l'écosystème `docker-compose` lit bien le défaut d'un `${VAR:-défaut}` ; c'est le **nom** des fichiers (`compose.mcp.*.yaml`, deux segments pointés) qui le met hors de portée : dette nommée D2.4 |
+| V3 | 1 | point 5 | vérifier si `bwrap` peut s'exécuter dans le conteneur `cap_drop: [ALL]` / `read_only` | information | **traité (commit 1)** : non, `unshare --user` refusé (seccomp par défaut), cgroup en lecture seule, `bwrap` absent de l'image ; le plan admin ne peut acquérir aucune sandbox |
+| V4 | 1 | goldens | les 12 golden sont dans `minos-app/src/test/resources/characterization/`, pas à la racine | information | pris en compte : `git diff --stat origin/develop -- minos-app/src/test/resources/characterization` vide, relevé en fin de lot |
+| V5 | 1 | baseline | module-boundaries 14/511/45 ; private-io 511/37/8/4 (30 tests) ; workflow-pins 70 | information | recoupé : identique à la baseline relevée ci-dessus |
 
 ## À traiter plus tard
 
-(rien pour l'instant)
+- **S11-L1 (latent, point 5)** — `StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor, Path)` (ownership seul), `ProcessIndexerExecutor.execute` et `NativeEphemeralWorkspaceBackend.execute(ALLOW)` sont publics et n'isolent rien ; aucun appelant en production aujourd'hui. À rendre non publics ou à retirer quand `minos-runtime-local` sera ré-ouvert (A2/A3).
+- **S11-L2 (point 5)** — le diagnostic `UNSUPPORTED_BY_BACKEND` dit « this is not a failure and does not block installation or use » alors que `index` est refusé dans le plan Docker : libellé à corriger (`StrongOwnedProcessExecutors.qualifySandbox`, `StrongOwnedProcessExecutorsQualificationTest`, `docs/user/cli.md:96`). Non touché : texte de diagnostic verrouillé par plusieurs tests, hors périmètre.
+- **S11-L3 (point 5)** — la composition `minos-admin` configure encore `HOME`, `COURSIER_CACHE`, `MAVEN_OPTS`, `DOTNET_CLI_HOME`, `NUGET_PACKAGES` et un tmpfs `exec` pour des providers qui n'y tournent pas : à réduire si le propriétaire confirme que l'indexation Docker n'est pas prévue.
+- **S11-L4 (point 2, décision du propriétaire)** — renommer `compose.mcp.prod.yaml` / `compose.mcp.connected.yaml` en `compose-mcp.prod.yaml` / `compose-mcp.connected.yaml` (motif Dependabot `docker-compose`) pour que les digests pgvector et ollama soient proposés automatiquement. Touche l'installateur, les scripts de mise à jour et 38 références.
+- **S11-L5 (point 3)** — les installations existantes gardent le tag nu écrit dans leur `.env` par une version antérieure (`MINOS_POSTGRES_IMAGE`, `MINOS_OLLAMA_IMAGE`) jusqu'au prochain `configure-m30-docker-services.ps1`, qui le retire. Un contrôle au démarrage (`doctor`) pourrait le signaler.
+- **S11-L6 (points 1, 3, 4)** — `configure-m30-docker-services.ps1` et l'installateur n'ont pas été exécutés de bout en bout (installation réelle, Windows) : seuls les services compose, les fichiers `.ps1` (analyse syntaxique) et les tests de contrat l'ont été. Qualification attendue sur la chaîne CI Windows/Docker du propriétaire.
+- **S11-L7 (point 4)** — `docker/scripts/verify-run-configurations.ps1` échoue dès sa première assertion (« Le conteneur PROD doit rester disponible entre deux sessions STDIO »), y compris sur `origin/develop` : script périmé, non branché ; son assertion Dockerfile a été réalignée (vérifiée à part).
+- **S11-L8 (point 4)** — indexation sémantique par `minos-admin` non mesurée (aucun instantané d'index dans le conteneur) ; Postgres et Ollama : plancher non cherché ; plafond CPU non mesuré en pic. À réviser si les plafonds par défaut gênent un usage réel (surcharge par `.env`).
+- **S11-L9 (point 3)** — la première exécution de Dependabot proposera des PR de rafraîchissement de digest (tags `24.0.2_12-jre`, `1.97.1-bookworm`, `1.26.5-bookworm` reconstruits depuis l'épinglage) : à relire, ce sont des changements de la chaîne de build de l'image release.
