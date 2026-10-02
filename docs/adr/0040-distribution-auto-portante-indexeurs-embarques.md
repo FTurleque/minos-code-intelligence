@@ -1,6 +1,6 @@
 # 0040 — Livrer les indexeurs dans le paquet, pas après l'installation
 
-Status: Proposed — conception, en attente de validation avant implémentation.
+Status: Accepted — implémentée par le lot D1 (chantier sprints 2–3) ; écarts à la conception initiale dans « Mise en œuvre ».
 
 Complète [0032](0032-evidence-gated-polyglot-scip-providers.md) (providers SCIP sous preuve), [0037](0037-first-class-native-and-docker-runtime-backends.md) et la §Supply-chain de [ROADMAP.md](../ROADMAP.md).
 
@@ -104,3 +104,16 @@ La mise à jour transactionnelle de l'installation (`integration/update-installa
 **Lot 4 — diagnostic, installeur, documentation.** États par provider dans `doctor` (texte + JSON), écran de validation du setup, réécriture du `README.txt` généré et des deux guides d'installation.
 
 **Lot 5 — qualification release.** Ajout à la qualification Windows d'un scénario **machine vierge, sans réseau** : installer, `doctor`, `project add`, `index` d'un projet Java et d'un projet TypeScript de `fixtures/`, sans aucune commande `tools install`. Ce scénario devient un critère de publication.
+
+## Mise en œuvre (lot D1, octobre 2026)
+
+Ce qui a été livré, et ce qui diffère de la conception ci-dessus :
+
+- **Une seule description** : `minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/embedded-tools.json` (versions, artefacts épinglés, composants assemblés, licences). Les gestionnaires Java la lisent ; `docker/Dockerfile.mcp.release` doit porter exactement ses valeurs (`scripts/release/sync-tools-manifest.py`) ; `scripts/release/build-embedded-tools.py` construit `tools/` à partir d'elle. Le gate `scripts/quality/check-tools-manifest.py` (avec `--distribution` et `--variant`) fait échouer le build au moindre écart (§6).
+- **Périmètre du paquet Windows x64** : Coursier, Apache Maven, Node.js 24.20.0, `node_modules` de scip-typescript, classpath résolu de scip-java. Non embarqués : scip-go (aucun binaire Windows amont, exige Go), scip-dotnet (nupkg de 82 Mo, exige le SDK .NET 10), scip-clang (aucun binaire Windows), scip-python (exige Python et Node/npm du poste), rust-analyzer (le gestionnaire le cherche sur le PATH).
+- **Deux natures de composant** : les artefacts épinglés (Coursier, Maven, Node) sont comparés au SHA-256 du catalogue, embarqué dans le JAR ; les arbres assemblés à la construction (scip-typescript, classpath de scip-java) n'ont aucun épinglage amont et sont comparés au manifeste du paquet signé, plus faible, puis marqués (`.minos-integrity.sha256`) et revérifiés à chaque inspection (empreinte, marqueur, absence de lien ou de point de réanalyse) ; les artefacts épinglés extraits ne sont comparés qu'à l'amorçage.
+- **Classpath de scip-java livré** : le runner Windows lit `classpath.txt` (`-ClasspathFile`) au lieu de demander à Coursier de résoudre dans un cache : Coursier écrit dans son cache même hors ligne, ce qu'un bac à sable en lecture seule interdit.
+- **§3 (repli par téléchargement automatique) non réalisé** : `minos tools install` télécharge déjà des artefacts épinglés et vérifiés ; `MINOS_TOOLS_OFFLINE=1` interdit tout téléchargement. Un artefact embarqué altéré est refusé, jamais remplacé par un téléchargement. `--offline` en option de CLI reste à faire.
+- **§4** : l'origine de chaque outil est un diagnostic `tools origin: <composant>=embedded|downloaded` ; une dépendance externe manquante est préfixée `machine prerequisite (not shipped by MINOS)`. Il n'y a pas de champ JSON dédié (les goldens de caractérisation en seraient modifiés).
+- **Variante lite** (décision du propriétaire) : `minos-<version>-windows-x64-lite.zip`, sans `tools/`, produite par le même script (`-Variant lite`) et vérifiée par le même gate ; la mise à jour d'une installation complète par un ZIP lite supprime `tools/` de façon transactionnelle.
+- **Pas de JDK embarqué** (décision du propriétaire) : l'indexation Java exige un JDK complet, Git Bash, PowerShell 5.1 et `csc.exe` sur le poste. Le critère « machine neuve sans réseau » vaut tel quel pour TypeScript, et pour Java si ces prérequis sont déjà présents.

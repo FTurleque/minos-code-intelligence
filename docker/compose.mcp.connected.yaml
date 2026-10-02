@@ -1,7 +1,42 @@
 name: "${MINOS_COMPOSE_PROJECT}"
 
+# Resource ceilings (audit S11), one definition per role, overridable from the runtime .env.
+# Merged into each service with `<<: *limits-<role>`. `memswap_limit` equals `mem_limit`: no swap.
+# `cpus` defaults to 0 = no CPU ceiling: a hard default above the host's CPU count makes the Docker
+# daemon refuse to create the container ("range of CPUs is from 0.01 to N"). Set MINOS_<ROLE>_CPUS
+# (for example 2) in the runtime .env to cap a role on a shared host.
+# docker/compose.mcp.prod.yaml and docker/compose.mcp.connected.yaml carry the same blocks; a gate
+# (scripts/quality/check-compose-limits.py) refuses any divergence. Values and the measurements
+# behind them: docs/user/docker-runtime.md, "Limites de ressources".
+x-limits-query: &limits-query
+  cpus: "${MINOS_MCP_CPUS:-0}"
+  mem_limit: "${MINOS_MCP_MEM_LIMIT:-3g}"
+  memswap_limit: "${MINOS_MCP_MEM_LIMIT:-3g}"
+  pids_limit: "${MINOS_MCP_PIDS_LIMIT:-1024}"
+x-limits-admin: &limits-admin
+  cpus: "${MINOS_ADMIN_CPUS:-0}"
+  mem_limit: "${MINOS_ADMIN_MEM_LIMIT:-2g}"
+  memswap_limit: "${MINOS_ADMIN_MEM_LIMIT:-2g}"
+  pids_limit: "${MINOS_ADMIN_PIDS_LIMIT:-256}"
+x-limits-job: &limits-job
+  cpus: "${MINOS_JOB_CPUS:-0}"
+  mem_limit: "${MINOS_JOB_MEM_LIMIT:-512m}"
+  memswap_limit: "${MINOS_JOB_MEM_LIMIT:-512m}"
+  pids_limit: "${MINOS_JOB_PIDS_LIMIT:-128}"
+x-limits-postgres: &limits-postgres
+  cpus: "${MINOS_POSTGRES_CPUS:-0}"
+  mem_limit: "${MINOS_POSTGRES_MEM_LIMIT:-1g}"
+  memswap_limit: "${MINOS_POSTGRES_MEM_LIMIT:-1g}"
+  pids_limit: "${MINOS_POSTGRES_PIDS_LIMIT:-128}"
+x-limits-ollama: &limits-ollama
+  cpus: "${MINOS_OLLAMA_CPUS:-0}"
+  mem_limit: "${MINOS_OLLAMA_MEM_LIMIT:-2g}"
+  memswap_limit: "${MINOS_OLLAMA_MEM_LIMIT:-2g}"
+  pids_limit: "${MINOS_OLLAMA_PIDS_LIMIT:-256}"
+
 services:
   minos-mcp:
+    <<: *limits-query
     image: "${MINOS_IMAGE}"
     container_name: "${MINOS_CONTAINER_NAME}"
     entrypoint: [sleep, infinity]
@@ -67,6 +102,7 @@ services:
       io.minos.network-policy: internal-services-only
 
   minos-admin:
+    <<: *limits-admin
     image: "${MINOS_IMAGE}"
     entrypoint: [java, -cp, /opt/minos/minos.jar, com.minos.cli.MinosLauncher]
     init: true
@@ -112,6 +148,7 @@ services:
       io.minos.runtime-plane: admin
 
   minos-bootstrap:
+    <<: *limits-job
     image: "${MINOS_IMAGE}"
     entrypoint: [java, -cp, /opt/minos/minos.jar, com.minos.cli.DockerRuntimeBootstrap]
     command: [configure-project-paths, "${MINOS_HOST_PROJECTS_ROOT}", /workspace/projects]
@@ -136,6 +173,7 @@ services:
   # too -- omitting it made prod-mcp-release.ps1's Install/Validate fail with "no such
   # service: minos-data-bootstrap" on any run after managed PostgreSQL/Ollama was configured.
   minos-data-bootstrap:
+    <<: *limits-job
     image: "${MINOS_IMAGE}"
     entrypoint: [/bin/sh, -c]
     command:
@@ -165,6 +203,7 @@ services:
       io.minos.runtime-plane: data-bootstrap
 
   minos-tools-bootstrap:
+    <<: *limits-job
     image: "${MINOS_IMAGE}"
     entrypoint: [/bin/sh, -c]
     command:
@@ -195,6 +234,7 @@ services:
     restart: "no"
 
   minos-provider-probe:
+    <<: *limits-job
     image: "${MINOS_IMAGE}"
     entrypoint: [/bin/sh, -c]
     command:
@@ -239,8 +279,12 @@ services:
     restart: "no"
 
   minos-postgres:
+    <<: *limits-postgres
     profiles: [postgresql]
-    image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17}"
+    # The ONLY place that names this image (docker/scripts/configure-m30-docker-services.ps1 and the
+    # PostgreSQL integration tests read it from here). <tag>@<index digest>: the digest is the pin,
+    # the tag is what a human or Dependabot reads. Gate: scripts/quality/check-image-pins.py.
+    image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17@sha256:feb68f4f15446397d8cac7f4fe48fe4586de83160d1fc48b46283312d1a33966}"
     environment:
       POSTGRES_DB: "${MINOS_POSTGRES_DATABASE:-minos}"
       POSTGRES_USER: "${MINOS_POSTGRES_USER:-minos}"
@@ -271,15 +315,63 @@ services:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
       io.minos.runtime-plane: storage
 
-  minos-ollama:
+  # Ollama runs as the unprivileged uid 10002 (audit S11). Model volumes created by earlier
+  # versions are owned by root (they were mounted on /root/.ollama): this one-shot service, which
+  # reuses the MINOS image rather than a second copy of the Ollama image, hands the volume to
+  # 10002 before Ollama starts. It touches nothing when the ownership already matches, so a fresh
+  # volume (empty) and an already migrated one cost one `find`. The mount keeps the layout Ollama
+  # expects under HOME (`~/.ollama`), so models already pulled are found as they are.
+  minos-ollama-bootstrap:
+    <<: *limits-job
     profiles: [ollama]
-    image: "${MINOS_OLLAMA_IMAGE:-ollama/ollama:0.32.0}"
-    environment:
-      OLLAMA_HOST: 0.0.0.0:11434
+    image: "${MINOS_IMAGE}"
+    entrypoint: [/bin/sh, -c]
+    command:
+      - |
+        set -eu
+        target=/home/ollama/.ollama
+        if [ -n "$$(find "$$target" -xdev \( ! -user 10002 -o ! -group 10002 \) -print -quit)" ]; then
+          chown -R 10002:10002 "$$target"
+          echo "MINOS Ollama model volume ownership handed to uid 10002."
+        else
+          echo "MINOS Ollama model volume ownership already matches uid 10002."
+        fi
+    user: "0:0"
+    init: true
+    network_mode: none
     volumes:
       - type: volume
         source: minos-ollama-models
-        target: /root/.ollama
+        target: /home/ollama/.ollama
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.runtime-plane: semantic-bootstrap
+
+  minos-ollama:
+    <<: *limits-ollama
+    profiles: [ollama]
+    # The ONLY place that names this image (see minos-postgres). Gate: scripts/quality/check-image-pins.py.
+    image: "${MINOS_OLLAMA_IMAGE:-ollama/ollama:0.32.0@sha256:57f573b47f1f71ebb445789f279fe3e596a8beab182f7cf486db9205bad87c5a}"
+    # Unprivileged: no root inside the container, no capability, no privilege gain. HOME is the
+    # only writable place Ollama needs besides /tmp, and it is the model volume itself.
+    user: "10002:10002"
+    depends_on:
+      minos-ollama-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      HOME: /home/ollama
+    volumes:
+      - type: volume
+        source: minos-ollama-models
+        target: /home/ollama/.ollama
     networks: [minos-runtime]
     healthcheck:
       test: [CMD, ollama, list]

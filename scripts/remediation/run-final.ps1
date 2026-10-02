@@ -57,6 +57,33 @@ try {
     python scripts/architecture/test_check_private_io.py
     if ($LASTEXITCODE -ne 0) { throw 'private I/O gate self-test failed' }
 
+    python scripts/quality/check-image-pins.py
+    if ($LASTEXITCODE -ne 0) { throw 'container image pin gate failed' }
+
+    python scripts/quality/test_check_image_pins.py
+    if ($LASTEXITCODE -ne 0) { throw 'container image pin gate self-test failed' }
+
+    python scripts/quality/check-compose-limits.py
+    if ($LASTEXITCODE -ne 0) { throw 'compose resource limits gate failed' }
+
+    python scripts/quality/test_check_compose_limits.py
+    if ($LASTEXITCODE -ne 0) { throw 'compose resource limits gate self-test failed' }
+
+    python scripts/quality/check-tools-manifest.py
+    if ($LASTEXITCODE -ne 0) { throw 'shipped tools gate failed' }
+
+    python scripts/quality/test_check_tools_manifest.py
+    if ($LASTEXITCODE -ne 0) { throw 'shipped tools gate self-test failed' }
+
+    python scripts/release/test_build_embedded_tools.py
+    if ($LASTEXITCODE -ne 0) { throw 'embedded tools payload builder self-test failed' }
+
+    python scripts/quality/check-single-execution.py
+    if ($LASTEXITCODE -ne 0) { throw 'single execution gate failed' }
+
+    python scripts/quality/test_check_single_execution.py
+    if ($LASTEXITCODE -ne 0) { throw 'single execution gate self-test failed' }
+
     if (-not $SkipCleanVerify) {
         .\mvnw.cmd clean verify
         if ($LASTEXITCODE -ne 0) { throw 'Maven clean verify failed' }
