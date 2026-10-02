@@ -107,7 +107,7 @@ minos.cmd tools install scip-typescript
 minos.cmd tools install scip-python
 ```
 
-`tools install` télécharge le provider et ses dépendances (Coursier/Maven pour `scip-java`, Node.js/npm pour `scip-typescript`, etc.) : il nécessite un accès réseau. La distribution actuelle n'embarque aucun indexeur ; l'auto-portance est décidée par l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md), non encore implémentée.
+Dans la distribution Windows complète, `scip-java` et `scip-typescript` sont embarqués : `tools list`, `tools verify`, `doctor` et `index` les amorcent sous `MINOS_HOME\tools` sans réseau, après vérification de leur SHA-256, et `tools install` ne sert plus qu'à une mise à jour explicite (il réutilise la charge embarquée si elle est saine). Pour les autres providers, ou avec le ZIP lite, `tools install` télécharge le provider et ses dépendances (artefacts épinglés, SHA-256 vérifié) et nécessite un accès réseau ; `MINOS_TOOLS_OFFLINE=1` interdit tout téléchargement. Un diagnostic `tools origin: <composant>=embedded|downloaded` dit d'où vient chaque outil, et un diagnostic `machine prerequisite (not shipped by MINOS): …` nomme une dépendance externe manquante (JDK du projet, Git Bash, Go…) : MINOS embarque ses indexeurs, jamais la toolchain du projet analysé. Voir [l'installation de production](production-installation.md), §2 bis.
 
 Les providers installables restent sous `MINOS_HOME\tools` lorsque le contrat du provider le prévoit.
 
