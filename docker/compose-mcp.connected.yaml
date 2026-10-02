@@ -5,7 +5,7 @@ name: "${MINOS_COMPOSE_PROJECT}"
 # `cpus` defaults to 0 = no CPU ceiling: a hard default above the host's CPU count makes the Docker
 # daemon refuse to create the container ("range of CPUs is from 0.01 to N"). Set MINOS_<ROLE>_CPUS
 # (for example 2) in the runtime .env to cap a role on a shared host.
-# docker/compose.mcp.prod.yaml and docker/compose.mcp.connected.yaml carry the same blocks; a gate
+# docker/compose-mcp.prod.yaml and docker/compose-mcp.connected.yaml carry the same blocks; a gate
 # (scripts/quality/check-compose-limits.py) refuses any divergence. Values and the measurements
 # behind them: docs/user/docker-runtime.md, "Limites de ressources".
 x-limits-query: &limits-query

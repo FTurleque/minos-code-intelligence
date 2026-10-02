@@ -50,8 +50,8 @@ function New-FixturePackage {
     "# uninstall-mcp-clients $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\uninstall-mcp-clients.ps1') -Encoding ascii
     "# update-installation $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\update-installation.ps1') -Encoding ascii
     "# Dockerfile $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\Dockerfile.mcp.release') -Encoding ascii
-    "# compose $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose.mcp.prod.yaml') -Encoding ascii
-    "# compose-connected $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose.mcp.connected.yaml') -Encoding ascii
+    "# compose $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose-mcp.prod.yaml') -Encoding ascii
+    "# compose-connected $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose-mcp.connected.yaml') -Encoding ascii
     "# prod-mcp-release $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\prod-mcp-release.ps1') -Encoding ascii
     "# mcp-lifecycle $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\mcp-lifecycle.ps1') -Encoding ascii
     "# configure-docker-mcp $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\configure-docker-mcp.ps1') -Encoding ascii

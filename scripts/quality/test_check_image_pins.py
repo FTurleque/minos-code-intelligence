@@ -53,7 +53,7 @@ class CheckImagePinsTest(unittest.TestCase):
     def test_a_fully_pinned_tree_passes(self):
         self.assertEqual([], self.run_gate({
             "docker/Dockerfile.mcp": PINNED_DOCKERFILE,
-            "docker/compose.mcp.connected.yaml": PINNED_COMPOSE,
+            "docker/compose-mcp.connected.yaml": PINNED_COMPOSE,
         }))
 
     def test_digest_without_tag_is_refused_because_dependabot_would_move_it_to_latest(self):
@@ -86,26 +86,26 @@ class CheckImagePinsTest(unittest.TestCase):
 
     def test_compose_default_without_digest_is_refused(self):
         failures = self.run_gate({
-            "docker/compose.mcp.connected.yaml":
+            "docker/compose-mcp.connected.yaml":
                 'services:\n  o:\n    image: "${MINOS_OLLAMA_IMAGE:-ollama/ollama:0.32.0}"\n'})
         self.assertEqual(1, len(failures), failures)
         self.assertIn("default must be pinned", failures[0])
 
     def test_literal_compose_image_without_digest_is_refused(self):
-        failures = self.run_gate({"docker/compose.mcp.prod.yaml": "services:\n  s:\n    image: redis:7\n"})
+        failures = self.run_gate({"docker/compose-mcp.prod.yaml": "services:\n  s:\n    image: redis:7\n"})
         self.assertEqual(1, len(failures), failures)
 
     def test_a_variable_without_default_other_than_the_minos_image_is_refused(self):
-        failures = self.run_gate({"docker/compose.mcp.prod.yaml": 'services:\n  s:\n    image: "${OTHER_IMAGE}"\n'})
+        failures = self.run_gate({"docker/compose-mcp.prod.yaml": 'services:\n  s:\n    image: "${OTHER_IMAGE}"\n'})
         self.assertEqual(1, len(failures), failures)
 
     def test_the_minos_image_variable_is_the_only_unpinned_reference_allowed(self):
-        self.assertEqual([], self.run_gate({"docker/compose.mcp.prod.yaml": 'services:\n  s:\n    image: "${MINOS_IMAGE}"\n'}))
+        self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml": 'services:\n  s:\n    image: "${MINOS_IMAGE}"\n'}))
 
     def test_a_second_copy_of_a_compose_pinned_service_image_is_refused(self):
         failures = self.run_gate({
             "docker/Dockerfile.mcp": PINNED_DOCKERFILE,
-            "docker/compose.mcp.connected.yaml": PINNED_COMPOSE,
+            "docker/compose-mcp.connected.yaml": PINNED_COMPOSE,
             "docker/scripts/configure.ps1": "[string] $PostgresImage = 'pgvector/pgvector:0.8.2-pg17',\n",
         })
         self.assertEqual(1, len(failures), failures)
@@ -115,7 +115,7 @@ class CheckImagePinsTest(unittest.TestCase):
     def test_prose_under_docs_may_quote_the_reference(self):
         self.assertEqual([], self.run_gate({
             "docker/Dockerfile.mcp": PINNED_DOCKERFILE,
-            "docker/compose.mcp.connected.yaml": PINNED_COMPOSE,
+            "docker/compose-mcp.connected.yaml": PINNED_COMPOSE,
             "docs/user/docker-runtime.md": "Image pgvector/pgvector:0.8.2-pg17 is managed.\n",
         }))
 

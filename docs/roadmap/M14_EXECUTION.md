@@ -227,7 +227,7 @@ minos-<version>-windows-x64/
 │   └── minos.jar                         # shaded JAR exact de release
 ├── docker/
 │   ├── Dockerfile.mcp.release
-│   ├── compose.mcp.prod.yaml
+│   ├── compose-mcp.prod.yaml
 │   └── scripts/prod-mcp-release.ps1
 ├── minos.cmd
 ├── minos-mcp.cmd

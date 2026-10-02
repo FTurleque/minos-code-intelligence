@@ -61,24 +61,24 @@ abstract class PostgresTestSupport {
 
     /**
      * The pgvector image the managed Docker runtime ships, read from its single source: the default
-     * of {@code MINOS_POSTGRES_IMAGE} in {@code docker/compose.mcp.connected.yaml}. The tests then
+     * of {@code MINOS_POSTGRES_IMAGE} in {@code docker/compose-mcp.connected.yaml}. The tests then
      * exercise the exact tag-and-digest reference users run, and no second copy of it exists.
      */
     static String pinnedPostgresImage() throws IOException {
         Path directory = Path.of("").toAbsolutePath();
         while (directory != null) {
-            Path compose = directory.resolve("docker").resolve("compose.mcp.connected.yaml");
+            Path compose = directory.resolve("docker").resolve("compose-mcp.connected.yaml");
             if (Files.isRegularFile(compose)) {
                 Matcher image = Pattern.compile("MINOS_POSTGRES_IMAGE:-([^}\"\\s]+)")
                         .matcher(Files.readString(compose));
                 if (!image.find()) {
-                    throw new IllegalStateException("compose.mcp.connected.yaml declares no MINOS_POSTGRES_IMAGE default");
+                    throw new IllegalStateException("compose-mcp.connected.yaml declares no MINOS_POSTGRES_IMAGE default");
                 }
                 return image.group(1);
             }
             directory = directory.getParent();
         }
-        throw new IllegalStateException("docker/compose.mcp.connected.yaml not found above the module directory");
+        throw new IllegalStateException("docker/compose-mcp.connected.yaml not found above the module directory");
     }
 
     @AfterAll

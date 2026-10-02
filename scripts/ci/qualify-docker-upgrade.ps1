@@ -78,7 +78,7 @@ function Invoke-AdminCommandCapture([string[]] $MinosArgumentsToCapture) {
     # Mirrors mcp-lifecycle.ps1's own Invoke-DockerAllowFailure: capture stdout+stderr from a single
     # native invocation expression so the output survives regardless of exit code.
     $RuntimeRootLocal = Join-Path $InstallRoot 'runtime'
-    $ComposeFileLocal = Join-Path $RuntimeRootLocal 'compose.mcp.prod.yaml'
+    $ComposeFileLocal = Join-Path $RuntimeRootLocal 'compose-mcp.prod.yaml'
     $EnvironmentFileLocal = Join-Path $RuntimeRootLocal '.env'
     $ComposeArguments = @(
         'compose', '--project-directory', $RuntimeRootLocal, '--env-file', $EnvironmentFileLocal,
@@ -89,14 +89,14 @@ function Invoke-AdminCommandCapture([string[]] $MinosArgumentsToCapture) {
 
 function Invoke-AdminShellCommand([string] $ShellCommand) {
     # minos-data-bootstrap chown's the MINOS data root to uid 10001 and chmod's it 0700 (see
-    # compose.mcp.prod.yaml) so nothing outside the container can read or write it - real,
+    # compose-mcp.prod.yaml) so nothing outside the container can read or write it - real,
     # intentional hardening that a real Linux bind mount enforces on the HOST directory too (a
     # Docker Desktop/WSL2 host, where this script was first validated, translates ownership
     # differently and does not enforce this the same way - a real environment difference, not a
     # flake). Persistence must therefore be proven by writing/reading through the admin plane,
     # which mounts the data root writable, not by reaching into $DataRoot directly from the host.
     $RuntimeRootLocal = Join-Path $InstallRoot 'runtime'
-    $ComposeFileLocal = Join-Path $RuntimeRootLocal 'compose.mcp.prod.yaml'
+    $ComposeFileLocal = Join-Path $RuntimeRootLocal 'compose-mcp.prod.yaml'
     $EnvironmentFileLocal = Join-Path $RuntimeRootLocal '.env'
     $ComposeArguments = @(
         'compose', '--project-directory', $RuntimeRootLocal, '--env-file', $EnvironmentFileLocal,
@@ -142,7 +142,7 @@ function Invoke-DockerWorkflow {
 
 function Invoke-McpSmoke([string] $SourceRoot, [string] $Label) {
     $Smoke = Join-Path $SourceRoot 'docker\scripts\MinosDockerMcpSmoke.java'
-    $Compose = Join-Path $InstallRoot 'runtime\compose.mcp.prod.yaml'
+    $Compose = Join-Path $InstallRoot 'runtime\compose-mcp.prod.yaml'
     $Environment = Join-Path $InstallRoot 'runtime\.env'
     $Output = Join-Path $EvidenceRoot "mcp-$Label.txt"
     $ErrorOutput = Join-Path $EvidenceRoot "mcp-$Label.stderr.log"
@@ -210,9 +210,9 @@ try {
     # but both are driven by this repo's current mcp-lifecycle.ps1 - see Invoke-DockerWorkflow.
     foreach ($Required in @(
         (Join-Path $PreviousWorktree 'docker\Dockerfile.mcp.release'),
-        (Join-Path $PreviousWorktree 'docker\compose.mcp.prod.yaml'),
+        (Join-Path $PreviousWorktree 'docker\compose-mcp.prod.yaml'),
         (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'),
-        (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml')
+        (Join-Path $RepoRoot 'docker\compose-mcp.prod.yaml')
     )) {
         if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "Missing real Docker release recipe: $Required" }
     }

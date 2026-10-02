@@ -295,14 +295,14 @@ New-Item -ItemType Directory -Force -Path $LibDirectory, $DockerScripts, $Integr
 Copy-Item -LiteralPath $Jar -Destination (Join-Path $LibDirectory 'minos.jar') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release') `
     -Destination (Join-Path $DockerDirectory 'Dockerfile.mcp.release') -Force
-Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml') `
-    -Destination (Join-Path $DockerDirectory 'compose.mcp.prod.yaml') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose-mcp.prod.yaml') `
+    -Destination (Join-Path $DockerDirectory 'compose-mcp.prod.yaml') -Force
 # The M30 connected profile (managed PostgreSQL/pgvector + Ollama sidecars) must ship
 # alongside the base profile: configure-docker-mcp.ps1 delegates to the M30 configurator
 # whenever StorageBackend=postgresql or SemanticProvider=ollama is selected, and that
 # configurator resolves the connected template relative to its own directory.
-Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.connected.yaml') `
-    -Destination (Join-Path $DockerDirectory 'compose.mcp.connected.yaml') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose-mcp.connected.yaml') `
+    -Destination (Join-Path $DockerDirectory 'compose-mcp.connected.yaml') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1') `
     -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
 # prod-mcp-release.ps1 delegates every action to this portable core; both must ship together or an

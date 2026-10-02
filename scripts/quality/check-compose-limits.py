@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when a compose service has no CPU, memory and PID ceiling, or when the ceilings diverge.
 
-Contract of docker/compose.mcp.prod.yaml and docker/compose.mcp.connected.yaml (audit S11):
+Contract of docker/compose-mcp.prod.yaml and docker/compose-mcp.connected.yaml (audit S11):
 
 * each file declares its ceilings once, as top-level ``x-limits-<role>: &limits-<role>`` blocks of
   ``mem_limit``, ``memswap_limit``, ``pids_limit`` and optionally ``cpus``; every value is

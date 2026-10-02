@@ -15,7 +15,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $ProjectsRoot,
 
-    # Where docker/Dockerfile.mcp.release and docker/compose.mcp.prod.yaml are read from for this
+    # Where docker/Dockerfile.mcp.release and docker/compose-mcp.prod.yaml are read from for this
     # Install. Defaults to this script's own repo (the normal case: installing whatever version of
     # MINOS this checkout is). The Docker A -> B upgrade qualification overrides this per candidate
     # so each candidate installs itself with its OWN contemporary Dockerfile/Compose recipe - the
@@ -67,7 +67,7 @@ $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 
 $RuntimeRoot = Join-Path $InstallRoot 'runtime'
 $BackupsRoot = Join-Path $InstallRoot 'backups'
-$ComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
+$ComposeFile = Join-Path $RuntimeRoot 'compose-mcp.prod.yaml'
 $EnvironmentFile = Join-Path $RuntimeRoot '.env'
 $MetadataFile = Join-Path $RuntimeRoot 'installation.json'
 $ProviderInventoryFile = Join-Path $RuntimeRoot 'provider-inventory.json'
@@ -77,7 +77,7 @@ function ConvertTo-DockerPath([string] $Path) {
     return ([System.IO.Path]::GetFullPath($Path)).Replace('\', '/')
 }
 
-# Unlike docker\Dockerfile.mcp.release and docker\compose.mcp.prod.yaml -- which are shipped
+# Unlike docker\Dockerfile.mcp.release and docker\compose-mcp.prod.yaml -- which are shipped
 # verbatim under {app}\docker\ and so remain reachable via a $RepoRoot-relative path from both a
 # git checkout and an installed distribution -- the npm lockfiles below live under a Maven
 # module's src/main/resources tree. That tree is compiled INTO minos.jar and never itself shipped
@@ -122,7 +122,7 @@ function Compose([string[]] $Arguments, [int[]] $AcceptedExitCodes = @(0)) {
     if ($LASTEXITCODE -notin $AcceptedExitCodes) { throw "docker compose failed (exit $LASTEXITCODE): $($Arguments -join ' ')" }
 }
 
-# Resource ceilings (docker/compose.mcp.*.yaml, x-limits-<role>; defaults in docker/.env.example). Hitting
+# Resource ceilings (docker/compose-mcp.*.yaml, x-limits-<role>; defaults in docker/.env.example). Hitting
 # one is not reported by Compose as anything but a failed command (exit 137 for a kill; for a PID ceiling
 # a JVM stack trace saying OutOfMemoryError: unable to create native thread), and a process killed inside
 # a still-running container (an Ollama model runner) only surfaces as an HTTP 500 from that service. These
@@ -352,7 +352,7 @@ switch ($Action) {
             Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
         }
 
-        Copy-Item -LiteralPath (Join-Path $SourceRoot 'docker\compose.mcp.prod.yaml') -Destination $ComposeFile -Force
+        Copy-Item -LiteralPath (Join-Path $SourceRoot 'docker\compose-mcp.prod.yaml') -Destination $ComposeFile -Force
         $PreservedOverrides = @(Get-PreservedCeilingOverrides -Path $EnvironmentFile)
         @"
 MINOS_COMPOSE_PROJECT=$ComposeProject

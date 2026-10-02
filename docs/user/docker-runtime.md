@@ -237,7 +237,7 @@ Quand un provider s'exécute (hôte natif), ses sorties Java, TypeScript, C/C++,
 
 ## Limites de ressources
 
-Chaque service des deux fichiers compose a un plafond **mémoire** et **PID**, défini une fois par rôle (blocs `x-limits-<rôle>` en tête de `docker/compose.mcp.prod.yaml` et `docker/compose.mcp.connected.yaml`, identiques dans les deux) et surchargeable depuis le `.env` du runtime. `memswap_limit` égale `mem_limit` : aucun swap. Les variables, leurs défauts et leurs unités sont aussi listés dans [`docker/.env.example`](../../docker/.env.example). Une ligne `MINOS_<RÔLE>_…` ajoutée au `.env` survit à une mise à jour (l'installation régénère le `.env` et reporte ces lignes). Docker applique ces clés hors Swarm : vérifié par `docker inspect` et par les fichiers cgroup du conteneur (`memory.max`, `memory.swap.max`, `pids.max`).
+Chaque service des deux fichiers compose a un plafond **mémoire** et **PID**, défini une fois par rôle (blocs `x-limits-<rôle>` en tête de `docker/compose-mcp.prod.yaml` et `docker/compose-mcp.connected.yaml`, identiques dans les deux) et surchargeable depuis le `.env` du runtime. `memswap_limit` égale `mem_limit` : aucun swap. Les variables, leurs défauts et leurs unités sont aussi listés dans [`docker/.env.example`](../../docker/.env.example). Une ligne `MINOS_<RÔLE>_…` ajoutée au `.env` survit à une mise à jour (l'installation régénère le `.env` et reporte ces lignes). Docker applique ces clés hors Swarm : vérifié par `docker inspect` et par les fichiers cgroup du conteneur (`memory.max`, `memory.swap.max`, `pids.max`).
 
 | Rôle | Services | Mémoire (octets, `<n>k`, `<n>m` ou `<n>g`) | PID (processus **et** threads) | CPU (nombre de CPU) |
 |---|---|---|---|---|

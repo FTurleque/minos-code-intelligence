@@ -31,7 +31,7 @@ $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 $runtimeDirectory = Join-Path $InstallRoot 'runtime'
 $dataDirectory = Join-Path $InstallRoot 'data'
 $backupDirectory = Join-Path $InstallRoot 'backups'
-$composeFile = Join-Path $runtimeDirectory 'compose.mcp.prod.yaml'
+$composeFile = Join-Path $runtimeDirectory 'compose-mcp.prod.yaml'
 $environmentFile = Join-Path $runtimeDirectory '.env'
 $metadataFile = Join-Path $runtimeDirectory 'installation.json'
 $composeProject = 'minos-mcp-prod'
@@ -239,7 +239,7 @@ switch ($Action) {
             $buildContext
         ) -FailureMessage "La construction de l'image Docker MINOS a echoue"
 
-        Copy-Item -LiteralPath (Join-Path $projectRoot 'docker\compose.mcp.prod.yaml') `
+        Copy-Item -LiteralPath (Join-Path $projectRoot 'docker\compose-mcp.prod.yaml') `
             -Destination $composeFile -Force
         $preservedOverrides = @(Get-PreservedCeilingOverrides -Path $environmentFile)
         $environmentContent = @"
