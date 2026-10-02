@@ -7,7 +7,7 @@ encore ouverts. Après ce chantier il ne reste que des constats d'échéance **T
 |---|---|---|---|---|
 | 1 | `sec/s11-chaine-et-conteneurs` | S11 | — | implémenté, validé en local (`clean verify`), en attente de PR |
 | 2 | `rel/d1-distribution-auto-portante` | D1 | — | implémenté, validé en local (`clean verify`), en attente de PR |
-| 3 | `ci/c2-un-seul-build` | C2 | — | inventaire avant écrit, consolidation en cours |
+| 3 | `ci/c2-un-seul-build` | C2 | — | implémenté, validé hors CI (gates Python, actionlint), en attente de PR |
 | 4 | `sec/s14-assainissement` | S14 | — | à faire |
 
 Base : `origin/develop` au 2026-10-02 (`2663bbda`, merge de #321). Une branche, un worktree (`minos-wt/…`) par lot, lots
@@ -468,6 +468,112 @@ worktree `minos-wt/ci-c2`. Règle de CI du lot : **aucun workflow lancé, aucun 
 | Les filtres `paths` | sans objet : `pr-ci` n'a pas de filtre | **aucun filtre élargi** : on supprime un déclencheur, `pr-ci` couvrait déjà ses chemins |
 
 Verdict avant décision : **aucune assertion de M19 ou de M20 n'est absente de `pr-ci`**. Les deux workflows ne portent qu'une copie moins stricte du build et des gates que `pr-ci` exécute déjà pour toute PR. Les deux voies proposées par le prompt (workflows réutilisables, ou jobs de `pr-ci` réutilisant le build) laissent chacune un exécutant qui n'a plus rien à vérifier : voir « Voie choisie ».
+
+### Voie choisie, et pourquoi
+
+**Ni workflow réutilisable, ni job d'absorption : suppression de M19 et de M20, parce que `pr-ci.yml` les subsume déjà.** Ce n'est pas une troisième voie par commodité : c'est ce que dit l'inventaire.
+
+| Voie du prompt | Ce qu'elle laisserait |
+|---|---|
+| Workflows réutilisables (`workflow_call`) appelés par `pr-ci` | M19 et M20 appelés porteraient encore un `clean verify` complet chacun (le reactor n'a aucun sous-ensemble « M19 ») : le gain est nul tant qu'ils ne sont pas vidés de leur build, et une fois vidés il ne reste que `product-facts` et `check-jacoco`, qui sont déjà dans `pr-ci`. Un appelé sans assertion propre est une coquille. |
+| Jobs de `pr-ci` qui réutilisent le build déjà fait (artefacts) | Il faudrait téléverser les `target/` de 14 modules (plusieurs centaines de Mo) d'un job à l'autre pour rejouer des gates qui lisent exactement les mêmes rapports (`check-jacoco.py` lit `target/site/jacoco-aggregate`), donc deux jobs de plus pour **zéro** assertion de plus. |
+| **Suppression** (retenue) | Aucune assertion ne perd son exécutant (voir la comparaison un à un). Gain maximal : ni build, ni installation de chaîne de bac à sable, ni cgroup en double. `pr-ci` n'a pas de filtre de chemins : aucun filtre n'est élargi. |
+
+Ce que la décision suppose et que j'ai vérifié : (1) M19 et M20 lancent le reactor entier (`./mvnw -B -ntp clean verify`, sans `-pl`, sans profil) ; C1 avait écrit « m19/m20 gardent leur propre build ciblé sur leurs modules », ce qui est inexact : le build n'est pas ciblé, seul le déclencheur l'est ; (2) `pr-ci` a le même Java, le même Python, les mêmes scripts de bac à sable, et un `clean verify` plus strict (`-Dminos.postgresql.tests.required=true`) ; (3) aucun des quatre checks exigés par le contrôle de branche n'est renommé ni supprimé.
+
+### Inventaire APRÈS (HEAD de `ci/c2-un-seul-build` après le commit 2)
+
+| Workflow | `on:` | Filtre | Jobs → checks | Différence avec AVANT |
+|---|---|---|---|---|
+| `pr-ci.yml` | `pull_request`, `push` (`main`, `develop`), `workflow_dispatch` | aucun | `Dependency vulnerability gate / osv-scan`, `Static invariants (single run)`, `Verify (ubuntu-24.04)`, `Verify (windows-2022)` : **mêmes noms** | job `invariants` : **+2 étapes** (`check-single-execution.py` et son auto-test, juste après `check-workflow-pins.py`) ; un commentaire devant `verify` ; rien d'autre |
+| `m19-advanced-code-intelligence.yml` | — | — | — | **supprimé** |
+| `m20-semantic-hybrid-intelligence.yml` | — | — | — | **supprimé** |
+| `m0-java-ci.yml`, `historical-qualification.yml`, les neuf autres | inchangés | inchangés | inchangés | aucune |
+
+Étapes de `pr-ci.yml` après : toutes celles de l'inventaire AVANT, **dans le même ordre**, plus les deux étapes ci-dessus. Les gates des lots 1 et 2 sont toujours exécutés une fois chacun dans `invariants` : `check-image-pins.py` + auto-test, `check-compose-limits.py` + auto-test, `check-tools-manifest.py` + `test_check_tools_manifest.py` + `test_build_embedded_tools.py` (vérifié par `git diff` : aucune de leurs lignes n'est touchée).
+
+#### Comparaison un à un (AVANT contre APRÈS) : tout contrôle sans exécutant est bloquant
+
+| Contrôle (qui l'exécutait AVANT) | Exécutant APRÈS | Perdu ? |
+|---|---|---|
+| Java 24 Temurin, Python 3.13, `ubuntu-24.04` (M19, M20, `verify`) | `verify` Ubuntu | non |
+| Chaîne de bac à sable Linux, délégation cgroup v2 (M19, M20, `verify`) | `verify` Ubuntu, une fois | non (2 copies en moins) |
+| `product-facts.py --check` (M19, M20, `invariants`) | `invariants`, une fois | non |
+| `./mvnw clean verify` du reactor (M19, M20, `verify` Ubuntu) | `verify` Ubuntu, une fois, avec PostgreSQL exigé | non |
+| `check-jacoco.py` complet Linux (M19, M20, `verify` Ubuntu) | `verify` Ubuntu, une fois | non |
+| `./mvnw clean verify` Windows, `check-jacoco.py --skip-scope …` Windows | `verify` Windows, inchangé | non |
+| Tous les gates de `invariants`, `Dependency vulnerability gate` | inchangés | non |
+| Exigence « les workflows qui exercent le bac à sable Linux délèguent un cgroup v2 et placent leur shell dans le sous-arbre » (`check-minos-01.py`, `check-p0-p2.py`, qui nommaient M19 et M20) | `pr-ci.yml` (déjà exigé) **et** `historical-qualification.yml` (ajouté : le seul autre workflow qui lance la charge de bac à sable Linux) | non, **exigence conservée et élargie d'un fichier**, aucune retirée |
+| Checkout de la fusion de la PR avec sa base (M19, M20) | `pr-ci` : HEAD exact ; la branche à jour est exigée par le contrôle de branche | **nuance écrite, pas une perte** (voir risques) |
+| Check `M19 Java 24 qualification`, `M20 Java 24 qualification` | aucun | oui, **non exigés** par le contrôle de branche |
+| *(nouveau)* « un gate lourd ne s'exécute qu'une fois » | `check-single-execution.py` (rouge sur l'arbre AVANT : 8 violations, 4 par workflow ; vert APRÈS) | — |
+
+Aucun contrôle bloquant : chaque assertion de M19 et M20 a un exécutant.
+
+### Noms de checks : AVANT / APRÈS (à transmettre au propriétaire)
+
+| | Checks d'une PR qui touche le cœur, AVANT | APRÈS |
+|---|---|---|
+| Exigés par le ruleset « Protect main & develop » | `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `SonarCloud Code Analysis` | **identiques** |
+| Non exigés, de `pr-ci` | `Static invariants (single run)` | identique |
+| Non exigés, **supprimés** | `M19 Java 24 qualification`, `M20 Java 24 qualification` | **disparaissent** (workflows supprimés) |
+| Renommés | — | **aucun** |
+| Autres (images, installeur, IntelliJ, upgrade, osv-scanner) | inchangés | inchangés |
+
+Action requise du propriétaire : **aucune** pour le contrôle de branche (les deux checks supprimés ne figurent pas dans le ruleset, relevé par `gh api repos/FTurleque/minos-code-intelligence/rules/branches/develop`). À vérifier seulement s'il existe un réglage hors ruleset (par exemple une protection de branche classique : `branches/develop/protection` répond 404, pas de protection classique).
+
+**Observation à lui transmettre (hors C2, jamais changée par ce lot)** : `Static invariants (single run)` n'est **pas** un check exigé. Tous les gates statiques (y compris les remédiations MND/MNE/post-MNE et le nouveau `check-single-execution.py`) peuvent donc être rouges et la PR fusionnable. C'est exactement le cas de la PR #326 aujourd'hui (`check-mnd.py` et `check-mne.py` rouges, voir plus haut). L'ajouter aux checks exigés est une décision de configuration du dépôt.
+
+### Gains, par PR
+
+| Mesure | PR touchant le cœur | PR ne touchant que `docs/developer/**` ou `docs/user/**` |
+|---|---|---|
+| `./mvnw clean verify` complets | 4 → **2** (Linux 3 → 1, Windows 1 → 1) | 3 → **2** |
+| installations de la chaîne de bac à sable Linux | 3 → **1** | 2 → **1** |
+| délégations cgroup v2 | 3 → **1** | 2 → **1** |
+| `product-facts.py --check` | 3 → **1** | 2 → **1** |
+| `check-jacoco.py` Linux | 3 → **1** | 2 → **1** |
+| jobs lancés | −2 | −1 |
+| temps de runner Linux économisé (durées de la PR #322) | environ 9 min 20 s (M19 4 min 50 s + M20 4 min 29 s), hors temps d'attente | environ 4 min 30 s |
+
+Ce sont des comptes de jobs lus dans les YAML, pas une mesure de durée de bout en bout : le chemin critique d'une PR reste `Verify (windows-2022)` (14 à 18 minutes), que ce lot ne touche pas.
+
+### Aucun gate orphelin créé
+
+- `check-single-execution.py` et son auto-test sont exécutés par `pr-ci.yml` (job `invariants`) et par `run-final.{ps1,sh}`, documentés dans `docs/developer/quality-gates.md` ; `check-milestone-artifact-references.py` passe de 111 à 113 scripts, SUCCESS.
+- Les deux scripts d'archive `scripts/history/m19/run-final.ps1` et `scripts/history/m20/run-final.ps1` citent encore le fichier du workflow supprimé dans leur liste `$required`. Ils sont archivés (ADR 0043, exemptés du garde-fou) et **déjà irrejouables** (plusieurs fichiers de leur liste n'existent plus à l'emplacement cité, par exemple `minos-bootstrap/src/test/java/com/minos/program/analysis/ProgramGraphAnalysisTest.java` pour M19 et les classes `minos-application/src/main/java/com/minos/semantic/*` pour M20) : ils n'ont pas été modifiés, ce n'est pas une régression de ce lot.
+- G4 (`scripts/history/m21/check-m21-parity.py`) : `historical-qualification.yml` ne le rejoue pas (il ne propose que `m28` et `m15`), il reste cassé (`IdeCommand.java` introuvable) et orphelin. **Non traité** : réparer ce gate ou l'archiver franchement (ADR 0043) est un choix produit sur la parité IntelliJ M19/M20, étranger à C2 ; je ne crée pas de second cas.
+
+### Journal du lot 3
+
+| # | Commit | Contenu | Preuve |
+|---|---|---|---|
+| 1 | `24a4582b` | inventaire AVANT, observations (déclenchements M19/M20, ruleset, G4, baseline) | gates rejoués sur le HEAD de départ : tout vert sauf `check-mnd`, `check-mne` (lot 2) |
+| 2 | `cb5b3a75` | suppression de M19 et M20 ; `check-single-execution.py` + auto-test (8 cas) branchés dans `pr-ci` et `run-final` ; réalignement de `check-minos-01.py` et `check-p0-p2.py` | gate rouge sur l'arbre AVANT (8 violations), vert APRÈS ; `rhysd/actionlint` code 0 sur `pr-ci.yml` |
+| 3 | ce commit | inventaire APRÈS, comparaison, noms de checks, docs (`quality-gates.md`, `STATUS.md`, `M19_EXECUTION.md`, `CI-HYGIENE-SUIVI.md`) | gates rejoués (tableau ci-dessous) |
+
+### Résultats de fin de lot (2026-10-02, Windows, Python 3.13)
+
+| Contrôle | AVANT (HEAD de départ) | APRÈS |
+|---|---|---|
+| `check-module-boundaries.py` | SUCCESS (14 / 517 / 45) | identique |
+| `check-private-io.py` + auto-test | SUCCESS (517 / 37 / 8 / 4) | identique |
+| `check-workflow-pins.py` | SUCCESS, **70** usages externes | SUCCESS, **64** : six `uses` retirés avec les deux workflows (3 chacun : `checkout`, `setup-java`, `setup-python`) ; le gate ne code pas ce compte en dur |
+| `check-milestone-artifact-references.py` | SUCCESS (111) | SUCCESS (113 : +2 scripts du nouveau gate, référencés) |
+| `check-current-docs.py`, `product-facts.py --check` | SUCCESS, SUCCESS | SUCCESS, SUCCESS |
+| `check-image-pins`, `check-compose-limits`, `check-tools-manifest` et leurs auto-tests | SUCCESS | SUCCESS, inchangés |
+| `check-post-mne`, `check-post228-hardening`, `check-audit-remediation-v2`, `check-p0-p2`, `check-minos-01` | SUCCESS | SUCCESS |
+| `check-mnd.py`, `check-mne.py` | **ÉCHEC** (lot 2) | **ÉCHEC**, identique : non causé ni masqué par ce lot |
+| `check-single-execution.py` + auto-test (8 cas) | ÉCHEC sur l'arbre AVANT (8 violations) | SUCCESS |
+| `check-jacoco.py` | non évaluable sans `clean verify` | non évalué (aucun Java touché) |
+| `rhysd/actionlint` sur `pr-ci.yml` | — | code 0 |
+| `rhysd/actionlint` sur tout `.github/workflows` | 1 remarque préexistante (`intellij-plugin-release.yml:120`, SC2129, style) | identique |
+| goldens de `characterization/`, liste blanche d'E/S privées | — | inchangés (aucun fichier Java ni ressource touché) |
+| Aucun push, aucune PR, aucun workflow lancé | — | respecté |
+
+Non validé hors CI : l'exécution réelle sur un runner GitHub des deux étapes ajoutées à `invariants` (Python 3.13 y est installé avant, aucune dépendance nouvelle ; les mêmes gates tournent localement), et le comportement de GitHub quand deux workflows disparaissent d'une PR déjà ouverte (checks anciens affichés comme « attendus » seulement s'ils étaient exigés : ils ne le sont pas). Aucun `clean verify` : aucun Java touché.
+
+Risques résiduels : (1) M19/M20 testaient la fusion de la PR avec sa base, `pr-ci` en teste le HEAD exact : sans effet à la fusion tant que le contrôle de branche exige la branche à jour (`strict_required_status_checks_policy: true`) ; (2) `check-single-execution.py` lit les lignes de commande des workflows : il ne voit pas un script lancé par un workflow qui exécuterait lui-même Maven (`scripts/ci/qualify-docker-release.sh` lance `mvnw package -DskipTests`, une construction et non un `verify`, donc hors de ce que C2 nommait) ; (3) `test-iscc-provenance.ps1` s'exécute deux fois sur une PR qui touche les chemins de `windows-installer.yml` (job `invariants` sous Linux et `windows-installer.yml` sous Windows) : même script, deux systèmes, hors du périmètre nommé par C2, non touché ; à trancher par le propriétaire ; (4) `Static invariants` n'est pas un check exigé (voir plus haut).
 
 ## Constats de `verif-s23`
 

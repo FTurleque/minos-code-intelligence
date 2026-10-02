@@ -16,7 +16,22 @@ La matrice obligatoire couvre :
 - vérification de l'immutabilité des références GitHub Actions ;
 - installation de `bubblewrap`, util-linux et du profil AppArmor officiel `bwrap-userns-restrict` sur Ubuntu afin que la qualification du worker sandbox Linux puisse réellement exercer les namespaces non privilégiés.
 
-Les workflows spécialisés M19, M20, IntelliJ et Windows Installer complètent cette matrice selon les chemins modifiés. Les workflows de publication restent séparés et ne remplacent jamais la qualification de PR.
+Les workflows spécialisés IntelliJ, Windows Installer et Windows in-place upgrade complètent cette matrice selon les chemins modifiés. Les workflows de publication restent séparés et ne remplacent jamais la qualification de PR. Les anciens workflows M19 et M20, qui répétaient le job `verify` Ubuntu sur une partie des chemins, sont retirés (constat C2, voir ci-dessous).
+
+## Chaque gate lourd s'exécute une seule fois par PR (C2)
+
+Sur une PR, un seul workflow lance un build Maven : `pr-ci.yml`, job `verify`, une fois sous Ubuntu et une fois sous Windows (la matrice est voulue : seule la suite Windows exerce AppContainer, les Job Objects et les chemins Windows). Les quatre contrôles coûteux qu'un second workflow aurait tendance à recopier ne s'exécutent qu'à cet endroit :
+
+| Contrôle | Où, combien de fois |
+|---|---|
+| `./mvnw … clean verify` | `verify` Ubuntu (PostgreSQL exigé) et `verify` Windows : une fois chacun |
+| `scripts/quality/check-jacoco.py` | `verify` Ubuntu (périmètre complet) et `verify` Windows (`--skip-scope m30-postgresql-pgvector`) : une fois chacun |
+| `scripts/docs/product-facts.py --check` | job `invariants` : une fois |
+| `scripts/ci/install-linux-sandbox-toolchain.sh` et la délégation cgroup v2 | `verify` Ubuntu : une fois |
+
+Le gate `python scripts/quality/check-single-execution.py` (auto-test `test_check_single_execution.py`, branché dans le job `invariants`) échoue si un autre workflow démarré par `pull_request` ou `push` lance l'un de ces contrôles, si `pr-ci.yml` en lance un plus d'une fois par système, ou s'il n'en lance plus aucun (un gate dont l'unique exécutant a disparu ne tourne plus). Les workflows lancés à la main (`m0-java-ci.yml`, `historical-qualification.yml`, les publications) sont des outils de rejeu, pas des gates de PR, et sont hors de son champ.
+
+**Ce que faisaient `m19-advanced-code-intelligence.yml` et `m20-semantic-hybrid-intelligence.yml` (supprimés)** : sur `pull_request` vers `main` ou `develop`, filtrés par chemins (M19 : `minos-domain`, `minos-engine`, `minos-application`, `minos-api`, `minos-mcp`, quelques documents ; M20 : les mêmes plus `minos-storage-local`, `minos-nexus`, `docs/developer/**`, `docs/user/**`), ils installaient Java 24 et la chaîne de bac à sable Linux, délégaient un cgroup v2, jouaient `product-facts.py --check`, puis `./mvnw -B -ntp clean verify` sur le reactor entier (aucun test ni module propre à M19 ou M20) et `check-jacoco.py`. Chacune de ces affirmations est portée, à l'identique ou en plus strict (PostgreSQL réel exigé), par `pr-ci.yml`, qui n'a aucun filtre de chemins et couvre les mêmes branches. Leurs checks `M19 Java 24 qualification` et `M20 Java 24 qualification` n'étaient pas exigés par le contrôle de branche. L'inventaire complet avant/après est dans `docs/audit/S23-SUIVI.md`, « Lot 3 ».
 
 ## Supply-chain des workflows
 
