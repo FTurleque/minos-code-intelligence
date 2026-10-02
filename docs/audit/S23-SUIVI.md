@@ -379,6 +379,14 @@ NON prouvé : une exécution sur une machine dont le réseau est réellement cou
 
 Constats d'environnement : Maven doit se lancer depuis Bash (depuis PowerShell 7, `PSModulePath` fuit et casse `PrivateLocalStorageWindowsAclTest`) ; un `MINOS_HOME` sous le scratchpad de session échoue (« cannot protect private storage », ACL des SID du harnais) : travail sous `%LOCALAPPDATA%\minos-d1-scratch`.
 
+### Après rebase sur la branche finale du lot 1 (PR #324, `3039360f`)
+
+Rebase fait par le pilote (un conflit, dans ce fichier, résolu : les listes « à traiter plus tard » S11 et D1 sont conservées). Relu : `pr-ci.yml` (job `invariants`) porte les gates du lot 1 (image-pins, compose-limits et leurs auto-tests) et ceux de D1 (check-tools-manifest, auto-tests), `actionlint` (image `rhysd/actionlint`) sans remarque ; `Dockerfile.mcp.release`, `quality-gates.md`, `run-final.*` fusionnés sans perte. Gates rejoués : module-boundaries 14 / 517 / 45, private-io 517 / 37 / 8 / 4 (aucune entrée ajoutée), workflow-pins 70, milestone-artifact-references 109 scripts, docs, product-facts, image-pins, compose-limits, tools-manifest, remediation-v2, auto-tests (private-io, module-boundaries, tools-manifest, builder, image-pins, compose-limits), `verify-installer-template.ps1`, `verify-windows-upgrade-transaction.ps1` (6b et 6c inclus) : tous verts ; goldens et liste blanche d'E/S privées : 0 fichier changé.
+
+`./mvnw clean verify` complet unique sur le HEAD rebasé (depuis Bash) : **BUILD SUCCESS**, 15 min 25 s, 0 échec ; `check-jacoco.py` SUCCESS (m24 PASS).
+
+Zips reconstruits depuis le HEAD rebasé, dans `%LOCALAPPDATA%\minos-d1-scratch\dist-final` : complet `minos-1.3.0-SNAPSHOT-windows-x64.zip` (220,31 Mio, SHA-256 `CA348592AF3C7E20322195143C140A2DAFAB6104B138927B80A04F36CD85E0CF`), lite `minos-1.3.0-SNAPSHOT-windows-x64-lite.zip` (67,20 Mio, SHA-256 `1D2DDA41C12691898898DE9876A0BAB5F86C3E30E55649B8D98636A761344EA1`) ; `check-tools-manifest.py --distribution` vert sur les deux (`--variant lite` pour le lite) ; `qualify-offline-install.ps1 -AllowOnline` sur le nouveau zip complet : tous les contrôles PASS (témoin positif du canari 1 connexion, 0 tentative pendant la run, scip-typescript READY embarqué, indexation TypeScript SUCCEEDED).
+
 ## Constats de `verif-s23`
 
 | Id | Lot | Fichier:ligne | Constat | Sévérité | Résolution |
