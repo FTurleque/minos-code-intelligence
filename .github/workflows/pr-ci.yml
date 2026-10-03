@@ -110,6 +110,14 @@ jobs:
       - name: Milestone artifact reference guard
         run: python scripts/quality/check-milestone-artifact-references.py
 
+      - name: Partial-result consumer gate (advisory heuristic; this job is not a required check, audit G6)
+        run: python scripts/quality/check-partial-result-consumers.py
+
+      - name: Partial-result consumer gate self-test, shared-list and script-function tests
+        run: |
+          python scripts/quality/check-partial-result-consumers.py --self-test
+          python scripts/lib/test_minos_exit_code.py -v
+
       - name: MND remediation invariants
         run: python scripts/remediation/check-mnd.py
 
