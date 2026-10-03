@@ -225,12 +225,51 @@ Principales opérations :
 ```text
 createWorkspace
 listWorkspaces
+listWorkspaceInventory
 getWorkspace
+lookupWorkspace
 assignProjectToWorkspace
 inspectGit
 analyzeGitActivity
 analyzeWorkspace
 ```
+
+### Registre abîmé : lister et résoudre un espace de travail sans rien taire
+
+`listWorkspaces` et `getWorkspace` sont **stricts** : une seule entrée de registre illisible les fait échouer, comme avant. Leur
+signature, leur comportement et le DTO `WorkspaceDto` ne changent pas : un client qui ignore ce qui suit fonctionne à l'identique.
+
+Deux opérations s'y ajoutent (méthodes `default` : une implémentation tierce du contrat v1 compile et se lie sans changement, et répond
+`UNAVAILABLE` plutôt que d'inventer un inventaire complet) :
+
+| Opération | Retour | Ce qu'elle dit |
+|---|---|---|
+| `listWorkspaceInventory()` | `WorkspaceInventoryDto(workspaces, unreadableWorkspaceEntries, unreadableProjectEntries)` | les espaces qui ont pu être établis, et combien d'entrées n'ont pas pu être lues |
+| `lookupWorkspace(identifiant ou nom)` | `WorkspaceLookupDto(workspace, unreadableWorkspaceEntries, unreadableProjectEntries)` | l'espace trouvé parmi les entrées lisibles, et ce qui qualifie la réponse |
+
+Les deux compteurs ne veulent pas dire la même chose :
+
+- `unreadableProjectEntries > 0` : des fichiers de projet sont illisibles. Ils ne peuvent ni créer ni retirer un espace, mais ils peuvent lui
+  appartenir : les `projectIds` des espaces listés sont **le rattachement qui a pu être lu**, pas nécessairement tout le rattachement.
+- `unreadableWorkspaceEntries > 0` : des fichiers d'espace sont illisibles. Un espace de ce nom peut exister et manquer à la liste ; pour une
+  résolution par nom, l'unicité du nom n'est pas prouvée.
+
+Une liste dont un compteur est non nul est **valide pour ce qui a été lu, et incomplète** : elle ne doit pas être lue comme la liste de tous
+les espaces. Ce sont des entiers, pas des messages ; pour savoir quelles entrées sont en cause, `minos project list` les montre.
+
+`lookupWorkspace` distingue deux échecs qui ne se confondent jamais :
+
+| Résultat | Code | Message | Ce que cela dit |
+|---|---|---|---|
+| espace inexistant, rien d'illisible qui pouvait le porter | `INVALID_REQUEST` | `Unknown workspace: <nom>` | l'espace n'existe pas |
+| introuvable, des entrées d'espace sont illisibles | `IO_FAILURE` | `N registry entries are unreadable, so it cannot be told whether this workspace exists` | on ne sait pas : ce n'est pas une absence |
+
+Par identifiant, seule l'entrée portant cet identifiant compte : un voisin abîmé ne concerne pas la résolution, et un identifiant dont l'entrée
+est elle-même illisible échoue avec `IO_FAILURE` (« this workspace cannot be read »), jamais avec « inconnu ».
+
+Un registre qu'on ne peut pas lister du tout (répertoire illisible, stockage en panne) échoue en `IO_FAILURE` : c'est une panne, jamais un
+inventaire partiel. Un registre dont **toutes** les entrées sont abîmées est listé : une liste vide **avec** ses compteurs. Ni `assignProjectToWorkspace`,
+ni `analyzeWorkspace`, ni `createWorkspace` ne changent : une mutation ou une analyse qui décide à partir de ce qu'elle a lu reste stricte.
 
 Les limites sont validées dans les DTOs publics : jusqu’à 10 000 commits/fichiers/relations selon la requête et profondeur de zone Git 1..8.
 

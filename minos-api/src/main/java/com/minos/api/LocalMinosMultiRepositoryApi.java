@@ -146,9 +146,36 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
                 .toList());
     }
 
+    /**
+     * The counts are the sizes of the registry's own {@code DegradedEntry} lists, taken once here at the public
+     * boundary: nothing between the registry and this method counts, filters or rebuilds them.
+     */
+    @Override
+    public WorkspaceInventoryDto listWorkspaceInventory() throws MinosApiException {
+        return execute(() -> {
+            WorkspaceIntelligenceService.WorkspaceListing listing = workspaceIntelligence.listWorkspacesTolerantly();
+            return new WorkspaceInventoryDto(
+                    listing.workspaces().stream().map(LocalMinosMultiRepositoryApi::workspace).toList(),
+                    listing.unreadableWorkspaces().size(),
+                    listing.unreadableProjects().size());
+        });
+    }
+
     @Override
     public WorkspaceDto getWorkspace(String workspaceIdentifier) throws MinosApiException {
         return execute(() -> workspace(workspaceIntelligence.getWorkspace(workspaceIdentifier)));
+    }
+
+    @Override
+    public WorkspaceLookupDto lookupWorkspace(String workspaceIdentifier) throws MinosApiException {
+        return execute(() -> {
+            WorkspaceIntelligenceService.WorkspaceLookup lookup = workspaceIntelligence.getWorkspaceTolerantly(
+                    required(workspaceIdentifier, "workspaceIdentifier"));
+            return new WorkspaceLookupDto(
+                    workspace(lookup.workspace()),
+                    lookup.unreadableWorkspaces().size(),
+                    lookup.unreadableProjects().size());
+        });
     }
 
     @Override
