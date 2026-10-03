@@ -255,7 +255,8 @@ Les deux compteurs ne veulent pas dire la même chose :
   résolution par nom, l'unicité du nom n'est pas prouvée.
 
 Une liste dont un compteur est non nul est **valide pour ce qui a été lu, et incomplète** : elle ne doit pas être lue comme la liste de tous
-les espaces. Ce sont des entiers, pas des messages ; pour savoir quelles entrées sont en cause, `minos project list` les montre.
+les espaces. Ce sont des entiers, pas des messages. `minos project list` montre les entrées de **projet** illisibles ; aucune commande ne montre celles d'**espace** :
+ce sont des fichiers de `registry/workspaces/` dans le répertoire MINOS_HOME.
 
 `lookupWorkspace` distingue deux échecs qui ne se confondent jamais :
 

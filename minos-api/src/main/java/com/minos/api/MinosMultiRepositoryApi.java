@@ -126,7 +126,8 @@ public interface MinosMultiRepositoryApi extends MinosApi {
      * The workspaces that could be established, and what could not be read. {@code unreadableWorkspaceEntries} counts
      * workspace entries that may exist and are missing from {@code workspaces}; {@code unreadableProjectEntries} counts
      * project entries whose membership is not in the listed workspaces' {@code projectIds}. Both are 0 for a registry
-     * that was read in full. They are counts, not messages: what the entries are is shown by {@code minos project list}.
+     * that was read in full. They are counts, not messages. {@code minos project list} shows the unreadable project entries; no
+     * command shows the unreadable workspace entries, which are the files under {@code registry/workspaces/} of the MINOS home.
      */
     record WorkspaceInventoryDto(
             List<WorkspaceDto> workspaces,
