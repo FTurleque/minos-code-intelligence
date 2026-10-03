@@ -3,16 +3,42 @@
 Chantier ouvert le 2026-10-02 sur `docs/audit/AUDIT-2026-09.md`. Quatre constats, les seuls de l'échéance sprints 2–3
 encore ouverts. Après ce chantier il ne reste que des constats d'échéance **Trimestre**.
 
-| Lot | Branche | Constats | PR | État |
+| Lot | Branche (supprimée après fusion) | Constats | PR | État au 2026-10-02 |
 |---|---|---|---|---|
-| 1 | `sec/s11-chaine-et-conteneurs` | S11 | — | implémenté, validé en local (`clean verify`), en attente de PR |
-| 2 | `rel/d1-distribution-auto-portante` | D1 | — | implémenté, validé en local (`clean verify`), en attente de PR |
-| 3 | `ci/c2-un-seul-build` | C2 | — | implémenté, validé hors CI (gates Python, actionlint), en attente de PR |
-| 4 | `sec/s14-assainissement` | S14 | — | à faire |
+| 1 | `sec/s11-chaine-et-conteneurs` | S11 | #324 | **fusionné dans `develop`** (avec #329, qui portait ses commits) |
+| 2 | `rel/d1-distribution-auto-portante` | D1 | #326 | **fusionné dans `develop`** (avec #329), **sauf la preuve hors ligne physique** (voir « Reste à faire ») |
+| 3 | `ci/c2-un-seul-build` | C2 | #329 | **fusionné dans `develop`** (M19 et M20 supprimés ; gate `check-single-execution.py`) |
+| 4 | `sec/s14-assainissement` | S14 | #328 | **fusionné dans `develop`** |
+| — | `build/s11-renommage-compose` | S11-L4 (dette Dependabot du lot 1) | #327 | **fusionné dans `develop`** (PR séparée, décision du propriétaire) |
+| — | `fix/appcontainer-protected-runtime-grant` | régression de #321 découverte pendant le lot 2 (D1-L1) | #325 | **fusionné dans `develop`** ; le défaut plus profond (`C:\` illisible par `ALL APPLICATION PACKAGES`) reste ouvert |
 
 Base : `origin/develop` au 2026-10-02 (`2663bbda`, merge de #321). Une branche, un worktree (`minos-wt/…`) par lot, lots
-séquentiels, chacun rebasé sur le précédent. #322 (promotion `develop`→`main`) et #323 (correctif Sonar S2259) sont
-ouvertes et hors de ce chantier : rien n'est fusionné ici.
+empilés (chacun rebasé sur le précédent, puis fusionné par la PR du sommet de la pile pour limiter les cycles de CI).
+#323 (correctif Sonar S2259) est fusionnée. **#322 (promotion `develop`→`main`) reste ouverte et n'est pas fusionnée.**
+
+## Reste à faire (hors code, au propriétaire)
+
+1. **Preuve hors ligne physique de D1** : non faite. L'observateur réseau (deux témoins positifs, ~275 ms d'écart)
+   prouve qu'avec le réseau joignable la run MINOS n'ouvre aucune connexion directe visible et ne résout aucun hôte de
+   téléchargement ; il ne couvre pas une connexion ouverte et refermée entre deux échantillons, ni le comportement d'une
+   machine dont le réseau est réellement coupé. Procédure (carte réseau désactivée, Windows PowerShell 5.1) :
+   `scriptselease\qualify-offline-install.ps1 -Package <zip complet>` ; lire `OFFLINE QUALIFICATION PASS`, `FAIL` ou
+   `NOT RUN`, puis réactiver la carte. Tant que ce n'est pas fait, le critère « machine neuve sans réseau » est établi
+   par substituts (canari, observateur, conteneur `--network none`), pas par la coupure.
+2. **#322** : promotion vers `main`, à fusionner par le propriétaire (aucune release ni tag créé par ce chantier).
+3. **Ruleset du dépôt** : `Static invariants (single run)` n'est pas un check exigé.
+4. **`AUDIT-2026-09.md`** : fermer S11, D1, C2 et S14 (copie locale modifiée du propriétaire, non touchée).
+
+## Chiffres de mesure : corrections successives (pour la prochaine personne qui rejoue)
+
+Les plafonds par défaut n'ont pas changé ; c'est la **prose** qui a été corrigée deux fois (V8, V18). Plancher PID pour
+9 clients MCP : « 150 » (faux) → « environ 250 » → **« environ 320-400, selon le nombre de CPU visibles par JVM »**
+(deux bancs ne se rejoignent pas à 300 : 9/9 sur l'un, 5/9 sur l'autre ; sans plafond CPU chaque JVM voit tous les CPU
+et crée plus de threads). Administration : « 344 Mio, 44 PID » (jamais reproduit : mélange du pic de la sonde providers et
+des PID de `doctor`) → `index --dry-run` sur ce dépôt 113 Mio / 37 PID ; `git-activity` sur 1 667 commits 333 Mio / 39
+PID (pire cas mesuré) ; plafond de 2 Gio **« généreux, non dérivé du pire cas »**. La table CPU « 4/4/2/2/4 » est
+caduque : plus aucun plafond CPU par défaut (V6). Les lignes V6/V8/V18 du tableau de `verif-s23` plus bas décrivent l'état
+au moment du constat, pas l'état livré.
 
 Règle de CI de ce chantier : **un seul passage de validation par lot**, un second seulement sur demande motivée au
 propriétaire. Aucun `workflow_dispatch` ni push « pour voir ».
