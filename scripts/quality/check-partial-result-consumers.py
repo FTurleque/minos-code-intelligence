@@ -11,7 +11,9 @@ named in KNOWN_GAPS below with its reason.
 WHAT IT DOES NOT DETECT (it is a heuristic, not a proof):
   * a command assembled at run time (string concatenation, a variable holding the verb, a wrapper with another name);
   * a file that loads the shared list but still tests one call strictly: the check is per file, not per call;
-  * a dot-source or a `0, 3` that is dead code (written but never reached): only comments are ignored;
+  * a dot-source or a `0, 3` that is dead code (written but never reached), or that sits where it does not run: only
+    whole lines starting with `#` are ignored, so a PowerShell block comment `<# ... #>`, a here-string, a trailing
+    comment or a Python docstring that contains the dot-source line or the JSON name still counts as handling;
   * the `run:` steps of .github/workflows (only scripts/, docker/ and packaging/ are scanned);
   * a strict call placed within two lines below an unrelated `-Action Admin` (it is read as delegated), and a
     single-word command such as `'inspect'` quoted for another purpose (a false positive; none exists today);
@@ -120,10 +122,11 @@ def check(root: Path) -> list[str]:
     for path in candidate_files(root):
         relative = path.relative_to(root).as_posix()
         text = path.read_text(encoding="utf-8", errors="ignore")
-        named = named_commands(text, commands)
+        code = COMMENT_LINE.sub("", text)  # keeps the line count: comment lines become empty lines
+        named = named_commands(code, commands)
         if not named:
             continue
-        handled = bool(HANDLED.search(COMMENT_LINE.sub("", text)))
+        handled = bool(HANDLED.search(code))
         if relative in KNOWN_GAPS:
             seen_gaps.add(relative)
             if handled:
