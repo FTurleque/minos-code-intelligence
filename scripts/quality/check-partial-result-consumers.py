@@ -10,7 +10,11 @@ named in KNOWN_GAPS below with its reason.
 
 WHAT IT DOES NOT DETECT (it is a heuristic, not a proof):
   * a command assembled at run time (string concatenation, a variable holding the verb, a wrapper with another name);
-  * a file that references the shared list but still tests one call strictly: the check is per file, not per call;
+  * a file that loads the shared list but still tests one call strictly: the check is per file, not per call;
+  * a dot-source or a `0, 3` that is dead code (written but never reached): only comments are ignored;
+  * the `run:` steps of .github/workflows (only scripts/, docker/ and packaging/ are scanned);
+  * a strict call placed within two lines below an unrelated `-Action Admin` (it is read as delegated), and a
+    single-word command such as `'inspect'` quoted for another purpose (a false positive; none exists today);
   * consumers that are not scripts: the IntelliJ plugin (Gradle, covered by its own tests), Java tests, anything
     outside this repository (NEXUS, users' own scripts);
   * a command that starts exiting 3 without being listed: that is PartialResultCommandsContractTest's job, not this one.
@@ -18,7 +22,8 @@ WHAT IT DOES NOT DETECT (it is a heuristic, not a proof):
 STATUS: advisory. The job that runs it (`Static invariants (single run)` in pr-ci.yml) is not a check required by the
 repository ruleset, so a failure here does not block a merge until the ruleset requires that job (audit finding G6).
 
-KNOWN_GAPS may only shrink: an entry whose file no longer needs it, or no longer exists, fails the gate.
+KNOWN_GAPS may only shrink: an entry whose file no longer needs it, or no longer exists, fails the gate, and an entry
+that is not in GAP_CEILING fails it too. Growing the ceiling is a visible change to this file, to be refused in review.
 """
 from __future__ import annotations
 
@@ -44,10 +49,16 @@ KNOWN_GAPS = {
     ),
 }
 
+GAP_CEILING = frozenset({"scripts/m24/run-provider-e2e.py"})  # a literal, on purpose: see the module docstring
+
+# What counts as "knows about the partial result". Comment lines are removed first: naming the list in a comment is
+# not loading it. A PowerShell script must really dot-source the helper; any dialect may read the JSON or accept 0 and 3.
 HANDLED = re.compile(
-    r"MinosExitCode\.ps1|partial-result-commands\.json|@\(\s*0\s*,\s*3\s*\)|\{\s*0\s*,\s*3\s*\}|"
-    r"AcceptedExitCodes\s+@\(\s*0\s*,\s*3|partial-result:\s*handled"
+    r"^\s*\.\s+.*MinosExitCode\.ps1|partial-result-commands\.json|@\(\s*0\s*,\s*3\s*\)|\{\s*0\s*,\s*3\s*\}|"
+    r"AcceptedExitCodes\s+@\(\s*0\s*,\s*3",
+    re.MULTILINE,
 )
+COMMENT_LINE = re.compile(r"^\s*#.*$", re.MULTILINE)
 DELEGATED_LINE = re.compile(r"-Action\s+Admin\b")
 
 
@@ -112,7 +123,7 @@ def check(root: Path) -> list[str]:
         named = named_commands(text, commands)
         if not named:
             continue
-        handled = bool(HANDLED.search(text))
+        handled = bool(HANDLED.search(COMMENT_LINE.sub("", text)))
         if relative in KNOWN_GAPS:
             seen_gaps.add(relative)
             if handled:
@@ -123,6 +134,8 @@ def check(root: Path) -> list[str]:
             problems.append(
                 f"{relative}: runs {names}, which can exit 3 (partial result), and neither reads "
                 f"scripts/lib/partial-result-commands.json nor accepts `0, 3` nor delegates through `-Action Admin`")
+    for relative in sorted(set(KNOWN_GAPS) - GAP_CEILING):
+        problems.append(f"{relative}: KNOWN_GAPS may not grow (it is not in GAP_CEILING)")
     for relative in sorted(set(KNOWN_GAPS) - seen_gaps):
         problems.append(f"{relative}: listed in KNOWN_GAPS but no longer names a partial-result command or no longer exists; remove it")
     return problems
@@ -144,6 +157,9 @@ def self_test() -> int:
         write("scripts/a/strict.ps1", "$o = Invoke-Minos @('index-status', 'x')\nif ($LASTEXITCODE -ne 0) { throw 'failed' }\n")
         write("scripts/a/strict.py", 'run(["java", "-jar", JAR, "project", "list"])\nif code != 0: raise RuntimeError\n')
         write("scripts/a/strict.sh", "minos inspect alpha\n[ $? -eq 0 ] || exit 1\n")
+        write("scripts/a/comment_only.ps1",
+              "# see partial-result-commands.json and MinosExitCode.ps1\n$o = Invoke-Minos @('index-status', 'x')\n"
+              "if ($LASTEXITCODE -ne 0) { throw }\n")
         write("scripts/b/shared.ps1", ". scripts\\lib\\MinosExitCode.ps1\n$o = Invoke-Minos @('index-status', 'x')\n")
         write("scripts/b/literal.ps1", "Invoke-Minos @('inspect', 'x') -AcceptedExitCodes @(0, 3)\n")
         write("scripts/b/delegated.ps1", "Invoke-Workflow -Action Admin -MinosArguments @('project', 'list')\n")
@@ -151,7 +167,7 @@ def self_test() -> int:
         write("scripts/history/m1/old.ps1", "Invoke-Minos @('index-status', 'x')\nif ($LASTEXITCODE -ne 0) { throw }\n")
         write("scripts/lib/test_something.py", "run(['inspect'])\n")
 
-        expected = {"scripts/a/strict.ps1", "scripts/a/strict.py", "scripts/a/strict.sh"}
+        expected = {"scripts/a/strict.ps1", "scripts/a/strict.py", "scripts/a/strict.sh", "scripts/a/comment_only.ps1"}
         failing = {problem.split(":", 1)[0] for problem in check(root) if "KNOWN_GAPS" not in problem}
         if failing != expected:
             print(f"PARTIAL RESULT CONSUMER GATE SELF-TEST FAILED: expected {sorted(expected)}, got {sorted(failing)}",

@@ -111,6 +111,41 @@ class HelperTests(unittest.TestCase):
             self.assertEqual([0], self.accepted(strict), " ".join(strict))
 
 
+DOT_SOURCES = r"""
+param([string] $Path)
+$tokens = $null; $errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref] $tokens, [ref] $errors)
+$dots = $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and
+    $node.InvocationOperator -eq [System.Management.Automation.Language.TokenKind]::Dot }, $true)
+@{ dotSourced = @($dots | ForEach-Object { $_.Extent.Text }) } | ConvertTo-Json -Compress
+"""
+
+
+class ConsumerWiringTests(unittest.TestCase):
+    """The function tests below hand the helper to the harness; this one proves the script really loads it."""
+
+    @classmethod
+    def setUpClass(cls):
+        if PWSH is None:
+            raise unittest.SkipTest("PowerShell is not installed")
+
+    def test_each_script_that_uses_the_shared_helper_dot_sources_it_itself(self):
+        for relative in ("scripts/m14/validate-local.ps1", "scripts/m29/run-s5.ps1"):
+            with tempfile.TemporaryDirectory() as tmp:
+                directory = Path(tmp)
+                probe = directory / "probe.ps1"
+                probe.write_text(DOT_SOURCES, encoding="utf-8")
+                completed = subprocess.run(
+                    [PWSH, "-NoProfile", "-File", str(probe), str(ROOT / relative)],
+                    capture_output=True, text=True, timeout=120, check=False)
+                lines = [line for line in completed.stdout.splitlines() if line.startswith("{")]
+                self.assertTrue(lines, completed.stdout + completed.stderr)
+                dot_sourced = json.loads(lines[-1])["dotSourced"]
+                dot_sourced = [dot_sourced] if isinstance(dot_sourced, str) else dot_sourced
+                self.assertTrue(any("MinosExitCode.ps1" in text for text in dot_sourced),
+                                f"{relative} calls the helper's functions but never dot-sources it: {dot_sourced}")
+
+
 class ScriptFunctionTests(unittest.TestCase):
     """The real functions of the real scripts, against a fake MINOS that exits with a chosen code."""
 

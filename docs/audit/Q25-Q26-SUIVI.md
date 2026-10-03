@@ -66,7 +66,13 @@ migrer vers le fichier serait un élargissement. Ils sont nommés dans « à tra
 
 | Id | Fichier:ligne | Ce qui casse | Scénario | Sévérité | Résolution |
 |---|---|---|---|---|---|
-| — | | | | | |
+| V1 | `scripts/m29/run-s5.ps1:125,127` | `Invoke-AdminJson` appelait des fonctions de l'assistant que le script ne chargeait jamais | dès `project add` (2e appel admin), `CommandNotFoundException` sous `$ErrorActionPreference = 'Stop'` : régression, le script allait au bout avant Q25. Le harnais de test chargeait l'assistant à la place du script | **bloquant** | corrigé : dot-source ajouté ; `ConsumerWiringTests` exige, par l'AST, un dot-source réel dans chaque script (rouge démontré sur run-s5 sans le dot-source) |
+| V2 | `check-partial-result-consumers.py` | une mention en commentaire valait prise en charge (cause de V1 : faux négatif du gate) | `# voir partial-result-commands.json` + `if ($LASTEXITCODE -ne 0) { throw }` passait | à corriger | corrigé : commentaires ignorés, dot-source réel exigé pour un `.ps1` ; cas « commentaire seul » au self-test ; démontré sur run-s5 sans dot-source |
+| V3 | idem, `KNOWN_GAPS` | « ne fait que rétrécir » n'était garanti par rien | une PR future ajoute son script avec une raison de complaisance | à corriger | corrigé : `GAP_CEILING` littéral ; toute entrée hors plafond échoue ; le plafond est une convention de revue, dite dans la docstring |
+| V4 | `LazyWiringGuardTest.java:42-48` | deux Javadoc empilées, la première orpheline | — | à corriger | fusionnées |
+| V5 | `pr-ci.yml` | « consultatif » n'est vrai que par l'état du ruleset (pas de `continue-on-error`) | un faux positif rougit le job `Static invariants` | remarque | dit tel quel dans la PR |
+| V6 | docstring du gate | angles morts non cités (workflows non scannés, fenêtre de 2 lignes, faux positif d'un mot seul quoté) | — | remarque | ajoutés à la docstring |
+| V8 | `MinosExitCode.ps1` | fins de ligne LF dans le worktree | — | remarque | artefact de checkout : `*.ps1` est `eol=crlf`, Git normalise |
 
 ## 5. À traiter plus tard
 

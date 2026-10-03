@@ -14,6 +14,7 @@ if ($env:OS -ne 'Windows_NT') {
 }
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+. (Join-Path $RepoRoot 'scripts\lib\MinosExitCode.ps1')
 if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { $ProjectsRoot = Split-Path -Parent $RepoRoot }
 $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 $FixtureRelativePath = 'minos-code-intelligence/fixtures/polyglot/m29-scoped-modules'
