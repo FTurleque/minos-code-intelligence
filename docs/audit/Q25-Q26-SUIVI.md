@@ -60,7 +60,12 @@ migrer vers le fichier serait un élargissement. Ils sont nommés dans « à tra
 
 | Commit | Contenu | Preuve |
 |---|---|---|
-| — | à remplir au fil des commits | |
+| `0402a947` | décisions du lot 1, script par script | mesure § 2.1 |
+| `6ac53c03` | liste unique `scripts/lib/partial-result-commands.json`, assistant `MinosExitCode.ps1`, garde Java `PartialResultCommandsContractTest` | garde bidirectionnelle (une commande de la table de lecture rend 3 si et seulement si elle est listée) ; mutation : retirer `inspect` et ajouter `architecture` la fait échouer |
+| `d8cf2f70` | `m14/validate-local.ps1` et `m29/run-s5.ps1` acceptent `{0, 3}` pour les commandes listées et le disent | rouge : 3 échecs sur 9 (`'RETURNED' != 'THREW'` ×2, `-Strict` absent) ; vert : 9/9 sous PowerShell 7.6 **et** Windows PowerShell 5.1 |
+| `40907248` | gate consultatif `check-partial-result-consumers.py`, branché dans `pr-ci.yml` | rouge démontré sur les scripts d'origine (il nomme `m14` l. 243 et `run-s5` l. 138, 186) |
+| `9ba4de1a` | **V1** : `run-s5.ps1` charge réellement l'assistant ; gate durci (V2, V3) ; Javadoc fusionnées (V4) | `ConsumerWiringTests` : rouge démontré sur `run-s5` sans dot-source, vert avec ; 10 tests sous les deux hôtes |
+| `f3b725b5` | W1 documenté, W3 corrigé | gate et self-test verts |
 
 ## 4. Constats de `verif-q`
 
@@ -88,5 +93,5 @@ migrer vers le fichier serait un élargissement. Ils sont nommés dans « à tra
 
 | Lot | `clean verify` | Gates | PR |
 |---|---|---|---|
-| 1 | | | |
+| 1 | `./mvnw clean verify` : **BUILD SUCCESS** (14 modules, 12 golden de caractérisation inchangés, 0 échec, 0 ignoré) ; `check-jacoco.py` SUCCESS | `check-module-boundaries` modules=14 sources=517 paquets=45 ; `check-private-io` sources=517, **liste blanche = 37** ; `check-milestone-artifact-references` 117 (113 + json, ps1, test, gate) ; `check-single-execution` workflows=11 ; `check-current-docs`, `product-facts --check`, `check-workflow-pins`, `check-compose-limits`, `check-mne`, `check-post-mne`, `check-audit-remediation-v2` verts ; `check-partial-result-consumers` + `--self-test` verts | à remplir |
 | 2 | | | |
