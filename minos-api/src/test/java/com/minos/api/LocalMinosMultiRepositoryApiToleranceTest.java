@@ -121,7 +121,7 @@ class LocalMinosMultiRepositoryApiToleranceTest {
     }
 
     @Test
-    void aThirdPartyImplementationWithoutTheNewMethodsAnswersUnavailableNotACompleteInventory() throws Exception {
+    void aThirdPartyImplementationWithoutTheNewMethodsAnswersUnavailableNotACompleteInventory() {
         InvocationHandler handler = (proxy, method, arguments) -> InvocationHandler.invokeDefault(proxy, method, arguments);
         MinosMultiRepositoryApi bare = (MinosMultiRepositoryApi) Proxy.newProxyInstance(
                 MinosMultiRepositoryApi.class.getClassLoader(), new Class<?>[]{MinosMultiRepositoryApi.class}, handler);

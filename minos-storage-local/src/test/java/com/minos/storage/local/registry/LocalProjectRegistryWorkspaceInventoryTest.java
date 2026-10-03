@@ -99,7 +99,8 @@ class LocalProjectRegistryWorkspaceInventoryTest {
         damage(projectEntry(beta));
 
         assertThrows(RuntimeException.class, registry::listWorkspaces);
-        assertThrows(RuntimeException.class, () -> registry.findWorkspace(platform.id()));
+        UUID platformId = platform.id();
+        assertThrows(RuntimeException.class, () -> registry.findWorkspace(platformId));
     }
 
     @Test
