@@ -52,3 +52,7 @@
 | `«database»` | Stockage persistant |
 
 Tous les diagrammes sont en Mermaid. Aucun diagramme ASCII ni image binaire n'est généré.
+
+## Évolution acceptée — stockage et frontières
+
+[ADR 0055–0057 et backlog](../roadmap/storage-hexagonal-2026-10/README.md). La cible est séparée des diagrammes générés décrivant les POMs actuels.
