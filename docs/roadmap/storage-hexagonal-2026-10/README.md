@@ -98,3 +98,24 @@ Les commandes de TASKS sont des prescriptions futures, pas des résultats annonc
 
 Après implémentation, consigner dans `VALIDATION.md` : SHA, environnement, commandes, sorties synthétiques, preuves de compatibilité, écarts et rollback. Aucun rapport d'implémentation n'est créé comme réussi à l'avance. Le rollback d'une PR de déplacement doit préserver les données grâce à l'absence de changement de format. Examiner séparément la compatibilité des coordonnées Maven et des records publics.
 
+
+## Suivi GitHub
+
+Chantier parent : [#334](https://github.com/FTurleque/minos-code-intelligence/issues/334).
+
+| Tâche | Issue | État initial |
+|---|---|---|
+| SH-01 | [#335](https://github.com/FTurleque/minos-code-intelligence/issues/335) | À faire |
+| SH-02 | [#336](https://github.com/FTurleque/minos-code-intelligence/issues/336) | À faire |
+| SH-03 | [#337](https://github.com/FTurleque/minos-code-intelligence/issues/337) | À faire |
+| SH-04 | [#338](https://github.com/FTurleque/minos-code-intelligence/issues/338) | À faire |
+| SH-05 | [#339](https://github.com/FTurleque/minos-code-intelligence/issues/339) | À faire |
+| SH-06 | [#340](https://github.com/FTurleque/minos-code-intelligence/issues/340) | À faire |
+| SH-07 | [#341](https://github.com/FTurleque/minos-code-intelligence/issues/341) | À faire |
+| SH-08 | [#342](https://github.com/FTurleque/minos-code-intelligence/issues/342) | À faire |
+| SH-09 | [#343](https://github.com/FTurleque/minos-code-intelligence/issues/343) | À faire |
+| SH-10 | [#344](https://github.com/FTurleque/minos-code-intelligence/issues/344) | À faire |
+| SH-11 | [#345](https://github.com/FTurleque/minos-code-intelligence/issues/345) | À faire |
+| SH-12 | [#346](https://github.com/FTurleque/minos-code-intelligence/issues/346) | À faire |
+
+Les états ci-dessus sont ceux de la création du plan ; consulter les issues pour l'avancement puis synchroniser ce tableau dans les PR d'implémentation.
