@@ -4,6 +4,10 @@ Statut au **31 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1
 
 Les versions historiques détaillées restent archivées sous [`history/reconciliations/`](history/reconciliations/). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
 
+## Chantier accepté — stockage et frontières hexagonales (2026-10-05)
+
+Décisions acceptées, code non encore migré : consolidation dans `minos-storage`, port de lecture neutre et finalisation des frontières. Le plan est basé sur `develop`, qui contient déjà le bootstrap et les corrections A2/A3. [Backlog priorisé](roadmap/storage-hexagonal-2026-10/README.md) · [12 tâches exécutables](roadmap/storage-hexagonal-2026-10/TASKS.md) · [Démarrage Claude](roadmap/storage-hexagonal-2026-10/START-WITH-CLAUDE.md). Commencer par SH-01, préparer SH-11, puis SH-02/03.
+
 ## Principes durables
 
 - une capacité n'est acquise qu'avec une preuve reproductible ;
