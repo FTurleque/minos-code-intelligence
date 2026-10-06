@@ -177,7 +177,7 @@ ne le liste : ses seuls consommateurs sont l'API et MCP, dont les listes (`List<
 porter le compte des entrées écartées. Les rendre tolérantes serait exactement le silence que la doctrine interdit, et
 leur ajouter ce champ est un changement de contrat API/MCP, hors d'un chantier de résidus CLI. De même `findWorkspace` :
 l'appartenance d'un espace est calculée sur les projets, et une liste tronquée y serait une réponse fausse. Les deux
-restent strictes ; le point part dans « à traiter plus tard ».
+restent strictes ; le point part dans « à traiter plus tard ». *Repris par le chantier Q25-Q26 (`Q25-Q26-SUIVI.md` § 7) : les deux méthodes restent strictes, deux opérations tolérantes s'ajoutent à l'API Java ; MCP n'expose pas les espaces locaux et n'est pas concerné.*
 
 ### 5.1 Ce que le code a appris (2026-10-01)
 
@@ -259,7 +259,7 @@ qui a écrit ce lot : la logique pure du plugin a été exécutée localement av
   lecture seule n'est donc pas testable sous Windows. Comportement de `PrivateLocalStorage` (module `minos-storage-local`),
   non modifié par ce chantier.
 - **`listWorkspaces` / `findWorkspace` stricts.** Tolérer un registre abîmé suppose un champ « entrées écartées » dans
-  les DTO de l'API et de MCP (contrat public) ; voir § 5.
+  les DTO de l'API et de MCP (contrat public) ; voir § 5. *Traité : `Q25-Q26-SUIVI.md` § 7 (API Java seulement, MCP n'est pas concerné).*
 - **Texte d'un fichier abîmé dans un message d'échec.** Sur les chemins d'échec stricts qui remontent l'exception d'origine
   (par exemple `inspect <identifiant d'une entrée abîmée>`), le message du JDK peut recopier un fragment du fichier lu
   (`Text 'nope' could not be parsed`). Constat de `verif-cli`. Corrigé dans ce lot pour ce qui est dangereux : la ligne d'échec

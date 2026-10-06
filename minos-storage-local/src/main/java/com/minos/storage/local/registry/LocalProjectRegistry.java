@@ -190,16 +190,47 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         List<RegisteredProject> projects = listProjects();
         List<RegisteredWorkspace> workspaces = new ArrayList<>();
         for (Path file : propertyFiles(workspacesDirectory)) {
-            WorkspaceMetadata metadata = readWorkspaceMetadata(file, idFromPropertiesFile(file));
-            List<UUID> projectIds = projects.stream()
-                    .filter(project -> project.workspaceId().filter(metadata.id()::equals).isPresent())
-                    .map(RegisteredProject::id)
-                    .toList();
-            workspaces.add(new RegisteredWorkspace(
-                    metadata.id(), metadata.name(), projectIds, metadata.createdAt(), metadata.updatedAt()));
+            workspaces.add(workspaceOf(readWorkspaceMetadata(file, idFromPropertiesFile(file)), projects));
         }
         workspaces.sort(Comparator.comparing(workspace -> workspace.id().toString()));
         return List.copyOf(workspaces);
+    }
+
+    /**
+     * Les espaces de travail comme inventaire (Q26) : un fichier de projet abîmé borne son dégât à son entrée (le
+     * rattachement des autres reste établi, l'entrée est comptée), un fichier d'espace abîmé est un espace qui manque
+     * à la liste et qui est compté. {@link #listWorkspaces()} échoue sur la première entrée abîmée comme avant ; un
+     * répertoire qu'on ne peut pas lister échoue ici aussi.
+     */
+    @Override
+    public synchronized WorkspaceInventory workspaceInventory() throws IOException {
+        Scan projects = scanProjects();
+        List<RegisteredWorkspace> workspaces = new ArrayList<>();
+        List<EntryFailure> failures = new ArrayList<>();
+        for (Path file : propertyEntries(workspacesDirectory)) {
+            if (!Files.isRegularFile(file)) {
+                failures.add(new EntryFailure(file, null));
+                continue;
+            }
+            try {
+                workspaces.add(workspaceOf(readWorkspaceMetadata(file, idFromPropertiesFile(file)), projects.projects()));
+            } catch (IOException | RuntimeException failure) {
+                // Une interruption n'est pas une entrée abîmée (voir scanProjects).
+                if (Thread.currentThread().isInterrupted()) throw failure;
+                failures.add(new EntryFailure(file, failure));
+            }
+        }
+        workspaces.sort(Comparator.comparing(workspace -> workspace.id().toString()));
+        return new WorkspaceInventory(workspaces, failures.stream().map(Scan::describe).toList(), projects.degraded());
+    }
+
+    private static RegisteredWorkspace workspaceOf(WorkspaceMetadata metadata, List<RegisteredProject> projects) {
+        List<UUID> projectIds = projects.stream()
+                .filter(project -> project.workspaceId().filter(metadata.id()::equals).isPresent())
+                .map(RegisteredProject::id)
+                .toList();
+        return new RegisteredWorkspace(
+                metadata.id(), metadata.name(), projectIds, metadata.createdAt(), metadata.updatedAt());
     }
 
     public Path storageRoot() {
