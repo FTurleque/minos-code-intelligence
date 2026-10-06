@@ -1,0 +1,76 @@
+schema: spec-driven
+
+context: |
+  MINOS est un moteur de code intelligence local-first, multi-langages, indépendant
+  des fournisseurs d'IA et capability-honest : une capacité absente ou non qualifiée
+  n'est jamais présentée comme acquise. Logiciel propriétaire source-available.
+
+  Langue : rédiger tous les artefacts OpenSpec en français (comme docs/, les ADR et
+  les PR du dépôt).
+
+  Toolchain (docs/TOOLCHAIN_POLICY.md) :
+  - Noyau, CLI, MCP, stockage, providers : Java 24 et Maven 3.9.x, via le wrapper
+    mvnw / mvnw.cmd, qui fait foi (pas un Maven local).
+  - minos-intellij : Gradle et Java 21, hors du reactor Maven. C'est un client
+    externe du protocole CLI versionné et il ne doit dépendre d'aucun artefact
+    com.minos:*.
+  - CI de qualification : Ubuntu 24.04 et Windows Server 2022. Tout changement doit
+    tenir sur les deux.
+
+  Architecture et frontières :
+  - Le reactor Maven impose les frontières de modules (ADR-0022). Ne jamais créer un
+    module juste pour reproduire un package, ni introduire une dépendance contraire
+    à la direction domain -> engine -> runtime/storage -> adapters -> application ->
+    surfaces. minos-app est le composition root.
+  - Une décision d'architecture structurante donne lieu à un ADR numéroté dans
+    docs/adr/ (Contexte, Décision, Conséquences) et non à une simple note de design.
+  - MCP en STDIO est en lecture seule (ADR-0017). Les surfaces publiques (CLI, API
+    Java, MCP) sont versionnées et additives : pas de rupture de contrat.
+  - Fail-closed : le code non fiable est refusé par le sandbox OS, jamais exécuté
+    en mode dégradé.
+
+  Gates de non-régression à connaître :
+  - scripts/remediation/check-*.py et scripts/m*/check-*.py affirment des chaînes
+    littérales (noms de méthodes ou de classes, expressions d'appel exactes) dans
+    le source. Avant de renommer ou restructurer, grep ces scripts pour l'ancien nom
+    et rejouer le check concerné.
+  - Les gates JaCoCo (scripts/quality/check-jacoco.py) sont ciblés par scope. Sur
+    poste Windows, le scope m24-polyglot-provider-platform est rouge hors régression
+    (code Linux-only) ; comparer avec develop avant d'investiguer.
+  - Les goldens de caractérisation (minos-app/src/test/resources/characterization/)
+    ne doivent pas dépendre de l'outillage de l'hôte.
+
+  Workflow Git : branches thématiques (docs/, build/, sec/, feat/…) fusionnées par PR
+  dans develop, puis promotion de develop vers main. Releases immuables (tags
+  vX.Y.Z), jamais retaguées.
+
+rules:
+  proposal:
+    - Toujours énoncer ce qui est hors périmètre.
+    - Indiquer les modules du reactor touchés et les surfaces publiques impactées
+      (CLI, API Java, MCP, IntelliJ, NEXUS).
+    - Dire si le changement exige un nouvel ADR ou en amende un existant (citer son
+      numéro).
+  design:
+    - Vérifier que le changement respecte la direction des dépendances entre modules
+      (ADR-0022) et expliquer toute exception.
+    - Qualifier explicitement chaque capacité nouvelle (qualifiée, partielle ou
+      non supportée) ; ne jamais en présumer.
+    - Couvrir Windows et Linux ; signaler tout comportement propre à une plateforme.
+  specs:
+    - Rédiger les exigences de façon testable et indiquer les cas de refus
+      (fail-closed) en plus du cas nominal.
+  tasks:
+    - Nommer les scripts check-*.py et les scopes JaCoCo à rejouer pour chaque tâche
+      qui renomme ou déplace du code.
+    - Prévoir les tests dans la même tâche que le code, pas dans une tâche finale.
+
+operations:
+  apply:
+    guidance:
+      - Construire avec le wrapper Maven ; tout -pl s'accompagne de -am.
+      - Ne pas écrire de journaux de build dans le target/ racine, que clean supprime.
+  archive:
+    guidance:
+      - Résumer le résultat de l'archivage et lister les docs/ à mettre à jour
+        (STATUS.md, ROADMAP.md, ADR) avant de conclure.
