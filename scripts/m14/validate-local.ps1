@@ -11,6 +11,7 @@ Set-StrictMode -Version Latest
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 . (Join-Path $RepoRoot 'scripts\windows\MinosWindows.ps1')
+. (Join-Path $RepoRoot 'scripts\lib\MinosExitCode.ps1')
 
 function Invoke-NativeChecked {
     param(
@@ -103,11 +104,14 @@ function Write-LatestProviderDiagnostics {
 function Invoke-MinosJson {
     param([Parameter(Mandatory = $true)][string[]] $Arguments)
     $lines = & $script:JavaExecutable "-Dminos.home=$script:ValidationHome" -jar $script:MinosJar @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        $exitCode = $LASTEXITCODE
+    $exitCode = $LASTEXITCODE
+    # Exit 3 is a partial result for the commands listed in scripts/lib/partial-result-commands.json (Q25): the JSON is
+    # valid for the registry entries that could be read. Any other non-zero code, and 3 from any other command, fails.
+    if (-not (Test-MinosExitCodeAccepted -MinosArguments $Arguments -ExitCode $exitCode)) {
         Write-LatestProviderDiagnostics
         throw "MINOS command failed: $($Arguments -join ' ') (exit=$exitCode)"
     }
+    Write-MinosPartialResultWarning -MinosArguments $Arguments -ExitCode $exitCode
     return (($lines | Out-String).Trim() | ConvertFrom-Json)
 }
 

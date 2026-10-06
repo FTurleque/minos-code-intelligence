@@ -33,8 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class LazyWiringGuardTest {
 
-    private static final String PROJECT = "<project>";
-    private static final String ROOT = "<root>";
+    static final String PROJECT = "<project>";
+    static final String ROOT = "<root>";
 
     /** Commandes qui ne font que muter : aucune de leurs formes valides n'est une lecture. */
     private static final Set<String> MUTATION_ONLY = Set.of("index", "import-scip", "remote");
@@ -43,8 +43,11 @@ class LazyWiringGuardTest {
      * Les formes de lecture, avec des arguments valides, de chaque commande qui en a une. Les formes de mutation
      * des commandes mixtes ({@code project add}, {@code tools install}, {@code runtime import}, les écritures de
      * {@code team} et {@code ide semantic-index-sync}) n'y figurent pas : elles écrivent légitimement.
+     *
+     * <p>Visible du paquet : {@code PartialResultCommandsContractTest} y lit les commandes de lecture de la table, pour
+     * ne pas les recopier.</p>
      */
-    private static Map<String, List<String>> readInvocations() {
+    static Map<String, List<String>> readInvocations() {
         Map<String, List<String>> reads = new LinkedHashMap<>();
         reads.put("project", List.of("project list", "project list --format json", "project inspect " + PROJECT));
         reads.put("inspect", List.of("inspect " + PROJECT));

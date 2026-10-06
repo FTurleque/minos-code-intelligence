@@ -471,7 +471,9 @@ registre étaient illisibles et ont été écartées ; elles sont comptées et a
   Une résolution par **identifiant** (UUID) ne lit que l'entrée demandée et sort `0`.
 
 Un script qui traite tout code non nul comme un échec doit accepter `3` pour ces commandes s'il veut lire leur sortie : la sortie standard reste
-exploitable, c'est le verdict qui dit qu'elle est incomplète.
+exploitable, c'est le verdict qui dit qu'elle est incomplète. La liste de ces commandes est écrite une seule fois dans le dépôt,
+`scripts/lib/partial-result-commands.json` ; `scripts/lib/MinosExitCode.ps1` la lit pour les scripts PowerShell, et un test de la CLI vérifie qu'elle
+dit vrai.
 
 Le code 2 est réservé aux erreurs d'usage détectées à l'analyse des arguments, avant tout appel de service. Une erreur levée ensuite par un service (projet inconnu, par exemple) est une erreur d'exécution (code 1), y compris pour les opérations `ide`.
 

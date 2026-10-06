@@ -1,0 +1,10 @@
+{
+  "partialResultExitCode": 3,
+  "meaning": "Partial result: the output is valid for the registry entries that could be read; unreadable entries were counted, not used. Exit codes stay 0 success, 1 failure, 2 usage error, 3 partial result (docs/user/cli.md, CLI-SUIVI.md section 2).",
+  "commands": [
+    "project list",
+    "project inspect",
+    "inspect",
+    "index-status"
+  ]
+}
