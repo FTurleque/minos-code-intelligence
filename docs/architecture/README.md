@@ -58,3 +58,7 @@ Tous les diagrammes sont en Mermaid. Aucun diagramme ASCII ni image binaire n'es
 [Étude arc42 et vue C4 Component](../research/minos-evolution-2026-10/README.md) · [Roadmap](../research/minos-evolution-2026-10/ROADMAP.md) · [ADR 0048–0054](../adr/README.md).
 
 Ces vues sont une cible proposée, distincte de l'architecture actuellement livrée. La base de conception est develop au 4 octobre 2026, notamment l'ADR-0042 (composition minos-bootstrap).
+
+## Évolution acceptée — stockage et frontières
+
+[ADR 0055–0057 et backlog](../roadmap/storage-hexagonal-2026-10/README.md). La cible est séparée des diagrammes générés décrivant les POMs actuels.

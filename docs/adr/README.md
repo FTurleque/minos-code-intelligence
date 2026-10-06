@@ -70,6 +70,18 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0053](0053-mcp-profils-progressifs.md) | Réduire le coût de découverte MCP avec des profils explicites | Proposed | Étude octobre 2026 |
 | [0054](0054-bridge-intellij-symbolique-optionnel.md) | Étudier un bridge IntelliJ de lecture symbolique | Proposed | Étude octobre 2026 |
 
+## Décisions du 5 octobre 2026 — mise en œuvre à venir
+
+Les numéros 0048–0054 sont utilisés par l'étude proposée dans la PR #333, non fusionnée lors de cette rédaction. Les décisions suivantes portent sur le chantier storage/hexagonal et ne valident pas ces propositions.
+
+| ADR | Décision | Statut |
+|---|---|---|
+| [0055](0055-unifier-les-adaptateurs-de-stockage.md) | Un module minos-storage, packages local/PostgreSQL et codec partagé | Accepted — à implémenter |
+| [0056](0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — à implémenter |
+| [0057](0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels |
+
+[Backlog, tâches et démarrage Claude](../roadmap/storage-hexagonal-2026-10/README.md).
+
 ## Règle de rédaction
 
 Un ADR doit capturer :
