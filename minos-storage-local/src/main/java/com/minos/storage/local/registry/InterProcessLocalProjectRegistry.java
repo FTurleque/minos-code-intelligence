@@ -115,6 +115,11 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
     }
 
     @Override
+    public WorkspaceInventory workspaceInventory() throws IOException {
+        return withLock(delegate::workspaceInventory);
+    }
+
+    @Override
     public boolean deleteProject(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         return withLock(() -> {
