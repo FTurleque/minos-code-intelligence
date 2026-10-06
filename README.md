@@ -198,3 +198,7 @@ MINOS Code Intelligence est un logiciel **propriétaire source-available**. La v
 Aucun droit général d'utilisation, d'exécution, de déploiement, de modification, de redistribution ou de commercialisation n'est accordé sans autorisation écrite préalable du titulaire des droits, sous réserve des droits imposés par la loi ou les conditions contraignantes de GitHub.
 
 Voir [`LICENSE`](LICENSE) pour les conditions complètes et [`CONTRIBUTING.md`](CONTRIBUTING.md) pour la politique de contribution.
+
+## Étude d'évolution — octobre 2026
+
+[Étude inspirée de Semble et Serena](docs/research/minos-evolution-2026-10/README.md), avec [roadmap détaillée](docs/research/minos-evolution-2026-10/ROADMAP.md), protocole d'évaluation et guide Claude. **Conception proposée ; aucune capacité nouvelle annoncée comme livrée.**

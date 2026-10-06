@@ -139,4 +139,14 @@ La ligne de développement courante est **1.1.0-SNAPSHOT**. Aucune release 1.1.0
 | Reprise d'une indexation interrompue (crash, reboot, terminal fermé) sans tout réindexer | [ADR 0039](adr/0039-reprise-indexation-apres-interruption.md) | conception proposée |
 | Distribution auto-portante : les indexeurs sont livrés dans le paquet, plus aucune étape `tools install` à la charge de l'utilisateur | [ADR 0040](adr/0040-distribution-auto-portante-indexeurs-embarques.md) | implémentée (scip-java, scip-typescript ; qualification hors ligne physique à confirmer) |
 
-Aucun nouveau jalon fonctionnel n'est ouvert. La dette durable de sécurité reste le hard filesystem quota pour une exécution réellement hostile : une primitive qui refuse l'écriture avant dépassement reste nécessaire avant de pouvoir renforcer cette claim. Les autres travaux doivent préserver les gates exact-head et la topologie `main ⊆ develop`.
+Aucun nouveau jalon fonctionnel livré n'est déclaré par l'étude d'octobre ; le programme proposé ci-dessous reste en conception. La dette durable de sécurité reste le hard filesystem quota pour une exécution réellement hostile : une primitive qui refuse l'écriture avant dépassement reste nécessaire avant de pouvoir renforcer cette claim. Les autres travaux doivent préserver les gates exact-head et la topologie `main ⊆ develop`.
+
+## Programme proposé — amélioration retrieval et intelligence IDE (4 octobre 2026)
+
+L'[étude MINOS / Semble / Serena](research/minos-evolution-2026-10/README.md) ouvre un programme de conception distinct des jalons historiques : **35 tâches TODO, U0–U8**, sept ADR Proposed (0048–0054), mesures préalables et options conditionnelles.
+
+- [Roadmap intégrale, charges, dépendances et critères d'acceptation](research/minos-evolution-2026-10/ROADMAP.md)
+- [Protocole de qualification](research/minos-evolution-2026-10/EVALUATION.md)
+- [Reprise de développement avec Claude](research/minos-evolution-2026-10/CLAUDE-HANDOFF.md)
+
+Base de l'étude : develop `c9a339088f81b6b31c65c7ad12bc718be2a98a7b`. Priorité : recherche et contexte ; embeddings CPU et bridge IntelliJ soumis à go/no-go. Les travaux d'audit ouverts restent suivis dans leurs fichiers ; aucune implémentation, qualification ni release nouvelle n'est déclarée par cette section.
