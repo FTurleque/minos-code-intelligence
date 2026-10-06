@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -142,6 +143,11 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
 
     public Path root() {
         return root;
+    }
+
+    @Override
+    public OptionalLong tenantByteLimit() {
+        return OptionalLong.of(maxTenantBytes);
     }
 
     private HostedTenantState read(Path file, UUID expectedTenant) throws IOException {
