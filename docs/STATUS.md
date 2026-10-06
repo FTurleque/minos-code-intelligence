@@ -4,6 +4,10 @@ Dernière mise à jour : **31 août 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit courant. Les réconciliations détaillées antérieures restent archivées sous [`history/reconciliations/`](history/reconciliations/). Une capacité présente sur une branche ou une PR n'est dite intégrée dans `develop` qu'après merge ; le présent document décrit néanmoins les garanties du HEAD qui le contient afin qu'il reste exact avant et après promotion.
 
+## Planification additionnelle — 2026-10-05
+
+Les ADR 0055–0057 sont acceptés comme direction, sans revendiquer leur implémentation. [Suivi du chantier storage/hexagonal](roadmap/storage-hexagonal-2026-10/README.md). La présence de ce plan ne signifie ni promotion de develop vers main ni clôture des audits. Les preuves d'implémentation seront ajoutées dans le suivi des tâches.
+
 ## État produit
 
 - **C0 → M30** : terminés et intégrés.

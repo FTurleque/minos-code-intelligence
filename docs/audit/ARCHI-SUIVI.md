@@ -1267,3 +1267,7 @@ Le vocabulaire « Latin-1 » contient `œ` (U+0153), qui n'est pas Latin-1 : ses
 | Après correctif | 107 482 154 | 1 325 | ≈ 202 500 documents | 74,7 Mo | 1,44 |
 
 La limite d'admission ne baisse pas : elle monte, et l'estimation reste un majorant du tas réel. Temps par requête après correctif : 31–40 ms en médiane, dans la dispersion de l'étape 4 (23–37 ms). Le plafond de 250 000 documents du budget sémantique reste la borne dure.
+
+## Suite distincte — consolidation et frontières, 2026-10-05
+
+Le [chantier SH](../roadmap/storage-hexagonal-2026-10/README.md) préserve les corrections déjà acquises A2/A3/A4. Il suit notamment les résidus I/O A5 (SH-08) et chargeur SPI A8 (SH-10), sans clôturer ces constats par anticipation. La fusion des stockages relève du nouvel ADR 0055 ; le port de lecture de l'ADR 0056. Les preuves historiques ci-dessus restent inchangées.

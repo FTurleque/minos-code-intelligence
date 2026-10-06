@@ -63,6 +63,18 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0046](0046-format-de-snapshot-v3-chaines-utf8.md) | Format de snapshot V3 : chaînes UTF-8, repli V2 pour les surrogates isolés, lecture de tous les formats antérieurs | Accepted | Audit 2026-09, A6 |
 | [0047](0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) | Snapshot en mémoire : dédoublonnage des chaînes au décodage, table de chaînes, pagination ou mappage, dans cet ordre et sous mesure | Proposed | Audit 2026-09, A6 |
 
+## Décisions du 5 octobre 2026 — mise en œuvre à venir
+
+Les numéros 0048–0054 sont utilisés par l'étude proposée dans la PR #333, non fusionnée lors de cette rédaction. Les décisions suivantes portent sur le chantier storage/hexagonal et ne valident pas ces propositions.
+
+| ADR | Décision | Statut |
+|---|---|---|
+| [0055](0055-unifier-les-adaptateurs-de-stockage.md) | Un module minos-storage, packages local/PostgreSQL et codec partagé | Accepted — à implémenter |
+| [0056](0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — à implémenter |
+| [0057](0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels |
+
+[Backlog, tâches et démarrage Claude](../roadmap/storage-hexagonal-2026-10/README.md).
+
 ## Règle de rédaction
 
 Un ADR doit capturer :
