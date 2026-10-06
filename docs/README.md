@@ -61,3 +61,7 @@ Les archives conservent volontairement leurs anciens SHA, mesures, limitations f
 - [ADR](adr/README.md)
 
 > Pour installer ou utiliser MINOS, privilégier `user/`. Pour modifier le code, privilégier `developer/`. Pour comprendre une décision durable, privilégier `adr/`. Pour auditer une livraison passée, utiliser `history/`.
+
+## Chantier storage/hexagonal
+
+[Décisions, backlog et démarrage](roadmap/storage-hexagonal-2026-10/README.md) · [Tâches](roadmap/storage-hexagonal-2026-10/TASKS.md).
