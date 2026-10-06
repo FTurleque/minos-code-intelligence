@@ -1,10 +1,13 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.registry.ProjectRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 
 import static com.minos.cli.CliArgumentRules.command;
@@ -70,6 +73,83 @@ class IdeIntelligenceCommandTest {
             assertTrue(error.toString().startsWith("error: "), context);
             assertFalse(error.toString().contains("Usage:"), context);
         }
+    }
+
+    /** MINOS-AUD-C16 : une erreur d'E/S ou d'exécution d'un service est une erreur de la commande, pas un échec de démarrage. */
+    @Test
+    void anIoFailureOfAServiceIsAnExecutionErrorNotABootstrapFailure() throws Exception {
+        ProjectRegistry brokenRegistry = (ProjectRegistry) Proxy.newProxyInstance(
+                ProjectRegistry.class.getClassLoader(), new Class<?>[]{ProjectRegistry.class},
+                (proxy, method, arguments) -> {
+                    if (method.getDeclaringClass() == Object.class) {
+                        return method.getName().equals("hashCode") ? System.identityHashCode(proxy)
+                                : method.getName().equals("equals") ? proxy == arguments[0] : "broken-registry";
+                    }
+                    throw new IOException("registry storage failure");
+                });
+        MinosApplication application = MinosApplication.builder(home.resolve("app"))
+                .projectRegistry(brokenRegistry).build();
+        StringBuilder out = new StringBuilder();
+        StringBuilder err = new StringBuilder();
+
+        int code = new IdeIntelligenceCommand(application).run(
+                new String[]{"semantic-index-status", "some-project"}, out, err);
+
+        assertEquals(FindSymbolCommand.EXECUTION_ERROR, code, err.toString());
+        assertTrue(err.toString().startsWith("error: "), err.toString());
+        assertFalse(err.toString().contains("bootstrap"), err.toString());
+    }
+
+    @Test
+    void aRuntimeFailureOfAServiceIsAnExecutionErrorToo() throws Exception {
+        StringBuilder out = new StringBuilder();
+        StringBuilder err = new StringBuilder();
+
+        int code = new IdeIntelligenceCommand(() -> {
+            throw new UncheckedIOException(new IOException("storage failure"));
+        }).run(new String[]{"semantic-index-status", "some-project"}, out, err);
+
+        assertEquals(FindSymbolCommand.EXECUTION_ERROR, code, err.toString());
+        assertTrue(err.toString().startsWith("error: "), err.toString());
+        assertFalse(err.toString().contains("bootstrap"), err.toString());
+    }
+
+    /** Un MINOS_HOME qui ne s'ouvre pas n'est pas un échec de la commande : le relais traverse jusqu'au lanceur. */
+    @Test
+    void aMinosHomeThatCannotBeOpenedStillCrossesTheCommandToTheLauncher() {
+        LazyApplication lazy = LazyApplication.opening(home.resolve("never-opened"), () -> {
+            throw new IOException("cannot open MINOS_HOME");
+        });
+        StringBuilder err = new StringBuilder();
+
+        LazyApplication.OpenFailure failure = org.junit.jupiter.api.Assertions.assertThrows(
+                LazyApplication.OpenFailure.class,
+                () -> new IdeIntelligenceCommand(lazy::get).run(
+                        new String[]{"semantic-index-status", "p"}, new StringBuilder(), err));
+
+        assertEquals("cannot open MINOS_HOME", failure.failure().getMessage());
+        assertEquals("", err.toString(), "the command itself reports nothing: the launcher says « bootstrap failed »");
+    }
+
+    /** MINOS-AUD-C05 : un plafond total bas seul est accepté (le plafond par document par défaut s'y plie). */
+    @Test
+    void aLowMaxTokensAloneIsAcceptedAndReachesTheProjectResolution() throws IOException {
+        for (String maxTokens : new String[]{"128", "200", "799"}) {
+            int code = run("ide", "hybrid-context", "unknown-project", "query", "--max-tokens", maxTokens);
+
+            assertEquals(1, code, maxTokens);
+            assertTrue(error.toString().contains("unknown project"), maxTokens + " -> " + error);
+            assertFalse(error.toString().contains("maxTokensPerDocument"), maxTokens + " -> " + error);
+        }
+    }
+
+    @Test
+    void anExplicitlyInconsistentPairIsStillRefusedWithAnActionableMessage() throws IOException {
+        int code = run("ide", "hybrid-context", "unknown-project", "query",
+                "--max-tokens", "500", "--max-tokens-per-document", "900");
+
+        assertEquals(2, code, "an inconsistent explicit pair is an argument error, as before this change");
+        assertTrue(error.toString().contains("maxTokensPerDocument must be between 32 and maxTokens"), error.toString());
     }
 
     @Test

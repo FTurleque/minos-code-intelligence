@@ -313,6 +313,7 @@ Le registre contient une entrée illisible et le projet est désigné **par son 
 
 - Si le projet est affiché, `warning: N registry entries are unreadable, so this name cannot be proven unique` : la réponse est valide, le code dit qu'elle est incomplète.
 - Si rien n'est affiché, `N registry entries are unreadable, so it cannot be told whether this project exists` : ce n'est pas « projet inexistant » (`unknown project`, code 1).
+- `unknown project (the reference is not shown); pass a registered project name or UUID` : la référence passée ressemblait à un chemin (`C:\…`, `/home/…`) ou à un secret, donc elle n'est pas répétée. Une commande de projet attend le **nom** enregistré ou l'**UUID**, jamais le chemin : `minos project list` donne les deux. Un simple nom inconnu est répété tel quel (`unknown project: demo`).
 
 Diagnostic : `minos.cmd project list --format json` nomme les entrées illisibles (`degraded`). Contournement immédiat : désigner le projet par son identifiant (UUID), qui ne lit que son entrée. Correction : réparer ou supprimer l'entrée nommée.
 

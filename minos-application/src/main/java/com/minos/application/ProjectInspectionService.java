@@ -122,6 +122,27 @@ public final class ProjectInspectionService {
         return new Inspection(view(resolution.project()), resolution.unreadable());
     }
 
+    /**
+     * {@link #inspectProject} for a status answer: the index state without the repository's structure. The
+     * languages, build systems and module count are not read by a status, so the tree is not walked and a discovery
+     * that would fail (unreadable directory, traversal budget) cannot fail the status.
+     */
+    public ProjectView inspectStatus(String projectIdentifier) throws IOException {
+        return statusView(projectResolver.resolve(projectIdentifier));
+    }
+
+    /** {@link #inspectStatus} that reports the unreadable registry entries it ignored instead of failing on them (Q24). */
+    public Inspection statusInspection(String projectIdentifier) throws IOException {
+        ProjectResolver.Resolution resolution = projectResolver.resolveTolerantly(projectIdentifier);
+        return new Inspection(statusView(resolution.project()), resolution.unreadable());
+    }
+
+    /** The project with its index state and no discovery: languages and build systems empty, no module counted. */
+    public ProjectView statusView(RegisteredProject project) throws IOException {
+        Objects.requireNonNull(project, "project");
+        return withIndexState(project, Files.isDirectory(project.rootPath()), List.of(), List.of(), 0);
+    }
+
     public record Inspection(ProjectView project, List<DegradedEntry> unreadable) {
         public Inspection {
             Objects.requireNonNull(project, "project");
@@ -142,6 +163,17 @@ public final class ProjectInspectionService {
             moduleCount = discovery.modules().size();
         }
 
+        return withIndexState(project, rootAvailable, languages, buildSystems, moduleCount);
+    }
+
+    /** The one reading of the index state, shared by the views that discover the repository and by the status. */
+    private ProjectView withIndexState(
+            RegisteredProject project,
+            boolean rootAvailable,
+            List<String> languages,
+            List<String> buildSystems,
+            int moduleCount
+    ) throws IOException {
         // A status read takes no lifecycle lease and writes nothing: it reports the last state published
         // by the indexing run, brought in line with the authoritative snapshot in memory only (lot 2, P1).
         ProjectIndexStateReconciler.Reconciliation consistency = reconciler.observeStatus(project.id());

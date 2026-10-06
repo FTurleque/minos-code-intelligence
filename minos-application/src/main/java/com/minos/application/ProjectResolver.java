@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
@@ -16,6 +17,12 @@ import java.util.UUID;
 public final class ProjectResolver {
     public static final int MAX_REFERENCE_UTF8_BYTES = 64 * 1024;
 
+    /** What a public caller reads when the reference it sent must not be echoed (path, secret, connection string). */
+    static final String UNKNOWN_REFERENCE_NOT_SHOWN =
+            "unknown project (the reference is not shown); pass a registered project name or UUID, see `minos project list`";
+    static final String AMBIGUOUS_REFERENCE_NOT_SHOWN =
+            "ambiguous project name (the name is not shown); pass the project UUID, see `minos project list`";
+
     public enum ErrorCode { PROJECT_NOT_FOUND, PROJECT_REFERENCE_AMBIGUOUS, INVALID_PROJECT_REFERENCE }
 
     public static final class ResolutionException extends IllegalArgumentException {
@@ -31,6 +38,22 @@ public final class ProjectResolver {
         }
 
         public ErrorCode code() { return code; }
+
+        /**
+         * The message a public caller (CLI, Java API, MCP) may read, the same on all three surfaces. The internal
+         * message copies the reference the caller sent; it is returned as is unless the central redaction policy
+         * judges it sensitive (it looks like a path, a credential or a connection string), in which case a fixed
+         * text names the cause and the way to fix it without echoing the value. An invalid reference never echoes
+         * its value, so its message is already public.
+         */
+        public String publicMessage() {
+            return switch (code) {
+                case INVALID_PROJECT_REFERENCE -> getMessage();
+                case PROJECT_NOT_FOUND -> PublicErrorMessages.sanitize(getMessage(), UNKNOWN_REFERENCE_NOT_SHOWN);
+                case PROJECT_REFERENCE_AMBIGUOUS ->
+                        PublicErrorMessages.sanitize(getMessage(), AMBIGUOUS_REFERENCE_NOT_SHOWN);
+            };
+        }
         public String reference() { return reference; }
         public List<UUID> candidateIds() { return candidateIds; }
     }

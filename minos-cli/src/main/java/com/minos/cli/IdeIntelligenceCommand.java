@@ -1,7 +1,6 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
-import com.minos.registry.UnreadableRegistryException;
 import com.minos.domain.SymbolLocation;
 import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.program.ProgramGraph;
@@ -91,7 +90,10 @@ final class IdeIntelligenceCommand {
         try {
             output.append(CliJson.render(invocation.run())).append('\n');
             return FindSymbolCommand.SUCCESS;
-        } catch (IllegalArgumentException | IllegalStateException | UnreadableRegistryException exception) {
+        } catch (LazyApplication.OpenFailure openFailure) {
+            // MINOS_HOME could not be opened: not a failure of this operation, the launcher reports it as before.
+            throw openFailure;
+        } catch (IOException | RuntimeException exception) {
             error.append("error: ").append(message(exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
@@ -188,11 +190,13 @@ final class IdeIntelligenceCommand {
         requirePositions(arguments, 3, "hybrid-context requires <project> <query>");
         CliOptions options = analyse(CONTEXT_OPTIONS, arguments, 3);
         HybridContextBuilder.ContextRequest defaults = HybridContextBuilder.ContextRequest.defaults(arguments[2]);
+        int maxTokens = options.integer("--max-tokens", defaults.maxTokens());
         HybridContextBuilder.ContextRequest request = new HybridContextBuilder.ContextRequest(
                 arguments[2],
                 options.integer("--max-documents", defaults.maxDocuments()),
-                options.integer("--max-tokens", defaults.maxTokens()),
-                options.integer("--max-tokens-per-document", defaults.maxTokensPerDocument()));
+                maxTokens,
+                // The default per-document cap never exceeds the total budget the user chose.
+                options.integer("--max-tokens-per-document", Math.min(defaults.maxTokensPerDocument(), maxTokens)));
         return () -> context(application.get().hybridContextBuilder().build(arguments[1], request));
     }
 

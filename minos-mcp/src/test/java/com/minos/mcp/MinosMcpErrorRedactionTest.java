@@ -40,6 +40,18 @@ class MinosMcpErrorRedactionTest {
     }
 
     @Test
+    void anUnexpectedFailureIsTheGenericErrorWithoutItsMessage() {
+        MinosMcpBackend backend = failingBackend(new IllegalStateException("boom at /var/lib/minos with token=abc"));
+        var result = call(new MinosMcpTools(backend), "minos_index_status", Map.of("project", "demo"));
+
+        assertTrue(Boolean.TRUE.equals(result.isError()));
+        String text = ((TextContent) result.content().getFirst()).text();
+        assertEquals("error: MINOS tool execution failed", text);
+        assertFalse(text.contains("/var/lib/minos"));
+        assertFalse(text.contains("token=abc"));
+    }
+
+    @Test
     void boundedNonSensitiveArgumentErrorsRemainActionable() {
         MinosMcpBackend backend = failingBackend(new AssertionError("backend must not be invoked"));
         var result = call(new MinosMcpTools(backend), "minos_find_symbols",

@@ -90,6 +90,10 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         ProjectInspectionService.Inspection inspection = inspectionService.inspection(projectIdentifier);
         return new ProjectInspection(projectView(inspection.project()), inspection.unreadable());
     }
+    @Override public ProjectInspection statusInspection(String projectIdentifier) throws IOException {
+        ProjectInspectionService.Inspection inspection = inspectionService.statusInspection(projectIdentifier);
+        return new ProjectInspection(projectView(inspection.project()), inspection.unreadable());
+    }
 
     @Override
     public IndexImportResult importScip(String projectIdentifier, Path indexFile, String providerId,

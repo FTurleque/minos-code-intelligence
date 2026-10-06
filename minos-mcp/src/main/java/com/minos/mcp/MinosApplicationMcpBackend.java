@@ -92,7 +92,8 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
 
     @Override
     public String indexStatus(String project) throws Exception {
-        ProjectInspectionService.ProjectView view = projects.inspectProject(project);
+        // The status reads the index state only: the repository is not walked, so a discovery that fails cannot fail it.
+        ProjectInspectionService.ProjectView view = projects.inspectStatus(project);
         // ADR 0039 §6: the run offered for resume, without any artifact location.
         Map<String, Object> map = ProjectJson.indexStatus(
                 view, ResumableRunSummary.of(application.indexStateStore(), UUID.fromString(view.id())), Instant.now());
@@ -284,13 +285,13 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
 
     private com.minos.hosted.HostedControlPlaneService hosted() {
         return application.hostedControlPlaneService()
-                .orElseThrow(() -> new IllegalStateException("MINOS team mode is disabled"));
+                .orElseThrow(() -> new McpClientFailure.TeamModeDisabled("MINOS team mode is disabled"));
     }
 
     private String hostedToken() {
         String token = hostedBearerToken.get();
         if (token == null || token.isBlank()) {
-            throw new SecurityException("MINOS_TEAM_TOKEN is required for hosted MCP tools");
+            throw new McpClientFailure.TeamTokenRequired("MINOS_TEAM_TOKEN is required for hosted MCP tools");
         }
         return token.trim();
     }
@@ -303,8 +304,13 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         }
     }
 
+    /**
+     * The provider profiles of a status answer: static profiles whose runtime state is not inspected. The MCP is
+     * read-only (ADR 0017): asking a runtime may extract, hash, write or start a process, so it is left to
+     * {@code minos providers} and {@code minos doctor}.
+     */
     private List<Map<String, Object>> providerProfiles() {
-        return providerPlatform.listProviders().stream().map(value -> {
+        return providerPlatform.listStaticProfiles().stream().map(value -> {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("id", value.id());
             map.put("version", value.version());
@@ -408,11 +414,16 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     static HybridContextRequest hybridContextDefaults(
             String project, String query, Integer maxDocuments, Integer maxTokens, Integer maxTokensPerDocument
     ) {
+        int totalTokens = maxTokens == null ? DEFAULT_HYBRID_CONTEXT_TOKENS : maxTokens;
         return new HybridContextRequest(
                 project, query,
                 maxDocuments == null ? DEFAULT_HYBRID_CONTEXT_DOCUMENTS : maxDocuments,
-                maxTokens == null ? DEFAULT_HYBRID_CONTEXT_TOKENS : maxTokens,
-                maxTokensPerDocument == null ? DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS : maxTokensPerDocument);
+                totalTokens,
+                // The default per-document cap never exceeds the total budget: a client that only lowers
+                // maxTokens (the schema allows 128 and up) must not be refused by a default it did not choose.
+                maxTokensPerDocument == null
+                        ? Math.min(DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS, totalTokens)
+                        : maxTokensPerDocument);
     }
 
     static RuntimeSessionsRequest runtimeSessionsDefaults(String project, Integer limit) {

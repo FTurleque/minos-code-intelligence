@@ -73,11 +73,13 @@ public final class ProjectCommand {
     }
 
     public int runInspectAlias(String[] arguments, Appendable output, Appendable error) throws IOException {
-        return runInspection(arguments, output, error, INSPECT_USAGE, "inspect", ProjectCommand::renderProject);
+        return runInspection(arguments, output, error, INSPECT_USAGE, "inspect", operations::inspection,
+                ProjectCommand::renderProject);
     }
 
     public int runIndexStatus(String[] arguments, Appendable output, Appendable error) throws IOException {
-        return runInspection(arguments, output, error, STATUS_USAGE, "index-status", this::renderIndexStatus);
+        return runInspection(arguments, output, error, STATUS_USAGE, "index-status", operations::statusInspection,
+                this::renderIndexStatus);
     }
 
     /**
@@ -87,13 +89,14 @@ public final class ProjectCommand {
      * identifier reads only its own entry and stays a plain success.
      */
     private int runInspection(String[] arguments, Appendable output, Appendable error, String usage, String label,
+                              Inspector inspector,
                               BiFunction<ProjectOperations.ProjectView, SymbolOutputFormat, String> render)
             throws IOException {
         return CliCommandSupport.run(arguments, output, error, usage, Options::singleProject,
                 CliCommandSupport.reportingCause(label), options -> {
                     ProjectOperations.ProjectInspection inspection;
                     try {
-                        inspection = operations.inspection(options.project());
+                        inspection = inspector.inspect(options.project());
                     } catch (UnreadableRegistryException unreadable) {
                         error.append("error: ").append(label).append(" failed: ").append(unreadable.getMessage()).append('\n');
                         return FindSymbolCommand.PARTIAL_RESULT;
@@ -106,6 +109,12 @@ public final class ProjectCommand {
                             .append(", so this name cannot be proven unique\n");
                     return FindSymbolCommand.PARTIAL_RESULT;
                 });
+    }
+
+    /** The inspection a command runs: the full one (structure included) or the status one (index state only). */
+    @FunctionalInterface
+    private interface Inspector {
+        ProjectOperations.ProjectInspection inspect(String project) throws IOException;
     }
 
     public static String usage() {
