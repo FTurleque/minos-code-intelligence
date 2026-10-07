@@ -119,6 +119,45 @@ aujourd'hui échouer **même les commandes de lecture** (`project list`, `doctor
 `icacls "<MINOS_HOME>" /remove:d <compte> /T` (un refus hérité d'un parent est devenu explicite sur les objets que MINOS a durcis,
 d'où `/T`).
 
+## Windows : « MINOS AppContainer recovery journal … has no provable owner »
+
+Le lanceur AppContainer note, dans `MINOS_HOME\sandbox\appcontainer-recovery-v2\`, le profil et les droits temporaires de chaque
+sandbox en cours (un fichier `Minos.Worker.<guid>.json` et son verrou `Minos.Worker.<guid>.lock`). Le verrou est tenu par le lanceur
+pendant toute la vie du sandbox ; Windows le libère à la mort du processus, quelle qu'en soit la cause. Au démarrage, un lanceur ne
+récupère donc que les sandbox dont le verrou est libre (propriétaire mort) : il retire leurs droits, supprime leur profil, puis le
+journal. Un sandbox **vivant** d'un autre processus MINOS n'est jamais touché, ni par un second `index`, ni par `doctor` ou par une
+commande de statut de provider.
+
+L'avertissement signale un journal que MINOS **laisse en place** parce que la mort de son propriétaire n'est pas prouvée : verrou
+absent, verrou illisible ou erreur d'entrée-sortie. MINOS ne devine jamais (ni horloge, ni identifiant de processus) : sans preuve, il
+ne récupère rien. Si vous savez qu'aucun MINOS ne tourne, supprimez à la main le journal et son profil :
+
+```powershell
+Get-ChildItem "$env:MINOS_HOME\sandbox\appcontainer-recovery-v2" | Where-Object Name -like 'Minos.Worker.*'
+```
+
+Les journaux d'un MINOS **antérieur** (`MINOS_HOME\sandbox\appcontainer-recovery\`) ne sont plus balayés ni examinés par le nouveau
+lanceur : un ancien lanceur encore actif sur le même `MINOS_HOME` détruirait sinon les sandbox du nouveau format. Les profils
+AppContainer et les droits qu'ils auraient laissés restent en place jusqu'à suppression manuelle : `icacls "<racine>" /remove:g
+"*<SID>"` pour chaque chemin du journal, puis suppression du journal. Ils sont peu nombreux : l'ancien lanceur nettoyait tout à
+chaque démarrage.
+
+## Espace disque dans `MINOS_HOME`
+
+Une copie de projet (`local-provider-workspaces/`), un temporaire de clonage distant (`remote-cache/repositories/.entry-*.tmp`) ou un
+répertoire d'extraction (`distributed-artifacts/.accept-*`, indexation distribuée, code dormant selon l'ADR 0041) d'un run **tué** (arrêt brutal, plantage, coupure) n'est jamais supprimé
+par ce run. MINOS en borne la vie : au moment où il crée un nouveau résidu du même genre, il supprime ceux dont la dernière
+modification remonte à plus de **24 heures**.
+
+- Jamais un run vivant ou récent, ni le répertoire du run courant, ni un résidu daté dans le futur (saut d'horloge).
+- Jamais une entrée valide du cache de dépôts ni une entrée vérifiée du cache d'artefacts.
+- Jamais un lien suivi : un lien ou une jonction ancien est supprimé lui-même, jamais sa cible.
+- Au plus 16 résidus par déclenchement : un `MINOS_HOME` très encombré se vide en plusieurs runs.
+- Jamais une cause d'échec : un résidu qui refuse la suppression (droits, verrou de fichier, antivirus) est signalé par un
+  avertissement sans chemin et laissé en place ; l'opération qui l'a déclenché réussit.
+
+Si l'espace presse avant le prochain run, supprimez à la main `local-provider-workspaces/` quand aucune indexation n'est en cours.
+
 ## Windows : le bac à sable est indisponible, `minos-launchers` refusé
 
 Les scripts des lanceurs du bac à sable vivent sous `%LOCALAPPDATA%\minos-launchers\<sha256>\` et sont contrôlés avant chaque

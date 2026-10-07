@@ -103,7 +103,8 @@ La découverte exige Windows PowerShell 5.1 et le lanceur AppContainer. Le lance
 - crée et configure le Job Object **avant** de créer le processus contenu ;
 - crée le processus `CREATE_SUSPENDED`, vérifie `TokenIsAppContainer`, l’assigne au job puis vérifie `IsProcessInJob` avant `ResumeThread` — aucun enfant ne peut donc exister hors du job ;
 - relit les limites appliquées avec `QueryInformationJobObject` et refuse explicitement `JOB_OBJECT_LIMIT_BREAKAWAY_OK` / `SILENT_BREAKAWAY_OK` ;
-- appelle `TerminateJobObject` sur tous les chemins de sortie, en plus de `KILL_ON_JOB_CLOSE`.
+- appelle `TerminateJobObject` sur tous les chemins de sortie, en plus de `KILL_ON_JOB_CLOSE` ;
+- prouve sa **propriété** sur son sandbox (MINOS-AUD-A01) : avant de créer le profil, il prend un verrou exclusif `Minos.Worker.<guid>.lock` (`CreateNew`, `FileShare.None`, handle non héritable) dans `sandbox/appcontainer-recovery-v2`, qu'il garde jusqu'à sa toute dernière étape, après la suppression du journal. S'il ne peut pas le créer, il échoue avant tout profil, sans provider ni mode dégradé. Le balayage de reprise ne récupère que les sandbox dont le verrou est **libre**, c'est-à-dire dont le propriétaire est mort : Windows le libère à la mort du processus, sans horloge ni identifiant de processus réutilisable. Verrou absent, illisible ou erreur d'entrée-sortie : rien n'est récupéré et le journal est signalé par un avertissement. Les journaux de l'ancien emplacement `appcontainer-recovery` ne sont plus examinés. Cette garantie n'est **prouvée que par les tests qui lancent le vrai lanceur sous Windows** (`WindowsAppContainerRecoveryOwnershipTest`) ; le test d'assemblage ne prouve que la fidélité du script.
 
 ## Quota d’écriture filesystem
 

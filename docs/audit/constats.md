@@ -142,6 +142,7 @@ Les constats déjà connus de [`AUDIT-2026-09.md`](AUDIT-2026-09.md) ne sont pas
 | Correction proposée | Marque de propriétaire dans le journal (PID + instant de démarrage + jeton d'instance) et récupération seulement si le propriétaire est prouvé mort ; en s'inspirant de `CgroupJobOwnership` sans reprendre ses défauts connus (R2 saut d'horloge, R11) |
 | Validation | Test Windows seul (`@EnabledOnOs(OS.WINDOWS)`) : un second lanceur ne touche ni le journal ni l'ACL d'un premier lanceur vivant ; prouvé seulement par le runner Windows (voir T6) |
 | Dépendances | A07 (la sonde déclenche le lanceur depuis des commandes de lecture) — `isoler-recuperation-appcontainer-par-proprietaire` |
+| Correction (2026-10-07) | **Corrigé en local** : la propriété d'un sandbox est un verrou exclusif du système d'exploitation, tenu par le lanceur pendant toute la vie du sandbox (ni horloge, ni PID, comme l'écartait la fiche) ; la reprise ne récupère que les sandbox dont le verrou est libre, sinon elle laisse en place et signale ; emplacement de reprise distinct `appcontainer-recovery-v2`. **Prouvé sur le vrai lanceur** : `WindowsAppContainerRecoveryOwnershipTest` (8), rouge au HEAD pour le sandbox vivant. Écarts avec la fiche : verrou de fichier et non PID + instant, gabarit non renommé. Reste à prouver : Linux (hors sujet pour A01), job `windows-2022` |
 
 <a id="minos-aud-c04"></a>
 ### MINOS-AUD-C04 — Plugin IntelliJ sous Windows : le lanceur `minos.cmd` par défaut ne démarre pas
@@ -346,3 +347,13 @@ Vérification : `clean verify` vert (16 min 44 s, 2 119 tests, 0 échec), 21 gat
 | MINOS-AUD-F03 | **Non traité** (lot conditionnel) | — |
 
 Vérification : `verify` vert (15 min 39 s, 2 182 tests, 0 échec, 57 ignorés), 27 gates `check-*.py` verts (les deux de publication exigent des arguments), gate JaCoCo vert. Cinq goldens changent, de façon purement additive (relus au mot près). **Non fait** : réindexation réelle avec `scip-typescript` pour le contrôle manuel du filtre par module, CI Ubuntu/Windows, PR ; les décisions ouvertes du design (questions 1 à 4, 6, 7). Voir « Évidence d'implémentation » dans les [tâches du changement](../../openspec/changes/declarer-limites-impact-scip/tasks.md).
+
+### Suivi du changement `isoler-recuperation-appcontainer-par-proprietaire` (2026-10-07)
+
+| Constat | État | Preuve |
+|---|---|---|
+| MINOS-AUD-A01 | **Corrigé en local** : un sandbox vivant n'est plus altéré par un autre lanceur ; un sandbox dont le propriétaire est mort est récupéré ; sans preuve, rien n'est récupéré | `WindowsAppContainerRecoveryOwnershipTest` (8, vrai lanceur Windows), `WindowsContainmentScriptTest` (assemblage, garde sans horloge ni PID) |
+| MINOS-AUD-A02 | **Corrigé en local** : borne de vie de 24 h sur les copies de run, les temporaires de clonage et (code dormant, ADR 0041) les extractions et enveloppes distribuées | `StaleScratchReclamationTest` (12), `LocalProviderWorkspaceTest`, `JGitRemoteRepositoryMaterializerTest`, `DistributedArtifactBundleStoreTest`, `LocalIsolatedIndexWorkerTest` |
+| MINOS-AUD-A07 | **Non tranché** (décision produit) ; le danger pour un sandbox vivant est supprimé, pas la mutation de l'hôte par la sonde | — |
+
+Vérification : `verify` vert sous Windows (18 min 16 s, 2 211 tests, 0 échec, 58 ignorés), 27 gates `check-*.py` verts (les deux de publication exigent des arguments), gate JaCoCo vert (`provider-sandbox-windows`, `provider-execution-trust-boundary`, `m25-remote-distributed-indexing`, `m24-polyglot-provider-platform` verts sur cet hôte). **Non fait** : exécution sous Linux (deux cas de la primitive de balayage propres à Linux jamais exécutés), job `windows-2022`, PR ; suppression du profil AppContainer prouvée indirectement ; les décisions ouvertes du design (questions 1 à 5). Voir « Évidence d'implémentation » dans les [tâches du changement](../../openspec/changes/isoler-recuperation-appcontainer-par-proprietaire/tasks.md).
