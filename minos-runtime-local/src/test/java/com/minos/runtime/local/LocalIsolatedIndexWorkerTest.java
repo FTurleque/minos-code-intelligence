@@ -22,7 +22,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +73,47 @@ class LocalIsolatedIndexWorkerTest {
             assertTrue(paths.findAny().isEmpty(),
                     "transport envelopes and worker directories must be removed");
         }
+    }
+
+    /** MINOS-AUD-A02 (code dormant, ADR 0041) : les résidus d'un run tué sont bornés dans le temps, le run courant protégé. */
+    @Test
+    void anExpiredWorkerDirectoryAndBundleOfAKilledRunAreReclaimedAndRecentOnesAreKept(@TempDir Path temp)
+            throws Exception {
+        Fixture fixture = fixture(temp);
+        Path workers = Files.createDirectories(temp.resolve("home/distributed-workers"));
+        Path expiredRun = plantScratch(workers.resolve(UUID.randomUUID().toString()), true, Duration.ofHours(48));
+        Path expiredBundle = plantScratch(workers.resolve(".bundle-expired.zip"), false, Duration.ofHours(48));
+        Path recentRun = plantScratch(workers.resolve(UUID.randomUUID().toString()), true, Duration.ofMinutes(5));
+        Path recentBundle = plantScratch(workers.resolve(".bundle-recent.zip"), false, Duration.ofMinutes(5));
+        Path foreign = plantScratch(workers.resolve("not-a-run"), true, Duration.ofHours(48));
+        AtomicReference<Path> delegateRoot = new AtomicReference<>();
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
+        LocalIsolatedIndexWorker worker = worker(
+                "worker-one", temp.resolve("home"), delegate(temp, delegateRoot), store,
+                qualifiedBackend(WorkerNetworkPolicy.ALLOW));
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
+
+        executor.execute(fixture.execution());
+
+        assertFalse(Files.exists(expiredRun), "the directory of a killed run older than the lifetime is reclaimed");
+        assertFalse(Files.exists(expiredBundle), "an unconsumed bundle older than the lifetime is reclaimed");
+        assertTrue(Files.exists(recentRun), "a recent run directory may belong to a live worker");
+        assertTrue(Files.exists(recentBundle), "a recent bundle may still be awaiting its coordinator");
+        assertTrue(Files.exists(foreign), "only run directories and bundles are residues");
+    }
+
+    private static Path plantScratch(Path target, boolean directory, Duration age) throws java.io.IOException {
+        FileTime time = FileTime.from(Instant.now().minus(age));
+        if (directory) {
+            Path file = Files.writeString(Files.createDirectories(target).resolve("residue.txt"), "residue");
+            Files.setLastModifiedTime(file, time);
+        } else {
+            Files.writeString(target, "residue");
+        }
+        Files.setLastModifiedTime(target, time);
+        return target;
     }
 
     @Test

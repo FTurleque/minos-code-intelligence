@@ -71,6 +71,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
 
     private static final String SANDBOX_DIRECTORY = "sandbox";
     private static final String LAUNCHER_SCRIPT_NAME = "windows-appcontainer-sandbox-v4.ps1";
+    private static final String RECOVERY_DIRECTORY = "appcontainer-recovery-v2";
     private static final Map<Path, Boolean> CAPABILITY_PROBE_CACHE = new ConcurrentHashMap<>();
 
     private static final System.Logger LOGGER =
@@ -311,8 +312,10 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         }
 
         Path planFile = run.resolve("windows-appcontainer-plan.txt").toAbsolutePath().normalize();
+        // MINOS-AUD-A01: a launcher of an earlier build keeps sweeping every journal of its own recovery directory.
+        // The ownership-aware launcher writes elsewhere, so no sweep ever runs across the two formats.
         Path recovery = minosHome.resolve(SANDBOX_DIRECTORY)
-                .resolve("appcontainer-recovery").toAbsolutePath().normalize();
+                .resolve(RECOVERY_DIRECTORY).toAbsolutePath().normalize();
         PrivateLocalStorage.ensurePrivateDirectory(recovery);
         writePlan(
                 planFile,

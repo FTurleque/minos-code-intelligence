@@ -64,6 +64,39 @@ class DistributedArtifactBundleStoreTest {
         }
     }
 
+    /** MINOS-AUD-A02 (code dormant, ADR 0041) : une extraction d'un processus mort est bornée dans le temps. */
+    @Test
+    void anExpiredAcceptanceDirectoryIsReclaimedWhereARecentOneAndTheVerifiedCacheAreKept(@TempDir Path temp)
+            throws Exception {
+        DistributedArtifactBundleStore store = store(temp, 2);
+        Path cacheRoot = temp.resolve("home").resolve("distributed-artifacts");
+        Path expired = plantAcceptance(cacheRoot, ".accept-expired", java.time.Duration.ofHours(48));
+        Path recent = plantAcceptance(cacheRoot, ".accept-recent", java.time.Duration.ofMinutes(5));
+        Path artifact = Files.writeString(temp.resolve("source.scip"), "scip-one");
+        DistributedArtifactManifest manifest = manifest(
+                "scip-java", artifact, Instant.parse("2026-07-29T00:00:01Z"));
+        Path bundle = store.createBundle(temp.resolve("artifact.zip"), manifest, artifact);
+
+        var accepted = store.accept(bundle);
+        try {
+            assertFalse(Files.exists(expired), "an extraction directory older than the residue lifetime is reclaimed");
+            assertTrue(Files.exists(recent), "a recent extraction may belong to a live acceptance");
+            assertEquals("scip-one", Files.readString(accepted.artifact()), "the verified cache is never touched");
+        } finally {
+            store.release(accepted);
+        }
+    }
+
+    private static Path plantAcceptance(Path cacheRoot, String name, java.time.Duration age) throws java.io.IOException {
+        Path directory = Files.createDirectories(cacheRoot.resolve(name).resolve("nested"));
+        Files.writeString(directory.resolve("artifact.scip"), "residue");
+        java.nio.file.attribute.FileTime time = java.nio.file.attribute.FileTime.from(Instant.now().minus(age));
+        Files.setLastModifiedTime(directory.resolve("artifact.scip"), time);
+        Files.setLastModifiedTime(directory, time);
+        Files.setLastModifiedTime(directory.getParent(), time);
+        return directory.getParent();
+    }
+
     @Test
     void rejectsTamperingUnknownEntriesAndOversize(@TempDir Path temp) throws Exception {
         DistributedArtifactBundleStore store = store(temp, 2);

@@ -1,6 +1,7 @@
 package com.minos.runtime.local;
 
 import com.minos.io.PrivateLocalStorage;
+import com.minos.io.StaleScratchReclamation;
 import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
@@ -132,6 +133,16 @@ public final class LocalIsolatedIndexWorker implements Worker {
         return sandboxBackend.enforcesNetworkDeny();
     }
 
+    /** Run directories (named by a run identifier) and unconsumed hand-off bundles are the residues of a run. */
+    private static boolean isWorkerScratchName(String name) {
+        if (name.startsWith(".bundle-") && name.endsWith(".zip")) return true;
+        try {
+            return java.util.UUID.fromString(name).toString().equalsIgnoreCase(name);
+        } catch (IllegalArgumentException notARunIdentifier) {
+            return false;
+        }
+    }
+
     @Override
     public WorkerResponse execute(WorkerRequest request) throws Exception {
         Objects.requireNonNull(request, "request");
@@ -152,6 +163,10 @@ public final class LocalIsolatedIndexWorker implements Worker {
         }
 
         PrivateLocalStorage.ensurePrivateDirectory(workersRoot);
+        // MINOS-AUD-A02 (dormant code, ADR 0041): the directories and the hand-off bundles of a killed run are never
+        // removed by it. Reclaimed where the next run starts, bounded and never fatal; the current run is protected.
+        StaleScratchReclamation.reclaim(workersRoot, LocalIsolatedIndexWorker::isWorkerScratchName,
+                java.util.Set.of(workersRoot.resolve(request.execution().runId().toString())), clock.instant());
         Path providerRoot = workersRoot
                 .resolve(request.execution().runId().toString())
                 .resolve(ProviderId.require(delegate.indexerId()))
