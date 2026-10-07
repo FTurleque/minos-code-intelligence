@@ -6,6 +6,7 @@ import com.minos.io.BoundedProperties;
 import com.minos.io.FileTreeOperations;
 import com.minos.io.Sha256;
 import com.minos.io.SharedCacheLeaseRegistry;
+import com.minos.io.StaleScratchReclamation;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.remote.DistributedArtifactManifest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
@@ -73,6 +74,8 @@ public final class DistributedArtifactBundleStore {
     private static final String PROP_ARTIFACT_PATH = "artifactPath";
     private static final String PROP_ARTIFACT_SIZE = "artifactSize";
     private static final String PROP_ARTIFACT_SHA256 = "artifactSha256";
+
+    private static final String ACCEPT_PREFIX = ".accept-";
 
     private final Path cacheRoot;
     private final Path leasesRoot;
@@ -172,7 +175,11 @@ public final class DistributedArtifactBundleStore {
             throw new IOException("distributed artifact bundle exceeds its byte limit");
         }
 
-        Path extraction = PrivateLocalStorage.createPrivateTempDirectory(cacheRoot, ".accept-");
+        // MINOS-AUD-A02 (dormant code, ADR 0041): an acceptance killed before its cleanup leaves its extraction
+        // directory for ever. Reclaimed where the next one is created: bounded and never fatal; cache entries are
+        // named by digest and never match.
+        StaleScratchReclamation.reclaim(cacheRoot, name -> name.startsWith(ACCEPT_PREFIX), java.util.Set.of());
+        Path extraction = PrivateLocalStorage.createPrivateTempDirectory(cacheRoot, ACCEPT_PREFIX);
         String leasedKey = null;
         try {
             Extracted extracted = extract(source, extraction);

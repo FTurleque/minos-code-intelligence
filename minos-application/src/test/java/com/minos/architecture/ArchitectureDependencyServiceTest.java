@@ -11,14 +11,19 @@ import com.minos.domain.CodeEntityType;
 import com.minos.domain.Evidence;
 import com.minos.domain.EvidenceType;
 import com.minos.domain.InformationNature;
+import com.minos.domain.OccurrenceRole;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipKind;
+import com.minos.domain.PositionEncoding;
 import com.minos.domain.ResolutionStatus;
+import com.minos.domain.ResolvedSymbolReference;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
+import com.minos.domain.SymbolLocation;
+import com.minos.domain.SymbolOccurrence;
 import com.minos.store.CodeKnowledgeSnapshot;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +36,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ArchitectureDependencyServiceTest {
 
@@ -150,6 +156,64 @@ class ArchitectureDependencyServiceTest {
         assertEquals(0, graph.intraModuleDependencyCount());
         assertEquals(1, graph.unassignedDependencyCount());
         assertEquals(0, graph.moduleEdgeCount());
+    }
+
+    /** MINOS-AUD-F01 : le graphe n'agrège que les dépendances persistées ; il le déclare quand des références restent des occurrences. */
+    @Test
+    void declaresOccurrenceReferencesAsNotAggregated() {
+        CodeKnowledgeSnapshot snapshot = twoModuleSnapshot(true);
+
+        ArchitectureDependencyGraph graph = service.build(discovery(), snapshot);
+
+        assertEquals(List.of("OCCURRENCE_REFERENCES_NOT_PROJECTED"), graph.limitations());
+    }
+
+    @Test
+    void keepsLimitationsEmptyWithoutResolvedReferenceOccurrences() {
+        assertEquals(List.of(), service.build(discovery(), twoModuleSnapshot(false)).limitations());
+    }
+
+    @Test
+    void keepsCountersAndEdgesIdenticalWhenTheLimitationIsDeclared() {
+        ArchitectureDependencyGraph with = service.build(discovery(), twoModuleSnapshot(true));
+        ArchitectureDependencyGraph without = service.build(discovery(), twoModuleSnapshot(false));
+
+        assertEquals(without.totalDependencyCount(), with.totalDependencyCount());
+        assertEquals(without.interModuleDependencyCount(), with.interModuleDependencyCount());
+        assertEquals(without.intraModuleDependencyCount(), with.intraModuleDependencyCount());
+        assertEquals(without.unassignedDependencyCount(), with.unassignedDependencyCount());
+        assertEquals(without.dependencies(), with.dependencies());
+    }
+
+    @Test
+    void proofMessageNamesPersistedDependenciesAsTheOnlyAggregatedSource() {
+        String message = service.build(discovery(), twoModuleSnapshot(false)).evidence().getFirst().description();
+
+        assertTrue(message.contains("persisted DEPENDS_ON"), message);
+        assertTrue(message.contains("only aggregated source"), message);
+        assertTrue(message.contains("occurrences"), message);
+    }
+
+    @Test
+    void theHistoricalConstructorWithoutLimitationsStillBuildsAnEmptyList() {
+        ArchitectureDependencyGraph graph = new ArchitectureDependencyGraph("p", "s", 0, 0, 0, 0, List.of(),
+                InformationNature.DERIVED, List.of(new Evidence(EvidenceType.DERIVATION_PATH, "d", null, null, null, 1.0)));
+
+        assertEquals(List.of(), graph.limitations());
+    }
+
+    private static CodeKnowledgeSnapshot twoModuleSnapshot(boolean withReferenceOccurrence) {
+        UUID projectId = UUID.fromString("00000000-0000-0000-0000-000000000f02");
+        Symbol api = symbol(projectId, "api", "api/src/main/java/com/acme/api/Api.java", false);
+        Symbol app = symbol(projectId, "app", "app/src/main/java/com/acme/app/App.java", false);
+        List<SymbolOccurrence> occurrences = withReferenceOccurrence
+                ? List.of(new SymbolOccurrence("occurrence-1", projectId.toString(), new ResolvedSymbolReference(api.id()),
+                        new SymbolLocation("app/src/main/java/com/acme/app/App.java", 5, 0, 5, 3,
+                                PositionEncoding.UTF16_CODE_UNITS),
+                        Set.of(OccurrenceRole.REFERENCE), ResolutionStatus.RESOLVED, ORIGIN, Set.of()))
+                : List.of();
+        return new CodeKnowledgeSnapshot(projectId, "snapshot-f01-architecture", List.of(api, app), occurrences,
+                List.of(dependency(projectId, "d1", app, api)));
     }
 
     private static ProjectDiscovery discovery() {

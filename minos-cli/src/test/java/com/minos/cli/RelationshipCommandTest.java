@@ -64,6 +64,49 @@ class RelationshipCommandTest {
         }
     }
 
+    /** MINOS-AUD-F01 : les appelants, appelés et dépendances déclarent la limite ; les implémentations restent inchangées. */
+    @Test
+    void declaresTheLimitationsOfTheKindAskedForAndNothingForImplementations() throws IOException {
+        ProjectSymbolQuery query = new EmptyProjectQuery() {
+            @Override
+            public List<RelationshipResult> findRelationships(String projectId, RelationshipSearchCriteria criteria) {
+                return List.of();
+            }
+
+            @Override
+            public List<String> relationshipLimitations(String projectId, java.util.Set<RelationshipKind> kinds) {
+                return kinds.contains(RelationshipKind.CALLS) ? List.of("CALL_RELATIONS_NOT_PRODUCED")
+                        : kinds.contains(RelationshipKind.DEPENDS_ON) ? List.of("OCCURRENCE_REFERENCES_NOT_PROJECTED")
+                        : List.of();
+            }
+        };
+
+        for (var operation : List.of(RelationshipCommand.Operation.CALLERS, RelationshipCommand.Operation.CALLEES)) {
+            StringBuilder json = new StringBuilder();
+            new RelationshipCommand(operation, query).run(
+                    new String[]{"project-1", "symbol-1", "--format", "json"}, json, new StringBuilder());
+            assertEquals("{\"count\":0,\"relationships\":[],\"limitations\":[\"CALL_RELATIONS_NOT_PRODUCED\"]}\n",
+                    json.toString(), operation.name());
+
+            StringBuilder text = new StringBuilder();
+            new RelationshipCommand(operation, query).run(
+                    new String[]{"project-1", "symbol-1", "--format", "text"}, text, new StringBuilder());
+            assertEquals("relationships: 0\nlimitations: [CALL_RELATIONS_NOT_PRODUCED]\n", text.toString(), operation.name());
+        }
+
+        StringBuilder dependents = new StringBuilder();
+        new RelationshipCommand(RelationshipCommand.Operation.DEPENDENTS, query).run(
+                new String[]{"project-1", "symbol-1", "--format", "json"}, dependents, new StringBuilder());
+        assertTrue(dependents.toString().contains("\"limitations\":[\"OCCURRENCE_REFERENCES_NOT_PROJECTED\"]"));
+
+        for (var operation : List.of(RelationshipCommand.Operation.IMPLEMENTATIONS, RelationshipCommand.Operation.RELATED_TESTS)) {
+            StringBuilder output = new StringBuilder();
+            new RelationshipCommand(operation, query).run(
+                    new String[]{"project-1", "symbol-1", "--format", "json"}, output, new StringBuilder());
+            assertEquals("{\"count\":0,\"relationships\":[]}\n", output.toString(), operation.name());
+        }
+    }
+
     @Test
     void exposesOperationSpecificHelpAndFailure() throws IOException {
         RelationshipCommand command = new RelationshipCommand(

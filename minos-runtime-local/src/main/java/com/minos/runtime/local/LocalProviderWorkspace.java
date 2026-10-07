@@ -1,6 +1,7 @@
 package com.minos.runtime.local;
 
 import com.minos.io.PrivateLocalStorage;
+import com.minos.io.StaleScratchReclamation;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.orchestration.ProviderId;
 import com.minos.source.SourceBudgetPolicy;
@@ -10,6 +11,8 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Bounded ephemeral copy used for local provider execution.
@@ -53,6 +56,12 @@ final class LocalProviderWorkspace implements AutoCloseable {
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         Path workspacesRoot = home.resolve("local-provider-workspaces").toAbsolutePath().normalize();
         PrivateLocalStorage.ensurePrivateDirectory(workspacesRoot);
+        // MINOS-AUD-A02: a killed run never reaches close(); its copy of the project would stay forever. Reclaimed here,
+        // where the next copy is made, bounded and never fatal: the current run directory is protected.
+        StaleScratchReclamation.reclaim(
+                workspacesRoot,
+                LocalProviderWorkspace::isRunDirectoryName,
+                Set.of(workspacesRoot.resolve(request.runId().toString())));
 
         Path providerRoot = workspacesRoot
                 .resolve(request.runId().toString())
@@ -92,6 +101,15 @@ final class LocalProviderWorkspace implements AutoCloseable {
             if (!success && Files.exists(providerRoot, LinkOption.NOFOLLOW_LINKS)) {
                 ProviderWorkspaceFiles.deleteTree(workspacesRoot, providerRoot, WORKSPACE_BOUNDARY);
             }
+        }
+    }
+
+    /** Only directories named by a run identifier are residues of a run; anything else is left alone. */
+    private static boolean isRunDirectoryName(String name) {
+        try {
+            return UUID.fromString(name).toString().equalsIgnoreCase(name);
+        } catch (IllegalArgumentException notARunIdentifier) {
+            return false;
         }
     }
 

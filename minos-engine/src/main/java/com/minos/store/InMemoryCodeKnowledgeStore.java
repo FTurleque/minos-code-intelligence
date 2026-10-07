@@ -12,11 +12,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.minos.domain.Preconditions.requireText;
@@ -94,6 +96,14 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
         requireText(projectId, "projectId");
         requireText(symbolId, "symbolId");
         return Optional.ofNullable(symbolsByScopedId.get(scopedKey(projectId, symbolId)));
+    }
+
+    @Override
+    public boolean lacksModuleAttribution(String projectId) {
+        requireText(projectId, "projectId");
+        SymbolIndexes indexes = symbolIndexes;
+        return indexes.byProject().containsKey(projectId)
+                && !indexes.projectsWithModuleAttribution().contains(projectId);
     }
 
     @Override
@@ -440,10 +450,11 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
             Map<String, List<Symbol>> byNormalizedName,
             Map<String, List<Symbol>> byQualifiedName,
             Map<String, List<Symbol>> byNormalizedQualifiedName,
-            Map<String, List<Symbol>> byFileId
+            Map<String, List<Symbol>> byFileId,
+            Set<String> projectsWithModuleAttribution
     ) {
         static SymbolIndexes empty() {
-            return new SymbolIndexes(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
+            return new SymbolIndexes(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Set.of());
         }
 
         static SymbolIndexes build(Collection<Symbol> symbols) {
@@ -452,8 +463,12 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
             Map<String, List<Symbol>> qualified = new LinkedHashMap<>();
             Map<String, List<Symbol>> normalizedQualified = new LinkedHashMap<>();
             Map<String, List<Symbol>> file = new LinkedHashMap<>();
+            Set<String> withModule = new LinkedHashSet<>();
             for (Symbol symbol : symbols) {
                 add(project, symbol.projectId(), symbol);
+                if (symbol.moduleId() != null) {
+                    withModule.add(symbol.projectId());
+                }
                 add(name, scopedKey(symbol.projectId(), normalize(symbol.name())), symbol);
                 if (symbol.qualifiedName() != null) {
                     add(qualified, scopedKey(symbol.projectId(), symbol.qualifiedName()), symbol);
@@ -472,7 +487,8 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
                     freeze(name),
                     freeze(qualified),
                     freeze(normalizedQualified),
-                    freeze(file)
+                    freeze(file),
+                    Set.copyOf(withModule)
             );
         }
     }

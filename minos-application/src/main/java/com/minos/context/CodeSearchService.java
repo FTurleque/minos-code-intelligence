@@ -8,6 +8,7 @@ import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolSearchCriteria;
+import com.minos.query.ModuleFilterGuard;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
@@ -45,6 +46,7 @@ public final class CodeSearchService {
         Objects.requireNonNull(criteria, "criteria");
 
         SymbolSearchCriteria requestedSymbols = criteria.symbols();
+        ModuleFilterGuard.require(knowledgeStore, projectId, requestedSymbols);
         int probeLimit = requestedSymbols.limit() == Integer.MAX_VALUE
                 ? Integer.MAX_VALUE
                 : requestedSymbols.limit() + 1;

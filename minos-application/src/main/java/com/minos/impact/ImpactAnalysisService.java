@@ -6,6 +6,7 @@ import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipKind;
 import com.minos.domain.ResolutionStatus;
 import com.minos.domain.Symbol;
+import com.minos.query.SnapshotCoverageLimitations;
 import com.minos.store.CodeKnowledgeSnapshot;
 
 import java.util.ArrayList;
@@ -234,6 +235,9 @@ public final class ImpactAnalysisService {
                 ImpactLimitation.REFLECTION_NOT_PROVEN,
                 ImpactLimitation.RUNTIME_CONFIGURATION_NOT_PROVEN
         );
+        if (SnapshotCoverageLimitations.hasResolvedReferenceOccurrences(snapshot)) {
+            limitations.add(ImpactLimitation.OCCURRENCE_REFERENCES_NOT_PROJECTED);
+        }
         if (snapshot.relationships().stream().anyMatch(relationship ->
                 PROPAGATING_KINDS.contains(relationship.kind())
                         && relationship.resolutionStatus() == ResolutionStatus.UNRESOLVED)) {

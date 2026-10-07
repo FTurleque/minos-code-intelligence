@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.discovery.ModuleAssignmentRule;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
@@ -98,7 +99,8 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
                     .orElseThrow(() -> new IllegalStateException(
                             "provider normalization did not publish its temporary snapshot: "
                                     + descriptor.id() + " scope=" + portableRoot));
-            normalized.symbols().forEach(symbol -> putUnique(symbols, symbol.id(), symbol, "symbol"));
+            normalized.symbols().forEach(symbol -> putUnique(symbols, symbol.id(),
+                    withModule(symbol, request.moduleAssignment()), "symbol"));
             normalized.occurrences().forEach(occurrence -> putUnique(occurrences, occurrence.id(), occurrence, "occurrence"));
             normalized.relationships().forEach(relationship ->
                     putUnique(relationships, relationship.id(), relationship, "relationship"));
@@ -158,6 +160,24 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
         return activeStore.loadActiveKnowledge(projectId)
                 .map(snapshot -> ActiveSnapshotObservation.active(snapshot.snapshotId()))
                 .orElseGet(ActiveSnapshotObservation::noActiveSnapshot);
+    }
+
+    /**
+     * MINOS-AUD-F04 : rattache un symbole local au module de son fichier, avec la règle de l'architecture. Une portée
+     * à la racine peut couvrir plusieurs modules (réacteur) : l'attribution se fait donc par symbole, jamais par portée.
+     * Les symboles externes et ceux hors de tout module restent sans module.
+     */
+    private static Symbol withModule(Symbol symbol, ModuleAssignmentRule rule) {
+        if (rule.isEmpty() || symbol.external() || symbol.moduleId() != null) {
+            return symbol;
+        }
+        return rule.moduleIdOf(symbol.fileId())
+                .map(moduleId -> new Symbol(symbol.id(), symbol.symbolKey(), symbol.identityQuality(),
+                        symbol.projectId(), moduleId, symbol.fileId(), symbol.parentSymbolId(), symbol.kind(),
+                        symbol.name(), symbol.qualifiedName(), symbol.signature(), symbol.language(),
+                        symbol.location(), symbol.resolutionStatus(), symbol.origin(), symbol.external(),
+                        symbol.generated(), symbol.providerReferences()))
+                .orElse(symbol);
     }
 
     private void cleanupProviderWorkspaces(UUID runId, List<IndexingArtifact> artifacts) throws IOException {

@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.PushbackReader;
 import java.io.Reader;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
@@ -16,6 +17,7 @@ import java.util.Properties;
 
 /** Shared bounded UTF-8 readers for small runtime configuration and metadata files. */
 public final class BoundedProperties {
+    private static final int BYTE_ORDER_MARK = '\uFEFF';
 
     private BoundedProperties() {
     }
@@ -36,7 +38,8 @@ public final class BoundedProperties {
         try (BoundedInputStream input = new BoundedInputStream(
                      Files.newInputStream(source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS),
                      maximumBytes, boundary);
-             Reader reader = strictUtf8Reader(input)) {
+             PushbackReader reader = new PushbackReader(strictUtf8Reader(input))) {
+            skipLeadingByteOrderMark(reader, boundary);
             loadInto(properties, reader, boundary);
         }
         validate(properties, maximumEntries, maximumKeyChars, maximumValueChars, boundary);
@@ -74,6 +77,26 @@ public final class BoundedProperties {
         } catch (IllegalArgumentException exception) {
             throw new IOException(label(boundary) + " is malformed", exception);
         }
+    }
+
+    /**
+     * MINOS-AUD-B08: removes one leading UTF-8 byte order mark (what Windows PowerShell 5.1 {@code Out-File -Encoding utf8}
+     * and older editors write), which the strict decoder would otherwise keep as a valid U+FEFF: it turned the first
+     * property key into "U+FEFF followed by the key" (the property was silently lost) and was appended to a secret read from a file. A
+     * second mark is refused, never skipped, and a mark anywhere else stays data. The byte limit has already counted
+     * the bytes of the mark, and invalid UTF-8 is refused by the decoder before this point.
+     */
+    private static void skipLeadingByteOrderMark(PushbackReader reader, String boundary) throws IOException {
+        int first = reader.read();
+        if (first != BYTE_ORDER_MARK) {
+            if (first != -1) reader.unread(first);
+            return;
+        }
+        int second = reader.read();
+        if (second == BYTE_ORDER_MARK) {
+            throw new IOException(label(boundary) + " starts with a repeated UTF-8 byte order mark");
+        }
+        if (second != -1) reader.unread(second);
     }
 
     private static Reader strictUtf8Reader(InputStream input) {
@@ -120,7 +143,8 @@ public final class BoundedProperties {
         Objects.requireNonNull(source, "source");
         StringBuilder value = new StringBuilder();
         try (BoundedInputStream input = new BoundedInputStream(source, maximumBytes, boundary);
-             Reader reader = strictUtf8Reader(input)) {
+             PushbackReader reader = new PushbackReader(strictUtf8Reader(input))) {
+            skipLeadingByteOrderMark(reader, boundary);
             char[] buffer = new char[4096];
             int read;
             while ((read = reader.read(buffer)) != -1) {

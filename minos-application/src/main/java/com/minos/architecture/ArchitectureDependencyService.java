@@ -10,6 +10,7 @@ import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipKind;
 import com.minos.domain.Symbol;
 import com.minos.io.Sha256;
+import com.minos.query.SnapshotCoverageLimitations;
 import com.minos.store.CodeKnowledgeSnapshot;
 
 import java.util.ArrayList;
@@ -100,12 +101,17 @@ public final class ArchitectureDependencyService {
                         EvidenceType.DERIVATION_PATH,
                         "Aggregated " + dependencies.size()
                                 + " persisted DEPENDS_ON relationships into "
-                                + moduleDependencies.size() + " inter-module edges",
+                                + moduleDependencies.size() + " inter-module edges"
+                                + " (persisted DEPENDS_ON is the only aggregated source;"
+                                + " references expressed only as occurrences are not included)",
                         null,
                         null,
                         null,
                         1.0
-                ))
+                )),
+                SnapshotCoverageLimitations.hasResolvedReferenceOccurrences(snapshot)
+                        ? List.of(SnapshotCoverageLimitations.OCCURRENCE_REFERENCES_NOT_PROJECTED)
+                        : List.of()
         );
     }
 

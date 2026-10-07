@@ -74,6 +74,14 @@ public final class RelatedTestDerivationService {
     private static final Set<String> JVM_SOURCE_EXTENSIONS = Set.of(
             ".java", ".kt", ".kts", ".scala", ".groovy"
     );
+    /** Langues dont le fichier de test se reconnaît à un suffixe {@code _test} (Go, Python, C, C++). */
+    private static final Set<String> TEST_SUFFIX_EXTENSIONS = Set.of(
+            ".go", ".py", ".c", ".cc", ".cpp", ".cxx"
+    );
+    /** Python : {@code test_foo.py} (convention pytest et unittest). */
+    private static final String TEST_PREFIX_EXTENSION = ".py";
+    /** Répertoire de projet de test .NET : {@code Foo.Tests}, {@code Foo.Test}. */
+    private static final Set<String> TEST_PROJECT_DIRECTORY_SUFFIXES = Set.of(".tests", ".test");
 
     public List<Relationship> derive(
             Collection<Symbol> symbols,
@@ -444,7 +452,10 @@ public final class RelatedTestDerivationService {
      *       langue (agencement Ant, pytest, Cargo), et à toute profondeur pour les langues hors JVM
      *       (monorepo {@code packages/x/test}) ; pour une source JVM, un répertoire {@code test}
      *       plus profond est un PAQUET ({@code com/acme/test/Support.java}), pas un répertoire de test ;</li>
-     *   <li>un fichier {@code *.test.*} ou {@code *.spec.*}.</li>
+     *   <li>un fichier {@code *.test.*} ou {@code *.spec.*} ;</li>
+     *   <li>un fichier {@code *_test.go}, {@code *_test.py}, {@code *_test.c|cc|cpp|cxx} ou
+     *       {@code test_*.py} ;</li>
+     *   <li>un répertoire de projet de test {@code *.Tests} ou {@code *.Test} (.NET).</li>
      * </ul>
      * Tout ce qui se trouve sous {@code src/main} est de la production. Les noms comme {@code latest},
      * {@code contest} ou {@code testing} ne sont jamais des répertoires de test.
@@ -457,7 +468,7 @@ public final class RelatedTestDerivationService {
         String[] segments = normalized.split("/");
         int last = segments.length - 1;
         String fileName = segments[last];
-        if (fileName.matches(".*\\.(?:test|spec)\\.[^/]+$")) {
+        if (fileName.matches(".*\\.(?:test|spec)\\.[^/]+$") || hasTestFileNameConvention(fileName)) {
             return true;
         }
         boolean jvmSource = JVM_SOURCE_EXTENSIONS.stream().anyMatch(fileName::endsWith);
@@ -476,7 +487,7 @@ public final class RelatedTestDerivationService {
                     return true;
                 }
             }
-            if ("__tests__".equals(segment)) {
+            if ("__tests__".equals(segment) || isTestProjectDirectory(segment)) {
                 return true;
             }
             if (TEST_ROOT_DIRECTORIES.contains(segment) && (firstDirectory || !jvmSource)) {
@@ -485,6 +496,26 @@ public final class RelatedTestDerivationService {
             firstDirectory = false;
         }
         return false;
+    }
+
+    /** {@code foo_test.go}, {@code foo_test.py}, {@code foo_test.cc} et {@code test_foo.py}, jamais {@code contest.py}. */
+    private static boolean hasTestFileNameConvention(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        if (dot <= 0) {
+            return false;
+        }
+        String extension = fileName.substring(dot);
+        String stem = fileName.substring(0, dot);
+        if (TEST_SUFFIX_EXTENSIONS.contains(extension) && stem.length() > "_test".length() && stem.endsWith("_test")) {
+            return true;
+        }
+        return TEST_PREFIX_EXTENSION.equals(extension) && stem.length() > "test_".length() && stem.startsWith("test_");
+    }
+
+    /** {@code Foo.Tests} : le suffixe pointé est exigé, le mot seul ({@code Foo.Testing}) ne suffit pas. */
+    private static boolean isTestProjectDirectory(String segment) {
+        return TEST_PROJECT_DIRECTORY_SUFFIXES.stream()
+                .anyMatch(suffix -> segment.length() > suffix.length() && segment.endsWith(suffix));
     }
 
     private static Candidate candidate(

@@ -252,6 +252,15 @@ related-tests <project> <symbol-id>
 
 Une liste vide signifie qu'aucune relation correspondante n'est présente dans le snapshot observé ; elle ne prouve pas une absence runtime. Le profil provider indique séparément les capacités réellement supportées.
 
+Une liste vide n'est donc pas une réponse « rien n'appelle ce symbole » quand le snapshot ne contient pas ce genre de relation. `find-callers`, `find-callees`, `dependencies` et `dependents` ajoutent alors une clé JSON `limitations` (dernière clé) et une ligne texte `limitations: [...]` :
+
+| Limitation | Quand | Sens |
+|---|---|---|
+| `CALL_RELATIONS_NOT_PRODUCED` | `find-callers`, `find-callees` sur un snapshot sans aucune relation `CALLS` | aucun producteur d'appels n'a alimenté ce snapshot ; l'absence d'appelants ne prouve rien |
+| `OCCURRENCE_REFERENCES_NOT_PROJECTED` | `dependencies`, `dependents` sur un snapshot qui contient des références résolues par occurrence | les références existent comme occurrences (`find-usages`) mais ne sont pas projetées en relations de dépendance |
+
+`find-implementations` et `related-tests` gardent leur sortie historique.
+
 ## Architecture et graphe
 
 ```text
@@ -290,6 +299,8 @@ impact <project> <symbol-id> [--depth <1..32>] [--limit <1..10000>] [--format <t
 ```
 
 L'impact reste une estimation potentielle fondée sur le graphe observé et les capabilities réellement disponibles.
+
+Un impact vide n'est pas une preuve d'absence d'impact. Sur un snapshot SCIP, les références restent des occurrences : le rapport déclare `OCCURRENCE_REFERENCES_NOT_PROJECTED` parmi ses `limitations`, après les trois limitations de base (`DYNAMIC_DISPATCH_NOT_PROVEN`, `REFLECTION_NOT_PROVEN`, `RUNTIME_CONFIGURATION_NOT_PROVEN`). La même limitation est portée par `architecture` (clé JSON `limitations`, ligne texte, commentaire `%% limitation:` en Mermaid et `// limitation:` en DOT) : le graphe agrège les dépendances persistées, pas les occurrences.
 
 ## ProgramGraph et intelligence avancée
 

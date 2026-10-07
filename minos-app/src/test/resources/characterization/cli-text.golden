@@ -792,6 +792,7 @@ $ minos dependencies a2-char sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a927
 exit: 0
 --- stdout
 relationships: 0
+limitations: [OCCURRENCE_REFERENCES_NOT_PROJECTED]
 
 --- stderr
 
@@ -802,7 +803,7 @@ root: GreetingPort [sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da3
 snapshot: scip-7f41649a3cdad442a3235c0a
 impacts: 2
 potentiallyImpactedTests: 1
-limitations: [DYNAMIC_DISPATCH_NOT_PROVEN, REFLECTION_NOT_PROVEN, RUNTIME_CONFIGURATION_NOT_PROVEN]
+limitations: [DYNAMIC_DISPATCH_NOT_PROVEN, REFLECTION_NOT_PROVEN, RUNTIME_CONFIGURATION_NOT_PROVEN, OCCURRENCE_REFERENCES_NOT_PROJECTED]
 - DIRECT depth=1 confidence=1.0 test=false DefaultGreetingPort [sym:5faa0cbc765bb59f8e2db7ef30bc3e220c64a73128984386e78f709485fac23c] path=[IMPLEMENTS:rel:db798b6871c52786657c9ff8f902cd68f8af0429fc9223fcd569e0bdeade220f]
 - INDIRECT depth=2 confidence=0.685 test=true verifiesCrossProjectOverloads [sym:6afa28638b56c6add7dc26bea0c93139ef80aa38dfc04817ae5a94a7a3a19e80] path=[IMPLEMENTS:rel:db798b6871c52786657c9ff8f902cd68f8af0429fc9223fcd569e0bdeade220f, RELATED_TEST:rel:e0475d9e4f67c98fc754e16cf253a9cce08d13f701d4fddb7929b3e7a8361e17]
 
@@ -823,6 +824,7 @@ moduleEdges: 1
 topIncomingModules: [module:23e0115bdddd2a2f87e6b6a980ebc0a74ba3f5b4ca8db5fe793059159ffd1078]
 topOutgoingModules: [module:c00a5b16a8fd285b21988cbbacdde73c99e593535dbd859b6da0afc2ee5c2700]
 technologies: [TYPESCRIPT, NPM]
+limitations: [OCCURRENCE_REFERENCES_NOT_PROJECTED]
 
 --- stderr
 

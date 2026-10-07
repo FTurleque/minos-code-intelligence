@@ -5,6 +5,7 @@ import com.minos.impact.ImpactAnalysisReport;
 import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.ImpactAnalysisService;
 import com.minos.impact.ImpactLevel;
+import com.minos.impact.ImpactLimitation;
 import com.minos.impact.ImpactedSymbol;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.domain.Symbol;
@@ -57,6 +58,9 @@ class ImpactAnalysisRealFixtureTest {
         assertTrue(report.impacts().stream().anyMatch(impact ->
                 "DefaultGreetingPort".equals(impact.symbol().qualifiedName())
                         && impact.level() == ImpactLevel.DIRECT));
+        // MINOS-AUD-F01 : un index SCIP réel garde ses références en occurrences ; l'impact le déclare au lieu de le taire.
+        assertTrue(report.limitations().contains(ImpactLimitation.OCCURRENCE_REFERENCES_NOT_PROJECTED),
+                report.limitations().toString());
         assertFalse(report.potentiallyImpactedTests().isEmpty());
         assertTrue(report.potentiallyImpactedTests().stream().allMatch(impact ->
                 impact.testImpact() && !impact.path().isEmpty()));

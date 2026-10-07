@@ -1,5 +1,6 @@
 package com.minos.orchestration;
 
+import com.minos.discovery.ModuleAssignmentRule;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.ExecutionPathIdentityProvider.IdentityPair;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
@@ -363,10 +364,16 @@ public final class IndexingRuntimePorts {
         }
     }
 
+    /**
+     * Demande de mise en scène d'un snapshot de projet. {@code moduleAssignment} est la règle qui rattache un
+     * fichier au module découvert qui le contient (MINOS-AUD-F04) : vide quand l'indexation n'a pas de découverte,
+     * auquel cas les symboles restent sans module.
+     */
     public record IndexSnapshotStageRequest(
             UUID runId,
             UUID projectId,
-            List<IndexingArtifact> artifacts
+            List<IndexingArtifact> artifacts,
+            ModuleAssignmentRule moduleAssignment
     ) {
         public IndexSnapshotStageRequest {
             Objects.requireNonNull(runId, "runId");
@@ -375,6 +382,12 @@ public final class IndexingRuntimePorts {
             if (artifacts.isEmpty()) {
                 throw new IllegalArgumentException("artifacts must not be empty");
             }
+            moduleAssignment = moduleAssignment == null ? ModuleAssignmentRule.none() : moduleAssignment;
+        }
+
+        /** Compatibility constructor: no module attribution. */
+        public IndexSnapshotStageRequest(UUID runId, UUID projectId, List<IndexingArtifact> artifacts) {
+            this(runId, projectId, artifacts, ModuleAssignmentRule.none());
         }
     }
 }

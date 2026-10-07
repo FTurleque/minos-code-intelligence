@@ -356,6 +356,9 @@ final class MinosStrongProcessLauncher {
     }
 
     private static void writeWindowsPlan(Path plan, ProcessBuilder original) throws IOException {
+        // MINOS-AUD-C04: a batch launcher is a raw cmd.exe line. Decided on the command as the caller built it, before
+        // cmd.exe is replaced by its system path; the launcher script then checks the shape strictly.
+        boolean rawCmd = MinosCommandLine.isCmdBatchInvocation(original.command());
         List<String> command = new ArrayList<>(original.command());
         command.set(0, resolveWindowsExecutable(command.getFirst()).toString());
         Path working = original.directory() == null
@@ -363,6 +366,7 @@ final class MinosStrongProcessLauncher {
                 : original.directory().toPath().toAbsolutePath().normalize();
         StringBuilder value = new StringBuilder();
         value.append("command.count=").append(command.size()).append('\n');
+        if (rawCmd) value.append("command.mode=cmd-c").append('\n');
         for (int index = 0; index < command.size(); index++) {
             value.append("command.").append(index).append('=').append(encoded(command.get(index))).append('\n');
         }

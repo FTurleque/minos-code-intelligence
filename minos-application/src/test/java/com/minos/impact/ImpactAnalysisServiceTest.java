@@ -5,14 +5,19 @@ import com.minos.domain.CodeEntityType;
 import com.minos.domain.Evidence;
 import com.minos.domain.EvidenceType;
 import com.minos.domain.InformationNature;
+import com.minos.domain.OccurrenceRole;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
+import com.minos.domain.PositionEncoding;
 import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipKind;
 import com.minos.domain.ResolutionStatus;
+import com.minos.domain.ResolvedSymbolReference;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
+import com.minos.domain.SymbolLocation;
+import com.minos.domain.SymbolOccurrence;
 import com.minos.store.CodeKnowledgeSnapshot;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +26,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ImpactAnalysisServiceTest {
@@ -183,6 +189,51 @@ class ImpactAnalysisServiceTest {
         assertTrue(report.impacts().isEmpty());
         assertTrue(report.limitations().contains(ImpactLimitation.GENERATED_SYMBOLS_NOT_TRAVERSED));
         assertTrue(report.limitations().contains(ImpactLimitation.UNRESOLVED_RELATIONSHIPS_IGNORED));
+    }
+
+    /** MINOS-AUD-F01 : une référence par occurrence que la traversée ne voit pas est déclarée, même sans aucun impact. */
+    @Test
+    void declaresOccurrenceReferencesNotProjectedEvenWhenNoImpactIsFound() {
+        Symbol root = symbol("root", "src/main/java/Root.java");
+        Symbol caller = symbol("caller", "src/main/java/Caller.java");
+        CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(
+                PROJECT_ID, "snapshot-f01", List.of(root, caller),
+                List.of(occurrence("o1", root, "src/main/java/Caller.java", OccurrenceRole.REFERENCE)), List.of());
+
+        ImpactAnalysisReport report = new ImpactAnalysisService().analyze(snapshot, ImpactAnalysisRequest.defaults("root"));
+
+        assertTrue(report.impacts().isEmpty(), "the traversal sees no relationship, so no impact");
+        assertTrue(limitationNames(report).contains("OCCURRENCE_REFERENCES_NOT_PROJECTED"), limitationNames(report).toString());
+    }
+
+    @Test
+    void doesNotDeclareOccurrenceReferencesWithoutResolvedReferenceOccurrences() {
+        Symbol root = symbol("root", "src/main/java/Root.java");
+        CodeKnowledgeSnapshot withoutOccurrences = snapshot(List.of(root), List.of());
+        CodeKnowledgeSnapshot onlyDefinitions = new CodeKnowledgeSnapshot(
+                PROJECT_ID, "snapshot-f01", List.of(root),
+                List.of(occurrence("d1", root, "src/main/java/Root.java", OccurrenceRole.DEFINITION),
+                        occurrence("d2", root, "src/main/java/Root.java", OccurrenceRole.FORWARD_DEFINITION)),
+                List.of());
+
+        for (CodeKnowledgeSnapshot snapshot : List.of(withoutOccurrences, onlyDefinitions)) {
+            ImpactAnalysisReport report = new ImpactAnalysisService().analyze(snapshot, ImpactAnalysisRequest.defaults("root"));
+
+            assertFalse(limitationNames(report).contains("OCCURRENCE_REFERENCES_NOT_PROJECTED"), limitationNames(report).toString());
+            assertTrue(limitationNames(report).containsAll(List.of(
+                    "DYNAMIC_DISPATCH_NOT_PROVEN", "REFLECTION_NOT_PROVEN", "RUNTIME_CONFIGURATION_NOT_PROVEN")),
+                    "the existing baseline limitations are kept");
+        }
+    }
+
+    private static List<String> limitationNames(ImpactAnalysisReport report) {
+        return report.limitations().stream().map(Enum::name).toList();
+    }
+
+    private static SymbolOccurrence occurrence(String id, Symbol target, String fileId, OccurrenceRole role) {
+        return new SymbolOccurrence(id, PROJECT_ID.toString(), new ResolvedSymbolReference(target.id()),
+                new SymbolLocation(fileId, 3, 0, 3, 4, PositionEncoding.UTF16_CODE_UNITS), Set.of(role),
+                ResolutionStatus.RESOLVED, FACTUAL_ORIGIN, Set.of());
     }
 
     private static ImpactedSymbol impact(ImpactAnalysisReport report, String symbolId) {

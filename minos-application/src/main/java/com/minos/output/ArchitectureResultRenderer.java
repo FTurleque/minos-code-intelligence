@@ -52,6 +52,7 @@ public final class ArchitectureResultRenderer {
         map.put("technologies", view.technologies().technologies().stream().map(value -> value.name()).toList());
         map.put("modules", view.overview().modules().stream().map(ArchitectureResultRenderer::moduleMap).toList());
         map.put("moduleDependencies", dependencyMaps(view));
+        map.put("limitations", view.dependencies().limitations());
         if (format == SymbolOutputFormat.JSON) {
             return DeterministicJson.render(map);
         }
@@ -70,7 +71,8 @@ public final class ArchitectureResultRenderer {
                 "moduleEdges: " + view.dependencies().moduleEdgeCount(),
                 "topIncomingModules: " + view.centrality().topIncomingModuleIds(),
                 "topOutgoingModules: " + view.centrality().topOutgoingModuleIds(),
-                "technologies: " + view.technologies().technologies().stream().map(value -> value.name()).toList()
+                "technologies: " + view.technologies().technologies().stream().map(value -> value.name()).toList(),
+                "limitations: " + view.dependencies().limitations()
         );
     }
 
@@ -159,6 +161,9 @@ public final class ArchitectureResultRenderer {
         result.append("flowchart LR\n");
         result.append("  %% MINOS project: ").append(mermaidText(view.projectName()))
                 .append(" | snapshot: ").append(mermaidText(view.snapshotId())).append('\n');
+        for (String limitation : view.dependencies().limitations()) {
+            result.append("  %% limitation: ").append(mermaidText(limitation)).append('\n');
+        }
         for (ArchitectureModule module : selection.modules()) {
             String label = module.relativePath().isBlank()
                     ? module.name()
@@ -177,6 +182,9 @@ public final class ArchitectureResultRenderer {
     private static String renderDot(ArchitectureIntelligenceView view, GraphSelection selection) {
         StringBuilder result = new StringBuilder();
         result.append("digraph minos_architecture {\n");
+        for (String limitation : view.dependencies().limitations()) {
+            result.append("  // limitation: ").append(dotText(limitation)).append('\n');
+        }
         result.append("  graph [label=\"").append(dotText(view.projectName()))
                 .append(" @ ").append(dotText(view.snapshotId()))
                 .append("\", labelloc=\"t\", rankdir=\"LR\"];\n");

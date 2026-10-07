@@ -38,7 +38,7 @@ L'[audit d'octobre 2026](../../audit/README.md) relève des écarts entre ce pla
 - **MINOS-AUD-B07, B08, B13, B09** : le changement `durcir-configuration-postgresql-et-secrets` touche `minos-storage-postgresql` ; le livrer avant SH-02 ou le rebaser.
 
 Plan d'ensemble : [plan de remédiation](../../audit/plan-de-remediation.md).
- Les PR #331/#332 sur les résultats partiels ne doivent pas être écrasées. La PR #333 propose les ADR 0048–0054 : les numéros 0055–0057 sont utilisés ici pour éviter une collision ; leur absence dans develop ne signifie pas qu'ils sont libres. Les améliorations Semble/Serena restent un chantier distinct.
+ Les PR #331/#332 sur les résultats partiels ne doivent pas être écrasées. La PR #333, fusionnée le 6 octobre 2026 (merge `bc1d3421`), a ajouté les ADR 0048–0054 (Proposed) : les numéros 0055–0057 ont été choisis ici pour éviter une collision avec eux. Les améliorations Semble/Serena restent un chantier distinct.
 
 ## Backlog ordonné
 

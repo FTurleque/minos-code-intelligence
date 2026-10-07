@@ -28,7 +28,9 @@ public final class SymbolQueryService {
     }
 
     public List<Symbol> findSymbols(String projectId, SymbolSearchCriteria criteria) {
-        return knowledgeStore.findSymbols(projectId, Objects.requireNonNull(criteria, "criteria"));
+        Objects.requireNonNull(criteria, "criteria");
+        ModuleFilterGuard.require(knowledgeStore, projectId, criteria);
+        return knowledgeStore.findSymbols(projectId, criteria);
     }
 
     public List<SymbolResult> findSymbolResults(String projectId, SymbolSearchCriteria criteria) {

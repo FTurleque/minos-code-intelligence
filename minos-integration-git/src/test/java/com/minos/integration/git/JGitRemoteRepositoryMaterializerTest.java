@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -239,6 +240,49 @@ class JGitRemoteRepositoryMaterializerTest {
 
         assertTrue(failure.getMessage().contains("traversal entry limit"));
         assertNoCacheDirectories(home);
+    }
+
+    /** MINOS-AUD-A02 : un temporaire de clonage d'un processus mort est borné dans le temps ; une entrée valide jamais touchée. */
+    @Test
+    void anExpiredCloneTemporaryIsReclaimedWhereAValidEntryAndARecentTemporaryAreKept(@TempDir Path temp) throws Exception {
+        Path source = createRepository(temp.resolve("source"));
+        AtomicInteger clones = new AtomicInteger();
+        Path home = temp.resolve("home");
+        JGitRemoteRepositoryMaterializer materializer = materializer(
+                home, new RemoteRepositoryCachePolicy(4, 1024L * 1024L), source, clones, name -> Optional.empty());
+        RemoteMaterialization validEntry = materializer.materialize(request(head(source), null));
+        materializer.release(validEntry);
+
+        Path repositories = home.resolve("remote-cache/repositories");
+        Instant now = Instant.parse("2026-07-29T00:00:00Z");
+        Path expired = plant(repositories, ".entry-" + UUID.randomUUID() + ".tmp", now.minus(Duration.ofHours(48)));
+        Path recent = plant(repositories, ".entry-" + UUID.randomUUID() + ".tmp", now.minus(Duration.ofMinutes(5)));
+        Files.writeString(source.resolve("fixtures/java/pom.xml"), "<project>second</project>");
+        try (Git git = Git.open(source.toFile())) {
+            git.add().addFilepattern(".").call();
+            git.commit().setMessage("second").setAuthor(identity()).setCommitter(identity()).call();
+        }
+
+        RemoteMaterialization second = materializer.materialize(request(head(source), null));
+        try {
+            assertFalse(Files.exists(expired), "a clone temporary older than the residue lifetime must be reclaimed");
+            assertTrue(Files.exists(recent), "a recent clone temporary may belong to a live clone");
+            assertTrue(Files.isDirectory(validEntry.repositoryRoot()), "a valid cache entry is never a scratch residue");
+            assertTrue(Files.isDirectory(second.repositoryRoot()));
+            assertEquals(2, clones.get());
+        } finally {
+            materializer.release(second);
+        }
+    }
+
+    private static Path plant(Path root, String name, Instant modified) throws IOException {
+        Path directory = Files.createDirectories(root.resolve(name).resolve("repository"));
+        Files.writeString(directory.resolve("f.txt"), "residue");
+        java.nio.file.attribute.FileTime time = java.nio.file.attribute.FileTime.from(modified);
+        Files.setLastModifiedTime(directory.resolve("f.txt"), time);
+        Files.setLastModifiedTime(directory, time);
+        Files.setLastModifiedTime(directory.getParent(), time);
+        return directory.getParent();
     }
 
     private static void assertNoCacheDirectories(Path home) throws IOException {

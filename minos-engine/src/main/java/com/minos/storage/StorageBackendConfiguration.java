@@ -147,7 +147,8 @@ public record StorageBackendConfiguration(
             String host = uri.getHost();
             if (host == null || host.isBlank()) return REDACTED_POSTGRES_URL;
             StringBuilder safe = new StringBuilder("jdbc:postgresql://");
-            if (host.indexOf(':') >= 0) safe.append('[').append(host).append(']');
+            // MINOS-AUD-B13: java.net.URI already returns an IPv6 literal between brackets; add them only when absent.
+            if (host.indexOf(':') >= 0 && !host.startsWith("[")) safe.append('[').append(host).append(']');
             else safe.append(host);
             if (uri.getPort() >= 0) safe.append(':').append(uri.getPort());
             String path = uri.getRawPath();

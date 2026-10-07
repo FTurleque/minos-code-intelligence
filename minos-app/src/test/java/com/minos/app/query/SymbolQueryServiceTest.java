@@ -156,6 +156,63 @@ class SymbolQueryServiceTest {
         assertEquals(List.of(SYMBOL_ID), result.stream().map(SymbolResult::id).toList());
     }
 
+    /** MINOS-AUD-F04 : un filtre par module sur un snapshot dont aucun symbole n'a de module ne renvoie pas « rien ». */
+    @Test
+    void aModuleFilterOnASnapshotWithoutAnyModuleIsRefusedExplicitly() {
+        InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
+        store.putSymbols(List.of(
+                symbol("symbol-a", "Alpha", "com.acme.Alpha", SymbolKind.CLASS, null, "src/Alpha.java", 1, false),
+                symbol("symbol-b", "Beta", "com.acme.Beta", SymbolKind.CLASS, null, "src/Beta.java", 1, false)));
+        SymbolQueryService service = new SymbolQueryService(store);
+
+        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () ->
+                service.findSymbolResults(PROJECT_ID, new SymbolSearchCriteria("alpha", null, null, "module-main", 10)));
+
+        assertTrue(refusal.getMessage().contains("module"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains("/") || refusal.getMessage().contains("\\"), refusal.getMessage());
+        assertFalse(com.minos.diagnostics.PublicErrorMessages.looksSensitive(refusal.getMessage()),
+                refusal.getMessage());
+        assertEquals(2, service.findSymbolResults(PROJECT_ID, SymbolSearchCriteria.lexical("a", 10)).size());
+    }
+
+    @Test
+    void anUnknownModuleOnASnapshotThatRecordsModulesIsAnEmptyAnswerNotARefusal() {
+        InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
+        store.putSymbols(List.of(
+                symbol("symbol-a", "Alpha", "com.acme.Alpha", SymbolKind.CLASS, "module-main", "src/Alpha.java", 1, false),
+                symbol("symbol-b", "Beta", "com.acme.Beta", SymbolKind.CLASS, null, "src/Beta.java", 1, false)));
+        SymbolQueryService service = new SymbolQueryService(store);
+
+        assertEquals(List.of(), service.findSymbolResults(PROJECT_ID,
+                new SymbolSearchCriteria("alpha", null, null, "module-other", 10)));
+        assertEquals(1, service.findSymbolResults(PROJECT_ID,
+                new SymbolSearchCriteria("alpha", null, null, "module-main", 10)).size());
+    }
+
+    @Test
+    void aModuleFilterOnAnEmptyProjectIsAnEmptyAnswerNotARefusal() {
+        SymbolQueryService service = new SymbolQueryService(new InMemoryCodeKnowledgeStore());
+
+        assertEquals(List.of(), service.findSymbolResults(PROJECT_ID,
+                new SymbolSearchCriteria("alpha", null, null, "module-main", 10)));
+    }
+
+    @Test
+    void theModuleRefusalIsPerProjectAndFollowsLaterInserts() {
+        InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
+        store.putSymbols(List.of(
+                symbol("symbol-a", "Alpha", "com.acme.Alpha", SymbolKind.CLASS, null, "src/Alpha.java", 1, false)));
+        SymbolQueryService service = new SymbolQueryService(store);
+        SymbolSearchCriteria byModule = new SymbolSearchCriteria("alpha", null, null, "module-main", 10);
+
+        assertThrows(IllegalArgumentException.class, () -> service.findSymbolResults(PROJECT_ID, byModule));
+
+        store.putSymbols(List.of(
+                symbol("symbol-m", "Gamma", "com.acme.Gamma", SymbolKind.CLASS, "module-main", "src/Gamma.java", 1, false)));
+
+        assertEquals(List.of(), service.findSymbolResults(PROJECT_ID, byModule));
+    }
+
     @Test
     void getFileSymbolsReturnsDeclarationsInSourceOrder() {
         InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();

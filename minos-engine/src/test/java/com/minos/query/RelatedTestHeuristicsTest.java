@@ -130,7 +130,16 @@ class RelatedTestHeuristicsTest {
             "src/__tests__/foo.ts",
             "web/app/__tests__/foo.ts",
             "src/foo.test.ts",
-            "lib/foo.spec.ts"
+            "lib/foo.spec.ts",
+            // MINOS-AUD-F02 : conventions polyglottes qualifiées (Go, Python, C#, C/C++)
+            "pkg/foo_test.go",
+            "pkg/test_foo.py",
+            "pkg/foo_test.py",
+            "src/Foo.Tests/FooTests.cs",
+            "src/foo_test.cc",
+            "src/foo_test.cpp",
+            "src/foo_test.c",
+            "pkg\\foo_test.go"
     })
     void theProjectTestConventionsAreTestPaths(String path) {
         assertTrue(RelatedTestDerivationService.isTestPath(path), path);
@@ -154,7 +163,13 @@ class RelatedTestHeuristicsTest {
             "src/Test.java",
             "src/testing/Foo.java",
             "src/test-support/Foo.java",
-            "docs/tester/notes.md"
+            "docs/tester/notes.md",
+            "pkg/contest.py",
+            "pkg/contest.go",
+            "pkg/latest_foo.py",
+            "pkg/testing.go",
+            "pkg/protest.cc",
+            "src/Foo.Testing/Foo.cs"
     })
     void aDirectoryThatMerelyContainsTheWordTestIsNotATestPath(String path) {
         assertFalse(RelatedTestDerivationService.isTestPath(path), path);

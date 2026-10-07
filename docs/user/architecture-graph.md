@@ -95,6 +95,8 @@ signifie que MINOS a agrégé 37 dépendances observées depuis des symboles du 
 
 Le rendu Mermaid/DOT utilise directement les arêtes de `ArchitectureDependencyGraph.dependencies()` ; il n'invente pas de liens supplémentaires pour rendre le diagramme plus joli.
 
+Le graphe n'agrège que les relations de dépendance **persistées**. Sur un snapshot SCIP, les références restent des occurrences et ne deviennent pas des arêtes : un graphe peu fourni n'est alors pas une preuve d'absence de couplage. La limitation `OCCURRENCE_REFERENCES_NOT_PROJECTED` est déclarée dans la clé JSON `limitations`, la ligne texte `limitations:`, le commentaire `%% limitation:` (Mermaid) et le commentaire `// limitation:` (DOT). Les commentaires n'ajoutent ni nœud ni arête : le diagramme reste valide.
+
 ## JSON : lire précisément les nœuds et les arêtes
 
 Commande :
