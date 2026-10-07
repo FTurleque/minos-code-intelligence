@@ -50,7 +50,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0033](0033-immutable-remote-revisions-and-verified-worker-artifacts.md) | Épingler les sources distantes et n’accepter que des artefacts worker bornés, vérifiés et concordants | Accepted | M25 |
 | [0034](0034-partial-runtime-observations-with-explicit-static-correlation.md) | Conserver les observations runtime partielles séparées des faits statiques et corrélées à un snapshot exact | Accepted | M26 |
 | [0035](0035-opt-in-tenant-control-plane-with-external-keys.md) | Ajouter un contrôle tenant opt-in, chiffré, audité et alimenté par des clés externes | Accepted | M27 |
-| [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) | Converger par mesures et interdire les claims sandbox/hosted non qualifiés | Proposed | M28 |
+| [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) | Converger par mesures et interdire les claims sandbox/hosted non qualifiés | Accepted | M28 |
 | [0037](0037-first-class-native-and-docker-runtime-backends.md) | Router `minos mcp` vers un backend natif ou Docker explicite, versionné et fail-closed | Accepted — parity pending | M29-S1 |
 | [0038](0038-aggregate-worker-resource-containment.md) | Confiner les ressources des workers non fiables de manière agrégée et fail-closed | Accepted | MINOS-01 |
 | [0039](0039-reprise-indexation-apres-interruption.md) | Reprendre une indexation interrompue au lieu de tout réindexer | Accepted | — |
@@ -72,7 +72,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 
 ## Décisions du 5 octobre 2026 — mise en œuvre à venir
 
-Les numéros 0048–0054 sont utilisés par l'étude proposée dans la PR #333, non fusionnée lors de cette rédaction. Les décisions suivantes portent sur le chantier storage/hexagonal et ne valident pas ces propositions.
+Les numéros 0048–0054 sont utilisés par l'étude proposée dans la PR #333, fusionnée le 6 octobre 2026 (merge `bc1d3421`). Les décisions suivantes portent sur le chantier storage/hexagonal et ne valident pas ces propositions.
 
 | ADR | Décision | Statut |
 |---|---|---|

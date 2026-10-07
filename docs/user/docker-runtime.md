@@ -76,7 +76,7 @@ La construction provider-complete applique désormais les invariants suivants :
 
 - images de base Docker épinglées par digest OCI ;
 - paquets Ubuntu résolus depuis l'archive datée `20260814T000000Z`, et non depuis les miroirs mouvants `archive/security` ;
-- Maven 3.9.16 vérifié par le SHA-256 possédé par le dépôt, identique au checksum du Maven Wrapper ;
+- Maven 3.9.16 vérifié par le SHA-256 possédé par le dépôt (`MAVEN_ZIP_SHA256` de `docker/Dockerfile.mcp.release`), distinct du checksum du Maven Wrapper, qui pointe sur Maven 3.10.0 ;
 - Node vérifié par une empreinte SHA-256 épinglée dans `embedded-tools.json` (la description unique des outils, voir `docs/developer/quality-gates.md`) ;
 - launcher Coursier, `scip-clang` et `rust-analyzer` vérifiés par SHA-256 attendu ;
 - `scip-typescript` et `scip-python` installés avec les lockfiles npm v3 du dépôt et `npm ci --ignore-scripts` ;
