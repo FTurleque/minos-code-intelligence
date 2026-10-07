@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **31 août 2026**.
+État produit revérifié le : **7 octobre 2026**. Planification additionnelle : **5 octobre 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit courant. Les réconciliations détaillées antérieures restent archivées sous [`history/reconciliations/`](history/reconciliations/). Une capacité présente sur une branche ou une PR n'est dite intégrée dans `develop` qu'après merge ; le présent document décrit néanmoins les garanties du HEAD qui le contient afin qu'il reste exact avant et après promotion.
 
@@ -74,8 +74,9 @@ La qualification courante est volontairement séparée entre gates produit actue
 
 ### PR Validation
 
-`.github/workflows/pr-ci.yml` est le pipeline de PR unique (constat C1 de l'audit 2026-09, voir [`docs/audit/CI-HYGIENE-SUIVI.md`](audit/CI-HYGIENE-SUIVI.md)), avec deux jobs qui tournent en parallèle :
+`.github/workflows/pr-ci.yml` est le pipeline de PR unique (constat C1 de l'audit 2026-09, voir [`docs/audit/CI-HYGIENE-SUIVI.md`](audit/CI-HYGIENE-SUIVI.md)), avec trois jobs sans dépendance entre eux, qui tournent en parallèle :
 
+- **`vulnerability-scan`** : gate de vulnérabilités des dépendances (OSV-Scanner, workflow réutilisable épinglé par SHA) ;
 - **`invariants`** : un unique **gate statique ciblé Ubuntu**, sans Maven ni Java — épinglage supply-chain des workflows, frontières de modules, cohérence documentaire courante, `product-facts`, garde-fou de non-réaccumulation d'artefacts de jalon, invariants MND/MNE/post-MNE (y compris les neuf gates de jalon actifs M21–M28), invariants post-#228, invariants d'audit-remédiation v2/P0-P2/MINOS-01, provenance Inno Setup, tests unitaires du vérificateur Docker upgrade — chaque contrôle une seule fois, quel que soit l'OS de `verify` ;
 - **`verify`** (Ubuntu 24.04 et Windows Server 2022), **seul build Maven d'une PR** (les workflows M19 et M20, qui en répétaient une copie filtrée par chemins, sont retirés : constat C2, gardé par `scripts/quality/check-single-execution.py`) : `clean verify` Maven complet, PostgreSQL obligatoire sur Linux, tests sandbox/cgroup/AppContainer applicables, seuils JaCoCo ciblés Linux/Windows, invariant d'ascendance (`main` doit être ancêtre du candidat, afin d'empêcher une nouvelle divergence silencieuse `main/develop`).
 
@@ -111,14 +112,14 @@ Un scaffold d'analyse SonarCloud pilotée par CI (`mvn sonar:sonar` avec `sonar.
 
 - les chemins de secrets relatifs sont confinés physiquement à `MINOS_HOME` ; les chemins absolus restent une option opérateur explicite pour les secret stores montés ;
 - les fichiers de secret sont lus avec un plafond d'octets et un décodeur UTF-8 strict : les séquences mal formées sont refusées, jamais remplacées silencieusement ;
-- les snapshots structurés v1/v2 conservent leur plafond persistant de **256 MiB**, désormais imposé pendant l'I/O par flux bornés en plus des contrôles de taille ;
+- les snapshots structurés v1/v2/v3 conservent leur plafond persistant de **256 MiB**, désormais imposé pendant l'I/O par flux bornés en plus des contrôles de taille ;
 - les tailles/cardinalités/chaînes des formats persistés restent bornées et les données PostgreSQL utilisent un scratch privé ;
 - les clés hosted dérivées utilisent HMAC-SHA-256 ; les buffers temporaires maître et dérivé sont nettoyés après construction de la clé finale ;
 - hosted control plane : AES-256-GCM avec AAD, limites de taille et écriture atomique durable.
 
 ## Supply-chain et toolchains
 
-- Maven Wrapper : Maven 3.9.16 avec checksum SHA-256 ;
+- Maven Wrapper : Maven 3.10.0 avec checksum SHA-256 (`.mvn/wrapper/maven-wrapper.properties`), accepté par la plage `[3.9,4.0)` de l'enforcer ; l'image Docker et les outils embarqués (`embedded-tools.json`) restent en Maven 3.9.16 ;
 - cœur MINOS : Java 24 / Maven 3.9.x ;
 - plugin IntelliJ : Java 21 / Gradle 9.6.1 / IntelliJ Platform 2026.1 ;
 - Dependabot couvre Maven, GitHub Actions **et le build Gradle `minos-intellij`** ;

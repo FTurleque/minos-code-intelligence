@@ -5,6 +5,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.CopyOption;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -112,7 +113,11 @@ public final class DurableAtomicFile {
         Objects.requireNonNull(directorySync, "directorySync");
         Objects.requireNonNull(platform, "platform");
         forceFile(from);
-        atomicMove(from, to, replaceExisting, label, platform);
+        if (replaceExisting) {
+            atomicMove(from, to, label, platform);
+        } else {
+            publishExclusively(from, to, label, platform);
+        }
         try {
             directorySync.force(to.getParent());
         } catch (IOException failure) {
@@ -122,30 +127,51 @@ public final class DurableAtomicFile {
         }
     }
 
-    private static void atomicMove(
-            Path from,
-            Path to,
-            boolean replaceExisting,
-            String label,
-            Platform platform
-    ) throws IOException {
+    private static void atomicMove(Path from, Path to, String label, Platform platform) throws IOException {
         for (int attempt = 1; ; attempt++) {
             try {
-                if (replaceExisting) {
-                    platform.mover().move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                } else {
-                    platform.mover().move(from, to, StandardCopyOption.ATOMIC_MOVE);
-                }
+                platform.mover().move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 return;
             } catch (AtomicMoveNotSupportedException unsupported) {
                 throw new IOException("filesystem does not support required atomic " + label + ": " + to, unsupported);
             } catch (FileSystemException failure) {
-                boolean retry = replaceExisting && platform.windows()
-                        && heldOpenByAReader(failure) && attempt < REPLACE_ATTEMPTS_ON_WINDOWS;
+                boolean retry = platform.windows() && heldOpenByAReader(failure) && attempt < REPLACE_ATTEMPTS_ON_WINDOWS;
                 if (!retry) throw failure;
                 platform.pause().pause(attempt);
             }
         }
+    }
+
+    /**
+     * MINOS-AUD-B09: publishes without ever replacing the target. {@code ATOMIC_MOVE} does not do that: the JDK leaves its
+     * behaviour on an existing target unspecified, and it replaces it on Windows and, through {@code rename(2)}, on Linux. A
+     * hard link is created atomically by the file system and fails with "already exists" when the target exists, on both
+     * platforms; the source name is then removed (best effort: the publication is already acquired, and callers delete
+     * their temporary file anyway). A file system that cannot make the link fails the publication with an explicit
+     * message; there is no fallback to a move that could overwrite.
+     */
+    private static void publishExclusively(Path from, Path to, String label, Platform platform) throws IOException {
+        try {
+            platform.linker().link(to, from);
+        } catch (FileAlreadyExistsException exists) {
+            throw exists;
+        } catch (UnsupportedOperationException unsupported) {
+            throw exclusivePublicationUnsupported(label, to, unsupported);
+        } catch (FileSystemException failure) {
+            // A missing source and a permission failure are specific and final. Any other plain failure to create the
+            // link (FAT and exFAT, some network shares) means exclusivity cannot be guaranteed here.
+            if (failure.getClass() != FileSystemException.class) throw failure;
+            throw exclusivePublicationUnsupported(label, to, failure);
+        }
+        try {
+            Files.deleteIfExists(from);
+        } catch (IOException ignored) {
+            // The target is published; a leftover source name is the caller's temporary file.
+        }
+    }
+
+    private static IOException exclusivePublicationUnsupported(String label, Path to, Exception cause) {
+        return new IOException("filesystem does not support required exclusive " + label + ": " + to, cause);
     }
 
     /**
@@ -213,9 +239,20 @@ public final class DurableAtomicFile {
     }
 
     /** The platform-dependent steps of a move, replaceable so the retry policy is testable anywhere. */
-    record Platform(FileMover mover, boolean windows, ReplacePause pause) {
+    record Platform(FileMover mover, FileLinker linker, boolean windows, ReplacePause pause) {
         static final Platform SYSTEM = new Platform(
-                Files::move, DurableAtomicFile.windows(), DurableAtomicFile::pauseBeforeReplaceRetry);
+                Files::move, Files::createLink, DurableAtomicFile.windows(), DurableAtomicFile::pauseBeforeReplaceRetry);
+
+        /** Historical constructor: the hard link of an exclusive publication is the real one. */
+        Platform(FileMover mover, boolean windows, ReplacePause pause) {
+            this(mover, Files::createLink, windows, pause);
+        }
+    }
+
+    /** Creates the hard link that makes a publication exclusive; replaceable so a file system without links is testable. */
+    @FunctionalInterface
+    interface FileLinker {
+        void link(Path link, Path existing) throws IOException;
     }
 
     @FunctionalInterface

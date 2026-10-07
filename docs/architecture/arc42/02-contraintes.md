@@ -11,7 +11,7 @@
 |-----|-----------|--------|--------|
 | CT-1 | **Java 24** requis (range `[24,25)`) | Imposée — enforcer Maven | `pom.xml` `<requireJavaVersion>` |
 | CT-2 | **Maven 3.9.x** requis (range `[3.9,4.0)`) | Imposée — enforcer Maven | `pom.xml` `<requireMavenVersion>` |
-| CT-3 | **Reactor Maven multi-module** : 12 modules enfants + parent | Imposée — ADR-0022 | `pom.xml` `<modules>` |
+| CT-3 | **Reactor Maven multi-module** : 14 modules enfants + parent | Imposée — ADR-0022 | `pom.xml` `<modules>` |
 | CT-4 | Direction de dépendances Maven stricte : `domain → engine → infra → adapters → services → surfaces → app` | Imposée — ADR-0022 | Structure `pom.xml` des modules |
 | CT-5 | **SCIP** comme protocole d'interopérabilité d'indexation privilégié | Imposée — ADR-0002 | `minos-provider-scip/pom.xml` |
 | CT-6 | **MCP STDIO read-only** — aucune mutation de projet via MCP | Imposée — ADR-0017 | `MinosMcpServer.java` |

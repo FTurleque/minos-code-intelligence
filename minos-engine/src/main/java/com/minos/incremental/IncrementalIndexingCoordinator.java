@@ -82,8 +82,12 @@ public final class IncrementalIndexingCoordinator {
             Path projectRoot,
             IndexingRequirements requirements
     ) throws IOException {
-        ProjectDiscovery discovery = discoveryService.discover(projectRoot);
+        // MINOS-AUD-D06: the reference fingerprint is captured BEFORE the discovery. A structure that appears between the
+        // two (a module created while discovery runs) is then in "after" without being in "before", so the baseline is
+        // not promoted for a snapshot that never covered it (ADR 0014: fingerprints describe what was indexed). The
+        // conservative cost is a FULL run next time.
         ProjectFingerprint before = fingerprintService.capture(projectRoot);
+        ProjectDiscovery discovery = discoveryService.discover(projectRoot);
         ProjectIndexState indexState = lifecycleService.recoverProjectState(projectId);
 
         BaselineLoad baselineLoad = loadBaselineConservatively(projectId, indexState);

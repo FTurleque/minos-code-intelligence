@@ -44,29 +44,28 @@ Il **ne stocke pas** de code sur un serveur distant et **ne s'authentifie pas** 
 ## 3.4 Diagramme C4 — Context
 
 ```mermaid
-C4Context
-    title MINOS Code Intelligence — Diagramme de contexte (C4 Level 1)
+flowchart LR
+    dev(["Développeur"])
+    agent(["Agent IA<br/>Claude Code, Copilot, Codex"])
+    ide["Plugin IntelliJ<br/>client Java 21 externe"]
 
-    Person(dev, "Développeur", "«Person»\nUtilise la CLI ou le plugin IntelliJ")
-    Person(ai_agent, "Agent IA", "«Person»\nClaude Code, Copilot, Codex\nconsomme les outils MCP")
+    minos[["MINOS<br/>moteur local-first<br/>de code intelligence"]]
 
-    System(minos, "MINOS Code Intelligence", "«Software System»\nMoteur local-first de Code Intelligence\nmulti-langages et multi-indexeurs")
+    nexus["Orchestrateur NEXUS"]
+    git["GitHub / GitLab"]
+    scip["Indexeurs SCIP<br/>scip-java, scip-typescript"]
+    docker["Docker Daemon<br/>backend MCP"]
+    pg[("PostgreSQL / pgvector")]
 
-    System_Ext(intellij, "Plugin IntelliJ", "«Software System»\nClient Java 21 externe\nnégocie le protocole CLI JSON versionné")
-    System_Ext(nexus, "Orchestrateur NEXUS", "«Software System»\nConsomme l'export JSON du snapshot normalisé")
-    System_Ext(github, "GitHub / GitLab", "«Software System»\nSource de révisions distantes immutables")
-    System_Ext(docker, "Docker Daemon", "«Software System»\nBackend MCP optionnel")
-    System_Ext(scip_java, "Indexeur SCIP Java", "«Software System»\nProduit un artefact .scip")
-    System_Ext(scip_ts, "Indexeur SCIP TypeScript", "«Software System»\nProduit un artefact .scip")
-    System_Ext(pg, "PostgreSQL / pgvector", "«Software System»\nBackend de stockage avancé optionnel")
+    dev -->|"CLI"| minos
+    ide -->|"CLI JSON versionné"| minos
+    agent -->|"MCP STDIO"| minos
 
-    Rel(dev, minos, "invoque via CLI ou IDE")
-    Rel(ai_agent, minos, "interroge via MCP STDIO (JSON-RPC 2.0)")
-    Rel(intellij, minos, "négocie protocole CLI JSON versionné")
-    Rel(minos, nexus, "exporte snapshot normalisé (JSON local)")
-    Rel(minos, github, "matérialise révisions immutables")
-    Rel(minos, docker, "route mcp vers backend Docker (optionnel)")
-    Rel(minos, scip_java, "déclenche l'indexation Java")
-    Rel(minos, scip_ts, "déclenche l'indexation TypeScript")
-    Rel(minos, pg, "persiste / requête (optionnel)")
+    minos -->|"export JSON local"| nexus
+    minos -->|"révisions immuables"| git
+    minos -->|"lance les indexeurs"| scip
+    minos -.->|"optionnel"| docker
+    minos -.->|"optionnel"| pg
 ```
+
+Traits pleins : usage courant. Traits pointillés : optionnel.

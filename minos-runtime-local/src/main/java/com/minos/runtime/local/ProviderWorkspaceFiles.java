@@ -23,6 +23,10 @@ import static com.minos.domain.Preconditions.requireText;
 /** Shared bounded filesystem primitives for ephemeral provider workspaces. */
 final class ProviderWorkspaceFiles {
 
+    private static final System.Logger LOGGER = System.getLogger(ProviderWorkspaceFiles.class.getName());
+    /** Unreadable ignored directories reported by one copy; the rest is summarized by one trace. */
+    private static final int MAX_REPORTED_UNREADABLE = 10;
+
     private ProviderWorkspaceFiles() {
     }
 
@@ -42,6 +46,7 @@ final class ProviderWorkspaceFiles {
 
         ProjectIgnoreRules ignoreRules = ProjectIgnoreRules.load(source);
         SourceBudgetPolicy.Tracker budget = policy.tracker(label);
+        int[] reportedUnreadable = new int[1];
         Files.walkFileTree(source, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
@@ -82,9 +87,41 @@ final class ProviderWorkspaceFiles {
             @Override
             public FileVisitResult visitFileFailed(Path file, IOException failure) throws IOException {
                 budget.accountTraversalEntry();
-                throw failure;
+                return skipUnreadable(source, file, failure, ignoreRules, reportedUnreadable);
             }
         });
+    }
+
+    /**
+     * MINOS-AUD-D01: the same decision as discovery and the fingerprint (the shared {@link ProjectIgnoreRules}): the
+     * JDK opens a directory before {@code preVisitDirectory}, so a directory the account cannot read arrives here even
+     * when it is hardened or ignored. Such a directory has no place in the provider copy and is skipped, with a bounded
+     * trace that carries the relative name and the exception class only; the root of the copy always fails; anything
+     * else fails with the same exception type, the relative path and the way out ({@code .minosignore}).
+     */
+    private static FileVisitResult skipUnreadable(
+            Path source,
+            Path file,
+            IOException failure,
+            ProjectIgnoreRules ignoreRules,
+            int[] reportedUnreadable
+    ) throws IOException {
+        Path unreadable = file.toAbsolutePath().normalize();
+        if (unreadable.equals(source) || !unreadable.startsWith(source)) throw failure;
+        Path relative = source.relativize(unreadable);
+        if (!ignoreRules.isSkippableWhenUnreadable(relative)) {
+            throw ProjectIgnoreRules.unreadableFailure(relative, failure);
+        }
+        int reported = ++reportedUnreadable[0];
+        if (reported <= MAX_REPORTED_UNREADABLE) {
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS skipped the unreadable ignored directory '"
+                    + portable(relative) + "' while copying the provider workspace: "
+                    + failure.getClass().getSimpleName());
+        } else if (reported == MAX_REPORTED_UNREADABLE + 1) {
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS skipped more than " + MAX_REPORTED_UNREADABLE
+                    + " unreadable ignored directories while copying the provider workspace; the others are not reported");
+        }
+        return FileVisitResult.CONTINUE;
     }
 
     static void deleteTree(Path allowedRoot, Path target, String boundary) throws IOException {

@@ -150,7 +150,8 @@ public final class ProjectDiscoveryService {
             @Override
             public FileVisitResult visitFileFailed(Path file, IOException exception) throws IOException {
                 budget.accountTraversalEntry();
-                throw exception;
+                // MINOS-AUD-D01: skipped when hardened or ignored, an actionable failure otherwise, the root always fails.
+                return ignorePolicy.onUnreadable(root, file, exception);
             }
         });
         return modules;

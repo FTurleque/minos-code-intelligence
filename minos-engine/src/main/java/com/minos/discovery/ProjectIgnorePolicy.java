@@ -90,6 +90,34 @@ public final class ProjectIgnorePolicy {
     }
 
     /**
+     * MINOS-AUD-D01: what a tree walk does with a path it could not open ({@code visitFileFailed}). The JDK opens a
+     * directory before {@code preVisitDirectory}, so a directory MINOS cannot read arrives here even when it is
+     * hardened or ignored, and one such directory used to make the whole project unusable.
+     *
+     * <ul>
+     *   <li>the root of the walk: rethrown, a scope MINOS cannot read at all has nothing to index;</li>
+     *   <li>hardened or ignored (under either interpretation of its type): skipped, with the bounded trace of
+     *       {@link #reportUnreadable}, and it contributes nothing;</li>
+     *   <li>anything else: the failure is thrown with the same exception type, the path relative to the project and
+     *       the way out ({@code .minosignore}), never the absolute path.</li>
+     * </ul>
+     */
+    public FileVisitResult onUnreadable(Path walkRoot, Path path, IOException failure) throws IOException {
+        Path walk = Objects.requireNonNull(walkRoot, "walkRoot").toAbsolutePath().normalize();
+        Path unreadable = Objects.requireNonNull(path, "path").toAbsolutePath().normalize();
+        Objects.requireNonNull(failure, "failure");
+        if (unreadable.equals(walk) || unreadable.equals(root) || !unreadable.startsWith(root)) {
+            throw failure;
+        }
+        Path relative = root.relativize(unreadable);
+        if (rules.isSkippableWhenUnreadable(relative)) {
+            reportUnreadable(relative, failure);
+            return FileVisitResult.CONTINUE;
+        }
+        throw ProjectIgnoreRules.unreadableFailure(relative, failure);
+    }
+
+    /**
      * Returns whether a source root contains a visible matching file. The complete visible-name
      * inventory of a root is built once per discovery operation and reused by every language detector.
      */
@@ -140,6 +168,11 @@ public final class ProjectIgnorePolicy {
                     names.add(file.getFileName().toString().toLowerCase(java.util.Locale.ROOT));
                 }
                 return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException failure) throws IOException {
+                return onUnreadable(sourceRoot, file, failure);
             }
         });
         return Set.copyOf(names);
