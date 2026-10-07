@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **31 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1, 1.1.0 et 1.2.0 publiées ; hardening #113–#260, remédiation d'audit `develop` (PR #259, PR #272) et rafraîchissement Dependabot intégrés dans `main` (PR #284) ; 1.3.0-SNAPSHOT ouverte.**
+État produit revérifié le **7 octobre 2026** ; planification additionnelle du **4 au 5 octobre 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1, 1.1.0 et 1.2.0 publiées ; hardening #113–#260, remédiation d'audit `develop` (PR #259, PR #272) et rafraîchissement Dependabot intégrés dans `main` (PR #284) ; 1.3.0-SNAPSHOT ouverte.**
 
 Les versions historiques détaillées restent archivées sous [`history/reconciliations/`](history/reconciliations/). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
 
@@ -10,7 +10,7 @@ Décisions acceptées, code non encore migré : consolidation dans `minos-storag
 
 ## Audit 2026-10 — remédiation préparée (2026-10-06)
 
-L'[audit d'octobre 2026](audit/README.md) (101 constats : 7 P1, 39 P2, 55 P3, aucun P0) a donné lieu à huit changements OpenSpec **préparés** (sept implémentés, voir plus bas), validés en mode strict : `fiabiliser-chaine-audit-tenant` (premier recommandé), `diagnostiquer-statut-mcp-et-erreurs`, `declarer-limites-impact-scip`, `isoler-recuperation-appcontainer-par-proprietaire`, `corriger-lancement-plugin-intellij-windows`, `durcir-configuration-postgresql-et-secrets`, `tolerer-repertoires-illisibles-a-la-decouverte` et `reconcilier-documentation-courante`. Ordre, dépendances et décisions à clarifier : [plan de remédiation](audit/plan-de-remediation.md) ; dossiers sous [`openspec/changes/`](../openspec/changes/). Deux sont **implémentés en local, PR ouverte, CI de la PR à observer** : `fiabiliser-chaine-audit-tenant` (MINOS-AUD-B01 à B04) et `diagnostiquer-statut-mcp-et-erreurs` (MINOS-AUD-C01, C02, C03, C05, C06, C16), voir [constats § 6](audit/constats.md#6-suivi-des-corrections). Le troisième, `declarer-limites-impact-scip` (MINOS-AUD-F01 lot 1, F02, F04), est **implémenté en local, non commité** ; la dérivation occurrence→relation reste une décision ouverte. Le quatrième, `isoler-recuperation-appcontainer-par-proprietaire` (MINOS-AUD-A01, A02), est **implémenté en local** ; A01 est prouvé sur le vrai lanceur Windows, la CI Linux et le job `windows-2022` restent à observer. Le cinquième, `corriger-lancement-plugin-intellij-windows` (MINOS-AUD-C04), est **implémenté en local** : prouvé par un vrai `.cmd` sous Windows via un harnais local, sans le build Gradle du plugin ni sa CI. Le sixième, `durcir-configuration-postgresql-et-secrets` (MINOS-AUD-B07, B08, B09, B13), est **implémenté en local** ; la CI Linux reste à observer. Le septième, `tolerer-repertoires-illisibles-a-la-decouverte` (MINOS-AUD-D01, D06, D10), est **implémenté en local** ; les tests d'illisibilité par permissions POSIX n'ont pas encore tourné sous Linux. Les auto-tests du garde de frontières (MINOS-AUD-E02) sont à traiter avant SH-02.
+L'[audit d'octobre 2026](audit/README.md) (101 constats : 7 P1, 39 P2, 55 P3, aucun P0) a donné lieu à huit changements OpenSpec **préparés** (huit implémentés, voir plus bas), validés en mode strict : `fiabiliser-chaine-audit-tenant` (premier recommandé), `diagnostiquer-statut-mcp-et-erreurs`, `declarer-limites-impact-scip`, `isoler-recuperation-appcontainer-par-proprietaire`, `corriger-lancement-plugin-intellij-windows`, `durcir-configuration-postgresql-et-secrets`, `tolerer-repertoires-illisibles-a-la-decouverte` et `reconcilier-documentation-courante`. Ordre, dépendances et décisions à clarifier : [plan de remédiation](audit/plan-de-remediation.md) ; dossiers sous [`openspec/changes/`](../openspec/changes/). Deux sont **implémentés en local, PR ouverte, CI de la PR à observer** : `fiabiliser-chaine-audit-tenant` (MINOS-AUD-B01 à B04) et `diagnostiquer-statut-mcp-et-erreurs` (MINOS-AUD-C01, C02, C03, C05, C06, C16), voir [constats § 6](audit/constats.md#6-suivi-des-corrections). Le troisième, `declarer-limites-impact-scip` (MINOS-AUD-F01 lot 1, F02, F04), est **implémenté en local, non commité** ; la dérivation occurrence→relation reste une décision ouverte. Le quatrième, `isoler-recuperation-appcontainer-par-proprietaire` (MINOS-AUD-A01, A02), est **implémenté en local** ; A01 est prouvé sur le vrai lanceur Windows, la CI Linux et le job `windows-2022` restent à observer. Le cinquième, `corriger-lancement-plugin-intellij-windows` (MINOS-AUD-C04), est **implémenté en local** : prouvé par un vrai `.cmd` sous Windows via un harnais local, sans le build Gradle du plugin ni sa CI. Le sixième, `durcir-configuration-postgresql-et-secrets` (MINOS-AUD-B07, B08, B09, B13), est **implémenté en local** ; la CI Linux reste à observer. Le septième, `tolerer-repertoires-illisibles-a-la-decouverte` (MINOS-AUD-D01, D06, D10), est **implémenté en local** ; les tests d'illisibilité par permissions POSIX n'ont pas encore tourné sous Linux. Le huitième, `reconcilier-documentation-courante` (MINOS-AUD-G01, G09 à G19), est **implémenté en local** : documentation seule, sans fichier ADR modifié. Les auto-tests du garde de frontières (MINOS-AUD-E02) sont à traiter avant SH-02.
 
 ## Principes durables
 
@@ -59,7 +59,7 @@ Sous Windows, la JVM hôte n'est jamais traitée comme runtime provider ; toute 
 
 ### Secrets, formats persistés et hosted control plane
 
-Les secrets relatifs restent physiquement confinés à `MINOS_HOME`. Tous les fichiers secrets utilisent désormais un lecteur UTF-8 borné et strict. Les snapshots structurés v1/v2 imposent leur plafond **256 MiB pendant l'I/O** au moyen de flux d'entrée/sortie bornés, en complément des cardinalités déjà limitées.
+Les secrets relatifs restent physiquement confinés à `MINOS_HOME`. Tous les fichiers secrets utilisent désormais un lecteur UTF-8 borné et strict. Les snapshots structurés v1/v2/v3 imposent leur plafond **256 MiB pendant l'I/O** au moyen de flux d'entrée/sortie bornés, en complément des cardinalités déjà limitées.
 
 Le hosted control plane conserve AES-256-GCM + AAD ; les buffers de clé maître et de clé dérivée temporaires sont nettoyés après usage.
 
@@ -83,7 +83,7 @@ Le workflow **PR Validation** porte :
 
 ### Post-228 — invariants statiques ciblés
 
-**Post-228 Hardening Invariants** n'est plus une deuxième matrice Maven/Windows/JaCoCo. Il exécute les invariants statiques post-#228 sur Ubuntu ; les tests/builds/couvertures sont autoritairement dans PR Validation.
+Le workflow **Post-228 Hardening Invariants** (`post-228-hardening.yml`) est **retiré** : ses invariants statiques vivent désormais dans le job `invariants` de `.github/workflows/pr-ci.yml` (Ubuntu, sans Maven), avec ceux des anciens workflows MND, MNE et post-MNE ; les tests/builds/couvertures sont autoritairement dans le job `verify` de PR Validation.
 
 La preuve historique reste attachée aux SHA Post-#228 : candidat exact qualifié `1a551ff72f95db4e14e8a9597d897491b9c1589a`, merge `a042e97ac5e3e2ab7207fa603d85563ea1f71712`. Ces références décrivent la qualification #228 historique et ne réintroduisent aucune duplication Maven/Windows/JaCoCo dans le workflow courant.
 
@@ -115,7 +115,7 @@ Le blocage historique `docker compose` interactif de #246 est ainsi couvert par 
 
 ## Supply-chain et toolchains
 
-- cœur : Java 24 / Maven 3.9.x, wrapper Maven 3.9.16 avec checksum ;
+- cœur : Java 24 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven 3.10.0 avec checksum ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
 - IntelliJ : Java 21 / Gradle 9.6.1 / IntelliJ Platform 2026.1 ;
 - Dependabot : Maven + Gradle `minos-intellij` + GitHub Actions ;
 - workflows GitHub : actions épinglées par SHA ;
@@ -132,7 +132,7 @@ La **Release 1.0.1 est publiée** et reste immuable :
 - **10 assets** publiés ;
 - qualification incluant OSV, packaging et **Plugin Verifier**.
 
-La ligne de développement courante est **1.1.0-SNAPSHOT**. Aucune release 1.1.0 n'est publiée à ce jour.
+Les releases 1.1.0 et 1.2.0 ont été publiées depuis (voir [`STATUS.md`](STATUS.md)) ; la ligne de développement courante est la `<revision>` du `pom.xml` (**1.3.0-SNAPSHOT**).
 
 ## Suite
 
@@ -140,8 +140,9 @@ La ligne de développement courante est **1.1.0-SNAPSHOT**. Aucune release 1.1.0
 
 | Sujet | Décision | État |
 |---|---|---|
-| Reprise d'une indexation interrompue (crash, reboot, terminal fermé) sans tout réindexer | [ADR 0039](adr/0039-reprise-indexation-apres-interruption.md) | conception proposée |
 | Distribution auto-portante : les indexeurs sont livrés dans le paquet, plus aucune étape `tools install` à la charge de l'utilisateur | [ADR 0040](adr/0040-distribution-auto-portante-indexeurs-embarques.md) | implémentée (scip-java, scip-typescript ; qualification hors ligne physique à confirmer) |
+
+La reprise d'une indexation interrompue ([ADR 0039](adr/0039-reprise-indexation-apres-interruption.md)) n'est plus en conception : l'ADR est acceptée et implémentée au sprint 2 (`IndexingResumePlanner`, `IndexingRun.Status.INTERRUPTED` dans `minos-engine`).
 
 Aucun nouveau jalon fonctionnel livré n'est déclaré par l'étude d'octobre ; le programme proposé ci-dessous reste en conception. La dette durable de sécurité reste le hard filesystem quota pour une exécution réellement hostile : une primitive qui refuse l'écriture avant dépassement reste nécessaire avant de pouvoir renforcer cette claim. Les autres travaux doivent préserver les gates exact-head et la topologie `main ⊆ develop`.
 

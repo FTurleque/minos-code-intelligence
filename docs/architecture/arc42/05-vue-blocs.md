@@ -20,6 +20,7 @@ C4Container
 
     System_Boundary(minos_sys, "MINOS Code Intelligence") {
         Container(app, "minos-app", "«Container»\nJava 24 / Shaded JAR\nAssemblage final, route MCP\nBackend router natif / Docker")
+        Container(bootstrap, "minos-bootstrap", "«Container»\nJava 24\nRacine de composition (ADR-0042) :\ncâble les adaptateurs derrière les ports de minos-application")
         Container(cli, "minos-cli", "«Container»\nJava 24\nSurface CLI stable — toutes les commandes")
         Container(mcp, "minos-mcp", "«Container»\nJava 24 / SDK MCP 2.0\nServeur MCP STDIO read-only")
         Container(api, "minos-api", "«Container»\nJava 24\nAPI Java publique versionnée")
@@ -44,6 +45,16 @@ C4Container
     Rel(ai_agent, mcp, "interroge", "MCP STDIO JSON-RPC 2.0")
     Rel(app, cli, "délègue les commandes")
     Rel(app, mcp, "démarre le serveur MCP")
+    Rel(app, bootstrap, "assemble")
+    Rel(cli, bootstrap, "ouvre l'application (ServiceLoader, runtime)")
+    Rel(mcp, bootstrap, "ouvre l'application (ServiceLoader, runtime)")
+    Rel(api, bootstrap, "ouvre l'application (ServiceLoader, runtime)")
+    Rel(bootstrap, application, "implémente le composeur de MinosApplication")
+    Rel(bootstrap, storage_local, "câble le stockage local")
+    Rel(bootstrap, storage_pg, "câble le backend PostgreSQL (optionnel)")
+    Rel(bootstrap, provider_scip, "câble les providers SCIP")
+    Rel(bootstrap, integration_git, "câble l'intégration Git")
+    Rel(bootstrap, runtime_local, "câble l'exécution locale")
     Rel(cli, application, "utilise les services applicatifs")
     Rel(mcp, application, "délègue aux services")
     Rel(api, application, "expose les services")
@@ -139,6 +150,12 @@ C4Container
 - **Types clés** : `MinosMcpServer`, `MinosMcpApplicationTools`, `MinosApplicationMcpBackend`.
 - **Dépendances** : `minos-application`, `io.modelcontextprotocol.sdk:mcp 2.0.0`.
 - **Sources** : `minos-mcp/src/main/java/com/minos/mcp/`.
+
+### minos-bootstrap
+- **Responsabilité** : racine de composition ([ADR 0042](../../adr/0042-racine-de-composition.md)) : seul module non adaptateur qui connaît des classes concrètes d'adaptateur ; découvert par `ServiceLoader` derrière `MinosApplication.open(home)` / `Builder.build()`.
+- **Types clés** : `DefaultMinosApplicationComposer`, `StorageBackendSelection`, `LocalRemoteIndexingRuntime`, `LocalWorkerSandboxProbe`.
+- **Dépendances** : `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
+- **Sources** : `minos-bootstrap/src/main/java/com/minos/bootstrap/`.
 
 ### minos-app
 - **Responsabilité** : assemblage final (shaded JAR), point d'entrée NEXUS (`NexusExportBridgeMain`), route `minos mcp` (`McpLaunchRouteProvider` → router backend natif/Docker, `com.minos.app`) fournie à `MinosLauncher` par `META-INF/services` ([ADR 0044](../../adr/0044-un-package-un-module.md)).

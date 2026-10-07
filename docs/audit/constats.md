@@ -391,3 +391,23 @@ Vérification : `verify` vert sous Windows (17 min 42 s, 2 242 tests, 0 échec, 
 | MINOS-AUD-D12 | **Non tranché** (décision) | — |
 
 Vérification : `verify` vert sous Windows (18 min 13 s, 2 271 tests, 0 échec, 56 ignorés), 26 gates `check-*.py` verts (hors les deux de publication), JaCoCo vert, dont `provider-execution-trust-boundary`. **Non fait** : exécution sous Linux (les tests d'illisibilité par permissions POSIX n'ont jamais tourné), CI ; ils s'ignorent en compte root ou administrateur élevé ; les décisions ouvertes du design (questions 1 à 3, 6). Voir « Évidence d'implémentation » dans les [tâches du changement](../../openspec/changes/tolerer-repertoires-illisibles-a-la-decouverte/tasks.md).
+
+### Suivi du changement `reconcilier-documentation-courante` (2026-10-07)
+
+Documentation seule : aucun code, test, script ni workflow modifié, aucun fichier ADR touché, `docs/generated/product-facts.md` inchangé.
+
+| Constat | État | Preuve |
+|---|---|---|
+| MINOS-AUD-G11 | **Corrigé en local, et étendu** : wrapper Maven 3.10.0 dans `STATUS.md` et `ROADMAP.md` ; `docs/user/docker-runtime.md` ne dit plus l'image identique au wrapper (3.9.16 contre 3.10.0) | `.mvn/wrapper/maven-wrapper.properties`, `docker/Dockerfile.mcp.release`, `embedded-tools.json` relus |
+| MINOS-AUD-G12, G13, G14 | **Corrigés en local** : ligne de développement = `<revision>` (1.3.0-SNAPSHOT), ADR 0039 hors des travaux en conception, workflow Post-228 décrit comme retiré (job `invariants`) | `pom.xml`, `IndexingResumePlanner`, `ls .github/workflows` |
+| MINOS-AUD-G15, G19 | **Corrigés en local** : trois jobs (`vulnerability-scan`, `invariants`, `verify`) ; snapshots v1/v2/v3 | `pr-ci.yml` (aucun `needs:`), `KnowledgeSnapshotCodecs` |
+| MINOS-AUD-G16, G17 | **Corrigés en local** : README et docs d'architecture (arc42 02, 04, 05, SYNTHESE) alignés sur ADR-0042 et sur 14 modules enfants ; releases 1.1.0 et 1.2.0 au README | `pom.xml`, ADR-0042, `check-module-boundaries.py` (`modules=14`) |
+| MINOS-AUD-G09 | **Corrigé en local** : 57 lignes dans `arc42/09-decisions.md` pour 57 fichiers ADR, dates relues sur chaque en-tête ; SYNTHESE à 57 ADR | comparaison ligne à ligne ; 0036 laissée en l'état (Q1) |
+| MINOS-AUD-G01 | **Corrigé en local** : deux dates dans `STATUS.md` et `ROADMAP.md`, date de `docs/architecture/README.md` (ligne `Version :` intacte) | `git log`, gate `product-facts.py --check` |
+| MINOS-AUD-G10, G03 (citation) | **Corrigés en local** : PR #333 notée fusionnée (`bc1d3421`) ; `arc42/11` cite l'ADR-0037 | `gh pr view 333`, ADR-0037 |
+| MINOS-AUD-G18 | **Corrigé en local, étendu** : 10 liens de la documentation courante réparés (fiche, deux prompts, six liens de `CI-HYGIENE-SUIVI.md`) ; les sept diagrammes absents de `docs/architecture/diagrams/` ont été créés sur décision de l'utilisateur (Q7) et relus contre le code ; six des huit diagrammes validés en entier par un analyseur Mermaid | contrôleur de liens : 17 morts avant, 0 après |
+| MINOS-AUD-G02 | **Corrigé en local sur décision de l'utilisateur (Q1)** : l'index, `arc42/09` (statut et date) et `arc42/11:3` suivent le fichier de l'ADR-0036 (« Accepted », 2026-07-31) ; le fichier ADR n'est pas modifié | en-tête de l'ADR-0036, commit `cd87f402` |
+| MINOS-AUD-G04, G05, G06, G07, G08, G20 | **Non tranchés** (statuts, bandeaux et nouveaux ADR : décision de l'utilisateur ; questions Q2 à Q6 et Q8 du design) | — |
+| MINOS-AUD-G21, G22 | **Non retenus** (état de la machine locale ; fichier non versionné) | — |
+
+Vérification : les trois gates documentaires rejoués après chaque tâche, puis 18 scripts de contrôle du job `invariants` sur l'arbre final (18 verts) ; `openspec validate --all --strict`. **Non fait** : CI de la PR ; revérification des lignes historiques de `STATUS.md` et `ROADMAP.md` non touchées ; correction de la dépendance `minos-application` annoncée à tort pour `minos-storage-postgresql` dans `arc42/05` (constat hors périmètre, noté dans `design.md`).
