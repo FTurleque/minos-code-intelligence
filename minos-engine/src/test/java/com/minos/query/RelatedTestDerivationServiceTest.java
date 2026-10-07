@@ -155,6 +155,41 @@ class RelatedTestDerivationServiceTest {
         assertEquals(0.858, related.confidence());
     }
 
+    /** MINOS-AUD-F02 : un test Go ({@code foo_test.go}) est reconnu comme test, sans répertoire de test ni suffixe {@code .test}. */
+    @Test
+    void recognisesAGoTestFileByItsSuffixConvention() {
+        String file = "pkg/user_service_test.go";
+        Symbol testFunction = symbol(
+                "go-test", "TestFindsUser", "pkg.TestFindsUser", SymbolKind.FUNCTION, file);
+        Symbol production = symbol(
+                "go-service", "UserService", "pkg.UserService", SymbolKind.CLASS, "pkg/user_service.go");
+
+        List<Relationship> related = service.derive(
+                List.of(testFunction, production),
+                List.of(reference("reference", production, file, 4)),
+                List.of()
+        );
+
+        assertEquals(1, related.size());
+        assertEquals(ref(testFunction), related.getFirst().source());
+        assertEquals(ref(production), related.getFirst().target());
+    }
+
+    @Test
+    void doesNotTreatAGoFileThatMerelyEndsWithTheWordTestAsATest() {
+        String file = "pkg/contest.go";
+        Symbol notATest = symbol(
+                "contest", "TestFindsUser", "pkg.TestFindsUser", SymbolKind.FUNCTION, file);
+        Symbol production = symbol(
+                "go-service", "UserService", "pkg.UserService", SymbolKind.CLASS, "pkg/user_service.go");
+
+        assertTrue(service.derive(
+                List.of(notATest, production),
+                List.of(reference("reference", production, file, 4)),
+                List.of()
+        ).isEmpty());
+    }
+
     private static Set<EvidenceType> evidenceTypes(Relationship relationship) {
         return relationship.evidence().stream()
                 .map(Evidence::type)

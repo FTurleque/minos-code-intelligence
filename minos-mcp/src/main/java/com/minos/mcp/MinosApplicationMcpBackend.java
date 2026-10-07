@@ -142,7 +142,9 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
                 ? RelationshipSearchCriteria.incoming(anchor, Set.of(kind), request.limit())
                 : RelationshipSearchCriteria.outgoing(anchor, Set.of(kind), request.limit());
         return CodeIntelligenceResultRenderer.renderRelationships(
-                queries.findRelationships(request.project(), criteria), SymbolOutputFormat.JSON);
+                queries.findRelationships(request.project(), criteria),
+                queries.relationshipLimitations(request.project(), Set.of(kind)),
+                SymbolOutputFormat.JSON);
     }
 
     @Override

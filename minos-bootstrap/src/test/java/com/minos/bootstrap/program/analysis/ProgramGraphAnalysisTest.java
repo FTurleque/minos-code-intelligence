@@ -3,15 +3,21 @@ package com.minos.bootstrap.program.analysis;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.InformationNature;
+import com.minos.domain.OccurrenceRole;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipKind;
+import com.minos.domain.PositionEncoding;
 import com.minos.domain.ResolutionStatus;
+import com.minos.domain.ResolvedSymbolReference;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
+import com.minos.domain.SymbolLocation;
+import com.minos.domain.SymbolOccurrence;
 import com.minos.impact.ImpactAnalysisRequest;
+import com.minos.impact.ImpactLimitation;
 import com.minos.impact.LocalProjectImpactQuery;
 import com.minos.program.ProgramEdgeKind;
 import com.minos.program.ProgramGraph;
@@ -161,6 +167,32 @@ class ProgramGraphAnalysisTest {
         assertTrue(security.observedPaths().getFirst().sanitizedPathObserved());
         assertEquals(List.of("security:sanitizer"), security.observedPaths().getFirst().sanitizerNodeIds());
         assertTrue(security.limitations().contains("ABSENCE_OF_PATH_IS_NOT_PROOF_OF_SAFETY"));
+    }
+
+    /** MINOS-AUD-F01 : l'impact v2 embarque le rapport de base, donc sa limite sur les références par occurrence. */
+    @Test
+    void impactV2KeepsTheBaselineOccurrenceReferenceLimitation(@TempDir Path temp) throws Exception {
+        Path root = Files.createDirectories(temp.resolve("project"));
+        LocalProjectRegistry registry = new LocalProjectRegistry(temp.resolve("registry"));
+        RegisteredProject project = registry.registerProject(root, "fixture");
+        Symbol rootSymbol = symbol(project.id(), "root", SymbolKind.METHOD);
+        Symbol advancedSymbol = symbol(project.id(), "advanced", SymbolKind.METHOD);
+        SymbolOccurrence reference = new SymbolOccurrence("occurrence-1", project.id().toString(),
+                new ResolvedSymbolReference(rootSymbol.id()),
+                new SymbolLocation("src/Caller.java", 4, 0, 4, 4, PositionEncoding.UTF16_CODE_UNITS),
+                Set.of(OccurrenceRole.REFERENCE), ResolutionStatus.RESOLVED, ORIGIN, Set.of());
+        FileSymbolSnapshotStore store = new FileSymbolSnapshotStore(temp.resolve("snapshots"));
+        store.publish(project.id(), "snapshot-advanced", List.of(rootSymbol, advancedSymbol), List.of(reference), List.of());
+        ProgramGraphService graphs = new ProgramGraphService(registry, store, List.of(new FixtureProvider()));
+        AdvancedImpactService impacts = new AdvancedImpactService(new LocalProjectImpactQuery(registry, store), graphs);
+
+        AdvancedImpactService.AdvancedImpactReport report = impacts.analyze(
+                project.id().toString(), new ImpactAnalysisRequest(rootSymbol.id(), 8, 100));
+
+        assertTrue(report.baseline().limitations().contains(ImpactLimitation.OCCURRENCE_REFERENCES_NOT_PROJECTED),
+                report.baseline().limitations().toString());
+        assertEquals(1, report.advancedAddedCount(), "the limitations of v2 itself are unchanged");
+        assertFalse(report.limitations().isEmpty(), "the limitations proper to v2 are kept");
     }
 
     private static final class FixtureProvider implements ProgramGraphProvider {

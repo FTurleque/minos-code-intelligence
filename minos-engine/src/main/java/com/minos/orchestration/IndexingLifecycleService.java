@@ -1,5 +1,6 @@
 package com.minos.orchestration;
 
+import com.minos.discovery.ModuleAssignmentRule;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.incremental.IncrementalIndexingPlan;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
@@ -104,7 +105,8 @@ public final class IndexingLifecycleService {
     /** Run complet sur les cibles racine ; reprise selon {@code policy} (ADR 0039 §6, reprise par défaut). */
     public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
-        return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of(), null, policy);
+        return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of(), null, policy,
+                ModuleAssignmentRule.none());
     }
 
     public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
@@ -116,7 +118,7 @@ public final class IndexingLifecycleService {
                                IndexerNegotiationResult negotiation, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
         return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of(),
-                null, policy);
+                null, policy, ModuleAssignmentRule.of(id.toString(), discovery));
     }
 
     public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
@@ -127,7 +129,7 @@ public final class IndexingLifecycleService {
     public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
                                                 IncrementalIndexingPlan plan, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
-        return planned(id, root, negotiation, plans.rootTargets(negotiation), plan, policy);
+        return planned(id, root, negotiation, plans.rootTargets(negotiation), plan, policy, ModuleAssignmentRule.none());
     }
 
     public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
@@ -139,12 +141,13 @@ public final class IndexingLifecycleService {
                                                 IndexerNegotiationResult negotiation, IncrementalIndexingPlan plan,
                                                 IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
-        return planned(id, root, negotiation, plans.scopedTargets(root, discovery, negotiation), plan, policy);
+        return planned(id, root, negotiation, plans.scopedTargets(root, discovery, negotiation), plan, policy,
+                ModuleAssignmentRule.of(id.toString(), discovery));
     }
 
     private Optional<IndexingRun> planned(UUID id, Path root, IndexerNegotiationResult negotiation,
                                           List<IndexingExecutionTarget> targets, IncrementalIndexingPlan plan,
-                                          IndexingResumePolicy policy) {
+                                          IndexingResumePolicy policy, ModuleAssignmentRule moduleAssignment) {
         Objects.requireNonNull(plan, "plan");
         if (!id.equals(plan.projectId())) throw new IllegalArgumentException("plan belongs to another project");
         plans.validatePlan(plan, negotiation);
@@ -155,18 +158,19 @@ public final class IndexingLifecycleService {
             }
         }
         return Optional.of(run(id, root, targets, plan.mode(),
-                plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of(), plan, policy));
+                plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of(), plan, policy,
+                moduleAssignment));
     }
 
     private IndexingRun run(UUID id, Path root, List<IndexingExecutionTarget> targets,
                             IndexingMode mode, List<String> changedFiles, IncrementalIndexingPlan plan,
-                            IndexingResumePolicy policy) {
+                            IndexingResumePolicy policy, ModuleAssignmentRule moduleAssignment) {
         if (targets.isEmpty()) throw new IllegalArgumentException("indexing execution must contain at least one provider scope");
         Objects.requireNonNull(policy, "policy");
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
             if (plan != null) validatePlanStillCurrent(id, plan);
             return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
-                    executors, stager, promoter, stateStore, markers, artifactPolicy, policy, clock);
+                    executors, stager, promoter, stateStore, markers, artifactPolicy, policy, moduleAssignment, clock);
         }
     }
 

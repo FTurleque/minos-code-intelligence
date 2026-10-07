@@ -446,9 +446,42 @@ public interface MinosApi extends AutoCloseable {
             List<String> topIncomingModuleIds,
             List<String> topOutgoingModuleIds,
             List<String> technologies,
-            List<ArchitectureModuleDto> modules
+            List<ArchitectureModuleDto> modules,
+            List<String> limitations
     ) {
+        /**
+         * Historical shape, kept so that no caller of the published contract breaks: it declares no limitation.
+         * {@code limitations} says what the aggregated dependency graph does not see.
+         */
+        public ArchitectureDto(
+                String projectId,
+                String projectName,
+                String snapshotId,
+                String nature,
+                List<String> languages,
+                List<String> buildSystems,
+                int moduleCount,
+                int localSymbolCount,
+                int externalSymbolCount,
+                int relationshipCount,
+                int totalDependencyCount,
+                int interModuleDependencyCount,
+                int intraModuleDependencyCount,
+                int unassignedDependencyCount,
+                int moduleEdgeCount,
+                List<String> topIncomingModuleIds,
+                List<String> topOutgoingModuleIds,
+                List<String> technologies,
+                List<ArchitectureModuleDto> modules
+        ) {
+            this(projectId, projectName, snapshotId, nature, languages, buildSystems, moduleCount, localSymbolCount,
+                    externalSymbolCount, relationshipCount, totalDependencyCount, interModuleDependencyCount,
+                    intraModuleDependencyCount, unassignedDependencyCount, moduleEdgeCount, topIncomingModuleIds,
+                    topOutgoingModuleIds, technologies, modules, List.of());
+        }
+
         public ArchitectureDto {
+            limitations = immutable(limitations);
             languages = immutable(languages);
             buildSystems = immutable(buildSystems);
             topIncomingModuleIds = immutable(topIncomingModuleIds);

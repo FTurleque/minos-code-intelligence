@@ -61,7 +61,10 @@ public final class RelationshipCommand {
                             : RelationshipSearchCriteria.outgoing(anchor, Set.of(operation.kind), options.limit());
                     List<RelationshipResult> relationships =
                             List.copyOf(query.findRelationships(options.projectId(), criteria));
-                    output.append(CodeIntelligenceResultRenderer.renderRelationships(relationships, options.format()))
+                    List<String> limitations =
+                            query.relationshipLimitations(options.projectId(), Set.of(operation.kind));
+                    output.append(CodeIntelligenceResultRenderer.renderRelationships(
+                                    relationships, limitations, options.format()))
                             .append('\n');
                     return FindSymbolCommand.SUCCESS;
                 });

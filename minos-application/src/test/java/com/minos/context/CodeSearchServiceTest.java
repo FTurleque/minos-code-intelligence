@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CodeSearchServiceTest {
@@ -83,6 +84,19 @@ class CodeSearchServiceTest {
         assertTrue(response.truncated());
     }
 
+    /** MINOS-AUD-F04 : la recherche de contexte refuse aussi un filtre par module sur un snapshot sans module. */
+    @Test
+    void aModuleFilterOnASnapshotWithoutAnyModuleIsRefusedExplicitly() {
+        InMemoryCodeKnowledgeStore withoutModules = new InMemoryCodeKnowledgeStore();
+        withoutModules.putSymbols(List.of(symbol("a", null), symbol("b", null)));
+        CodeSearchService service = new CodeSearchService(withoutModules, new FixtureSourceReader());
+
+        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                () -> service.search(PROJECT, criteria(1, 4_000, false)));
+
+        assertTrue(refusal.getMessage().contains("module"), refusal.getMessage());
+    }
+
     private static CodeSearchCriteria criteria(int depth, int tokens, boolean source) {
         return new CodeSearchCriteria(
                 new SymbolSearchCriteria("A", "com.minos.A", SymbolKind.CLASS, "main", 1),
@@ -114,10 +128,14 @@ class CodeSearchServiceTest {
     }
 
     private static Symbol symbol(String suffix) {
+        return symbol(suffix, "main");
+    }
+
+    private static Symbol symbol(String suffix, String moduleId) {
         String upper = suffix.toUpperCase();
         return new Symbol(
                 "symbol-" + suffix, PROJECT + "|java|CLASS|com.minos." + upper,
-                SymbolIdentityQuality.STRUCTURAL_FALLBACK, PROJECT, "main",
+                SymbolIdentityQuality.STRUCTURAL_FALLBACK, PROJECT, moduleId,
                 "src/" + upper + ".java", null, SymbolKind.CLASS, upper,
                 "com.minos." + upper, null, "java", location("src/" + upper + ".java", 2),
                 ResolutionStatus.RESOLVED, origin(), false, false, Set.of()

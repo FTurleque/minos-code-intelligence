@@ -356,7 +356,8 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
                 view.centrality().topIncomingModuleIds(),
                 view.centrality().topOutgoingModuleIds(),
                 view.technologies().technologies().stream().map(value -> value.name()).toList(),
-                view.overview().modules().stream().map(LocalMinosApi::architectureModule).toList()
+                view.overview().modules().stream().map(LocalMinosApi::architectureModule).toList(),
+                view.dependencies().limitations()
         );
     }
 

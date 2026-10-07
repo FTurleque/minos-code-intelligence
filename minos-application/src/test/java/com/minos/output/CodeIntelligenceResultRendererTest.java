@@ -97,4 +97,33 @@ class CodeIntelligenceResultRendererTest {
         return new Origin(
                 "fixture-provider", "TEST", "1", "run-1", OriginType.OTHER);
     }
+
+    /** MINOS-AUD-F01 : la surcharge avec limitations ajoute une clé après les clés existantes ; l'ancienne reste identique. */
+    @Test
+    void relationshipsWithLimitationsAddTheKeyAfterTheExistingOnesWhileTheHistoricalOverloadIsUnchanged() {
+        List<RelationshipResult> none = List.of();
+
+        String historical = CodeIntelligenceResultRenderer.renderRelationships(none, SymbolOutputFormat.JSON);
+        String withLimitation = CodeIntelligenceResultRenderer.renderRelationships(
+                none, List.of("CALL_RELATIONS_NOT_PRODUCED"), SymbolOutputFormat.JSON);
+        String withoutLimitation = CodeIntelligenceResultRenderer.renderRelationships(
+                none, List.of(), SymbolOutputFormat.JSON);
+
+        assertEquals("{\"count\":0,\"relationships\":[]}", historical);
+        assertEquals("{\"count\":0,\"relationships\":[],\"limitations\":[\"CALL_RELATIONS_NOT_PRODUCED\"]}",
+                withLimitation);
+        assertEquals(historical, withoutLimitation, "no limitation: the output is the historical one, byte for byte");
+    }
+
+    @Test
+    void relationshipsWithLimitationsAddALineInTextAndNothingWithoutLimitation() {
+        List<RelationshipResult> none = List.of();
+
+        String text = CodeIntelligenceResultRenderer.renderRelationships(
+                none, List.of("CALL_RELATIONS_NOT_PRODUCED", "OCCURRENCE_REFERENCES_NOT_PROJECTED"), SymbolOutputFormat.TEXT);
+
+        assertEquals("relationships: 0\nlimitations: [CALL_RELATIONS_NOT_PRODUCED, OCCURRENCE_REFERENCES_NOT_PROJECTED]", text);
+        assertEquals(CodeIntelligenceResultRenderer.renderRelationships(none, SymbolOutputFormat.TEXT),
+                CodeIntelligenceResultRenderer.renderRelationships(none, List.of(), SymbolOutputFormat.TEXT));
+    }
 }

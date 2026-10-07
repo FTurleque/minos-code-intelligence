@@ -5,21 +5,25 @@ import com.minos.context.CodeSearchResponse;
 import com.minos.context.CodeSearchService;
 import com.minos.context.LocalSourceReader;
 import com.minos.context.SourceExcerpt;
+import com.minos.domain.RelationshipKind;
 import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.query.RelationshipQueryService;
 import com.minos.query.RelationshipResult;
+import com.minos.query.SnapshotCoverageLimitations;
 import com.minos.query.SymbolQueryService;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
+import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.InMemoryCodeKnowledgeStore;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /** Application-level read service over the active Code Intelligence snapshot of a project. */
 public final class ProjectQueryService {
@@ -54,6 +58,15 @@ public final class ProjectQueryService {
     public List<RelationshipResult> findRelationships(String projectIdentifier, RelationshipSearchCriteria criteria) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         return new RelationshipQueryService(loadQueryStore(project)).findRelationshipResults(project.id().toString(), Objects.requireNonNull(criteria, "criteria"));
+    }
+
+    /** The limitations of relationship answers of the given kinds, computed on the active snapshot's content. */
+    public List<String> relationshipLimitations(String projectIdentifier, Set<RelationshipKind> kinds) throws IOException {
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
+        CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveQueryView(project.id())
+                .orElseThrow(() -> new IllegalStateException("project has no active symbol snapshot: " + project.id()))
+                .snapshot();
+        return SnapshotCoverageLimitations.relationshipLimitations(snapshot, Objects.requireNonNull(kinds, "kinds"));
     }
 
     public CodeSearchResponse searchCode(String projectIdentifier, CodeSearchCriteria criteria) throws IOException {

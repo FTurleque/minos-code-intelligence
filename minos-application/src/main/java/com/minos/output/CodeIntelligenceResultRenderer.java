@@ -44,6 +44,33 @@ public final class CodeIntelligenceResultRenderer {
         };
     }
 
+    /**
+     * {@link #renderRelationships(List, SymbolOutputFormat)} that also states what the answer cannot see (callers,
+     * callees and dependencies on a snapshot whose references are occurrences). The limitations are added after the
+     * existing keys and lines, and only when there is one: with none, the output is the historical one, byte for byte.
+     */
+    public static String renderRelationships(
+            List<RelationshipResult> relationships,
+            List<String> limitations,
+            SymbolOutputFormat format
+    ) {
+        Objects.requireNonNull(relationships, "relationships");
+        Objects.requireNonNull(limitations, "limitations");
+        Objects.requireNonNull(format, "format");
+        if (limitations.isEmpty()) {
+            return renderRelationships(relationships, format);
+        }
+        return switch (format) {
+            case TEXT -> renderRelationshipText(relationships) + "\nlimitations: " + limitations;
+            case JSON -> DeterministicJson.render(object(
+                    "count", relationships.size(),
+                    "relationships", relationships.stream()
+                            .map(CodeIntelligenceResultRenderer::relationshipMap)
+                            .toList(),
+                    "limitations", List.copyOf(limitations)));
+        };
+    }
+
     private static String renderUsageText(List<UsageResult> usages) {
         StringJoiner output = new StringJoiner("\n\n");
         usages.forEach(usage -> {

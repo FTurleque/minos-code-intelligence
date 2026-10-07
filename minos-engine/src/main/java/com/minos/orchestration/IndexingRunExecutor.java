@@ -1,5 +1,6 @@
 package com.minos.orchestration;
 
+import com.minos.discovery.ModuleAssignmentRule;
 import com.minos.io.CommitUncertainException;
 import com.minos.orchestration.IndexingResumePlanner.Outcome;
 import com.minos.orchestration.IndexingResumePlanner.ReusedTarget;
@@ -48,10 +49,11 @@ final class IndexingRunExecutor {
                                Map<String, IndexerExecutor> executors, SnapshotStager stager,
                                SnapshotPromoter promoter, IndexStateStore stateStore,
                                ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy,
-                               IndexingResumePolicy resumePolicy, Clock clock) {
+                               IndexingResumePolicy resumePolicy, ModuleAssignmentRule moduleAssignment,
+                               Clock clock) {
         Objects.requireNonNull(resumePolicy, "resumePolicy");
         ValidatedProjectRoot root = validateExecutionRoot(projectRoot, targets, mode);
-        Ports ports = new Ports(executors, stager, promoter, stateStore, markers, clock);
+        Ports ports = new Ports(executors, stager, promoter, stateStore, markers, moduleAssignment, clock);
         Instant createdAt = clock.instant();
         ProjectIndexState previous = reconcilePreviousState(projectId, ports, createdAt);
 
@@ -447,7 +449,7 @@ final class IndexingRunExecutor {
         context.phase = Phase.STAGING;
         context.ports.stateStore().saveRun(running(context, "staging project snapshot: mode=" + mode));
         String stagedId = context.ports.stager().stage(new IndexSnapshotStageRequest(
-                context.runId, context.projectId, context.artifacts()));
+                context.runId, context.projectId, context.artifacts(), context.ports.moduleAssignment()));
         if (stagedId == null || stagedId.isBlank()) {
             // Etat interne invalide (le port de mise en scene a rendu un identifiant vide), pas un argument :
             // IllegalStateException, dont le nom de classe figure dans le message du run persiste.
@@ -848,6 +850,7 @@ final class IndexingRunExecutor {
             SnapshotPromoter promoter,
             IndexStateStore stateStore,
             ResumableRunMarkers markers,
+            ModuleAssignmentRule moduleAssignment,
             Clock clock
     ) {
         private Ports {
@@ -856,6 +859,7 @@ final class IndexingRunExecutor {
             Objects.requireNonNull(promoter, "promoter");
             Objects.requireNonNull(stateStore, "stateStore");
             Objects.requireNonNull(markers, "markers");
+            Objects.requireNonNull(moduleAssignment, "moduleAssignment");
             Objects.requireNonNull(clock, "clock");
         }
     }

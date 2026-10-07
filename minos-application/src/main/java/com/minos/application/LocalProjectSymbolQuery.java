@@ -3,6 +3,7 @@ package com.minos.application;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.context.CodeSearchResponse;
 import com.minos.context.SourceExcerpt;
+import com.minos.domain.RelationshipKind;
 import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.query.RelationshipResult;
@@ -14,6 +15,7 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /** Application adapter over the shared project query service. */
 public final class LocalProjectSymbolQuery implements ProjectSymbolQuery {
@@ -51,6 +53,11 @@ public final class LocalProjectSymbolQuery implements ProjectSymbolQuery {
     @Override
     public List<RelationshipResult> findRelationships(String projectIdentifier, RelationshipSearchCriteria criteria) throws IOException {
         return service.findRelationships(projectIdentifier, criteria);
+    }
+
+    @Override
+    public List<String> relationshipLimitations(String projectIdentifier, Set<RelationshipKind> kinds) throws IOException {
+        return service.relationshipLimitations(projectIdentifier, kinds);
     }
 
     @Override

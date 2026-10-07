@@ -67,6 +67,31 @@ class IndexingLifecycleScopedExecutionTest {
                 staged.get().artifacts().stream().map(IndexingArtifact::projectRelativeRoot).toList()
         );
         assertEquals("snapshot-scoped", run.activeSnapshotAfter().orElseThrow());
+        // MINOS-AUD-F04 : la découverte de l'exécution arrive au stager sous la forme de la règle d'attribution.
+        assertTrue(!staged.get().moduleAssignment().isEmpty());
+    }
+
+    /** MINOS-AUD-F04 : sans découverte, le stager reçoit la règle vide et les symboles restent sans module. */
+    @Test
+    void anExecutionWithoutDiscoveryStagesWithAnEmptyModuleAssignment(@TempDir Path root) throws Exception {
+        Path app = Files.createDirectories(root.resolve("ui/app"));
+        Path appArtifact = Files.writeString(root.resolve("app.scip"), "app");
+        Path libArtifact = Files.writeString(root.resolve("lib.scip"), "lib");
+        AtomicReference<IndexSnapshotStageRequest> staged = new AtomicReference<>();
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(
+                List.of(scopedExecutor(app, appArtifact, libArtifact, new ArrayList<>(), new AtomicBoolean(false))),
+                request -> {
+                    staged.set(request);
+                    return "snapshot-root";
+                },
+                (projectId, runId, snapshotId) -> { },
+                new InMemoryIndexStateStore()
+        );
+
+        IndexingRun run = lifecycle.execute(UUID.randomUUID(), root, negotiation());
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
+        assertTrue(staged.get().moduleAssignment().isEmpty());
     }
 
     @Test
