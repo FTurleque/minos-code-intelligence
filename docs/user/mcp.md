@@ -474,6 +474,8 @@ Attention : un succès avec le JDK complet du checkout ne suffit pas à qualifie
 | `minos_runtime_sessions` | sessions runtime déjà importées |
 | `minos_runtime_report` | rapport d'observations partielles d'une session |
 | `minos_runtime_symbol` | observations partielles liées à un symbole |
+
+`minos_find_callers`, `minos_find_callees`, `minos_dependencies` et `minos_dependents` ajoutent une clé `limitations` (dernière clé) lorsque le snapshot ne contient pas le genre de relation demandé : `CALL_RELATIONS_NOT_PRODUCED` (aucune relation d'appel dans le snapshot) ou `OCCURRENCE_REFERENCES_NOT_PROJECTED` (références présentes seulement comme occurrences). `minos_impact`, `minos_impact_v2`, `minos_architecture` et `minos_architecture_graph` déclarent la seconde. Une liste vide accompagnée d'une limitation n'est pas une preuve d'absence.
 | `minos_team_tenant` | état tenant courant, read-only |
 | `minos_team_workspaces` | liste des workspaces accessibles |
 | `minos_team_workspace` | détail d'un workspace |

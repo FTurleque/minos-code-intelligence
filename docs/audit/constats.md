@@ -123,6 +123,7 @@ Les constats déjà connus de [`AUDIT-2026-09.md`](AUDIT-2026-09.md) ne sont pas
 | Correction proposée | Lot 1 : déclarer explicitement la limite dans les sorties (limitation d'impact, message d'architecture, résultat vide d'appelants). Lot 2, conditionnel et **soumis à décision** : dériver des relations `REFERENCES` de nature dérivée depuis les occurrences ; exige l'amendement des ADR 0010 et 0015 |
 | Validation | Lot 1 : test de sortie contenant la limite pour un snapshot SCIP avec occurrences non définitionnelles. Lot 2 : test bout-en-bout `ImpactAnalysisRealFixtureTest` voisin, `impacts()` contient l'appelant |
 | Dépendances | F03 (même cause racine), F04 — `declarer-limites-impact-scip` |
+| Correction (2026-10-07) | **Lot 1 corrigé en local** : la limite `OCCURRENCE_REFERENCES_NOT_PROJECTED` est déclarée par l'impact (et l'impact avancé), par l'architecture (clé JSON, ligne texte, commentaires Mermaid/DOT, `ArchitectureDto`) et par `dependencies`/`dependents` ; `CALL_RELATIONS_NOT_PRODUCED` par `find-callers`/`find-callees`, en CLI et en MCP. Preuves : `SnapshotCoverageLimitationsTest`, `ImpactAnalysisRealFixtureTest` (index SCIP TypeScript réel), `ArchitectureResultRendererLimitationsTest`, goldens de caractérisation. **Le fond reste ouvert** : aucune relation n'est dérivée des occurrences (lot 2, décision de l'utilisateur, amendement des ADR 0010 et 0015) ; la limitation reste donc vraie. L'API Java `findRelationships` ne porte pas de limitations |
 
 <a id="minos-aud-a01"></a>
 ### MINOS-AUD-A01 — Windows : le lanceur AppContainer détruit les ACL et le profil d'un autre sandbox encore vivant
@@ -334,3 +335,14 @@ Vérification : `./mvnw -B -ntp clean verify` vert (15 min 46 s, ≈ 2 079 tests
 | MINOS-AUD-C16 | **Corrigé en local** | `IdeIntelligenceCommandTest` |
 
 Vérification : `clean verify` vert (16 min 44 s, 2 119 tests, 0 échec), 21 gates verts, gate JaCoCo vert. Le golden `mcp-all-tools.golden` change de 5 lignes (outils d'équipe, mode équipe désactivé), voulu par la spec. **Non fait** : CI Ubuntu/Windows ; les quatre questions ouvertes du design.
+
+### Suivi du changement `declarer-limites-impact-scip` (2026-10-07)
+
+| Constat | État | Preuve |
+|---|---|---|
+| MINOS-AUD-F01 | **Lot 1 corrigé en local** (limites déclarées dans l'impact, l'architecture, les appelants, appelés et dépendances) ; le fond (dérivation occurrence→relation) reste une décision ouverte | `SnapshotCoverageLimitationsTest`, `ImpactAnalysisServiceTest`, `ImpactAnalysisRealFixtureTest`, `ProgramGraphAnalysisTest`, `ArchitectureDependencyServiceTest`, `ArchitectureResultRendererLimitationsTest`, `ProjectQueryServiceRelationshipLimitationsTest`, `RelationshipCommandTest`, `MinosMcpRelationshipLimitationsTest`, goldens |
+| MINOS-AUD-F02 | **Corrigé en local pour la classification** (Go, Python, C/C++, répertoire `*.Tests`) ; l'ancre unique par fichier reste ouverte (question 2) | `RelatedTestHeuristicsTest`, `RelatedTestDerivationServiceTest` |
+| MINOS-AUD-F04 | **Corrigé en local** : refus explicite du filtre par module sans attribution, puis attribution par symbole à l'indexation autonome avec la règle de l'architecture (extraite dans `minos-engine`) ; les snapshots déjà persistés ne gagnent des modules qu'à la réindexation | `SymbolQueryServiceTest`, `CodeSearchServiceTest`, `FindSymbolCommandTest`, `MinosMcpModuleFilterRefusalTest`, `ModuleAssignmentRuleTest`, `ArchitectureModuleResolverParityTest`, `ScipProjectSnapshotLifecycleTest` |
+| MINOS-AUD-F03 | **Non traité** (lot conditionnel) | — |
+
+Vérification : `verify` vert (15 min 39 s, 2 182 tests, 0 échec, 57 ignorés), 27 gates `check-*.py` verts (les deux de publication exigent des arguments), gate JaCoCo vert. Cinq goldens changent, de façon purement additive (relus au mot près). **Non fait** : réindexation réelle avec `scip-typescript` pour le contrôle manuel du filtre par module, CI Ubuntu/Windows, PR ; les décisions ouvertes du design (questions 1 à 4, 6, 7). Voir « Évidence d'implémentation » dans les [tâches du changement](../../openspec/changes/declarer-limites-impact-scip/tasks.md).

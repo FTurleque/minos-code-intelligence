@@ -144,7 +144,9 @@ Vue agrégée :
 MinosApi.ArchitectureDto architecture = minos.getArchitecture(project.id());
 ```
 
-Elle expose notamment les modules, langages, builds, compteurs de dépendances, modules centraux relatifs et technologies observées.
+Elle expose notamment les modules, langages, builds, compteurs de dépendances, modules centraux relatifs et technologies observées, ainsi que `limitations()` : la liste des limites de couverture du snapshot (`OCCURRENCE_REFERENCES_NOT_PROJECTED` quand les références ne sont que des occurrences). Le constructeur historique de `ArchitectureDto` reste disponible et renvoie une liste vide.
+
+`findRelationships` ne porte pas de limitations dans cette version : la déclaration de limites est faite par la CLI et le MCP. `MinosApi.ImpactReportDto` expose les siennes dans `limitations()`.
 
 ### Graphe de dépendances inter-modules
 
