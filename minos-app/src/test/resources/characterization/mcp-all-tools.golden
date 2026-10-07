@@ -162,20 +162,20 @@ isError: false
 @ minos_team_tenant {}
 isError: true
 --- content
-error: MINOS tool execution failed
+error: MINOS team mode is disabled
 @ minos_team_workspaces {}
 isError: true
 --- content
-error: MINOS tool execution failed
+error: MINOS team mode is disabled
 @ minos_team_workspace {workspaceId=<uuid-2>}
 isError: true
 --- content
-error: MINOS tool execution failed
+error: MINOS team mode is disabled
 @ minos_team_members {}
 isError: true
 --- content
-error: MINOS tool execution failed
+error: MINOS team mode is disabled
 @ minos_team_audit {limit=10}
 isError: true
 --- content
-error: MINOS tool execution failed
+error: MINOS team mode is disabled

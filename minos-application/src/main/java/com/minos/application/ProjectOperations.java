@@ -36,6 +36,15 @@ public interface ProjectOperations {
         return new ProjectInspection(inspectProject(projectIdentifier), List.of());
     }
 
+    /**
+     * {@link #inspection} for an index status: the index state of the project without the structure of its
+     * repository, so the repository is not walked. The default keeps third-party implementations working by
+     * answering with the full inspection.
+     */
+    default ProjectInspection statusInspection(String projectIdentifier) throws IOException {
+        return inspection(projectIdentifier);
+    }
+
     record ProjectInspection(ProjectView project, List<DegradedEntry> unreadable) {
         public ProjectInspection {
             Objects.requireNonNull(project, "project");

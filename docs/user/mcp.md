@@ -449,7 +449,7 @@ Attention : un succès avec le JDK complet du checkout ne suffit pas à qualifie
 | Tool | Usage |
 |---|---|
 | `minos_project_structure` | structure, langages, builds, état et snapshot |
-| `minos_index_status` | état d'index et métadonnées |
+| `minos_index_status` | état d'index et métadonnées ; `providerProfiles` y est un profil **statique** : l'état d'exécution des runtimes vaut `NOT_INSPECTED` (le MCP n'interroge jamais les runtimes, voir ci-dessous) |
 | `minos_search_code` | contexte de code compact structuré |
 | `minos_find_symbols` | recherche de symboles |
 | `minos_find_usages` | usages résolus |
@@ -481,6 +481,8 @@ Attention : un succès avec le JDK complet du checkout ne suffit pas à qualifie
 | `minos_team_audit` | audit chaîné read-only |
 
 Le MCP reste **read-only** : `project add`, `tools install`, `index`, `runtime import` et la synchronisation explicite de l'index sémantique sont des opérations administratives hors MCP.
+
+Par conséquence, `minos_index_status` et `minos_project_structure` n'inspectent **pas** les runtimes des providers (inspecter un runtime peut extraire des fichiers, calculer l'empreinte d'un arbre ou lancer une sonde de sandbox) : dans `providerProfiles`, `runtimeState` vaut `NOT_INSPECTED` et `runtimeDiagnostics` renvoie vers les commandes d'inspection. L'état réel (installé, prêt, bloqué…) se lit par `minos providers` et `minos doctor`. Une erreur de référence de projet (`unknown project`, ambiguïté) reste actionnable : si la valeur ressemble à un chemin ou à un secret, elle n'est pas répétée et le message demande un nom enregistré ou un UUID (`minos project list`).
 
 ### Analyses avancées
 

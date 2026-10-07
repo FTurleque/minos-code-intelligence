@@ -32,6 +32,7 @@ public record HostedAuditEvent(
         Chaining chaining
 ) {
     public static final String GENESIS_HASH = "0".repeat(64);
+    static final int ESTIMATED_FRAMING_BYTES = 128;
     private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
 
     public enum Outcome { ALLOWED, DENIED }
@@ -80,6 +81,22 @@ public record HostedAuditEvent(
     ) {
         this(sequence, tenantId, occurredAt, principalId, action, resourceType, resourceId, outcome, requestId,
                 keyId, previousHash, hash, Chaining.CHAINED);
+    }
+
+    /**
+     * Upper bound, in bytes, of what a store spends to persist this event: a fixed framing allowance
+     * ({@value #ESTIMATED_FRAMING_BYTES}, above the sequence, tenant, instant and nine length prefixes of the
+     * local encoding) plus the UTF-8 length of every text field. It is an allowance, not the store's codec: it
+     * lets the engine budget refusals in bytes without knowing the storage format.
+     */
+    public int estimatedEncodedBytes() {
+        return ESTIMATED_FRAMING_BYTES + utf8Length(principalId) + utf8Length(action) + utf8Length(resourceType)
+                + utf8Length(resourceId) + utf8Length(outcome.name()) + utf8Length(requestId) + utf8Length(keyId)
+                + utf8Length(previousHash) + utf8Length(hash);
+    }
+
+    private static int utf8Length(String value) {
+        return value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
     }
 
     private static String sha(String value, String field) {

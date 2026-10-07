@@ -8,6 +8,10 @@ Les versions historiques détaillées restent archivées sous [`history/reconcil
 
 Décisions acceptées, code non encore migré : consolidation dans `minos-storage`, port de lecture neutre et finalisation des frontières. Le plan est basé sur `develop`, qui contient déjà le bootstrap et les corrections A2/A3. [Backlog priorisé](roadmap/storage-hexagonal-2026-10/README.md) · [12 tâches exécutables](roadmap/storage-hexagonal-2026-10/TASKS.md) · [Démarrage Claude](roadmap/storage-hexagonal-2026-10/START-WITH-CLAUDE.md). Commencer par SH-01, préparer SH-11, puis SH-02/03.
 
+## Audit 2026-10 — remédiation préparée (2026-10-06)
+
+L'[audit d'octobre 2026](audit/README.md) (101 constats : 7 P1, 39 P2, 55 P3, aucun P0) a donné lieu à huit changements OpenSpec **préparés** (deux implémentés, voir plus bas), validés en mode strict : `fiabiliser-chaine-audit-tenant` (premier recommandé), `diagnostiquer-statut-mcp-et-erreurs`, `declarer-limites-impact-scip`, `isoler-recuperation-appcontainer-par-proprietaire`, `corriger-lancement-plugin-intellij-windows`, `durcir-configuration-postgresql-et-secrets`, `tolerer-repertoires-illisibles-a-la-decouverte` et `reconcilier-documentation-courante`. Ordre, dépendances et décisions à clarifier : [plan de remédiation](audit/plan-de-remediation.md) ; dossiers sous [`openspec/changes/`](../openspec/changes/). Deux sont **implémentés en local, PR ouverte, CI de la PR à observer** : `fiabiliser-chaine-audit-tenant` (MINOS-AUD-B01 à B04) et `diagnostiquer-statut-mcp-et-erreurs` (MINOS-AUD-C01, C02, C03, C05, C06, C16), voir [constats § 6](audit/constats.md#6-suivi-des-corrections). Les auto-tests du garde de frontières (MINOS-AUD-E02) sont à traiter avant SH-02.
+
 ## Principes durables
 
 - une capacité n'est acquise qu'avec une preuve reproductible ;

@@ -26,7 +26,19 @@ L'analyse de conversation portait sur `main@730b760`. L'inspection de préparati
 | I/O dans engine | Mécanismes concrets, protections existantes | SH-08, relié à A5 |
 | Chargement SPI contextuel | Résidu signalé ADR 0042 / ARCHI-SUIVI | SH-10, relié à A8 |
 
-Le chantier ne clôture aucun audit global. Les PR #331/#332 sur les résultats partiels ne doivent pas être écrasées. La PR #333 propose les ADR 0048–0054 : les numéros 0055–0057 sont utilisés ici pour éviter une collision ; leur absence dans develop ne signifie pas qu'ils sont libres. Les améliorations Semble/Serena restent un chantier distinct.
+Le chantier ne clôture aucun audit global.
+
+## Entrées de l'audit 2026-10 à intégrer avant d'exécuter les tâches
+
+L'[audit d'octobre 2026](../../audit/README.md) relève des écarts entre ce plan et le code (aucun n'est encore corrigé ici) :
+
+- **MINOS-AUD-E04** : `PostgresProjectRegistry` dépend du magasin de correspondances de chemins local (pas seulement des codecs) ; le pointeur de snapshot partage des primitives de portée paquet avec le codec ; fusionner les modules perdrait le garde-fou « `minos-bootstrap` ne dépend pas de PostgreSQL en compilation » ; un chemin cité dans SH-10 est inexact ; les préfixes JaCoCo sont des littéraux de packages. À corriger avant SH-02, SH-03, SH-10 et SH-11.
+- **MINOS-AUD-E02** : les règles « application ↛ adaptateurs » de `scripts/architecture/check-module-boundaries.py` n'ont pas d'auto-test (contrairement à l'ADR 0042 §8.4) et trois contournements ont été reproduits sur une copie. À traiter avant SH-02 : SH-02 et SH-11 modifient ce garde en profondeur.
+- **MINOS-AUD-E01** : le backend PostgreSQL ne persiste jamais `resumableRunId` (reprise ADR 0039 inopérante) ; la migration de schéma v5 est à coordonner avec SH-02.
+- **MINOS-AUD-B07, B08, B13, B09** : le changement `durcir-configuration-postgresql-et-secrets` touche `minos-storage-postgresql` ; le livrer avant SH-02 ou le rebaser.
+
+Plan d'ensemble : [plan de remédiation](../../audit/plan-de-remediation.md).
+ Les PR #331/#332 sur les résultats partiels ne doivent pas être écrasées. La PR #333 propose les ADR 0048–0054 : les numéros 0055–0057 sont utilisés ici pour éviter une collision ; leur absence dans develop ne signifie pas qu'ils sont libres. Les améliorations Semble/Serena restent un chantier distinct.
 
 ## Backlog ordonné
 

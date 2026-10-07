@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.ProjectOperations;
+import com.minos.application.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.domain.SymbolKind;
 import com.minos.registry.DegradedEntry;
@@ -164,6 +165,10 @@ final class CliCommandSupport {
      * sequences that a terminal would execute are replaced by the same rule as a degraded entry ({@link DegradedEntry#printable}).
      */
     static String failureMessage(Throwable failure) {
+        if (failure instanceof ProjectResolver.ResolutionException resolution) {
+            // One public message for a project reference, shared with the Java API and the MCP server.
+            return DegradedEntry.printable(resolution.publicMessage());
+        }
         return DegradedEntry.printable(
                 PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName()));
     }

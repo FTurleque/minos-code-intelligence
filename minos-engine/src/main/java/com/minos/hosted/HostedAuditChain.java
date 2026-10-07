@@ -46,12 +46,11 @@ final class HostedAuditChain {
             throw new IllegalStateException("hosted audit hard capacity reached; apply retention explicitly");
         }
         long sequence = state.auditSequence() + 1;
-        Instant occurredAt = clock.instant();
-        String previous = head(state);
-        String hash = hash(HostedAuditEvent.Chaining.CHAINED, state.tenantId(), sequence, occurredAt, principalId,
-                action, resourceType, resourceId, outcome, requestId, keyId, previous);
-        HostedAuditEvent event = new HostedAuditEvent(sequence, state.tenantId(), occurredAt, principalId, action,
-                resourceType, resourceId, outcome, requestId, keyId, previous, hash);
+        // The event is built first and authenticated from its own fields: its constructor canonicalizes the
+        // values (trimming, bounds), so the HMAC always covers exactly what is persisted and exported.
+        HostedAuditEvent event = authenticated(new HostedAuditEvent(
+                sequence, state.tenantId(), clock.instant(), principalId, action, resourceType, resourceId, outcome,
+                requestId, keyId, head(state), HostedAuditEvent.GENESIS_HASH));
         return new HostedTenantState(state.tenantId(), state.name(), keyId, targetVersion,
                 state.createdAt(), event.occurredAt(), state.retentionPolicy(), state.members(), state.workspaces(),
                 event.sequence(), state.auditAnchorHash(), appended(state.auditEvents(), event));
@@ -73,14 +72,9 @@ final class HostedAuditChain {
             String requestId,
             String keyId
     ) {
-        Instant occurredAt = clock.instant();
-        String previous = head(state);
-        String hash = hash(HostedAuditEvent.Chaining.UNCHAINED, state.tenantId(), UNCHAINED_SEQUENCE, occurredAt,
-                principalId, action, resourceType, resourceId, HostedAuditEvent.Outcome.DENIED, requestId, keyId,
-                previous);
-        return new HostedAuditEvent(UNCHAINED_SEQUENCE, state.tenantId(), occurredAt, principalId, action,
-                resourceType, resourceId, HostedAuditEvent.Outcome.DENIED, requestId, keyId, previous, hash,
-                HostedAuditEvent.Chaining.UNCHAINED);
+        return authenticated(new HostedAuditEvent(UNCHAINED_SEQUENCE, state.tenantId(), clock.instant(), principalId,
+                action, resourceType, resourceId, HostedAuditEvent.Outcome.DENIED, requestId, keyId, head(state),
+                HostedAuditEvent.GENESIS_HASH, HostedAuditEvent.Chaining.UNCHAINED));
     }
 
     /** Authenticates an unchained refusal in its own HMAC domain; it is never accepted as a chain link. */
@@ -122,10 +116,21 @@ final class HostedAuditChain {
         return state.auditEvents().isEmpty() ? state.auditAnchorHash() : state.auditEvents().getLast().hash();
     }
 
-    private void authenticate(HostedAuditEvent event) {
-        String expected = hash(event.chaining(), event.tenantId(), event.sequence(), event.occurredAt(),
+    /** The event with the HMAC of its own (already canonical) fields in place of its placeholder hash. */
+    private HostedAuditEvent authenticated(HostedAuditEvent event) {
+        return new HostedAuditEvent(event.sequence(), event.tenantId(), event.occurredAt(), event.principalId(),
+                event.action(), event.resourceType(), event.resourceId(), event.outcome(), event.requestId(),
+                event.keyId(), event.previousHash(), expectedHash(event), event.chaining());
+    }
+
+    private String expectedHash(HostedAuditEvent event) {
+        return hash(event.chaining(), event.tenantId(), event.sequence(), event.occurredAt(),
                 event.principalId(), event.action(), event.resourceType(), event.resourceId(), event.outcome(),
                 event.requestId(), event.keyId(), event.previousHash());
+    }
+
+    private void authenticate(HostedAuditEvent event) {
+        String expected = expectedHash(event);
         if (!java.security.MessageDigest.isEqual(
                 expected.getBytes(StandardCharsets.US_ASCII), event.hash().getBytes(StandardCharsets.US_ASCII))) {
             throw new SecurityException("hosted audit event authentication failed");

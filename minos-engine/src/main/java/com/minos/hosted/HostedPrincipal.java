@@ -23,6 +23,11 @@ public record HostedPrincipal(String principalId, String displayName, HostedRole
         return normalized;
     }
 
+    /** Whether {@link #safeId} accepts the value, without throwing; the value is judged after trimming. */
+    static boolean isSafeId(String value) {
+        return value != null && SAFE_ID.matcher(value.trim()).matches();
+    }
+
     public static String text(String value, String field, int maximum) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " must not be blank");
         String normalized = value.trim();

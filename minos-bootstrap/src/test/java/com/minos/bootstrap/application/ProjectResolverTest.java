@@ -1,6 +1,7 @@
 package com.minos.bootstrap.application;
 
 import com.minos.application.ProjectResolver;
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import org.junit.jupiter.api.Test;
@@ -11,8 +12,10 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectResolverTest {
 
@@ -86,5 +89,56 @@ class ProjectResolverTest {
         assertEquals("ambiguous project name, use its UUID: shared", ambiguous.getMessage());
         assertEquals(List.of(first.id(), second.id()).stream().sorted().toList(),
                 ambiguous.candidateIds().stream().sorted().toList());
+    }
+
+    /** MINOS-AUD-C01 : le message public d'une référence est le même sur les trois surfaces, sans écho sensible. */
+    @Test
+    void publicMessageKeepsAPlainReferenceAndNeverEchoesASensitiveOne(@TempDir Path root) throws Exception {
+        ProjectResolver resolver = new ProjectResolver(new LocalProjectRegistry(root.resolve("registry")));
+
+        assertEquals("unknown project: demo", publicMessageOf(resolver, "demo"));
+        for (String sensitive : List.of("C:\\Users\\x\\proj", "D:/work/proj", "/home/x/proj", "\\\\srv\\share\\p",
+                "my-api-key-service", "password=hunter2", "jdbc:postgresql://db/minos")) {
+            String message = publicMessageOf(resolver, sensitive);
+
+            assertTrue(message.contains("unknown project"), sensitive + " -> " + message);
+            assertTrue(message.contains("project name or UUID"), sensitive + " -> " + message);
+            assertTrue(message.contains("minos project list"), sensitive + " -> " + message);
+            assertFalse(message.contains(sensitive), sensitive + " -> " + message);
+            assertFalse(PublicErrorMessages.looksSensitive(message),
+                    "the fixed text must itself pass the public redaction policy: " + message);
+        }
+    }
+
+    @Test
+    void publicMessageOfAnAmbiguousNameIsRedactedOnlyWhenTheNameIsSensitive(@TempDir Path root) throws Exception {
+        LocalProjectRegistry registry = new LocalProjectRegistry(root.resolve("registry"));
+        registry.registerProject(Files.createDirectories(root.resolve("first")), "shared");
+        registry.registerProject(Files.createDirectories(root.resolve("second")), "shared");
+        registry.registerProject(Files.createDirectories(root.resolve("third")), "my-api-key-service");
+        registry.registerProject(Files.createDirectories(root.resolve("fourth")), "my-api-key-service");
+        ProjectResolver resolver = new ProjectResolver(registry);
+
+        assertEquals("ambiguous project name, use its UUID: shared", publicMessageOf(resolver, "shared"));
+        String redacted = publicMessageOf(resolver, "my-api-key-service");
+        assertTrue(redacted.contains("ambiguous project name"), redacted);
+        assertTrue(redacted.contains("project UUID"), redacted);
+        assertFalse(redacted.contains("api-key"), redacted);
+        assertFalse(PublicErrorMessages.looksSensitive(redacted), redacted);
+    }
+
+    @Test
+    void anInvalidReferenceNeverEchoesItsValue(@TempDir Path root) throws Exception {
+        ProjectResolver resolver = new ProjectResolver(new LocalProjectRegistry(root.resolve("registry")));
+
+        assertEquals("project identifier must not be blank", publicMessageOf(resolver, "   "));
+        String tooLong = publicMessageOf(resolver, "x".repeat(ProjectResolver.MAX_REFERENCE_UTF8_BYTES + 1));
+        assertEquals("project identifier exceeds UTF-8 byte limit: " + ProjectResolver.MAX_REFERENCE_UTF8_BYTES, tooLong);
+        assertFalse(tooLong.contains("xxxx"));
+    }
+
+    private static String publicMessageOf(ProjectResolver resolver, String reference) {
+        return assertThrows(ProjectResolver.ResolutionException.class, () -> resolver.resolve(reference))
+                .publicMessage();
     }
 }

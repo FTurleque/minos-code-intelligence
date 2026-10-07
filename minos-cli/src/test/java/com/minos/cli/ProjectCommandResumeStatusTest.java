@@ -53,7 +53,39 @@ class ProjectCommandResumeStatusTest {
         assertTrue(json.toString().contains("\"resumableRunId\":null"), json.toString());
     }
 
-    private static final class StubProjectOperations implements ProjectOperations {
+    /** MINOS-AUD-C03 : le statut demande la vue sans découverte, l'inspection demande la vue complète. */
+    @Test
+    void indexStatusAsksForTheStatusInspectionAndInspectAsksForTheFullOne() throws Exception {
+        CountingOperations operations = new CountingOperations();
+        ProjectCommand command = new ProjectCommand(operations, projectId -> Optional.empty());
+
+        assertEquals(FindSymbolCommand.SUCCESS,
+                command.runIndexStatus(new String[]{"demo"}, new StringBuilder(), new StringBuilder()));
+        assertEquals(1, operations.statusInspections);
+        assertEquals(0, operations.fullInspections, "a status must not ask for the structure of the repository");
+
+        assertEquals(FindSymbolCommand.SUCCESS,
+                command.runInspectAlias(new String[]{"demo"}, new StringBuilder(), new StringBuilder()));
+        assertEquals(1, operations.statusInspections);
+        assertEquals(1, operations.fullInspections);
+    }
+
+    private static final class CountingOperations extends StubProjectOperations {
+        private int statusInspections;
+        private int fullInspections;
+
+        @Override public ProjectInspection inspection(String projectIdentifier) {
+            fullInspections++;
+            return new ProjectInspection(inspectProject(projectIdentifier), List.of());
+        }
+
+        @Override public ProjectInspection statusInspection(String projectIdentifier) {
+            statusInspections++;
+            return new ProjectInspection(inspectProject(projectIdentifier), List.of());
+        }
+    }
+
+    private static class StubProjectOperations implements ProjectOperations {
         @Override public ProjectView addProject(Path rootPath, String displayName) {
             throw new UnsupportedOperationException();
         }
