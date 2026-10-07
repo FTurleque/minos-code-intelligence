@@ -32,7 +32,7 @@ delta de spécification (`skip_specs: true` dans `.openspec.yaml`) et sans aucun
   cités) : questions ouvertes.
 - Rédaction de nouveaux ADR (G-08 PostgreSQL/pgvector, G-07 endpoint `minos-ollama`) : à
   proposer avec le statut Proposed, non rédigés ici.
-- Création des sept diagrammes absents de `docs/architecture/diagrams/` (nouveau contenu).
+- ~~Création des sept diagrammes absents de `docs/architecture/diagrams/`~~ : **ajoutée au périmètre le 2026-10-07 sur décision de l'utilisateur (Q7)**, tâche 8.2.
 - Annexes d'audit, `docs/audit/CAPACITES.md` et autres fichiers d'audit non versionnés.
 - `openspec/config.yaml` (qui reprend lui aussi « minos-app est le composition root ») :
   appartient à l'utilisateur, signalé en question ouverte.

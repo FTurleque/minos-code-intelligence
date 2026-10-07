@@ -130,6 +130,13 @@ public final class ProjectFingerprintService {
                 files.add(fingerprint(root, relative, budget));
                 return FileVisitResult.CONTINUE;
             }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException failure) throws IOException {
+                budget.accountTraversalEntry();
+                // MINOS-AUD-D01: a hardened or ignored directory MINOS cannot open contributes nothing; the scope root fails.
+                return ignorePolicy.onUnreadable(scopeRoot, file, failure);
+            }
         });
 
         if (!scopeRoot.equals(root)) {
@@ -276,6 +283,12 @@ public final class ProjectFingerprintService {
                 budget.accountFile();
                 files.add(fingerprint(root, relative, budget));
                 return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException failure) throws IOException {
+                budget.accountTraversalEntry();
+                return ignorePolicy.onUnreadable(directory, file, failure);
             }
         });
         return files;

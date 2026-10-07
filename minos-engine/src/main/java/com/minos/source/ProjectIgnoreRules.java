@@ -8,8 +8,11 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.channels.Channels;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +31,7 @@ import java.util.regex.Pattern;
  */
 public final class ProjectIgnoreRules {
 
+    private static final char BYTE_ORDER_MARK = '\uFEFF';
     private static final long MAX_IGNORE_BYTES = 1024L * 1024L;
     private static final int MAX_IGNORE_LINES = 20_000;
     private static final int MAX_IGNORE_RULES = 10_000;
@@ -112,6 +116,42 @@ public final class ProjectIgnoreRules {
         return isHardIgnoredNormalized(normalizeRelative(relativePath));
     }
 
+    /**
+     * MINOS-AUD-D01: whether a path a tree walk could not open may be skipped. The JDK opens a directory before
+     * {@code preVisitDirectory}, so an unreadable directory reaches {@code visitFileFailed} even when it is hardened or
+     * ignored, and its type is not known there: the path is skippable when it is hardened, or ignored under either
+     * interpretation of its type (a directory-only rule such as {@code pgdata/} counts). Anything else is not
+     * skippable: a source directory MINOS cannot read must not become a silently incomplete index.
+     */
+    public boolean isSkippableWhenUnreadable(Path relativePath) {
+        Path normalized = normalizeRelative(relativePath);
+        return isHardIgnoredNormalized(normalized) || isIgnored(normalized, true) || isIgnored(normalized, false);
+    }
+
+    /**
+     * The failure for an unreadable path that is NOT skippable: the same exception type as the original, because the
+     * public error taxonomy classifies an {@code AccessDeniedException} apart from any other {@code IOException}, and
+     * a message that names the path relative to the project (never the absolute path) and the way out. The original
+     * exception is kept as the cause.
+     */
+    public static IOException unreadableFailure(Path relativePath, IOException cause) {
+        String name = portable(normalizeRelative(relativePath));
+        String reason = "cannot be read and is not ignored; add it to .minosignore (or fix its permissions) "
+                + "so that MINOS skips it";
+        IOException failure;
+        if (cause instanceof AccessDeniedException) {
+            failure = new AccessDeniedException(name, null, reason);
+        } else if (cause instanceof NoSuchFileException) {
+            failure = new NoSuchFileException(name, null, reason);
+        } else if (cause instanceof FileSystemException) {
+            failure = new FileSystemException(name, null, reason);
+        } else {
+            failure = new IOException(name + " " + reason);
+        }
+        failure.initCause(cause);
+        return failure;
+    }
+
     private static boolean isHardIgnoredNormalized(Path normalized) {
         for (Path segment : normalized) {
             if (HARD_IGNORED_DIRECTORY_NAMES.contains(segment.toString())) return true;
@@ -146,6 +186,12 @@ public final class ProjectIgnoreRules {
                 lines++;
                 if (lines > MAX_IGNORE_LINES) {
                     throw new IOException("project ignore file exceeds line limit");
+                }
+                // MINOS-AUD-D10: a UTF-8 byte order mark (Windows PowerShell 5.1, older editors) starts the file, never a
+                // later line; String.strip() does not remove it, so it would stay glued to the first pattern. Git removes
+                // it on every platform, so does this.
+                if (lines == 1 && !rawLine.isEmpty() && rawLine.charAt(0) == BYTE_ORDER_MARK) {
+                    rawLine = rawLine.substring(1);
                 }
                 IgnoreRule rule = parseRuleOrDiscard(rawLine, discarded);
                 if (rule != null) {

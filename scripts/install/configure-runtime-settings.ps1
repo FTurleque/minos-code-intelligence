@@ -137,8 +137,14 @@ function Assert-ExternalPostgresUrl([string] $JdbcUrl) {
     }
 
     $Parameters = @{}
-    if (-not [string]::IsNullOrWhiteSpace($Uri.Query)) {
-        foreach ($Pair in $Uri.Query.TrimStart('?').Split('&')) {
+    # The query is read from the URL as given: System.Uri normalizes the query (it decodes an unnecessarily escaped
+    # unreserved character, so 'ssl%6Dode' would come back as 'sslmode'), which would hide exactly the difference
+    # between this check and the driver.
+    $RawQuery = ''
+    $QueryStart = $JdbcUrl.IndexOf('?')
+    if ($QueryStart -ge 0) { $RawQuery = $JdbcUrl.Substring($QueryStart + 1) }
+    if (-not [string]::IsNullOrWhiteSpace($RawQuery)) {
+        foreach ($Pair in $RawQuery.Split('&')) {
             if ([string]::IsNullOrEmpty($Pair)) {
                 throw 'PostgresUrl contains an empty query parameter name.'
             }
@@ -147,7 +153,11 @@ function Assert-ExternalPostgresUrl([string] $JdbcUrl) {
                     ($Parts.Length -gt 1 -and $Parts[1] -match '%(?![0-9A-Fa-f]{2})')) {
                 throw 'PostgresUrl contains invalid query encoding.'
             }
-            $Key = [Uri]::UnescapeDataString($Parts[0].Replace('+', ' ')).ToLowerInvariant()
+            # MINOS-AUD-B07: the parameter NAME is kept raw, exactly as the pgjdbc driver reads it. The driver only
+            # recognizes the exact key 'sslmode' (it ignores 'SSLMODE' and 'ssl%6Dode' and falls back to 'prefer',
+            # without certificate verification), so decoding or lower-casing the name here would accept a URL whose
+            # TLS mode the driver never applies. The VALUE is decoded, as the driver decodes it.
+            $Key = $Parts[0]
             $Value = if ($Parts.Length -gt 1) { [Uri]::UnescapeDataString($Parts[1].Replace('+', ' ')) } else { '' }
             if ([string]::IsNullOrWhiteSpace($Key)) { throw 'PostgresUrl contains an empty query parameter name.' }
             if ($Parameters.ContainsKey($Key)) { throw "PostgresUrl contains duplicate parameter: $Key" }
@@ -155,7 +165,7 @@ function Assert-ExternalPostgresUrl([string] $JdbcUrl) {
         }
     }
     foreach ($Parameter in $Parameters.Keys) {
-        if ($Parameter -notin @('sslmode')) {
+        if ($Parameter -cne 'sslmode') {
             throw "PostgresUrl contains unsupported parameter: $Parameter"
         }
     }
