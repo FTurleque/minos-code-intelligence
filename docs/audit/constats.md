@@ -369,3 +369,14 @@ Vérification : `verify` vert sous Windows (18 min 16 s, 2 211 tests, 0 échec, 
 | MINOS-AUD-C09 | **Différé** (P3 ; une fenêtre de versions exige un amendement de l'ADR 0027) | — |
 
 Vérification : harnais local `javac` + JUnit sous Windows (pas de Gradle local), 26 gates `check-*.py` verts, reactor Maven non modifié. **Non fait** : build Gradle du plugin et CI (`windows-ownership`, job `plugin`), tests dépendant de la plateforme IntelliJ (`MinosCliClientTest`, `MinosM21ClientTest`…), exécution dans une IDE réelle ; les questions ouvertes du design (1 à 4). Voir « Évidence d'implémentation » dans les [tâches du changement](../../openspec/changes/corriger-lancement-plugin-intellij-windows/tasks.md).
+
+### Suivi du changement `durcir-configuration-postgresql-et-secrets` (2026-10-07)
+
+| Constat | État | Preuve |
+|---|---|---|
+| MINOS-AUD-B07 | **Corrigé en local** : la politique compare le nom de paramètre brut, comme le pilote ; **l'installateur Windows avait un défaut de plus** (`System.Uri` normalisait `ssl%6Dode` en `sslmode`), corrigé aussi | `PostgresJdbcUrlPolicyTest`, `PostgresJdbcUrlPolicyDriverParityTest` (contre pgjdbc 42.7.13, rouge sur la politique d'origine) ; script exécuté sous PowerShell 7 et Windows PowerShell 5.1 |
+| MINOS-AUD-B08 | **Corrigé en local** : un BOM UTF-8 initial est retiré, un BOM répété est refusé | `BoundedPropertiesTest` (8 nouveaux), `AbsoluteSecretFileTest`, `StorageBackendConfigurationTest` ; contrôle réel avec un fichier écrit par Windows PowerShell 5.1 |
+| MINOS-AUD-B13 | **Corrigé en local** : `[::1]` et `[0:0:0:0:0:0:0:1]` reconnus comme bouclage, une seule paire de crochets au diagnostic | `PostgresJdbcUrlPolicyTest`, `StorageBackendConfigurationTest` |
+| MINOS-AUD-B09 | **Corrigé en local** : `publish` n'écrase plus une cible existante (lien physique) ; refus explicite sans lien, sans repli | `DurableAtomicFileTest` (7 nouveaux), appelants rejoués |
+
+Vérification : `verify` vert sous Windows (17 min 42 s, 2 242 tests, 0 échec, 56 ignorés), 26 gates `check-*.py` verts (hors les deux de publication), gate JaCoCo vert **sans ignorer** `m30-postgresql-pgvector`. **Non fait** : CI Ubuntu et Windows (le lien physique sous Linux n'a jamais tourné), publication sur FAT, exFAT ou partage réseau réels, test automatique de l'installateur (vérification manuelle seulement), BOM du secret source de l'installateur (question ouverte 4) ; les décisions ouvertes du design (questions 1 à 4). Voir « Évidence d'implémentation » dans les [tâches du changement](../../openspec/changes/durcir-configuration-postgresql-et-secrets/tasks.md).

@@ -158,6 +158,10 @@ modification remonte à plus de **24 heures**.
 
 Si l'espace presse avant le prochain run, supprimez à la main `local-provider-workspaces/` quand aucune indexation n'est en cours.
 
+## Windows : `minos.properties` ou un fichier de secret enregistré avec un BOM
+
+Windows PowerShell 5.1 (`Out-File -Encoding utf8`) et d'anciens éditeurs enregistrent un fichier UTF-8 avec un BOM (octets `EF BB BF`) en tête. MINOS le retire, **une seule fois**, à la lecture de `config/minos.properties`, des autres fichiers de propriétés que MINOS lit (registre, état d'index…) et des fichiers de secret lus par `MinosRuntimeSettings` (par exemple le fichier de mot de passe PostgreSQL désigné par `minos.postgres.passwordFile`) : la première propriété est lue sous son vrai nom et le secret ne contient pas le BOM. Un fichier qui commence par **deux** BOM est refusé avec le message `starts with a repeated UTF-8 byte order mark` : réenregistrez-le en UTF-8 sans BOM. Un BOM ailleurs qu'en tête reste une donnée. Un fichier UTF-16 (autre encodage proposé par ces outils) n'est pas du UTF-8 valide et reste refusé.
+
 ## Windows : le bac à sable est indisponible, `minos-launchers` refusé
 
 Les scripts des lanceurs du bac à sable vivent sous `%LOCALAPPDATA%\minos-launchers\<sha256>\` et sont contrôlés avant chaque

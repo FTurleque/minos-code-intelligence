@@ -50,6 +50,33 @@ class StorageBackendConfigurationTest {
                 value.safeDescription());
     }
 
+    /** MINOS-AUD-B13 : le diagnostic ajoutait une seconde paire de crochets à un hôte qui en porte déjà (`[[::1]]`). */
+    @Test
+    void anIpv6HostCarriesASinglePairOfBracketsInTheDiagnostics() throws IOException {
+        assertEquals("jdbc:postgresql://[::1]:5432/minos",
+                StorageBackendConfiguration.safePostgresUrl("jdbc:postgresql://[::1]:5432/minos"));
+        assertEquals("jdbc:postgresql://[2001:db8::1]/minos",
+                StorageBackendConfiguration.safePostgresUrl(
+                        "jdbc:postgresql://[2001:db8::1]/minos?sslmode=verify-full&token=url-secret"));
+        assertEquals("jdbc:postgresql://db.example.com:5432/minos",
+                StorageBackendConfiguration.safePostgresUrl("jdbc:postgresql://db.example.com:5432/minos?x=1"));
+
+        Properties properties = new Properties();
+        properties.setProperty(StorageBackendConfiguration.BACKEND_PROPERTY, "postgresql");
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_URL_PROPERTY,
+                "jdbc:postgresql://[::1]:5432/minos?token=url-secret");
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_USER_PROPERTY, "minos_user");
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_PASSWORD_PROPERTY, "super-secret-value");
+        StorageBackendConfiguration value = StorageBackendConfiguration.resolve(
+                Path.of("target/test-minos-home"), Map.of(), properties);
+
+        assertTrue(value.safeDescription().contains("url=jdbc:postgresql://[::1]:5432/minos "),
+                value.safeDescription());
+        assertFalse(value.safeDescription().contains("[["));
+        assertFalse(value.safeDescription().contains("url-secret"));
+        assertFalse(value.safeDescription().contains("super-secret-value"));
+    }
+
     @Test
     void toStringNeverExposesPostgresPassword() throws IOException {
         Properties properties = new Properties();
@@ -107,6 +134,48 @@ class StorageBackendConfigurationTest {
 
         assertEquals("file-secret", value.postgresPassword());
         assertFalse(value.safeDescription().contains("file-secret"));
+    }
+
+    /**
+     * MINOS-AUD-B08 : un minos.properties enregistre par Windows PowerShell 5.1 (Out-File -Encoding utf8) commence par un
+     * BOM. La premiere propriete etait perdue sans erreur : minos.storage.backend=postgresql basculait sur le stockage
+     * local. Les octets EF BB BF sont ecrits explicitement.
+     */
+    @Test
+    void aSettingsFileWithALeadingByteOrderMarkStillSelectsPostgresql() throws IOException {
+        Path home = Files.createTempDirectory("minos-storage-bom-");
+        Path config = home.resolve(MinosRuntimeSettings.CONFIG_DIRECTORY).resolve(MinosRuntimeSettings.CONFIG_FILE);
+        Files.createDirectories(config.getParent());
+        byte[] bom = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+        byte[] body = (StorageBackendConfiguration.BACKEND_PROPERTY + "=postgresql\r\n"
+                + StorageBackendConfiguration.POSTGRES_MANAGED_PROPERTY + "=true\r\n")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] content = new byte[bom.length + body.length];
+        System.arraycopy(bom, 0, content, 0, bom.length);
+        System.arraycopy(body, 0, content, bom.length, body.length);
+        Files.write(config, content);
+
+        StorageBackendConfiguration value = StorageBackendConfiguration.resolve(MinosRuntimeSettings.load(home));
+
+        assertTrue(value.postgresql(), "the first property of a file with a byte order mark must not be lost");
+        assertTrue(value.postgresManaged());
+    }
+
+    @Test
+    void aRelativeSecretWithALeadingByteOrderMarkIsReadWithoutIt() throws IOException {
+        Path home = Files.createTempDirectory("minos-storage-bom-secret-");
+        Path secret = home.resolve("secrets/postgres.password");
+        Files.createDirectories(secret.getParent());
+        byte[] bytes = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF, 'f', 'i', 'l', 'e', '-', 's', 'e', 'c', 'r', 'e', 't', '\n'};
+        Files.write(secret, bytes);
+        Properties file = new Properties();
+        file.setProperty(StorageBackendConfiguration.BACKEND_PROPERTY, "postgresql");
+        file.setProperty(StorageBackendConfiguration.POSTGRES_PASSWORD_FILE_PROPERTY, "secrets/postgres.password");
+
+        StorageBackendConfiguration value = StorageBackendConfiguration.resolve(
+                MinosRuntimeSettings.testing(home, file, Map.of(), new Properties()));
+
+        assertEquals("file-secret", value.postgresPassword());
     }
 
     @Test

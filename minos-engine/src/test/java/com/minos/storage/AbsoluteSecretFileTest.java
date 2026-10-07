@@ -34,6 +34,16 @@ class AbsoluteSecretFileTest {
         assertEquals("mounted-secret", resolve(temp.resolve("home"), secret).postgresPassword());
     }
 
+    /** MINOS-AUD-B08 : un BOM en tete (Windows PowerShell 5.1) s'ajoutait au mot de passe, que PostgreSQL refusait. */
+    @Test
+    void anAbsoluteSecretWithALeadingByteOrderMarkIsReadWithoutIt(@TempDir Path temp) throws Exception {
+        byte[] bytes = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF, 's', '3', 'c', 'r', 'e', 't', '\r', '\n'};
+        Path secret = temp.resolve("bom.password");
+        Files.write(secret, bytes);
+
+        assertEquals("s3cret", resolve(temp.resolve("home"), secret).postgresPassword());
+    }
+
     @Test
     void aMissingAbsoluteSecretFailsWithoutNamingItsPath(@TempDir Path temp) {
         Path secret = temp.resolve("absent.password");
