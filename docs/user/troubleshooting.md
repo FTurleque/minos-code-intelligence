@@ -176,7 +176,7 @@ echo 'data/db/' >> .minosignore
 Add-Content -Path .minosignore -Value 'data/db/'
 ```
 
-Un `.gitignore` ou un `.minosignore` enregistré avec un BOM UTF-8 (Windows PowerShell 5.1 `Out-File -Encoding utf8`) est lu normalement : le BOM est retiré, la première règle s'applique. La casse des motifs sous NTFS et le comptage des liens non suivis dans un diagnostic `NO_CHANGES` ne sont pas traités : voir les questions ouvertes de `openspec/changes/tolerer-repertoires-illisibles-a-la-decouverte/design.md`.
+Un `.gitignore` ou un `.minosignore` enregistré avec un BOM UTF-8 (Windows PowerShell 5.1 `Out-File -Encoding utf8`) est lu normalement : le BOM est retiré, la première règle s'applique. La casse des motifs sous NTFS et le comptage des liens non suivis dans un diagnostic `NO_CHANGES` ne sont pas traités : voir les questions ouvertes de `openspec/changes/archive/2026-10-07-tolerer-repertoires-illisibles-a-la-decouverte/design.md`.
 
 ## Windows : `minos.properties` ou un fichier de secret enregistré avec un BOM
 
