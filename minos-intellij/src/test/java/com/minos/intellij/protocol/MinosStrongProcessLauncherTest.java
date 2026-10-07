@@ -201,6 +201,91 @@ class MinosStrongProcessLauncherTest {
                 "Windows ownership entry ACL must contain only owner ALLOW entries");
     }
 
+    /**
+     * MINOS-AUD-C04 : le mode de ligne cmd brute n'accepte qu'une forme exacte. Le script, installé par un premier
+     * démarrage, est lancé à la main sur des plans qui portent le mode avec une autre forme : il refuse avant de créer
+     * le moindre processus (le fichier témoin n'apparaît jamais) et ne laisse aucun plan.
+     */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void aPlanCarryingTheRawCmdModeWithAnyOtherShapeIsRefusedBeforeAnyProcessStarts() throws Exception {
+        Path home = temp.resolve("raw-mode-home");
+        ProcessBuilder install = new ProcessBuilder(List.of(
+                powershell().toString(), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "exit 0"));
+        install.directory(temp.toFile());
+        MinosStrongProcessLauncher.Launch launch = MinosStrongProcessLauncher.start(install, home.toString());
+        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
+            assertTrue(supervisor.waitFor(TimeUnit.SECONDS.toMillis(30)));
+        }
+        Path ownership = home.resolve("intellij/process-ownership");
+        Path launcher = ownership.resolve("windows-cli-job-owner-v1.ps1");
+        Path system32 = Path.of(System.getenv("SystemRoot"), "System32");
+        Path cmd = system32.resolve("cmd.exe");
+        Path marker = temp.resolve("must-never-exist.txt");
+        String echo = "echo started > \"" + marker + "\"";
+
+        List<List<String>> refused = List.of(
+                // three elements instead of six
+                List.of(cmd.toString(), "/c", echo),
+                // six elements, but the executable is not the system cmd.exe
+                List.of(system32.resolve("where.exe").toString(), "/d", "/v:off", "/s", "/c", echo),
+                // six elements with a switch that is not the one the plugin builds
+                List.of(cmd.toString(), "/d", "/v:on", "/s", "/c", echo),
+                // six elements with an empty command string
+                List.of(cmd.toString(), "/d", "/v:off", "/s", "/c", " "));
+        for (List<String> command : refused) {
+            int exit = runPlan(launcher, ownership, "cmd-c", command);
+            assertTrue(exit != 0, "a raw cmd plan of another shape must be refused: " + command);
+            assertFalse(Files.exists(marker), "the refused plan started a process: " + command);
+        }
+        int unknownMode = runPlan(launcher, ownership, "evil",
+                List.of(cmd.toString(), "/d", "/v:off", "/s", "/c", echo));
+        assertTrue(unknownMode != 0, "an unknown command mode must be refused");
+        assertFalse(Files.exists(marker));
+        assertFalse(hasPlans(ownership), "the launcher must leave no plan behind");
+
+        // Control: the very same hand-made plan with the exact shape does start, so the refusals above are about
+        // the shape and not about a malformed plan.
+        Path accepted = temp.resolve("accepted.txt");
+        int ok = runPlan(launcher, ownership, "cmd-c", List.of(cmd.toString(), "/d", "/v:off", "/s", "/c",
+                "echo started > " + '"' + accepted + '"'));
+        assertTrue(ok == 0, "the exact raw cmd shape must be accepted");
+        assertTrue(Files.exists(accepted), "the accepted plan must have started cmd.exe");
+    }
+
+    private int runPlan(Path launcher, Path ownership, String mode, List<String> command) throws Exception {
+        StringBuilder plan = new StringBuilder();
+        plan.append("command.count=").append(command.size()).append('\n');
+        plan.append("command.mode=").append(mode).append('\n');
+        for (int index = 0; index < command.size(); index++) {
+            plan.append("command.").append(index).append('=').append(encode(command.get(index))).append('\n');
+        }
+        List<java.util.Map.Entry<String, String>> environment = System.getenv().entrySet().stream()
+                .filter(entry -> !entry.getKey().isEmpty() && entry.getKey().indexOf('=') < 0).toList();
+        plan.append("environment.count=").append(environment.size()).append('\n');
+        for (int index = 0; index < environment.size(); index++) {
+            plan.append("environment.").append(index).append(".key=")
+                    .append(encode(environment.get(index).getKey())).append('\n');
+            plan.append("environment.").append(index).append(".value=")
+                    .append(encode(environment.get(index).getValue())).append('\n');
+        }
+        plan.append("working=").append(encode(temp.toString())).append('\n');
+        Path file = Files.createTempFile(ownership, "cli-", ".plan");
+        Files.writeString(file, plan, StandardCharsets.UTF_8);
+        Process process = new ProcessBuilder(List.of(
+                powershell().toString(), "-NoLogo", "-NoProfile", "-NonInteractive",
+                "-ExecutionPolicy", "Bypass", "-File", launcher.toString(), "-Plan", file.toString()))
+                .redirectErrorStream(true).start();
+        process.getInputStream().readAllBytes();
+        assertTrue(process.waitFor(60, TimeUnit.SECONDS), "the launcher script did not finish");
+        Files.deleteIfExists(file);
+        return process.exitValue();
+    }
+
+    private static String encode(String value) {
+        return java.util.Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
     private static boolean hasPlans(Path ownership) throws Exception {
         if (!Files.isDirectory(ownership)) return false;
         try (var plans = Files.newDirectoryStream(ownership, "cli-*.plan")) {

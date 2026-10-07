@@ -161,6 +161,7 @@ Les constats déjà connus de [`AUDIT-2026-09.md`](AUDIT-2026-09.md) ne sont pas
 | Correction proposée | Écrire la chaîne `cmd /c` brute sans passer par `QuoteArgument`, ou résoudre `minos.cmd` vers le `minos.exe` voisin quand il existe ; refuser les arguments contenant `"`, `%`, `^` pour un `.cmd` |
 | Validation | `MinosCommandLineBatchLaunchTest` Windows seul : un `echoargs.cmd` reçoit `simple`, `50% off`, `a&b` à l'identique |
 | Dépendances | G5 (le gate du plugin n'est exigé par rien), T6 — `corriger-lancement-plugin-intellij-windows` |
+| Correction (2026-10-07) | **Corrigé en local** : la chaîne de commande d'un lanceur `.cmd` est transmise brute à `cmd.exe` (mode `command.mode=cmd-c` du plan, forme vérifiée strictement par le script, même Job Object), au lieu d'être re-sérialisée selon le runtime C ; `quoteWindows` ne modifie plus l'argument et refuse `"` et `%`. **Exécuté** : `MinosCommandLineBatchLaunchTest` démarre un vrai `.cmd` (rouge au HEAD avec le message exact de la fiche, vert ensuite) ; arguments `simple`, `a&b`, `x y\|<>^` intacts, code de sortie restitué, arbre de processus tué sans plan résiduel. Écart avec la fiche : sa fixture `echo [%~2]` est fausse pour `a&b` (copie en variable entre guillemets). Reste à prouver : build Gradle et CI `windows-ownership`, exécution dans une vraie IDE |
 
 ## 3. Registre complet
 
@@ -357,3 +358,14 @@ Vérification : `verify` vert (15 min 39 s, 2 182 tests, 0 échec, 57 ignorés),
 | MINOS-AUD-A07 | **Non tranché** (décision produit) ; le danger pour un sandbox vivant est supprimé, pas la mutation de l'hôte par la sonde | — |
 
 Vérification : `verify` vert sous Windows (18 min 16 s, 2 211 tests, 0 échec, 58 ignorés), 27 gates `check-*.py` verts (les deux de publication exigent des arguments), gate JaCoCo vert (`provider-sandbox-windows`, `provider-execution-trust-boundary`, `m25-remote-distributed-indexing`, `m24-polyglot-provider-platform` verts sur cet hôte). **Non fait** : exécution sous Linux (deux cas de la primitive de balayage propres à Linux jamais exécutés), job `windows-2022`, PR ; suppression du profil AppContainer prouvée indirectement ; les décisions ouvertes du design (questions 1 à 5). Voir « Évidence d'implémentation » dans les [tâches du changement](../../openspec/changes/isoler-recuperation-appcontainer-par-proprietaire/tasks.md).
+
+### Suivi du changement `corriger-lancement-plugin-intellij-windows` (2026-10-07)
+
+| Constat | État | Preuve |
+|---|---|---|
+| MINOS-AUD-C04 | **Corrigé en local** : un `.cmd` démarre sous Windows et reçoit ses arguments intacts ; `"` et `%` sont refusés avant tout démarrage, avec l'argument nommé et `minos.exe` recommandé | `MinosCommandLineBatchLaunchTest` (3, vrai `.cmd`), `MinosCommandLineTest` (11), `MinosStrongProcessLauncherTest` (refus par le script, avec témoin) |
+| MINOS-AUD-C07 | **Non tranché** (décision de produit : délais par classe de commande) | — |
+| MINOS-AUD-C08 | **Non retenu** (la preuve centrale de la fiche est inexacte au HEAD ; liste blanche d'environnement : décision ouverte) | — |
+| MINOS-AUD-C09 | **Différé** (P3 ; une fenêtre de versions exige un amendement de l'ADR 0027) | — |
+
+Vérification : harnais local `javac` + JUnit sous Windows (pas de Gradle local), 26 gates `check-*.py` verts, reactor Maven non modifié. **Non fait** : build Gradle du plugin et CI (`windows-ownership`, job `plugin`), tests dépendant de la plateforme IntelliJ (`MinosCliClientTest`, `MinosM21ClientTest`…), exécution dans une IDE réelle ; les questions ouvertes du design (1 à 4). Voir « Évidence d'implémentation » dans les [tâches du changement](../../openspec/changes/corriger-lancement-plugin-intellij-windows/tasks.md).

@@ -341,7 +341,7 @@ Le client :
 - résout d'abord le launcher MINOS en chemin réel absolu hors de la racine projet ;
 - applique seulement ensuite le working directory projet à `ProcessBuilder` ;
 - transmet les arguments séparément à `ProcessBuilder` ;
-- adapte explicitement les launchers `.cmd/.bat` sous Windows ;
+- adapte explicitement les launchers `.cmd/.bat` sous Windows : la ligne est transmise telle quelle à `cmd.exe`, dans le même Job Object que `minos.exe`, de sorte qu'une annulation termine le `.cmd` et tous ses descendants (voir « Arguments refusés avec un launcher `.cmd` ») ;
 - lit stdout/stderr sans bloquer le processus ;
 - applique le timeout configuré ;
 - tue un processus dépassant ce délai ;
@@ -358,6 +358,17 @@ minos.cmd ide handshake --format json
 ```
 
 puis vérifier **MINOS executable**. Un chemin relatif contenant un répertoire n'est pas accepté ; utiliser un nom disponible dans le `PATH` ou un chemin absolu.
+
+### Arguments refusés avec un launcher `.cmd` (Windows)
+
+Avec le launcher par défaut `minos.cmd` (ou tout `.cmd`/`.bat`), `cmd.exe` interprète la ligne de commande. Le plugin entoure chaque argument de guillemets, ce qui rend `&`, `|`, `<`, `>` et `^` littéraux : `a&b` ou `x y|<>^` arrivent intacts. Deux caractères ne peuvent pas l'être et sont **refusés avant tout démarrage de processus**, avec un message qui nomme l'argument :
+
+- le guillemet `"` : il rompt l'équilibre des guillemets dont `cmd /s` a besoin ;
+- le pourcentage `%` : `cmd.exe` le développe même entre guillemets (`%PATH%` serait remplacé par la valeur de la variable).
+
+Cela concerne aussi le chemin du launcher lui-même. Le cas typique est une recherche sémantique ou hybride dont le texte contient l'un de ces deux caractères. Contournement : configurer **MINOS executable** sur le launcher natif de l'installation, `<installation>\app\minos.exe` (même recommandation que pour le serveur MCP, voir `docs/user/mcp.md`) : un launcher natif reçoit chaque argument tel quel, sans interpréteur, et n'a aucune de ces restrictions. Les caractères de contrôle (retour chariot, saut de ligne, caractère nul) sont refusés quel que soit le launcher.
+
+Un `.bat` tiers qui active l'expansion retardée (`setlocal EnableDelayedExpansion`) peut altérer un `!` contenu dans un argument : cela n'est pas supporté. Le `minos.cmd` livré par MINOS ne l'active pas.
 
 ### `Connected MINOS runtime does not advertise IDE capability ...`
 
