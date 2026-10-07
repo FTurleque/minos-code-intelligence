@@ -69,7 +69,7 @@ propriétaire de l'arc42, non nécessaire pour corriger les faits.
 
 ### D5 — Pas de nouveau contenu
 
-Les diagrammes absents, les ADR manquants et les amendements ne sont pas créés ici (Q4, Q7).
+Les ADR manquants et les amendements ne sont pas créés ici (Q4) ; les sept diagrammes le sont, sur décision de l'utilisateur (Q7, tâche 8.2).
 Les corrections n'ajoutent que des faits relus à la source.
 
 ## Risks / Trade-offs
@@ -95,7 +95,7 @@ arrière : revert de la PR.
 Aucune ne bloque une tâche ; chaque point attend une décision de l'utilisateur, seul à pouvoir
 changer le statut d'un ADR.
 
-- **Q1 — G-02, statut de l'ADR-0036.** Le fichier ADR dit « Accepted » (accepté le 2026-08-09,
+- **Q1 — G-02, statut de l'ADR-0036.** **Résolue le 2026-10-07 : alignement sur le fichier validé par l'utilisateur** (tâche 6.2). Le fichier ADR dit « Accepted » (accepté le 2026-08-09,
   commit `cd87f402`) ; l'index `docs/adr/README.md`, `arc42/09-decisions.md` et
   `arc42/11-risques-dette.md:3` disent « Proposed ». Proposition : aligner ces trois documents sur
   le fichier, qui est la source de vérité de l'index. À valider par l'utilisateur.
@@ -127,6 +127,7 @@ changer le statut d'un ADR.
   fichiers qui n'ont jamais existé (`c4-context.md`, `c4-container.md`, `c4-component-application.md`,
   `seq-indexation-nominale.md`, `seq-erreur-provider.md`, `seq-mcp-startup.md`,
   `deployment-native.md`). Retirer les lignes ou créer les diagrammes (nouveau contenu) ?
+  **Résolue le 2026-10-07 : l'utilisateur veut les diagrammes** (tâche 8.2). Ils sont relus contre le code, pas recopiés d'arc42 : voir « Écarts constatés ».
 - **Q8 — G-20, index des ADR.** 29 titres sur 57 de l'index diffèrent du H1 du fichier et le
   vocabulaire de statuts de l'index (« Partially superseded », « Accepted — à implémenter »)
   dépasse celui que définit son en-tête. Quelle source est canonique, faut-il étendre le
@@ -134,3 +135,15 @@ changer le statut d'un ADR.
 - **Q9 — `openspec/config.yaml`.** Son contexte écrit « minos-app est le composition root », ce que
   l'ADR-0042 contredit (même écart que G-16). Fichier hors périmètre : à corriger par
   l'utilisateur si souhaité, sans quoi les prochains artefacts OpenSpec reprendront l'erreur.
+
+## Écarts constatés à l'implémentation (2026-10-07)
+
+Aucun ne change le périmètre ; ils précisent D1 à D4. Le détail est dans « Évidence d'implémentation » de `tasks.md`.
+
+- **D3, date de revérification.** Fixée au 7 octobre 2026 (jour de l'exécution) pour `STATUS.md`, `ROADMAP.md` et `docs/architecture/README.md` ; elle ne couvre que les faits relus pendant ce changement.
+- **D4, dates sans en-tête.** Les ADR 0026 et 0030 n'ont aucune date dans leur en-tête : les dates du tableau (2026-07-27, 2026-07-28) sont conservées, non vérifiables. 0038, 0040 et 0043 n'en ont pas non plus : la colonne porte « — » au lieu d'une date déduite de l'historique Git. Les statuts des lignes ajoutées sont une abréviation du texte d'en-tête, sans interprétation.
+- **Tâche 3.1, ADR 0039.** La ligne est retirée du tableau « Travaux ouverts en conception » et remplacée par une phrase sous le tableau (acceptée et implémentée), plutôt que simplement supprimée, pour que l'ADR reste citée dans la feuille de route.
+- **Tâche 7.1, commande de vérification.** `git log --grep "pull request #333"` ne renvoyait rien dans ce clone ; l'état de la PR a été établi par `gh pr view 333` et `git merge-base --is-ancestor bc1d3421 HEAD`.
+- **Tâche 8.1, lien en plus.** `PROMPT-SPRINT-2-3-RESTANT.md` portait un troisième lien mort (`docs/adr/`, relatif invalide) ; il pointe désormais le fichier de l'ADR 0041.
+- **Tâche 8.3, arc42.** Sur demande de l'utilisateur, les diagrammes d'arc42 sont remplacés par ceux de `docs/architecture/diagrams/` (copie, pas renvoi : arc42 reste lisible seul) ; le fichier `diagrams/` fait foi en cas d'écart. Le diagramme Docker de § 7.3 n'est pas relu.
+- **Constat hors périmètre, non corrigé.** `arc42/05-vue-blocs.md` (section `minos-storage-postgresql`) écrit que le module dépend de `minos-application` ; son `pom.xml` et `module-dependencies.md` montrent `minos-domain`, `minos-engine` et `minos-storage-local` seulement. À corriger dans un changement distinct si l'utilisateur le décide.

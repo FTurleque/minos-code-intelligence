@@ -11,7 +11,7 @@ Tu es l'orchestrateur du dernier chantier d'échéance **sprints 2–3** de l'au
 | C2 | 🟠 | CI | trois `clean verify` complets subsistent sur une PR qui touche le cœur |
 | S14 | 🟡 | Sécurité | le motif de refus de reprise est écrit sur stdout sans assainissement |
 
-**D1 est la demande que le propriétaire du produit a formulée lui-même**, deux fois, dans ces termes : « je ne veux plus être obligé d'installer les tools de MINOS pour pouvoir l'exécuter ». Sa conception est arrêtée par [ADR 0040](docs/adr/0040-distribution-auto-portante-indexeurs-embarques.md). Ce n'est pas un constat d'audit parmi d'autres : c'est une exigence produit, et son critère d'acceptation est une machine neuve **sans réseau**.
+**D1 est la demande que le propriétaire du produit a formulée lui-même**, deux fois, dans ces termes : « je ne veux plus être obligé d'installer les tools de MINOS pour pouvoir l'exécuter ». Sa conception est arrêtée par [ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md). Ce n'est pas un constat d'audit parmi d'autres : c'est une exigence produit, et son critère d'acceptation est une machine neuve **sans réseau**.
 
 **Attention, les chemins cités par l'audit sont datés.** Huit sprints ont déplacé et renommé des paquets entiers, et le sprint 8 a introduit un gate d'E/S privées (`scripts/architecture/check-private-io.py`) à **cliquet** : sa liste blanche ne peut que rétrécir, donc tout nouveau code qui crée un fichier passe par les primitives, sans exception à demander. **Relocalise chaque cible avant d'y toucher** et corrige la référence dans ton suivi.
 
@@ -28,7 +28,7 @@ Tu travailles avec **un agent d'implémentation** et **un agent de supervision q
 
 1. **La CI s'utilise avec parcimonie, et tu demandes avant d'enchaîner.** C'est une consigne du propriétaire du produit, et le lot 3 touche précisément les workflows. Tu valides une modification de workflow **hors CI** d'abord (`actionlint` s'il est disponible, lecture du YAML, `act` si tu l'as), tu ne lances **qu'un seul** passage de validation par lot, et si tu as besoin d'un deuxième tu me le demandes en disant pourquoi. Pas de boucle « pousse et regarde ».
 2. **Un correctif de sécurité se prouve par l'attaque, pas par l'intention** (S11, S14) : le test rouge exerce le défaut — il fait compiler du code non fiable, il fait écrire un motif qui porte un chemin.
-3. **Aucun durcissement existant ne peut être affaibli pour faire passer un test.** En particulier : le gate d'E/S privées du sprint 8 reste vert sans nouvelle entrée de liste blanche, et [ADR 0041](docs/adr/) (refus fermé du code non fiable sans bac à sable qualifié) ne se contourne pas.
+3. **Aucun durcissement existant ne peut être affaibli pour faire passer un test.** En particulier : le gate d'E/S privées du sprint 8 reste vert sans nouvelle entrée de liste blanche, et [ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md) (refus fermé du code non fiable sans bac à sable qualifié) ne se contourne pas.
 4. **D1 se prouve hors ligne, pour de vrai.** Pas « les fichiers sont dans le zip », mais : machine ou conteneur neuf, **réseau coupé**, installation depuis le zip, puis une indexation qui réussit. Si tu ne peux pas couper le réseau, dis-le et décris précisément ce que tu as pu prouver à la place.
 5. **Builds locaux ciblés** pendant le travail ; un `clean verify` complet par lot avant d'ouvrir sa PR.
 6. **Branche et worktree par lot**, lots **séquentiels**, chacun rebasé sur le précédent. **Test rouge avant correctif**, preuve jointe au commit.

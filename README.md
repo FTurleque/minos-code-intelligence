@@ -10,6 +10,9 @@ MINOS est **local-first**, multi-langages, indépendant des fournisseurs d'IA et
 C0 → M30                         ✅ terminés / intégrés
 MINOS 1.0.0                      ✅ publiée le 1er août 2026 / immuable
 MINOS 1.0.1                      ✅ publiée le 9 août 2026 / immuable
+MINOS 1.1.0                      ✅ publiée le 27 août 2026 / immuable
+MINOS 1.2.0                      ✅ publiée le 31 août 2026 / immuable
+ligne de développement           1.3.0-SNAPSHOT (aucune release 1.3.0 publiée)
 M29 #107                         ✅ CLOSED / PR #108 merged
 M30                              ✅ PR #110 + promotion #111 merged
 hardening #113/#117              ✅ merged
@@ -29,6 +32,8 @@ v1.0.1 → f762025d66e33c40324c811079f1527d122f90f9
 Release : [MINOS v1.0.1](https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1).
 
 La publication finale a été effectuée après validation utilisateur réelle du setup Windows. Le workflow transactionnel a reconstruit le candidat exact, rejoué le Plugin Verifier IntelliJ et les smokes Windows, publié **10 assets**, puis re-téléchargé et vérifié les **5 paires payload/SHA-256**.
+
+Les releases 1.1.0 et 1.2.0 sont publiées depuis ; leurs tags, SHA et assets sont consignés dans [`docs/STATUS.md`](docs/STATUS.md), qui fait foi pour l'état courant.
 
 Voir [`docs/STATUS.md`](docs/STATUS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md) et [`docs/releases/1.0.1.md`](docs/releases/1.0.1.md).
 
@@ -51,7 +56,7 @@ MINOS sait notamment :
 
 ## Architecture
 
-Le reactor Maven contient les modules métier, runtime/provider/storage et surfaces publiques, avec `minos-app` comme composition root. La documentation architecture détaillée est sous [`docs/architecture/`](docs/architecture/README.md).
+Le reactor Maven contient les modules métier, runtime/provider/storage et surfaces publiques, dont la racine de composition est `minos-bootstrap` ([ADR-0042](docs/adr/0042-racine-de-composition.md)) ; `minos-app` est l'assemblage final distribué (lanceur, JAR ombré, backends optionnels). La documentation architecture détaillée est sous [`docs/architecture/`](docs/architecture/README.md).
 
 ```mermaid
 flowchart TB

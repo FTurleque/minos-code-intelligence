@@ -1,14 +1,15 @@
 # Synthèse exécutive — Documentation d'architecture MINOS Code Intelligence
 
 Date de production : 2026-08-06  
-Version analysée : 1.0.1-SNAPSHOT (branche `develop`, HEAD `a0ed8ab`)
+Version analysée : 1.0.1-SNAPSHOT (branche `develop`, HEAD `a0ed8ab`)  
+Mise à jour partielle le 2026-10-07 : décompte des modules, racine de composition et index des ADR ; le reste de la synthèse décrit l'état du 2026-08-06.
 
 ---
 
 ## Ce que le dépôt révèle avec certitude
 
 **MINOS Code Intelligence** est un moteur local-first de Code Intelligence multi-langages,
-distribué en Java 24, structuré en reactor Maven multi-module de 13 projets (12 enfants + parent).
+distribué en Java 24, structuré en reactor Maven multi-module de 15 projets (14 enfants + parent).
 
 Son architecture est **hexagonale, capabilist et fail-closed** :
 
@@ -16,9 +17,9 @@ Son architecture est **hexagonale, capabilist et fail-closed** :
 - `minos-engine` définit les ports (interfaces) provider-indépendants.
 - Les adapters (`minos-provider-scip`, `minos-integration-git`, `minos-storage-local`, `minos-storage-postgresql`) implémentent ces ports.
 - Les surfaces (`minos-cli`, `minos-mcp`, `minos-api`, `minos-nexus`) consomment les services applicatifs via `minos-application`.
-- `minos-app` est le seul composition root et produit le shaded JAR distribué.
+- `minos-bootstrap` est la racine de composition (ADR-0042) ; `minos-app` est l'assemblage final distribué (lanceur, JAR ombré, backends optionnels).
 
-37 ADR documentent chaque décision structurante depuis le jalon C0 jusqu'à M29.
+57 ADR documentent chaque décision structurante depuis le jalon C0 jusqu'au chantier storage/hexagonal d'octobre 2026.
 La direction de dépendances est imposée par Maven comme garde-fou de compilation.
 
 ---
@@ -35,7 +36,7 @@ La direction de dépendances est imposée par Maven comme garde-fou de compilati
 | Section 6 — Vue d'exécution (3 scénarios) | ✅ Complet |
 | Section 7 — Vue de déploiement (natif + Docker) | ✅ Complet |
 | Section 8 — Concepts transverses (12 sous-sections) | ✅ Complet |
-| Section 9 — Décisions (index de 37 ADR) | ✅ Complet |
+| Section 9 — Décisions (index de 57 ADR) | ✅ Complet |
 | Section 10 — Exigences qualité (7 scénarios) | ✅ Complet |
 | Section 11 — Risques et dette (8 risques, 5 dettes) | ✅ Complet |
 | Section 12 — Glossaire | ✅ Complet |
