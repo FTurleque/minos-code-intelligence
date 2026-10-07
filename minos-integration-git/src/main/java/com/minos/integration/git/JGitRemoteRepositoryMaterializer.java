@@ -7,6 +7,7 @@ import com.minos.io.FileTreeOperations;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 import com.minos.io.SharedCacheLeaseRegistry;
+import com.minos.io.StaleScratchReclamation;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryRequest;
 import org.eclipse.jgit.api.Git;
@@ -44,6 +45,8 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private static final String METADATA_FILE = "entry.properties";
     private static final String PIN_FILE = "registered.pin";
     private static final String REPOSITORY_DIRECTORY = "repository";
+    private static final String ENTRY_TEMPORARY_PREFIX = ".entry-";
+    private static final String ENTRY_TEMPORARY_SUFFIX = ".tmp";
     private static final int MAX_CACHE_ROOT_SCAN_ENTRIES = 4_096;
     static final Duration LOCK_ACQUIRE_TIMEOUT = Duration.ofMinutes(2);
     private static final int LOCK_STRIPES = 64;
@@ -166,7 +169,12 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         }
         if (Files.exists(entry)) deleteCacheTree(entry);
 
-        Path temporary = cacheRoot.resolve(".entry-" + UUID.randomUUID() + ".tmp");
+        // MINOS-AUD-A02: a clone killed before its finally leaves its temporary for ever. Reclaimed here, where the next
+        // one is created: bounded, never fatal, and only the temporaries, never a valid cache entry (evict() ignores
+        // the entries that start with a dot).
+        StaleScratchReclamation.reclaim(cacheRoot, JGitRemoteRepositoryMaterializer::isEntryTemporary,
+                java.util.Set.of(), clock.instant());
+        Path temporary = cacheRoot.resolve(ENTRY_TEMPORARY_PREFIX + UUID.randomUUID() + ENTRY_TEMPORARY_SUFFIX);
         PrivateLocalStorage.ensurePrivateDirectory(temporary);
         try {
             Path repositoryRoot = temporary.resolve(REPOSITORY_DIRECTORY);
@@ -198,6 +206,10 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         } finally {
             if (Files.exists(temporary)) deleteCacheTree(temporary);
         }
+    }
+
+    private static boolean isEntryTemporary(String name) {
+        return name.startsWith(ENTRY_TEMPORARY_PREFIX) && name.endsWith(ENTRY_TEMPORARY_SUFFIX);
     }
 
     private char[] resolveSecret(RemoteRepositoryRequest request) {

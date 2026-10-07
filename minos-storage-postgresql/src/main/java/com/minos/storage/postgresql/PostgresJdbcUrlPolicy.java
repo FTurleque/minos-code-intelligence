@@ -92,7 +92,11 @@ final class PostgresJdbcUrlPolicy {
             String rawKey = separator < 0 ? pair : pair.substring(0, separator);
             String rawValue = separator < 0 ? "" : pair.substring(separator + 1);
             try {
-                String key = URLDecoder.decode(rawKey, StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
+                // MINOS-AUD-B07: the parameter NAME is compared as the driver reads it, raw. pgjdbc recognizes only the
+                // exact key "sslmode": it ignores "SSLMODE" and "ssl%6Dode" and silently falls back to "prefer". Decoding
+                // or lower-casing the name here would accept a URL whose TLS mode the driver never applies. The VALUE is
+                // decoded, as the driver decodes it.
+                String key = rawKey;
                 String decoded = URLDecoder.decode(rawValue, StandardCharsets.UTF_8);
                 if (key.isEmpty()) {
                     throw new IOException("MINOS_POSTGRES_URL contains an empty query parameter name");
@@ -108,13 +112,22 @@ final class PostgresJdbcUrlPolicy {
     }
 
     private static boolean loopbackHost(String host) {
-        String normalized = host.toLowerCase(Locale.ROOT);
+        // MINOS-AUD-B13: java.net.URI returns an IPv6 literal between brackets ("[::1]"). One pair is removed so the literal
+        // is compared as an address; every form that is not listed below (mapped IPv4, zone, abbreviated) stays external.
+        String normalized = unbracketed(host).toLowerCase(Locale.ROOT);
         if ("localhost".equals(normalized)
                 || "::1".equals(normalized)
                 || "0:0:0:0:0:0:0:1".equals(normalized)) {
             return true;
         }
         return ipv4LoopbackLiteral(normalized);
+    }
+
+    private static String unbracketed(String host) {
+        if (host.length() > 2 && host.charAt(0) == '[' && host.charAt(host.length() - 1) == ']') {
+            return host.substring(1, host.length() - 1);
+        }
+        return host;
     }
 
     private static boolean ipv4LoopbackLiteral(String host) {

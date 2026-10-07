@@ -1,0 +1,84 @@
+function Write-Recovery([string] $Journal, [string] $containerProfile, [string] $Sid, [System.Collections.Generic.List[string]] $Granted) {
+    $state = [ordered]@{ profile = $containerProfile; sid = $Sid; paths = [string[]]$Granted.ToArray() }
+    $temporary = $Journal + '.tmp'
+    $state | ConvertTo-Json -Depth 3 -Compress | Set-Content -LiteralPath $temporary -Encoding UTF8
+    Move-Item -LiteralPath $temporary -Destination $Journal -Force
+}
+
+# The owner of a sandbox is proven by an exclusive operating-system lock that its launcher holds for the whole
+# life of the sandbox. Windows releases that lock when the owning process dies, whatever the cause, so "the lock
+# can be opened exclusively" is the only proof of death: no wall clock and no process identifier takes part in
+# the decision. The lock handle is never inheritable, so the provider process cannot keep a dead owner "alive".
+
+# Created before any profile exists. A collision, an access error or a read-only volume throws here, so a launcher
+# that cannot prove its own ownership never starts a provider and leaves no profile and no grant behind.
+function New-OwnershipLock([string] $RecoveryDirectory, [string] $ContainerProfile) {
+    $lockPath = Join-Path $RecoveryDirectory ($ContainerProfile + '.lock')
+    return New-Object System.IO.FileStream($lockPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+}
+
+# The last step of a launcher: the journal is already gone, so a lock is never left without its journal.
+function Close-OwnershipLock($Lock, [string] $RecoveryDirectory, [string] $ContainerProfile) {
+    if ($null -eq $Lock) { return }
+    try { $Lock.Dispose() } catch { Write-Warning $_ }
+    Remove-Item -LiteralPath (Join-Path $RecoveryDirectory ($ContainerProfile + '.lock')) -Force -ErrorAction SilentlyContinue
+}
+
+# Returns the open exclusive lock when its owner is dead, the text 'ALIVE' when a live process holds it (sharing
+# violation), and $null when ownership cannot be proven (no lock, access denied, any other I/O error).
+function Get-DeadOwnerLock([string] $LockPath) {
+    try {
+        return New-Object System.IO.FileStream($LockPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    } catch [System.IO.FileNotFoundException] {
+        return $null
+    } catch [System.IO.DirectoryNotFoundException] {
+        return $null
+    } catch [System.IO.IOException] {
+        if (($_.Exception.HResult -band 0xFFFF) -eq 32) { return 'ALIVE' }
+        return $null
+    } catch {
+        return $null
+    }
+}
+
+# Recovers only the sandboxes whose owner is proven dead. Without proof nothing is recovered, and the journal is
+# reported by name only.
+function Recover-Stale([string] $RecoveryDirectory) {
+    if (-not (Test-Path -LiteralPath $RecoveryDirectory -PathType Container)) { return }
+    foreach ($journal in Get-ChildItem -LiteralPath $RecoveryDirectory -Filter '*.json' -File -ErrorAction SilentlyContinue) {
+        if ($journal.Extension -ne '.json') { continue }
+        $lockPath = [System.IO.Path]::ChangeExtension($journal.FullName, '.lock')
+        $lock = Get-DeadOwnerLock $lockPath
+        if ($lock -is [string]) { continue }
+        if ($null -eq $lock) {
+            Write-Warning "MINOS AppContainer recovery journal $($journal.Name) has no provable owner and was left in place"
+            continue
+        }
+        try {
+            if (-not (Test-Path -LiteralPath $journal.FullName -PathType Leaf)) { continue }
+            $state = Get-Content -LiteralPath $journal.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+            $sid = [string]$state.sid
+            foreach ($path in @($state.paths)) {
+                try { Remove-AppContainerPath ([string]$path) $sid } catch { Write-Warning $_ }
+            }
+            try { [MinosAppContainerNativeV3]::DeleteProfile([string]$state.profile) } catch { Write-Warning $_ }
+            Remove-Item -LiteralPath $journal.FullName -Force -ErrorAction SilentlyContinue
+        } catch {
+            Write-Warning "Unable to reconcile stale MINOS AppContainer journal $($journal.Name): $_"
+        } finally {
+            $lock.Dispose()
+            if (-not (Test-Path -LiteralPath $journal.FullName)) {
+                Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+    foreach ($lockFile in Get-ChildItem -LiteralPath $RecoveryDirectory -Filter '*.lock' -File -ErrorAction SilentlyContinue) {
+        if ($lockFile.Extension -ne '.lock') { continue }
+        if (Test-Path -LiteralPath ([System.IO.Path]::ChangeExtension($lockFile.FullName, '.json'))) { continue }
+        $orphan = Get-DeadOwnerLock $lockFile.FullName
+        if ($orphan -is [System.IO.FileStream]) {
+            $orphan.Dispose()
+            Remove-Item -LiteralPath $lockFile.FullName -Force -ErrorAction SilentlyContinue
+        }
+    }
+}

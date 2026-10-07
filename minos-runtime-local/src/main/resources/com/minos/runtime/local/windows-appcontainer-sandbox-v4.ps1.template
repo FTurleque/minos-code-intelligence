@@ -488,30 +488,7 @@ function Remove-AppContainerPath([string] $Path, [string] $Sid) {
     & icacls.exe $Path /remove:g "*$Sid" /q | Out-Null
 }
 
-function Write-Recovery([string] $Journal, [string] $containerProfile, [string] $Sid, [System.Collections.Generic.List[string]] $Granted) {
-    $state = [ordered]@{ profile = $containerProfile; sid = $Sid; paths = [string[]]$Granted.ToArray() }
-    $temporary = $Journal + '.tmp'
-    $state | ConvertTo-Json -Depth 3 -Compress | Set-Content -LiteralPath $temporary -Encoding UTF8
-    Move-Item -LiteralPath $temporary -Destination $Journal -Force
-}
-
-function Recover-Stale([string] $RecoveryDirectory) {
-    if (-not (Test-Path -LiteralPath $RecoveryDirectory -PathType Container)) { return }
-    foreach ($journal in Get-ChildItem -LiteralPath $RecoveryDirectory -Filter '*.json' -File -ErrorAction SilentlyContinue) {
-        try {
-            $state = Get-Content -LiteralPath $journal.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
-            $sid = [string]$state.sid
-            foreach ($path in @($state.paths)) {
-                try { Remove-AppContainerPath ([string]$path) $sid } catch { Write-Warning $_ }
-            }
-            try { [MinosAppContainerNativeV3]::DeleteProfile([string]$state.profile) } catch { Write-Warning $_ }
-            Remove-Item -LiteralPath $journal.FullName -Force -ErrorAction SilentlyContinue
-        } catch {
-            Write-Warning "Unable to reconcile stale MINOS AppContainer journal $($journal.FullName): $_"
-        }
-    }
-}
-
+#minos-include:appcontainer-recovery-ownership
 $values = Read-Plan $Plan
 $command = Read-List $values 'command'
 $environment = Read-Environment $values
@@ -539,6 +516,7 @@ $containerProfile = 'Minos.Worker.' + ([Guid]::NewGuid().ToString('N'))
 $sid = $null
 $granted = New-Object System.Collections.Generic.List[string]
 $journal = Join-Path $recoveryDirectory ($containerProfile + '.json')
+$ownership = New-OwnershipLock $recoveryDirectory $containerProfile
 
 try {
     $sid = [MinosAppContainerNativeV3]::CreateProfile($containerProfile)
@@ -582,4 +560,5 @@ finally {
     }
     try { [MinosAppContainerNativeV3]::DeleteProfile($containerProfile) } catch { Write-Warning $_ }
     Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+    Close-OwnershipLock $ownership $recoveryDirectory $containerProfile
 }

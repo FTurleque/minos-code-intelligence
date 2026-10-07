@@ -19,7 +19,7 @@ Tu es l'orchestrateur du chantier **Fiabilité opérationnelle** de l'audit `doc
 | R6 | 🟡 | CONFIRMÉ | une interruption pendant l'attente de l'artefact dégrade le run en FAILED |
 | R7 | 🟡 | CONFIRMÉ | la réparation « snapshot stable » perd la référence de run reprenable |
 
-**Ne redessine pas la reprise.** R1 a été fermé au sprint 2 et la machinerie de reprise est spécifiée par [ADR 0039](docs/adr/0039-reprise-indexation-apres-interruption.md). R4, R5, R6 et R7 sont ses **résidus** : ce sont des trous dans une conception déjà arrêtée, pas une invitation à la refaire. De même R2 et R3 sont des résidus du correctif S3 : la marque d'appartenance des cgroups reste le mécanisme, il s'agit de la rendre insensible à l'horloge.
+**Ne redessine pas la reprise.** R1 a été fermé au sprint 2 et la machinerie de reprise est spécifiée par [ADR 0039](../adr/0039-reprise-indexation-apres-interruption.md). R4, R5, R6 et R7 sont ses **résidus** : ce sont des trous dans une conception déjà arrêtée, pas une invitation à la refaire. De même R2 et R3 sont des résidus du correctif S3 : la marque d'appartenance des cgroups reste le mécanisme, il s'agit de la rendre insensible à l'horloge.
 
 **Attention, les chemins cités par l'audit sont datés.** Les chantiers A2, A3, A4 et le chantier Code ont déplacé et renommé des paquets entiers : `minos-storage-local` vit sous `com.minos.storage.local.*`, `minos-runtime-local` sous `com.minos.runtime.local`, le câblage sous `minos-bootstrap`. **Relocalise chaque cible avant d'y toucher** et corrige la référence dans ton suivi.
 

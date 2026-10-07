@@ -20,65 +20,47 @@
 ## 7.2 Diagramme de déploiement — Backend natif (mode principal)
 
 ```mermaid
-graph TB
-    subgraph node_dev["«node» Poste développeur (Windows / Linux)"]
-        subgraph proc_minos["«node» Processus minos.exe / minos.jar"]
-            launcher["«Component»\nMinosLauncher\nPoint d'entrée"]
-            router["«Component»\nBackendRouter\nCharge backend.properties"]
-            mcp_srv["«Container»\nminos-mcp\nServeur MCP STDIO"]
-            cli_surf["«Container»\nminos-cli\nSurface CLI"]
-            app_svc["«Container»\nminos-application\nServices applicatifs"]
-            engine["«Container»\nminos-engine\nMoteur de requête"]
-            domain["«Container»\nminos-domain\nModèle de domaine"]
-            storage["«Container»\nminos-storage-local\nPersistance locale"]
-        end
+flowchart TB
+    agent(["Agent IA<br/>client MCP"])
+    ide["Plugin IntelliJ<br/>(Java 21)"]
 
-        subgraph fs_minos["«node» Système de fichiers ($MINOS_HOME)"]
-            snap_store["«database»\nSnapshots (.minos/)\n(fichiers binaires v2)"]
-            vec_store["«database»\nVector Store\n(fichiers .minos/)"]
-            rt_obs["«database»\nRuntime Observations\n(fichiers .minos/)"]
-            cp_store["«database»\nControl Plane tenant\n(chiffré AES-256-GCM)"]
-            backend_cfg["backend.properties\nformat=1, backend=native"]
+    subgraph poste["Poste développeur (Windows ou Linux)"]
+        direction TB
+        subgraph jvm["Processus JVM minos"]
+            direction TB
+            launcher["MinosLauncher"]
+            router["McpBackendRouter"]
+            mcp["Serveur MCP STDIO<br/>lecture seule"]
+            cli["Commandes CLI"]
+            app["MinosApplication<br/>moteur, stockage local"]
         end
-
-        subgraph proc_scip_java["«node» Processus scip-java (subprocess)"]
-            scip_java_bin["«node»\nscip-java binary\nProduit index.scip"]
-        end
-
-        subgraph proc_scip_ts["«node» Processus scip-typescript (subprocess)"]
-            scip_ts_bin["«node»\nscip-typescript binary\nProduit index.scip"]
-        end
+        home[("MINOS_HOME<br/>backend.properties, stores, tools")]
+        indexers["Indexeurs scip-java,<br/>scip-typescript<br/>(sous-processus)"]
+        sources[("Sources du projet")]
     end
 
-    subgraph node_git["«node» Dépôt Git local"]
-        git_repo["«database»\nSources Java / TS / …"]
-    end
-
-    subgraph node_ai["«node» Client IA (Claude Code, Copilot…)"]
-        ai_client["«node»\nAgent IA"]
-    end
-
-    launcher --> router
-    router --> mcp_srv
-    router --> cli_surf
-    mcp_srv --> app_svc
-    cli_surf --> app_svc
-    app_svc --> engine
-    engine --> domain
-    engine --> storage
-    storage --> snap_store
-    storage --> vec_store
-    storage --> rt_obs
-    storage --> cp_store
-    router --> backend_cfg
-
-    app_svc --> proc_scip_java
-    app_svc --> proc_scip_ts
-    proc_scip_java --> git_repo
-    proc_scip_ts --> git_repo
-
-    ai_client -->|"MCP STDIO\nJSON-RPC 2.0"| mcp_srv
+    agent -->|"MCP STDIO"| launcher
+    ide -->|"CLI JSON versionné"| launcher
+    launcher -->|"minos mcp"| router
+    launcher -->|"autres commandes"| cli
+    router --> mcp
+    mcp --> app
+    cli --> app
+    router -.->|"lit"| home
+    app --> home
+    app -->|"lance"| indexers
+    indexers -->|"lisent"| sources
 ```
+
+| Élément | Réalisation |
+|---|---|
+| Processus JVM minos | `minos-app` (JAR ombré ou `minos.exe`) ; `MinosLauncher` vient de `minos-cli`, `McpBackendRouter` de `minos-app`, le serveur MCP de `minos-mcp` |
+| MinosApplication | composée par `minos-bootstrap` (ServiceLoader) ; moteur de `minos-engine`, stockage de `minos-storage-local` |
+| MINOS_HOME | répertoires privés : `runtime/backend.properties`, `projects`, `indexing`, `runs`, `locks`, `workspaces`, `hosted-control-plane`, `tools` |
+| Indexeurs | providers gérés sous `MINOS_HOME/tools`, lancés par `minos-runtime-local` et `minos-provider-scip` |
+
+Éléments optionnels non dessinés : backend de stockage PostgreSQL / pgvector (`minos-storage-postgresql`, câblé par
+`minos-bootstrap`), couche sémantique (`disabled | local-hash | ollama`), plan de contrôle tenant.
 
 ---
 
@@ -88,7 +70,7 @@ graph TB
 graph TB
     subgraph node_host["«node» Poste hôte (Windows / Linux)"]
         subgraph proc_minos_host["«node» Processus minos.exe (hôte)"]
-            router_host["«Component»\nBackendRouter\nbackend=docker"]
+            router_host["«Component»\nMcpBackendRouter\nbackend=docker"]
         end
         backend_cfg_host["backend.properties\nformat=1, backend=docker\ncontainer=minos"]
         router_host --> backend_cfg_host
@@ -128,6 +110,6 @@ graph TB
 | ProcessBuilder / STDIO | Lancement indexeurs | minos-runtime-local → scip-java, scip-typescript |
 | JDBC | Stockage PostgreSQL (opt-in) | minos-storage-postgresql → PostgreSQL |
 | JGit (in-process) | Lecture Git | minos-integration-git → dépôt Git local |
-| docker exec -i | Relay STDIO Docker | BackendRouter → conteneur MINOS |
+| docker exec -i | Relay STDIO Docker | McpBackendRouter → conteneur MINOS |
 | Fichier local JSON | Export NEXUS | minos-nexus → orchestrateur NEXUS |
 | Fichier binaire v2 | Snapshots MINOS | minos-storage-local → système de fichiers |

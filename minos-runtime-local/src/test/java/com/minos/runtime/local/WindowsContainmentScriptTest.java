@@ -17,8 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * script that was reviewed and qualified. The golden copies remain the pre-remediation qualified
  * baseline. After normalizing platform and terminal line endings, the accepted drift is limited to
  * the explicit one-shot deletion of the credential-bearing plan and, for AppContainer only, the
- * separately fingerprinted private-storage hardening introduced after that baseline. Any other
- * content drift remains a test failure.
+ * separately fingerprinted private-storage hardening and the separately fingerprinted ownership-aware
+ * recovery (MINOS-AUD-A01), both introduced after that baseline. Any other content drift remains a
+ * test failure.
  */
 class WindowsContainmentScriptTest {
 
@@ -34,6 +35,8 @@ class WindowsContainmentScriptTest {
             "29b40f2d578a3e9a0d191e72d48dd93b16296b8efc512f0bd35f9d307fbad6ad";
     private static final String PRIVATE_STORAGE_SHA256 =
             "fa5ed8c517237ca180652403cb6a812cbb6233f7023cde773f91809c06999ef7";
+    private static final String OWNERSHIP_RECOVERY_SHA256 =
+            "f8e25954378984fad359ef0412e30edaae9d75614aa01b3bd9d9707fbd91929f";
 
     @Test
     void jobObjectLauncherMatchesQualifiedBaselineExceptForApprovedPlanConsumption() throws Exception {
@@ -71,6 +74,39 @@ class WindowsContainmentScriptTest {
                 "appcontainer launcher lost its CPU hard cap");
     }
 
+    /**
+     * MINOS-AUD-A01: a clock jump and a reused process identifier cannot be reproduced on a workstation, so they
+     * are ruled out by construction. The ownership proof is an operating-system lock; the fragment reads neither
+     * the wall clock nor a process identifier, and the lock handle is opened without the inheritable share flag.
+     */
+    @Test
+    void theOwnershipRecoveryDependsOnNeitherAClockNorAProcessIdentifier() throws Exception {
+        String fragment = approvedFragment("appcontainer-recovery-ownership", OWNERSHIP_RECOVERY_SHA256);
+
+        for (String forbidden : new String[]{
+                "Get-Date", "[DateTime]", "[System.DateTime]", "$PID", "Get-Process", "GetCurrentProcess",
+                "LastWriteTime", "CreationTime", "Inheritable"}) {
+            assertFalse(fragment.contains(forbidden), "the ownership recovery must not depend on " + forbidden);
+        }
+        assertTrue(fragment.contains("[System.IO.FileMode]::CreateNew"), "the lock is created, never reused");
+        assertEquals(2, count(fragment, "[System.IO.FileShare]::None"), "both opens are exclusive");
+    }
+
+    @Test
+    void theLauncherTakesItsLockBeforeAnyProfileAndReleasesItLast() throws Exception {
+        String launcher = normalizeScriptText(WindowsContainmentScript.assemble("windows-appcontainer-sandbox-v4.ps1"));
+
+        int lock = launcher.indexOf("$ownership = New-OwnershipLock");
+        int tryBlock = launcher.indexOf("\ntry {\n    $sid = [MinosAppContainerNativeV3]::CreateProfile");
+        int release = launcher.lastIndexOf("Close-OwnershipLock $ownership");
+        assertTrue(lock > 0 && tryBlock > lock, "the lock must be taken before the profile is created");
+        assertTrue(release > launcher.lastIndexOf("DeleteProfile($containerProfile)"),
+                "the lock must be released after the profile is deleted");
+        assertTrue(launcher.indexOf("Remove-Item -LiteralPath $journal -Force") < release,
+                "the lock must outlive the journal");
+        assertTrue(launcher.contains("Recover-Stale $recoveryDirectory"), "the sweep still runs before each launch");
+    }
+
     @Test
     void aMissingTemplateOrFragmentFailsClosed() {
         assertThrows(IOException.class, () -> WindowsContainmentScript.assemble("no-such-launcher.ps1"));
@@ -95,9 +131,50 @@ class WindowsContainmentScriptTest {
         String assembled = normalizeScriptText(WindowsContainmentScript.assemble(launcher));
         if ("windows-appcontainer-sandbox-v4.ps1".equals(launcher)) {
             assembled = removeApprovedPrivateStorageHardening(assembled);
+            assembled = removeApprovedOwnershipRecovery(assembled, golden);
         }
         assertEquals(expected, assembled,
                 launcher + " drifted beyond the approved containment remediations");
+    }
+
+    /**
+     * The qualified {@code Write-Recovery} and {@code Recover-Stale} are replaced, byte for byte, by the
+     * approved ownership-aware recovery fragment; the baseline's own text for those two functions is read
+     * from the golden, so the comparison cannot drift silently. The two call sites that the fragment adds
+     * (the lock taken before any profile exists, and its release as the very last step) are the only other
+     * accepted differences.
+     */
+    private static String removeApprovedOwnershipRecovery(String assembled, String golden) throws Exception {
+        String fragment = approvedFragment("appcontainer-recovery-ownership", OWNERSHIP_RECOVERY_SHA256);
+        int from = golden.indexOf("function Write-Recovery(");
+        int to = golden.indexOf("$values = Read-Plan $Plan");
+        assertTrue(from >= 0 && to > from, "qualified baseline lost its recovery functions");
+        String qualifiedRecovery = golden.substring(from, to);
+        assertTrue(qualifiedRecovery.contains("function Recover-Stale("),
+                "qualified baseline recovery region lost Recover-Stale");
+
+        String value = replaceExactlyOnce(
+                assembled, fragment + "\n", qualifiedRecovery, "ownership-aware recovery fragment");
+        value = replaceExactlyOnce(
+                value,
+                """
+                $journal = Join-Path $recoveryDirectory ($containerProfile + '.json')
+                $ownership = New-OwnershipLock $recoveryDirectory $containerProfile
+                """,
+                """
+                $journal = Join-Path $recoveryDirectory ($containerProfile + '.json')
+                """,
+                "ownership lock acquisition");
+        return replaceExactlyOnce(
+                value,
+                """
+                    Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+                    Close-OwnershipLock $ownership $recoveryDirectory $containerProfile
+                }""",
+                """
+                    Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+                }""",
+                "ownership lock release");
     }
 
     private static String removeApprovedPrivateStorageHardening(String assembled) throws Exception {
@@ -237,6 +314,14 @@ class WindowsContainmentScriptTest {
         return value.substring(0, marker)
                 + replacement
                 + value.substring(marker + target.length());
+    }
+
+    private static int count(String value, String target) {
+        int count = 0;
+        for (int index = value.indexOf(target); index >= 0; index = value.indexOf(target, index + target.length())) {
+            count++;
+        }
+        return count;
     }
 
     private static String sha256(String value) throws Exception {

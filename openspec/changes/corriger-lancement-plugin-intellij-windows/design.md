@@ -184,3 +184,12 @@ Aucune ne bloque les tâches de ce changement ; chacune attend l'utilisateur.
   revanche accepter `protocolVersion` dans `[minCompatibleVersion, maxCompatibleVersion]` contredit
   la section « Compatibilité » de l'ADR-0027 (Accepted) : cela exigerait un amendement ou un
   nouvel ADR à proposer (statut Proposed), à la main de l'utilisateur.
+
+## Écarts constatés à l'implémentation (2026-10-07)
+
+Aucun ne change les exigences ; ils précisent D1 à D4. Le détail et les preuves sont dans la section « Évidence d'implémentation » de `tasks.md`.
+
+- **D1, forme du mode.** Le plan porte la ligne `command.mode=cmd-c` seulement quand `MinosCommandLine.isCmdBatchInvocation` reconnaît exactement `[cmd.exe, /d, /v:off, /s, /c, chaîne]` ; la détection est faite sur la commande telle que l'appelant l'a construite, avant que `cmd.exe` soit remplacé par son chemin système, et c'est la **même** définition (constantes `CMD_EXECUTABLE`, `CMD_SWITCHES`) qui sert à `build`. Côté script, la signature du type C# devient `Run(command, environment, workingDirectory, rawCmd)` ; `BuildRawCmdCommandLine` exige six éléments, le premier égal (sans tenir compte de la casse) à `Environment.SystemDirectory\cmd.exe`, les quatre commutateurs exacts et une chaîne non vide, sinon il lève avant `CreateProcessW`. Un mode inconnu dans le plan est refusé par PowerShell avant d'appeler `Run`. Le script n'ajoute aucune autre sémantique de propriété.
+- **D2, message.** Le message de refus nomme l'argument (ou « executable » pour le chemin du lanceur), tronqué à 64 caractères, et recommande `app\minos.exe`. Il peut donc citer le texte d'une recherche saisie par l'utilisateur ; c'est ce que la spec exige (« nomme l'argument refusé »).
+- **D3, fixtures.** Les fixtures `.cmd` référencent PowerShell par son chemin absolu (`SystemRoot`) et non par le `PATH`. Les plans fabriqués à la main pour tester le refus du script portent l'environnement réel, car un environnement vide faisait échouer même la forme valide : un témoin à forme exacte fixe cette limite du test.
+- **Exécution locale.** Voir « Comment les tests ont tourné ici » dans `tasks.md` : pas de Gradle local, harnais `javac` + JUnit hors dépôt, deux substituts de la plateforme IntelliJ ; le build Gradle et la CI restent à observer.

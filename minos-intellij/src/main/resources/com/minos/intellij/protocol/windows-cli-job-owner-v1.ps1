@@ -9,6 +9,7 @@ Set-StrictMode -Version Latest
 Add-Type -TypeDefinition @'
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -142,7 +143,7 @@ public static class MinosJobObjectOwnerV1 {
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool CloseHandle(IntPtr hObject);
 
-    public static int Run(string[] command, string[] environment, string workingDirectory) {
+    public static int Run(string[] command, string[] environment, string workingDirectory, bool rawCmd) {
         if (command == null || command.Length == 0) throw new ArgumentException("command is empty");
         if (environment == null) throw new ArgumentNullException("environment");
 
@@ -161,7 +162,7 @@ public static class MinosJobObjectOwnerV1 {
             startup.hStdOutput = GetStdHandle(-11);
             startup.hStdError = GetStdHandle(-12);
 
-            StringBuilder commandLine = new StringBuilder(BuildCommandLine(command));
+            StringBuilder commandLine = new StringBuilder(BuildCommandLine(command, rawCmd));
             environmentBlock = BuildEnvironmentBlock(environment);
             uint flags = CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | CREATE_NO_WINDOW;
             if (!CreateProcessW(
@@ -241,7 +242,22 @@ public static class MinosJobObjectOwnerV1 {
         return Marshal.StringToHGlobalUni(block.ToString());
     }
 
-    private static string BuildCommandLine(string[] args) {
+    // MINOS-AUD-C04: cmd.exe does not read the C runtime quoting: a batch launcher's command string must reach it raw.
+    // The mode is explicit in the plan and its shape is verified strictly; any other shape with this mode is refused
+    // before any process exists. The first element must be the cmd.exe of the system directory.
+    private static string BuildRawCmdCommandLine(string[] args) {
+        string system = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+        if (args.Length != 6
+                || !string.Equals(args[0], system, StringComparison.OrdinalIgnoreCase)
+                || args[1] != "/d" || args[2] != "/v:off" || args[3] != "/s" || args[4] != "/c"
+                || string.IsNullOrWhiteSpace(args[5])) {
+            throw new ArgumentException("raw cmd mode requires exactly: <system cmd.exe> /d /v:off /s /c <command>");
+        }
+        return QuoteArgument(args[0]) + " /d /v:off /s /c \"" + args[5] + "\"";
+    }
+
+    private static string BuildCommandLine(string[] args, bool rawCmd) {
+        if (rawCmd) return BuildRawCmdCommandLine(args);
         StringBuilder result = new StringBuilder();
         for (int i = 0; i < args.Length; i++) {
             if (i > 0) result.Append(' ');
@@ -325,5 +341,10 @@ $workingDirectory = Decode ([string]$values['working'])
 # The plan contains the complete inherited environment. Delete it before the CLI is allowed to
 # start so a JVM/IDE crash cannot leave credentials behind on disk for the duration of the child.
 Remove-Item -LiteralPath $Plan -Force -ErrorAction Stop
-$exitCode = [MinosJobObjectOwnerV1]::Run($command, $environment, $workingDirectory)
+$commandMode = ''
+if ($values.ContainsKey('command.mode')) { $commandMode = [string]$values['command.mode'] }
+if ($commandMode -ne '' -and $commandMode -ne 'cmd-c') {
+    throw "Unsupported command mode in ownership plan: $commandMode"
+}
+$exitCode = [MinosJobObjectOwnerV1]::Run($command, $environment, $workingDirectory, ($commandMode -eq 'cmd-c'))
 exit $exitCode
