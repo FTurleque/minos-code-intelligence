@@ -27,6 +27,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -62,10 +63,10 @@ public final class RelatedTestDerivationService {
      * doit suivre une minuscule ou un chiffre. La fin d'un mot en minuscules n'est jamais un suffixe :
      * {@code Audit}, {@code Commit}, {@code Limit}, {@code Latest} et {@code Contest} restent entiers.
      */
-    private static final Pattern TEST_SUFFIX = Pattern.compile(
-            "(?:[._-](?i:tests?|spec(?:ification)?s?|it)"
-                    + "|(?:Tests?|Spec(?:ification)?s?)"
-                    + "|(?<=[a-z0-9])I[Tt])$"
+    private static final List<Pattern> TEST_SUFFIXES = List.of(
+            Pattern.compile("[._-](?i:tests?|spec(?:ification)?s?|it)$"),
+            Pattern.compile("(?:Tests?|Spec(?:ification)?s?)$"),
+            Pattern.compile("(?<=[a-z0-9])I[Tt]$")
     );
     private static final Set<String> TEST_SOURCE_SETS = Set.of(
             "test", "tests", "it", "integrationtest", "integration-test"
@@ -410,7 +411,18 @@ public final class RelatedTestDerivationService {
     }
 
     private static String stripTestSuffix(String value) {
-        return value == null ? "" : TEST_SUFFIX.matcher(value).replaceFirst("");
+        if (value == null) {
+            return "";
+        }
+        // Les trois motifs finissent à la fin du nom : retirer le plus long revient au motif le plus à gauche.
+        int cut = value.length();
+        for (Pattern suffix : TEST_SUFFIXES) {
+            Matcher matcher = suffix.matcher(value);
+            if (matcher.find()) {
+                cut = Math.min(cut, matcher.start());
+            }
+        }
+        return value.substring(0, cut);
     }
 
     private static String stripTestFileSuffix(String value) {

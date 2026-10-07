@@ -23,6 +23,8 @@ public final class CodeIntelligenceResultRenderer {
     private static final String FORMAT = "format";
     private static final String RELATIONSHIPS = "relationships";
     private static final String COUNT = "count";
+    private static final String LOCATION = "location";
+    private static final String ORIGIN = "origin";
 
     private CodeIntelligenceResultRenderer() {
     }
@@ -147,10 +149,10 @@ public final class CodeIntelligenceResultRenderer {
                 "id", usage.id(),
                 "projectId", usage.projectId(),
                 "symbolId", usage.symbolId(),
-                "location", JsonShapes.location(usage.location()),
+                LOCATION, JsonShapes.location(usage.location()),
                 "roles", JsonShapes.roles(usage.roles()),
                 "resolutionStatus", usage.resolutionStatus().name(),
-                "origin", JsonShapes.origin(usage.origin()));
+                ORIGIN, JsonShapes.origin(usage.origin()));
     }
 
     private static Map<String, Object> relationshipMap(RelationshipResult relationship) {
@@ -161,11 +163,11 @@ public final class CodeIntelligenceResultRenderer {
                 "target", JsonShapes.entity(relationship.target()),
                 "unresolvedTarget", relationship.unresolvedTarget(),
                 "kind", relationship.kind().name(),
-                "location", JsonShapes.location(relationship.location()),
+                LOCATION, JsonShapes.location(relationship.location()),
                 "resolutionStatus", relationship.resolutionStatus().name(),
                 "nature", relationship.nature().name(),
                 "confidence", relationship.confidence(),
-                "origin", JsonShapes.origin(relationship.origin()),
+                ORIGIN, JsonShapes.origin(relationship.origin()),
                 "evidence", relationship.evidence().stream()
                         .map(CodeIntelligenceResultRenderer::evidenceMap)
                         .toList());
@@ -177,22 +179,22 @@ public final class CodeIntelligenceResultRenderer {
                 "description", item.description(),
                 "source", JsonShapes.entity(item.source()),
                 "target", JsonShapes.entity(item.target()),
-                "location", JsonShapes.location(item.location()),
+                LOCATION, JsonShapes.location(item.location()),
                 "weight", item.weight());
     }
 
     private static void appendLocationText(StringJoiner lines, SymbolLocation location) {
         if (location == null) {
-            field(lines, 2, "location", "null");
+            field(lines, 2, LOCATION, "null");
             return;
         }
-        field(lines, 2, "location", quote(location.fileId()) + ":"
+        field(lines, 2, LOCATION, quote(location.fileId()) + ":"
                 + location.startLine() + ":" + location.startColumn() + "-"
                 + location.endLine() + ":" + location.endColumn());
     }
 
     private static void appendOriginText(StringJoiner lines, Origin origin) {
-        field(lines, 2, "origin", quote(origin.providerId()) + "/" + origin.sourceType().name());
+        field(lines, 2, ORIGIN, quote(origin.providerId()) + "/" + origin.sourceType().name());
     }
 
     private static String entityText(CodeEntityRef reference) {
