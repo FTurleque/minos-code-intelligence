@@ -284,7 +284,7 @@ services:
     # The ONLY place that names this image (docker/scripts/configure-m30-docker-services.ps1 and the
     # PostgreSQL integration tests read it from here). <tag>@<index digest>: the digest is the pin,
     # the tag is what a human or Dependabot reads. Gate: scripts/quality/check-image-pins.py.
-    image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17@sha256:feb68f4f15446397d8cac7f4fe48fe4586de83160d1fc48b46283312d1a33966}"
+    image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.7-pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d}"
     environment:
       POSTGRES_DB: "${MINOS_POSTGRES_DATABASE:-minos}"
       POSTGRES_USER: "${MINOS_POSTGRES_USER:-minos}"
@@ -358,7 +358,7 @@ services:
     <<: *limits-ollama
     profiles: [ollama]
     # The ONLY place that names this image (see minos-postgres). Gate: scripts/quality/check-image-pins.py.
-    image: "${MINOS_OLLAMA_IMAGE:-ollama/ollama:0.32.0@sha256:57f573b47f1f71ebb445789f279fe3e596a8beab182f7cf486db9205bad87c5a}"
+    image: "${MINOS_OLLAMA_IMAGE:-ollama/ollama:0.35.1@sha256:292ee7945dfc3d5840a181f3ab86fedb1e66703e02c8af98b50f4da56b7e278c}"
     # Unprivileged: no root inside the container, no capability, no privilege gain. HOME is the
     # only writable place Ollama needs besides /tmp, and it is the model volume itself.
     user: "10002:10002"
