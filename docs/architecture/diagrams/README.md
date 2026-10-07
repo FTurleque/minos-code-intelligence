@@ -5,8 +5,8 @@ Ces diagrammes reprennent ceux des sections arc42, en plus simples : peu de nœu
 de classes dans les tableaux sous chaque diagramme.
 
 Les sept fichiers ont été **relus contre le code le 2026-10-07** et corrigés (classes renommées ou déplacées
-depuis août). Les diagrammes d'arc42 § 5.3, § 6.1 à
-§ 6.3 et § 7.2 gardent encore leur version d'août : en cas d'écart, ces fichiers font foi.
+depuis août). Les mêmes diagrammes sont repris dans arc42 (§ 3.4, 5.1, 5.3, 6.1 à 6.4, 7.2) ; en cas d'écart,
+ces fichiers font foi. Le diagramme de déploiement Docker d'arc42 § 7.3 n'a pas été relu.
 
 | Fichier | Type | Portée |
 |---------|------|--------|
