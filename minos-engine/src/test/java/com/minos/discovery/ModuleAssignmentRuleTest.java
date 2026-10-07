@@ -14,7 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,8 +93,8 @@ class ModuleAssignmentRuleTest {
     void theIdentifierDependsOnTheProjectAndOnThePortableModulePathOnly() {
         assertEquals("module:" + Sha256.hex(PROJECT + "\u001F" + "packages/api"),
                 ModuleAssignmentRule.moduleId(PROJECT, Path.of("packages", "api")));
-        assertFalse(ModuleAssignmentRule.moduleId(PROJECT, Path.of("packages/api"))
-                .equals(ModuleAssignmentRule.moduleId("other-project", Path.of("packages/api"))));
+        assertNotEquals(ModuleAssignmentRule.moduleId(PROJECT, Path.of("packages/api")),
+                ModuleAssignmentRule.moduleId("other-project", Path.of("packages/api")));
     }
 
     @Test

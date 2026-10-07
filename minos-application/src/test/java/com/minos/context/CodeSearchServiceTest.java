@@ -91,8 +91,9 @@ class CodeSearchServiceTest {
         withoutModules.putSymbols(List.of(symbol("a", null), symbol("b", null)));
         CodeSearchService service = new CodeSearchService(withoutModules, new FixtureSourceReader());
 
+        CodeSearchCriteria request = criteria(1, 4_000, false);
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                () -> service.search(PROJECT, criteria(1, 4_000, false)));
+                () -> service.search(PROJECT, request));
 
         assertTrue(refusal.getMessage().contains("module"), refusal.getMessage());
     }

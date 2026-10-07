@@ -32,6 +32,8 @@ import static com.minos.domain.Preconditions.requireText;
  */
 public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
+    private static final String PROJECT_ID = "projectId";
+
     private final Map<String, Symbol> symbolsByScopedId = new ConcurrentHashMap<>();
     private final Map<String, SymbolOccurrence> occurrencesByScopedId = new ConcurrentHashMap<>();
     private final Map<String, Relationship> relationshipsByScopedId = new ConcurrentHashMap<>();
@@ -93,14 +95,14 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     @Override
     public Optional<Symbol> findSymbolById(String projectId, String symbolId) {
-        requireText(projectId, "projectId");
+        requireText(projectId, PROJECT_ID);
         requireText(symbolId, "symbolId");
         return Optional.ofNullable(symbolsByScopedId.get(scopedKey(projectId, symbolId)));
     }
 
     @Override
     public boolean lacksModuleAttribution(String projectId) {
-        requireText(projectId, "projectId");
+        requireText(projectId, PROJECT_ID);
         SymbolIndexes indexes = symbolIndexes;
         return indexes.byProject().containsKey(projectId)
                 && !indexes.projectsWithModuleAttribution().contains(projectId);
@@ -108,7 +110,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     @Override
     public List<Symbol> findSymbols(String projectId, SymbolSearchCriteria criteria) {
-        requireText(projectId, "projectId");
+        requireText(projectId, PROJECT_ID);
         if (criteria == null) {
             throw new IllegalArgumentException("criteria must not be null");
         }
@@ -137,7 +139,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     @Override
     public List<Symbol> findFileSymbols(String projectId, String fileId, int limit) {
-        requireText(projectId, "projectId");
+        requireText(projectId, PROJECT_ID);
         requireText(fileId, "fileId");
         validateLimit(limit);
 
@@ -156,7 +158,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     @Override
     public List<SymbolOccurrence> findUsages(String projectId, String symbolId, int limit) {
-        requireText(projectId, "projectId");
+        requireText(projectId, PROJECT_ID);
         requireText(symbolId, "symbolId");
         validateLimit(limit);
 
@@ -178,7 +180,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
             String projectId,
             RelationshipSearchCriteria criteria
     ) {
-        requireText(projectId, "projectId");
+        requireText(projectId, PROJECT_ID);
         if (criteria == null) {
             throw new IllegalArgumentException("criteria must not be null");
         }

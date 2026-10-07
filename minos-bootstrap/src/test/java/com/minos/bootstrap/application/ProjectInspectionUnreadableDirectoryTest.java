@@ -18,6 +18,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -53,7 +54,7 @@ class ProjectInspectionUnreadableDirectoryTest {
             ProjectInspectionService.ProjectView view = inventory.projects().getFirst();
             assertEquals(project.id().toString(), view.id());
             assertTrue(inventory.degraded().isEmpty(), "an ignored unreadable directory degrades nothing: " + inventory.degraded());
-            assertFalse("UNREADABLE".equals(view.indexState()), "the project must be inspected, not unreadable");
+            assertNotEquals("UNREADABLE", view.indexState(), "the project must be inspected, not unreadable");
             assertEquals("NEVER_INDEXED", view.indexState());
         }
     }
