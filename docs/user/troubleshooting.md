@@ -158,6 +158,26 @@ modification remonte à plus de **24 heures**.
 
 Si l'espace presse avant le prochain run, supprimez à la main `local-provider-workspaces/` quand aucune indexation n'est en cours.
 
+## `index` échoue sur un répertoire illisible
+
+Un répertoire de votre projet que MINOS ne peut pas ouvrir (un volume Docker `pgdata/` en 0700 appartenant à `root`, une ACL Windows qui refuse le listage) faisait échouer à lui seul la découverte, l'empreinte et la copie de travail du provider, donc tout `index`. Désormais :
+
+- un répertoire illisible **ignoré** (`.gitignore` ou `.minosignore`) ou **durci** (`.git`, `.idea`, `.minos`, `node_modules`, `target`, `dist`, `out`) est écarté avec un avertissement, par exemple `MINOS discovery could not read the project file 'pgdata' and treats it as absent: AccessDeniedException` (nom relatif au projet, jamais le chemin absolu ; dix avertissements au plus par opération). Il ne contribue ni à l'index ni à l'empreinte ;
+- un répertoire illisible **non ignoré** continue de faire échouer l'opération : un répertoire de sources que MINOS ne peut pas lire ne doit pas devenir un index silencieusement incomplet. Le message nomme le répertoire relatif et la sortie : `data/db: cannot be read and is not ignored; add it to .minosignore (or fix its permissions) so that MINOS skips it` ;
+- la racine du projet, ou la racine d'un scope, illisible échoue toujours.
+
+Pour qu'un répertoire illisible soit écarté, ajoutez-le à `.minosignore` à la racine du projet (ou changez ses droits) :
+
+```bash
+echo 'data/db/' >> .minosignore
+```
+
+```powershell
+Add-Content -Path .minosignore -Value 'data/db/'
+```
+
+Un `.gitignore` ou un `.minosignore` enregistré avec un BOM UTF-8 (Windows PowerShell 5.1 `Out-File -Encoding utf8`) est lu normalement : le BOM est retiré, la première règle s'applique. La casse des motifs sous NTFS et le comptage des liens non suivis dans un diagnostic `NO_CHANGES` ne sont pas traités : voir les questions ouvertes de `openspec/changes/tolerer-repertoires-illisibles-a-la-decouverte/design.md`.
+
 ## Windows : `minos.properties` ou un fichier de secret enregistré avec un BOM
 
 Windows PowerShell 5.1 (`Out-File -Encoding utf8`) et d'anciens éditeurs enregistrent un fichier UTF-8 avec un BOM (octets `EF BB BF`) en tête. MINOS le retire, **une seule fois**, à la lecture de `config/minos.properties`, des autres fichiers de propriétés que MINOS lit (registre, état d'index…) et des fichiers de secret lus par `MinosRuntimeSettings` (par exemple le fichier de mot de passe PostgreSQL désigné par `minos.postgres.passwordFile`) : la première propriété est lue sous son vrai nom et le secret ne contient pas le BOM. Un fichier qui commence par **deux** BOM est refusé avec le message `starts with a repeated UTF-8 byte order mark` : réenregistrez-le en UTF-8 sans BOM. Un BOM ailleurs qu'en tête reste une donnée. Un fichier UTF-16 (autre encodage proposé par ces outils) n'est pas du UTF-8 valide et reste refusé.

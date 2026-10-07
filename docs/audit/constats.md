@@ -380,3 +380,14 @@ Vérification : harnais local `javac` + JUnit sous Windows (pas de Gradle local)
 | MINOS-AUD-B09 | **Corrigé en local** : `publish` n'écrase plus une cible existante (lien physique) ; refus explicite sans lien, sans repli | `DurableAtomicFileTest` (7 nouveaux), appelants rejoués |
 
 Vérification : `verify` vert sous Windows (17 min 42 s, 2 242 tests, 0 échec, 56 ignorés), 26 gates `check-*.py` verts (hors les deux de publication), gate JaCoCo vert **sans ignorer** `m30-postgresql-pgvector`. **Non fait** : CI Ubuntu et Windows (le lien physique sous Linux n'a jamais tourné), publication sur FAT, exFAT ou partage réseau réels, test automatique de l'installateur (vérification manuelle seulement), BOM du secret source de l'installateur (question ouverte 4) ; les décisions ouvertes du design (questions 1 à 4). Voir « Évidence d'implémentation » dans les [tâches du changement](../../openspec/changes/durcir-configuration-postgresql-et-secrets/tasks.md).
+
+### Suivi du changement `tolerer-repertoires-illisibles-a-la-decouverte` (2026-10-07)
+
+| Constat | État | Preuve |
+|---|---|---|
+| MINOS-AUD-D01 | **Corrigé en local pour les ignorés et les durcis** (découverte, empreinte, `.mvn/`, inventaire, **copie de travail du provider**, lacune de la fiche) ; un répertoire non ignoré reste un échec fail-closed, désormais actionnable et du même type d'exception ; la racine illisible échoue toujours. Tolérer les non-ignorés reste une décision ouverte | `UnreadableDirectoryDiscoveryTest`, `ProjectFingerprintUnreadableDirectoryTest`, `ProviderWorkspaceFilesUnreadableDirectoryTest`, `ProjectInspectionUnreadableDirectoryTest` (tous réellement exécutés sous un compte Windows non élevé) |
+| MINOS-AUD-D10 | **Corrigé en local pour le BOM** ; la casse des motifs sous NTFS reste ouverte | `ProjectIgnoreByteOrderMarkTest` (rouge au HEAD) |
+| MINOS-AUD-D06 | **Corrigé en local** : l'empreinte est capturée avant la découverte, dans le coordinateur et dans la CLI | `IncrementalIndexingDiscoveryOrderTest` (rouge au HEAD), `IndexPlanCaptureOrderTest` (rouge par mutation) |
+| MINOS-AUD-D12 | **Non tranché** (décision) | — |
+
+Vérification : `verify` vert sous Windows (18 min 13 s, 2 271 tests, 0 échec, 56 ignorés), 26 gates `check-*.py` verts (hors les deux de publication), JaCoCo vert, dont `provider-execution-trust-boundary`. **Non fait** : exécution sous Linux (les tests d'illisibilité par permissions POSIX n'ont jamais tourné), CI ; ils s'ignorent en compte root ou administrateur élevé ; les décisions ouvertes du design (questions 1 à 3, 6). Voir « Évidence d'implémentation » dans les [tâches du changement](../../openspec/changes/tolerer-repertoires-illisibles-a-la-decouverte/tasks.md).

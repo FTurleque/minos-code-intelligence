@@ -311,8 +311,10 @@ public final class LocalAutonomousIndexOperations
     private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull, boolean persist)
             throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        ProjectDiscovery discovery = application.discoveryService().discover(project.rootPath());
+        // MINOS-AUD-D06: the reference fingerprint is captured BEFORE the discovery, so a structure created between the
+        // two is in the post-run fingerprint without being in this one and the baseline is not promoted (ADR 0014).
         ProjectFingerprint current = fingerprintService.capture(project.rootPath());
+        ProjectDiscovery discovery = application.discoveryService().discover(project.rootPath());
         ProjectIndexState indexState = alignedIndexState(project.id(), persist);
         Optional<ProjectFingerprintSnapshot> baseline;
         ProjectInvalidationAssessment invalidation;
