@@ -2,6 +2,7 @@
 """Fail-closed invariants for the MNE-01..MNE-17 remediation campaign."""
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -30,28 +31,28 @@ def forbid(relative: str, text: str, *needles: str) -> None:
 
 def main() -> int:
     try:
-        compaction = read("minos-storage-local/src/main/java/com/minos/store/SnapshotCompactionService.java")
-        retention = read("minos-storage-local/src/main/java/com/minos/store/SnapshotRetentionService.java")
+        compaction = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotCompactionService.java")
+        retention = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java")
         postgres_snapshot = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java")
-        snapshot_codec = read("minos-storage-local/src/main/java/com/minos/store/SnapshotBinaryCodecSupport.java")
-        file_snapshot = read("minos-storage-local/src/main/java/com/minos/store/FileSymbolSnapshotStore.java")
-        semantic_budget = read("minos-application/src/main/java/com/minos/semantic/SemanticIndexBudget.java")
-        semantic_service = read("minos-application/src/main/java/com/minos/semantic/SemanticIndexService.java")
-        semantic_store = read("minos-storage-local/src/main/java/com/minos/store/FileSemanticVectorStore.java")
+        snapshot_codec = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotBinaryCodecSupport.java")
+        file_snapshot = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")
+        semantic_budget = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java")
+        semantic_service = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexService.java")
+        semantic_store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java")
         scip = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIngestionLimits.java")
-        discovery = read("minos-application/src/main/java/com/minos/discovery/ProjectDiscoveryService.java")
+        discovery = read("minos-engine/src/main/java/com/minos/discovery/ProjectDiscoveryService.java")
         fingerprint = read("minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java")
         runtime_port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
-        runtime_service = read("minos-application/src/main/java/com/minos/dynamic/RuntimeIntelligenceService.java")
-        local_runtime = read("minos-storage-local/src/main/java/com/minos/store/FileRuntimeObservationStore.java")
+        runtime_service = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java")
+        local_runtime = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
         postgres_runtime = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresRuntimeObservationStore.java")
         provider_api = read("minos-api/src/main/java/com/minos/api/LocalProviderPlatformApi.java")
         multi_api = read("minos-api/src/main/java/com/minos/api/LocalMinosMultiRepositoryApi.java")
-        nexus = read("minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java")
-        hybrid = read("minos-application/src/main/java/com/minos/semantic/HybridSearchService.java")
+        nexus = read("minos-nexus/src/main/java/com/minos/nexus/NexusExportService.java")
+        hybrid = read("minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java")
         token = read("minos-application/src/main/java/com/minos/context/TokenEstimator.java")
         polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
-        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/WindowsAppContainerWorkerSandboxBackend.java")
+        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java")
 
         # MNE-01: read active pointer under the same project lease as retention deletion.
         require("SnapshotCompactionService.java", compaction,
@@ -126,12 +127,18 @@ def main() -> int:
         forbid("TokenEstimator.java", token, "getBytes(StandardCharsets.UTF_8)", "while (low < high)")
 
         # MNE-15/16: exact NuGet package pin and bounded managed-runtime integrity traversal.
+        # D1: the nupkg SHA-256 is no longer a Java literal: it is the pinned hash of embedded-tools.json (the single
+        # description of the shipped tools), compared by PinnedArtifactSource before anything is installed.
         require("ManagedPolyglotScipRuntimeManager.java", polyglot,
-                "DOTNET_PACKAGE_SHA256", "downloadPinnedDotnetPackage", "pinned-nuget-source",
+                "DOTNET_PACKAGE_ID", "downloadPinnedDotnetPackage", "pinned-nuget-source",
+                "MAX_DOTNET_PACKAGE_BYTES", "PinnedArtifactSource.forHost().acquire(",
                 "MAX_MANAGED_TRAVERSAL_ENTRIES", "MAX_MANAGED_FILES", "MAX_MANAGED_BYTES")
-        match = re.search(r'DOTNET_PACKAGE_SHA256 = "([0-9a-f]{64})"', polyglot)
-        if not match:
-            raise RuntimeError("ManagedPolyglotScipRuntimeManager.java: scip-dotnet SHA-256 is not immutable")
+        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/PinnedArtifactSource.java")
+        require("PinnedArtifactSource.java", pinned, "artifact.sha256().equals(actual)")
+        catalogue = json.loads(read("minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/embedded-tools.json"))
+        nupkg = [a for a in catalogue["artifacts"] if a["id"] == "scip-dotnet-nupkg"]
+        if len(nupkg) != 1 or not re.fullmatch(r"[0-9a-f]{64}", nupkg[0]["sha256"]):
+            raise RuntimeError("embedded-tools.json: scip-dotnet SHA-256 is not immutable")
         forbid("ManagedPolyglotScipRuntimeManager.java", polyglot,
                'DOTNET_SOURCE = "https://api.nuget.org/v3/index.json"', ".sorted(Comparator.comparing(path -> portable(directory.relativize(path))))\n                    .toList()")
 

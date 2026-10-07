@@ -22,6 +22,12 @@ public final class ToolsCommand {
               install <provider>    Install or bootstrap a managed provider
             """.stripTrailing();
 
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--format").flag("--all");
+
+    public static String usage() {
+        return USAGE;
+    }
+
     private final AutonomousIndexOperations operations;
 
     public ToolsCommand(AutonomousIndexOperations operations) {
@@ -37,22 +43,27 @@ public final class ToolsCommand {
             }
             List<AutonomousIndexOperations.ProviderView> providers = operations.providers();
             output.append(render(providers, parsed.format())).append('\n');
-            if ("verify".equals(parsed.action())) {
-                // UNSUPPORTED_BY_BACKEND means the currently selected backend (e.g. the Docker MCP
-                // admin/indexing plane) never claims the stronger sandbox tier this provider would
-                // otherwise need -- not that the provider itself is broken. It must never silently
-                // pass as READY, but it must also never block a verification/installation that does
-                // not actually depend on that tier. Every other non-READY state still blocks.
-                boolean notReady = providers.stream()
-                        .filter(provider -> parsed.all() || provider.requiredByDefault())
-                        .filter(provider -> !"UNSUPPORTED_BY_BACKEND".equals(provider.state()))
-                        .anyMatch(provider -> !"READY".equals(provider.state()));
-                if (notReady) {
-                    return FindSymbolCommand.EXECUTION_ERROR;
-                }
+            if ("verify".equals(parsed.action())
+                    && providers.stream()
+                            .filter(provider -> parsed.all() || provider.requiredByDefault())
+                            .anyMatch(ToolsCommand::blocksReadiness)) {
+                return FindSymbolCommand.EXECUTION_ERROR;
             }
             return FindSymbolCommand.SUCCESS;
         });
+    }
+
+    /**
+     * Le verdict de disponibilité unique de {@code tools verify} et de {@code doctor} : un provider bloque
+     * sauf s'il est {@code READY} ou {@code UNSUPPORTED_BY_BACKEND}. Ce dernier état dit que le backend
+     * sélectionné (par exemple le plan Docker MCP admin/indexation) ne revendique jamais le palier de
+     * sandbox plus fort dont ce provider aurait sinon besoin -- pas que le provider est cassé. Il est
+     * rapporté tel quel (jamais comme {@code READY}) mais ne doit jamais bloquer une vérification ou une
+     * installation qui ne dépend pas de ce palier (docs/developer/remote-worker-sandbox-disposition.md,
+     * « Invariant »). Tout autre état non prêt bloque.
+     */
+    static boolean blocksReadiness(AutonomousIndexOperations.ProviderView provider) {
+        return !"READY".equals(provider.state()) && !"UNSUPPORTED_BY_BACKEND".equals(provider.state());
     }
 
     static String render(List<AutonomousIndexOperations.ProviderView> providers, SymbolOutputFormat format) {
@@ -93,35 +104,19 @@ public final class ToolsCommand {
                 throw new IllegalArgumentException("unknown tools action: " + action);
             }
             String provider = null;
-            boolean all = false;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            int index = 1;
+            int optionsFrom = 1;
             if ("install".equals(action)) {
-                if (index >= arguments.length || arguments[index].startsWith("-")) {
+                if (arguments.length < 2) {
                     throw new IllegalArgumentException("tools install requires <provider>");
                 }
-                provider = arguments[index++];
+                provider = CliCommandSupport.operand(arguments[1], "provider");
+                optionsFrom = 2;
             }
-            while (index < arguments.length) {
-                String option = arguments[index];
-                if ("--all".equals(option)) {
-                    if (!"verify".equals(action)) {
-                        throw new IllegalArgumentException("--all is only valid with tools verify");
-                    }
-                    if (all) {
-                        throw new IllegalArgumentException("--all may only be specified once");
-                    }
-                    all = true;
-                    index++;
-                    continue;
-                }
-                if (!"--format".equals(option) || index + 1 >= arguments.length) {
-                    throw new IllegalArgumentException("unexpected tools option: " + option);
-                }
-                format = SymbolOutputFormat.parse(arguments[index + 1]);
-                index += 2;
+            CliOptions options = OPTIONS.parse(arguments, optionsFrom);
+            if (options.has("--all") && !"verify".equals(action)) {
+                throw new IllegalArgumentException("--all is only valid with tools verify");
             }
-            return new Parsed(action, provider, all, format);
+            return new Parsed(action, provider, options.has("--all"), options.format());
         }
     }
 }

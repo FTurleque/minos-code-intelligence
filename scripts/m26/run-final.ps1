@@ -80,10 +80,10 @@ try {
     Write-Host "Java: $JavaVersion"
 
     Write-Host '[1/7] M26 static, documentation and prior-milestone contracts...'
-    Invoke-PythonGate $Python 'scripts\m26\check-runtime-dynamic.py' 'M26 consistency gate failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-runtime-dynamic-consistency.py' 'M26 consistency gate failed'
     Invoke-PythonGate $Python 'scripts\docs\check-current-docs.py' 'Current documentation consistency failed'
-    Invoke-PythonGate $Python 'scripts\m25\check-remote-distributed.py' 'M25 regression gate failed'
-    Invoke-PythonGate $Python 'scripts\m24\check-polyglot.py' 'M24 regression gate failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-remote-distributed-consistency.py' 'M25 regression gate failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-polyglot-provider-consistency.py' 'M24 regression gate failed'
 
     Write-Host '[2/7] Full Java 24 Maven reactor...'
     Invoke-SemanticDisabled {
@@ -95,8 +95,8 @@ try {
     Invoke-PythonGate $Python 'scripts\quality\check-jacoco.py' 'M26 JaCoCo gate failed'
 
     Write-Host '[4/7] Historical provider and semantic regression contracts...'
-    Invoke-PythonGate $Python 'scripts\m22\check-provider.py' 'M22 provider regression failed'
-    Invoke-PythonGate $Python 'scripts\m23\check-semantic.py' 'M23 semantic regression failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-java-ast-provider-consistency.py' 'M22 provider regression failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-semantic-retrieval-consistency.py' 'M23 semantic regression failed'
 
     Write-Host '[5/7] Shaded CLI runtime import/correlation/storage/report e2e...'
     Invoke-SemanticDisabled {
@@ -106,7 +106,7 @@ try {
     }
 
     Write-Host '[6/7] Static, docs and detailed evidence recheck...'
-    Invoke-PythonGate $Python 'scripts\m26\check-runtime-dynamic.py' 'M26 consistency recheck failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-runtime-dynamic-consistency.py' 'M26 consistency recheck failed'
     Invoke-PythonGate $Python 'scripts\docs\check-current-docs.py' 'Documentation recheck failed'
     $Evidence = Get-Content 'target\m26\runtime-e2e-windows.json' -Raw | ConvertFrom-Json
     if ($Evidence.status -ne 'PASS' -or $Evidence.commit -ne $Head `

@@ -1,5 +1,7 @@
 package com.minos.domain;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Identité opaque conservée pour retrouver un objet dans un fournisseur externe.
  *
@@ -11,11 +13,5 @@ public record ProviderReference(String providerId, String externalId) {
     public ProviderReference {
         requireText(providerId, "providerId");
         requireText(externalId, "externalId");
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
     }
 }

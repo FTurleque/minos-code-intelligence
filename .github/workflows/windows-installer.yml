@@ -46,7 +46,8 @@ permissions:
 
 concurrency:
   group: windows-installer-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Never cancel a push-triggered run on develop/main: only a duplicate PR run is obsolete.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Cross the GitHub Actions -> PowerShell boundary only through env vars, never through direct
@@ -68,7 +69,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Java 24
-        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '24'
@@ -155,6 +156,12 @@ jobs:
             "target\dist\MINOS-$version-windows-x64-setup.exe.sha256",
             "target\dist\minos-$version-windows-x64.zip",
             "target\dist\minos-$version-windows-x64.zip.sha256",
+            "target\dist\minos-$version-windows-x64-lite.zip",
+            "target\dist\minos-$version-windows-x64-lite.zip.sha256",
+            "target\dist\minos-$version-lite.cdx.json",
+            "target\dist\minos-$version-lite.cdx.json.sha256",
+            "target\dist\MINOS-$version-lite-THIRD-PARTY-NOTICES.txt",
+            "target\dist\MINOS-$version-lite-THIRD-PARTY-NOTICES.txt.sha256",
             "target\dist\minos-$version.cdx.json",
             "target\dist\minos-$version.cdx.json.sha256",
             "target\dist\MINOS-$version-THIRD-PARTY-NOTICES.txt",
@@ -176,6 +183,8 @@ jobs:
             target/dist/MINOS-*-windows-x64-setup.exe.sha256
             target/dist/minos-*-windows-x64.zip
             target/dist/minos-*-windows-x64.zip.sha256
+            target/dist/minos-*-windows-x64-lite.zip
+            target/dist/minos-*-windows-x64-lite.zip.sha256
             target/dist/minos-*.cdx.json
             target/dist/minos-*.cdx.json.sha256
             target/dist/MINOS-*-THIRD-PARTY-NOTICES.txt

@@ -9,6 +9,8 @@ import com.minos.domain.SymbolLocation;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Provider-independent node in a reconstructible program graph. */
 public record ProgramGraphNode(
         String id,
@@ -36,12 +38,6 @@ public record ProgramGraphNode(
         }
         if (nature != InformationNature.FACTUAL && evidence.isEmpty()) {
             throw new IllegalArgumentException("derived or heuristic node requires evidence");
-        }
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
         }
     }
 }

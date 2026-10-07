@@ -22,6 +22,7 @@
         <dependency><groupId>com.minos</groupId><artifactId>minos-integration-git</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-application</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-storage-postgresql</artifactId><version>${project.version}</version></dependency>
+        <dependency><groupId>com.minos</groupId><artifactId>minos-bootstrap</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-nexus</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-cli</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-api</artifactId><version>${project.version}</version></dependency>

@@ -31,28 +31,31 @@
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
-            <artifactId>minos-integration-git</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-storage-local</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-provider-scip</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-runtime-local</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
             <artifactId>minos-nexus</artifactId>
             <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <!-- A2 / ADR 0042: composition root discovered by ServiceLoader behind MinosApplication.open; runtime only, never compile -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-bootstrap</artifactId>
+            <version>${project.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <!-- A1-3 / A2: test fixtures of the composition root (no public injection point in production) -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-bootstrap</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- Q13: LogCapture (com.minos.testsupport), one copy for the tests of every module; test scope adds no edge (compile edge to minos-engine already exists) -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-engine</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

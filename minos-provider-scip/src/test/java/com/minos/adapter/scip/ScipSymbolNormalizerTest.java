@@ -1,11 +1,14 @@
 package com.minos.adapter.scip;
 
 import com.minos.domain.PositionEncoding;
+import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
 import org.junit.jupiter.api.Test;
 import org.scip_code.scip.SymbolInformation;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -13,6 +16,11 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScipSymbolNormalizerTest {
+
+    private static final String PROJECT_ONE = "project-1";
+    private static final String JAVA_PROVIDER = "scip-java";
+    private static final String OTHER_PROVIDER = "scip-other";
+    private static final String RUN_ONE = "run-1";
 
     private final ScipSymbolNormalizer normalizer = new ScipSymbolNormalizer();
 
@@ -238,5 +246,48 @@ class ScipSymbolNormalizerTest {
                 "run-1",
                 false
         ).isEmpty());
+    }
+
+    /**
+     * Q9 : le seul producteur de symboles dérive l'identifiant de la clé ({@code id = sha256(projet, clé)}), donc
+     * deux symboles du même projet ont la même clé si et seulement s'ils ont le même identifiant. Un instantané
+     * refuse deux symboles de même identifiant : deux clés identiques n'arrivent jamais jusqu'à la fabrique
+     * sémantique (voir {@code SemanticDocumentKeysReachabilityTest}).
+     */
+    @Test
+    void theIdOfASymbolIsAFunctionOfItsKeyAndTheKeyOfItsIdentity() {
+        ScipSymbolFact fact = new ScipSymbolFact(
+                "scip-java maven example 1.0 io/example/UserService#", "UserService", SymbolInformation.Kind.Class,
+                "final class UserService", "", "src/main/java/io/example/UserService.java", "java", false);
+        ScipSymbolFact otherKind = new ScipSymbolFact(
+                fact.rawSymbol(), fact.displayName(), SymbolInformation.Kind.Interface, fact.signature(),
+                fact.enclosingRawSymbol(), fact.relativePath(), fact.language(), false);
+        ScipSymbolFact external = new ScipSymbolFact(
+                fact.rawSymbol(), fact.displayName(), SymbolInformation.Kind.Class, fact.signature(),
+                fact.enclosingRawSymbol(), "", fact.language(), true);
+        SymbolLocation location = new SymbolLocation("file", 8, 0, 40, 1, PositionEncoding.UTF16_CODE_UNITS);
+
+        List<Symbol> symbols = List.of(
+                normalizer.normalize(fact, PROJECT_ONE, null, "file", location, JAVA_PROVIDER, "1", RUN_ONE, false).orElseThrow(),
+                normalizer.normalize(fact, PROJECT_ONE, null, "file", location, OTHER_PROVIDER, "2", "run-2", false).orElseThrow(),
+                normalizer.normalize(otherKind, PROJECT_ONE, null, "file", location, JAVA_PROVIDER, "1", RUN_ONE, false).orElseThrow(),
+                normalizer.normalize(external, PROJECT_ONE, null, null, null, JAVA_PROVIDER, "1", RUN_ONE, false).orElseThrow(),
+                normalizer.normalize(external, PROJECT_ONE, null, null, null, OTHER_PROVIDER, "1", RUN_ONE, false).orElseThrow(),
+                normalizer.normalize(fact, "project-2", null, "file", location, JAVA_PROVIDER, "1", RUN_ONE, false).orElseThrow());
+
+        for (Symbol left : symbols) {
+            for (Symbol right : symbols) {
+                assertEquals(left.symbolKey().equals(right.symbolKey()), left.id().equals(right.id()),
+                        "same key if and only if same id: " + left.symbolKey() + " / " + right.symbolKey());
+            }
+        }
+    }
+
+    @Test
+    void aNullFactIsRefusedWithAMessageNotWithALaterNullPointer() {
+        org.junit.jupiter.api.Assertions.assertEquals("fact",
+                org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
+                        () -> normalizer.normalize(null, PROJECT_ONE, null, "file", null, JAVA_PROVIDER, "1", RUN_ONE, false))
+                        .getMessage());
     }
 }

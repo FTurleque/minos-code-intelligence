@@ -1,6 +1,5 @@
 package com.minos.application;
 
-import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.orchestration.IndexerProvider;
 import com.minos.orchestration.ProviderConformanceKit;
@@ -16,6 +15,10 @@ import java.util.stream.Collectors;
 /** Shared read-only provider/discovery platform view for CLI, API and MCP. */
 public final class ProviderPlatformService {
     private static final String REDACTED_DIAGNOSTIC = "internal diagnostic redacted";
+    /** The runtime state of a profile that was built without asking any runtime: never a state deduced blindly. */
+    public static final String RUNTIME_NOT_INSPECTED = "NOT_INSPECTED";
+    static final String NOT_INSPECTED_DIAGNOSTIC =
+            "runtime state is not inspected by the read-only MCP status; run `minos providers` or `minos doctor`";
 
     private final List<IndexerProvider> providers;
     private final ProviderRuntimeManager runtimes;
@@ -29,7 +32,7 @@ public final class ProviderPlatformService {
     /** Default provider platform bound to one already-composed application. */
     public static ProviderPlatformService defaults(MinosApplication application) {
         MinosApplication app = Objects.requireNonNull(application, "application");
-        return new ProviderPlatformService(ScipIndexerCatalog.qualifiedM24Providers(), app.providerRuntimeManager());
+        return new ProviderPlatformService(app.providerCatalog().providers(), app.providerRuntimeManager());
     }
 
     public List<ProviderView> listProviders() {
@@ -37,6 +40,19 @@ public final class ProviderPlatformService {
                 .collect(Collectors.toUnmodifiableMap(ProviderRuntimeStatus::providerId, Function.identity()));
         return providers.stream()
                 .map(provider -> view(provider, statuses.get(provider.descriptor().id())))
+                .sorted(java.util.Comparator.comparing(ProviderView::id))
+                .toList();
+    }
+
+    /**
+     * The provider profiles that need no runtime: conformance, capabilities and limitations come from the declared
+     * descriptors, and the runtime state is {@value #RUNTIME_NOT_INSPECTED}. It never lists, inspects or installs a
+     * runtime (no file written, no tree hashed, no process started), which is what a read-only surface needs;
+     * {@link #listProviders} is the call that inspects, for {@code providers}, {@code doctor} and the Java API.
+     */
+    public List<ProviderView> listStaticProfiles() {
+        return providers.stream()
+                .map(provider -> view(provider, RUNTIME_NOT_INSPECTED, List.of(NOT_INSPECTED_DIAGNOSTIC)))
                 .sorted(java.util.Comparator.comparing(ProviderView::id))
                 .toList();
     }
@@ -54,6 +70,12 @@ public final class ProviderPlatformService {
     }
 
     private ProviderView view(IndexerProvider provider, ProviderRuntimeStatus status) {
+        return view(provider,
+                status == null ? "UNMANAGED" : status.state().name(),
+                status == null ? List.of("no runtime manager registered") : publicDiagnostics(status.diagnostics()));
+    }
+
+    private ProviderView view(IndexerProvider provider, String runtimeState, List<String> runtimeDiagnostics) {
         ProviderConformanceKit.ConformanceResult result = conformanceKit.evaluate(provider);
         return new ProviderView(
                 result.providerId(),
@@ -71,8 +93,8 @@ public final class ProviderPlatformService {
                 result.installationBehavior(),
                 result.stableIdentityBehavior(),
                 result.provenanceBehavior(),
-                status == null ? "UNMANAGED" : status.state().name(),
-                status == null ? List.of("no runtime manager registered") : publicDiagnostics(status.diagnostics())
+                runtimeState,
+                runtimeDiagnostics
         );
     }
 
@@ -107,7 +129,7 @@ public final class ProviderPlatformService {
             if (qualification == null || qualification.isBlank()) throw new IllegalArgumentException("qualification must not be blank");
             languages = List.copyOf(Objects.requireNonNull(languages, "languages"));
             buildSystems = List.copyOf(Objects.requireNonNull(buildSystems, "buildSystems"));
-            capabilities = Map.copyOf(Objects.requireNonNull(capabilities, "capabilities"));
+            capabilities = ProviderConformanceKit.sortedCopy(Objects.requireNonNull(capabilities, "capabilities"));
             limitations = List.copyOf(Objects.requireNonNull(limitations, "limitations"));
             qualificationPlatforms = List.copyOf(Objects.requireNonNull(qualificationPlatforms, "qualificationPlatforms"));
             runtimeRequirements = List.copyOf(Objects.requireNonNull(runtimeRequirements, "runtimeRequirements"));

@@ -118,7 +118,7 @@ try {
     $Python = Resolve-Python
 
     Write-Host '[1/7] Checking M23 static contract and current documentation consistency...'
-    Invoke-PythonGate -Python $Python -Script 'scripts\m23\check-semantic.py' `
+    Invoke-PythonGate -Python $Python -Script 'scripts\quality\check-semantic-retrieval-consistency.py' `
         -Failure 'M23 semantic retrieval consistency gate failed'
     Invoke-PythonGate -Python $Python -Script 'scripts\docs\check-current-docs.py' `
         -Failure 'Current documentation consistency failed before M23 qualification'
@@ -134,9 +134,9 @@ try {
     }
 
     Write-Host '[4/7] Checking M22 provider regression and M23 contract after the core build...'
-    Invoke-PythonGate -Python $Python -Script 'scripts\m22\check-provider.py' `
+    Invoke-PythonGate -Python $Python -Script 'scripts\quality\check-java-ast-provider-consistency.py' `
         -Failure 'M22 provider regression gate failed on the M23 head'
-    Invoke-PythonGate -Python $Python -Script 'scripts\m23\check-semantic.py' `
+    Invoke-PythonGate -Python $Python -Script 'scripts\quality\check-semantic-retrieval-consistency.py' `
         -Failure 'M23 semantic retrieval consistency changed after the core build'
 
     Write-Host '[5/7] Replaying supply-chain and qualified Windows release validation with semantic opt-in isolated...'
@@ -154,9 +154,9 @@ try {
     Write-Host '[7/7] Rechecking learned quality, contracts, documentation, exact HEAD and clean worktree...'
     Invoke-PythonGate -Python $Python -Script 'scripts\m23\evaluate-learned-quality.py' `
         -Failure 'M23 learned semantic quality changed during qualification'
-    Invoke-PythonGate -Python $Python -Script 'scripts\m22\check-provider.py' `
+    Invoke-PythonGate -Python $Python -Script 'scripts\quality\check-java-ast-provider-consistency.py' `
         -Failure 'M22 provider regression recheck failed on the M23 head'
-    Invoke-PythonGate -Python $Python -Script 'scripts\m23\check-semantic.py' `
+    Invoke-PythonGate -Python $Python -Script 'scripts\quality\check-semantic-retrieval-consistency.py' `
         -Failure 'M23 semantic retrieval consistency recheck failed'
     Invoke-PythonGate -Python $Python -Script 'scripts\docs\check-current-docs.py' `
         -Failure 'Current documentation consistency changed during M23 qualification'

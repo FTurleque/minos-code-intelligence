@@ -1,9 +1,10 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
-import com.minos.runtime.IndexerProcessPlan;
-import com.minos.runtime.IndexerProcessPlanFactory;
+import com.minos.runtime.local.IndexerProcessPlan;
+import com.minos.runtime.local.IndexerProcessPlanFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -12,6 +13,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import static com.minos.domain.Preconditions.requireText;
 
 /** Shared fail-closed skeleton for executable-backed SCIP process plans. */
 abstract class AbstractScipProcessPlanFactory implements IndexerProcessPlanFactory {
@@ -40,7 +43,7 @@ abstract class AbstractScipProcessPlanFactory implements IndexerProcessPlanFacto
         }
         Path runRoot = Objects.requireNonNull(runDirectory, "runDirectory").toAbsolutePath().normalize();
         Path output = runRoot.resolve("index.scip");
-        Files.createDirectories(output.getParent());
+        PrivateLocalStorage.ensurePrivateDirectory(output.getParent());
         Map<String, String> environment = environment(request, root, runRoot, output);
         List<String> command = command(request, root, runRoot, output);
         return new IndexerProcessPlan(command, root, environment, output, timeout());
@@ -70,10 +73,5 @@ abstract class AbstractScipProcessPlanFactory implements IndexerProcessPlanFacto
 
     protected final Path executable() {
         return executable;
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
-        return value;
     }
 }

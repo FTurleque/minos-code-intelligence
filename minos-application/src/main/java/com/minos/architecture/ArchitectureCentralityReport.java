@@ -6,6 +6,8 @@ import com.minos.domain.InformationNature;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Rapport de classement relatif des modules, séparant centralité entrante et sortante.
  */
@@ -62,12 +64,6 @@ public record ArchitectureCentralityReport(
         evidence = List.copyOf(Objects.requireNonNull(evidence, "evidence"));
         if (evidence.isEmpty()) {
             throw new IllegalArgumentException("architecture centrality report requires evidence");
-        }
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
         }
     }
 

@@ -51,9 +51,9 @@ echo "Java: $JAVA_VERSION"
 echo "Go: $GO_VERSION"
 
 echo '[1/7] M25 static, documentation and M24 regression contracts...'
-"$PYTHON" scripts/m25/check-remote-distributed.py
+"$PYTHON" scripts/quality/check-remote-distributed-consistency.py
 "$PYTHON" scripts/docs/check-current-docs.py
-"$PYTHON" scripts/m24/check-polyglot.py
+"$PYTHON" scripts/quality/check-polyglot-provider-consistency.py
 
 echo '[2/7] Full Java 24 Maven reactor...'
 run_semantic_disabled ./mvnw clean verify
@@ -62,15 +62,15 @@ echo '[3/7] JaCoCo including M25 scope...'
 "$PYTHON" scripts/quality/check-jacoco.py
 
 echo '[4/7] Historical capability/provider regressions...'
-"$PYTHON" scripts/m22/check-provider.py
-"$PYTHON" scripts/m23/check-semantic.py
+"$PYTHON" scripts/quality/check-java-ast-provider-consistency.py
+"$PYTHON" scripts/quality/check-semantic-retrieval-consistency.py
 
 echo '[5/7] Real GitHub exact-revision/cache/worker/artifact/snapshot e2e...'
 run_semantic_disabled "$PYTHON" scripts/m25/run-remote-e2e.py \
   --expected-head "$HEAD_SHA" --output target/m25/remote-e2e-linux.json
 
 echo '[6/7] Static, docs and detailed evidence recheck...'
-"$PYTHON" scripts/m25/check-remote-distributed.py
+"$PYTHON" scripts/quality/check-remote-distributed-consistency.py
 "$PYTHON" scripts/docs/check-current-docs.py
 "$PYTHON" - "$HEAD_SHA" <<'PY'
 import json

@@ -2,9 +2,9 @@
 
 Ce guide décrit le parcours utilisateur de MINOS sous Windows.
 
-Le parcours normal ne nécessite **ni clone Git, ni Maven, ni JDK pour exécuter MINOS** : la distribution Windows contient son propre runtime Java. Les toolchains d'un projet analysé peuvent en revanche rester nécessaires à ses providers.
+Le parcours normal ne nécessite **ni clone Git, ni Maven, ni JDK pour exécuter MINOS** : la distribution Windows contient son propre runtime Java, **et les indexeurs de MINOS** (voir §2 bis) : après l'installation, aucune commande `tools install` n'est à lancer, y compris sur un poste neuf sans réseau. Ce que la distribution ne contient pas, c'est la toolchain du **projet analysé** (JDK, Git Bash, Go, SDK .NET…) : elle appartient au poste de développement, MINOS la détecte et la nomme (`minos.cmd doctor`) sans l'installer. Voir l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md).
 
-> État au **10 août 2026** : `v1.0.0` et `v1.0.1` sont **publiées et immuables**. `v1.0.1` a été publiée le **9 août 2026** après qualification Windows/Linux, PostgreSQL/pgvector, MCP, IntelliJ, installateur et supply-chain. L'issue #98 de sandbox worker OS réelle est fermée/completed et qualifiée Linux + Windows.
+> État au **10 août 2026** : `v1.0.0` et `v1.0.1` sont **publiées et immuables**. `v1.0.1` a été publiée le **9 août 2026** après qualification Windows/Linux, PostgreSQL/pgvector, MCP, IntelliJ, installateur et supply-chain. L'issue #98 (sandbox worker OS réelle) est fermée sur le plan des primitives Linux/Windows, mais la qualification pour du code non fiable reste refusée : `remote index` est fail-closed sur tous les OS (voir le constat A1 de [`../audit/AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md)).
 
 ## 1. Parcours recommandé
 
@@ -70,6 +70,40 @@ Get-Content ".\MINOS-$Version-windows-x64-setup.exe.sha256"
 ```
 
 Les empreintes doivent être identiques. Ne pas exécuter un setup dont le hash ne correspond pas.
+
+La release publie en plus la variante **lite** du ZIP (voir §2 bis) :
+
+```text
+minos-<version>-windows-x64-lite.zip
+minos-<version>-windows-x64-lite.zip.sha256
+minos-<version>-lite.cdx.json
+minos-<version>-lite.cdx.json.sha256
+MINOS-<version>-lite-THIRD-PARTY-NOTICES.txt
+MINOS-<version>-lite-THIRD-PARTY-NOTICES.txt.sha256
+```
+
+## 2 bis. Variantes, outils embarqués et prérequis du poste
+
+| Variante | Contenu | Taille du ZIP (mesure du 2026-10-02) | Usage |
+|---|---|---|---|
+| **Complète** (`minos-<version>-windows-x64.zip` et le setup) | MINOS, son runtime Java et le répertoire `tools\` : les indexeurs **scip-java** (Coursier, Apache Maven, classpath de scip-java) et **scip-typescript** (Node.js, paquets) | environ 220 Mio (67 Mio sans les outils, 154 Mio d'outils) | recommandée : poste neuf, poste sans réseau, rien à installer |
+| **Lite** (`minos-<version>-windows-x64-lite.zip`) | la même chose sans `tools\` | 67 Mio | poste qui gère ses propres outils, ou place limitée ; `minos.cmd tools install <provider>` installe un outil à la demande (réseau requis) |
+
+Les outils de la variante complète sont décrits par `tools\TOOLS-MANIFEST.json` (identifiant, version, empreinte SHA-256, taille, licence, origine). Au premier usage (`doctor`, `tools verify`, `index`…), MINOS les copie vers `MINOS_HOME\tools` **après avoir comparé leur SHA-256 à celui du catalogue embarqué dans le JAR** (`embedded-tools.json`, la même description que celle de l'image Docker) : un outil altéré, supprimé ou remplacé par un lien est refusé (`INVALID`, avec la consigne de réinstaller le paquet), jamais remplacé en silence par un téléchargement. La garantie d'intégrité s'exerce à l'**amorçage** ; ensuite seuls les deux arbres assemblés (`node_modules` de scip-typescript, classpath de scip-java) sont revérifiés à chaque inspection (empreinte, marqueur d'origine, absence de lien ou de point de réanalyse), les artefacts épinglés extraits (Coursier, Maven, Node) ne le sont pas. Le répertoire d'installation reste en lecture seule ; rien ne s'exécute depuis lui. Deux composants (le `node_modules` de scip-typescript et le classpath de scip-java) sont assemblés à la construction : aucun amont n'en épingle les octets, leur empreinte est celle du manifeste du paquet signé, plus faible qu'un artefact épinglé ; elles sont vérifiées à l'amorçage et à chaque inspection.
+
+`MINOS_TOOLS_OFFLINE=1` interdit tout téléchargement des outils. Pour un outil livré, `minos.cmd tools install <provider>` ne télécharge rien de nouveau : il réutilise la charge embarquée si elle est saine (pour obtenir des versions plus récentes des outils, installer un MINOS plus récent) ; il sert aux providers non livrés. Le répertoire de la charge se déduit du lanceur (`<installation>\tools`) ; la variable `MINOS_EMBEDDED_TOOLS_DIR` (et la propriété `minos.embedded.tools`) le remplace pour les tests et l'image Docker : elle relève de l'environnement de l'utilisateur, sans frontière de privilège, et chaque artefact épinglé reste comparé au SHA-256 du catalogue, quel que soit le répertoire. Les archives conservées sous `MINOS_HOME\tools` et les anciennes versions d'outils ne sont pas nettoyées automatiquement (voir « à traiter plus tard »).
+
+**Ce que le poste doit avoir** (jamais installé par MINOS) :
+
+| Langage du projet | Prérequis du poste |
+|---|---|
+| TypeScript | rien d'autre : le critère « machine neuve, sans réseau » est rempli tel quel |
+| Java (Maven) | un **JDK complet** (`JAVA_HOME` pointant sur un JDK avec `javac` et `jar` ; le runtime embarqué de MINOS n'en tient pas lieu), **Git for Windows** (`Git\bin\bash.exe`), **Windows PowerShell 5.1** et `csc.exe` (tous deux fournis par Windows). Le build Maven du projet résout ses propres greffons et dépendances : sans réseau, elles doivent déjà être dans `~/.m2` |
+| Go, C#, Rust, C/C++, Python | Go, SDK .NET 10, cargo, toolchain C++ et Python 3.10+ ; ces indexeurs (scip-go, scip-dotnet, scip-clang, rust-analyzer, scip-python) ne sont pas embarqués (pas de binaire Windows amont, ou toolchain du poste requise) et restent installables comme avant |
+
+`minos.cmd doctor` et `minos.cmd tools verify` nomment ce qui manque : un diagnostic préfixé `machine prerequisite (not shipped by MINOS)` est une dépendance externe, `tools origin: …=embedded` ou `=downloaded` dit d'où vient chaque outil géré. Les licences et les mentions obligatoires sont dans `supply-chain\THIRD-PARTY-NOTICES.txt` (dont l'offre de sources pour les composants EPL, CDDL et GPL avec exception classpath embarqués avec le classpath de scip-java ; le dépôt `coursier/launchers`, d'où vient `cs.exe`, ne porte pas de fichier LICENSE propre : la licence est celle du projet coursier, Apache-2.0).
+
+**Mise à jour** : `integration\update-installation.ps1` traite `tools\` comme le reste du payload (copie en staging, bascule, rollback). Installer le ZIP lite sur une installation complète **supprime** l'ancien `tools\` géré (sauvegardé, restauré si l'activation échoue) ; les outils déjà amorcés sous `MINOS_HOME\tools` ne sont pas touchés.
 
 ## 3. Programme et données
 
@@ -184,7 +218,7 @@ Le backend PostgreSQL est réel et utilise pgvector pour le stockage/retrieval v
 - avec runtime natif : le wizard demande une URL JDBC, un utilisateur, un secret et un schéma ; la base est externe au setup ;
 - avec runtime Docker : MINOS peut gérer PostgreSQL/pgvector dans le stack Docker et un volume persistant dédié.
 
-Pour une base PostgreSQL **externe non-loopback**, l'URL JDBC doit utiliser `sslmode=verify-full`. Les credentials et secrets sont refusés dans l'URL JDBC et restent fournis séparément ; le secret peut être importé depuis un fichier dédié dont la lecture est bornée. Le PostgreSQL Docker géré par MINOS est explicitement identifié comme interne au runtime et n'est pas soumis à cette règle TLS externe.
+Pour une base PostgreSQL **externe non-loopback**, l'URL JDBC doit utiliser `sslmode=verify-full`. Le **nom** du paramètre doit être `sslmode`, exactement, en minuscules et sans encodage : le pilote JDBC ne reconnaît que cette clé et ignorerait `SSLMODE` ou `ssl%6Dode`, retombant sur un TLS opportuniste sans vérification de certificat ; MINOS refuse donc ces URL (`PostgresUrl contains unsupported parameter`) au lieu de les accepter. La **valeur** est insensible à la casse (`VERIFY-FULL`). Le bouclage IPv6 `[::1]` (ou `[0:0:0:0:0:0:0:1]`) est reconnu comme bouclage ; toute autre forme IPv6 (adresse mappée IPv4 comme `[::ffff:127.0.0.1]`, forme abrégée comme `[0::1]`) est traitée comme externe et exige `sslmode=verify-full`. Les credentials et secrets sont refusés dans l'URL JDBC et restent fournis séparément ; le secret peut être importé depuis un fichier dédié dont la lecture est bornée. Le PostgreSQL Docker géré par MINOS est explicitement identifié comme interne au runtime et n'est pas soumis à cette règle TLS externe.
 
 Il n'existe pas de fallback silencieux PostgreSQL→local.
 

@@ -1,5 +1,6 @@
 package com.minos.orchestration;
 
+import com.minos.discovery.ModuleAssignmentRule;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.ExecutionPathIdentityProvider.IdentityPair;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
@@ -23,6 +24,18 @@ public final class IndexingRuntimePorts {
         String indexerId();
 
         IndexingArtifact execute(IndexingExecutionRequest request) throws Exception;
+
+        /**
+         * Whether the artifact this executor returns is written by MINOS under the run directory
+         * ({@code runs/<runId>/}). When it is, the orchestrator confines it there physically, reaching it
+         * through no link at any level of its path, before any checkpoint and again before staging (Q5).
+         * An executor whose artifacts live in a
+         * store of their own that it verifies itself, such as the distributed executor with its verified
+         * bundle cache, answers {@code false}.
+         */
+        default boolean artifactsLiveInRunDirectory() {
+            return true;
+        }
     }
 
     public interface SnapshotStager {
@@ -119,6 +132,8 @@ public final class IndexingRuntimePorts {
             }
         }
 
+        private static final System.Logger LOGGER = System.getLogger(ExecutionPathAuthorization.class.getName());
+
         public static Optional<ExecutionPathAuthorization> tryCapture(
                 Path registeredProjectRoot,
                 Path projectRoot
@@ -146,6 +161,12 @@ public final class IndexingRuntimePorts {
                 // Some protocol/contract tests intentionally construct requests for paths that are
                 // not materialized. Local process execution rejects an absent authorization before
                 // launch; non-process ports can continue to use the historical request contract.
+                // The cause is journaled because the launch refusal carries none (class only: no path,
+                // no exception message).
+                LOGGER.log(System.Logger.Level.WARNING,
+                        "MINOS could not capture the canonical identity of the provider execution roots; "
+                                + "a launch through the local process runtime will be refused: "
+                                + unavailable.getClass().getSimpleName());
                 return Optional.empty();
             }
         }
@@ -343,10 +364,16 @@ public final class IndexingRuntimePorts {
         }
     }
 
+    /**
+     * Demande de mise en scène d'un snapshot de projet. {@code moduleAssignment} est la règle qui rattache un
+     * fichier au module découvert qui le contient (MINOS-AUD-F04) : vide quand l'indexation n'a pas de découverte,
+     * auquel cas les symboles restent sans module.
+     */
     public record IndexSnapshotStageRequest(
             UUID runId,
             UUID projectId,
-            List<IndexingArtifact> artifacts
+            List<IndexingArtifact> artifacts,
+            ModuleAssignmentRule moduleAssignment
     ) {
         public IndexSnapshotStageRequest {
             Objects.requireNonNull(runId, "runId");
@@ -355,6 +382,12 @@ public final class IndexingRuntimePorts {
             if (artifacts.isEmpty()) {
                 throw new IllegalArgumentException("artifacts must not be empty");
             }
+            moduleAssignment = moduleAssignment == null ? ModuleAssignmentRule.none() : moduleAssignment;
+        }
+
+        /** Compatibility constructor: no module attribution. */
+        public IndexSnapshotStageRequest(UUID runId, UUID projectId, List<IndexingArtifact> artifacts) {
+            this(runId, projectId, artifacts, ModuleAssignmentRule.none());
         }
     }
 }

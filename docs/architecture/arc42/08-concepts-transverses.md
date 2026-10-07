@@ -3,8 +3,8 @@
 > Preuves : ADR-0001, ADR-0006, ADR-0008, ADR-0010, ADR-0014, ADR-0015, ADR-0017,
 > ADR-0023, ADR-0024, ADR-0029, ADR-0035, ADR-0037,
 > `minos-domain/src/main/java/com/minos/domain/Evidence.java`,
-> `minos-storage-local/src/main/java/com/minos/store/SnapshotIntegrityService.java`,
-> `minos-application/src/main/java/com/minos/semantic/EmbeddingProvider.java`.
+> `minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotIntegrityService.java`,
+> `minos-application/src/main/java/com/minos/application/semantic/EmbeddingProvider.java`.
 
 ---
 
@@ -56,7 +56,7 @@
 - Les services retournent des types portant les limitations et le `ResolutionStatus` (non des exceptions de bas niveau).
 - `ImpactAnalysisReport` porte une liste de `ImpactLimitation` explicites.
 - `IndexerNegotiationResult` indique les capacités absentes ou partielles.
-- En CLI, les exit codes sont : 0 = succès, 1 = erreur d'exécution, 2 = erreur d'usage.
+- En CLI, les exit codes sont : 0 = succès, 1 = erreur d'exécution, 2 = erreur d'usage, 3 = résultat partiel (un seul sens pour toutes les commandes : `project list` et la résolution par nom de `inspect`, `project inspect` et `index-status`, quand des entrées du registre sont illisibles, comptées et affichées ; voir `docs/user/cli.md`).
 - En MCP, les erreurs sont des réponses JSON-RPC d'erreur, pas des panics.
 
 ---

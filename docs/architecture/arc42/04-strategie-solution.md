@@ -34,11 +34,13 @@ minos-storage-local   ← implémentations de persistance locale (fichiers, mém
 minos-provider-scip   ← adapter SCIP : ingestion et lifecycle providers Java/TS/polyglot
 minos-integration-git ← adapter Git (JGit)
 minos-application     ← services applicatifs partagés (architecture, impact, recherche…)
+minos-storage-postgresql ← backend PostgreSQL / pgvector (optionnel)
+minos-bootstrap       ← racine de composition : câble les adaptateurs derrière les ports (ADR-0042)
 minos-nexus           ← adapter NEXUS (contrat JSON export)
 minos-cli             ← surface CLI stable
 minos-api             ← surface API Java publique versionnée
 minos-mcp             ← surface MCP STDIO (SDK Java MCP)
-minos-app             ← composition root et artefact distribué (shaded JAR)
+minos-app             ← assemblage final distribué (lanceur, JAR ombré, backends optionnels)
 ```
 
 La direction des dépendances est strictement ascendante : les couches basses ignorent les couches hautes.

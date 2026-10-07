@@ -1,7 +1,8 @@
 package com.minos.cli;
 
 import com.minos.output.SymbolOutputFormat;
-import com.minos.semantic.SemanticIndexService;
+import com.minos.registry.UnreadableRegistryException;
+import com.minos.application.semantic.SemanticIndexService;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,6 +26,8 @@ final class RetrievalStatusCommand {
         SemanticIndexService.Status status(String projectReference) throws IOException;
     }
 
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--format").operands(1);
+
     private final Mode mode;
     private final StatusReader statusReader;
 
@@ -41,11 +44,11 @@ final class RetrievalStatusCommand {
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
-        if (arguments.length == 1 && isHelp(arguments[0])) {
+        if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(usage(mode)).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
-        if (arguments.length == 2 && "status".equals(arguments[0]) && isHelp(arguments[1])) {
+        if (arguments.length == 2 && "status".equals(arguments[0]) && CliCommandSupport.isHelp(arguments[1])) {
             output.append(usage(mode)).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
@@ -63,7 +66,9 @@ final class RetrievalStatusCommand {
             SemanticIndexService.Status status = statusReader.status(options.projectReference());
             output.append(render(status, mode, options.format())).append('\n');
             return FindSymbolCommand.SUCCESS;
-        } catch (RuntimeException exception) {
+        } catch (LazyApplication.OpenFailure openFailure) {
+            throw openFailure;
+        } catch (UnreadableRegistryException | RuntimeException exception) {
             error.append("error: ").append(mode.commandName()).append(" status failed: ")
                     .append(CliCommandSupport.failureMessage(exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
@@ -120,39 +125,16 @@ final class RetrievalStatusCommand {
         return List.copyOf(limitations);
     }
 
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
-    }
-
     private record Options(String projectReference, SymbolOutputFormat format) {
         static Options parse(String[] arguments) {
             if (arguments.length < 2 || !"status".equals(arguments[0])) {
                 throw new IllegalArgumentException("status and a project reference are required");
             }
-            String project = null;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            int i = 1;
-            while (i < arguments.length) {
-                String argument = arguments[i];
-                if ("--format".equals(argument)) {
-                    i++;
-                    if (i >= arguments.length) throw new IllegalArgumentException("--format requires a value");
-                    format = switch (arguments[i].toLowerCase()) {
-                        case "text" -> SymbolOutputFormat.TEXT;
-                        case "json" -> SymbolOutputFormat.JSON;
-                        default -> throw new IllegalArgumentException("unsupported format: " + arguments[i]);
-                    };
-                } else if (argument.startsWith("--")) {
-                    throw new IllegalArgumentException("unknown option: " + argument);
-                } else if (project == null) {
-                    project = argument;
-                } else {
-                    throw new IllegalArgumentException("unexpected argument: " + argument);
-                }
-                i++;
+            CliOptions options = OPTIONS.parse(arguments, 1);
+            if (options.operands().isEmpty()) {
+                throw new IllegalArgumentException("project reference is required");
             }
-            if (project == null || project.isBlank()) throw new IllegalArgumentException("project reference is required");
-            return new Options(project, format);
+            return new Options(options.operands().getFirst(), options.format());
         }
     }
 }

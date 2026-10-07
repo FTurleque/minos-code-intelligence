@@ -83,7 +83,7 @@ Un backend distant futur implémente `Worker`. Pour annoncer `DENY`, `enforcesNe
 
 ```powershell
 .\mvnw.cmd -pl minos-integration-git,minos-cli -am test
-python scripts/m25/check-remote-distributed.py
+python scripts/quality/check-remote-distributed-consistency.py
 python scripts/docs/check-current-docs.py
 ```
 

@@ -176,6 +176,8 @@ if (-not $PublishOnly) {
     if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) { $InstallerParameters['RequiredIsccVersion'] = $RequiredIsccVersion }
     if (-not $SkipBuild) {
         Invoke-PowerShellScriptChecked -Script $BuildDistribution -Parameters @{ Version=$Version } -Failure 'Windows release distribution build failed'
+        # The lite variant (same package without tools\) reuses the full build's JAR and SBOM: no second `mvnw clean`.
+        Invoke-PowerShellScriptChecked -Script $BuildDistribution -Parameters @{ Version=$Version; Variant='lite'; ReuseBuild=$true } -Failure 'Windows lite distribution build failed'
         Invoke-PowerShellScriptChecked -Script $BuildInstaller -Parameters $InstallerParameters -Failure 'Windows release setup build failed'
     }
     # Always compile a non-shippable setup with a distinct AppId for automated install/uninstall smoke.
@@ -194,14 +196,22 @@ $Sbom = Join-Path $RepoRoot "target\dist\minos-$Version.cdx.json"
 $SbomChecksum = "$Sbom.sha256"
 $Notices = Join-Path $RepoRoot "target\dist\MINOS-$Version-THIRD-PARTY-NOTICES.txt"
 $NoticesChecksum = "$Notices.sha256"
+# Lite variant: the same package without tools\, published next to the full one.
+$LiteDistributionName = "minos-$Version-windows-x64-lite"
+$LiteZip = Join-Path $RepoRoot "target\dist\$LiteDistributionName.zip"
+$LiteZipChecksum = "$LiteZip.sha256"
+$LiteSbom = Join-Path $RepoRoot "target\dist\minos-$Version-lite.cdx.json"
+$LiteSbomChecksum = "$LiteSbom.sha256"
+$LiteNotices = Join-Path $RepoRoot "target\dist\MINOS-$Version-lite-THIRD-PARTY-NOTICES.txt"
+$LiteNoticesChecksum = "$LiteNotices.sha256"
 $RequiredInstalledFiles = @(
     'minos.cmd','minos-mcp.cmd','VERSION','RUNTIME-MODULES.txt','RELEASE-MANIFEST.json','install.ps1',
     'app\minos.exe','app\runtime\bin\java.exe','app\runtime\bin\server\jvm.dll','app\runtime\lib\modules',
-    'lib\minos.jar','supply-chain\minos.cdx.json','supply-chain\THIRD-PARTY-NOTICES.txt',
+    'lib\minos.jar','supply-chain\minos.cdx.json','supply-chain\THIRD-PARTY-NOTICES.txt','tools\TOOLS-MANIFEST.json',
     'integration\configure-mcp-clients.ps1','integration\configure-mcp-clients-setup.ps1',
     'integration\configure-codex-mcp.ps1','integration\detect-mcp-clients.ps1','integration\uninstall-mcp-clients.ps1',
     'integration\update-installation.ps1','integration\switch-mcp-backend.ps1','integration\probe-mcp-backend.ps1',
-    'docker\Dockerfile.mcp.release','docker\compose.mcp.prod.yaml',
+    'docker\Dockerfile.mcp.release','docker\compose-mcp.prod.yaml',
     'docker\scripts\prod-mcp-release.ps1','docker\scripts\mcp-lifecycle.ps1','docker\scripts\configure-docker-mcp.ps1'
 )
 
@@ -209,6 +219,9 @@ $ZipHash = Verify-Sha256 $Zip $ZipChecksum
 $SetupHash = Verify-Sha256 $Setup $SetupChecksum
 $SbomHash = Verify-Sha256 $Sbom $SbomChecksum
 $NoticesHash = Verify-Sha256 $Notices $NoticesChecksum
+$LiteZipHash = Verify-Sha256 $LiteZip $LiteZipChecksum
+$LiteSbomHash = Verify-Sha256 $LiteSbom $LiteSbomChecksum
+$LiteNoticesHash = Verify-Sha256 $LiteNotices $LiteNoticesChecksum
 
 if (-not $PublishOnly) {
     if (-not (Test-Path -LiteralPath $SmokeSetup -PathType Leaf)) { throw "Isolated smoke setup missing: $SmokeSetup" }
@@ -238,6 +251,22 @@ if (-not $PublishOnly) {
         Invoke-McpHandshake $InstalledMinos (Join-Path $ZipSmokeRoot 'mcp-home') 'Portable installation'
     }
     finally { Remove-Item -LiteralPath $ZipSmokeRoot -Recurse -Force -ErrorAction SilentlyContinue }
+
+    # LITE ZIP: installs through its own portable installer, runs, and ships no tools\ directory.
+    $LiteSmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-release-lite-smoke-' + [Guid]::NewGuid())
+    try {
+        $LiteExtractRoot = Join-Path $LiteSmokeRoot 'package'
+        $LiteInstallRoot = Join-Path $LiteSmokeRoot 'installed'
+        New-Item -ItemType Directory -Force -Path $LiteExtractRoot | Out-Null
+        Expand-Archive -LiteralPath $LiteZip -DestinationPath $LiteExtractRoot -Force
+        $LitePackagedRoot = Join-Path $LiteExtractRoot $LiteDistributionName
+        Assert-VersionProvenance (Join-Path $LitePackagedRoot 'VERSION') $Version $TargetCommit 'Lite ZIP'
+        Invoke-PowerShellScriptChecked -Script (Join-Path $LitePackagedRoot 'install.ps1') -Parameters @{ Package=$LiteZip; InstallRoot=$LiteInstallRoot } -Failure 'Packaged lite portable installer smoke test failed'
+        if (Test-Path -LiteralPath (Join-Path $LiteInstallRoot 'tools')) { throw 'The lite installation contains a tools directory.' }
+        $LiteVersionOutput = Invoke-MinosVersion (Join-Path $LiteInstallRoot 'minos.cmd') 'Lite MINOS --version failed'
+        if ($LiteVersionOutput -ne "MINOS $Version") { throw "Lite MINOS version mismatch: expected='MINOS $Version' actual='$LiteVersionOutput'" }
+    }
+    finally { Remove-Item -LiteralPath $LiteSmokeRoot -Recurse -Force -ErrorAction SilentlyContinue }
 
     # Setup: automated install/uninstall uses ONLY the isolated smoke setup. It has a
     # different AppId and skips all global cleanup hooks, so local validation cannot
@@ -314,6 +343,7 @@ if ($ExistingTag.Count -gt 0) { throw "Git tag $Tag already exists on origin wit
 
 $ReleaseArguments = @(
     'release','create',$Tag,$Setup,$SetupChecksum,$Zip,$ZipChecksum,$Sbom,$SbomChecksum,$Notices,$NoticesChecksum,
+    $LiteZip,$LiteZipChecksum,$LiteSbom,$LiteSbomChecksum,$LiteNotices,$LiteNoticesChecksum,
     '--repo',$Repository,'--target',$TargetCommit,'--title',"MINOS $Version",'--generate-notes'
 )
 if ($Version -match '-') { $ReleaseArguments += '--prerelease' }
@@ -326,6 +356,7 @@ Write-Host "Tag           : $Tag"
 Write-Host "Commit        : $TargetCommit"
 Write-Host "Setup SHA-256 : $SetupHash"
 Write-Host "ZIP SHA-256   : $ZipHash"
+Write-Host "Lite ZIP SHA  : $LiteZipHash"
 Write-Host "MCP handshake : PASS (ZIP + isolated setup)"
 Write-Host "SBOM SHA-256  : $SbomHash"
 Write-Host "Notices SHA   : $NoticesHash"

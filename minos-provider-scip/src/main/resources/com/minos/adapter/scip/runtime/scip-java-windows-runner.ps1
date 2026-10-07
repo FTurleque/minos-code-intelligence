@@ -5,7 +5,10 @@ param(
     [Parameter(Mandatory = $true)][string] $Coordinate,
     [Parameter(Mandatory = $true)][ValidateSet('JAVA', 'KOTLIN')][string] $Language,
     [Parameter(Mandatory = $true)][string] $OutputDirectory,
-    [Parameter(Mandatory = $true)][string] $MavenCommand
+    [Parameter(Mandatory = $true)][string] $MavenCommand,
+    # Pre-resolved classpath shipped with the MINOS distribution: one jar per line, relative to the file.
+    # When given, Coursier is not asked for anything, so the run needs neither the network nor a writable cache.
+    [string] $ClasspathFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -217,6 +220,18 @@ internal static class ScipJavacCommandShim
     return [pscustomobject]@{ Maven = $mavenExe; Javac = $javacExe }
 }
 
+function Read-ShippedClasspath {
+    param([Parameter(Mandatory = $true)][string] $File)
+    $root = Split-Path -Parent (Resolve-Path -LiteralPath $File).Path
+    $entries = @(Get-Content -LiteralPath $File | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object {
+        $jar = Join-Path $root $_.Trim()
+        if (-not (Test-Path -LiteralPath $jar -PathType Leaf)) { throw "Shipped scip-java classpath entry is missing: $_" }
+        $jar
+    })
+    if ($entries.Count -eq 0) { throw "Shipped scip-java classpath is empty: $File" }
+    return ($entries -join [System.IO.Path]::PathSeparator)
+}
+
 function Resolve-ScipJavaClasspath {
     param([string] $Coursier, [string] $ScipCoordinate)
     $lines = & $Coursier fetch --classpath $ScipCoordinate 2>&1
@@ -361,7 +376,12 @@ $maven = Resolve-MavenCommand -Explicit $MavenCommand
 $bash = Resolve-GitBash
 $csc = Resolve-CSharpCompiler
 $shims = Install-CommandShims -DestinationDirectory (Join-Path $workRoot 'command-shims') -Compiler $csc
-$classpath = Resolve-ScipJavaClasspath -Coursier $coursier -ScipCoordinate $Coordinate
+$classpath = if (-not [string]::IsNullOrWhiteSpace($ClasspathFile)) {
+    Read-ShippedClasspath -File $ClasspathFile
+}
+else {
+    Resolve-ScipJavaClasspath -Coursier $coursier -ScipCoordinate $Coordinate
+}
 $patch = Build-WindowsPatch -Classpath $classpath -WorkRoot $workRoot -Javac $javac -Jar $jar
 
 $generated = Join-Path $project 'index.scip'

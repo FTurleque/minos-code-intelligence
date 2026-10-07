@@ -1,6 +1,7 @@
 package com.minos.api;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.ProjectResolver;
 import com.minos.api.MinosApi.ErrorCode;
 import com.minos.api.MinosApi.MinosApiException;
 import com.minos.diagnostics.PublicErrorMessages;
@@ -64,6 +65,8 @@ final class MinosApiSupport {
             throw publicFailure(ErrorCode.ACCESS_DENIED, exception);
         } catch (AccessDeniedException exception) {
             throw publicFailure(ErrorCode.ACCESS_DENIED, exception);
+        } catch (ProjectResolver.ResolutionException exception) {
+            throw publicFailure(ErrorCode.INVALID_REQUEST, exception.publicMessage(), exception);
         } catch (IllegalArgumentException exception) {
             throw publicFailure(ErrorCode.INVALID_REQUEST, exception);
         } catch (IllegalStateException exception) {
@@ -75,11 +78,37 @@ final class MinosApiSupport {
         }
     }
 
+    @FunctionalInterface
+    interface ApplicationOpener {
+        MinosApplication open(Path home) throws IOException;
+    }
+
     static MinosApplication openApplication(Path home, String bootstrapFailureMessage) throws MinosApiException {
+        return openApplication(home, bootstrapFailureMessage, MinosApplication::open);
+    }
+
+    /**
+     * Opens the application and translates whatever the opening throws into the published error taxonomy, as
+     * {@link #execute} does for every call: an I/O failure keeps the facade's bootstrap message, a bad
+     * configuration value is an invalid request, an unavailable composition is {@link ErrorCode#UNAVAILABLE}, and
+     * anything else an execution failure. The message is redacted and no cause is attached. What was partially
+     * opened is closed by the opening itself.
+     */
+    static MinosApplication openApplication(
+            Path home,
+            String bootstrapFailureMessage,
+            ApplicationOpener opener
+    ) throws MinosApiException {
         try {
-            return MinosApplication.open(Objects.requireNonNull(home, "home"));
+            return opener.open(Objects.requireNonNull(home, "home"));
         } catch (IOException exception) {
             throw publicFailure(ErrorCode.IO_FAILURE, bootstrapFailureMessage, exception);
+        } catch (IllegalArgumentException exception) {
+            throw publicFailure(ErrorCode.INVALID_REQUEST, exception);
+        } catch (IllegalStateException exception) {
+            throw publicFailure(ErrorCode.UNAVAILABLE, exception);
+        } catch (RuntimeException exception) {
+            throw publicFailure(ErrorCode.EXECUTION_FAILURE, exception);
         }
     }
 

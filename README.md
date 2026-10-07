@@ -10,12 +10,15 @@ MINOS est **local-first**, multi-langages, indépendant des fournisseurs d'IA et
 C0 → M30                         ✅ terminés / intégrés
 MINOS 1.0.0                      ✅ publiée le 1er août 2026 / immuable
 MINOS 1.0.1                      ✅ publiée le 9 août 2026 / immuable
+MINOS 1.1.0                      ✅ publiée le 27 août 2026 / immuable
+MINOS 1.2.0                      ✅ publiée le 31 août 2026 / immuable
+ligne de développement           1.3.0-SNAPSHOT (aucune release 1.3.0 publiée)
 M29 #107                         ✅ CLOSED / PR #108 merged
 M30                              ✅ PR #110 + promotion #111 merged
 hardening #113/#117              ✅ merged
 readiness 1.0.1 #118/#119        ✅ merged / qualifiée
 correctifs installateur #122–127 ✅ merged / qualifiés
-#98 sandbox OS worker réelle     ✅ CLOSED / qualifiée Linux + Windows
+#98 sandbox OS worker réelle     ✅ CLOSED / primitives Linux + Windows ; code non fiable refusé (fail-closed)
 ```
 
 La release **1.0.1** corrige le runtime Windows 1.0.0, intègre le backend Docker autonome M29, l'installateur avancé M30, PostgreSQL/pgvector et Ollama, puis applique le hardening sécurité/CI/release issu de l'audit complet.
@@ -29,6 +32,8 @@ v1.0.1 → f762025d66e33c40324c811079f1527d122f90f9
 Release : [MINOS v1.0.1](https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1).
 
 La publication finale a été effectuée après validation utilisateur réelle du setup Windows. Le workflow transactionnel a reconstruit le candidat exact, rejoué le Plugin Verifier IntelliJ et les smokes Windows, publié **10 assets**, puis re-téléchargé et vérifié les **5 paires payload/SHA-256**.
+
+Les releases 1.1.0 et 1.2.0 sont publiées depuis ; leurs tags, SHA et assets sont consignés dans [`docs/STATUS.md`](docs/STATUS.md), qui fait foi pour l'état courant.
 
 Voir [`docs/STATUS.md`](docs/STATUS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md) et [`docs/releases/1.0.1.md`](docs/releases/1.0.1.md).
 
@@ -51,7 +56,7 @@ MINOS sait notamment :
 
 ## Architecture
 
-Le reactor Maven contient les modules métier, runtime/provider/storage et surfaces publiques, avec `minos-app` comme composition root. La documentation architecture détaillée est sous [`docs/architecture/`](docs/architecture/README.md).
+Le reactor Maven contient les modules métier, runtime/provider/storage et surfaces publiques, dont la racine de composition est `minos-bootstrap` ([ADR-0042](docs/adr/0042-racine-de-composition.md)) ; `minos-app` est l'assemblage final distribué (lanceur, JAR ombré, backends optionnels). La documentation architecture détaillée est sous [`docs/architecture/`](docs/architecture/README.md).
 
 ```mermaid
 flowchart TB
@@ -189,7 +194,7 @@ La qualification Linux exige en plus un Docker utilisable pour les tests Postgre
 
 ## Sandbox worker OS
 
-L'issue **#98** est **fermée / completed** depuis le **9 août 2026**. La sandbox worker réelle est qualifiée sur Linux (`bubblewrap`/namespaces/`prlimit`) et Windows (AppContainer + Job Object). L’indexation distante refuse `ALLOW` comme `DENY` lorsqu’une primitive OS qualifiée n’est pas disponible.
+L'issue **#98** est **fermée / completed** depuis le **9 août 2026** sur le plan des **primitives** : les backends `LinuxBubblewrapWorkerSandboxBackend` (`bubblewrap`/namespaces, job cgroup v2) et `WindowsAppContainerWorkerSandboxBackend` (AppContainer + Job Object) existent et sont testés. En revanche, la **qualification pour du code non fiable est refusée par décision** ([ADR 0041](docs/adr/0041-indexation-distante-de-code-non-fiable.md), 2026-09-26) : le quota d'écriture disque (octets/entrées) reste supervisé par MINOS (`SUPERVISED_HARD_KILL`), pas appliqué par l'OS, et `WorkerSandboxQualification` rétrograde donc les deux backends en `UNTRUSTED_CODE_UNSUPPORTED` avec la limitation `WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041` (verrouillé par le test `currentOsBackendsStayFailClosedByDecisionAdr0041`). Conséquence : `remote index` n'exécute aucun provider distant, sur tous les OS, en `ALLOW` comme en `DENY` (fail-closed, sans option de contournement) ; il refuse **avant** toute matérialisation, le backend écarté et ses dimensions non OS-enforced sont journalisés en WARNING, et `minos doctor` (section `workerSandbox`) dit si l'indexation distante est disponible et sinon pourquoi — prérequis manquant ou décision. Seule l'indexation **locale** des providers gérés utilise ces sandbox, sous le contrat plus étroit `supportsManagedLocalProvider`. Voir le constat A1 de [`docs/audit/AUDIT-2026-09.md`](docs/audit/AUDIT-2026-09.md) et [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md).
 
 ## Licence
 
@@ -198,3 +203,7 @@ MINOS Code Intelligence est un logiciel **propriétaire source-available**. La v
 Aucun droit général d'utilisation, d'exécution, de déploiement, de modification, de redistribution ou de commercialisation n'est accordé sans autorisation écrite préalable du titulaire des droits, sous réserve des droits imposés par la loi ou les conditions contraignantes de GitHub.
 
 Voir [`LICENSE`](LICENSE) pour les conditions complètes et [`CONTRIBUTING.md`](CONTRIBUTING.md) pour la politique de contribution.
+
+## Étude d'évolution — octobre 2026
+
+[Étude inspirée de Semble et Serena](docs/research/minos-evolution-2026-10/README.md), avec [roadmap détaillée](docs/research/minos-evolution-2026-10/ROADMAP.md), protocole d'évaluation et guide Claude. **Conception proposée ; aucune capacité nouvelle annoncée comme livrée.**

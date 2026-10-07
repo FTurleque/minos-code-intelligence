@@ -153,7 +153,7 @@ ManagedPolyglotScipRuntimeManagerTest
 Gate statique :
 
 ```text
-python scripts/m24/check-polyglot.py
+python scripts/quality/check-polyglot-provider-consistency.py
 ```
 
 Runners exact-head :

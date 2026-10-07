@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.RelationshipKind;
@@ -9,7 +10,6 @@ import com.minos.output.SymbolOutputFormat;
 import com.minos.query.RelationshipResult;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -40,7 +40,9 @@ public final class RelationshipCommand {
         }
     }
 
-    private static final Set<String> SUPPORTED_OPTIONS = Set.of("--limit", "--format");
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec()
+            .text("--format")
+            .integer("--limit", 1, FindSymbolCommand.MAX_LIMIT);
 
     private final Operation operation;
     private final ProjectSymbolQuery query;
@@ -51,33 +53,21 @@ public final class RelationshipCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        String usage = usage(operation);
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(usage).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n')
-                    .append(usage).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-
-        CodeEntityRef anchor = new CodeEntityRef(CodeEntityType.SYMBOL, options.symbolId());
-        RelationshipSearchCriteria criteria = operation.incoming
-                ? RelationshipSearchCriteria.incoming(anchor, Set.of(operation.kind), options.limit())
-                : RelationshipSearchCriteria.outgoing(anchor, Set.of(operation.kind), options.limit());
-        try {
-            List<RelationshipResult> relationships = List.copyOf(query.findRelationships(options.projectId(), criteria));
-            output.append(CodeIntelligenceResultRenderer.renderRelationships(relationships, options.format())).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: ").append(operation.commandName).append(" failed: ")
-                    .append(CliCommandSupport.failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        return CliCommandSupport.run(arguments, output, error, usage(operation), Options::parse, operation.commandName,
+                options -> {
+                    CodeEntityRef anchor = new CodeEntityRef(CodeEntityType.SYMBOL, options.symbolId());
+                    RelationshipSearchCriteria criteria = operation.incoming
+                            ? RelationshipSearchCriteria.incoming(anchor, Set.of(operation.kind), options.limit())
+                            : RelationshipSearchCriteria.outgoing(anchor, Set.of(operation.kind), options.limit());
+                    List<RelationshipResult> relationships =
+                            List.copyOf(query.findRelationships(options.projectId(), criteria));
+                    List<String> limitations =
+                            query.relationshipLimitations(options.projectId(), Set.of(operation.kind));
+                    output.append(CodeIntelligenceResultRenderer.renderRelationships(
+                                    relationships, limitations, options.format()))
+                            .append('\n');
+                    return FindSymbolCommand.SUCCESS;
+                });
     }
 
     public static String usage(Operation operation) {
@@ -91,10 +81,6 @@ public final class RelationshipCommand {
                 """).formatted(operation.commandName).stripTrailing();
     }
 
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
-    }
-
     private record Options(String projectId, String symbolId, int limit, SymbolOutputFormat format) {
         private static Options parse(String[] arguments) {
             if (arguments.length < 2) {
@@ -102,31 +88,9 @@ public final class RelationshipCommand {
             }
             String project = CliCommandSupport.operand(arguments[0], "project");
             String symbol = CliCommandSupport.operand(arguments[1], "symbol-id");
-            int limit = FindSymbolCommand.DEFAULT_LIMIT;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Set<String> seen = new HashSet<>();
-            for (int index = 2; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (option == null || !SUPPORTED_OPTIONS.contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if (++index >= arguments.length) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                String value = arguments[index];
-                if (value == null || value.isBlank() || value.startsWith("--")) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                if ("--limit".equals(option)) {
-                    limit = CliCommandSupport.parseLimit(value, FindSymbolCommand.MAX_LIMIT);
-                } else {
-                    format = SymbolOutputFormat.parse(value);
-                }
-            }
-            return new Options(project, symbol, limit, format);
+            CliOptions options = OPTIONS.parse(arguments, 2);
+            return new Options(project, symbol, options.integer("--limit", FindSymbolCommand.DEFAULT_LIMIT),
+                    options.format());
         }
     }
 }

@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Public, provider-independent Java contract for consuming MINOS Code Intelligence.
  *
@@ -243,11 +245,33 @@ public interface MinosApi extends AutoCloseable {
             String activeSnapshotId,
             String lastSuccessfulIndexAt,
             String providerId,
-            String providerVersion
+            String providerVersion,
+            String resumableRunId,
+            Long resumableCheckpointAgeSeconds,
+            Integer resumableTargets
     ) {
         public ProjectDto {
             languages = immutable(languages);
             buildSystems = immutable(buildSystems);
+        }
+
+        /** Compatibility constructor: a project without any run offered for resume (ADR 0039 §6). */
+        public ProjectDto(
+                String id,
+                String name,
+                String rootPath,
+                boolean rootAvailable,
+                List<String> languages,
+                List<String> buildSystems,
+                int moduleCount,
+                String indexState,
+                String activeSnapshotId,
+                String lastSuccessfulIndexAt,
+                String providerId,
+                String providerVersion
+        ) {
+            this(id, name, rootPath, rootAvailable, languages, buildSystems, moduleCount, indexState,
+                    activeSnapshotId, lastSuccessfulIndexAt, providerId, providerVersion, null, null, null);
         }
     }
 
@@ -422,9 +446,42 @@ public interface MinosApi extends AutoCloseable {
             List<String> topIncomingModuleIds,
             List<String> topOutgoingModuleIds,
             List<String> technologies,
-            List<ArchitectureModuleDto> modules
+            List<ArchitectureModuleDto> modules,
+            List<String> limitations
     ) {
+        /**
+         * Historical shape, kept so that no caller of the published contract breaks: it declares no limitation.
+         * {@code limitations} says what the aggregated dependency graph does not see.
+         */
+        public ArchitectureDto(
+                String projectId,
+                String projectName,
+                String snapshotId,
+                String nature,
+                List<String> languages,
+                List<String> buildSystems,
+                int moduleCount,
+                int localSymbolCount,
+                int externalSymbolCount,
+                int relationshipCount,
+                int totalDependencyCount,
+                int interModuleDependencyCount,
+                int intraModuleDependencyCount,
+                int unassignedDependencyCount,
+                int moduleEdgeCount,
+                List<String> topIncomingModuleIds,
+                List<String> topOutgoingModuleIds,
+                List<String> technologies,
+                List<ArchitectureModuleDto> modules
+        ) {
+            this(projectId, projectName, snapshotId, nature, languages, buildSystems, moduleCount, localSymbolCount,
+                    externalSymbolCount, relationshipCount, totalDependencyCount, interModuleDependencyCount,
+                    intraModuleDependencyCount, unassignedDependencyCount, moduleEdgeCount, topIncomingModuleIds,
+                    topOutgoingModuleIds, technologies, modules, List.of());
+        }
+
         public ArchitectureDto {
+            limitations = immutable(limitations);
             languages = immutable(languages);
             buildSystems = immutable(buildSystems);
             topIncomingModuleIds = immutable(topIncomingModuleIds);
@@ -555,12 +612,6 @@ public interface MinosApi extends AutoCloseable {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
     }
 
     private static void requireLimit(int value, int maximum, String name) {

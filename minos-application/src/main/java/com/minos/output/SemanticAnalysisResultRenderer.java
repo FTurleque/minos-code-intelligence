@@ -1,10 +1,10 @@
 package com.minos.output;
 
-import com.minos.semantic.HybridContextBuilder;
-import com.minos.semantic.HybridSearchService;
+import com.minos.application.semantic.HybridContextBuilder;
+import com.minos.application.semantic.HybridSearchService;
 import com.minos.semantic.SemanticDocument;
-import com.minos.semantic.SemanticIndexService;
-import com.minos.semantic.SemanticSearchService;
+import com.minos.application.semantic.SemanticIndexService;
+import com.minos.application.semantic.SemanticSearchService;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

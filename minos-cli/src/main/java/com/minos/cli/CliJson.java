@@ -11,8 +11,4 @@ final class CliJson {
     static String render(Object value) {
         return DeterministicJson.render(value);
     }
-
-    static void quote(StringBuilder builder, String value) {
-        DeterministicJson.quote(builder, value);
-    }
 }

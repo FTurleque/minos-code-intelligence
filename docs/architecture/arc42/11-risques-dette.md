@@ -1,7 +1,7 @@
 # Section 11 — Risques et dette technique
 
-> Preuves : ADR-0036 (Proposed), ADR-0037 (parité pending), ADR-0022 (contraintes restantes),
-> ADR-0031 (ANN derrière mesures), ADR-0027 (IntelliJ external), ADR-0021 (Docker autonomy).
+> Preuves : ADR-0036 (Accepted), ADR-0037 (parité pending), ADR-0022 (contraintes restantes),
+> ADR-0031 (ANN derrière mesures), ADR-0027 (IntelliJ external), ADR-0037 (backends natif et Docker, § « Relation avec ADR-0021 »).
 
 > **Registre courant** : ce document est l'historique arc42 du registre de risques initial (période M15–M31). Le
 > registre **vivant**, tenu à jour à chaque réconciliation, est [`docs/architecture/risks/register.md`](../risks/register.md)

@@ -1,0 +1,90 @@
+# bootstrap
+ok: BootstrapDto[tenant=TenantDto[tenantId=<uuid-1>, name=Acme, keyId=key-a, version=0, createdAt=<instant>, updatedAt=<instant>, memberCount=1, workspaceCount=0, auditSequence=1, retention=RetentionPolicyDto[maxAuditEvents=10000, auditRetentionDays=365, archivedWorkspaceRetentionDays=90], isolation=TENANT_SCOPED, encryptionAtRest=AES_256_GCM], bearerToken=<secret>, tokenHandling=SECRET_OUTPUT_ONCE_DO_NOT_LOG]
+# tenant
+ok: TenantDto[tenantId=<uuid-1>, name=Acme, keyId=key-a, version=0, createdAt=<instant>, updatedAt=<instant>, memberCount=1, workspaceCount=0, auditSequence=1, retention=RetentionPolicyDto[maxAuditEvents=10000, auditRetentionDays=365, archivedWorkspaceRetentionDays=90], isolation=TENANT_SCOPED, encryptionAtRest=AES_256_GCM]
+# createWorkspace
+ok: WorkspaceDto[workspaceId=<uuid-2>, tenantId=<uuid-1>, name=Platform, status=ACTIVE, createdAt=<instant>, updatedAt=<instant>, archivedAt=null, bindings=[]]
+# listWorkspaces
+ok: [WorkspaceDto[workspaceId=<uuid-2>, tenantId=<uuid-1>, name=Platform, status=ACTIVE, createdAt=<instant>, updatedAt=<instant>, archivedAt=null, bindings=[]]]
+# getWorkspace
+ok: WorkspaceDto[workspaceId=<uuid-2>, tenantId=<uuid-1>, name=Platform, status=ACTIVE, createdAt=<instant>, updatedAt=<instant>, archivedAt=null, bindings=[]]
+# grantMember
+ok: MemberDto[principalId=reader, displayName=Reader, role=VIEWER, permissions=[MEMBER_READ, WORKSPACE_READ], createdAt=<instant>]
+# listMembers
+ok: [MemberDto[principalId=owner, displayName=Owner, role=OWNER, permissions=[AUDIT_READ, BINDING_WRITE, KEY_ROTATE, MEMBER_READ, MEMBER_WRITE, RETENTION_MANAGE, TENANT_ADMIN, WORKSPACE_READ, WORKSPACE_WRITE], createdAt=<instant>], MemberDto[principalId=reader, displayName=Reader, role=VIEWER, permissions=[MEMBER_READ, WORKSPACE_READ], createdAt=<instant>]]
+# retentionPlan
+ok: RetentionDto[policy=RetentionPolicyDto[maxAuditEvents=10000, auditRetentionDays=365, archivedWorkspaceRetentionDays=90], plan=RetentionPlanDto[tenantId=<uuid-1>, evaluatedAt=<instant>, auditEventsToRemove=0, archivedWorkspacesToRemove=[]], implicitDeletion=false]
+# audit
+ok: [AuditEventDto[sequence=3, tenantId=<uuid-1>, occurredAt=<instant>, principalId=owner, action=MEMBER_GRANT, resourceType=PRINCIPAL, resourceId=reader, outcome=ALLOWED, requestId=a2-grant, keyId=key-a, previousHash=<hash-1>, hash=<hash-2>], AuditEventDto[sequence=2, tenantId=<uuid-1>, occurredAt=<instant>, principalId=owner, action=WORKSPACE_CREATE, resourceType=WORKSPACE, resourceId=<uuid-2>, outcome=ALLOWED, requestId=a2-workspace, keyId=key-a, previousHash=<hash-3>, hash=<hash-1>], AuditEventDto[sequence=1, tenantId=<uuid-1>, occurredAt=<instant>, principalId=owner, action=TENANT_BOOTSTRAP, resourceType=TENANT, resourceId=<uuid-1>, outcome=ALLOWED, requestId=a2-bootstrap, keyId=key-a, previousHash=<hash-4>, hash=<hash-3>]]
+# tenant(invalid token)
+MinosApiException[ACCESS_DENIED]: SecurityException
+$ minos team tenant (application hébergée, sans MINOS_TEAM_TOKEN)
+exit: 1
+--- stdout
+
+--- stderr
+error: MINOS_TEAM_TOKEN is required for authenticated team operations
+
+$ minos team tenant --format json
+exit: 2
+--- stdout
+
+--- stderr
+error: unknown team option: --format
+Usage: minos team <operation> [options]
+
+Read-only:
+  tenant
+  workspaces
+  workspace-show --workspace <uuid>
+  members
+  audit [--limit <1..10000>]
+  retention-plan
+
+Mutations:
+  bootstrap --tenant <uuid> --name <name> --key-id <id> --owner <id> --owner-name <name>
+  workspace-create --name <name>
+  workspace-archive --workspace <uuid>
+  member-grant --principal <id> --display-name <name> --role <role>
+  member-revoke --principal <id>
+  project-bind --workspace <uuid> --project <uuid> --snapshot <id>
+  project-unbind --workspace <uuid> --project <uuid>
+  token-issue --principal <id> [--token-hours <1..24>]
+  key-rotate --key-id <id> [--token-hours <1..24>]
+  retention-set --max-audit-events <100..100000> --audit-days <1..3650>
+                --archived-workspace-days <1..3650>
+  retention-apply
+
+Authentication:
+  Set MINOS_TEAM_TOKEN for every operation except bootstrap.
+  Bearer tokens are never accepted as command-line arguments.
+  Mutations accept optional --request-id <id>; otherwise a UUID is generated.
+
+$ minos team tenant
+exit: 1
+--- stdout
+
+--- stderr
+error: team is not configured in this CLI bootstrap
+
+$ minos project list --format json
+exit: 0
+--- stdout
+{"count":0,"projects":[]}
+
+--- stderr
+
+$ minos team bootstrap --tenant <uuid-1> --name Acme --key-id a2-missing-key --owner owner --owner-name Owner
+exit: 1
+--- stdout
+
+--- stderr
+error: missing hosted tenant key environment variable: MINOS_TEAM_KEY_A2_MISSING_KEY
+
+$ minos team tenant
+exit: 1
+--- stdout
+
+--- stderr
+error: MINOS_TEAM_TOKEN is required for authenticated team operations
+

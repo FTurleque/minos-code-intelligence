@@ -50,9 +50,37 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0033](0033-immutable-remote-revisions-and-verified-worker-artifacts.md) | Épingler les sources distantes et n’accepter que des artefacts worker bornés, vérifiés et concordants | Accepted | M25 |
 | [0034](0034-partial-runtime-observations-with-explicit-static-correlation.md) | Conserver les observations runtime partielles séparées des faits statiques et corrélées à un snapshot exact | Accepted | M26 |
 | [0035](0035-opt-in-tenant-control-plane-with-external-keys.md) | Ajouter un contrôle tenant opt-in, chiffré, audité et alimenté par des clés externes | Accepted | M27 |
-| [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) | Converger par mesures et interdire les claims sandbox/hosted non qualifiés | Proposed | M28 |
+| [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) | Converger par mesures et interdire les claims sandbox/hosted non qualifiés | Accepted | M28 |
 | [0037](0037-first-class-native-and-docker-runtime-backends.md) | Router `minos mcp` vers un backend natif ou Docker explicite, versionné et fail-closed | Accepted — parity pending | M29-S1 |
 | [0038](0038-aggregate-worker-resource-containment.md) | Confiner les ressources des workers non fiables de manière agrégée et fail-closed | Accepted | MINOS-01 |
+| [0039](0039-reprise-indexation-apres-interruption.md) | Reprendre une indexation interrompue au lieu de tout réindexer | Accepted | — |
+| [0040](0040-distribution-auto-portante-indexeurs-embarques.md) | Livrer les indexeurs dans le paquet, pas après l'installation | Accepted | — |
+| [0041](0041-indexation-distante-de-code-non-fiable.md) | Indexation distante de code non fiable : quota d'écriture OS ou fermeture assumée | Accepted (option b : fermeture par décision) | Audit 2026-09, A1 |
+| [0042](0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Accepted (option c : module minos-bootstrap) | Audit 2026-09, A2 |
+| [0043](0043-retrait-des-artefacts-de-jalon.md) | Politique de retrait des scripts et workflows de jalon (permanent / gelé par assertion / archivé) | Accepted | Audit 2026-09, G3 |
+| [0044](0044-un-package-un-module.md) | Un package, un module : replier les packages éclatés par déplacement, renommer le côté interne | Accepted | Audit 2026-09, A3 (et A7) |
+| [0045](0045-constructeur-unique-et-point-d-entree-nomme.md) | Constructeur unique et point d'entrée nommé ; racine de composition regroupée par domaine, sans cache d'architecture | Accepted | Audit 2026-09, A4 |
+| [0046](0046-format-de-snapshot-v3-chaines-utf8.md) | Format de snapshot V3 : chaînes UTF-8, repli V2 pour les surrogates isolés, lecture de tous les formats antérieurs | Accepted | Audit 2026-09, A6 |
+| [0047](0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) | Snapshot en mémoire : dédoublonnage des chaînes au décodage, table de chaînes, pagination ou mappage, dans cet ordre et sous mesure | Proposed | Audit 2026-09, A6 |
+| [0048](0048-evaluation-comparative-reproductible.md) | Évaluer les changements sur un protocole commun | Proposed | Étude octobre 2026 |
+| [0049](0049-retrieval-hybride-explicable.md) | Faire évoluer le classement hybride par profils mesurés | Proposed | Étude octobre 2026 |
+| [0050](0050-unites-recherche-contexte-budgete.md) | Assembler un contexte cohérent, compact et traçable | Proposed | Étude octobre 2026 |
+| [0051](0051-embeddings-cpu-optionnels.md) | Évaluer un provider d'embeddings CPU léger et local | Proposed | Étude octobre 2026 |
+| [0052](0052-fraicheur-hors-mcp.md) | Actualiser les index hors du chemin MCP en lecture seule | Proposed | Étude octobre 2026 |
+| [0053](0053-mcp-profils-progressifs.md) | Réduire le coût de découverte MCP avec des profils explicites | Proposed | Étude octobre 2026 |
+| [0054](0054-bridge-intellij-symbolique-optionnel.md) | Étudier un bridge IntelliJ de lecture symbolique | Proposed | Étude octobre 2026 |
+
+## Décisions du 5 octobre 2026 — mise en œuvre à venir
+
+Les numéros 0048–0054 sont utilisés par l'étude proposée dans la PR #333, fusionnée le 6 octobre 2026 (merge `bc1d3421`). Les décisions suivantes portent sur le chantier storage/hexagonal et ne valident pas ces propositions.
+
+| ADR | Décision | Statut |
+|---|---|---|
+| [0055](0055-unifier-les-adaptateurs-de-stockage.md) | Un module minos-storage, packages local/PostgreSQL et codec partagé | Accepted — à implémenter |
+| [0056](0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — à implémenter |
+| [0057](0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels |
+
+[Backlog, tâches et démarrage Claude](../roadmap/storage-hexagonal-2026-10/README.md).
 
 ## Règle de rédaction
 

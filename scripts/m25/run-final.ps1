@@ -82,9 +82,9 @@ try {
     Write-Host "Go: $GoVersion"
 
     Write-Host '[1/7] M25 static, documentation and M24 regression contracts...'
-    Invoke-PythonGate $Python 'scripts\m25\check-remote-distributed.py' 'M25 consistency gate failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-remote-distributed-consistency.py' 'M25 consistency gate failed'
     Invoke-PythonGate $Python 'scripts\docs\check-current-docs.py' 'Current documentation consistency failed'
-    Invoke-PythonGate $Python 'scripts\m24\check-polyglot.py' 'M24 regression gate failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-polyglot-provider-consistency.py' 'M24 regression gate failed'
 
     Write-Host '[2/7] Full Java 24 Maven reactor...'
     Invoke-SemanticDisabled {
@@ -96,8 +96,8 @@ try {
     Invoke-PythonGate $Python 'scripts\quality\check-jacoco.py' 'M25 JaCoCo gate failed'
 
     Write-Host '[4/7] Historical capability/provider regressions...'
-    Invoke-PythonGate $Python 'scripts\m22\check-provider.py' 'M22 provider regression failed'
-    Invoke-PythonGate $Python 'scripts\m23\check-semantic.py' 'M23 semantic regression failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-java-ast-provider-consistency.py' 'M22 provider regression failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-semantic-retrieval-consistency.py' 'M23 semantic regression failed'
 
     Write-Host '[5/7] Real GitHub exact-revision/cache/worker/artifact/snapshot e2e...'
     Invoke-SemanticDisabled {
@@ -107,7 +107,7 @@ try {
     }
 
     Write-Host '[6/7] Static, docs and evidence recheck...'
-    Invoke-PythonGate $Python 'scripts\m25\check-remote-distributed.py' 'M25 consistency recheck failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-remote-distributed-consistency.py' 'M25 consistency recheck failed'
     Invoke-PythonGate $Python 'scripts\docs\check-current-docs.py' 'Documentation recheck failed'
     $Evidence = Get-Content 'target\m25\remote-e2e-windows.json' -Raw | ConvertFrom-Json
     if ($Evidence.status -ne 'PASS' -or $Evidence.commit -ne $Head -or $Evidence.provider.id -ne 'scip-go' `

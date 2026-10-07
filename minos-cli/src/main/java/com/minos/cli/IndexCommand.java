@@ -1,32 +1,40 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectOperations;
+import com.minos.orchestration.IndexingResumePolicy;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /** Commande d'indexation autonome M14 avec compatibilité d'import M9. */
 public final class IndexCommand {
 
     public static final String NAME = "index";
-    private static final Set<String> SUPPORTED_OPTIONS = Set.of(
-            "--provider", "--force-full", "--dry-run", "--format",
-            "--scip", "--provider-version", "--module", "--snapshot");
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec()
+            .text("--provider", "--format", "--scip", "--provider-version", "--module", "--snapshot")
+            .flag("--force-full", "--dry-run", "--no-resume", "--resume-only");
     private static final String USAGE = """
             Usage: minos index <project> [options]
 
             Autonomous indexing:
               --provider <id>               Override provider negotiation
               --force-full                  Force a complete provider execution
-              --dry-run                     Show discovery/runtime/plan without executing
+              --dry-run                     Show discovery/runtime/plan without executing (writes nothing;
+                                            not combinable with --no-resume/--resume-only, see `minos index-status`)
+              --no-resume                   Never reopen an interrupted run: supersede it and run a complete index
+                                            (implies --force-full)
+              --resume-only                 Fail without creating a run unless an interrupted run can be resumed
               --format <text|json>          Output format (default: text)
+
+            An interrupted run (crash, kill, reboot) is reopened by default and only the providers
+            without a valid checkpoint are re-executed. A provider that fails explicitly during the
+            reopened attempt consumes the run's checkpoints: the next `minos index` starts from scratch.
 
             Deprecated compatibility import:
               --scip <index.scip>           Import an already generated SCIP artifact
@@ -74,7 +82,8 @@ public final class IndexCommand {
                         options.project(), options.providerId(), options.forceFull()), options.format())).append('\n');
             } else {
                 output.append(renderExecution(autonomousOperations.execute(
-                        options.project(), options.providerId(), options.forceFull()), options.format())).append('\n');
+                        options.project(), options.providerId(), options.forceFull(), options.resumePolicy()),
+                        options.format())).append('\n');
             }
             return FindSymbolCommand.SUCCESS;
         });
@@ -119,6 +128,7 @@ public final class IndexCommand {
         map.put("activeSnapshotId", execution.activeSnapshotId());
         map.put("fingerprintPromoted", execution.fingerprintPromoted());
         map.put("diagnostic", diagnostic);
+        map.put("resumed", resumedMap(execution.resumed()));
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }
@@ -127,7 +137,28 @@ public final class IndexCommand {
                 + "status: " + execution.status() + "\n"
                 + "activeSnapshotId: " + nullable(execution.activeSnapshotId()) + "\n"
                 + "fingerprintPromoted: " + execution.fingerprintPromoted() + "\n"
-                + "diagnostic: " + nullable(diagnostic);
+                + "diagnostic: " + nullable(diagnostic) + "\n"
+                + "resumed: " + resumedText(execution.resumed());
+    }
+
+    private static Map<String, Object> resumedMap(AutonomousIndexOperations.ResumeView resumed) {
+        if (resumed == null) return null;
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("attempt", resumed.attempt());
+        map.put("reusedTargets", resumed.reusedTargets());
+        map.put("reexecutedTargets", resumed.reexecutedTargets());
+        map.put("refusalReason", resumed.refusalReason());
+        return map;
+    }
+
+    private static String resumedText(AutonomousIndexOperations.ResumeView resumed) {
+        if (resumed == null) return "none";
+        if (resumed.refusalReason() != null) {
+            return "refused (" + resumed.refusalReason() + "), " + resumed.reexecutedTargets() + " re-executed";
+        }
+        int total = resumed.reusedTargets() + resumed.reexecutedTargets();
+        return "attempt " + resumed.attempt() + ", " + resumed.reusedTargets() + "/" + total + " targets reused, "
+                + resumed.reexecutedTargets() + " re-executed";
     }
 
     private static Map<String, Object> planMap(AutonomousIndexOperations.IndexPlanView plan) {
@@ -161,20 +192,7 @@ public final class IndexCommand {
             SymbolOutputFormat format,
             String diagnostic
     ) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("projectId", result.projectId());
-        map.put("snapshotId", result.snapshotId());
-        map.put("providerId", result.providerId());
-        map.put("providerVersion", result.providerVersion());
-        map.put("normalizedSymbolCount", result.normalizedSymbolCount());
-        map.put("occurrenceCount", result.occurrenceCount());
-        map.put("relationshipCount", result.relationshipCount());
-        map.put("relatedTestRelationshipCount", result.relatedTestRelationshipCount());
-        map.put("unresolvedOccurrenceCount", result.unresolvedOccurrenceCount());
-        map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
-        map.put("completedAt", result.completedAt());
-        map.put("commitStatus", result.commitStatus().name());
-        map.put("diagnostic", diagnostic);
+        Map<String, Object> map = CliCommandSupport.importResultMap(result, diagnostic);
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }
@@ -207,64 +225,47 @@ public final class IndexCommand {
             Path scipFile,
             String providerVersion,
             String moduleId,
-            String snapshotId
+            String snapshotId,
+            IndexingResumePolicy resumePolicy
     ) {
         private static Options parse(String[] arguments) {
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
             String project = CliCommandSupport.operand(arguments[0], "project");
-            String provider = null;
-            boolean forceFull = false;
-            boolean dryRun = false;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Path scip = null;
-            String providerVersion = null;
-            String module = null;
-            String snapshot = null;
-            Set<String> seen = new HashSet<>();
-            for (int index = 1; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (option == null || !SUPPORTED_OPTIONS.contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if ("--force-full".equals(option)) {
-                    forceFull = true;
-                    continue;
-                }
-                if ("--dry-run".equals(option)) {
-                    dryRun = true;
-                    continue;
-                }
-                if (++index >= arguments.length || arguments[index] == null || arguments[index].isBlank()
-                        || arguments[index].startsWith("--")) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                String value = arguments[index];
-                switch (option) {
-                    case "--provider" -> provider = value;
-                    case "--format" -> format = SymbolOutputFormat.parse(value);
-                    case "--scip" -> scip = Path.of(value);
-                    case "--provider-version" -> providerVersion = value;
-                    case "--module" -> module = value;
-                    case "--snapshot" -> snapshot = value;
-                    default -> throw new IllegalStateException("unhandled option: " + option);
-                }
+            CliOptions options = OPTIONS.parse(arguments, 1);
+            String provider = options.text("--provider");
+            boolean forceFull = options.has("--force-full");
+            boolean dryRun = options.has("--dry-run");
+            boolean noResume = options.has("--no-resume");
+            boolean resumeOnly = options.has("--resume-only");
+            String scipValue = options.text("--scip");
+            Path scip = scipValue == null ? null : Path.of(scipValue);
+            String providerVersion = options.text("--provider-version");
+            String module = options.text("--module");
+            String snapshot = options.text("--snapshot");
+            if (noResume && resumeOnly) {
+                throw new IllegalArgumentException("--no-resume and --resume-only are mutually exclusive");
+            }
+            if (dryRun && (noResume || resumeOnly)) {
+                throw new IllegalArgumentException("--dry-run executes nothing, so it cannot be combined with "
+                        + "--no-resume/--resume-only (`minos index-status <project>` shows the run that could be resumed)");
             }
             if (scip != null) {
                 if (provider == null || provider.isBlank()) {
                     throw new IllegalArgumentException("--provider is required with --scip");
                 }
-                if (forceFull || dryRun) {
-                    throw new IllegalArgumentException("--force-full/--dry-run cannot be combined with --scip");
+                if (forceFull || dryRun || noResume || resumeOnly) {
+                    throw new IllegalArgumentException(
+                            "--force-full/--dry-run/--no-resume/--resume-only cannot be combined with --scip");
                 }
             } else if (providerVersion != null || module != null || snapshot != null) {
                 throw new IllegalArgumentException("--provider-version/--module/--snapshot require --scip");
             }
-            return new Options(project, provider, forceFull, dryRun, format, scip, providerVersion, module, snapshot);
+            IndexingResumePolicy resumePolicy = noResume ? IndexingResumePolicy.NO_RESUME
+                    : resumeOnly ? IndexingResumePolicy.RESUME_ONLY : IndexingResumePolicy.RESUME;
+            return new Options(project, provider, forceFull, dryRun, options.format(), scip, providerVersion, module,
+                    snapshot, resumePolicy);
         }
     }
 }

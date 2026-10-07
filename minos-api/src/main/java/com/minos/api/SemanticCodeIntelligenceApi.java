@@ -3,6 +3,8 @@ package com.minos.api;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Additive M20 semantic/hybrid API. Existing structured APIs remain unchanged and authoritative. */
 public interface SemanticCodeIntelligenceApi {
 
@@ -189,10 +191,6 @@ public interface SemanticCodeIntelligenceApi {
             items = immutable(items);
             limitations = immutable(limitations);
         }
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
     }
 
     private static void requireRange(int value, int minimum, int maximum, String name) {

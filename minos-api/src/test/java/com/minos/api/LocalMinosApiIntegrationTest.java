@@ -66,6 +66,18 @@ class LocalMinosApiIntegrationTest {
         assertEquals(3, architecture.modules().size());
         assertTrue(architecture.technologies().contains("TYPESCRIPT"));
         assertTrue(architecture.technologies().contains("NPM"));
+        // MINOS-AUD-F01 : l'index SCIP réel garde ses références en occurrences ; le DTO le déclare.
+        assertEquals(java.util.List.of("OCCURRENCE_REFERENCES_NOT_PROJECTED"), architecture.limitations());
+        // Le constructeur historique du contrat publié reste utilisable et ne déclare aucune limitation.
+        MinosApi.ArchitectureDto historical = new MinosApi.ArchitectureDto(
+                architecture.projectId(), architecture.projectName(), architecture.snapshotId(), architecture.nature(),
+                architecture.languages(), architecture.buildSystems(), architecture.moduleCount(),
+                architecture.localSymbolCount(), architecture.externalSymbolCount(), architecture.relationshipCount(),
+                architecture.totalDependencyCount(), architecture.interModuleDependencyCount(),
+                architecture.intraModuleDependencyCount(), architecture.unassignedDependencyCount(),
+                architecture.moduleEdgeCount(), architecture.topIncomingModuleIds(), architecture.topOutgoingModuleIds(),
+                architecture.technologies(), architecture.modules());
+        assertEquals(java.util.List.of(), historical.limitations());
 
         MinosApi.ArchitectureGraphDto graph = api.getArchitectureGraph("m11-typescript");
         assertEquals(architecture.projectId(), graph.projectId());

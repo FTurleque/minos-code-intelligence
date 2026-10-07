@@ -2,7 +2,7 @@ package com.minos.storage.postgresql;
 
 import com.minos.io.CommitUncertainException;
 import com.minos.registry.ProjectPathMapping;
-import com.minos.registry.ProjectPathMappingStore;
+import com.minos.storage.local.registry.ProjectPathMappingStore;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.ProjectRegistryLimits;
 import com.minos.registry.RegisteredProject;

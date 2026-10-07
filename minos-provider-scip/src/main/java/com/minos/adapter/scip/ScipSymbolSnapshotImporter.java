@@ -9,6 +9,9 @@ import com.minos.domain.SymbolSearchCriteria;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.CommitUncertainException;
 import com.minos.io.PrivateLocalStorage;
+import com.minos.io.Sha256;
+import com.minos.orchestration.ScipSymbolSnapshotReport;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.CodeKnowledgeStore;
 import org.scip_code.scip.Index;
@@ -24,9 +27,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -141,7 +142,7 @@ public final class ScipSymbolSnapshotImporter {
                     throw new IOException("SCIP artifact size is outside configured byte limit: "
                             + expectedBytes + "/" + limits.maxArtifactBytes());
                 }
-                MessageDigest digest = sha256Digest();
+                MessageDigest digest = Sha256.newDigest();
                 BoundedInputStream bounded = new BoundedInputStream(
                         Channels.newInputStream(sourceChannel), expectedBytes, "SCIP artifact snapshot");
                 DigestInputStream input = new DigestInputStream(bounded, digest);
@@ -149,7 +150,7 @@ public final class ScipSymbolSnapshotImporter {
                 if (bounded.consumedBytes() != expectedBytes || sourceChannel.size() != expectedBytes) {
                     throw new IOException("SCIP artifact changed while being captured");
                 }
-                sha256 = HexFormat.of().formatHex(digest.digest());
+                sha256 = Sha256.hex(digest);
             }
             if (Files.isSymbolicLink(frozen)
                     || !Files.isRegularFile(frozen, LinkOption.NOFOLLOW_LINKS)
@@ -200,14 +201,6 @@ public final class ScipSymbolSnapshotImporter {
         String expected = "scip-" + sha256.substring(0, 24);
         if (!expected.equals(snapshotId)) {
             throw new IOException("SCIP artifact changed after its hash-derived snapshot id was computed");
-        }
-    }
-
-    private static MessageDigest sha256Digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
     }
 

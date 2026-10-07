@@ -53,11 +53,7 @@ public final class BoundedFileLease implements AutoCloseable {
         try {
             acquireJvmLock(localLock, deadline, label);
             localAcquired = true;
-            preparePrivateLockFile(file, label);
-            channel = FileChannel.open(
-                    file,
-                    StandardOpenOption.WRITE,
-                    LinkOption.NOFOLLOW_LINKS);
+            channel = openPrivateLockChannel(file, label);
             FileLock fileLock = acquireFileLock(channel, deadline, label);
             return new BoundedFileLease(localLock, channel, fileLock);
         } catch (IOException | RuntimeException failure) {
@@ -95,6 +91,19 @@ public final class BoundedFileLease implements AutoCloseable {
         }
     }
 
+    /**
+     * Opens, for locking, the owner-only regular lock file {@code file}, creating it when absent.
+     *
+     * <p>This is the single way a lock file is opened in the repository: a pre-existing file is
+     * hardened in place, a symbolic link or special object is refused, and the channel itself is
+     * opened with {@link LinkOption#NOFOLLOW_LINKS}, so a link swapped in after the preparation is
+     * still not followed. The message never carries the path.</p>
+     */
+    static FileChannel openPrivateLockChannel(Path file, String description) throws IOException {
+        preparePrivateLockFile(file, description);
+        return FileChannel.open(file, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
+    }
+
     private static void preparePrivateLockFile(Path file, String description) throws IOException {
         if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
             PrivateLocalStorage.hardenExistingFile(file);
@@ -111,7 +120,7 @@ public final class BoundedFileLease implements AutoCloseable {
             }
         }
         if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException(description + " lock file is not a regular non-symlink file: " + file);
+            throw new IOException(description + " lock file is not a regular non-symlink file");
         }
     }
 

@@ -1,10 +1,11 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
-import com.minos.runtime.CommandLocator;
-import com.minos.runtime.IndexerProcessPlan;
-import com.minos.runtime.IndexerProcessPlanFactory;
+import com.minos.runtime.local.CommandLocator;
+import com.minos.runtime.local.IndexerProcessPlan;
+import com.minos.runtime.local.IndexerProcessPlanFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -42,7 +43,7 @@ public final class ScipPythonProcessPlanFactory implements IndexerProcessPlanFac
             throw new IllegalStateException("scip-python incremental execution is not qualified by MINOS M17");
         }
         Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
-        Files.createDirectories(output.getParent());
+        PrivateLocalStorage.ensurePrivateDirectory(output.getParent());
         String projectName = root.getFileName() == null ? "minos-python-project" : root.getFileName().toString();
         List<String> command = new ArrayList<>(launcher);
         command.addAll(List.of(

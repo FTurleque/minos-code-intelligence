@@ -28,9 +28,21 @@ public interface MinosTeamApi {
                             String ownerDisplayName, Duration tokenLifetime, String requestId) { }
     record MemberGrantRequest(String principalId, String displayName, String role) { }
     record BindingRequest(UUID workspaceId, UUID projectId, String snapshotId) { }
-    record BootstrapDto(TenantDto tenant, String bearerToken, String tokenHandling) { }
-    record TokenDto(String bearerToken, String tokenHandling) { }
-    record RotationDto(TenantDto tenant, String replacementBearerToken, String tokenHandling) { }
+    record BootstrapDto(TenantDto tenant, String bearerToken, String tokenHandling) {
+        @Override public String toString() {
+            return "BootstrapDto[tenant=" + tenant + ", bearerToken=***, tokenHandling=" + tokenHandling + "]";
+        }
+    }
+    record TokenDto(String bearerToken, String tokenHandling) {
+        @Override public String toString() {
+            return "TokenDto[bearerToken=***, tokenHandling=" + tokenHandling + "]";
+        }
+    }
+    record RotationDto(TenantDto tenant, String replacementBearerToken, String tokenHandling) {
+        @Override public String toString() {
+            return "RotationDto[tenant=" + tenant + ", replacementBearerToken=***, tokenHandling=" + tokenHandling + "]";
+        }
+    }
     record TenantDto(UUID tenantId, String name, String keyId, long version, String createdAt, String updatedAt,
                      int memberCount, int workspaceCount, long auditSequence, RetentionPolicyDto retention,
                      String isolation, String encryptionAtRest) { }

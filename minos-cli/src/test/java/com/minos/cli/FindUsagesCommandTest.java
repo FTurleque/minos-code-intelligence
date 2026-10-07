@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.domain.OccurrenceRole;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;

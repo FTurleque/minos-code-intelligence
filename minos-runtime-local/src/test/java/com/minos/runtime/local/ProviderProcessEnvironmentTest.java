@@ -1,0 +1,91 @@
+package com.minos.runtime.local;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class ProviderProcessEnvironmentTest {
+
+    @Test
+    void dropsParentSecretsAndArbitraryVariablesWhileKeepingOnlyRuntimeAllowlist() {
+        Map<String, String> inherited = new LinkedHashMap<>();
+        inherited.put("PATH", "/usr/bin");
+        inherited.put("JAVA_HOME", "/jdk");
+        inherited.put("HOME", "/home/operator");
+        inherited.put("UNRELATED_PARENT_SETTING", "must-not-leak");
+        inherited.put("MINOS_TEAM_TOKEN", "team-secret");
+        inherited.put("MINOS_POSTGRES_PASSWORD", "db-secret");
+        inherited.put("GITHUB_TOKEN", "github-secret");
+        inherited.put("AWS_SECRET_ACCESS_KEY", "aws-secret");
+
+        Map<String, String> sanitized = ProviderProcessEnvironment.sanitize(inherited, Map.of());
+
+        assertEquals("/usr/bin", sanitized.get("PATH"));
+        assertEquals("/jdk", sanitized.get("JAVA_HOME"));
+        if (CommandLocator.isWindows()) {
+            assertEquals("/home/operator", sanitized.get("HOME"),
+                    "Windows PowerShell/AppContainer startup may inherit the non-secret HOME profile path");
+        } else {
+            assertFalse(sanitized.containsKey("HOME"));
+        }
+        assertFalse(sanitized.containsKey("UNRELATED_PARENT_SETTING"));
+        assertFalse(sanitized.containsKey("MINOS_TEAM_TOKEN"));
+        assertFalse(sanitized.containsKey("MINOS_POSTGRES_PASSWORD"));
+        assertFalse(sanitized.containsKey("GITHUB_TOKEN"));
+        assertFalse(sanitized.containsKey("AWS_SECRET_ACCESS_KEY"));
+    }
+
+    @Test
+    void explicitProviderEnvironmentIsPreservedAndCanOverrideAllowlistedValues() {
+        Map<String, String> sanitized = ProviderProcessEnvironment.sanitize(
+                Map.of("PATH", "/parent", "MINOS_TEAM_TOKEN", "secret"),
+                Map.of("PATH", "/provider", "PROVIDER_CACHE", "/cache"));
+
+        assertEquals("/provider", sanitized.get("PATH"));
+        assertEquals("/cache", sanitized.get("PROVIDER_CACHE"));
+        assertFalse(sanitized.containsKey("MINOS_TEAM_TOKEN"));
+        assertTrue(sanitized.size() >= 2);
+    }
+
+    @Test
+    void aTrustedLauncherKeepsOnlyWhatItNeedsToStartAndWhatTheOverlayDeclares() {
+        ProcessBuilder builder = new ProcessBuilder();
+        builder.environment().clear();
+        builder.environment().put("PATH", "/usr/bin");
+        builder.environment().put("TEMP", "/tmp");
+        builder.environment().put("JAVA_HOME", "/jdk");
+        builder.environment().put("MINOS_TEAM_TOKEN", "team-secret");
+        builder.environment().put("GITHUB_TOKEN", "github-secret");
+
+        ProviderProcessEnvironment.applyForTrustedLauncher(builder, Map.of("DECLARED", "value"));
+
+        Map<String, String> environment = builder.environment();
+        assertEquals("/usr/bin", environment.get("PATH"));
+        assertEquals("/tmp", environment.get("TEMP"));
+        assertEquals("value", environment.get("DECLARED"));
+        assertFalse(environment.containsKey("JAVA_HOME"), "a launcher has no use for the toolchain variables");
+        assertFalse(environment.containsKey("MINOS_TEAM_TOKEN"));
+        assertFalse(environment.containsKey("GITHUB_TOKEN"));
+    }
+
+    @Test
+    void aTrustedLauncherKeepsThePowerShellModuleAnalysisCachePathAndNoSecretNextToIt() {
+        // Measured on a CI runner: without this path PowerShell rebuilds its module cache on every start
+        // (about 23 s of CPU before the launcher compiles anything); with it the start takes a third of a second.
+        ProcessBuilder builder = new ProcessBuilder();
+        builder.environment().clear();
+        builder.environment().put("PSModuleAnalysisCachePath", "C:\\cache\\ModuleAnalysisCache");
+        builder.environment().put("PATH", "/usr/bin");
+        builder.environment().put("AWS_SECRET_ACCESS_KEY", "secret");
+
+        ProviderProcessEnvironment.applyForTrustedLauncher(builder, Map.of());
+
+        assertEquals("C:\\cache\\ModuleAnalysisCache", builder.environment().get("PSModuleAnalysisCachePath"));
+        assertFalse(builder.environment().containsKey("AWS_SECRET_ACCESS_KEY"));
+    }
+}

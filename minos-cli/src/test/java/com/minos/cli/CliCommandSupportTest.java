@@ -130,6 +130,16 @@ class CliCommandSupportTest {
     }
 
     @Test
+    void aFailureMessageNeverCarriesTheControlSequencesOfADamagedFile() {
+        // A message may copy a value read from a damaged file: ESC, BEL and bidirectional marks must not reach a terminal.
+        String message = CliCommandSupport.failureMessage(
+                new IllegalStateException("bad value \u001b[2Jevil\u0007 and " + (char) 0x202e + "flipped"));
+
+        assertTrue(message.chars().noneMatch(value -> Character.isISOControl(value) || value == 0x202e), message);
+        assertTrue(message.contains("evil"), "the text stays readable: " + message);
+    }
+
+    @Test
     void unwrapRuntimeKeepsCheckedFailuresAndCauselessRuntimeFailures() {
         IOException checked = new IOException("checked", new IllegalStateException("cause"));
         assertEquals(checked, CliCommandSupport.unwrapRuntime(checked));
@@ -145,21 +155,6 @@ class CliCommandSupportTest {
                     () -> CliCommandSupport.operand(rejected, "project"));
             assertEquals("invalid <project> operand", failure.getMessage());
         }
-    }
-
-    @Test
-    void parseLimitEnforcesTheInclusiveRangeAndReportsNonNumericInput() {
-        assertEquals(1, CliCommandSupport.parseLimit("1", 1000));
-        assertEquals(1000, CliCommandSupport.parseLimit("1000", 1000));
-        assertEquals("limit must be between 1 and 1000",
-                assertThrows(IllegalArgumentException.class,
-                        () -> CliCommandSupport.parseLimit("0", 1000)).getMessage());
-        assertEquals("limit must be between 1 and 1000",
-                assertThrows(IllegalArgumentException.class,
-                        () -> CliCommandSupport.parseLimit("1001", 1000)).getMessage());
-        assertEquals("invalid limit: abc",
-                assertThrows(IllegalArgumentException.class,
-                        () -> CliCommandSupport.parseLimit("abc", 1000)).getMessage());
     }
 
     @Test

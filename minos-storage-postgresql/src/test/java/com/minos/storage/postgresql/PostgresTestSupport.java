@@ -5,6 +5,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,6 +14,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -33,9 +36,11 @@ abstract class PostgresTestSupport {
     private static Throwable dockerFailure;
 
     @BeforeAll
-    static void startPostgres() {
+    static void startPostgres() throws IOException {
+        // Outside the try: a missing or malformed pin is a repository defect, never a skipped suite.
+        DockerImageName image = DockerImageName.parse(pinnedPostgresImage()).asCompatibleSubstituteFor("postgres");
         try {
-            POSTGRES = new PostgreSQLContainer<>("pgvector/pgvector:0.8.2-pg17")
+            POSTGRES = new PostgreSQLContainer<>(image)
                     .withDatabaseName("minos_test")
                     .withUsername("minos")
                     .withPassword("test-secret");
@@ -52,6 +57,28 @@ abstract class PostgresTestSupport {
                 );
             }
         }
+    }
+
+    /**
+     * The pgvector image the managed Docker runtime ships, read from its single source: the default
+     * of {@code MINOS_POSTGRES_IMAGE} in {@code docker/compose-mcp.connected.yaml}. The tests then
+     * exercise the exact tag-and-digest reference users run, and no second copy of it exists.
+     */
+    static String pinnedPostgresImage() throws IOException {
+        Path directory = Path.of("").toAbsolutePath();
+        while (directory != null) {
+            Path compose = directory.resolve("docker").resolve("compose-mcp.connected.yaml");
+            if (Files.isRegularFile(compose)) {
+                Matcher image = Pattern.compile("MINOS_POSTGRES_IMAGE:-([^}\"\\s]+)")
+                        .matcher(Files.readString(compose));
+                if (!image.find()) {
+                    throw new IllegalStateException("compose-mcp.connected.yaml declares no MINOS_POSTGRES_IMAGE default");
+                }
+                return image.group(1);
+            }
+            directory = directory.getParent();
+        }
+        throw new IllegalStateException("docker/compose-mcp.connected.yaml not found above the module directory");
     }
 
     @AfterAll

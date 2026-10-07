@@ -14,6 +14,7 @@ if ($env:OS -ne 'Windows_NT') {
 }
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+. (Join-Path $RepoRoot 'scripts\lib\MinosExitCode.ps1')
 if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { $ProjectsRoot = Split-Path -Parent $RepoRoot }
 $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 $FixtureRelativePath = 'minos-code-intelligence/fixtures/polyglot/m29-scoped-modules'
@@ -50,9 +51,10 @@ function Invoke-NativeCapture {
 }
 
 function Assert-NativeSuccess {
-    param([Parameter(Mandatory = $true)][string] $File, [Parameter(Mandatory = $true)][string[]] $Arguments, [Parameter(Mandatory = $true)][string] $Failure)
+    param([Parameter(Mandatory = $true)][string] $File, [Parameter(Mandatory = $true)][string[]] $Arguments, [Parameter(Mandatory = $true)][string] $Failure, [int[]] $AcceptedExitCodes = @(0))
     $Result = Invoke-NativeCapture -File $File -Arguments $Arguments
-    if ($Result.ExitCode -ne 0) { throw "$Failure (exit=$($Result.ExitCode)): $($Result.Output)" }
+    $script:LastNativeExitCode = $Result.ExitCode
+    if ($AcceptedExitCodes -notcontains $Result.ExitCode) { throw "$Failure (exit=$($Result.ExitCode)): $($Result.Output)" }
     if (-not [string]::IsNullOrWhiteSpace($Result.Output)) { Write-Host $Result.Output }
     return $Result.Output
 }
@@ -92,7 +94,7 @@ $DataRoot = Join-Path $env:TEMP "minos-m29-s4-data-$Suffix"
 $ContainerName = "minos-m29-s4-$Suffix"
 $ComposeProject = "minos-m29-s4-$Suffix"
 $RuntimeRoot = Join-Path $InstallRoot 'runtime'
-$ComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
+$ComposeFile = Join-Path $RuntimeRoot 'compose-mcp.prod.yaml'
 $EnvironmentFile = Join-Path $RuntimeRoot '.env'
 $Workflow = Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1'
 $ReportRoot = Join-Path $RepoRoot 'target\m29'
@@ -111,14 +113,19 @@ $QuerySemanticStatus = $null
 $QueryHybridStatus = $null
 $ScopedRoots = @()
 
+# Exit 3 is a partial result for the commands listed in scripts/lib/partial-result-commands.json (Q25): the JSON is valid
+# for the registry entries that could be read, and the warning says so. -Strict refuses it: `fresh project list` asserts a
+# registry with nothing in it, which an inventory with unreadable entries is not.
 function Invoke-AdminJson {
-    param([Parameter(Mandatory = $true)][string[]] $MinosArguments, [Parameter(Mandatory = $true)][string] $Label)
+    param([Parameter(Mandatory = $true)][string[]] $MinosArguments, [Parameter(Mandatory = $true)][string] $Label, [switch] $Strict)
     $Arguments = @(
         'compose', '--project-directory', $RuntimeRoot,
         '--env-file', $EnvironmentFile, '-f', $ComposeFile,
         'run', '--rm', '--no-deps', 'minos-admin'
     ) + $MinosArguments
-    $Output = Assert-NativeSuccess -File $Docker -Arguments $Arguments -Failure "M29-S5 admin command failed: $Label"
+    $Accepted = if ($Strict) { @(0) } else { @(Get-MinosAcceptedExitCodes -MinosArguments $MinosArguments) }
+    $Output = Assert-NativeSuccess -File $Docker -Arguments $Arguments -Failure "M29-S5 admin command failed: $Label" -AcceptedExitCodes $Accepted
+    if (-not $Strict) { Write-MinosPartialResultWarning -MinosArguments $MinosArguments -ExitCode $script:LastNativeExitCode }
     return ConvertFrom-LastJsonLine -Output $Output -Label $Label
 }
 
@@ -135,7 +142,7 @@ function Invoke-Workflow([string] $Action) {
 }
 
 try {
-    $InitialProjects = Invoke-AdminJson -MinosArguments @('project', 'list', '--format', 'json') -Label 'fresh project list'
+    $InitialProjects = Invoke-AdminJson -MinosArguments @('project', 'list', '--format', 'json') -Label 'fresh project list (a registry with unreadable entries is not fresh)' -Strict
     if ([int] $InitialProjects.count -ne 0) { throw "M29-S5 expected a fresh project registry, found $($InitialProjects.count)" }
 
     $ContainerFixture = '/workspace/projects/' + $FixtureRelativePath

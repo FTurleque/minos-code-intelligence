@@ -33,11 +33,13 @@ function New-FixturePackage {
         [string] $Root,
         [string] $Version,
         [switch] $IncludeObsoleteFile,
-        [switch] $IncludeNewMarker
+        [switch] $IncludeNewMarker,
+        [switch] $Lite
     )
     foreach ($Directory in @('app', 'lib', 'docker\scripts', 'integration', 'supply-chain')) {
         New-Item -ItemType Directory -Force -Path (Join-Path $Root $Directory) | Out-Null
     }
+    if (-not $Lite) { New-Item -ItemType Directory -Force -Path (Join-Path $Root 'tools\artifacts') | Out-Null }
     "fake-exe-$Version" | Set-Content -LiteralPath (Join-Path $Root 'app\minos.exe') -Encoding ascii
     "fake-jar-$Version" | Set-Content -LiteralPath (Join-Path $Root 'lib\minos.jar') -Encoding ascii
     "# switch-mcp-backend $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\switch-mcp-backend.ps1') -Encoding ascii
@@ -50,14 +52,19 @@ function New-FixturePackage {
     "# uninstall-mcp-clients $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\uninstall-mcp-clients.ps1') -Encoding ascii
     "# update-installation $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\update-installation.ps1') -Encoding ascii
     "# Dockerfile $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\Dockerfile.mcp.release') -Encoding ascii
-    "# compose $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose.mcp.prod.yaml') -Encoding ascii
-    "# compose-connected $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose.mcp.connected.yaml') -Encoding ascii
+    "# compose $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose-mcp.prod.yaml') -Encoding ascii
+    "# compose-connected $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose-mcp.connected.yaml') -Encoding ascii
     "# prod-mcp-release $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\prod-mcp-release.ps1') -Encoding ascii
     "# mcp-lifecycle $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\mcp-lifecycle.ps1') -Encoding ascii
     "# configure-docker-mcp $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\configure-docker-mcp.ps1') -Encoding ascii
     "# configure-m30-docker-services $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\configure-m30-docker-services.ps1') -Encoding ascii
     '{"bomFormat":"CycloneDX"}' | Set-Content -LiteralPath (Join-Path $Root 'supply-chain\minos.cdx.json') -Encoding ascii
     "Third party notices $Version" | Set-Content -LiteralPath (Join-Path $Root 'supply-chain\THIRD-PARTY-NOTICES.txt') -Encoding ascii
+    if (-not $Lite) {
+        ([ordered]@{ formatVersion = 1; platform = 'windows-x64'; files = @() } | ConvertTo-Json) |
+            Set-Content -LiteralPath (Join-Path $Root 'tools\TOOLS-MANIFEST.json') -Encoding ascii
+        "tool-payload-$Version" | Set-Content -LiteralPath (Join-Path $Root 'tools\artifacts\payload.bin') -Encoding ascii
+    }
     "@echo off`r`nrem minos $Version" | Set-Content -LiteralPath (Join-Path $Root 'minos.cmd') -Encoding ascii
     "@echo off`r`nrem minos-mcp $Version" | Set-Content -LiteralPath (Join-Path $Root 'minos-mcp.cmd') -Encoding ascii
     "java.base" | Set-Content -LiteralPath (Join-Path $Root 'RUNTIME-MODULES.txt') -Encoding ascii
@@ -72,6 +79,7 @@ function New-FixturePackage {
 
     if ($IncludeObsoleteFile) {
         'obsolete' | Set-Content -LiteralPath (Join-Path $Root 'app\obsolete.txt') -Encoding ascii
+        if (-not $Lite) { 'obsolete tool' | Set-Content -LiteralPath (Join-Path $Root 'tools\artifacts\obsolete-tool.bin') -Encoding ascii }
     }
     if ($IncludeNewMarker) {
         "new-$Version" | Set-Content -LiteralPath (Join-Path $Root 'app\new.txt') -Encoding ascii
@@ -191,6 +199,8 @@ try {
     Assert-True ((Get-Content -LiteralPath (Join-Path $OutsideDataRoot 'preserve.marker') -Raw).Trim() -eq 'user-data') 'Data outside InstallRoot was touched by the upgrade.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot '.install-staging'))) 'Staging residue left after a clean upgrade.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot '.install-rollback'))) 'Rollback residue left after a clean upgrade.'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot 'tools\artifacts\obsolete-tool.bin'))) 'Stale tool payload file from v1 survived the upgrade to v2.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $MainRoot 'tools\artifacts\payload.bin') -Raw).Trim() -eq 'tool-payload-1.1.0') 'The v2 tools payload was not activated.'
     Write-Host 'Scenario 3/5 (fresh install + clean upgrade, stale-file cleanup, preservation) PASS' -ForegroundColor Green
 
     # --- Scenario 6: synchronous rollback on an injected activation failure ---
@@ -207,6 +217,43 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot '.install-staging'))) 'Staging residue left after rollback.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot '.install-rollback'))) 'Rollback residue left after rollback.'
     Write-Host 'Scenario 6 (synchronous rollback on injected activation failure) PASS' -ForegroundColor Green
+
+    # --- Scenario 6b: the tools directory is activated (entry 6 of the staged directories), then the
+    # activation fails: rollback must put the previous tools payload back, not leave v3 tools beside v2 ---
+    $Threw6b = $false
+    try { Invoke-UpdaterInProcess -PackageRoot $PackageV3 -InstallRoot $MainRoot -TestFailActivationAfterEntries 6 }
+    catch {
+        $Threw6b = $true
+        Assert-True ($_.Exception.Message -like '*MINOS_UPDATE_TEST_ACTIVATION_FAILURE*') "Expected MINOS_UPDATE_TEST_ACTIVATION_FAILURE, got: $($_.Exception.Message)"
+    }
+    Assert-True $Threw6b 'Injected activation failure after the tools directory did not propagate.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $MainRoot 'tools\artifacts\payload.bin') -Raw).Trim() -eq 'tool-payload-1.1.0') 'The tools payload was not restored to its pre-upgrade content after rollback.'
+    Assert-True ((Get-VersionLine $MainRoot) -eq $PreFailureVersion) 'Install root was not restored after a rollback that had already activated tools.'
+    Write-Host 'Scenario 6b (rollback restores the tools payload) PASS' -ForegroundColor Green
+
+    # --- Scenario 6c: a lite package (no tools\) installed over a full installation removes the managed
+    # tools\ transactionally: gone after the upgrade, restored when the activation fails afterwards ---
+    $LiteRoot = Join-Path $Sandbox 'scenario6c-lite-over-full'
+    $PackageFull = Join-Path $Sandbox 'package-full-6c'
+    $PackageLite = Join-Path $Sandbox 'package-lite-6c'
+    New-FixturePackage -Root $PackageFull -Version '2.0.0'
+    New-FixturePackage -Root $PackageLite -Version '2.1.0' -Lite
+    Invoke-UpdaterInProcess -PackageRoot $PackageFull -InstallRoot $LiteRoot
+    Assert-True (Test-Path -LiteralPath (Join-Path $LiteRoot 'tools\artifacts\payload.bin')) 'Full package did not install its tools payload.'
+    $Threw6c = $false
+    try { Invoke-UpdaterInProcess -PackageRoot $PackageLite -InstallRoot $LiteRoot -TestFailActivationAfterEntries 6 }
+    catch { $Threw6c = $true }
+    Assert-True $Threw6c 'Injected activation failure during the lite upgrade did not propagate.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $LiteRoot 'tools\artifacts\payload.bin') -Raw).Trim() -eq 'tool-payload-2.0.0') 'The removed tools payload was not restored by the rollback.'
+    Invoke-UpdaterInProcess -PackageRoot $PackageLite -InstallRoot $LiteRoot
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $LiteRoot 'tools'))) 'The managed tools directory survived a lite upgrade.'
+    Assert-True ((Get-VersionLine $LiteRoot) -match '2\.1\.0') 'The lite package was not activated.'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $LiteRoot '.install-rollback'))) 'Rollback residue left after the lite upgrade.'
+    $PackageLite2 = Join-Path $Sandbox 'package-lite-6c-second'
+    New-FixturePackage -Root $PackageLite2 -Version '2.2.0' -Lite
+    Invoke-UpdaterInProcess -PackageRoot $PackageLite2 -InstallRoot $LiteRoot
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $LiteRoot 'tools'))) 'A lite over lite upgrade created a tools directory.'
+    Write-Host 'Scenario 6c (lite over full: tools removed, restored on rollback) PASS' -ForegroundColor Green
 
     # --- Scenario 7: crash mid-activation (FailFast, detached child process),
     # then next-launch recovery converges to a clean, requested state ---
@@ -268,6 +315,106 @@ try {
     }
     Assert-True $Threw9 'A corrupted transaction journal was not rejected -- recovery must fail closed.'
     Write-Host 'Scenario 9 (corrupted transaction journal fails closed) PASS' -ForegroundColor Green
+
+    # --- Scenario 10: an installation made BEFORE the compose files were renamed
+    # (docker\compose.mcp.*.yaml, audit S11) is updated by a package that ships the new names. `docker` is staged and
+    # moved whole, so the old names must vanish with the old directory (two compose files side by side would be
+    # dangerous: gates and tools glob docker\compose*.yaml), and a failed activation must bring the old names back.
+    $LegacyRoot = Join-Path $Sandbox 'scenario10-pre-rename-install'
+    $PackageLegacyV1 = Join-Path $Sandbox 'package-v1-scenario10'
+    $PackageLegacyV2 = Join-Path $Sandbox 'package-v2-scenario10'
+    New-FixturePackage -Root $PackageLegacyV1 -Version '1.0.0'
+    New-FixturePackage -Root $PackageLegacyV2 -Version '1.1.0'
+    Invoke-UpdaterInProcess -PackageRoot $PackageLegacyV1 -InstallRoot $LegacyRoot
+    # The installed tree of a pre-rename release: same files, old names (the updater of that release produced it).
+    Rename-Item -LiteralPath (Join-Path $LegacyRoot 'docker\compose-mcp.prod.yaml') -NewName 'compose.mcp.prod.yaml'
+    Rename-Item -LiteralPath (Join-Path $LegacyRoot 'docker\compose-mcp.connected.yaml') -NewName 'compose.mcp.connected.yaml'
+    $LegacyNames = @('compose.mcp.prod.yaml', 'compose.mcp.connected.yaml')
+    $CurrentNames = @('compose-mcp.prod.yaml', 'compose-mcp.connected.yaml')
+
+    $Threw10 = $false
+    try { Invoke-UpdaterInProcess -PackageRoot $PackageLegacyV2 -InstallRoot $LegacyRoot -TestFailActivationAfterEntries 4 }
+    catch { $Threw10 = $true }
+    Assert-True $Threw10 'Injected activation failure (after the docker directory was replaced) did not propagate.'
+    foreach ($Name in $LegacyNames) { Assert-True (Test-Path -LiteralPath (Join-Path $LegacyRoot "docker\$Name")) "Rollback did not restore docker\$Name." }
+    foreach ($Name in $CurrentNames) { Assert-True (-not (Test-Path -LiteralPath (Join-Path $LegacyRoot "docker\$Name"))) "docker\$Name survived a rolled-back update." }
+    Assert-True ((Get-VersionLine $LegacyRoot) -match '1\.0\.0') 'The pre-rename install was not restored to its own version.'
+
+    Invoke-UpdaterInProcess -PackageRoot $PackageLegacyV2 -InstallRoot $LegacyRoot
+    Assert-True ((Get-VersionLine $LegacyRoot) -match '1\.1\.0') 'The update of a pre-rename install did not activate the new version.'
+    foreach ($Name in $CurrentNames) { Assert-True (Test-Path -LiteralPath (Join-Path $LegacyRoot "docker\$Name")) "docker\$Name is missing after the update." }
+    foreach ($Name in $LegacyNames) { Assert-True (-not (Test-Path -LiteralPath (Join-Path $LegacyRoot "docker\$Name"))) "The pre-rename docker\$Name survived the update (two compose files side by side)." }
+    Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $LegacyRoot 'docker') -Filter 'compose*' -File).Count -eq 2) 'docker\ must hold exactly the two compose files of the new package.'
+    Write-Host 'Scenario 10 (update of a pre-rename install: old compose names replaced, restored on rollback) PASS' -ForegroundColor Green
+
+    # --- Scenario 11: the runtime directory (%LOCALAPPDATA%\MINOS\docker\runtime) is NOT part of the staged tree, so the
+    # update does not touch its compose copy. mcp-lifecycle.ps1 migrates it on the first action that follows. Its helper
+    # functions are taken from the real script (AST) and run against a scratch runtime, without Docker.
+    $LifecyclePath = Join-Path $RepoRoot 'docker\scripts\mcp-lifecycle.ps1'
+    $LifecycleErrors = $null
+    $LifecycleAst = [System.Management.Automation.Language.Parser]::ParseFile($LifecyclePath, [ref]$null, [ref]$LifecycleErrors)
+    Assert-True (@($LifecycleErrors).Count -eq 0) 'mcp-lifecycle.ps1 has syntax errors.'
+    $Wanted = @('Move-LegacyRuntimeCompose', 'Resolve-ComposeSource')
+    $Definitions = @($LifecycleAst.FindAll({ param($Node) $Node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $Node.Name -in $Wanted }, $true))
+    Assert-True ($Definitions.Count -eq 2) "mcp-lifecycle.ps1 must define $($Wanted -join ' and ')."
+    foreach ($Definition in $Definitions) { . ([scriptblock]::Create($Definition.Extent.Text)) }
+    $LifecycleText = Get-Content -LiteralPath $LifecyclePath -Raw
+    Assert-True ($LifecycleText -match '(?s)Move-LegacyRuntimeCompose\s+switch \(\$Action\)') 'The migration must run before every action (just before the switch).'
+    Assert-True ($LifecycleText.Contains('Resolve-ComposeSource $SourceRoot')) 'Install must read the recipe through Resolve-ComposeSource (previous releases keep the old name).'
+
+    $RuntimeRoot = Join-Path $Sandbox 'scenario11-runtime'
+    $ComposeFile = Join-Path $RuntimeRoot 'compose-mcp.prod.yaml'
+    $LegacyComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
+    function Reset-Runtime { Remove-Item -LiteralPath $RuntimeRoot -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null }
+
+    # Old file only, holding the connected profile swapped in by the M30 configurator: moved, content intact.
+    Reset-Runtime
+    '# connected profile, pre-rename' | Set-Content -LiteralPath $LegacyComposeFile -Encoding ascii
+    Move-LegacyRuntimeCompose 6>$null
+    Assert-True (-not (Test-Path -LiteralPath $LegacyComposeFile)) 'The pre-rename runtime compose file was left behind.'
+    Assert-True ((Get-Content -LiteralPath $ComposeFile -Raw).Trim() -eq '# connected profile, pre-rename') 'The migrated runtime compose file lost its content (the active profile must survive).'
+    Move-LegacyRuntimeCompose 6>$null   # idempotent
+    Assert-True ((Get-Content -LiteralPath $ComposeFile -Raw).Trim() -eq '# connected profile, pre-rename') 'A second migration changed the file.'
+
+    # Nothing at all (not installed): no-op, the "not installed" refusal stays Require-Installed's.
+    Reset-Runtime
+    Move-LegacyRuntimeCompose 6>$null
+    Assert-True (-not (Test-Path -LiteralPath $ComposeFile) -and -not (Test-Path -LiteralPath $LegacyComposeFile)) 'The migration invented a compose file.'
+
+    # Both: the new name wins, nothing is deleted or overwritten, the operator is told.
+    Reset-Runtime
+    '# current' | Set-Content -LiteralPath $ComposeFile -Encoding ascii
+    '# stale' | Set-Content -LiteralPath $LegacyComposeFile -Encoding ascii
+    $Warnings = @(Move-LegacyRuntimeCompose 3>&1 6>$null | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+    Assert-True ($Warnings.Count -eq 1) 'Both runtime compose files present: exactly one warning was expected.'
+    Assert-True ((Get-Content -LiteralPath $ComposeFile -Raw).Trim() -eq '# current') 'The current runtime compose file was overwritten.'
+    Assert-True ((Get-Content -LiteralPath $LegacyComposeFile -Raw).Trim() -eq '# stale') 'The pre-rename runtime compose file was deleted without a decision.'
+
+    # Resolve-ComposeSource: a tree older than the rename keeps its old name (previous release in the upgrade qualification).
+    $SourceTree = Join-Path $Sandbox 'scenario11-source'
+    New-Item -ItemType Directory -Force -Path (Join-Path $SourceTree 'docker') | Out-Null
+    $Threw11 = $false
+    try { [void](Resolve-ComposeSource $SourceTree) } catch { $Threw11 = $true }
+    Assert-True $Threw11 'A tree with no compose recipe must be refused.'
+    '# legacy' | Set-Content -LiteralPath (Join-Path $SourceTree 'docker\compose.mcp.prod.yaml') -Encoding ascii
+    Assert-True ((Split-Path -Leaf (Resolve-ComposeSource $SourceTree)) -eq 'compose.mcp.prod.yaml') 'A pre-rename tree must be read through its old name.'
+    '# current' | Set-Content -LiteralPath (Join-Path $SourceTree 'docker\compose-mcp.prod.yaml') -Encoding ascii
+    Assert-True ((Split-Path -Leaf (Resolve-ComposeSource $SourceTree)) -eq 'compose-mcp.prod.yaml') 'When both names exist the new one must win.'
+    # The developer entry point (docker\scripts\prod-mcp.ps1, runtime under %LOCALAPPDATA%\MINOS\runtime) carries the
+    # same migration, with its own variable names.
+    $ProdAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $RepoRoot 'docker\scripts\prod-mcp.ps1'), [ref]$null, [ref]$LifecycleErrors)
+    Assert-True (@($LifecycleErrors).Count -eq 0) 'prod-mcp.ps1 has syntax errors.'
+    $ProdDefinition = @($ProdAst.FindAll({ param($Node) $Node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $Node.Name -eq 'Move-LegacyMinosComposeFile' }, $true))
+    Assert-True ($ProdDefinition.Count -eq 1) 'prod-mcp.ps1 must define Move-LegacyMinosComposeFile.'
+    . ([scriptblock]::Create($ProdDefinition[0].Extent.Text))
+    $composeFile = $ComposeFile
+    $legacyComposeFile = $LegacyComposeFile
+    Reset-Runtime
+    '# dev runtime, pre-rename' | Set-Content -LiteralPath $LegacyComposeFile -Encoding ascii
+    Move-LegacyMinosComposeFile 6>$null
+    Assert-True ((-not (Test-Path -LiteralPath $LegacyComposeFile)) -and ((Get-Content -LiteralPath $ComposeFile -Raw).Trim() -eq '# dev runtime, pre-rename')) 'prod-mcp.ps1: the pre-rename runtime compose file was not migrated with its content.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp.ps1') -Raw) -match '(?s)Move-LegacyMinosComposeFile\s+switch \(\$Action\)') 'prod-mcp.ps1: the migration must run before every action.'
+    Write-Host 'Scenario 11 (pre-rename runtime compose file migrated on the first action; old-name source trees still readable) PASS' -ForegroundColor Green
 
     Write-Host 'WINDOWS_UPGRADE_TRANSACTION_VALID' -ForegroundColor Green
 }

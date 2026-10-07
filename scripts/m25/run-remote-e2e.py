@@ -70,7 +70,7 @@ def require(value: object, expected: object, label: str) -> None:
 def github_credential_environment(env: dict[str, str], repository: str) -> str | None:
     if "github.com" not in repository.lower():
         return None
-    name = "MINOS_M25_E2E_GITHUB_TOKEN"
+    name = "MINOS_REMOTE_TOKEN_E2E"
     if env.get(name):
         return name
     completed = subprocess.run(

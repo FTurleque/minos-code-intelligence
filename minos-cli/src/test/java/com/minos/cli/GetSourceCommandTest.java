@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.context.SourceExcerpt;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.query.SymbolResult;

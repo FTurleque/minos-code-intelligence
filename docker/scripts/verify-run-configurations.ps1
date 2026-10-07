@@ -4,7 +4,7 @@ Set-StrictMode -Version 2.0
 $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $scriptDirectory '..\..'))
 $runDirectory = Join-Path $projectRoot '.run'
-$composeTemplate = Join-Path $projectRoot 'docker\compose.mcp.prod.yaml'
+$composeTemplate = Join-Path $projectRoot 'docker\compose-mcp.prod.yaml'
 $dockerfile = Join-Path $projectRoot 'docker\Dockerfile.mcp'
 $prodScript = Join-Path $projectRoot 'docker\scripts\prod-mcp.ps1'
 $devScript = Join-Path $projectRoot 'scripts\intellij\run-minos.ps1'
@@ -109,8 +109,8 @@ foreach ($script in @($prodScript, $devScript, $windowsFunctions, $MyInvocation.
 $dockerfileContent = Read-Utf8Text -Path $dockerfile
 $composeContent = Read-Utf8Text -Path $composeTemplate
 $smokeContent = Read-Utf8Text -Path $smokeSource
-Assert-Condition -Condition ($dockerfileContent.Contains('FROM eclipse-temurin@sha256:')) `
-    -Message "L'image MCP doit utiliser Eclipse Temurin Java 24 par digest immuable."
+Assert-Condition -Condition ($dockerfileContent -match '(?m)^FROM eclipse-temurin:24\.[0-9._]+-jre@sha256:[0-9a-f]{64}\s*$') `
+    -Message "L'image MCP doit utiliser Eclipse Temurin Java 24 sous la forme tag@digest immuable (le tag est suivi par Dependabot)."
 Assert-Condition -Condition (-not $dockerfileContent.Contains('FROM eclipse-temurin:24-jre')) `
     -Message "L'image MCP ne doit pas revenir au tag flottant eclipse-temurin:24-jre."
 Assert-Condition -Condition ($dockerfileContent.Contains('USER 10001:10001')) `

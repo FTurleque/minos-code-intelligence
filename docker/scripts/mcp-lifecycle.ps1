@@ -15,7 +15,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $ProjectsRoot,
 
-    # Where docker/Dockerfile.mcp.release and docker/compose.mcp.prod.yaml are read from for this
+    # Where docker/Dockerfile.mcp.release and docker/compose-mcp.prod.yaml are read from for this
     # Install. Defaults to this script's own repo (the normal case: installing whatever version of
     # MINOS this checkout is). The Docker A -> B upgrade qualification overrides this per candidate
     # so each candidate installs itself with its OWN contemporary Dockerfile/Compose recipe - the
@@ -67,7 +67,11 @@ $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 
 $RuntimeRoot = Join-Path $InstallRoot 'runtime'
 $BackupsRoot = Join-Path $InstallRoot 'backups'
-$ComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
+$ComposeFile = Join-Path $RuntimeRoot 'compose-mcp.prod.yaml'
+# The runtime copy was named compose.mcp.prod.yaml until the compose files were renamed so that Dependabot's
+# docker-compose ecosystem can see them (audit S11). An installation made before that still holds the old name,
+# possibly with the connected profile swapped in by configure-m30-docker-services.ps1: see Move-LegacyRuntimeCompose.
+$LegacyComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
 $EnvironmentFile = Join-Path $RuntimeRoot '.env'
 $MetadataFile = Join-Path $RuntimeRoot 'installation.json'
 $ProviderInventoryFile = Join-Path $RuntimeRoot 'provider-inventory.json'
@@ -77,7 +81,7 @@ function ConvertTo-DockerPath([string] $Path) {
     return ([System.IO.Path]::GetFullPath($Path)).Replace('\', '/')
 }
 
-# Unlike docker\Dockerfile.mcp.release and docker\compose.mcp.prod.yaml -- which are shipped
+# Unlike docker\Dockerfile.mcp.release and docker\compose-mcp.prod.yaml -- which are shipped
 # verbatim under {app}\docker\ and so remain reachable via a $RepoRoot-relative path from both a
 # git checkout and an installed distribution -- the npm lockfiles below live under a Maven
 # module's src/main/resources tree. That tree is compiled INTO minos.jar and never itself shipped
@@ -112,14 +116,115 @@ function Resolve-SemanticProvider([string] $Requested) {
     return $Normalized
 }
 
-function Compose([string[]] $Arguments) {
+function Compose([string[]] $Arguments, [int[]] $AcceptedExitCodes = @(0)) {
     # Stdin MUST be a non-terminal pipe here: some invocation contexts (notably an
     # installer's inherited console) leave stdin attached to a handle that satisfies
     # isatty() without any human able to answer it. Compose only prompts interactively
     # ("... Recreate (data will be lost)?") when it believes stdin is a real terminal;
     # forcing it through a PowerShell pipe guarantees non-interactive, fail-fast behavior.
     $null | & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($Arguments -join ' ')" }
+    if ($LASTEXITCODE -notin $AcceptedExitCodes) { throw "docker compose failed (exit $LASTEXITCODE): $($Arguments -join ' ')" }
+}
+
+# Resource ceilings (docker/compose-mcp.*.yaml, x-limits-<role>; defaults in docker/.env.example). Hitting
+# one is not reported by Compose as anything but a failed command (exit 137 for a kill; for a PID ceiling
+# a JVM stack trace saying OutOfMemoryError: unable to create native thread), and a process killed inside
+# a still-running container (an Ollama model runner) only surfaces as an HTTP 500 from that service. These
+# helpers state facts the container itself reports and name the variable to raise and the ceiling in
+# force. They never claim to know WHY a ceiling was reached (for example whether a model is too large).
+function Get-CeilingVariablePrefix([string] $Service) {
+    switch ($Service) {
+        'minos-mcp' { 'MINOS_MCP' }
+        'minos-admin' { 'MINOS_ADMIN' }
+        'minos-postgres' { 'MINOS_POSTGRES' }
+        'minos-ollama' { 'MINOS_OLLAMA' }
+        default { 'MINOS_JOB' }
+    }
+}
+
+function Format-CeilingBytes($Bytes) {
+    if ($null -eq $Bytes -or [int64]$Bytes -le 0) { return 'none' }
+    return ('{0} MiB' -f [math]::Round([int64]$Bytes / 1MB))
+}
+
+# Ceilings in force for a service, as Compose resolves them with the runtime .env (override included).
+function Get-EffectiveCeilings([string] $Service) {
+    $Json = $null
+    try {
+        $Json = (& docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile config --format json 2>$null | Out-String)
+        $Config = $Json | ConvertFrom-Json
+        $Definition = $Config.services.$Service
+        if ($null -ne $Definition) {
+            return [pscustomobject]@{ Memory = (Format-CeilingBytes $Definition.mem_limit); Pids = [string]$Definition.pids_limit }
+        }
+    }
+    catch { }
+    return [pscustomobject]@{ Memory = 'unknown'; Pids = 'unknown' }
+}
+
+function Write-AdminCeilingHint {
+    $Ceilings = Get-EffectiveCeilings 'minos-admin'
+    Write-Warning ("If the error above is 'unable to create native thread', 'Resource temporarily unavailable' or a kill (exit 137), " +
+        "the admin container may have reached a resource ceiling. In force: memory $($Ceilings.Memory) (MINOS_ADMIN_MEM_LIMIT), " +
+        "processes and threads $($Ceilings.Pids) (MINOS_ADMIN_PIDS_LIMIT). Raise the matching variable in $EnvironmentFile and retry. " +
+        "See docs/user/docker-runtime.md, 'Depannage'.")
+}
+
+function Write-CeilingDiagnostics([string] $Project) {
+    $Containers = @(& docker ps -a --filter "label=com.docker.compose.project=$Project" --format '{{.Names}}' 2>$null)
+    foreach ($Name in $Containers) {
+        $Line = (& docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}|{{.State.OOMKilled}}|{{.HostConfig.Memory}}|{{.HostConfig.PidsLimit}}' $Name 2>$null)
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Line)) { continue }
+        $Parts = $Line.Split('|')
+        $Service = $Parts[0]; $Running = ($Parts[1] -eq 'true'); $OomKilled = ($Parts[2] -eq 'true')
+        $Prefix = Get-CeilingVariablePrefix $Service
+        $OomEvents = 0; $PidRefusals = 0
+        if ($Running) {
+            $MemoryEvents = (& docker exec $Name cat /sys/fs/cgroup/memory.events 2>$null | Out-String)
+            if ($MemoryEvents -match 'oom_kill (\d+)') { $OomEvents = [int]$Matches[1] }
+            $PidEvents = (& docker exec $Name cat /sys/fs/cgroup/pids.events 2>$null | Out-String)
+            if ($PidEvents -match 'max (\d+)') { $PidRefusals = [int]$Matches[1] }
+        }
+        if ($OomKilled -or $OomEvents -gt 0) {
+            Write-Warning ("$Name ($Service): the kernel killed a process for reaching the memory ceiling (OOMKilled=$OomKilled, oom_kill events=$OomEvents; " +
+                "ceiling in force $(Format-CeilingBytes $Parts[3])). Raise $($Prefix)_MEM_LIMIT in $EnvironmentFile and recreate the service. See docs/user/docker-runtime.md, 'Depannage'.")
+        }
+        if ($PidRefusals -gt 0) {
+            Write-Warning ("$Name ($Service): $PidRefusals process or thread creations were refused by the PID ceiling (in force $($Parts[4])). " +
+                "Raise $($Prefix)_PIDS_LIMIT in $EnvironmentFile and recreate the service. See docs/user/docker-runtime.md, 'Depannage'.")
+        }
+    }
+}
+
+# Resource-ceiling overrides an operator put in the runtime .env (MINOS_<ROLE>_CPUS|MEM_LIMIT|PIDS_LIMIT)
+# survive an Install/update: the .env is regenerated, these lines are carried over. Each value is
+# validated first, with the rule of scripts/quality/check-compose-limits.py: memory and PID are real
+# ceilings (0, -1 and empty mean "unlimited" to Docker); CPU is 0 (none) or a positive number the
+# daemon accepts (whether it exceeds the host's CPU count is the daemon's to say). An invalid value is
+# refused here, naming the variable, and is never copied silently into the new .env.
+function Test-CeilingOverride([string] $Name, [string] $Value) {
+    $Candidate = $Value.Trim().Trim('"').Trim("'")
+    if ($Name -like '*_MEM_LIMIT') {
+        if ($Candidate -match '^[1-9][0-9]*[kKmMgG]$') { return $true }
+        return ($Candidate -match '^[1-9][0-9]{0,17}$' -and [int64]$Candidate -ge 6291456)
+    }
+    if ($Name -like '*_PIDS_LIMIT') { return ($Candidate -match '^[1-9][0-9]{0,17}$') }
+    if ($Candidate -notmatch '^([0-9]+(\.[0-9]+)?|\.[0-9]+)$') { return $false }
+    $Cpus = 0.0
+    if (-not [double]::TryParse($Candidate, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$Cpus)) { return $false }
+    return ($Cpus -eq 0 -or $Cpus -ge 0.01)
+}
+
+function Get-PreservedCeilingOverrides([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
+    $Lines = @(Get-Content -LiteralPath $Path | Where-Object { $_ -match '^MINOS_(MCP|ADMIN|JOB|POSTGRES|OLLAMA)_(CPUS|MEM_LIMIT|PIDS_LIMIT)=' })
+    foreach ($Line in $Lines) {
+        $Name, $Value = $Line.Split('=', 2)
+        if (-not (Test-CeilingOverride -Name $Name -Value $Value)) {
+            throw "Invalid value for $Name in ${Path}: '$Value'. A memory or PID ceiling must be a real limit (0, -1 and empty mean unlimited; memory is <n>k, <n>m, <n>g or at least 6291456 bytes; PID a positive integer) and a CPU ceiling 0 (none) or a positive number. Fix or remove the line, then retry; nothing was written."
+        }
+    }
+    return $Lines
 }
 
 function Invoke-DockerAllowFailure([string[]] $Arguments) {
@@ -163,6 +268,34 @@ function Assert-DockerJavaRuntime([string] $Image, [string] $Failure) {
     $Output = $Output -join [Environment]::NewLine
     if ($ExitCode -ne 0) { throw "$Failure (exit=$ExitCode): $Output" }
     if (-not [string]::IsNullOrWhiteSpace($Output)) { Write-Host $Output }
+}
+
+# Where the compose recipe of $Root (a checkout, a distribution, or the worktree of a previous release) lives.
+# Current trees ship compose-mcp.prod.yaml only. A tree older than the rename ships compose.mcp.prod.yaml: the Docker
+# A -> B upgrade qualification (scripts/ci/qualify-docker-upgrade.ps1) installs the PREVIOUS release with its own
+# recipe, and must keep doing so. When both exist, the new name wins.
+function Resolve-ComposeSource([string] $Root) {
+    foreach ($Name in @('compose-mcp.prod.yaml', 'compose.mcp.prod.yaml')) {
+        $Candidate = Join-Path $Root (Join-Path 'docker' $Name)
+        if (Test-Path -LiteralPath $Candidate -PathType Leaf) { return $Candidate }
+    }
+    throw "No MINOS Docker compose recipe under $Root\docker (expected compose-mcp.prod.yaml)."
+}
+
+# Upgrade of an existing installation: the runtime directory (outside the installed program tree, so never replaced by
+# update-installation.ps1) may still hold the pre-rename file. Nothing persisted names the compose file (.env,
+# installation.json, .docker-mcp-managed carry the project, container and image, not the file), and the Compose
+# project is fixed by `name: ${MINOS_COMPOSE_PROJECT}`: renaming the file keeps the containers and volumes. So the old
+# file is MOVED to the new name, content intact (it may be the connected profile). If both exist the new name wins
+# (it is the one every action runs) and the old one is left alone, with a warning, rather than guessed at.
+function Move-LegacyRuntimeCompose {
+    if (-not (Test-Path -LiteralPath $LegacyComposeFile -PathType Leaf)) { return }
+    if (Test-Path -LiteralPath $ComposeFile -PathType Leaf) {
+        Write-Warning "Both $ComposeFile and the pre-rename $LegacyComposeFile exist; $ComposeFile is the one used. Remove the old file once you have checked it is not needed."
+        return
+    }
+    Move-Item -LiteralPath $LegacyComposeFile -Destination $ComposeFile
+    Write-Host "Migrated the runtime compose file to its new name: $ComposeFile" -ForegroundColor Cyan
 }
 
 function Require-Installed {
@@ -210,6 +343,8 @@ function Test-ExactImage([string] $Image, [string] $ExpectedVersion, [string] $E
         [string]$PreparedLabel.Value -eq 'true'
 }
 
+Move-LegacyRuntimeCompose
+
 switch ($Action) {
     'Install' {
         if ([string]::IsNullOrWhiteSpace($Jar)) { throw '-Jar is required for Install. Use the shaded JAR from the same MINOS release.' }
@@ -251,7 +386,9 @@ switch ($Action) {
             Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
         }
 
-        Copy-Item -LiteralPath (Join-Path $SourceRoot 'docker\compose.mcp.prod.yaml') -Destination $ComposeFile -Force
+        Copy-Item -LiteralPath (Resolve-ComposeSource $SourceRoot) -Destination $ComposeFile -Force
+        Remove-Item -LiteralPath $LegacyComposeFile -Force -ErrorAction SilentlyContinue
+        $PreservedOverrides = @(Get-PreservedCeilingOverrides -Path $EnvironmentFile)
         @"
 MINOS_COMPOSE_PROJECT=$ComposeProject
 MINOS_CONTAINER_NAME=$ContainerName
@@ -263,6 +400,7 @@ MINOS_VERSION=$Version
 MINOS_GIT_COMMIT=$Commit
 MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
 "@ | Set-Content -LiteralPath $EnvironmentFile -Encoding ascii
+        if ($PreservedOverrides.Count -gt 0) { Add-Content -LiteralPath $EnvironmentFile -Value $PreservedOverrides -Encoding ascii }
 
         Compose @('config', '--quiet')
         Assert-DockerJavaRuntime -Image $Image -Failure 'The MINOS Docker image does not expose a valid Java runtime.'
@@ -299,10 +437,10 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Write-Host "Data      : $DataRoot -> /var/lib/minos"
         Write-Host "Projects  : $ProjectsRoot -> /workspace/projects (read-only)"
         Write-Host "Semantic  : $ResolvedSemanticProvider"
-        Write-Host 'Network   : persistent query/bootstrap/provider-probe none; ephemeral admin/indexing may resolve project dependencies'
+        Write-Host 'Network   : persistent query/bootstrap/provider-probe none; ephemeral admin has egress and launches no provider'
         Write-Host 'Providers : image-prepared, executable-probed offline, isolated named volume mounted read-only in query/admin planes'
         Write-Host 'Query     : persistent hardened minos-mcp plane; MINOS data read-only; network none'
-        Write-Host 'Admin     : ephemeral minos-admin plane; MINOS data writable, projects read-only, dependency egress enabled'
+        Write-Host 'Admin     : ephemeral minos-admin plane; MINOS data writable, projects read-only, egress enabled, no provider launched'
     }
     'Start' {
         Require-Installed
@@ -318,13 +456,24 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Require-Installed
         if ($null -eq $MinosArguments -or $MinosArguments.Count -eq 0) { throw '-MinosArguments is required for Admin.' }
         $ComposeArguments = @('run', '--rm', '--no-deps', 'minos-admin') + $MinosArguments
-        Compose $ComposeArguments
+        # Exit 3 is a MINOS partial result (some registry entries are unreadable): the output printed above is valid
+        # for the entries that could be read, so it is not a failure of the admin command. Every other Compose call
+        # (Install, Start, Validate, Uninstall) keeps treating any non-zero code as a failure.
+        try { Compose $ComposeArguments -AcceptedExitCodes @(0, 3) }
+        catch { Write-AdminCeilingHint; throw }
+        if ($LASTEXITCODE -eq 3) {
+            Write-Warning 'MINOS exited 3 (partial result): some registry entries are unreadable and were counted, not used. Run `project list` to see them.'
+            # The partial result is reported by the warning; do not leave a stale 3 for an in-process caller that reads
+            # $LASTEXITCODE after this action (qualify-docker-upgrade.ps1, run-s3.ps1, minos-docker.ps1).
+            $global:LASTEXITCODE = 0
+        }
     }
     'Status' {
         Require-Installed
         Get-Content -LiteralPath $MetadataFile
         Get-Content -LiteralPath $ProviderInventoryFile
         & docker ps -a --filter "name=^/$ContainerName$"
+        Write-CeilingDiagnostics -Project $ComposeProject
     }
     'Validate' {
         Require-Installed

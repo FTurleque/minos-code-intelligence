@@ -4,13 +4,17 @@ import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.ResolutionStatus;
 import com.minos.domain.SymbolIdentityQuality;
+import com.minos.domain.Symbol;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolSearchCriteria;
+import com.minos.query.SymbolQueryService;
 import com.minos.query.SymbolResult;
+import com.minos.store.InMemoryCodeKnowledgeStore;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -110,11 +114,11 @@ class FindSymbolCommandTest {
                 ),
                 new InvalidArguments(
                         new String[]{"project-1", "Greeting", "--limit", "0"},
-                        "limit must be between 1 and 1000"
+                        "--limit must be between 1 and 1000"
                 ),
                 new InvalidArguments(
                         new String[]{"project-1", "Greeting", "--limit", "many"},
-                        "invalid limit: many"
+                        "--limit must be an integer"
                 ),
                 new InvalidArguments(
                         new String[]{"project-1", "Greeting", "--kind", "service"},
@@ -171,6 +175,34 @@ class FindSymbolCommandTest {
                 "error: find-symbol failed: active snapshot is unavailable\n",
                 error.toString()
         );
+    }
+
+    /** MINOS-AUD-F04 : `--module` sur un snapshot sans module est un échec explicite, pas un « 0 résultat ». */
+    @Test
+    void refusesTheModuleFilterOnASnapshotWithoutAnyModule() throws IOException {
+        InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
+        store.putSymbols(List.of(new Symbol("symbol-1", "key-1", SymbolIdentityQuality.STRUCTURAL_FALLBACK, "project-1",
+                null, "src/Greeting.java", null, SymbolKind.CLASS, "Greeting", "com.minos.Greeting", null, "java", null,
+                ResolutionStatus.RESOLVED, new Origin("fixture", "TEST", "1", "run-1", OriginType.OTHER), false, false,
+                Set.of())));
+        SymbolQueryService service = new SymbolQueryService(store);
+        FindSymbolCommand command = new FindSymbolCommand(
+                (projectId, criteria) -> service.findSymbolResults(projectId, criteria));
+        StringBuilder output = new StringBuilder();
+        StringBuilder error = new StringBuilder();
+
+        int exitCode = command.run(
+                new String[]{"project-1", "Greeting", "--module", "app"}, output, error);
+
+        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exitCode);
+        assertEquals("", output.toString());
+        assertTrue(error.toString().startsWith("error: find-symbol failed: module filter is unavailable"),
+                error.toString());
+
+        StringBuilder withoutModule = new StringBuilder();
+        assertEquals(FindSymbolCommand.SUCCESS, command.run(
+                new String[]{"project-1", "Greeting", "--format", "json"}, withoutModule, new StringBuilder()));
+        assertTrue(withoutModule.toString().startsWith("{\"count\":1,"), withoutModule.toString());
     }
 
     private record InvalidArguments(String[] arguments, String message) {

@@ -1,6 +1,7 @@
 package com.minos.cli;
 
-import com.minos.git.GitIntelligenceService;
+import com.minos.application.ProjectOperations;
+import com.minos.git.GitIntelligence;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
@@ -13,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
+import static com.minos.output.DeterministicJson.object;
 
 /** CLI adapter exposing the existing factual Git intelligence to external IDE clients. */
 public final class GitActivityCommand {
@@ -29,10 +32,17 @@ public final class GitActivityCommand {
               --format <text|json>      Output format (default: text)
             """.stripTrailing();
 
-    private final ProjectOperations projects;
-    private final GitIntelligenceService git;
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec()
+            .text("--format")
+            .integer("--days", 1, 3650)
+            .integer("--max-commits", 1, 10_000)
+            .integer("--max-files", 1, 10_000)
+            .integer("--zone-depth", 1, 8);
 
-    public GitActivityCommand(ProjectOperations projects, GitIntelligenceService git) {
+    private final ProjectOperations projects;
+    private final GitIntelligence git;
+
+    public GitActivityCommand(ProjectOperations projects, GitIntelligence git) {
         this.projects = Objects.requireNonNull(projects, "projects");
         this.git = Objects.requireNonNull(git, "git");
     }
@@ -42,9 +52,9 @@ public final class GitActivityCommand {
                 (options, exception) -> NAME + " failed: " + failureMessage(exception),
                 options -> {
                     ProjectOperations.ProjectView project = projects.inspectProject(options.project());
-                    GitIntelligenceService.ActivityReport report = git.analyze(
+                    GitIntelligence.ActivityReport report = git.analyze(
                             Path.of(project.rootPath()),
-                            new GitIntelligenceService.ActivityQuery(
+                            new GitIntelligence.ActivityQuery(
                                     Instant.now().minus(Duration.ofDays(options.days())),
                                     options.maxCommits(),
                                     options.maxFiles(),
@@ -60,7 +70,7 @@ public final class GitActivityCommand {
         return USAGE;
     }
 
-    static String render(GitIntelligenceService.ActivityReport report, SymbolOutputFormat format) {
+    static String render(GitIntelligence.ActivityReport report, SymbolOutputFormat format) {
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(reportMap(report));
         }
@@ -73,19 +83,19 @@ public final class GitActivityCommand {
         lines.add("zones: " + report.zones().size());
         lines.add("limitations: " + String.join(",", report.limitations()));
         lines.add("note: activity is factual and is not architectural or business importance");
-        for (GitIntelligenceService.ZoneActivity zone : report.zones()) {
+        for (GitIntelligence.ZoneActivity zone : report.zones()) {
             lines.add("zone\t" + zone.zone() + "\t" + zone.commitTouches() + "\t" + zone.distinctFileCount()
                     + "\t" + zone.lastChangedAt());
         }
         return String.join("\n", lines);
     }
 
-    private static Map<String, Object> reportMap(GitIntelligenceService.ActivityReport report) {
+    private static Map<String, Object> reportMap(GitIntelligence.ActivityReport report) {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("nature", "FACTUAL_ACTIVITY");
         root.put("importanceInference", false);
         root.put("repository", repositoryMap(report.repository()));
-        root.put("query", Map.of(
+        root.put("query", object(
                 "since", report.query().since().toString(),
                 "maxCommits", report.query().maxCommits(),
                 "maxFiles", report.query().maxFiles(),
@@ -101,7 +111,7 @@ public final class GitActivityCommand {
         return root;
     }
 
-    private static Map<String, Object> repositoryMap(GitIntelligenceService.RepositoryView repository) {
+    private static Map<String, Object> repositoryMap(GitIntelligence.RepositoryView repository) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("repositoryId", repository.repositoryId());
         map.put("workTree", repository.workTree());
@@ -115,7 +125,7 @@ public final class GitActivityCommand {
         return map;
     }
 
-    private static Map<String, Object> commitMap(GitIntelligenceService.CommitActivity commit) {
+    private static Map<String, Object> commitMap(GitIntelligence.CommitActivity commit) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("commitId", commit.commitId());
         map.put("committedAt", commit.committedAt().toString());
@@ -126,8 +136,8 @@ public final class GitActivityCommand {
         return map;
     }
 
-    private static Map<String, Object> fileMap(GitIntelligenceService.FileActivity file) {
-        return Map.of(
+    private static Map<String, Object> fileMap(GitIntelligence.FileActivity file) {
+        return object(
                 "path", file.path(),
                 "commitCount", file.commitCount(),
                 "uniqueAuthorCount", file.uniqueAuthorCount(),
@@ -136,8 +146,8 @@ public final class GitActivityCommand {
         );
     }
 
-    private static Map<String, Object> zoneMap(GitIntelligenceService.ZoneActivity zone) {
-        return Map.of(
+    private static Map<String, Object> zoneMap(GitIntelligence.ZoneActivity zone) {
+        return object(
                 "zone", zone.zone(),
                 "commitTouches", zone.commitTouches(),
                 "distinctFileCount", zone.distinctFileCount(),
@@ -166,50 +176,13 @@ public final class GitActivityCommand {
             SymbolOutputFormat format
     ) {
         private static Options parse(String[] arguments) {
-            if (arguments.length < 1 || arguments[0] == null || arguments[0].isBlank() || arguments[0].startsWith("-")) {
+            if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
-            String project = arguments[0];
-            int days = 30;
-            int maxCommits = 500;
-            int maxFiles = 500;
-            int zoneDepth = 2;
-            SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            Set<String> seen = new java.util.HashSet<>();
-            for (int index = 1; index < arguments.length; index++) {
-                String option = arguments[index];
-                if (!Set.of("--days", "--max-commits", "--max-files", "--zone-depth", "--format").contains(option)) {
-                    throw new IllegalArgumentException("unknown option: " + option);
-                }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
-                if (++index >= arguments.length || arguments[index] == null || arguments[index].isBlank()) {
-                    throw new IllegalArgumentException("missing value for " + option);
-                }
-                String value = arguments[index];
-                switch (option) {
-                    case "--days" -> days = boundedInt(value, option, 1, 3650);
-                    case "--max-commits" -> maxCommits = boundedInt(value, option, 1, 10_000);
-                    case "--max-files" -> maxFiles = boundedInt(value, option, 1, 10_000);
-                    case "--zone-depth" -> zoneDepth = boundedInt(value, option, 1, 8);
-                    case "--format" -> format = SymbolOutputFormat.parse(value);
-                    default -> throw new IllegalStateException("unhandled option " + option);
-                }
-            }
-            return new Options(project, days, maxCommits, maxFiles, zoneDepth, format);
-        }
-
-        private static int boundedInt(String value, String option, int minimum, int maximum) {
-            try {
-                int parsed = Integer.parseInt(value);
-                if (parsed < minimum || parsed > maximum) {
-                    throw new IllegalArgumentException(option + " must be between " + minimum + " and " + maximum);
-                }
-                return parsed;
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException(option + " must be an integer");
-            }
+            String project = CliCommandSupport.operand(arguments[0], "project");
+            CliOptions options = OPTIONS.parse(arguments, 1);
+            return new Options(project, options.integer("--days", 30), options.integer("--max-commits", 500),
+                    options.integer("--max-files", 500), options.integer("--zone-depth", 2), options.format());
         }
     }
 }

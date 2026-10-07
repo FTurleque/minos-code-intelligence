@@ -1,6 +1,6 @@
 # Remote worker — disposition d’isolation et de confinement
 
-L’indexation distante traite le provider et le dépôt matérialisé comme du code non fiable. Une copie dans une workspace éphémère et un processus distinct ne suffisent donc jamais : le provider doit être lancé par un backend OS dont la qualification annonce `UNTRUSTED_CODE_SUPPORTED` sur la plateforme courante.
+L’indexation distante traite le provider et le dépôt matérialisé comme du code non fiable. Une copie dans une workspace éphémère et un processus distinct ne suffisent donc jamais : le provider doit être lancé par un backend OS dont la qualification annonce `UNTRUSTED_CODE_SUPPORTED` sur la plateforme courante. **Aucun backend intégré ne l’annonce aujourd’hui, par décision** ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md)) : voir « Backends intégrés » ci-dessous.
 
 ## Contrat fail-closed
 
@@ -22,10 +22,10 @@ Le backend Docker MCP recouvre trois plans qui ne partagent ni le même modèle 
 | Plan | Rôle | Isolation |
 |---|---|---|
 | **Docker MCP query** (`minos-mcp`) | sert l'index déjà construit aux clients MCP | conteneur `read_only`, `network_mode: none`, non-root |
-| **Docker MCP admin/indexing** (`minos-admin`) | exécute les providers gérés (scip-java, scip-typescript, …) sur du code **local et déjà indexé/confié** | conteneur durci (`cap_drop: [ALL]`, non-root, `no-new-privileges`) — le conteneur lui-même est la frontière ; il n'imbrique pas une seconde sandbox OS |
-| **Remote worker** (`LocalIsolatedIndexWorker`) | exécute un provider sur du dépôt/code **non fiable** | exige une sandbox OS explicitement qualifiée (Bubblewrap+cgroup v2 délégué, ou AppContainer) ; refuse fail-closed sinon |
+| **Docker MCP admin** (`minos-admin`) | administre (`doctor`, `tools`, `project add`, `index-status`, `semantic`, `hybrid`) ; **n'exécute aucun provider** : `index` y est refusé (`UNSUPPORTED_BY_BACKEND`), `remote index` aussi, avant tout processus fils | conteneur durci (`cap_drop: [ALL]`, non-root, `no-new-privileges`, racine en lecture seule) ; il ne peut pas obtenir de sandbox OS (pas de `bwrap`, user namespaces refusés par le profil seccomp par défaut, cgroup en lecture seule), donc aucun code de projet n'y est compilé ni lancé |
+| **Remote worker** (`LocalIsolatedIndexWorker`) | exécute un provider sur du dépôt/code **non fiable** | exigerait une sandbox OS qualifiée pour le code non fiable (`UNTRUSTED_CODE_SUPPORTED`) ; **aucun backend intégré ne l’est** — Bubblewrap+cgroup v2 et AppContainer sont écartés par décision ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md)) — donc refuse fail-closed |
 
-Le plan admin/indexing Docker n'est **pas** le sandbox remote-worker qualifié : à l'intérieur d'un conteneur déjà durci, MINOS ne peut structurellement pas construire une seconde sandbox Bubblewrap/cgroup2 imbriquée. C'est attendu, pas une panne — mais cela ne doit jamais être confondu avec une qualification remote-worker, ni la remplacer silencieusement.
+Le plan admin Docker n'est **pas** le sandbox remote-worker qualifié : à l'intérieur d'un conteneur déjà durci, MINOS ne peut structurellement pas construire une seconde sandbox Bubblewrap/cgroup2 imbriquée. C'est attendu, pas une panne — mais cela ne doit jamais être confondu avec une qualification remote-worker, ni la remplacer silencieusement. Faute de sandbox, le plan admin **ne lance aucun provider** : la garde `StrongProcessOwnershipIndexerExecutor` (sélection `strongestAvailableForManagedLocalProvider`) refuse avant de copier le projet, et `StrongProcessOwnershipIndexerExecutorTest` verrouille ce refus. L'indexation par provider se fait sur l'hôte natif (sandbox qualifiée pour les providers locaux gérés) ; le plan Docker sert l'index déjà construit.
 
 ### Invariant
 
@@ -36,7 +36,7 @@ Concrètement (`ProviderRuntimeStatus.State`, `com.minos.runtime`) :
 - un provider dont la sandbox « managed local provider » (`WorkerSandboxBackend.supportsManagedLocalProvider()`) n'est pas fournie par le backend Docker est rapporté `UNSUPPORTED_BY_BACKEND` — jamais `READY` (la capability plus forte reste réellement absente) et jamais `BLOCKED` (ce n'est pas une panne : le conteneur est déjà la frontière pour ce plan) ;
 - sur un hôte natif, la même absence de sandbox qualifiée reste `BLOCKED` — là, la sandbox aurait dû être qualifiable, et son absence est une vraie panne bloquante ;
 - `ToolsCommand`'s `tools verify`/`tools verify --all` exclut explicitement `UNSUPPORTED_BY_BACKEND` du calcul « notReady », mais bloque toujours sur tout autre état non-`READY` — un provider réellement requis et cassé continue de faire échouer la porte d'installation, `--all` ou non ;
-- ce mécanisme ne touche ni aux critères de qualification de `supportsUntrustedCode()`, ni au sélecteur `WorkerSandboxBackends.strongestAvailable()` utilisé par `LocalIsolatedIndexWorker` : le contrat remote-worker ci-dessus reste inchangé et fail-closed dans tous les cas.
+- ce mécanisme ne touche ni aux critères de qualification de `supportsUntrustedCode()`, ni au sélecteur strict `WorkerSandboxBackends.selectForUntrustedCode()` utilisé par `LocalIsolatedIndexWorker` et par le refus précoce de `remote index` (`strongestAvailable()` en rend le même backend) : le contrat remote-worker ci-dessus reste inchangé et fail-closed dans tous les cas.
 
 ## Confinement agrégé des ressources
 
@@ -51,12 +51,15 @@ Concrètement (`ProviderRuntimeStatus.State`, `com.minos.runtime`) :
 
 Une limite **par processus** (`RLIMIT_AS`, `RLIMIT_NPROC`, `RLIMIT_CPU`) est multipliée par chaque `fork` : elle reste une défense en profondeur et n’est jamais déclarée `OS_ENFORCED` sur une dimension agrégée.
 
-`UNTRUSTED_CODE_SUPPORTED` exige :
+`UNTRUSTED_CODE_SUPPORTED` exige (`WorkerResourceContainment.unmetRequirements()`) :
 
 - `OS_ENFORCED` sur le nombre de processus agrégé, la mémoire agrégée, la CPU agrégée et la terminaison des descendants ;
-- au minimum `SUPERVISED_HARD_KILL` sur le wall-clock, le quota d’écriture (octets **et** nombre d’entrées) et la récupération du scratch.
+- `OS_ENFORCED` sur le quota d’écriture (octets **et** nombre d’entrées) ;
+- au minimum `SUPERVISED_HARD_KILL` sur le wall-clock et la récupération du scratch.
 
-Le constructeur de `WorkerSandboxQualification` refuse toute autre combinaison : la revendication ne peut pas diverger du confinement réel.
+Le contrat plus étroit des providers **locaux gérés** (`managedLocalProviderUnmetRequirements()`) accepte un quota d’écriture `SUPERVISED_HARD_KILL` ; c’est lui que l’indexation locale utilise.
+
+Le constructeur de `WorkerSandboxQualification` refuse toute autre combinaison : la revendication ne peut pas diverger du confinement réel. Un backend qui déclare `UNTRUSTED_CODE_SUPPORTED` avec un quota d’écriture seulement supervisé est **rétrogradé** en `UNTRUSTED_CODE_UNSUPPORTED`, avec les limitations `WORKER_UNTRUSTED_CODE_FAIL_CLOSED_INCOMPLETE_HARD_CONTAINMENT`, `WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041` et les codes exacts des dimensions manquantes. C’est le cas des deux backends intégrés.
 
 | Dimension | Linux | Windows |
 |---|---|---|
@@ -68,7 +71,9 @@ Le constructeur de `WorkerSandboxQualification` refuse toute autre combinaison :
 | Quota d’écriture (octets/entrées) | `SUPERVISED_HARD_KILL` | `SUPERVISED_HARD_KILL` |
 | Récupération du scratch | `SUPERVISED_HARD_KILL` | `SUPERVISED_HARD_KILL` |
 
-## Backends qualifiés
+## Backends intégrés (rétrogradés pour le code non fiable, ADR 0041)
+
+Les deux backends ci-dessous sont **qualifiés pour les providers locaux gérés** et **rétrogradés `UNTRUSTED_CODE_UNSUPPORTED`** pour l’indexation distante : leur quota d’écriture est `SUPERVISED_HARD_KILL`. `WorkerSandboxBackends.selectForUntrustedCode` les écarte en le journalisant (WARNING, codes de dimension, sans chemin) et `WorkerSandboxSelection` distingue trois causes de refus : `NO_OS_BACKEND_AVAILABLE` (prérequis manquant), `REJECTED_BY_DECISION` (ce cas), `EXECUTOR_NOT_SANDBOX_CAPABLE` (exécuteur sans capacité sandbox).
 
 | Plateforme | Backend | Frontière de job | `ALLOW` | `DENY` |
 |---|---|---|---|---|
@@ -98,7 +103,8 @@ La découverte exige Windows PowerShell 5.1 et le lanceur AppContainer. Le lance
 - crée et configure le Job Object **avant** de créer le processus contenu ;
 - crée le processus `CREATE_SUSPENDED`, vérifie `TokenIsAppContainer`, l’assigne au job puis vérifie `IsProcessInJob` avant `ResumeThread` — aucun enfant ne peut donc exister hors du job ;
 - relit les limites appliquées avec `QueryInformationJobObject` et refuse explicitement `JOB_OBJECT_LIMIT_BREAKAWAY_OK` / `SILENT_BREAKAWAY_OK` ;
-- appelle `TerminateJobObject` sur tous les chemins de sortie, en plus de `KILL_ON_JOB_CLOSE`.
+- appelle `TerminateJobObject` sur tous les chemins de sortie, en plus de `KILL_ON_JOB_CLOSE` ;
+- prouve sa **propriété** sur son sandbox (MINOS-AUD-A01) : avant de créer le profil, il prend un verrou exclusif `Minos.Worker.<guid>.lock` (`CreateNew`, `FileShare.None`, handle non héritable) dans `sandbox/appcontainer-recovery-v2`, qu'il garde jusqu'à sa toute dernière étape, après la suppression du journal. S'il ne peut pas le créer, il échoue avant tout profil, sans provider ni mode dégradé. Le balayage de reprise ne récupère que les sandbox dont le verrou est **libre**, c'est-à-dire dont le propriétaire est mort : Windows le libère à la mort du processus, sans horloge ni identifiant de processus réutilisable. Verrou absent, illisible ou erreur d'entrée-sortie : rien n'est récupéré et le journal est signalé par un avertissement. Les journaux de l'ancien emplacement `appcontainer-recovery` ne sont plus examinés. Cette garantie n'est **prouvée que par les tests qui lancent le vrai lanceur sous Windows** (`WindowsAppContainerRecoveryOwnershipTest`) ; le test d'assemblage ne prouve que la fidélité du script.
 
 ## Quota d’écriture filesystem
 

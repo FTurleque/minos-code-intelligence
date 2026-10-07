@@ -8,6 +8,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.PriorityQueue;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Reconstructible semantic vector index abstraction. Snapshots remain authoritative. */
 public interface SemanticVectorStore {
 
@@ -154,12 +156,5 @@ public interface SemanticVectorStore {
                 if (value.vector().dimensions() != dimensions) throw new IllegalArgumentException("semantic vector dimensions mismatch");
             }
         }
-        private static void requireText(String value, String name) {
-            if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
-        }
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
     }
 }

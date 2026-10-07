@@ -28,6 +28,14 @@ public interface CodeKnowledgeStore {
 
     List<Symbol> findSymbols(String projectId, SymbolSearchCriteria criteria);
 
+    /**
+     * Vrai quand le projet a des symboles et qu'aucun ne porte de module : un filtre par module ne
+     * peut alors rien désigner (MINOS-AUD-F04). Un store qui ne le sait pas répond faux.
+     */
+    default boolean lacksModuleAttribution(String projectId) {
+        return false;
+    }
+
     default List<Symbol> findSymbols(String projectId, String query, int limit) {
         return findSymbols(projectId, SymbolSearchCriteria.lexical(query, limit));
     }

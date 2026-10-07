@@ -52,4 +52,4 @@ Les documents de conception initialement placés sous `docs/architecture/` mais 
 - `INDEXEURS_CAPACITES.md` ;
 - `RETOURS_MODELE_DOMAINE.md` — retours expérimentaux ayant alimenté le modèle M0.
 
-Les scripts et benchmarks expérimentaux restent volontairement dans `scripts/m0/` et `benchmarks/m0/` : ils sont des artefacts reproductibles, pas des documents d’architecture.
+Les scripts et benchmarks expérimentaux sont des artefacts reproductibles, pas des documents d'architecture : ils vivent sous `scripts/history/m0/` et `benchmarks/m0/` (archivés, M0 étant clos — voir [ADR 0043](../../adr/0043-retrait-des-artefacts-de-jalon.md)).

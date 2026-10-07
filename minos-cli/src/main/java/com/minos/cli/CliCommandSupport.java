@@ -1,9 +1,18 @@
 package com.minos.cli;
 
+import com.minos.application.ProjectOperations;
+import com.minos.application.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.domain.SymbolKind;
+import com.minos.registry.DegradedEntry;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Shared fail-closed skeleton for the option-parsing MINOS commands.
@@ -27,6 +36,28 @@ final class CliCommandSupport {
     private static final String REDACTED_DIAGNOSTIC = "internal diagnostic redacted";
 
     private CliCommandSupport() {
+    }
+
+    /**
+     * The JSON object of an import outcome, shared by {@code import-scip} and {@code index}: the keys and their
+     * order are decided here once. {@code diagnostic} is the already redacted diagnostic.
+     */
+    static Map<String, Object> importResultMap(ProjectOperations.IndexImportResult result, String diagnostic) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("projectId", result.projectId());
+        map.put("snapshotId", result.snapshotId());
+        map.put("providerId", result.providerId());
+        map.put("providerVersion", result.providerVersion());
+        map.put("normalizedSymbolCount", result.normalizedSymbolCount());
+        map.put("occurrenceCount", result.occurrenceCount());
+        map.put("relationshipCount", result.relationshipCount());
+        map.put("relatedTestRelationshipCount", result.relatedTestRelationshipCount());
+        map.put("unresolvedOccurrenceCount", result.unresolvedOccurrenceCount());
+        map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
+        map.put("completedAt", result.completedAt());
+        map.put("commitStatus", result.commitStatus().name());
+        map.put("diagnostic", diagnostic);
+        return map;
     }
 
     @FunctionalInterface
@@ -67,6 +98,9 @@ final class CliCommandSupport {
         }
         try {
             return body.execute(options);
+        } catch (LazyApplication.OpenFailure openFailure) {
+            // MINOS_HOME could not be opened: not a failure of this command, the launcher reports it as before.
+            throw openFailure;
         } catch (Exception exception) {
             error.append("error: ").append(failureReporter.describe(options, exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
@@ -87,35 +121,66 @@ final class CliCommandSupport {
                 (options, exception) -> label + " failed: " + failureMessage(exception), body);
     }
 
+    /** Failure line {@code <label> failed: <message>} reporting the originating cause of nested runtime wrappers. */
+    static <O> FailureReporter<O> reportingCause(String label) {
+        return (options, exception) -> label + " failed: " + failureMessage(unwrapRuntime(exception));
+    }
+
+    /** An already available collaborator as a supplier, for the commands that also accept a deferred one. */
+    static <T> Supplier<T> constant(T value, String name) {
+        Objects.requireNonNull(value, name);
+        return () -> value;
+    }
+
     static boolean isHelp(String value) {
         return "--help".equals(value) || "-h".equals(value);
     }
 
+    /** Whether {@code value} can be an operand: not blank and not starting with a dash (it would be an option). */
+    static boolean isOperand(String value) {
+        return value != null && !value.isBlank() && !value.startsWith("-");
+    }
+
     static String operand(String value, String name) {
-        if (value == null || value.isBlank() || value.startsWith("-")) {
+        if (!isOperand(value)) {
             throw new IllegalArgumentException("invalid <" + name + "> operand");
         }
         return value;
     }
 
-    static int parseLimit(String value, int maximum) {
+    /** The symbol kind named by a {@code --kind} value (case-insensitive, {@code -} for {@code _}); {@code null} when absent. */
+    static SymbolKind symbolKind(String value) {
+        if (value == null) {
+            return null;
+        }
         try {
-            int limit = Integer.parseInt(value);
-            if (limit < 1 || limit > maximum) {
-                throw new IllegalArgumentException("limit must be between 1 and " + maximum);
-            }
-            return limit;
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("invalid limit: " + value, exception);
+            return SymbolKind.valueOf(value.toUpperCase(Locale.ROOT).replace('-', '_'));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("unsupported symbol kind: " + value, exception);
         }
     }
 
+    /**
+     * The one failure line of the CLI. A message may copy a value read from a damaged file, so the control
+     * sequences that a terminal would execute are replaced by the same rule as a degraded entry ({@link DegradedEntry#printable}).
+     */
     static String failureMessage(Throwable failure) {
-        return PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName());
+        if (failure instanceof ProjectResolver.ResolutionException resolution) {
+            // One public message for a project reference, shared with the Java API and the MCP server.
+            return DegradedEntry.printable(resolution.publicMessage());
+        }
+        return DegradedEntry.printable(
+                PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName()));
     }
 
+    /**
+     * The one rule for a diagnostic written on a public output: no path or secret ({@link PublicErrorMessages}) and
+     * no control sequence that a terminal would execute ({@link DegradedEntry#printable}, as {@link #failureMessage}).
+     */
     static String publicDiagnostic(String diagnostic) {
-        return diagnostic == null ? null : PublicErrorMessages.sanitize(diagnostic, REDACTED_DIAGNOSTIC);
+        return diagnostic == null
+                ? null
+                : DegradedEntry.printable(PublicErrorMessages.sanitize(diagnostic, REDACTED_DIAGNOSTIC));
     }
 
     static List<String> publicDiagnostics(List<String> diagnostics) {

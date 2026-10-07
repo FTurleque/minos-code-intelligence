@@ -2,16 +2,36 @@ package com.minos.io;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
-/** Shared fail-closed primitive for durable local control-plane file mutations. */
+import static com.minos.domain.Preconditions.requireText;
+
+/**
+ * Shared fail-closed primitive for durable local control-plane file mutations.
+ *
+ * <p>Readers of these files take no lease (a read never waits for a writer): a replacement is one
+ * atomic rename, so a reader sees the previous or the next content, never a torn one. On Windows
+ * that rename fails with a sharing violation or an access-denied error while a reader holds the
+ * target open; such a replacement is retried a bounded number of times, see
+ * {@link #REPLACE_ATTEMPTS_ON_WINDOWS}.</p>
+ */
 public final class DurableAtomicFile {
+
+    /** Attempts of one replacement on Windows; the pauses grow linearly, about one second in all. */
+    static final int REPLACE_ATTEMPTS_ON_WINDOWS = 20;
+    private static final long REPLACE_PAUSE_STEP_NANOS = TimeUnit.MILLISECONDS.toNanos(5);
 
     private DurableAtomicFile() {
     }
@@ -27,7 +47,7 @@ public final class DurableAtomicFile {
      */
     public static void ensureDirectory(Path directory, String label) throws IOException {
         Path target = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
-        String operation = requireLabel(label);
+        String operation = requireText(label, "label");
         boolean existed = Files.isDirectory(target);
         Path parent = target.getParent();
         if (!existed && parent != null && !Files.isDirectory(parent)) {
@@ -46,18 +66,18 @@ public final class DurableAtomicFile {
 
     /** Publishes a new immutable file; an existing target is never replaced. */
     public static void publish(Path source, Path target, String label) throws IOException {
-        move(source, target, false, requireLabel(label), DurableAtomicFile::forceDirectory);
+        move(source, target, false, requireText(label, "label"), DurableAtomicFile::forceDirectory);
     }
 
     /** Replaces a control-plane file atomically and durably. */
     public static void replace(Path source, Path target, String label) throws IOException {
-        move(source, target, true, requireLabel(label), DurableAtomicFile::forceDirectory);
+        move(source, target, true, requireText(label, "label"), DurableAtomicFile::forceDirectory);
     }
 
     /** Deletes a file and makes the directory entry removal durable where supported. */
     public static boolean deleteIfExists(Path target, String label) throws IOException {
         Path normalized = Objects.requireNonNull(target, "target").toAbsolutePath().normalize();
-        String operation = requireLabel(label);
+        String operation = requireText(label, "label");
         boolean deleted = Files.deleteIfExists(normalized);
         if (!deleted) return false;
         try {
@@ -77,18 +97,26 @@ public final class DurableAtomicFile {
             String label,
             DirectorySync directorySync
     ) throws IOException {
+        move(source, target, replaceExisting, label, directorySync, Platform.SYSTEM);
+    }
+
+    static void move(
+            Path source,
+            Path target,
+            boolean replaceExisting,
+            String label,
+            DirectorySync directorySync,
+            Platform platform
+    ) throws IOException {
         Path from = Objects.requireNonNull(source, "source").toAbsolutePath().normalize();
         Path to = Objects.requireNonNull(target, "target").toAbsolutePath().normalize();
         Objects.requireNonNull(directorySync, "directorySync");
+        Objects.requireNonNull(platform, "platform");
         forceFile(from);
-        try {
-            if (replaceExisting) {
-                Files.move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } else {
-                Files.move(from, to, StandardCopyOption.ATOMIC_MOVE);
-            }
-        } catch (AtomicMoveNotSupportedException unsupported) {
-            throw new IOException("filesystem does not support required atomic " + label + ": " + to, unsupported);
+        if (replaceExisting) {
+            atomicMove(from, to, label, platform);
+        } else {
+            publishExclusively(from, to, label, platform);
         }
         try {
             directorySync.force(to.getParent());
@@ -99,12 +127,98 @@ public final class DurableAtomicFile {
         }
     }
 
+    private static void atomicMove(Path from, Path to, String label, Platform platform) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                platform.mover().move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            } catch (AtomicMoveNotSupportedException unsupported) {
+                throw new IOException("filesystem does not support required atomic " + label + ": " + to, unsupported);
+            } catch (FileSystemException failure) {
+                boolean retry = platform.windows() && heldOpenByAReader(failure) && attempt < REPLACE_ATTEMPTS_ON_WINDOWS;
+                if (!retry) throw failure;
+                platform.pause().pause(attempt);
+            }
+        }
+    }
+
+    /**
+     * MINOS-AUD-B09: publishes without ever replacing the target. {@code ATOMIC_MOVE} does not do that: the JDK leaves its
+     * behaviour on an existing target unspecified, and it replaces it on Windows and, through {@code rename(2)}, on Linux. A
+     * hard link is created atomically by the file system and fails with "already exists" when the target exists, on both
+     * platforms; the source name is then removed (best effort: the publication is already acquired, and callers delete
+     * their temporary file anyway). A file system that cannot make the link fails the publication with an explicit
+     * message; there is no fallback to a move that could overwrite.
+     */
+    private static void publishExclusively(Path from, Path to, String label, Platform platform) throws IOException {
+        try {
+            platform.linker().link(to, from);
+        } catch (FileAlreadyExistsException exists) {
+            throw exists;
+        } catch (UnsupportedOperationException unsupported) {
+            throw exclusivePublicationUnsupported(label, to, unsupported);
+        } catch (FileSystemException failure) {
+            // A missing source and a permission failure are specific and final. Any other plain failure to create the
+            // link (FAT and exFAT, some network shares) means exclusivity cannot be guaranteed here.
+            if (failure.getClass() != FileSystemException.class) throw failure;
+            throw exclusivePublicationUnsupported(label, to, failure);
+        }
+        try {
+            Files.deleteIfExists(from);
+        } catch (IOException ignored) {
+            // The target is published; a leftover source name is the caller's temporary file.
+        }
+    }
+
+    private static IOException exclusivePublicationUnsupported(String label, Path to, Exception cause) {
+        return new IOException("filesystem does not support required exclusive " + label + ": " + to, cause);
+    }
+
+    /**
+     * The failures Windows reports when the target of a replacement is open in another reader: an
+     * access-denied error or a plain file-system failure (sharing violation). A missing source or
+     * target, a non-empty directory and every other specific failure are final.
+     */
+    private static boolean heldOpenByAReader(FileSystemException failure) {
+        return failure instanceof AccessDeniedException || failure.getClass() == FileSystemException.class;
+    }
+
+    private static void pauseBeforeReplaceRetry(int attempt) throws IOException {
+        LockSupport.parkNanos(REPLACE_PAUSE_STEP_NANOS * attempt);
+        if (Thread.interrupted()) {
+            Thread.currentThread().interrupt();
+            // R6: the interruption stays in the chain of causes, where the orchestration looks for it.
+            throw new IOException("interrupted while retrying an atomic replacement",
+                    new InterruptedException("interrupted while retrying an atomic replacement"));
+        }
+    }
+
     static void forceFile(Path file) throws IOException {
         try (FileChannel channel = FileChannel.open(file, StandardOpenOption.WRITE)) {
             channel.force(true);
         }
     }
 
+    /**
+     * Forces the directory entry of a rename or a deletion to stable storage, where Java can.
+     *
+     * <p><b>Inert on Windows, by limitation and not by choice.</b> Java opens a directory only with
+     * {@code FileChannel.open}, and Windows refuses that handle ({@code AccessDeniedException} for
+     * {@code READ} and for {@code WRITE}, measured on JDK 24): flushing a directory needs
+     * {@code CreateFile} with {@code FILE_FLAG_BACKUP_SEMANTICS} and {@code FlushFileBuffers}, which are
+     * reachable only through native code (FFM or JNA), and no clean pure-Java equivalent exists. Nothing is
+     * simulated here: on Windows this method does nothing.</p>
+     *
+     * <p>What that means for durability. The data is not at stake: {@link #forceFile} flushes the file
+     * before the rename, on every platform. The rename itself is an NTFS metadata operation, and NTFS
+     * journals its metadata, so after a crash the volume is consistent: the rename is either applied or
+     * not, never torn, and the target is never a half-written file. What is not guaranteed, because the
+     * journal tail is flushed lazily, is that a rename that already returned survives a power loss that
+     * follows it closely: the previous content (or, for a publication, the absence of the entry) may be
+     * what the next start sees. That is a lost last write, not corruption, and it is the same
+     * observable state as a crash just before the call. The JDK's own atomic move
+     * ({@code MoveFileEx} with {@code MOVEFILE_REPLACE_EXISTING}) does not request write-through either.</p>
+     */
     static void forceDirectory(Path directory) throws IOException {
         if (directory == null || windows()) return;
         try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
@@ -115,11 +229,6 @@ public final class DurableAtomicFile {
         }
     }
 
-    private static String requireLabel(String label) {
-        if (label == null || label.isBlank()) throw new IllegalArgumentException("label must not be blank");
-        return label;
-    }
-
     private static boolean windows() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
@@ -127,5 +236,32 @@ public final class DurableAtomicFile {
     @FunctionalInterface
     interface DirectorySync {
         void force(Path directory) throws IOException;
+    }
+
+    /** The platform-dependent steps of a move, replaceable so the retry policy is testable anywhere. */
+    record Platform(FileMover mover, FileLinker linker, boolean windows, ReplacePause pause) {
+        static final Platform SYSTEM = new Platform(
+                Files::move, Files::createLink, DurableAtomicFile.windows(), DurableAtomicFile::pauseBeforeReplaceRetry);
+
+        /** Historical constructor: the hard link of an exclusive publication is the real one. */
+        Platform(FileMover mover, boolean windows, ReplacePause pause) {
+            this(mover, Files::createLink, windows, pause);
+        }
+    }
+
+    /** Creates the hard link that makes a publication exclusive; replaceable so a file system without links is testable. */
+    @FunctionalInterface
+    interface FileLinker {
+        void link(Path link, Path existing) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface FileMover {
+        void move(Path from, Path to, CopyOption... options) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface ReplacePause {
+        void pause(int attempt) throws IOException;
     }
 }

@@ -9,14 +9,12 @@ import com.minos.domain.InformationNature;
 import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipKind;
 import com.minos.domain.Symbol;
+import com.minos.io.Sha256;
+import com.minos.query.SnapshotCoverageLimitations;
 import com.minos.store.CodeKnowledgeSnapshot;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -103,12 +101,17 @@ public final class ArchitectureDependencyService {
                         EvidenceType.DERIVATION_PATH,
                         "Aggregated " + dependencies.size()
                                 + " persisted DEPENDS_ON relationships into "
-                                + moduleDependencies.size() + " inter-module edges",
+                                + moduleDependencies.size() + " inter-module edges"
+                                + " (persisted DEPENDS_ON is the only aggregated source;"
+                                + " references expressed only as occurrences are not included)",
                         null,
                         null,
                         null,
                         1.0
-                ))
+                )),
+                SnapshotCoverageLimitations.hasResolvedReferenceOccurrences(snapshot)
+                        ? List.of(SnapshotCoverageLimitations.OCCURRENCE_REFERENCES_NOT_PROJECTED)
+                        : List.of()
         );
     }
 
@@ -139,20 +142,11 @@ public final class ArchitectureDependencyService {
     }
 
     private static String edgeId(String projectId, EdgeKey key) {
-        return "module-dependency:" + sha256(String.join("\u001F",
+        return "module-dependency:" + Sha256.hex(String.join("\u001F",
                 projectId,
                 key.sourceModuleId(),
                 key.targetModuleId()
         ));
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
     }
 
     private record EdgeKey(String sourceModuleId, String targetModuleId) {

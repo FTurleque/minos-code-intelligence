@@ -1,7 +1,7 @@
 package com.minos.adapter.scip.runtime;
 
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
-import com.minos.runtime.CommandLocator;
+import com.minos.runtime.local.CommandLocator;
 
 import java.io.IOException;
 import java.nio.file.Files;

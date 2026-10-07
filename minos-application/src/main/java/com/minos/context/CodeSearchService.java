@@ -8,6 +8,7 @@ import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolSearchCriteria;
+import com.minos.query.ModuleFilterGuard;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
@@ -21,6 +22,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+
+import static com.minos.domain.Preconditions.requireText;
 
 /**
  * Compose un contexte de code structuré en respectant les budgets M4.
@@ -43,6 +46,7 @@ public final class CodeSearchService {
         Objects.requireNonNull(criteria, "criteria");
 
         SymbolSearchCriteria requestedSymbols = criteria.symbols();
+        ModuleFilterGuard.require(knowledgeStore, projectId, requestedSymbols);
         int probeLimit = requestedSymbols.limit() == Integer.MAX_VALUE
                 ? Integer.MAX_VALUE
                 : requestedSymbols.limit() + 1;
@@ -267,12 +271,6 @@ public final class CodeSearchService {
             total += TokenEstimator.estimate(value);
         }
         return total;
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
     }
 
     private record EntityDepth(CodeEntityRef entity, int depth) {

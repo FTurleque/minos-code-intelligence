@@ -31,11 +31,45 @@ $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 $runtimeDirectory = Join-Path $InstallRoot 'runtime'
 $dataDirectory = Join-Path $InstallRoot 'data'
 $backupDirectory = Join-Path $InstallRoot 'backups'
-$composeFile = Join-Path $runtimeDirectory 'compose.mcp.prod.yaml'
+$composeFile = Join-Path $runtimeDirectory 'compose-mcp.prod.yaml'
+# Name of the runtime copy before the compose files were renamed (audit S11, Dependabot visibility): an existing
+# developer installation still has it. See Move-LegacyMinosComposeFile.
+$legacyComposeFile = Join-Path $runtimeDirectory 'compose.mcp.prod.yaml'
 $environmentFile = Join-Path $runtimeDirectory '.env'
 $metadataFile = Join-Path $runtimeDirectory 'installation.json'
 $composeProject = 'minos-mcp-prod'
 $containerName = 'minos-mcp-prod'
+
+# Resource-ceiling overrides an operator put in the runtime .env (MINOS_<ROLE>_CPUS|MEM_LIMIT|PIDS_LIMIT)
+# survive an Install/update: the .env is regenerated, these lines are carried over. Each value is
+# validated first, with the rule of scripts/quality/check-compose-limits.py: memory and PID are real
+# ceilings (0, -1 and empty mean "unlimited" to Docker); CPU is 0 (none) or a positive number the
+# daemon accepts (whether it exceeds the host's CPU count is the daemon's to say). An invalid value is
+# refused here, naming the variable, and is never copied silently into the new .env.
+function Test-CeilingOverride([string] $Name, [string] $Value) {
+    $Candidate = $Value.Trim().Trim('"').Trim("'")
+    if ($Name -like '*_MEM_LIMIT') {
+        if ($Candidate -match '^[1-9][0-9]*[kKmMgG]$') { return $true }
+        return ($Candidate -match '^[1-9][0-9]{0,17}$' -and [int64]$Candidate -ge 6291456)
+    }
+    if ($Name -like '*_PIDS_LIMIT') { return ($Candidate -match '^[1-9][0-9]{0,17}$') }
+    if ($Candidate -notmatch '^([0-9]+(\.[0-9]+)?|\.[0-9]+)$') { return $false }
+    $Cpus = 0.0
+    if (-not [double]::TryParse($Candidate, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$Cpus)) { return $false }
+    return ($Cpus -eq 0 -or $Cpus -ge 0.01)
+}
+
+function Get-PreservedCeilingOverrides([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
+    $Lines = @(Get-Content -LiteralPath $Path | Where-Object { $_ -match '^MINOS_(MCP|ADMIN|JOB|POSTGRES|OLLAMA)_(CPUS|MEM_LIMIT|PIDS_LIMIT)=' })
+    foreach ($Line in $Lines) {
+        $Name, $Value = $Line.Split('=', 2)
+        if (-not (Test-CeilingOverride -Name $Name -Value $Value)) {
+            throw "Invalid value for $Name in ${Path}: '$Value'. A memory or PID ceiling must be a real limit (0, -1 and empty mean unlimited; memory is <n>k, <n>m, <n>g or at least 6291456 bytes; PID a positive integer) and a CPU ceiling 0 (none) or a positive number. Fix or remove the line, then retry; nothing was written."
+        }
+    }
+    return $Lines
+}
 
 function Assert-CommandAvailable {
     param([Parameter(Mandatory = $true)][string]$Name)
@@ -108,6 +142,19 @@ function Invoke-MinosCompose {
         -FailureMessage $FailureMessage
 }
 
+# The runtime directory is outside the repository, so a rename in the repository does not reach it. The Compose
+# project is fixed by `name: ${MINOS_COMPOSE_PROJECT}` and nothing persisted names the file: the old file is moved
+# to the new name, content intact. If both exist the new name wins and the old one is left alone, with a warning.
+function Move-LegacyMinosComposeFile {
+    if (-not (Test-Path -LiteralPath $legacyComposeFile -PathType Leaf)) { return }
+    if (Test-Path -LiteralPath $composeFile -PathType Leaf) {
+        Write-Warning "$composeFile et l'ancien $legacyComposeFile existent tous deux ; $composeFile est utilise. Supprimez l'ancien une fois verifie."
+        return
+    }
+    Move-Item -LiteralPath $legacyComposeFile -Destination $composeFile
+    Write-Host "Fichier compose du runtime migre vers son nouveau nom : $composeFile" -ForegroundColor Cyan
+}
+
 function Assert-MinosProdInstalled {
     foreach ($requiredFile in @($composeFile, $environmentFile, $metadataFile)) {
         if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
@@ -162,6 +209,7 @@ function Invoke-MinosDockerSmoke {
 }
 
 Assert-CommandAvailable -Name 'docker'
+Move-LegacyMinosComposeFile
 
 switch ($Action) {
     'Install' {
@@ -208,8 +256,10 @@ switch ($Action) {
             $buildContext
         ) -FailureMessage "La construction de l'image Docker MINOS a echoue"
 
-        Copy-Item -LiteralPath (Join-Path $projectRoot 'docker\compose.mcp.prod.yaml') `
+        Copy-Item -LiteralPath (Join-Path $projectRoot 'docker\compose-mcp.prod.yaml') `
             -Destination $composeFile -Force
+        Remove-Item -LiteralPath $legacyComposeFile -Force -ErrorAction SilentlyContinue
+        $preservedOverrides = @(Get-PreservedCeilingOverrides -Path $environmentFile)
         $environmentContent = @"
 MINOS_COMPOSE_PROJECT=$composeProject
 MINOS_CONTAINER_NAME=$containerName
@@ -219,6 +269,9 @@ MINOS_PROJECTS_DIR=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -
 MINOS_VERSION=$version
 MINOS_GIT_COMMIT=$commit
 "@
+        if ($preservedOverrides.Count -gt 0) {
+            $environmentContent = $environmentContent.TrimEnd() + [Environment]::NewLine + ($preservedOverrides -join [Environment]::NewLine) + [Environment]::NewLine
+        }
         Write-MinosUtf8File -Path $environmentFile -Content $environmentContent.TrimStart()
         Invoke-MinosCompose -Arguments @('config', '--quiet') `
             -FailureMessage 'La configuration Docker Compose MINOS est invalide'

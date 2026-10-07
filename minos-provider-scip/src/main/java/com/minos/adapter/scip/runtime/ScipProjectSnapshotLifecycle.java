@@ -1,8 +1,11 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.discovery.ModuleAssignmentRule;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
-import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
+import com.minos.io.Sha256;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.io.FileTreeOperations;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
@@ -15,15 +18,11 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,8 +60,8 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
             }
         }
         this.descriptors = Map.copyOf(values);
-        Files.createDirectories(stagingRoot);
-        Files.createDirectories(runsRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(stagingRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(runsRoot);
     }
 
     @Override
@@ -70,7 +69,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
         Objects.requireNonNull(request, "request");
         Path runRoot = runRoot(request.runId());
         deleteRecursively(runRoot);
-        Files.createDirectories(runRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(runRoot);
         Map<String, Symbol> symbols = new LinkedHashMap<>();
         Map<String, SymbolOccurrence> occurrences = new LinkedHashMap<>();
         Map<String, Relationship> relationships = new LinkedHashMap<>();
@@ -100,7 +99,8 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
                     .orElseThrow(() -> new IllegalStateException(
                             "provider normalization did not publish its temporary snapshot: "
                                     + descriptor.id() + " scope=" + portableRoot));
-            normalized.symbols().forEach(symbol -> putUnique(symbols, symbol.id(), symbol, "symbol"));
+            normalized.symbols().forEach(symbol -> putUnique(symbols, symbol.id(),
+                    withModule(symbol, request.moduleAssignment()), "symbol"));
             normalized.occurrences().forEach(occurrence -> putUnique(occurrences, occurrence.id(), occurrence, "occurrence"));
             normalized.relationships().forEach(relationship ->
                     putUnique(relationships, relationship.id(), relationship, "relationship"));
@@ -162,6 +162,24 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
                 .orElseGet(ActiveSnapshotObservation::noActiveSnapshot);
     }
 
+    /**
+     * MINOS-AUD-F04 : rattache un symbole local au module de son fichier, avec la règle de l'architecture. Une portée
+     * à la racine peut couvrir plusieurs modules (réacteur) : l'attribution se fait donc par symbole, jamais par portée.
+     * Les symboles externes et ceux hors de tout module restent sans module.
+     */
+    private static Symbol withModule(Symbol symbol, ModuleAssignmentRule rule) {
+        if (rule.isEmpty() || symbol.external() || symbol.moduleId() != null) {
+            return symbol;
+        }
+        return rule.moduleIdOf(symbol.fileId())
+                .map(moduleId -> new Symbol(symbol.id(), symbol.symbolKey(), symbol.identityQuality(),
+                        symbol.projectId(), moduleId, symbol.fileId(), symbol.parentSymbolId(), symbol.kind(),
+                        symbol.name(), symbol.qualifiedName(), symbol.signature(), symbol.language(),
+                        symbol.location(), symbol.resolutionStatus(), symbol.origin(), symbol.external(),
+                        symbol.generated(), symbol.providerReferences()))
+                .orElse(symbol);
+    }
+
     private void cleanupProviderWorkspaces(UUID runId, List<IndexingArtifact> artifacts) throws IOException {
         Path expectedRunRoot = runsRoot.resolve(runId.toString()).toAbsolutePath().normalize();
         for (IndexingArtifact artifact : artifacts) {
@@ -189,13 +207,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
     private static String scopeKey(Path relativeRoot) {
         String portable = portable(relativeRoot);
         if (portable.isBlank()) return "root";
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            String hash = HexFormat.of().formatHex(digest.digest(portable.getBytes(StandardCharsets.UTF_8)));
-            return "module-" + hash.substring(0, 16);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
+        return "module-" + Sha256.hex(portable).substring(0, 16);
     }
 
     private static String portable(Path path) {

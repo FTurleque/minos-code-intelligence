@@ -3,7 +3,7 @@ import org.jetbrains.intellij.platform.gradle.models.ProductRelease
 
 plugins {
     java
-    id("org.jetbrains.intellij.platform") version "2.18.1"
+    id("org.jetbrains.intellij.platform") version "2.19.0"
 }
 
 group = "com.minos"

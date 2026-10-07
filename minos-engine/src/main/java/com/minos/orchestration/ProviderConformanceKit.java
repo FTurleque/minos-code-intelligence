@@ -44,8 +44,8 @@ public final class ProviderConformanceKit {
                 descriptor.qualification().name(),
                 descriptor.languages().stream().map(Enum::name).sorted().toList(),
                 descriptor.buildSystems().stream().map(Enum::name).sorted().toList(),
-                Map.copyOf(capabilities),
-                Map.copyOf(counts),
+                capabilities,
+                counts,
                 score,
                 descriptor.limitations(),
                 operational.explicit(),
@@ -63,6 +63,19 @@ public final class ProviderConformanceKit {
             throw new IllegalArgumentException(
                     label + " providerId mismatch: descriptor=" + descriptorId + ", profile=" + actualId);
         }
+    }
+
+    /**
+     * Immutable copy iterated in the natural order of its keys. It replaces {@code Map.copyOf}, whose
+     * iteration order is drawn at random when the JVM starts and so changed the key order of every
+     * JSON object built from it. Like {@code Map.copyOf}, it refuses null keys and null values.
+     */
+    public static <K extends Comparable<? super K>, V> Map<K, V> sortedCopy(Map<K, V> source) {
+        Objects.requireNonNull(source, "source");
+        Map<K, V> copy = new java.util.TreeMap<>();
+        source.forEach((key, value) -> copy.put(
+                Objects.requireNonNull(key, "key"), Objects.requireNonNull(value, "value")));
+        return java.util.Collections.unmodifiableMap(copy);
     }
 
     public record ConformanceResult(
@@ -89,8 +102,8 @@ public final class ProviderConformanceKit {
             if (qualification == null || qualification.isBlank()) throw new IllegalArgumentException("qualification must not be blank");
             languages = List.copyOf(Objects.requireNonNull(languages, "languages"));
             buildSystems = List.copyOf(Objects.requireNonNull(buildSystems, "buildSystems"));
-            capabilities = Map.copyOf(Objects.requireNonNull(capabilities, "capabilities"));
-            counts = Map.copyOf(Objects.requireNonNull(counts, "counts"));
+            capabilities = sortedCopy(Objects.requireNonNull(capabilities, "capabilities"));
+            counts = sortedCopy(Objects.requireNonNull(counts, "counts"));
             limitations = List.copyOf(Objects.requireNonNull(limitations, "limitations"));
             qualificationPlatforms = List.copyOf(Objects.requireNonNull(qualificationPlatforms, "qualificationPlatforms"));
             runtimeRequirements = List.copyOf(Objects.requireNonNull(runtimeRequirements, "runtimeRequirements"));

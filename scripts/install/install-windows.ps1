@@ -116,7 +116,7 @@ try {
         'integration\probe-mcp-backend.ps1',
         'integration\switch-mcp-backend.ps1',
         'docker\Dockerfile.mcp.release',
-        'docker\compose.mcp.prod.yaml',
+        'docker\compose-mcp.prod.yaml',
         'docker\scripts\prod-mcp-release.ps1',
         'docker\scripts\mcp-lifecycle.ps1',
         'docker\scripts\configure-docker-mcp.ps1'

@@ -32,11 +32,6 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-application</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>42.7.13</version>
@@ -74,13 +69,28 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <version>2.0.18</version>
+            <version>2.0.20</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <!--
+                  A2: the application-level consistency test over PostgreSQL lives in minos-app
+                  (this adapter no longer depends on minos-application); it reuses the Docker /
+                  pgvector bootstrap of PostgresTestSupport through this test-jar.
+                -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${maven.jar.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals><goal>test-jar</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -97,9 +107,10 @@
           Docker Desktop exposes its Linux engine through Windows named pipes. Keep
           Windows-only connection hints isolated from Linux/macOS. Recent hosted
           Windows runners use a Docker daemon whose minimum API is 1.44, while the
-          docker-java version shaded by Testcontainers 1.20.5 defaults to an older
-          API. Pin only the API level here; do not force a deprecated provider
-          strategy, so Npipe discovery can still select the available Windows pipe.
+          docker-java version shaded by the Testcontainers artifacts declared in this
+          module (see their <version> elements above) defaults to an older API.
+          Pin only the API level here; do not force a deprecated provider strategy,
+          so Npipe discovery can still select the available Windows pipe.
         -->
         <profile>
             <id>windows-docker-desktop-testcontainers</id>

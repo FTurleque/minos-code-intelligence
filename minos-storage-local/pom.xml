@@ -19,5 +19,13 @@
             <artifactId>minos-engine</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <!-- Q13: LogCapture (com.minos.testsupport), one copy for the tests of every module; test scope adds no edge (compile edge to minos-engine already exists) -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-engine</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

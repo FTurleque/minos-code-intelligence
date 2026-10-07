@@ -67,12 +67,17 @@ $OwnershipMarkerPath = Join-Path $InstallRoot '.minos-installation.json'
 # Directory-level entries are moved (not merged) whole -- any file present in an
 # old version's directory but absent from the new package's directory is
 # implicitly discarded along with the rest of that directory's rollback backup.
-$StagedDirectoryRelativePaths = @('app', 'lib', 'docker', 'integration', 'supply-chain')
+# tools\ is the payload of embedded indexers (TOOLS-MANIFEST.json and the archives it lists): staged, activated
+# and rolled back like every other directory, so an upgrade never leaves tools of two versions mixed. It is the
+# one OPTIONAL directory: the "lite" package ships without it, and installing a lite package over a full
+# installation removes the previous tools\ transactionally (backed up, restored on rollback).
+$StagedDirectoryRelativePaths = @('app', 'lib', 'docker', 'integration', 'supply-chain', 'tools')
 # install.ps1 is the portable/ZIP distribution's own bootstrapper; it has no
 # function once already Inno-installed, but the pre-transactional-engine
 # wildcard [Files] copy always shipped it into {app} too. Keep staging it so
 # an Inno-managed install still matches that prior behavior exactly.
 $StagedFileRelativePaths = @('minos.cmd', 'minos-mcp.cmd', 'RUNTIME-MODULES.txt', 'RELEASE-MANIFEST.json', 'VERSION', 'README.txt', 'install.ps1')
+$OptionalStagedDirectoryRelativePaths = @('tools')
 $ManagedRelativePaths = $StagedDirectoryRelativePaths + $StagedFileRelativePaths + @(
     '.install-staging', '.install-rollback', '.minos-installation.json'
 )
@@ -252,8 +257,8 @@ function Assert-Package {
         'integration\uninstall-mcp-clients.ps1',
         'integration\update-installation.ps1',
         'docker\Dockerfile.mcp.release',
-        'docker\compose.mcp.prod.yaml',
-        'docker\compose.mcp.connected.yaml',
+        'docker\compose-mcp.prod.yaml',
+        'docker\compose-mcp.connected.yaml',
         'docker\scripts\prod-mcp-release.ps1',
         'docker\scripts\mcp-lifecycle.ps1',
         'docker\scripts\configure-docker-mcp.ps1',
@@ -269,6 +274,10 @@ function Assert-Package {
         'install.ps1'
     )
     $Missing = @($Required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $PackageRoot $_)) })
+    # A package that ships tools\ must describe them; a package without tools\ is the lite variant.
+    if ((Test-Path -LiteralPath (Join-Path $PackageRoot 'tools')) -and -not (Test-Path -LiteralPath (Join-Path $PackageRoot 'tools\TOOLS-MANIFEST.json'))) {
+        $Missing += 'tools\TOOLS-MANIFEST.json'
+    }
     if ($Missing.Count -gt 0) {
         throw "MINOS_UPDATE_INVALID_PACKAGE: fichiers requis absents du paquet: $($Missing -join ', ')"
     }
@@ -462,6 +471,11 @@ function Register-StagedEntry([string] $RelativePath) {
 
 function Add-StagedDirectory([string] $RelativePath) {
     $Source = Join-Path $PackageRoot $RelativePath
+    if (($OptionalStagedDirectoryRelativePaths -contains $RelativePath) -and -not (Test-Path -LiteralPath $Source)) {
+        # Absent from the package: nothing to stage. An installed copy is removed by the activation (hadOriginal).
+        if (Test-Path -LiteralPath (Join-Path $InstallRoot $RelativePath)) { Register-StagedEntry -RelativePath $RelativePath }
+        return
+    }
     $StageTarget = Join-Path $StageRoot $RelativePath
     Assert-PathInsideRoot -Path $StageTarget -Root $StageRoot
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $StageTarget) | Out-Null
@@ -533,7 +547,9 @@ function Invoke-Activation {
         if ($Entry.hadOriginal) {
             Move-PathWithRetry -Source $InstallTarget -Destination $BackupTarget
         }
-        Move-PathWithRetry -Source $StageSource -Destination $InstallTarget
+        if (Test-Path -LiteralPath $StageSource) {
+            Move-PathWithRetry -Source $StageSource -Destination $InstallTarget
+        }
         $ActivationCount++
 
         if ($TestFailActivationAfterEntries -gt 0 -and $ActivationCount -eq $TestFailActivationAfterEntries) {

@@ -28,6 +28,13 @@ A useful report should include:
 
 Reports are triaged for reproducibility and severity before remediation. Confirmed vulnerabilities should receive regression coverage whenever practical, and fixes must pass the repository's required Linux, Windows, dependency-vulnerability, and static-analysis gates before promotion.
 
+## Local storage on Windows
+
+MINOS keeps `MINOS_HOME` owner-only and never removes a deny entry an administrator placed on it; a write-protected `MINOS_HOME`
+makes MINOS fail, and say so, rather than lift the restriction (read-only commands included, until the read paths no longer open the
+storage for writing). Sandbox launcher scripts are not kept in `MINOS_HOME`: they live under `%LOCALAPPDATA%\minos-launchers` and are
+checked before every launch.
+
 ## Secrets and sensitive data
 
 Never include real API keys, database passwords, access tokens, tenant keys, proprietary third-party source code, personal data, or production dumps in reports. Use synthetic values and the smallest possible reproduction fixture.

@@ -40,6 +40,28 @@ class LocalMinosTeamApiTest {
         assertNull(denied.getCause());
     }
 
+    /** MINOS-AUD-B03 : un refus est toujours « accès refusé » pour l'appelant, jamais une requête invalide ni une E/S. */
+    @Test
+    void aRefusalIsReportedAsAccessDeniedWhateverTheCallerSuppliedAndTheTenantStaysReadable() throws Exception {
+        MinosApplication app = MinosApplication.builder(home).hostedTenantKeyProvider(keys()).build();
+        MinosTeamApi api = new LocalMinosApi(app).team();
+        var bootstrap = api.bootstrap(new MinosTeamApi.BootstrapRequest(UUID.randomUUID(), "Acme", "key-a", "owner",
+                "Owner", Duration.ofHours(1), "api-bootstrap"));
+        String owner = bootstrap.bearerToken();
+        api.grantMember(owner, "grant-viewer", new MinosTeamApi.MemberGrantRequest("viewer", "Viewer", "VIEWER"));
+        String viewer = api.issueToken(owner, "token-viewer", "viewer", Duration.ofHours(1)).bearerToken();
+
+        for (String hostile : java.util.List.of("a".repeat(5000), " ghost", "bad\tid", "bad id")) {
+            MinosApi.MinosApiException refused = assertThrows(MinosApi.MinosApiException.class,
+                    () -> api.revokeMember(viewer, "refused", hostile));
+            assertEquals(MinosApi.ErrorCode.ACCESS_DENIED, refused.code(), "refusal with " + hostile.length() + " chars");
+            assertNull(refused.getCause());
+        }
+
+        assertEquals("TENANT_SCOPED", api.tenant(owner).isolation(), "the refusals must not corrupt the tenant");
+        assertFalse(api.audit(owner, 20).isEmpty());
+    }
+
     @Test
     void localModeRemainsAvailableWhileTeamOperationsFailClosed() throws Exception {
         MinosTeamApi api = new LocalMinosApi(MinosApplication.builder(home).build()).team();
@@ -47,6 +69,27 @@ class LocalMinosTeamApiTest {
                 () -> api.tenant("not-a-token"));
         assertEquals(MinosApi.ErrorCode.UNAVAILABLE, failure.code());
         assertNull(failure.getCause());
+    }
+
+    @Test
+    void bootstrapDtoToStringRedactsBearerToken() {
+        var dto = new MinosTeamApi.BootstrapDto(null, "mht1.secret-token", "SECRET_OUTPUT_ONCE_DO_NOT_LOG");
+        assertFalse(dto.toString().contains("mht1.secret-token"), "BootstrapDto.toString leaks the bearer token");
+        assertEquals("mht1.secret-token", dto.bearerToken());
+    }
+
+    @Test
+    void tokenDtoToStringRedactsBearerToken() {
+        var dto = new MinosTeamApi.TokenDto("mht1.secret-token", "SECRET_OUTPUT_ONCE_DO_NOT_LOG");
+        assertFalse(dto.toString().contains("mht1.secret-token"), "TokenDto.toString leaks the bearer token");
+        assertEquals("mht1.secret-token", dto.bearerToken());
+    }
+
+    @Test
+    void rotationDtoToStringRedactsReplacementBearerToken() {
+        var dto = new MinosTeamApi.RotationDto(null, "mht1.secret-token", "SECRET_OUTPUT_ONCE_DO_NOT_LOG");
+        assertFalse(dto.toString().contains("mht1.secret-token"), "RotationDto.toString leaks the replacement bearer token");
+        assertEquals("mht1.secret-token", dto.replacementBearerToken());
     }
 
     private static HostedTenantKeyProvider keys() {

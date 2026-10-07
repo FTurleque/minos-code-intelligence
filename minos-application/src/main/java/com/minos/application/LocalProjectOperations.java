@@ -1,8 +1,9 @@
 package com.minos.application;
 
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
-import com.minos.adapter.scip.ScipSymbolSnapshotReport;
-import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
+import com.minos.io.PrivateLocalStorage;
+import com.minos.orchestration.ScipSymbolSnapshotReport;
+import com.minos.orchestration.ScipArtifactImporter;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.io.BoundedFileDigest;
 import com.minos.io.DurableAtomicFile;
@@ -12,6 +13,7 @@ import com.minos.orchestration.ProjectIndexState;
 import com.minos.orchestration.ProviderId;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
+import com.minos.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
@@ -29,6 +31,8 @@ import java.util.UUID;
 
 /** Local application adapter over the selected MINOS storage backend. */
 public final class LocalProjectOperations implements ProjectOperations, AutoCloseable {
+    private static final System.Logger LOGGER = System.getLogger(LocalProjectOperations.class.getName());
+
     private final MinosApplication ownedApplication;
     private final Path home;
     private final ProjectRegistry registry;
@@ -36,6 +40,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final IndexStateStore stateStore;
     private final ProjectInspectionService inspectionService;
+    private final ScipArtifactImporter scipArtifactImporter;
     private final Path historyDirectory;
 
     public LocalProjectOperations(Path home) throws IOException { this(MinosApplication.open(home), true); }
@@ -50,17 +55,44 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         this.snapshotStore = value.snapshotStore();
         this.stateStore = value.indexStateStore();
         this.inspectionService = value.projectInspectionService();
+        this.scipArtifactImporter = value.scipArtifactImporter();
         this.historyDirectory = home.resolve("cli-index-history");
     }
 
     @Override public ProjectView addProject(Path rootPath, String displayName) throws IOException {
-        return projectView(inspectionService.view(registry.registerProject(rootPath, displayName)));
+        RegisteredProject registered;
+        try {
+            registered = registry.registerProject(rootPath, displayName);
+        } catch (IOException | RuntimeException failure) {
+            // A mutation stays strict: it cannot know whether the unreadable entry is the one it was about to
+            // overwrite. It refuses, and says why instead of surfacing a raw read failure (Q24).
+            if (Thread.currentThread().isInterrupted()) throw failure;
+            // A path that is not a directory is its own failure, whatever the state of the registry.
+            if (!Files.isDirectory(rootPath)) throw failure;
+            Optional<UnreadableRegistryException> explained = UnreadableRegistryException.explaining(registry,
+                    "the uniqueness of the registration cannot be guaranteed");
+            if (explained.isEmpty()) throw failure;
+            explained.get().addSuppressed(failure);
+            throw explained.get();
+        }
+        return projectView(inspectionService.view(registered));
     }
-    @Override public List<ProjectView> listProjects() throws IOException {
-        return inspectionService.listProjects().stream().map(LocalProjectOperations::projectView).toList();
+    @Override public List<ProjectView> listProjects() throws IOException { return inventory().projects(); }
+    @Override public ProjectInventory inventory() throws IOException {
+        ProjectInspectionService.Inventory inventory = inspectionService.inventory();
+        return new ProjectInventory(
+                inventory.projects().stream().map(LocalProjectOperations::projectView).toList(), inventory.degraded());
     }
     @Override public ProjectView inspectProject(String projectIdentifier) throws IOException {
         return projectView(inspectionService.inspectProject(projectIdentifier));
+    }
+    @Override public ProjectInspection inspection(String projectIdentifier) throws IOException {
+        ProjectInspectionService.Inspection inspection = inspectionService.inspection(projectIdentifier);
+        return new ProjectInspection(projectView(inspection.project()), inspection.unreadable());
+    }
+    @Override public ProjectInspection statusInspection(String projectIdentifier) throws IOException {
+        ProjectInspectionService.Inspection inspection = inspectionService.statusInspection(projectIdentifier);
+        return new ProjectInspection(projectView(inspection.project()), inspection.unreadable());
     }
 
     @Override
@@ -84,7 +116,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                 ? "scip-" + BoundedFileDigest.sha256Exact(
                         artifact, IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES, "SCIP artifact").substring(0, 24)
                 : snapshotId;
-        ScipSymbolSnapshotReport report = new ScipSymbolSnapshotImporter().importSnapshot(
+        ScipSymbolSnapshotReport report = scipArtifactImporter.importSnapshot(
                 artifact,
                 new ScipSymbolSnapshotRequest(project.id(), effectiveSnapshotId, blankToNull(moduleId), safeProviderId,
                         blankToNull(providerVersion), "application-" + effectiveSnapshotId, java.util.Map.of()),
@@ -101,8 +133,12 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         try {
             writeHistory(project.id(), new IndexHistory(
                     effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
-        } catch (IOException ignored) {
-            // CLI history is secondary evidence. The active snapshot remains authoritative.
+        } catch (IOException failure) {
+            // CLI history is secondary evidence. The active snapshot remains authoritative, so the import
+            // still succeeds; the failure is journaled (class only: no path, no exception message).
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS could not write the CLI import history of project " + project.id()
+                            + "; the active snapshot stays authoritative: " + failure.getClass().getSimpleName());
         }
 
         return new IndexImportResult(project.id().toString(), report.snapshotId(), safeProviderId,
@@ -164,7 +200,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     private void writeHistory(UUID projectId, IndexHistory history) throws IOException {
         DurableAtomicFile.ensureDirectory(historyDirectory, "CLI import history directory");
         Path target = historyDirectory.resolve(projectId + ".properties");
-        Path temporary = Files.createTempFile(historyDirectory, projectId + ".", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(historyDirectory, projectId + ".", ".tmp");
         Properties properties = new Properties();
         properties.setProperty("snapshotId", history.snapshotId());
         properties.setProperty("providerId", history.providerId());

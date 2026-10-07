@@ -9,6 +9,8 @@ import com.minos.domain.SymbolLocation;
 
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Résultat compact et indépendant de la persistance pour une requête de symbole.
  *
@@ -66,11 +68,5 @@ public record SymbolResult(
                 symbol.external(),
                 symbol.generated()
         );
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
     }
 }

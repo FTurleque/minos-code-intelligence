@@ -6,6 +6,8 @@ import com.minos.domain.InformationNature;
 import java.util.List;
 import java.util.Objects;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Contexte architectural compact d'un module pour un snapshot donné.
  */
@@ -63,11 +65,5 @@ public record ArchitectureModuleContext(
 
     public int outgoingModuleEdgeCount() {
         return outgoingDependencies.size();
-    }
-
-    private static void requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
     }
 }

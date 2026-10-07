@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Lecteur UTF-8 confiné à la racine réelle d'un projet enregistré.
  */
@@ -104,7 +106,7 @@ public final class LocalSourceReader implements SourceReader {
 
     @Override
     public SourceExcerpt readFull(String fileId) throws IOException {
-        Path source = resolveReadableSource(requireFileId(fileId))
+        Path source = resolveReadableSource(requireText(fileId, "fileId"))
                 .orElseThrow(() -> new IllegalArgumentException(
                         "source file is not resolvable inside the project: " + fileId));
         String content = readText(source);
@@ -191,7 +193,7 @@ public final class LocalSourceReader implements SourceReader {
      * moment of the open.</p>
      */
     private Optional<Path> resolveReadableSource(String fileId) throws IOException {
-        String required = requireFileId(fileId);
+        String required = requireText(fileId, "fileId");
         if (required.startsWith("file:")) {
             return Optional.empty();
         }
@@ -214,13 +216,6 @@ public final class LocalSourceReader implements SourceReader {
             return Optional.empty();
         }
         return Optional.of(relative);
-    }
-
-    private static String requireFileId(String fileId) {
-        if (fileId == null || fileId.isBlank()) {
-            throw new IllegalArgumentException("fileId must not be blank");
-        }
-        return fileId;
     }
 
     private static String join(List<String> lines, int start, int end) {

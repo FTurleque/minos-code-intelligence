@@ -4,6 +4,7 @@ import com.minos.application.LocalProjectOperations;
 import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectOperations;
+import com.minos.application.ProjectSummary;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.architecture.ArchitectureIntelligenceView;
 import com.minos.architecture.ArchitectureModule;
@@ -28,18 +29,24 @@ import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.ImpactPathStep;
 import com.minos.impact.ImpactedSymbol;
 import com.minos.impact.ProjectImpactQuery;
+import com.minos.orchestration.ResumableRunSummary;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+
+import static com.minos.domain.Preconditions.requireText;
 
 /**
  * Local M11 implementation backed by the already-qualified MINOS services.
@@ -100,7 +107,7 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
 
     @Override
     public List<ProjectDto> listProjects() throws MinosApiException {
-        return execute(() -> projectOperations.listProjects().stream().map(LocalMinosApi::project).toList());
+        return execute(() -> projectOperations.listProjects().stream().map(this::project).toList());
     }
 
     @Override
@@ -243,12 +250,29 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
         }
     }
 
-    private static ProjectDto project(ProjectOperations.ProjectView view) {
+    private ProjectDto project(ProjectOperations.ProjectView view) {
+        // A row the inventory could not read (Q8) offers nothing: its state store may be the damaged part.
+        Optional<ResumableRunSummary> resumable = ProjectSummary.UNREADABLE_STATE.equals(view.indexState())
+                ? Optional.empty()
+                : resumableRun(view.id());
+        Instant now = Instant.now();
         return new ProjectDto(
                 view.id(), view.name(), view.rootPath(), view.rootAvailable(),
                 view.languages(), view.buildSystems(), view.moduleCount(), view.indexState(),
-                view.activeSnapshotId(), view.lastSuccessfulIndexAt(), view.providerId(), view.providerVersion()
+                view.activeSnapshotId(), view.lastSuccessfulIndexAt(), view.providerId(), view.providerVersion(),
+                resumable.map(summary -> summary.runId().toString()).orElse(null),
+                resumable.map(summary -> summary.checkpointAgeSeconds(now)).orElse(null),
+                resumable.map(ResumableRunSummary::resumableTargets).orElse(null)
         );
+    }
+
+    /** ADR 0039 §6: the run offered for resume; an unparseable view id simply offers nothing. */
+    private Optional<ResumableRunSummary> resumableRun(String projectId) {
+        try {
+            return ResumableRunSummary.of(application.indexStateStore(), UUID.fromString(projectId));
+        } catch (IllegalArgumentException notAProjectId) {
+            return Optional.empty();
+        }
     }
 
     private static IndexImportDto indexImport(ProjectOperations.IndexImportResult result) {
@@ -332,7 +356,8 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
                 view.centrality().topIncomingModuleIds(),
                 view.centrality().topOutgoingModuleIds(),
                 view.technologies().technologies().stream().map(value -> value.name()).toList(),
-                view.overview().modules().stream().map(LocalMinosApi::architectureModule).toList()
+                view.overview().modules().stream().map(LocalMinosApi::architectureModule).toList(),
+                view.dependencies().limitations()
         );
     }
 
@@ -482,12 +507,6 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
             return Enum.valueOf(type, value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("unsupported " + field + ": " + value, exception);
-        }
-    }
-
-    private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(field + " must not be blank");
         }
     }
 

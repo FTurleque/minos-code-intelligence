@@ -9,12 +9,9 @@ import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipKind;
 import com.minos.domain.ResolutionStatus;
 import com.minos.domain.Symbol;
+import com.minos.io.Sha256;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 
@@ -130,7 +127,7 @@ final class ScipRelationshipNormalizer {
                 providerRelationship.getSymbol(),
                 kind.name()
         );
-        return "rel:" + sha256(material);
+        return "rel:" + Sha256.hex(material);
     }
 
     private static CodeEntityRef symbol(String symbolId) {
@@ -139,15 +136,6 @@ final class ScipRelationshipNormalizer {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
-    }
-
-    private static String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
     }
 
     private record Fact(

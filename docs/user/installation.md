@@ -31,13 +31,13 @@ java -version
 La ligne de maintenance courante est :
 
 ```text
-1.2.0-SNAPSHOT
+1.3.0-SNAPSHOT
 ```
 
 Le shaded JAR de développement est donc notamment :
 
 ```text
-target\minos-code-intelligence-1.2.0-SNAPSHOT-all.jar
+target\minos-code-intelligence-1.3.0-SNAPSHOT-all.jar
 ```
 
 Les scripts de release remplacent la propriété Maven CI-friendly `revision` avec `-Drevision=<version>` ; ils ne nécessitent pas de modifier temporairement les POM.
@@ -46,13 +46,15 @@ Les scripts de release remplacent la propriété Maven CI-friendly `revision` av
 
 ```powershell
 $env:MINOS_HOME = 'C:\minos-data'
-$minos = '.\target\minos-code-intelligence-1.2.0-SNAPSHOT-all.jar'
+$minos = '.\target\minos-code-intelligence-1.3.0-SNAPSHOT-all.jar'
 
 java -jar $minos --help
 java -jar $minos doctor
 ```
 
 ## Parcours autonome
+
+Depuis le checkout, `tools install` télécharge le provider et ses dépendances (Coursier/Maven, Node.js/npm…) et nécessite un accès réseau. La **distribution Windows complète**, elle, embarque les indexeurs scip-java et scip-typescript et les amorce sans réseau (voir [l'installation de production](production-installation.md), §2 bis, et l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md)) : la commande ci-dessous n'est alors qu'une mise à jour explicite.
 
 ```powershell
 java -jar $minos tools install scip-java
@@ -94,7 +96,8 @@ Il :
 - exige notamment `java.xml` ;
 - écrit `RUNTIME-MODULES.txt` ;
 - génère SBOM/notices/manifest ;
-- produit le ZIP portable.
+- construit `tools\` (indexeurs embarqués) avec `scripts/release/build-embedded-tools.py`, qui lit `embedded-tools.json` (aucune liste ni empreinte propre au script), et vérifie le résultat avec `scripts/quality/check-tools-manifest.py --distribution` ;
+- produit le ZIP portable ; `-Variant lite` (avec `-ReuseBuild` pour ne pas relancer Maven) produit `minos-<version>-windows-x64-lite.zip`, sans `tools\`.
 
 ## Construire le setup local à vérifier avant release
 

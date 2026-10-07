@@ -1,8 +1,10 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.output.DeterministicJson;
+import com.minos.registry.UnreadableRegistryException;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
@@ -50,6 +52,7 @@ public final class MinosMcpTools implements AutoCloseable {
     private static final String ARG_LIMIT = "limit";
     private static final String ARG_MODULE = "module";
     private static final int MAX_CLIENT_ERROR_CHARS = 240;
+    private static final int MAX_CAUSE_DEPTH = 16;
     private static final System.Logger LOGGER = System.getLogger(MinosMcpTools.class.getName());
 
     private final MinosMcpBackend backend;
@@ -165,9 +168,19 @@ public final class MinosMcpTools implements AutoCloseable {
                     .build();
         } catch (DeterministicJson.OutputBudgetExceededException exception) {
             return toolError(RESULT_BUDGET_ERROR);
+        } catch (ProjectResolver.ResolutionException exception) {
+            // An unknown, ambiguous or invalid project reference: the one public message shared with the CLI and
+            // the Java API (it does not echo a path or a secret).
+            return toolError("error: " + exception.publicMessage());
+        } catch (UnreadableRegistryException exception) {
+            // Its message only counts the unreadable entries and names the consequence: no path, no file content.
+            return toolError("error: " + PublicErrorMessages.sanitize(exception.getMessage(), "registry entries are unreadable"));
         } catch (IllegalArgumentException exception) {
             return toolError(clientError(toolName, exception));
         } catch (Exception exception) {
+            if (exception instanceof McpClientFailure failure) {
+                return toolError("error: " + failure.clientMessage());
+            }
             logInternalFailure(toolName, exception);
             return toolError(GENERIC_TOOL_ERROR);
         }
@@ -219,9 +232,19 @@ public final class MinosMcpTools implements AutoCloseable {
         return detail.startsWith("error:") ? detail : "error: " + detail;
     }
 
+    /** The operator's only trace of an opaque failure: tool and classes, never the message nor an argument. */
     private static void logInternalFailure(String toolName, Exception exception) {
         LOGGER.log(System.Logger.Level.WARNING,
-                "MCP tool execution failed (tool=" + toolName + ", type=" + exception.getClass().getName() + ")");
+                "MCP tool execution failed (tool=" + toolName + ", type=" + exception.getClass().getName()
+                        + ", rootCause=" + rootCauseType(exception) + ")");
+    }
+
+    private static String rootCauseType(Throwable failure) {
+        Throwable root = failure;
+        for (int depth = 0; depth < MAX_CAUSE_DEPTH && root.getCause() != null && root.getCause() != root; depth++) {
+            root = root.getCause();
+        }
+        return root.getClass().getName();
     }
 
     private static MinosMcpBackend.SearchRequest searchRequest(Map<String, Object> args) {

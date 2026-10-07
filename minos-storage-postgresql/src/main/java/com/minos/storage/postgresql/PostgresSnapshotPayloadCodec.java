@@ -1,20 +1,32 @@
 package com.minos.storage.postgresql;
 
 import com.minos.store.CodeKnowledgeSnapshot;
-import com.minos.store.SnapshotCodec;
-import com.minos.store.SnapshotCodecV2;
+import com.minos.storage.local.store.KnowledgeSnapshotCodecs;
+import com.minos.storage.local.store.SnapshotCodec;
 
 import java.io.IOException;
 import java.nio.file.Path;
 
+/**
+ * PostgreSQL payloads are the file-store encodings, self-described by their header (magic and format
+ * version): new payloads follow {@link KnowledgeSnapshotCodecs#select}, stored V2 payloads stay readable.
+ */
 final class PostgresSnapshotPayloadCodec {
-    private final SnapshotCodecV2 codec = new SnapshotCodecV2();
 
-    SnapshotCodec.SnapshotEncoding encode(Path target, CodeKnowledgeSnapshot snapshot) throws IOException {
-        return codec.write(target, snapshot);
+    KnowledgeSnapshotCodecs.Selection select(CodeKnowledgeSnapshot snapshot) throws IOException {
+        return KnowledgeSnapshotCodecs.select(snapshot);
+    }
+
+    SnapshotCodec.SnapshotEncoding encode(KnowledgeSnapshotCodecs.Selection selection, Path target,
+                                          CodeKnowledgeSnapshot snapshot) throws IOException {
+        return selection.codec().write(target, snapshot);
+    }
+
+    int formatVersion(Path payload) throws IOException {
+        return KnowledgeSnapshotCodecs.formatVersionOf(payload);
     }
 
     CodeKnowledgeSnapshot decode(Path payload) throws IOException {
-        return codec.read(payload);
+        return KnowledgeSnapshotCodecs.read(payload);
     }
 }

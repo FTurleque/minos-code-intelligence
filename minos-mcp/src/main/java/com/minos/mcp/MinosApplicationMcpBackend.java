@@ -13,11 +13,13 @@ import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.impact.ImpactAnalysisRequest;
+import com.minos.orchestration.ResumableRunSummary;
 import com.minos.output.AdvancedAnalysisResultRenderer;
 import com.minos.output.ArchitectureResultRenderer;
 import com.minos.output.CodeIntelligenceResultRenderer;
 import com.minos.output.CodeSearchRenderer;
 import com.minos.output.DeterministicJson;
+import com.minos.output.ProjectJson;
 import com.minos.output.ImpactResultRenderer;
 import com.minos.output.HostedControlPlaneRenderer;
 import com.minos.output.RuntimeIntelligenceRenderer;
@@ -25,10 +27,12 @@ import com.minos.output.SemanticAnalysisResultRenderer;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.output.SymbolResultRenderer;
 import com.minos.program.analysis.SecurityAnalysisService;
-import com.minos.semantic.HybridContextBuilder;
-import com.minos.semantic.HybridSearchService;
-import com.minos.semantic.SemanticSearchService;
+import com.minos.application.semantic.HybridContextBuilder;
+import com.minos.application.semantic.HybridSearchService;
+import com.minos.application.semantic.SemanticSearchService;
 
+import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,34 +85,18 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     @Override
     public String projectStructure(String project) throws Exception {
         ProjectInspectionService.ProjectView view = projects.inspectProject(project);
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", view.id());
-        map.put("name", view.name());
-        map.put("rootPath", view.rootPath());
-        map.put("rootAvailable", view.rootAvailable());
-        map.put("languages", view.languages());
-        map.put("buildSystems", view.buildSystems());
-        map.put("moduleCount", view.moduleCount());
-        map.put("indexState", view.indexState());
-        map.put("activeSnapshotId", view.activeSnapshotId());
-        map.put("lastSuccessfulIndexAt", view.lastSuccessfulIndexAt());
-        map.put("providerId", view.providerId());
-        map.put("providerVersion", view.providerVersion());
+        Map<String, Object> map = ProjectJson.project(view);
         map.put("providerProfiles", providerProfiles());
         return DeterministicJson.render(map);
     }
 
     @Override
     public String indexStatus(String project) throws Exception {
-        ProjectInspectionService.ProjectView view = projects.inspectProject(project);
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("projectId", view.id());
-        map.put("projectName", view.name());
-        map.put("state", view.indexState());
-        map.put("activeSnapshotId", view.activeSnapshotId());
-        map.put("lastSuccessfulIndexAt", view.lastSuccessfulIndexAt());
-        map.put("providerId", view.providerId());
-        map.put("providerVersion", view.providerVersion());
+        // The status reads the index state only: the repository is not walked, so a discovery that fails cannot fail it.
+        ProjectInspectionService.ProjectView view = projects.inspectStatus(project);
+        // ADR 0039 §6: the run offered for resume, without any artifact location.
+        Map<String, Object> map = ProjectJson.indexStatus(
+                view, ResumableRunSummary.of(application.indexStateStore(), UUID.fromString(view.id())), Instant.now());
         map.put("providerProfiles", providerProfiles());
         return DeterministicJson.render(map);
     }
@@ -154,7 +142,9 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
                 ? RelationshipSearchCriteria.incoming(anchor, Set.of(kind), request.limit())
                 : RelationshipSearchCriteria.outgoing(anchor, Set.of(kind), request.limit());
         return CodeIntelligenceResultRenderer.renderRelationships(
-                queries.findRelationships(request.project(), criteria), SymbolOutputFormat.JSON);
+                queries.findRelationships(request.project(), criteria),
+                queries.relationshipLimitations(request.project(), Set.of(kind)),
+                SymbolOutputFormat.JSON);
     }
 
     @Override
@@ -297,13 +287,13 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
 
     private com.minos.hosted.HostedControlPlaneService hosted() {
         return application.hostedControlPlaneService()
-                .orElseThrow(() -> new IllegalStateException("MINOS team mode is disabled"));
+                .orElseThrow(() -> new McpClientFailure.TeamModeDisabled("MINOS team mode is disabled"));
     }
 
     private String hostedToken() {
         String token = hostedBearerToken.get();
         if (token == null || token.isBlank()) {
-            throw new SecurityException("MINOS_TEAM_TOKEN is required for hosted MCP tools");
+            throw new McpClientFailure.TeamTokenRequired("MINOS_TEAM_TOKEN is required for hosted MCP tools");
         }
         return token.trim();
     }
@@ -316,8 +306,13 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         }
     }
 
+    /**
+     * The provider profiles of a status answer: static profiles whose runtime state is not inspected. The MCP is
+     * read-only (ADR 0017): asking a runtime may extract, hash, write or start a process, so it is left to
+     * {@code minos providers} and {@code minos doctor}.
+     */
     private List<Map<String, Object>> providerProfiles() {
-        return providerPlatform.listProviders().stream().map(value -> {
+        return providerPlatform.listStaticProfiles().stream().map(value -> {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("id", value.id());
             map.put("version", value.version());
@@ -328,7 +323,7 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
             map.put("limitations", value.limitations());
             map.put("runtimeState", value.runtimeState());
             map.put("runtimeDiagnostics", value.runtimeDiagnostics());
-            return Map.copyOf(map);
+            return Collections.unmodifiableMap(map);
         }).toList();
     }
 
@@ -421,11 +416,16 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     static HybridContextRequest hybridContextDefaults(
             String project, String query, Integer maxDocuments, Integer maxTokens, Integer maxTokensPerDocument
     ) {
+        int totalTokens = maxTokens == null ? DEFAULT_HYBRID_CONTEXT_TOKENS : maxTokens;
         return new HybridContextRequest(
                 project, query,
                 maxDocuments == null ? DEFAULT_HYBRID_CONTEXT_DOCUMENTS : maxDocuments,
-                maxTokens == null ? DEFAULT_HYBRID_CONTEXT_TOKENS : maxTokens,
-                maxTokensPerDocument == null ? DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS : maxTokensPerDocument);
+                totalTokens,
+                // The default per-document cap never exceeds the total budget: a client that only lowers
+                // maxTokens (the schema allows 128 and up) must not be refused by a default it did not choose.
+                maxTokensPerDocument == null
+                        ? Math.min(DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS, totalTokens)
+                        : maxTokensPerDocument);
     }
 
     static RuntimeSessionsRequest runtimeSessionsDefaults(String project, Integer limit) {

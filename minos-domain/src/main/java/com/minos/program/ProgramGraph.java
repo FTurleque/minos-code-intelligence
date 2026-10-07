@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /** Immutable, provider-independent M19 program graph view. */
 public record ProgramGraph(
         String projectId,
@@ -49,11 +51,5 @@ public record ProgramGraph(
 
     public boolean supports(ProgramGraphCapability capability) {
         return capabilities.contains(Objects.requireNonNull(capability, "capability"));
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
     }
 }

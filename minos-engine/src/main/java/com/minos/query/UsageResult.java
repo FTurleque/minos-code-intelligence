@@ -9,6 +9,8 @@ import com.minos.domain.SymbolOccurrence;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.domain.Preconditions.requireText;
+
 /**
  * Résultat compact d'un usage résolu de symbole.
  */
@@ -43,11 +45,5 @@ public record UsageResult(
                 occurrence.resolutionStatus(),
                 occurrence.origin()
         );
-    }
-
-    private static void requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
     }
 }

@@ -1,0 +1,911 @@
+$ minos project add <FIXTURE> --name a2-char --format text
+exit: 0
+--- stdout
+id: <uuid-1>
+name: a2-char
+root: <REPO>/fixtures/typescript/typescript-modules
+rootAvailable: true
+languages: [TYPESCRIPT]
+buildSystems: [NPM]
+modules: 3
+indexState: NEVER_INDEXED
+activeSnapshot: -
+lastSuccessfulIndexAt: -
+provider: -
+providerVersion: -
+
+--- stderr
+
+$ minos project list --format text
+exit: 0
+--- stdout
+<uuid-2>	a2-char	NEVER_INDEXED	<REPO>/fixtures/typescript/typescript-modules
+
+--- stderr
+
+$ minos project inspect a2-char --format text
+exit: 0
+--- stdout
+id: <uuid-2>
+name: a2-char
+root: <REPO>/fixtures/typescript/typescript-modules
+rootAvailable: true
+languages: [TYPESCRIPT]
+buildSystems: [NPM]
+modules: 3
+indexState: NEVER_INDEXED
+activeSnapshot: -
+lastSuccessfulIndexAt: -
+provider: -
+providerVersion: -
+
+--- stderr
+
+$ minos index-status a2-char --format text
+exit: 0
+--- stdout
+projectId: <uuid-2>
+projectName: a2-char
+state: NEVER_INDEXED
+activeSnapshotId: -
+lastSuccessfulIndexAt: -
+providerId: -
+providerVersion: -
+resumableRunId: none
+resumableRunPhase: none
+resumableCheckpointAgeSeconds: none
+resumableTargets: none
+
+--- stderr
+
+$ minos index a2-char --scip <SCIP> --provider scip-typescript --provider-version 0.4.0 --format text
+exit: 0
+--- stdout
+projectId: <uuid-2>
+snapshotId: scip-7f41649a3cdad442a3235c0a
+providerId: scip-typescript
+providerVersion: 0.4.0
+normalizedSymbols: 19
+occurrences: 67
+relationships: 6
+relatedTests: 4
+unresolvedOccurrences: 23
+unresolvedRelationships: 0
+completedAt: <instant>
+commitStatus: COMMITTED
+diagnostic: -
+
+--- stderr
+warning: `minos index --scip` is deprecated; use `minos import-scip`
+
+$ minos index-status a2-char --format text
+exit: 0
+--- stdout
+projectId: <uuid-2>
+projectName: a2-char
+state: READY
+activeSnapshotId: scip-7f41649a3cdad442a3235c0a
+lastSuccessfulIndexAt: <instant>
+providerId: scip-typescript
+providerVersion: 0.4.0
+resumableRunId: none
+resumableRunPhase: none
+resumableCheckpointAgeSeconds: none
+resumableTargets: none
+
+--- stderr
+
+$ minos inspect a2-char --format text
+exit: 0
+--- stdout
+id: <uuid-2>
+name: a2-char
+root: <REPO>/fixtures/typescript/typescript-modules
+rootAvailable: true
+languages: [TYPESCRIPT]
+buildSystems: [NPM]
+modules: 3
+indexState: READY
+activeSnapshot: scip-7f41649a3cdad442a3235c0a
+lastSuccessfulIndexAt: <instant>
+provider: scip-typescript
+providerVersion: 0.4.0
+
+--- stderr
+
+$ minos find-symbol a2-char Greeting --format text
+exit: 0
+--- stdout
+symbols: 18
+
+symbol:
+  id: "sym:ad128204910c0db5219de64cf4ed3584f15c4cf97ea44b3c2e729ef54fc219b6"
+  symbolKey: "minos:structural:9a58557e3a318c970a69aebf904d4987b22bf093fb750b270e299713f329e699"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/api/src/greeting-contract.ts"
+  kind: TYPE
+  name: "GreetingBase"
+  qualifiedName: "GreetingBase"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/api/src/greeting-contract.ts"
+    startLine: 5
+    startColumn: 22
+    endLine: 5
+    endColumn: 34
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913"
+  symbolKey: "minos:structural:e6e53c43d119962a091b761282ba5ea6f2cbce14df2f5f7f11712d0b083a8b10"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/api/src/greeting-contract.ts"
+  kind: TYPE
+  name: "GreetingPort"
+  qualifiedName: "GreetingPort"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/api/src/greeting-contract.ts"
+    startLine: 1
+    startColumn: 17
+    endLine: 1
+    endColumn: 29
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:dab5aeb56e799843264c719064c17fbb73e63eaa3429e30a615e923cac114b8f"
+  symbolKey: "minos:structural:7218d684e44a9d9e0f3475bb493c993b12aeabb485a063c62103cb0bd70b2eff"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/app/src/greeting-service.ts"
+  kind: TYPE
+  name: "GreetingService"
+  qualifiedName: "GreetingService"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/app/src/greeting-service.ts"
+    startLine: 3
+    startColumn: 13
+    endLine: 3
+    endColumn: 28
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:1a592d9f5f475d1a06eda2f5d5a331acc9ed7eaf16dfa0735eaafff1d7574503"
+  symbolKey: "minos:structural:9b6c1580a15cd54be0c110728840593c27931e1fd9de70619482c0937e33e5e0"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/api/src/greeting-contract.ts"
+  kind: METHOD
+  name: "greet"
+  qualifiedName: "GreetingBase.greet"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/api/src/greeting-contract.ts"
+    startLine: 6
+    startColumn: 11
+    endLine: 6
+    endColumn: 16
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:6909fb6578bdc9f44b0a3194e0f0a08911dafa900f10c702cf1576dd2ca9cac2"
+  symbolKey: "minos:structural:407eb21c542872049659d4c89cc1d89afb65bd9b4c12bebc6b42719d99b45d22"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/api/src/greeting-contract.ts"
+  kind: OTHER
+  name: "name"
+  qualifiedName: "GreetingBase.greet.name"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/api/src/greeting-contract.ts"
+    startLine: 6
+    startColumn: 17
+    endLine: 6
+    endColumn: 21
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:f004c86275dafa15c0486eaafd07d24cb46d08b7a3fa26801a3552f41bc53d1a"
+  symbolKey: "minos:structural:2f54f4a8a8be083d53684f74e668553b1f66229f96d266f59fbecfd8edf087d5"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/api/src/greeting-contract.ts"
+  kind: METHOD
+  name: "normalize"
+  qualifiedName: "GreetingBase.normalize"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/api/src/greeting-contract.ts"
+    startLine: 8
+    startColumn: 12
+    endLine: 8
+    endColumn: 21
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:dcc15f316ee11bbd002205ceccc8096640f7a43c1b0b9d0a43fa2a6681396796"
+  symbolKey: "minos:structural:fda8a5f307498946926bd37f0781afe246f2d6e25effe7cd8700672d4a466c90"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/api/src/greeting-contract.ts"
+  kind: OTHER
+  name: "name"
+  qualifiedName: "GreetingBase.normalize.name"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/api/src/greeting-contract.ts"
+    startLine: 8
+    startColumn: 22
+    endLine: 8
+    endColumn: 26
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:9e394547e72023f96b792b1384ceb70a673ef76eab56e60436d068996ee4353c"
+  symbolKey: "minos:structural:13066f1e14f26bc6c5aedfc606f15849801834ae7578605106e113ab5d376c67"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/api/src/greeting-contract.ts"
+  kind: METHOD
+  name: "greet"
+  qualifiedName: "GreetingPort.greet"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/api/src/greeting-contract.ts"
+    startLine: 2
+    startColumn: 2
+    endLine: 2
+    endColumn: 7
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:d9d2d1658f2655194e58a7b06ad97f644d85afe48742657e6abba119fc896a3a"
+  symbolKey: "minos:structural:ae313cf3902b97ca4b95b0894183a254be67e251cbd9cde28ba6d6b02b8c27d1"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/api/src/greeting-contract.ts"
+  kind: OTHER
+  name: "name"
+  qualifiedName: "GreetingPort.greet.name"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/api/src/greeting-contract.ts"
+    startLine: 2
+    startColumn: 8
+    endLine: 2
+    endColumn: 12
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:7d71cf74f07d2ea448319bbcc2a8d09019349b7b9494c97531ce29fd3924de58"
+  symbolKey: "minos:structural:1b8e158612da65af601f468b5c8047d2812593ec899bd99ff6a8bf9924bae510"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/app/src/greeting-service.ts"
+  kind: CONSTRUCTOR
+  name: "<constructor>"
+  qualifiedName: "GreetingService.constructor"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/app/src/greeting-service.ts"
+    startLine: 4
+    startColumn: 2
+    endLine: 4
+    endColumn: 13
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:f5685e2b88bdfc7e94f54dccd65c58d7dfbc24c3e48d7488367e6300f541a1cf"
+  symbolKey: "minos:structural:804fa1f123f4fbf21711d2d9e36b49be003f7d54052b895fedfcece55483bf67"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/app/src/greeting-service.ts"
+  kind: OTHER
+  name: "port"
+  qualifiedName: "GreetingService.constructor.port"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/app/src/greeting-service.ts"
+    startLine: 4
+    startColumn: 31
+    endLine: 4
+    endColumn: 35
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:7c0e3e3937309acc8bed5654a7096e57934a68123090f05af4822471c6b6b0ad"
+  symbolKey: "minos:structural:2ec049852fb327c5f865156ebea0ac388fa2e35f20d7a869f51408b6bfcbdf39"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/app/src/greeting-service.ts"
+  kind: METHOD
+  name: "greet"
+  qualifiedName: "GreetingService.greet"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/app/src/greeting-service.ts"
+    startLine: 6
+    startColumn: 2
+    endLine: 6
+    endColumn: 7
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:c50a2e67164196606d38cd245b1b856c13a3866f07a71c85328fb00649ad34d4"
+  symbolKey: "minos:structural:13a8dca19b09386046ba65f78211228fc8a340b607f741c433f12e13858f01d3"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/app/src/greeting-service.ts"
+  kind: OTHER
+  name: "input"
+  qualifiedName: "GreetingService.greet.input"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/app/src/greeting-service.ts"
+    startLine: 8
+    startColumn: 8
+    endLine: 8
+    endColumn: 13
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:e6bc90f17421e91b3b06dd30ac22ba005bf000ad4242eb65b1e3fb6b814ab931"
+  symbolKey: "minos:structural:82e16cfbd69fc1ed6af6b0df28e23c2c09fbf87e1cb50da39d2e431abdf6046b"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/app/src/greeting-service.ts"
+  kind: OTHER
+  name: "name"
+  qualifiedName: "GreetingService.greet.name"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/app/src/greeting-service.ts"
+    startLine: 6
+    startColumn: 8
+    endLine: 6
+    endColumn: 12
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:d5d844bbf735c0f3be3c532923f81ed36f5c60eee5dbf84c2df9b0eb39c1d51f"
+  symbolKey: "minos:structural:c7a162af7ed1a7084dd69f675f6cc4743fc7f90d03a0631370f18e22d7541890"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/app/src/greeting-service.ts"
+  kind: OTHER
+  name: "names"
+  qualifiedName: "GreetingService.greet.names"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/app/src/greeting-service.ts"
+    startLine: 7
+    startColumn: 8
+    endLine: 7
+    endColumn: 13
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:5faa0cbc765bb59f8e2db7ef30bc3e220c64a73128984386e78f709485fac23c"
+  symbolKey: "minos:structural:4118407b004fb9d2e61a55462990db346d66c94cd9b90ea1f37b4a25a7db8f67"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/app/src/default-greeting-port.ts"
+  kind: TYPE
+  name: "DefaultGreetingPort"
+  qualifiedName: "DefaultGreetingPort"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/app/src/default-greeting-port.ts"
+    startLine: 3
+    startColumn: 13
+    endLine: 3
+    endColumn: 32
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:a3df15cdfc3678cc477aa0578ee6c3d7a11a964a8087f088a621e53fcc525c21"
+  symbolKey: "minos:structural:8fd826f095dde09773273ba8819fc4fe8812b4d3cc32d59da558f2460c93873a"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/app/src/default-greeting-port.ts"
+  kind: METHOD
+  name: "greet"
+  qualifiedName: "DefaultGreetingPort.greet"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/app/src/default-greeting-port.ts"
+    startLine: 4
+    startColumn: 11
+    endLine: 4
+    endColumn: 16
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+symbol:
+  id: "sym:2a3e4ea9967a935840bd577083bc139e5530a77990adb78a42732b944e0ec01e"
+  symbolKey: "minos:structural:a14d2e27e8d34886f0cefc5f2dc4ebdca02e0c93eeb7814f0c48509c8a32ee19"
+  identityQuality: STRUCTURAL_FALLBACK
+  projectId: "<uuid-2>"
+  moduleId: null
+  fileId: "packages/app/src/default-greeting-port.ts"
+  kind: OTHER
+  name: "name"
+  qualifiedName: "DefaultGreetingPort.greet.name"
+  signature: null
+  language: "typescript"
+  location:
+    fileId: "packages/app/src/default-greeting-port.ts"
+    startLine: 4
+    startColumn: 17
+    endLine: 4
+    endColumn: 21
+    positionEncoding: UNKNOWN
+  resolutionStatus: RESOLVED
+  origin:
+    providerId: "scip-typescript"
+    providerType: "SCIP_INDEXER"
+    providerVersion: "0.4.0"
+    indexRunId: "application-scip-7f41649a3cdad442a3235c0a"
+    sourceType: SCIP
+  external: false
+  generated: false
+
+--- stderr
+
+$ minos search a2-char GreetingPort --format text
+exit: 0
+--- stdout
+search:
+  projectId: "<uuid-2>"
+  query: "GreetingPort"
+  count: 5
+  maxDepth: 1
+  tokenBudget: 4000
+  estimatedTokens: 3256
+  estimatedTokensAvoided: 132
+  truncated: true
+
+context:
+  symbolId: "sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913"
+  name: "GreetingPort"
+  qualifiedName: "GreetingPort"
+  signature: null
+  kind: TYPE
+  estimatedTokens: 561
+  truncated: true
+  sourceRange: "packages/api/src/greeting-contract.ts:1-3"
+  source: "export interface GreetingPort {\n  greet(name: string): string\n}"
+  relationships: 2
+    relationship: 1:INCOMING:IMPLEMENTS:rel:db798b6871c52786657c9ff8f902cd68f8af0429fc9223fcd569e0bdeade220f
+    relationship: 1:INCOMING:DEPENDS_ON:rel:fa66d7d5818673732c1a4c0ec6ef5ffd9d238fd8ce4194004e64e168549ab406
+  usages: 3
+    usage: "packages/app/src/default-greeting-port.ts:1:23"
+    usage: "packages/app/src/default-greeting-port.ts:3:65"
+    usage: "packages/app/src/greeting-service.ts:1:9"
+
+context:
+  symbolId: "sym:9e394547e72023f96b792b1384ceb70a673ef76eab56e60436d068996ee4353c"
+  name: "greet"
+  qualifiedName: "GreetingPort.greet"
+  signature: null
+  kind: METHOD
+  estimatedTokens: 643
+  truncated: false
+  sourceRange: "packages/api/src/greeting-contract.ts:1-4"
+  source: "export interface GreetingPort {\n  greet(name: string): string\n}\n"
+  relationships: 3
+    relationship: 1:INCOMING:REFERENCES:rel:7169c7aa5e63e7f905b6d001d124e45dd4e72ff5cdae210650a2aef39ccdad52
+    relationship: 1:INCOMING:IMPLEMENTS:rel:2fcd027d047d48fb073551dce5f0d9de0d89a10a3a395d678ceb7a2b29013d7b
+    relationship: 1:INCOMING:DEPENDS_ON:rel:7f6a976892a91b38900320fc15782fd014ea90da625302d00e975e4356218a81
+  usages: 2
+    usage: "packages/app/src/greeting-service.ts:10:23"
+    usage: "packages/app/src/greeting-service.ts:12:39"
+
+context:
+  symbolId: "sym:d9d2d1658f2655194e58a7b06ad97f644d85afe48742657e6abba119fc896a3a"
+  name: "name"
+  qualifiedName: "GreetingPort.greet.name"
+  signature: null
+  kind: OTHER
+  estimatedTokens: 113
+  truncated: false
+  sourceRange: "packages/api/src/greeting-contract.ts:1-4"
+  source: "export interface GreetingPort {\n  greet(name: string): string\n}\n"
+  relationships: 0
+  usages: 0
+
+context:
+  symbolId: "sym:5faa0cbc765bb59f8e2db7ef30bc3e220c64a73128984386e78f709485fac23c"
+  name: "DefaultGreetingPort"
+  qualifiedName: "DefaultGreetingPort"
+  signature: null
+  kind: TYPE
+  estimatedTokens: 977
+  truncated: false
+  sourceRange: "packages/app/src/default-greeting-port.ts:1-5"
+  source: "import { GreetingBase, GreetingPort } from '@minos/greeting-api'\n\nexport class DefaultGreetingPort extends GreetingBase implements GreetingPort {\n  override greet(name: string): string {\n    return `Hello ${this.normalize(name)}`"
+  relationships: 5
+    relationship: 1:OUTGOING:IMPLEMENTS:rel:c64c28e5ba0af1385e56a3a1d70cbc78de57daa01a4d4b3483a7028c15442438
+    relationship: 1:OUTGOING:IMPLEMENTS:rel:db798b6871c52786657c9ff8f902cd68f8af0429fc9223fcd569e0bdeade220f
+    relationship: 1:OUTGOING:DEPENDS_ON:rel:43d320176ac55b07e8c354d919af940f67cea5130dc1be9880e41e2717b903b8
+    relationship: 1:OUTGOING:DEPENDS_ON:rel:fa66d7d5818673732c1a4c0ec6ef5ffd9d238fd8ce4194004e64e168549ab406
+    relationship: 1:INCOMING:RELATED_TEST:rel:e0475d9e4f67c98fc754e16cf253a9cce08d13f701d4fddb7929b3e7a8361e17
+  usages: 2
+    usage: "packages/app/test/greeting-service.spec.ts:1:9"
+    usage: "packages/app/test/greeting-service.spec.ts:5:42"
+
+context:
+  symbolId: "sym:a3df15cdfc3678cc477aa0578ee6c3d7a11a964a8087f088a621e53fcc525c21"
+  name: "greet"
+  qualifiedName: "DefaultGreetingPort.greet"
+  signature: null
+  kind: METHOD
+  estimatedTokens: 938
+  truncated: false
+  sourceRange: "packages/app/src/default-greeting-port.ts:2-6"
+  source: "\nexport class DefaultGreetingPort extends GreetingBase implements GreetingPort {\n  override greet(name: string): string {\n    return `Hello ${this.normalize(name)}`\n  }"
+  relationships: 6
+    relationship: 1:OUTGOING:REFERENCES:rel:b8df5fff4096dc6afc4e34f910c12f4c01b5b84b5640256d202ee6bb7623bdca
+    relationship: 1:OUTGOING:REFERENCES:rel:7169c7aa5e63e7f905b6d001d124e45dd4e72ff5cdae210650a2aef39ccdad52
+    relationship: 1:OUTGOING:IMPLEMENTS:rel:fff2ddb4932ae047a35e100833edf4b5de56231fa064be6134a801e58b55ac34
+    relationship: 1:OUTGOING:IMPLEMENTS:rel:2fcd027d047d48fb073551dce5f0d9de0d89a10a3a395d678ceb7a2b29013d7b
+    relationship: 1:OUTGOING:DEPENDS_ON:rel:bfc6624ba84a602912f5535796bf83f46cf1ca1a9412b2d4df88847b05d99d60
+    relationship: 1:OUTGOING:DEPENDS_ON:rel:7f6a976892a91b38900320fc15782fd014ea90da625302d00e975e4356218a81
+  usages: 0
+
+--- stderr
+
+$ minos find-usages a2-char sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913 --format text
+exit: 0
+--- stdout
+usages: 4
+
+usage:
+  id: "occ:c05739c6346da0eaa4d857d51434eaa5278bc50ca6664a4aa1ab5bcaa9f0ae9c"
+  projectId: "<uuid-2>"
+  symbolId: "sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913"
+  roles: [REFERENCE]
+  resolutionStatus: RESOLVED
+  location: "packages/app/src/default-greeting-port.ts":1:23-1:35
+  origin: "scip-typescript"/SCIP
+
+usage:
+  id: "occ:2a805bfd67d23e62157e186d4689c206954b9ada38d140fd8b6ae3437d141a43"
+  projectId: "<uuid-2>"
+  symbolId: "sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913"
+  roles: [REFERENCE]
+  resolutionStatus: RESOLVED
+  location: "packages/app/src/default-greeting-port.ts":3:65-3:77
+  origin: "scip-typescript"/SCIP
+
+usage:
+  id: "occ:f55ea69ef452450075760ff9fb317767c778b91548f05d06fdd20aa286713eb8"
+  projectId: "<uuid-2>"
+  symbolId: "sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913"
+  roles: [REFERENCE]
+  resolutionStatus: RESOLVED
+  location: "packages/app/src/greeting-service.ts":1:9-1:21
+  origin: "scip-typescript"/SCIP
+
+usage:
+  id: "occ:a3b343e3c55c48313dc92a3cc6a913f2582ac551f24cfa3b1dbc34575f2fe00b"
+  projectId: "<uuid-2>"
+  symbolId: "sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913"
+  roles: [REFERENCE]
+  resolutionStatus: RESOLVED
+  location: "packages/app/src/greeting-service.ts":4:37-4:49
+  origin: "scip-typescript"/SCIP
+
+--- stderr
+
+$ minos dependencies a2-char sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913 --format text
+exit: 0
+--- stdout
+relationships: 0
+limitations: [OCCURRENCE_REFERENCES_NOT_PROJECTED]
+
+--- stderr
+
+$ minos impact a2-char sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913 --format text
+exit: 0
+--- stdout
+root: GreetingPort [sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913]
+snapshot: scip-7f41649a3cdad442a3235c0a
+impacts: 2
+potentiallyImpactedTests: 1
+limitations: [DYNAMIC_DISPATCH_NOT_PROVEN, REFLECTION_NOT_PROVEN, RUNTIME_CONFIGURATION_NOT_PROVEN, OCCURRENCE_REFERENCES_NOT_PROJECTED]
+- DIRECT depth=1 confidence=1.0 test=false DefaultGreetingPort [sym:5faa0cbc765bb59f8e2db7ef30bc3e220c64a73128984386e78f709485fac23c] path=[IMPLEMENTS:rel:db798b6871c52786657c9ff8f902cd68f8af0429fc9223fcd569e0bdeade220f]
+- INDIRECT depth=2 confidence=0.685 test=true verifiesCrossProjectOverloads [sym:6afa28638b56c6add7dc26bea0c93139ef80aa38dfc04817ae5a94a7a3a19e80] path=[IMPLEMENTS:rel:db798b6871c52786657c9ff8f902cd68f8af0429fc9223fcd569e0bdeade220f, RELATED_TEST:rel:e0475d9e4f67c98fc754e16cf253a9cce08d13f701d4fddb7929b3e7a8361e17]
+
+--- stderr
+
+$ minos architecture a2-char --format text
+exit: 0
+--- stdout
+project: typescript-modules (<uuid-2>)
+snapshot: scip-7f41649a3cdad442a3235c0a
+modules: 3
+languages: [TYPESCRIPT]
+buildSystems: [NPM]
+symbols: local=19, external=0
+relationships: 14
+dependencies: total=4, inter=4, intra=0, unassigned=0
+moduleEdges: 1
+topIncomingModules: [module:23e0115bdddd2a2f87e6b6a980ebc0a74ba3f5b4ca8db5fe793059159ffd1078]
+topOutgoingModules: [module:c00a5b16a8fd285b21988cbbacdde73c99e593535dbd859b6da0afc2ee5c2700]
+technologies: [TYPESCRIPT, NPM]
+limitations: [OCCURRENCE_REFERENCES_NOT_PROJECTED]
+
+--- stderr
+
+$ minos providers --format text
+exit: 0
+--- stdout
+rust-analyzer-scip	0.3.2989	QUALIFIED_WITH_CONSTRAINTS	<host>	score=45
+scip-clang	0.4.0	QUALIFIED_WITH_CONSTRAINTS	<host>	score=48
+scip-dotnet	0.2.14	QUALIFIED_WITH_CONSTRAINTS	<host>	score=55
+scip-go	0.2.7	QUALIFIED_WITH_CONSTRAINTS	<host>	score=52
+scip-java	0.13.1	QUALIFIED_WITH_CONSTRAINTS	<host>	score=69
+scip-python	0.6.6	QUALIFIED_WITH_CONSTRAINTS	<host>	score=40
+scip-typescript	0.4.0	QUALIFIED_WITH_CONSTRAINTS	<host>	score=62
+
+--- stderr
+
+$ minos providers scip-typescript --format text
+exit: 0
+--- stdout
+id: scip-typescript
+version: 0.4.0
+qualification: QUALIFIED_WITH_CONSTRAINTS
+languages: [TYPESCRIPT]
+buildSystems: []
+conformanceScore: 62
+capabilities: {CALL_RELATIONS=UNSUPPORTED, IMPLEMENTATION_RELATIONS=UNSUPPORTED, INCREMENTAL_INDEXING=UNSUPPORTED, MULTI_MODULE=FULL, PARTIAL_INDEX_ON_BUILD_FAILURE=FULL, POSITION_UTF16=EXPERIMENTAL, REFERENCES=FULL, RESUMABLE_ARTIFACT=UNSUPPORTED, RUNTIME_INSTALLATION=FULL, STABLE_SYMBOL_IDENTITY=PARTIAL, STRUCTURAL_RELATIONS=PARTIAL, SYMBOLS=FULL, TEST_SOURCES=FULL, UNRESOLVED_REFERENCES=FULL}
+limitations: [incremental indexing has not been qualified for scip-typescript 0.4.0, overloaded declarations can share one provider symbol identity, symbol kinds are frequently unspecified, structural relations are incomplete and do not distinguish extends from implements reliably, CALLS relations are not emitted explicitly]
+operationalProfileExplicit: true
+qualificationPlatforms: [WINDOWS_X64]
+runtimeRequirements: [Node.js, npm]
+readinessBehavior: READY only when the pinned managed executable and Node/npm runtime are available
+installationBehavior: managed npm installation is confined under MINOS_HOME/tools
+stableIdentityBehavior: stable identity is PARTIAL because overloaded provider declarations can collide
+provenanceBehavior: Origin records scip-typescript/version/index-run and raw SCIP symbols are retained as ProviderReference
+runtimeState: <host>
+runtimeDiagnostics: <host>
+
+--- stderr
+
+$ minos semantic status a2-char --format text
+exit: 0
+--- stdout
+mode: semantic
+projectId: <uuid-2>
+projectName: a2-char
+state: DISABLED
+activeSnapshotId: scip-7f41649a3cdad442a3235c0a
+semanticState: DISABLED
+semanticAvailable: false
+providerId: null
+modelId: null
+dimensions: 0
+documentCount: 0
+indexSizeBytes: 0
+limitations: [SEMANTIC_EMBEDDING_PROVIDER_UNAVAILABLE]
+
+--- stderr
+
+$ minos hybrid status a2-char --format text
+exit: 0
+--- stdout
+mode: hybrid
+projectId: <uuid-2>
+projectName: a2-char
+state: READY_STRUCTURED_FALLBACK
+activeSnapshotId: scip-7f41649a3cdad442a3235c0a
+semanticState: DISABLED
+semanticAvailable: false
+providerId: null
+modelId: null
+dimensions: 0
+documentCount: 0
+indexSizeBytes: 0
+limitations: [SEMANTIC_EMBEDDING_PROVIDER_UNAVAILABLE, HYBRID_RANKING_IS_DERIVED_SELECTION_NOT_CODE_FACT, SEMANTIC_SIGNAL_UNAVAILABLE_STRUCTURED_FALLBACK_USED]
+
+--- stderr
+
+$ minos find-symbol a2-missing-project Greeting --format text
+exit: 1
+--- stdout
+
+--- stderr
+error: find-symbol failed: unknown project: a2-missing-project
+

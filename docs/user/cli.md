@@ -11,10 +11,10 @@ minos.cmd <commande>
 Checkout source sur la ligne de maintenance courante :
 
 ```powershell
-java -jar .\target\minos-code-intelligence-1.2.0-SNAPSHOT-all.jar <commande>
+java -jar .\target\minos-code-intelligence-1.3.0-SNAPSHOT-all.jar <commande>
 ```
 
-`--help` reste la source de vérité exécutable. Les commandes d'aide n'ont pas besoin d'initialiser un projet MINOS pour afficher leur syntaxe.
+`--help` reste la source de vérité exécutable. Les commandes d'aide n'ont pas besoin d'initialiser un projet MINOS pour afficher leur syntaxe : `--help` est reconnu à n'importe quelle position après le nom d'une commande (`minos find-symbol p S --limit 5 --help`), et ni l'aide ni une erreur d'usage (code 2) n'ouvrent `MINOS_HOME`. Une commande n'ouvre `MINOS_HOME` qu'une fois ses arguments compris, et ne construit que ce dont elle a besoin : une commande de lecture ne crée pas de répertoire d'indexation distante dans `MINOS_HOME`.
 
 ## Version
 
@@ -27,7 +27,7 @@ Dans un artefact packagé, la version provient du manifest du JAR afin d'être i
 Version de développement courante :
 
 ```text
-1.2.0-SNAPSHOT
+1.3.0-SNAPSHOT
 ```
 
 ## Formats de sortie
@@ -62,6 +62,12 @@ index-status <project> [--format <text|json>]
 
 `project inspect` et `inspect` exposent les faits de découverte : langages, systèmes de build, modules et état d'indexation.
 
+Les lectures d'état (`index-status`, `inspect`, `project list`, outils MCP `minos_index_status` et `minos_project_structure`) ne prennent aucun bail et n'écrivent rien : pendant une indexation elles répondent immédiatement avec le dernier état publié par le run (`INDEXING` tant que le run n'a pas publié sa fin) au lieu d'attendre le bail d'indexation puis d'échouer. Le snapshot actif rapporté est toujours l'autoritaire ; l'état publié peut avoir un court retard sur lui, et c'est le prochain run qui le répare.
+
+`project list` isole les entrées abîmées : un fichier du registre illisible (date ou identifiant invalides, fichier tronqué, entrée remplacée par un répertoire), un historique d'indexation abîmé ou un répertoire illisible sous la racine d'un projet dégradent **ce** projet et pas l'inventaire. Le projet concerné reste une ligne de la liste, à l'état `UNREADABLE` (`-` pour son nom et sa racine quand c'est le registre lui-même qui est illisible), et la commande **sort avec le code 3** au lieu de 0. En texte, les lignes sont suivies d'un pied `degraded: <N>` puis d'une ligne `  <entrée>: <raison>` par entrée dégradée ; en JSON, les clés `degradedCount` et `degraded` (`[{"entry": …, "reason": …}]`) suivent `count` et `projects`. `count` compte toutes les lignes, dégradées comprises. Un avertissement `warning: project inventory is partial: <N> of <total> entries are degraded` est écrit sur la sortie d'erreur. Les raisons ne portent aucun chemin absolu ; `minos inspect <identifiant>` sur le projet concerné donne l'erreur complète. Sans entrée dégradée, la sortie et le code 0 sont inchangés, sans aucune de ces clés. Un registre qui ne peut pas être listé du tout (le répertoire `registry/projects` lui-même est illisible) échoue en bloc avec le code 1 : il n'y a alors rien à rapporter entrée par entrée.
+
+`project add` reste stricte (code 1) tant qu'une entrée du registre est illisible : elle ne peut pas prouver qu'elle n'écrase pas l'entrée abîmée, et le dit (`N registry entries are unreadable, so the uniqueness of the registration cannot be guaranteed`). La résolution **par nom** de `inspect`, `project inspect` et `index-status` répond avec ce qu'elle a lu mais sort `3` (voir [Codes de sortie](#codes-de-sortie)) ; les autres commandes qui prennent un projet par nom restent strictes (code 1, `use its UUID`). Adresser un projet sain par son identifiant reste toujours possible.
+
 Le catalogue provider courant couvre Java/Kotlin, TypeScript, Python, C/C++, C#, Go et Rust selon les profils et plateformes explicitement qualifiés. Une détection de langage/build ne vaut jamais preuve qu'un provider donné offre toutes les capabilities avancées.
 
 ## Diagnostic runtime
@@ -84,7 +90,10 @@ Il distingue notamment :
 - les toolchains du projet analysé ;
 - les providers gérés ;
 - Docker, qui reste optionnel ;
-- les actions nécessaires pour rendre un provider utilisable.
+- les actions nécessaires pour rendre un provider utilisable ;
+- la sandbox worker (section `workerSandbox`, texte et JSON) : backend retenu pour les providers locaux gérés, disponibilité de l'indexation distante de code non fiable (`remoteIndexing: AVAILABLE|UNAVAILABLE`) et, si elle est indisponible, la **cause** — `NO_OS_BACKEND_AVAILABLE` (prérequis opérateur manquant, nommé par code) ou `REJECTED_BY_DECISION` (backend OS écarté, dimensions non OS-enforced, décision `ADR 0041`). Cette section ne contient jamais de chemin. Une indexation distante indisponible ne change pas le verdict `READY` : ce n'est pas une action requise.
+
+Le verdict de `doctor` (`READY` ou `ACTION_REQUIRED`, code 0 ou 1) est le même que celui de `minos tools verify` : un provider requis qui n'est ni `READY` ni `UNSUPPORTED_BY_BACKEND` bloque ; `UNSUPPORTED_BY_BACKEND` (capacité volontairement absente du backend sélectionné, par exemple le plan Docker) est affiché tel quel, jamais présenté comme `READY`, mais ne rend pas l'installation « action requise » ([disposition des sandboxes](../developer/remote-worker-sandbox-disposition.md)).
 
 Depuis la maintenance 1.0.1, le runtime Windows packagé est également contrôlé lors de la construction par `jdeps`, `java --list-modules` et un vrai handshake MCP. Le fait que `doctor` ou `--version` fonctionne ne remplace donc pas les gates spécifiques du binaire de release.
 
@@ -97,6 +106,8 @@ minos.cmd tools install scip-java
 minos.cmd tools install scip-typescript
 minos.cmd tools install scip-python
 ```
+
+Dans la distribution Windows complète, `scip-java` et `scip-typescript` sont embarqués : `tools list`, `tools verify`, `doctor` et `index` les amorcent sous `MINOS_HOME\tools` sans réseau, après vérification de leur SHA-256, et `tools install` d'un outil livré ne télécharge rien de nouveau (il réutilise la charge embarquée si elle est saine ; des versions plus récentes viennent avec un MINOS plus récent). Pour les autres providers, ou avec le ZIP lite, `tools install` télécharge le provider et ses dépendances (artefacts épinglés, SHA-256 vérifié) et nécessite un accès réseau ; `MINOS_TOOLS_OFFLINE=1` interdit tout téléchargement. Un diagnostic `tools origin: <composant>=embedded|downloaded` dit d'où vient chaque outil, et un diagnostic `machine prerequisite (not shipped by MINOS): …` nomme une dépendance externe manquante (JDK du projet, Git Bash, Go…) : MINOS embarque ses indexeurs, jamais la toolchain du projet analysé. Voir [l'installation de production](production-installation.md), §2 bis.
 
 Les providers installables restent sous `MINOS_HOME\tools` lorsque le contrat du provider le prévoit.
 
@@ -135,9 +146,13 @@ Options structurantes :
 ```text
 --provider <id>       override de négociation
 --force-full          exécution FULL explicite
---dry-run             calculer le plan sans lancer le provider
+--dry-run             calculer le plan sans lancer le provider (n'écrit rien dans MINOS_HOME)
+--no-resume           ne rouvre jamais un run interrompu : le supplante et lance un index complet (implique --force-full)
+--resume-only         échoue sans créer de run si aucun run interrompu ne peut être repris
 --format <text|json>
 ```
+
+Un run interrompu (arrêt brutal, redémarrage) est repris par défaut ; `minos index-status <projet>` indique le run reprenable. `--dry-run` n'exécute rien : le combiner avec `--no-resume` ou `--resume-only` est une erreur d'usage (code 2).
 
 Exemples :
 
@@ -237,6 +252,15 @@ related-tests <project> <symbol-id>
 
 Une liste vide signifie qu'aucune relation correspondante n'est présente dans le snapshot observé ; elle ne prouve pas une absence runtime. Le profil provider indique séparément les capacités réellement supportées.
 
+Une liste vide n'est donc pas une réponse « rien n'appelle ce symbole » quand le snapshot ne contient pas ce genre de relation. `find-callers`, `find-callees`, `dependencies` et `dependents` ajoutent alors une clé JSON `limitations` (dernière clé) et une ligne texte `limitations: [...]` :
+
+| Limitation | Quand | Sens |
+|---|---|---|
+| `CALL_RELATIONS_NOT_PRODUCED` | `find-callers`, `find-callees` sur un snapshot sans aucune relation `CALLS` | aucun producteur d'appels n'a alimenté ce snapshot ; l'absence d'appelants ne prouve rien |
+| `OCCURRENCE_REFERENCES_NOT_PROJECTED` | `dependencies`, `dependents` sur un snapshot qui contient des références résolues par occurrence | les références existent comme occurrences (`find-usages`) mais ne sont pas projetées en relations de dépendance |
+
+`find-implementations` et `related-tests` gardent leur sortie historique.
+
 ## Architecture et graphe
 
 ```text
@@ -275,6 +299,8 @@ impact <project> <symbol-id> [--depth <1..32>] [--limit <1..10000>] [--format <t
 ```
 
 L'impact reste une estimation potentielle fondée sur le graphe observé et les capabilities réellement disponibles.
+
+Un impact vide n'est pas une preuve d'absence d'impact. Sur un snapshot SCIP, les références restent des occurrences : le rapport déclare `OCCURRENCE_REFERENCES_NOT_PROJECTED` parmi ses `limitations`, après les trois limitations de base (`DYNAMIC_DISPATCH_NOT_PROVEN`, `REFLECTION_NOT_PROVEN`, `RUNTIME_CONFIGURATION_NOT_PROVEN`). La même limitation est portée par `architecture` (clé JSON `limitations`, ligne texte, commentaire `%% limitation:` en Mermaid et `// limitation:` en DOT) : le graphe agrège les dépendances persistées, pas les occurrences.
 
 ## ProgramGraph et intelligence avancée
 
@@ -333,6 +359,8 @@ backend natif/process-only → refusé dans les deux modes
 
 Linux utilise bubblewrap/namespaces et une frontière de job cgroup v2 (`memory.max`, `pids.max`, `cpu.max`, `cgroup.kill`); Windows utilise AppContainer + Job Object. L’absence de primitive qualifiée provoque un échec avant l’exécution du provider distant.
 
+État actuel : ces deux backends déclarent leur quota d'écriture disque `SUPERVISED_HARD_KILL` (supervisé par MINOS, non appliqué par l'OS) et sont donc rétrogradés en `UNTRUSTED_CODE_UNSUPPORTED` — **par décision** ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md)), pas comme un défaut en attente. `remote index` échoue sur tous les OS, en `ALLOW` comme en `DENY`, sans contournement ; il refuse avant toute matérialisation avec un message `remote index failed: …` (exit 1) propre à la cause : le backend écarté et les dimensions manquantes (`REJECTED_BY_DECISION`), ou le prérequis manquant quand aucun backend OS n'est découvert (`NO_OS_BACKEND_AVAILABLE`) ; `doctor` expose la même cause. Le bloc ci-dessus décrit le contrat cible. Voir [`remote-indexing.md`](remote-indexing.md) et le constat A1 de [`../audit/AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md).
+
 ## Runtime & Dynamic Intelligence
 
 ```text
@@ -358,6 +386,16 @@ minos.cmd team bootstrap --tenant <uuid> --name Team --key-id key-a `
 ```
 
 Le token retourné ensuite est placé dans `MINOS_TEAM_TOKEN`, pas persisté dans une ligne de commande partagée.
+
+Codes de sortie de `team` : toutes les options d'une opération sont validées avant le premier appel au plan de contrôle, donc une erreur d'usage ne suit jamais une mutation.
+
+```text
+0  succès
+1  erreur d'exécution : token absent ou invalide, refus RBAC, ressource introuvable, stockage indisponible
+2  erreur d'usage, avant tout appel au plan de contrôle : opération ou option inconnue, option manquante
+   ou dupliquée, valeur invalide (UUID, rôle, entier) ou hors bornes documentées — `audit --limit`
+   hors 1..10000, `--token-hours` hors 1..24, bornes de `retention-set` —, token passé en argument
+```
 
 Le contrôle tenant, RBAC, workspaces, audit, chiffrement et rétention ne constituent pas un service SaaS opéré.
 
@@ -411,12 +449,43 @@ Le binaire `app\minos.exe mcp` de la distribution Windows est désormais directe
 
 Ce runner ne crée aucun tag, ne publie aucune release et ne déclenche aucun GitHub Actions.
 
+## Règles des arguments
+
+Toutes les commandes partagent le même analyseur d'arguments :
+
+- un nom d'option est exact et sensible à la casse (`--Format` est inconnu) ; la valeur d'un choix (`--format JSON`, `--kind Class`, `--role viewer`) ne l'est pas ;
+- une option à valeur exige une valeur : une valeur absente, vide ou commençant par `--` est refusée (`missing value for --limit`) au lieu d'avaler l'option suivante ; une valeur commençant par un seul tiret est une valeur (`--limit -5` est signalé hors borne) ;
+- une option répétée est refusée (`duplicate option: --format`), qu'elle porte une valeur ou non ;
+- une option inconnue (`unknown option: --x`) ou un argument en trop (`unexpected argument: x`) est refusé ;
+- les bornes annoncées dans l'usage sont contrôlées avant tout accès aux données (`--limit must be between 1 and 10000`, code 2) ;
+- `--help` ou `-h`, seul après la commande ou après son opération (`minos tools install --help`, `minos team audit --help`), affiche l'usage et sort 0 sans ouvrir `MINOS_HOME`, y compris pour `doctor` et `mcp` ; `--help` placé n'importe où après le nom de la commande (`minos find-symbol p S --limit 5 --help`) a le même effet. `-h` n'est reconnu que seul ou en dernière position de trois arguments : il peut être une valeur (`--name -h`).
+
 ## Codes de sortie
 
 ```text
 0  succès
 1  erreur d'exécution / diagnostic action requise
-2  erreur d'usage
+2  erreur d'usage : rien n'a été ouvert ni modifié
+3  résultat partiel
 ```
+
+Le code `3` a **un seul sens**, quelle que soit la commande : la sortie est valide pour ce qui a pu être lu, mais des entrées du
+registre étaient illisibles et ont été écartées ; elles sont comptées et affichées, jamais ignorées en silence. Il est rendu par :
+
+- `project list` : le registre est listé, les entrées abîmées sont comptées et montrées (voir [Administration des projets](#administration-des-projets)) ;
+  si **toutes** les entrées sont abîmées, la liste n'a aucune ligne lisible et N lignes dégradées, toujours code `3`. Un registre qui ne peut pas être
+  listé du tout (stockage inaccessible) est un échec (`1`), jamais un résultat partiel ;
+- la résolution **par nom** de `inspect`, `project inspect` et `index-status` : le nom est trouvé parmi les entrées lisibles, le projet est affiché et
+  le code est `3` avec `warning: N registry entries are unreadable, so this name cannot be proven unique` sur la sortie d'erreur ; le nom n'est pas
+  trouvé alors que des entrées sont illisibles : `N registry entries are unreadable, so it cannot be told whether this project exists`, code `3`.
+  Ce n'est pas « projet inexistant » (`unknown project: <nom>`, code `1`, registre sain) : le projet existe peut-être parmi les entrées illisibles.
+  Une résolution par **identifiant** (UUID) ne lit que l'entrée demandée et sort `0`.
+
+Un script qui traite tout code non nul comme un échec doit accepter `3` pour ces commandes s'il veut lire leur sortie : la sortie standard reste
+exploitable, c'est le verdict qui dit qu'elle est incomplète. La liste de ces commandes est écrite une seule fois dans le dépôt,
+`scripts/lib/partial-result-commands.json` ; `scripts/lib/MinosExitCode.ps1` la lit pour les scripts PowerShell, et un test de la CLI vérifie qu'elle
+dit vrai.
+
+Le code 2 est réservé aux erreurs d'usage détectées à l'analyse des arguments, avant tout appel de service. Une erreur levée ensuite par un service (projet inconnu, par exemple) est une erreur d'exécution (code 1), y compris pour les opérations `ide`.
 
 En automatisation : utiliser `--format json` et tester le code de sortie avant de consommer stdout.

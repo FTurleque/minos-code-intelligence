@@ -23,7 +23,7 @@ rm -f "$OUTPUT_JSON"
 (
   cd "$REPO_ROOT"
   "$MAVEN" \
-    -pl minos-application \
+    -pl minos-bootstrap \
     -am \
     -Dtest=ProgramGraphPerformanceQualificationTest \
     -Dsurefire.failIfNoSpecifiedTests=false \
