@@ -52,8 +52,9 @@ class MinosCommandLineTest {
     @Test
     void refusesAnArgumentThatABatchLauncherCannotReceiveIntactAndNamesItWithTheWorkaround() {
         for (String argument : List.of("say \"hi\"", "%PATH%", "50% off")) {
+            List<String> arguments = List.of("semantic-search", argument);
             IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                    () -> MinosCommandLine.build(CMD, List.of("semantic-search", argument), WINDOWS), argument);
+                    () -> MinosCommandLine.build(CMD, arguments, WINDOWS), argument);
 
             assertTrue(refusal.getMessage().contains(argument), refusal.getMessage());
             assertTrue(refusal.getMessage().contains("minos.exe"), refusal.getMessage());
@@ -62,8 +63,9 @@ class MinosCommandLineTest {
 
     @Test
     void refusesALauncherPathThatABatchLauncherCannotReceiveIntact() {
+        List<String> arguments = List.of("project", "list");
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                () -> MinosCommandLine.build("C:\\100% Tools\\minos.cmd", List.of("project", "list"), WINDOWS));
+                () -> MinosCommandLine.build("C:\\100% Tools\\minos.cmd", arguments, WINDOWS));
 
         assertTrue(refusal.getMessage().startsWith("executable "), refusal.getMessage());
         assertTrue(refusal.getMessage().contains("minos.exe"), refusal.getMessage());
@@ -73,8 +75,9 @@ class MinosCommandLineTest {
     void aLongRefusedArgumentIsTruncatedInTheMessage() {
         String argument = "%" + "x".repeat(500);
 
+        List<String> arguments = List.of(argument);
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                () -> MinosCommandLine.build(CMD, List.of(argument), WINDOWS));
+                () -> MinosCommandLine.build(CMD, arguments, WINDOWS));
 
         assertFalse(refusal.getMessage().contains(argument));
         assertTrue(refusal.getMessage().length() < 400, refusal.getMessage());
@@ -83,8 +86,9 @@ class MinosCommandLineTest {
     @Test
     void stillRefusesControlCharactersForABatchLauncher() {
         for (String argument : List.of("bad\nargument", "bad\rargument", "bad\0argument")) {
+            List<String> arguments = List.of(argument);
             assertThrows(IllegalArgumentException.class,
-                    () -> MinosCommandLine.build(CMD, List.of(argument), WINDOWS), argument);
+                    () -> MinosCommandLine.build(CMD, arguments, WINDOWS), argument);
         }
     }
 

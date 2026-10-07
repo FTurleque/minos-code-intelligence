@@ -269,6 +269,12 @@ class WindowsAppContainerRecoveryOwnershipTest {
             return new Prepared(sandboxed.command(), working, run, marker);
         }
 
+        private static final long JOURNAL_POLL_MILLIS = 200L;
+
+        private static AssertionError launcherExited(Sandbox sandbox) {
+            return new AssertionError("the launcher exited before granting its sandbox: " + sandbox.output());
+        }
+
         Journal awaitJournalWithGrants(Sandbox sandbox, Duration timeout) throws Exception {
             return awaitJournalWithGrants(sandbox, timeout, null);
         }
@@ -276,12 +282,11 @@ class WindowsAppContainerRecoveryOwnershipTest {
         Journal awaitJournalWithGrants(Sandbox sandbox, Duration timeout, String directory) throws Exception {
             long deadline = System.nanoTime() + timeout.toNanos();
             while (System.nanoTime() < deadline) {
-                if (!sandbox.process().isAlive()) {
-                    throw new AssertionError("the launcher exited before granting its sandbox: " + sandbox.output());
-                }
+                if (!sandbox.process().isAlive()) throw launcherExited(sandbox);
                 Optional<Journal> journal = findJournal(directory);
                 if (journal.isPresent() && !journal.get().paths().isEmpty()) return journal.get();
-                Thread.sleep(200);
+                // Attend la fin du lanceur pendant au plus un intervalle : une sortie prematuree se voit tout de suite.
+                if (sandbox.process().waitFor(JOURNAL_POLL_MILLIS, TimeUnit.MILLISECONDS)) throw launcherExited(sandbox);
             }
             throw new AssertionError("no recovery journal with grants appeared: " + sandbox.output());
         }

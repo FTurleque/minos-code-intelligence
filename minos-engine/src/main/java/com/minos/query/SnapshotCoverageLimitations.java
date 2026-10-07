@@ -21,6 +21,8 @@ import java.util.Set;
  */
 public final class SnapshotCoverageLimitations {
 
+    private static final String SNAPSHOT = "snapshot";
+
     /** References held as occurrences are not projected into relationships: traversals and aggregates cannot see them. */
     public static final String OCCURRENCE_REFERENCES_NOT_PROJECTED = "OCCURRENCE_REFERENCES_NOT_PROJECTED";
     /** The snapshot holds no call relation at all: a caller or callee query cannot answer from it. */
@@ -31,7 +33,7 @@ public final class SnapshotCoverageLimitations {
 
     /** At least one resolved occurrence that is not a definition (a forward definition is a definition). */
     public static boolean hasResolvedReferenceOccurrences(CodeKnowledgeSnapshot snapshot) {
-        Objects.requireNonNull(snapshot, "snapshot");
+        Objects.requireNonNull(snapshot, SNAPSHOT);
         for (SymbolOccurrence occurrence : snapshot.occurrences()) {
             if (occurrence.isResolved() && !occurrence.isDefinitionOccurrence()) {
                 return true;
@@ -42,7 +44,7 @@ public final class SnapshotCoverageLimitations {
 
     /** At least one relation of kind {@link RelationshipKind#CALLS}. */
     public static boolean hasCallRelations(CodeKnowledgeSnapshot snapshot) {
-        Objects.requireNonNull(snapshot, "snapshot");
+        Objects.requireNonNull(snapshot, SNAPSHOT);
         return snapshot.relationships().stream().anyMatch(relationship -> relationship.kind() == RelationshipKind.CALLS);
     }
 
@@ -53,7 +55,7 @@ public final class SnapshotCoverageLimitations {
      * complete as far as the provider states them and give nothing.
      */
     public static List<String> relationshipLimitations(CodeKnowledgeSnapshot snapshot, Set<RelationshipKind> kinds) {
-        Objects.requireNonNull(snapshot, "snapshot");
+        Objects.requireNonNull(snapshot, SNAPSHOT);
         Objects.requireNonNull(kinds, "kinds");
         List<String> limitations = new ArrayList<>();
         if (kinds.contains(RelationshipKind.CALLS) && !hasCallRelations(snapshot)) {

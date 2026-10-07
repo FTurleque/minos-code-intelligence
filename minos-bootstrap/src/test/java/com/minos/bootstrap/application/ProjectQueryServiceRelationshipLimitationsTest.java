@@ -83,8 +83,8 @@ class ProjectQueryServiceRelationshipLimitationsTest {
         registry.registerProject(Files.createDirectories(root.resolve("project")), "f01");
         ProjectQueryService service = new ProjectQueryService(registry, new FileSymbolSnapshotStore(root.resolve("snapshots")));
 
-        assertThrows(IllegalStateException.class,
-                () -> service.relationshipLimitations("f01", Set.of(RelationshipKind.CALLS)));
+        Set<RelationshipKind> kinds = Set.of(RelationshipKind.CALLS);
+        assertThrows(IllegalStateException.class, () -> service.relationshipLimitations("f01", kinds));
     }
 
     private Fixture fixture(List<Relationship> relationships, List<SymbolOccurrence> occurrences) throws Exception {

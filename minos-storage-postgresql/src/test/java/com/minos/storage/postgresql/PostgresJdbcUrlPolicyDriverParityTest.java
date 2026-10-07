@@ -101,7 +101,7 @@ class PostgresJdbcUrlPolicyDriverParityTest {
         return SslMode.of(driverProperties(url));
     }
 
-    private static Properties driverProperties(String url) throws Exception {
+    private static Properties driverProperties(String url) {
         Properties parsed = Driver.parseURL(url, new Properties());
         assertNotNull(parsed, "the driver must understand " + url);
         return parsed;

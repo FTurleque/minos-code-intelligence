@@ -137,12 +137,10 @@ class StaleScratchReclamationTest {
 
     @Test
     void nonPositiveLifetimeAndBoundsAreRefused() {
-        assertThrows(IllegalArgumentException.class, () -> StaleScratchReclamation.reclaim(
-                root, name -> true, Set.of(), new StaleScratchReclamation.Policy(Duration.ZERO, NOW, 10, 10), message -> { }));
-        assertThrows(IllegalArgumentException.class, () -> StaleScratchReclamation.reclaim(
-                root, name -> true, Set.of(), new StaleScratchReclamation.Policy(LIFETIME, NOW, 0, 10), message -> { }));
-        assertThrows(IllegalArgumentException.class, () -> StaleScratchReclamation.reclaim(
-                root, name -> true, Set.of(), new StaleScratchReclamation.Policy(LIFETIME, NOW, 10, 0), message -> { }));
+        // La politique se valide a sa construction : c'est elle qui refuse, avant tout parcours du dossier.
+        assertThrows(IllegalArgumentException.class, () -> new StaleScratchReclamation.Policy(Duration.ZERO, NOW, 10, 10));
+        assertThrows(IllegalArgumentException.class, () -> new StaleScratchReclamation.Policy(LIFETIME, NOW, 0, 10));
+        assertThrows(IllegalArgumentException.class, () -> new StaleScratchReclamation.Policy(LIFETIME, NOW, 10, 0));
     }
 
     @Test
