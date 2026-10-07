@@ -190,6 +190,10 @@ git diff --check
 
 Ne pas mélanger une refactorisation sans rapport avec un jalon fonctionnel. Préférer des commits atomiques dont le message explique la décision.
 
+## Audit de code à la demande
+
+SpotBugs (analyse statique) et PIT (tests de mutation) sont disponibles dans les profils Maven `audit-spotbugs` et `audit-mutation`. Ils ne font pas partie de `clean verify` ni de la CI de PR. Voir [Audit de code : SpotBugs et PIT](../quality/code-audit.md).
+
 ## Documentation
 
 Toute évolution de surface utilisateur doit mettre à jour :

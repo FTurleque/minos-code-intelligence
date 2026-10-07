@@ -1,0 +1,123 @@
+name: Code audit (SpotBugs and PIT)
+
+on:
+  # Politique du dépôt : aucun déclenchement automatique. SpotBugs et PIT ne sont pas des contrôles de
+  # fusion ; ce workflow ne sert qu'à produire leurs rapports à la demande (docs/quality/code-audit.md).
+  workflow_dispatch:
+    inputs:
+      run_spotbugs:
+        description: Lancer SpotBugs (profil audit-spotbugs) sur tout le réacteur
+        type: boolean
+        default: true
+      spotbugs_blocking:
+        description: SpotBugs en mode bloquant (spotbugs:check) au lieu du rapport seul
+        type: boolean
+        default: false
+      run_mutation:
+        description: Lancer PIT (profil audit-mutation) sur le périmètre initial de minos-engine
+        type: boolean
+        default: false
+      target_classes:
+        description: Classes mutées par PIT, séparées par des virgules (vide = périmètre du profil)
+        type: string
+        default: ''
+      target_tests:
+        description: Tests exécutés par PIT, séparés par des virgules (vide = périmètre du profil)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  spotbugs:
+    name: SpotBugs
+    if: ${{ inputs.run_spotbugs }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Installer Java 24
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Analyser (rapport ou contrôle bloquant)
+        shell: bash
+        env:
+          BLOCKING: ${{ inputs.spotbugs_blocking }}
+        run: |
+          chmod +x mvnw
+          goal=spotbugs:spotbugs
+          if [ "$BLOCKING" = "true" ]; then goal=spotbugs:check; fi
+          ./mvnw --batch-mode --no-transfer-progress -Paudit-spotbugs -DskipTests compile "$goal" -fae
+
+      - name: Résumer les rapports
+        if: always()
+        run: python scripts/quality/audit-report-summary.py spotbugs
+
+      - name: Publier les rapports SpotBugs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: spotbugs-reports
+          path: |
+            */target/spotbugsXml.xml
+            */target/spotbugsSarif.json
+            */target/reports/spotbugs.html
+            target/spotbugsXml.xml
+            target/spotbugsSarif.json
+            target/reports/spotbugs.html
+          if-no-files-found: error
+
+  mutation:
+    name: PIT (périmètre restreint)
+    if: ${{ inputs.run_mutation }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Installer Java 24
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Muter
+        shell: bash
+        env:
+          TARGET_CLASSES: ${{ inputs.target_classes }}
+          TARGET_TESTS: ${{ inputs.target_tests }}
+        run: |
+          chmod +x mvnw
+          args=()
+          if [ -n "$TARGET_CLASSES" ]; then args+=("-DtargetClasses=$TARGET_CLASSES"); fi
+          if [ -n "$TARGET_TESTS" ]; then args+=("-DtargetTests=$TARGET_TESTS"); fi
+          ./mvnw --batch-mode --no-transfer-progress -Paudit-mutation -pl minos-engine -am \
+            -DfailWhenNoMutations=false test-compile org.pitest:pitest-maven:mutationCoverage "${args[@]}"
+
+      - name: Vérifier que PIT a réellement muté du code testé
+        run: python scripts/quality/audit-report-summary.py pit --module minos-engine
+
+      - name: Publier les rapports PIT
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pit-reports
+          path: minos-engine/target/pit-reports
+          if-no-files-found: error

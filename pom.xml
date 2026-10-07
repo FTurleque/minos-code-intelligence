@@ -67,6 +67,33 @@
         <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
         <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
         <maven.shade.plugin.version>3.6.2</maven.shade.plugin.version>
+
+        <!--
+          Audit tooling (docs/quality/code-audit.md). Both tools live in opt-in profiles only
+          (audit-spotbugs, audit-mutation): the default clean verify never loads them.
+          spotbugs-maven-plugin 4.10.4.1 is the wrapper release built around SpotBugs 4.10.4; the engine
+          version is pinned separately below so that upgrading one is a visible decision.
+        -->
+        <spotbugs.maven.plugin.version>4.10.4.1</spotbugs.maven.plugin.version>
+        <spotbugs.version>4.10.4</spotbugs.version>
+        <pitest.maven.plugin.version>1.30.0</pitest.maven.plugin.version>
+        <pitest.junit5.plugin.version>1.2.3</pitest.junit5.plugin.version>
+        <!--
+          Defaults of the audit settings, so that a direct goal call without a profile (spotbugs:check,
+          pitest-maven:mutationCoverage) resolves them like the profiles do. Override with -D.
+          SpotBugs: max depth; Medium keeps medium- and high-confidence findings (Low is noise);
+          failThreshold is the severity at which spotbugs:check fails.
+        -->
+        <spotbugs.effort>Max</spotbugs.effort>
+        <spotbugs.threshold>Medium</spotbugs.threshold>
+        <spotbugs.failThreshold>Medium</spotbugs.failThreshold>
+        <spotbugs.maxHeap>1024</spotbugs.maxHeap>
+        <spotbugs.timeout>1800000</spotbugs.timeout>
+        <pit.threads>2</pit.threads>
+        <pit.timeoutConstant>8000</pit.timeoutConstant>
+        <pit.timeoutFactor>1.5</pit.timeoutFactor>
+        <pit.mutators>DEFAULTS</pit.mutators>
+        <pit.maxHeapMb>1024</pit.maxHeapMb>
     </properties>
 
     <dependencyManagement>
@@ -172,5 +199,122 @@
                 </executions>
             </plugin>
         </plugins>
+
+        <pluginManagement>
+            <plugins>
+                <!--
+                  Shared configuration of the audit tools. Only the profiles below put these plugins in the
+                  build; this block gives a direct goal invocation (spotbugs:check, pitest:mutationCoverage) the
+                  same settings. Every value that varies between runs is a property, overridable with -D.
+                -->
+                <plugin>
+                    <groupId>com.github.spotbugs</groupId>
+                    <artifactId>spotbugs-maven-plugin</artifactId>
+                    <version>${spotbugs.maven.plugin.version}</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>com.github.spotbugs</groupId>
+                            <artifactId>spotbugs</artifactId>
+                            <version>${spotbugs.version}</version>
+                        </dependency>
+                    </dependencies>
+                    <configuration>
+                        <effort>${spotbugs.effort}</effort>
+                        <threshold>${spotbugs.threshold}</threshold>
+                        <failThreshold>${spotbugs.failThreshold}</failThreshold>
+                        <includeTests>false</includeTests>
+                        <xmlOutput>true</xmlOutput>
+                        <sarifOutput>true</sarifOutput>
+                        <htmlOutput>true</htmlOutput>
+                        <excludeFilterFile>${maven.multiModuleProjectDirectory}/quality/spotbugs-exclude.xml</excludeFilterFile>
+                        <maxHeap>${spotbugs.maxHeap}</maxHeap>
+                        <timeout>${spotbugs.timeout}</timeout>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.pitest</groupId>
+                    <artifactId>pitest-maven</artifactId>
+                    <version>${pitest.maven.plugin.version}</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.pitest</groupId>
+                            <artifactId>pitest-junit5-plugin</artifactId>
+                            <version>${pitest.junit5.plugin.version}</version>
+                        </dependency>
+                    </dependencies>
+                    <configuration>
+                        <!-- targetClasses / targetTests come from the properties of the audit-mutation profile. -->
+                        <outputFormats>
+                            <outputFormat>HTML</outputFormat>
+                            <outputFormat>XML</outputFormat>
+                        </outputFormats>
+                        <timestampedReports>false</timestampedReports>
+                        <threads>${pit.threads}</threads>
+                        <timeoutConstant>${pit.timeoutConstant}</timeoutConstant>
+                        <timeoutFactor>${pit.timeoutFactor}</timeoutFactor>
+                        <mutators>
+                            <mutator>${pit.mutators}</mutator>
+                        </mutators>
+                        <jvmArgs>
+                            <jvmArg>-Xmx${pit.maxHeapMb}m</jvmArg>
+                            <!--
+                              pitest-maven has no workingDirectory parameter, unlike the Surefire configuration above.
+                              Tests resolve repository paths from the multi-module root, so the minions get it as user.dir.
+                            -->
+                            <jvmArg>-Duser.dir=${maven.multiModuleProjectDirectory}</jvmArg>
+                        </jvmArgs>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
     </build>
+
+    <profiles>
+        <!--
+          audit-spotbugs: static bug-pattern analysis (docs/quality/code-audit.md).
+          Off by default. Reports: target/spotbugsXml.xml, target/spotbugs.html, target/spotbugsSarif.json per module.
+          The blocking gate is the explicit goal spotbugs:check, never part of the default lifecycle.
+        -->
+        <profile>
+            <id>audit-spotbugs</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                        <executions>
+                            <!-- Report only (never fails): -Paudit-spotbugs verify produces the reports next to the tests. -->
+                            <execution>
+                                <id>spotbugs-report</id>
+                                <phase>verify</phase>
+                                <goals><goal>spotbugs</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          audit-mutation: PIT mutation testing on a restricted scope (docs/quality/code-audit.md).
+          Off by default and never bound to a phase: it runs only through pitest:mutationCoverage.
+          Default scope: the hosted authorization and audit-chain classes of minos-engine, with the tests of the
+          same module. Override without touching a POM: -DtargetClasses=... -DtargetTests=...
+        -->
+        <profile>
+            <id>audit-mutation</id>
+            <properties>
+                <targetClasses>com.minos.hosted.HostedAuditChain,com.minos.hosted.HostedAuthorizationService,com.minos.hosted.HostedPermission</targetClasses>
+                <targetTests>com.minos.hosted.*</targetTests>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
