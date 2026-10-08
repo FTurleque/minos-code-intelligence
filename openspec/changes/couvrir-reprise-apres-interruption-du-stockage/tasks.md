@@ -17,8 +17,8 @@
 
 ## 4. Pointeurs orphelins (après décision)
 
-- [ ] 4.1 Décision de l'utilisateur sur la récupération des `.active-*.tmp` (H13).
-- [ ] 4.2 Si oui : test d'abord (inverser `SnapshotRetentionOrphanTest:38`), puis balayage sous verrou de mutation ; amender l'ADR 0023 si la politique de rétention change.
+- [x] 4.1 Décision de l'utilisateur sur la récupération des `.active-*.tmp` (H13). — Option A retenue le 2026-10-08 : balayage.
+- [x] 4.2 Si oui : test d'abord (inverser `SnapshotRetentionOrphanTest:38`), puis balayage sous verrou de mutation ; amender l'ADR 0023 si la politique de rétention change. — Fait : la politique figure dans l'ADR 0039 (e), amendée là.
 
 ## 5. Validation
 

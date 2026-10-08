@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SnapshotRetentionOrphanTest {
 
     @Test
-    void deletesOnlyPreparedSnapshotTemporariesOlderThanTheMaxAge(@TempDir Path root) throws Exception {
+    void deletesOnlyPreparedSnapshotAndPointerTemporariesOlderThanTheMaxAge(@TempDir Path root) throws Exception {
         SnapshotRepository repository = new SnapshotRepository(root);
         SnapshotRetentionService retention = new SnapshotRetentionService(repository);
         UUID projectId = UUID.randomUUID();
@@ -27,15 +27,17 @@ class SnapshotRetentionOrphanTest {
         Path orphan = stale(directory.resolve(".snapshot-orphan.tmp"), now.minus(Duration.ofHours(25)));
         Path inFlight = stale(directory.resolve(".snapshot-inflight.tmp"), now.minus(Duration.ofMinutes(5)));
         Path pointer = stale(directory.resolve(".active-old.tmp"), now.minus(Duration.ofDays(3)));
+        Path pointerInFlight = stale(directory.resolve(".active-inflight.tmp"), now.minus(Duration.ofMinutes(5)));
         Path published = stale(directory.resolve("snapshot-abc-def.v2"), now.minus(Duration.ofDays(3)));
         Path unrelated = stale(directory.resolve(".snapshot-lookalike.txt"), now.minus(Duration.ofDays(3)));
 
         int deleted = retention.deleteOrphanPreparedSnapshots(projectId, now, Duration.ofHours(24));
 
-        assertEquals(1, deleted);
+        assertEquals(2, deleted);
         assertFalse(Files.exists(orphan), "a prepared snapshot older than the max age is an orphan");
         assertTrue(Files.exists(inFlight), "a recent temporary may belong to a staging in progress");
-        assertTrue(Files.exists(pointer), "an active-pointer temporary is never touched");
+        assertFalse(Files.exists(pointer), "an old active-pointer temporary is the residue of an interrupted promotion (H13)");
+        assertTrue(Files.exists(pointerInFlight), "a recent active-pointer temporary may belong to a promotion in progress");
         assertTrue(Files.exists(published));
         assertTrue(Files.exists(unrelated));
         assertEquals(0, retention.deleteOrphanPreparedSnapshots(UUID.randomUUID(), now, Duration.ofHours(24)),
