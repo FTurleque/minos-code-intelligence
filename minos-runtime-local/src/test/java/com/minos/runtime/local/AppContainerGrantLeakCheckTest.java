@@ -27,7 +27,7 @@ class AppContainerGrantLeakCheckTest {
             Set<String> entries = AppContainerGrantLeakCheck.explicitEntries(root);
 
             assertEquals(1, entries.size(), entries.toString());
-            assertTrue(entries.iterator().next().endsWith("|" + SID), entries.toString());
+            assertEquals(granted + "|" + SID, entries.iterator().next(), "the path keeps its spaces");
         } finally {
             icacls(granted.toString(), "/remove:g", "*" + SID, "/q");
         }

@@ -50,7 +50,8 @@ function Get-LiveSids([string] $RecoveryDirectory) {
         $state = $null
         try { $state = Get-Content -LiteralPath $journal.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
         try {
-            $probe = New-Object System.IO.FileStream($lockPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+            $probe = New-Object System.IO.FileStream($lockPath, [System.IO.FileMode]::Open,
+                [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
             $probe.Dispose()
         } catch [System.IO.FileNotFoundException] {
         } catch [System.IO.IOException] {
@@ -110,7 +111,9 @@ if ($orphans.Count -eq 0) {
 
 $orphans | Group-Object Path | Sort-Object Count -Descending |
     ForEach-Object { [pscustomobject]@{ Path = $_.Name; OrphanEntries = $_.Count } } | Format-Table -AutoSize | Out-String | Write-Output
-Write-Output "$($orphans.Count) orphan AppContainer entr$(if ($orphans.Count -eq 1) { 'y' } else { 'ies' }) on $(@($orphans | Select-Object -ExpandProperty Path -Unique).Count) path(s)."
+$noun = if ($orphans.Count -eq 1) { 'entry' } else { 'entries' }
+$pathCount = @($orphans | Select-Object -ExpandProperty Path -Unique).Count
+Write-Output "$($orphans.Count) orphan AppContainer $noun on $pathCount path(s)."
 
 if (-not $Remove) {
     Write-Output 'Nothing was changed. Run again with -Remove to remove them, one confirmation per path and SID.'
