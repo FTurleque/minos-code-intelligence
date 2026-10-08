@@ -173,6 +173,8 @@ PIT a analysé 7 modules sur 14 (`minos-runtime-local` partiellement) : voir § 
 
 **Stockage local (P2).** `minos-storage-local` : 518 survivants, concentrés dans `FileSemanticVectorStore` (84), `FileRuntimeObservationStore` (73), `FileProjectFingerprintSnapshotStore` (70), `FileHostedControlPlaneStore` (52) et `FileSymbolSnapshotStore` (46), à qualifier avec H12.
 
+**Mutants équivalents documentés (`renforcer-tests-revelees-par-mutation`, tâche 1.3).** Dans `HostedAuditChain.verify`, les mutants qui retirent les gardes des lignes 94 (événement non chaîné), 100 (autre tenant), 103 (lien rompu) et 110 (ancre, deux mutants) sont **équivalents** : le constructeur de `HostedTenantState` refuse déjà ces états, et tout état vérifié passe par lui. Ces gardes restent en place (défense en profondeur). Le mutant de la ligne 91 (calcul de la séquence attendue d'une chaîne vide) l'est aussi : la boucle ne s'exécute pas. `HostedAuditChainTamperingTest` couvre désormais les gardes atteignables (constructeur, et ligne 97 de `verify`).
+
 **Autorisation (P1, faiblesse de test).** `HostedAuthorizationService.authorizeRead:54` : supprimer la garde `role().allows(permission)` de la voie de lecture ne fait échouer aucun test ; aucun test ne vérifie qu'un VIEWER ou un CONTRIBUTOR est refusé sur `audit()` (`AUDIT_READ`) ou sur le plan de rétention.
 
 **Jetons (P2, faiblesse de test).** `HmacHostedIdentityProvider` : 19 survivants sur les bornes de décodage (`decode:116-129`, `decodeCanonical:139-143`, `readString:160-165`, `writeString:151`), l'expiration (`authenticate:58`, `:73`) et l'émission (`issue:42`). Les bornes exactes et les jetons tronqués ou surdimensionnés ne sont pas testés.
