@@ -117,7 +117,7 @@ Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité
 | H16 | Les limitations d'une requête de relations sont lues sur un second chargement du snapshot actif | Risque | P3 | A | — (lot 2 de `declarer-limites-impact-scip`) |
 | H17 | Linux : `--nproc=128` limite toutes les tâches de l'utilisateur réel, pas un processus | Risque (non exécuté) | P3 | A | — (lié à A03) |
 | H18 | Windows : la sonde AppContainer lit sa sortie après la fin du processus | Risque (non exécuté) | P3 | A | — (lié à A07) |
-| H19 | `scripts/intellij/run-minos.ps1` lance `mvnw package` avant le serveur MCP sur stdio | À vérifier | P3 | A | `corriger-documentation-plugin-et-suivi-audit` |
+| H19 | `scripts/intellij/run-minos.ps1` lance `mvnw package` avant le serveur MCP sur stdio | Non reproduit | — | E | `corriger-documentation-plugin-et-suivi-audit` |
 | H20 | Variables obligatoires des fichiers Compose sans garde `${VAR:?message}` | Amélioration | P3 | E | — |
 | H21 | Alertes SpotBugs nouvelles du plugin IntelliJ (11) | Faux positifs (5) et à qualifier (6) | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H22 | Les droits accordés au bac à sable AppContainer ne sont pas retirés quand le lanceur est tué (460 entrées sur le JDK) | Défaut confirmé | P1 | E | `revoquer-droits-appcontainer-apres-arret-brutal` |
@@ -206,7 +206,7 @@ PIT a analysé 7 modules sur 14 (`minos-runtime-local` partiellement) : voir § 
 
 #### MINOS-AUD-H11 — Suivi de l'audit d'octobre périmé
 
-- **Preuve (L)** : `docs/audit/constats.md` § 2 et § 6 et `docs/audit/README.md` § 9 décrivent B01–B04, C01–C06, C16, A01, A02, C04, B07–B09, B13, D01, D06, D10 comme « corrigés en local », « PR ouverte » ou « CI à observer », alors que les commits correspondants (`82dc354b`, `f87f2250`, `9bc1129d`, `9f3e2911`, `14596db2`, `93e10c3a`) sont dans `develop`. **Correction** : ligne de suivi datée ajoutée dans `docs/audit/README.md` § 10 ; mise à jour du § 6 de `constats.md` au prochain lot documentaire.
+- **Preuve (L)** : `docs/audit/constats.md` § 2 et § 6 et `docs/audit/README.md` § 9 décrivent B01–B04, C01–C06, C16, A01, A02, C04, B07–B09, B13, D01, D06, D10 comme « corrigés en local », « PR ouverte » ou « CI à observer », alors que les commits correspondants (`82dc354b`, `f87f2250`, `9bc1129d`, `9f3e2911`, `14596db2`, `93e10c3a`, `67872cc8`) sont dans `develop`. **Correction faite** : ligne de suivi datée dans `docs/audit/README.md` § 10 et état daté en tête du § 6 de `constats.md` (commit fusionné et statut revérifié de chaque changement).
 
 #### MINOS-AUD-H12 et H13 — Reprise après interruption du stockage
 
@@ -222,7 +222,7 @@ Relevés par lecture déléguée (A), non réexécutés ; chaque point dit ce qu
 - **H16** `ProjectQueryService.java:64-70` recharge le snapshot actif pour les limitations, séparément de `findRelationships` (`:58-61`) : pendant une promotion, résultats et limitations peuvent venir de deux snapshots, et le décodage complet est payé deux fois (D03).
 - **H17** `LinuxBubblewrapWorkerSandboxBackend.java:343` : `RLIMIT_NPROC` compte les tâches de l'utilisateur réel ; l'ADR 0038 et `remote-worker-sandbox-disposition.md:52` parlent d'une limite par processus. À confirmer sous Linux avec un utilisateur qui a déjà plus de 128 tâches.
 - **H18** `WindowsAppContainerWorkerSandboxBackend.java` (≈ ligne 404) : `probeExitedCleanly` ne lit la sortie qu'après la fin ; le correctif A01 ajoute un `Write-Warning` par journal sans propriétaire. À confirmer sous Windows avec de nombreux journaux orphelins.
-- **H19** `scripts/intellij/run-minos.ps1:15-17` lance `mvnw package` avant le serveur MCP sur stdio : une ligne de Maven sur la sortie standard précéderait le flux JSON-RPC. À confirmer en lançant le script depuis un client MCP.
+- **H19** `scripts/intellij/run-minos.ps1:15-17` lance `mvnw package` avant le serveur MCP sur stdio : une ligne de Maven sur la sortie standard précéderait le flux JSON-RPC. **Non reproduit (E)** : en cas de succès, `mvnw.cmd -q -DskipTests package` n'écrit aucune ligne sur la sortie standard ; en cas d'échec, le script s'arrête avant le démarrage du serveur.
 
 #### MINOS-AUD-H20 — Garde des variables Compose
 
