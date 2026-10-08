@@ -21,7 +21,7 @@
 
 ## 4. Décisions H14 et H15
 
-- [ ] 4.1 Décision de l'utilisateur sur H14 et H15 ; test qui fixe le comportement retenu ; correctif seulement si décidé (rejouer `check-audit-remediation-v2.py`, `check-p0-p2.py`, `check-minos-01.py`, et les scopes JaCoCo du plan de contrôle).
+- [x] 4.1 Décision de l'utilisateur sur H14 et H15 (options recommandées, 2026-10-08 : autoriser avant de valider l'identifiant de requête ; contenir toute exception d'un puits) ; tests `HostedRequestIdAndSinkFailureTest` rouges puis verts ; test qui fixe le comportement retenu ; correctif seulement si décidé (rejouer `check-audit-remediation-v2.py`, `check-p0-p2.py`, `check-minos-01.py`, et les scopes JaCoCo du plan de contrôle).
 
 ## 5. Validation
 

@@ -112,8 +112,8 @@ Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité
 | H11 | Le suivi de l'audit d'octobre décrit comme « en local / PR ouverte » des correctifs fusionnés | Dérive documentaire | P3 | L | `corriger-documentation-plugin-et-suivi-audit` |
 | H12 | Aucun test d'arrêt brutal entre écriture temporaire et renommage d'un snapshot, de pointeur actif tronqué, ni de migration PostgreSQL d'une base peuplée | Faiblesse de test | P2 | A | `couvrir-reprise-apres-interruption-du-stockage` |
 | H13 | Les pointeurs temporaires `.active-*.tmp` laissés par un arrêt brutal ne sont jamais récupérés | Risque | P3 | A | `couvrir-reprise-apres-interruption-du-stockage` |
-| H14 | Un refus dont l'identifiant de requête est invalide est rejeté avant l'authentification, sans trace | Risque | P3 | A | `renforcer-tests-revelees-par-mutation` (décision) |
-| H15 | `HostedAuditDelivery` n'attrape que `IOException` | Risque | P3 | A | `renforcer-tests-revelees-par-mutation` (décision) |
+| H14 | Un refus dont l'identifiant de requête est invalide est rejeté avant l'authentification, sans trace | Défaut confirmé (test rouge), **corrigé** | P3 | E | `renforcer-tests-revelees-par-mutation` (décision) |
+| H15 | `HostedAuditDelivery` n'attrape que `IOException` | Défaut confirmé (test rouge), **corrigé** | P3 | E | `renforcer-tests-revelees-par-mutation` (décision) |
 | H16 | Les limitations d'une requête de relations sont lues sur un second chargement du snapshot actif | Risque | P3 | A | — (lot 2 de `declarer-limites-impact-scip`) |
 | H17 | Linux : `--nproc=128` limite toutes les tâches de l'utilisateur réel, pas un processus | Risque (non exécuté) | P3 | A | — (lié à A03) |
 | H18 | Windows : la sonde AppContainer lit sa sortie après la fin du processus | Risque (non exécuté) | P3 | A | — (lié à A07) |

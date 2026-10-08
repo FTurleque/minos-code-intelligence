@@ -309,11 +309,21 @@ class WindowsAppContainerRecoveryOwnershipTest {
             while (System.nanoTime() < deadline) {
                 if (!sandbox.process().isAlive()) throw launcherExited(sandbox);
                 Optional<Journal> journal = findJournal(directory);
-                if (journal.isPresent() && !journal.get().paths().isEmpty()) return journal.get();
+                // MINOS-AUD-H22: a path is journaled before icacls grants it, so "journaled" is not yet "granted".
+                if (journal.isPresent() && !journal.get().paths().isEmpty() && allGranted(journal.get())) {
+                    return journal.get();
+                }
                 // Attend la fin du lanceur pendant au plus un intervalle : une sortie prematuree se voit tout de suite.
                 if (sandbox.process().waitFor(JOURNAL_POLL_MILLIS, TimeUnit.MILLISECONDS)) throw launcherExited(sandbox);
             }
             throw new AssertionError("no recovery journal with grants appeared: " + sandbox.output());
+        }
+
+        private boolean allGranted(Journal journal) throws Exception {
+            for (String path : journal.paths()) {
+                if (!acl(path).contains(journal.sid())) return false;
+            }
+            return true;
         }
 
         Optional<Journal> findJournal(String onlyDirectory) throws IOException {
