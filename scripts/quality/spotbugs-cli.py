@@ -88,15 +88,15 @@ def main() -> int:
             if not classes.is_dir():
                 continue
             # minos-app writes into the root target/, where the reactor build writes the parent's file too.
-            aux_source = (module / "target" / AUX_CLASSPATH) if module.name == "minos-app" else target / AUX_CLASSPATH
-            aux = work / f"{module.name}.auxclasspath"
-            entries = aux_source.read_text(encoding="utf-8").strip().split(os.pathsep) if aux_source.is_file() else []
-            aux.write_text("\n".join(entry for entry in entries if entry) + "\n", encoding="utf-8")
+            module_classpath_file = (module / "target" / AUX_CLASSPATH) if module.name == "minos-app" else target / AUX_CLASSPATH
+            aux_classpath = work / f"{module.name}.auxclasspath"
+            entries = module_classpath_file.read_text(encoding="utf-8").strip().split(os.pathsep) if module_classpath_file.is_file() else []
+            aux_classpath.write_text("\n".join(entry for entry in entries if entry) + "\n", encoding="utf-8")
             result = subprocess.run(
                 ["java", "-Xmx2g", "-cp", classpath, "edu.umd.cs.findbugs.FindBugs2",
                  "-effort:max", "-medium", "-xml:withMessages",
                  "-output", str(output / f"{module.name}.xml"),
-                 "-auxclasspathFromFile", str(aux),
+                 "-auxclasspathFromFile", str(aux_classpath),
                  "-exclude", str(ROOT / "quality/spotbugs-exclude.xml"),
                  str(classes)],
                 capture_output=True, text=True)
