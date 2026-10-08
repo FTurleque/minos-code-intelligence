@@ -1,6 +1,7 @@
 package com.minos.runtime.local;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
@@ -32,6 +33,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * construction, ce que fixe la garde statique de {@code WindowsContainmentScriptTest}.
  */
 @EnabledOnOs(OS.WINDOWS)
+@ExtendWith(AppContainerGrantLeakCheck.class)
 class WindowsAppContainerRecoveryOwnershipTest {
     private static final Pattern STRING_FIELD = Pattern.compile("\"%s\"\\s*:\\s*\"([^\"]*)\"");
     private static final Duration PROVIDER_TIMEOUT = Duration.ofSeconds(120);
