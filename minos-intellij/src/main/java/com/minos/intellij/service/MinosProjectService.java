@@ -112,14 +112,17 @@ public final class MinosProjectService {
             PsiReference reference = cursor.getReference();
             if (reference != null) {
                 PsiElement resolved = reference.resolve();
-                if (resolved instanceof PsiNamedElement named && named.getName() != null) {
-                    return named.getName();
+                String name = resolved instanceof PsiNamedElement named ? named.getName() : null;
+                if (name != null) {
+                    return name;
                 }
             }
         }
         for (int depth = 0; cursor != null && depth < 8; depth++, cursor = cursor.getParent()) {
-            if (cursor instanceof PsiNamedElement named && named.getName() != null && !named.getName().isBlank()) {
-                return named.getName();
+            // MINOS-AUD-H21: one read of the name, so the value tested is the value returned.
+            String name = cursor instanceof PsiNamedElement named ? named.getName() : null;
+            if (name != null && !name.isBlank()) {
+                return name;
             }
         }
         return element == null ? null : element.getText();

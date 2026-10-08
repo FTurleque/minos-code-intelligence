@@ -119,7 +119,7 @@ Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité
 | H18 | Windows : la sonde AppContainer lit sa sortie après la fin du processus | Risque (non exécuté) | P3 | A | — (lié à A07) |
 | H19 | `scripts/intellij/run-minos.ps1` lance `mvnw package` avant le serveur MCP sur stdio | Non reproduit | — | E | `corriger-documentation-plugin-et-suivi-audit` |
 | H20 | Variables obligatoires des fichiers Compose sans garde `${VAR:?message}` | Amélioration | P3 | E | — |
-| H21 | Alertes SpotBugs nouvelles du plugin IntelliJ (11) | Faux positifs (5) et à qualifier (6) | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
+| H21 | Alertes SpotBugs nouvelles du plugin IntelliJ (11) | Faux positifs (4), convention (5), **2 corrigées** le 2026-10-08 | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H22 | Les droits accordés au bac à sable AppContainer ne sont pas retirés quand le lanceur est tué (460 entrées sur le JDK) | Défaut confirmé ; journal avant octroi **corrigé**, fuite des `MINOS_HOME` de test ouverte | P2 | E | `revoquer-droits-appcontainer-apres-arret-brutal` |
 | H23 | Incident d'environnement pendant le PIT de `minos-runtime-local` (JDK inutilisable, profil illisible ; cause non établie) | Risque confirmé (outillage) | P1 | E | `revoquer-droits-appcontainer-apres-arret-brutal` (précautions d'exécution) |
 | H24 | Sous Windows (Ryuk désactivé), une JVM de test tuée laisse son conteneur PostgreSQL en vie | Risque confirmé (outillage de test) | P2 | E | `aligner-dependances-de-test-testcontainers` |
@@ -231,8 +231,8 @@ Relevés par lecture déléguée (A), non réexécutés ; chaque point dit ce qu
 #### MINOS-AUD-H21 — Alertes SpotBugs du plugin IntelliJ
 
 - `DMI_HARDCODED_ABSOLUTE_FILENAME` ×4, `MinosStrongProcessLauncher:47` : liste voulue des répertoires système Linux (`/usr/bin`, `/bin`…) : **faux positif**.
-- `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE`, `MinosProjectService:121` : `named.getName()` rappelé après un test de nullité : **faux positif probable**.
-- `USO_UNSAFE_METHOD_SYNCHRONIZATION`, `MinosUiController:27` : `attach` est `synchronized` sur une instance publique et exécute un rappel sous verrou : **à qualifier** (interblocage peu probable).
+- `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE`, `MinosProjectService:121` : `named.getName()` rappelé après un test de nullité : rien ne garantit que le second appel rende la valeur testée. **Corrigé** le 2026-10-08 (une seule lecture, deux occurrences).
+- `USO_UNSAFE_METHOD_SYNCHRONIZATION`, `MinosUiController:27` : `attach` est `synchronized` sur une instance publique et exécute un rappel sous verrou. **Corrigé** le 2026-10-08 : verrou privé, rappel exécuté hors verrou comme dans `deliver`. Relecture SpotBugs : 9 alertes, 68/68 classes ; harnais : 63 tests réussis, 8 réservés Unix.
 - `EI_EXPOSE_REP` ×3 et `EI_EXPOSE_REP2` ×2 : même convention que dans le réacteur (lot 5 du § 4).
 
 #### MINOS-AUD-H22 — Les droits accordés au bac à sable AppContainer ne sont pas retirés quand le lanceur est tué
