@@ -105,10 +105,10 @@ Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité
 | H04 | La clé NVD de l'environnement est refusée ; Dependency-Check 13.0.0 ne rafraîchit pas sans clé | Décision ouverte (environnement) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H05 | Testcontainers mélange deux versions majeures (cœur 2.0.5, modules 1.21.4) ; `slf4j-api` ne converge pas | Risque | P3 | E | `aligner-dependances-de-test-testcontainers` |
 | H06 | Gitleaks n'est ni configuré ni exécuté par la CI ; la règle par défaut ne produit que des faux positifs | Décision ouverte | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
-| H07 | Faiblesses de tests révélées par PIT (chaîne d'audit et autorisation en P1) | Faiblesse de test | P1 à P3 | E | `renforcer-tests-revelees-par-mutation` |
+| H07 | Faiblesses de tests révélées par PIT (chaîne d'audit et autorisation en P1) | Faiblesse de test ; **P1 corrigés** (`5b9ef15b`) | P1 à P3 | E | `renforcer-tests-revelees-par-mutation` |
 | H08 | Usages de modules non déclarés ; surfaces qui consomment directement des ports du moteur | Décision ouverte | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` (mesure) ; décision par ADR |
 | H09 | Le plugin IntelliJ échappe aux contrôles locaux (hors réacteur, sans Gradle, sorties périmées) | Faiblesse (couverture) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
-| H10 | La documentation du plugin indique un chemin `…\MINOS\bin\minos.cmd` qui n'existe pas | Défaut confirmé (documentation) | P2 | L | `corriger-documentation-plugin-et-suivi-audit` |
+| H10 | La documentation du plugin indique un chemin `…\MINOS\bin\minos.cmd` qui n'existe pas | Défaut confirmé (documentation), **corrigé** (`93093b7a`) | P2 | L | `corriger-documentation-plugin-et-suivi-audit` |
 | H11 | Le suivi de l'audit d'octobre décrit comme « en local / PR ouverte » des correctifs fusionnés | Dérive documentaire | P3 | L | `corriger-documentation-plugin-et-suivi-audit` |
 | H12 | Aucun test d'arrêt brutal entre écriture temporaire et renommage d'un snapshot, de pointeur actif tronqué, ni de migration PostgreSQL d'une base peuplée | Faiblesse de test | P2 | A | `couvrir-reprise-apres-interruption-du-stockage` |
 | H13 | Les pointeurs temporaires `.active-*.tmp` laissés par un arrêt brutal ne sont jamais récupérés | Risque | P3 | A | `couvrir-reprise-apres-interruption-du-stockage` |
