@@ -4,7 +4,7 @@ import com.minos.storage.StorageBackendConfiguration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
@@ -31,7 +31,7 @@ abstract class PostgresTestSupport {
 
     static final String REQUIRED_PROPERTY = "minos.postgresql.tests.required";
 
-    private static PostgreSQLContainer<?> POSTGRES;
+    private static PostgreSQLContainer POSTGRES;
     private static boolean dockerAvailable = false;
     private static Throwable dockerFailure;
 
@@ -40,7 +40,7 @@ abstract class PostgresTestSupport {
         // Outside the try: a missing or malformed pin is a repository defect, never a skipped suite.
         DockerImageName image = DockerImageName.parse(pinnedPostgresImage()).asCompatibleSubstituteFor("postgres");
         try {
-            POSTGRES = new PostgreSQLContainer<>(image)
+            POSTGRES = new PostgreSQLContainer(image)
                     .withDatabaseName("minos_test")
                     .withUsername("minos")
                     .withPassword("test-secret");
