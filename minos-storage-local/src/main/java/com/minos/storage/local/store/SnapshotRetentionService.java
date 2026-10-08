@@ -116,14 +116,18 @@ public final class SnapshotRetentionService {
         try (DirectoryStream<Path> entries = Files.newDirectoryStream(directory)) {
             for (Path entry : entries) {
                 String name = entry.getFileName().toString();
-                boolean temporary = name.startsWith(PREPARED_SNAPSHOT_PREFIX) || name.startsWith(POINTER_TEMPORARY_PREFIX);
-                if (!temporary || !name.endsWith(TEMPORARY_SUFFIX)) continue;
+                if (!isReclaimableTemporaryName(name)) continue;
                 if (Files.isSymbolicLink(entry) || !Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)) continue;
                 if (!Files.getLastModifiedTime(entry, LinkOption.NOFOLLOW_LINKS).toInstant().isBefore(cutoff)) continue;
                 if (Files.deleteIfExists(entry)) deleted++;
             }
         }
         return deleted;
+    }
+
+    private static boolean isReclaimableTemporaryName(String name) {
+        return (name.startsWith(PREPARED_SNAPSHOT_PREFIX) || name.startsWith(POINTER_TEMPORARY_PREFIX))
+                && name.endsWith(TEMPORARY_SUFFIX);
     }
 
     RetentionResult applyPolicyLocked(
