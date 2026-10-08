@@ -153,7 +153,7 @@ gitleaks dir . --redact=100 --report-format json --report-path <hors dépôt>/wo
 
 ### Plugin IntelliJ (Gradle, hors réacteur)
 
-Gradle n'est pas installé sur le poste de développement et `minos-intellij/` n'a pas de `gradlew`. Les classes de `minos-intellij/build/` peuvent être périmées (le 8 octobre, elles dataient du 12 août alors que les sources avaient changé le 7 octobre) : ne les analysez pas telles quelles. Harnais constaté :
+Depuis le 8 octobre 2026 (H09), `minos-intellij/` a un wrapper Gradle 9.6.1 : `./gradlew test buildPlugin` (le premier lancement télécharge Gradle et la plateforme IntelliJ). Le harnais ci-dessous reste la voie hors ligne. Les classes de `minos-intellij/build/` peuvent être périmées (le 8 octobre, elles dataient du 12 août alors que les sources avaient changé le 7 octobre) : ne les analysez pas telles quelles. Harnais constaté :
 
 1. compiler `src/main/java` avec `javac --release 21` contre `<IDE>/lib/*` (IntelliJ IDEA `IU-261.22158.277`, la plateforme cible de `build.gradle.kts`) et `gson-2.14.0.jar` ; idem pour `src/test/java` avec JUnit 6.1.3 ;
 2. lancer les tests par l'API `LauncherFactory` de JUnit Platform 6.1.3 ;

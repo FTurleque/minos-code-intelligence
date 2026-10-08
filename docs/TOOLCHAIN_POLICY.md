@@ -16,7 +16,7 @@ Local core development should use the Maven Wrapper so plugin and reactor behavi
 ### IntelliJ plugin
 
 - Java: **21**.
-- Gradle: **9.6.1** in CI.
+- Gradle: **9.6.1**, through the wrapper `minos-intellij/gradlew` (distribution SHA-256 pinned in `gradle/wrapper/gradle-wrapper.properties`), locally and in CI.
 - IntelliJ Platform: **2026.1**.
 - IntelliJ Platform Gradle Plugin: version pinned in `minos-intellij/build.gradle.kts`.
 - Qualification: Linux plugin build/structure/verifier plus Windows unit/process-ownership tests.
