@@ -66,9 +66,9 @@ class ActivePointerCorruptionTest {
         return root.resolve(PROJECT.toString()).resolve("active.pointer");
     }
 
-    private static String refusal(Path root) {
-        IOException failure = assertThrows(IOException.class,
-                () -> new FileSymbolSnapshotStore(root).loadActiveKnowledge(PROJECT));
+    private static String refusal(Path root) throws IOException {
+        FileSymbolSnapshotStore store = new FileSymbolSnapshotStore(root);
+        IOException failure = assertThrows(IOException.class, () -> store.loadActiveKnowledge(PROJECT));
         return failure.getMessage();
     }
 }
