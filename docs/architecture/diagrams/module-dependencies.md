@@ -22,7 +22,9 @@ flowchart LR
     minos_mcp["minos-mcp"]
     minos_app["minos-app"]
     minos_engine --> minos_domain
+    minos_runtime_local --> minos_domain
     minos_runtime_local --> minos_engine
+    minos_storage_local --> minos_domain
     minos_storage_local --> minos_engine
     minos_storage_postgresql --> minos_domain
     minos_storage_postgresql --> minos_engine
@@ -45,6 +47,7 @@ flowchart LR
     minos_nexus --> minos_application
     minos_nexus --> minos_bootstrap
     minos_nexus --> minos_domain
+    minos_nexus --> minos_engine
     minos_cli --> minos_application
     minos_cli --> minos_bootstrap
     minos_cli --> minos_domain
@@ -56,6 +59,8 @@ flowchart LR
     minos_api --> minos_engine
     minos_mcp --> minos_application
     minos_mcp --> minos_bootstrap
+    minos_mcp --> minos_domain
+    minos_mcp --> minos_engine
     minos_app --> minos_api
     minos_app --> minos_application
     minos_app --> minos_bootstrap
@@ -77,17 +82,17 @@ flowchart LR
 |---|---|
 | `minos-domain` | — |
 | `minos-engine` | `minos-domain` |
-| `minos-runtime-local` | `minos-engine` |
-| `minos-storage-local` | `minos-engine` |
+| `minos-runtime-local` | `minos-domain`, `minos-engine` |
+| `minos-storage-local` | `minos-domain`, `minos-engine` |
 | `minos-storage-postgresql` | `minos-domain`, `minos-engine`, `minos-storage-local` |
 | `minos-provider-scip` | `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage-local` |
 | `minos-integration-git` | `minos-engine` |
 | `minos-application` | `minos-domain`, `minos-engine` |
 | `minos-bootstrap` | `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |
-| `minos-nexus` | `minos-application`, `minos-bootstrap`, `minos-domain` |
+| `minos-nexus` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
 | `minos-cli` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-nexus` |
 | `minos-api` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
-| `minos-mcp` | `minos-application`, `minos-bootstrap` |
+| `minos-mcp` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
 | `minos-app` | `minos-api`, `minos-application`, `minos-bootstrap`, `minos-cli`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-mcp`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |
 
 Le sens d'une flèche est **module → dépendance directe**. Les dépendances transitives ne sont pas répétées.

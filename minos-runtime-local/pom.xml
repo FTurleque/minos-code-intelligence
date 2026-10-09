@@ -14,6 +14,12 @@
     <description>Provider-neutral local process execution and runtime management infrastructure.</description>
 
     <dependencies>
+        <!-- ADR 0058: used directly, so declared (was reached transitively). -->
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-domain</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.minos</groupId>
             <artifactId>minos-engine</artifactId>

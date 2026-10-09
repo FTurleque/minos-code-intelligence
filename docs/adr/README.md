@@ -79,6 +79,7 @@ Les numéros 0048–0054 sont utilisés par l'étude proposée dans la PR #333, 
 | [0055](0055-unifier-les-adaptateurs-de-stockage.md) | Un module minos-storage, packages local/PostgreSQL et codec partagé | Accepted — à implémenter |
 | [0056](0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — à implémenter |
 | [0057](0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels |
+| [0058](0058-declarer-les-usages-de-modules.md) | Tout module utilisé est déclaré ; la règle ArchUnit stricte devient obligatoire | Accepted |
 
 [Backlog, tâches et démarrage Claude](../roadmap/storage-hexagonal-2026-10/README.md).
 
