@@ -51,25 +51,21 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
-            <version>2.0.5</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>1.21.4</version>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>1.21.4</version>
+            <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <version>2.0.20</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -111,6 +107,9 @@
           module (see their <version> elements above) defaults to an older API.
           Pin only the API level here; do not force a deprecated provider strategy,
           so Npipe discovery can still select the available Windows pipe.
+          The socket override is the path Ryuk mounts INSIDE its Linux container, not the
+          client pipe: with the Windows pipe there, Ryuk never starts, and the PostgreSQL
+          container of a killed test JVM stayed behind (MINOS-AUD-H24).
         -->
         <profile>
             <id>windows-docker-desktop-testcontainers</id>
@@ -128,8 +127,7 @@
                             </systemPropertyVariables>
                             <environmentVariables>
                                 <DOCKER_HOST>npipe:////./pipe/dockerDesktopLinuxEngine</DOCKER_HOST>
-                                <TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>//./pipe/dockerDesktopLinuxEngine</TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>
-                                <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                                <TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>/var/run/docker.sock</TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>
                             </environmentVariables>
                         </configuration>
                     </plugin>
