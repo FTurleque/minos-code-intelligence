@@ -24,7 +24,7 @@ Le POM parent utilise `${revision}` ; sans `-am`, Maven ne résout pas les modul
 
 ### D5. `-Duser.dir` pour les JVM de PIT
 
-`pitest-maven` n'a pas de paramètre `workingDirectory`. `HostedProductionBoundaryTest` lit `minos-engine/src/main/java/…` en chemin relatif et échoue sans correctif (constaté, PIT refuse alors de muter). Le contournement `-Duser.dir=${maven.multiModuleProjectDirectory}` reproduit le répertoire de travail de Surefire. Rejeté : exclure ce test (il perdrait un test qui contrôle le code visé) ; modifier le test (hors périmètre « intégration des outils »). La solution propre est consignée comme constat.
+`pitest-maven` n'a pas de paramètre `workingDirectory`. `HostedProductionBoundaryTest` lit `minos-engine/src/main/java/…` en chemin relatif et échoue sans correctif (constaté, PIT refuse alors de muter). Le contournement `-Duser.dir=${maven.multiModuleProjectDirectory}` reproduit le répertoire de travail de Surefire. Rejeté : exclure ce test (il perdrait un test qui contrôle le code visé) ; modifier le test (hors périmètre « intégration des outils »). La solution propre est consignée comme constat. **Décision du 2026-10-09** : `-Duser.dir` reste. Ce n'est pas un contournement isolé mais la convention du réacteur : Surefire lance tous les tests depuis la racine (`workingDirectory`), et plusieurs tests en dépendent (`fixtures/`, racine qui normalise les chemins des références de caractérisation). `HostedProductionBoundaryTest` et `Golden` cherchent maintenant la racine eux-mêmes.
 
 ### D6. Versions
 
