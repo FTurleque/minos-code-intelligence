@@ -23,6 +23,7 @@ public final class SnapshotRetentionService {
     /** Aligned on the resume TTL (ADR 0039): older prepared-snapshot temporaries are orphans. */
     public static final Duration DEFAULT_ORPHAN_MAX_AGE = Duration.ofHours(24);
     private static final String PREPARED_SNAPSHOT_PREFIX = ".snapshot-";
+    private static final String POINTER_TEMPORARY_PREFIX = ".active-";
     private static final String TEMPORARY_SUFFIX = ".tmp";
 
     private final SnapshotRepository repository;
@@ -93,7 +94,9 @@ public final class SnapshotRetentionService {
      * only be the residue of a staging interrupted mid-write. Recent temporaries are left alone
      * because a staging in progress writes its temporary before it takes the project lease; the
      * age check and the deletion happen under that lease, so a publication cannot slip between them.
-     * Active-pointer temporaries ({@code .active-*.tmp}) are never touched.
+     * Active-pointer temporaries ({@code .active-*.tmp}) older than {@code maxAge} are reclaimed by
+     * the same rule (MINOS-AUD-H13): a promotion writes its pointer temporary and renames it over the
+     * active pointer within one lease, so an old one is the residue of a promotion killed mid-write.
      */
     public int deleteOrphanPreparedSnapshots(UUID projectId, Instant now, Duration maxAge) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
@@ -112,14 +115,23 @@ public final class SnapshotRetentionService {
         int deleted = 0;
         try (DirectoryStream<Path> entries = Files.newDirectoryStream(directory)) {
             for (Path entry : entries) {
-                String name = entry.getFileName().toString();
-                if (!name.startsWith(PREPARED_SNAPSHOT_PREFIX) || !name.endsWith(TEMPORARY_SUFFIX)) continue;
-                if (Files.isSymbolicLink(entry) || !Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)) continue;
-                if (!Files.getLastModifiedTime(entry, LinkOption.NOFOLLOW_LINKS).toInstant().isBefore(cutoff)) continue;
-                if (Files.deleteIfExists(entry)) deleted++;
+                if (isStaleTemporary(entry, cutoff) && Files.deleteIfExists(entry)) deleted++;
             }
         }
         return deleted;
+    }
+
+    /** A regular (not linked) prepared-snapshot or pointer temporary last modified before {@code cutoff}. */
+    private static boolean isStaleTemporary(Path entry, Instant cutoff) throws IOException {
+        return isReclaimableTemporaryName(entry.getFileName().toString())
+                && !Files.isSymbolicLink(entry)
+                && Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)
+                && Files.getLastModifiedTime(entry, LinkOption.NOFOLLOW_LINKS).toInstant().isBefore(cutoff);
+    }
+
+    private static boolean isReclaimableTemporaryName(String name) {
+        return (name.startsWith(PREPARED_SNAPSHOT_PREFIX) || name.startsWith(POINTER_TEMPORARY_PREFIX))
+                && name.endsWith(TEMPORARY_SUFFIX);
     }
 
     RetentionResult applyPolicyLocked(
