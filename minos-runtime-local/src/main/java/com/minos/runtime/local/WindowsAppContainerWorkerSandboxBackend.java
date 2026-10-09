@@ -1,5 +1,6 @@
 package com.minos.runtime.local;
 
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.FileTreeOperations;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
@@ -425,7 +426,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     }
 
     private static String head(Path output) throws IOException {
-        try (var in = Files.newInputStream(output)) {
+        try (var in = ConfinedFileOpener.openRegularFileNoFollow(output)) {
             return new String(in.readNBytes(8192), StandardCharsets.UTF_8).trim();
         }
     }
