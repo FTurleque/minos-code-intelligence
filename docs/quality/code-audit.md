@@ -1,6 +1,6 @@
 # Audit de code outillé : SpotBugs, PIT, ArchUnit, Dependency-Check et Gitleaks
 
-MINOS dispose de cinq outils d'audit. Quatre sont **à la demande**, hors du build habituel : SpotBugs (analyse statique du bytecode), PIT (tests de mutation), OWASP Dependency-Check (vulnérabilités connues des dépendances) et Gitleaks (secrets dans les fichiers et l'historique Git). Le cinquième, ArchUnit, est une bibliothèque de test : ses règles établies tournent dans `clean verify` avec les autres tests de `minos-app`. Aucun des quatre premiers n'est un contrôle de fusion.
+MINOS dispose de cinq outils d'audit. Quatre sont **à la demande**, hors du build habituel : SpotBugs (analyse statique du bytecode), PIT (tests de mutation), OWASP Dependency-Check (vulnérabilités connues des dépendances) et Gitleaks (secrets dans les fichiers et l'historique Git). Le cinquième, ArchUnit, est une bibliothèque de test : ses règles établies tournent dans `clean verify` avec les autres tests de `minos-app`. Depuis le 9 octobre 2026 (H06), Gitleaks est aussi un **contrôle de PR** : le workflow `secret-scan.yml` analyse tout l'historique de chaque PR (il ne bloque la fusion que si la protection de branche l'exige) ; SpotBugs, PIT et Dependency-Check restent à la demande.
 
 - Couverture mesurée, registre des exécutions, état de référence et point de reprise : [code-audit-couverture.md](code-audit-couverture.md).
 - Constats qualifiés et plan de correction : [code-audit-constats.md](code-audit-constats.md).
@@ -150,6 +150,10 @@ gitleaks dir . --redact=100 --report-format json --report-path <hors dépôt>/wo
 ```
 
 `--redact=100` remplace chaque valeur par `REDACTED` dans le rapport ; les rapports s'écrivent **hors du périmètre analysé** pour ne pas être réanalysés. Pour qualifier une alerte sans afficher la valeur, ne publiez que sa **forme** (longueur, alphabet hexadécimal ou base 64) et la ligne masquée. La règle `sourcegraph-access-token` de la configuration par défaut correspond à **toute** chaîne hexadécimale de 40 caractères : épinglages d'actions GitHub, SHA de commit, versions d'outils.
+
+`.gitleaks.toml`, à la racine, garde les règles par défaut et n'ajoute que des listes d'autorisation **liées à une règle et à une forme** (action épinglée par SHA, commit cité en tête d'un rapport d'exécution, version d'outil de `embedded-tools.json`, clé HMAC et fausse clé Google des tests). Gitleaks le charge seul quand il analyse le dépôt. Vérifié le 9 octobre : 23 alertes sur l'historique local avec les seules règles par défaut, 0 avec la configuration (historique local et miroir) ; un jeton planté à côté de chaque forme autorisée reste signalé. Toute nouvelle exception suit la même règle : une règle, une forme, jamais un fichier entier.
+
+En CI, `secret-scan.yml` (sur chaque PR vers `main` et `develop`) installe Gitleaks 8.30.1 après vérification de sa somme SHA-256, analyse l'historique complet (`fetch-depth: 0`) avec `--redact=100 --exit-code 1` et publie le rapport rédigé en cas d'échec.
 
 ### Plugin IntelliJ (Gradle, hors réacteur)
 

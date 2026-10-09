@@ -1,0 +1,42 @@
+# Gitleaks configuration (MINOS-AUD-H06, docs/quality/code-audit.md).
+#
+# The default rules stay in force. Each allowlist below is bound to ONE default rule and to the SHAPE of a known
+# false positive, never to a whole file or directory, so a real secret written next to one of them is still
+# reported. The audit of 2026-10-08 traced every default-rule alert of the history to one of these shapes
+# (docs/quality/code-audit-couverture.md, section 3.6).
+
+title = "MINOS"
+
+[extend]
+useDefault = true
+
+# sourcegraph-access-token matches any 40-character hexadecimal string, which is also the shape of a Git object id.
+[[allowlists]]
+description = "Git object ids: actions pinned by commit SHA"
+targetRules = ["sourcegraph-access-token"]
+regexTarget = "line"
+regexes = ['''uses:\s*[\w.-]+/[\w./-]+@[0-9a-f]{40}\b''']
+
+[[allowlists]]
+description = "Git object ids: commits cited in the execution reports"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+paths = ['''(?:^|[/\\])docs[/\\].*\.md$''']
+regexTarget = "line"
+regexes = ['''^\s*(?:Base|Qualified HEAD|Validated HEAD|Merge develop)\s*:\s*(?:\S+\s*@\s*)?[0-9a-f]{40}\s*$''']
+
+[[allowlists]]
+description = "Git object ids: commit-pinned tool versions of the SCIP runtime manifest"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+paths = ['''(?:^|[/\\])embedded-tools\.json$''']
+regexTarget = "line"
+regexes = ['''^\s*"(?:version|url|payload)"\s*:\s*"[^"]*[0-9a-f]{40}[^"]*",?\s*$''']
+
+# Test fixtures that look like credentials on purpose.
+[[allowlists]]
+description = "Test fixtures: HMAC test key and the fake Google API key of the redaction tests"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(?:^|[/\\])minos-[\w-]+[/\\]src[/\\]test[/\\]''']
+regexes = ['''^0123456789abcdef0123456789abcdef$''', '''^AIzaSyD-abcdef1234$''']
