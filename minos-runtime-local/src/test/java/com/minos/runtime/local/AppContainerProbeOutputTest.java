@@ -26,7 +26,7 @@ class AppContainerProbeOutputTest {
     void aProbeWritingMoreThanAPipeHoldsCompletesWithinTheTimeout(@TempDir Path root) throws Exception {
         Path output = root.resolve("probe-output.log");
 
-        boolean succeeded = WindowsAppContainerWorkerSandboxBackend.runProbe(
+        boolean succeeded = WindowsAppContainerWorkerSandboxBackend.probeSucceeds(
                 powershell("[Console]::Out.Write('w' * 1048576); exit 0"), output, Duration.ofSeconds(30));
 
         assertTrue(succeeded, "a probe that exits 0 after a large output must succeed, not time out");
@@ -35,7 +35,7 @@ class AppContainerProbeOutputTest {
 
     @Test
     void aFailingProbeIsStillAFailure(@TempDir Path root) throws Exception {
-        boolean succeeded = WindowsAppContainerWorkerSandboxBackend.runProbe(
+        boolean succeeded = WindowsAppContainerWorkerSandboxBackend.probeSucceeds(
                 powershell("Write-Output 'refused'; exit 3"), root.resolve("probe-output.log"), Duration.ofSeconds(30));
 
         assertFalse(succeeded);

@@ -378,7 +378,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                     Duration.ofSeconds(15));
             IndexerProcessPlan sandboxed = sandboxPlan(original, run, WorkerNetworkPolicy.DENY);
             ProcessBuilder probe = new ProcessBuilder(sandboxed.command()).directory(working.toFile());
-            return runProbe(probe, probeRoot.resolve("probe-output.log"), Duration.ofSeconds(15));
+            return probeSucceeds(probe, probeRoot.resolve("probe-output.log"), Duration.ofSeconds(15));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return false;
@@ -411,7 +411,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
      * warning per ownerless recovery journal; with enough of them a pipe fills up, the launcher blocks on its write,
      * and the probe timed out and reported the sandbox unavailable although it worked.
      */
-    static boolean runProbe(ProcessBuilder builder, Path output, Duration timeout) throws IOException, InterruptedException {
+    static boolean probeSucceeds(ProcessBuilder builder, Path output, Duration timeout) throws IOException, InterruptedException {
         Process process = builder.redirectErrorStream(true).redirectOutput(output.toFile()).start();
         if (!awaitProbeCompletion(process, timeout)) {
             ProcessTreeTermination.terminateTree(process, Duration.ZERO, Duration.ofSeconds(5));
