@@ -377,16 +377,8 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                     run.resolve("probe.scip"),
                     Duration.ofSeconds(15));
             IndexerProcessPlan sandboxed = sandboxPlan(original, run, WorkerNetworkPolicy.DENY);
-            Process process = new ProcessBuilder(sandboxed.command())
-                    .directory(working.toFile())
-                    .redirectErrorStream(true)
-                    .start();
-            if (!awaitProbeCompletion(process, Duration.ofSeconds(15))) {
-                ProcessTreeTermination.terminateTree(process, Duration.ZERO, Duration.ofSeconds(5));
-                LOGGER.log(System.Logger.Level.WARNING, "MINOS Windows AppContainer capability probe timed out");
-                return false;
-            }
-            return probeExitedCleanly(process);
+            ProcessBuilder probe = new ProcessBuilder(sandboxed.command()).directory(working.toFile());
+            return runProbe(probe, probeRoot.resolve("probe-output.log"), Duration.ofSeconds(15));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return false;
@@ -414,12 +406,28 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         }
     }
 
-    private static boolean probeExitedCleanly(Process process) throws IOException {
-        String output = new String(process.getInputStream().readNBytes(8192), StandardCharsets.UTF_8).trim();
+    /**
+     * MINOS-AUD-H18: the probe's output goes to a file, never to a pipe read only after exit. The launcher writes one
+     * warning per ownerless recovery journal; with enough of them a pipe fills up, the launcher blocks on its write,
+     * and the probe timed out and reported the sandbox unavailable although it worked.
+     */
+    static boolean runProbe(ProcessBuilder builder, Path output, Duration timeout) throws IOException, InterruptedException {
+        Process process = builder.redirectErrorStream(true).redirectOutput(output.toFile()).start();
+        if (!awaitProbeCompletion(process, timeout)) {
+            ProcessTreeTermination.terminateTree(process, Duration.ZERO, Duration.ofSeconds(5));
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS Windows AppContainer capability probe timed out");
+            return false;
+        }
         if (process.exitValue() == 0) return true;
         LOGGER.log(System.Logger.Level.WARNING,
-                "MINOS Windows AppContainer capability probe failed (exit=" + process.exitValue() + "): " + output);
+                "MINOS Windows AppContainer capability probe failed (exit=" + process.exitValue() + "): " + head(output));
         return false;
+    }
+
+    private static String head(Path output) throws IOException {
+        try (var in = Files.newInputStream(output)) {
+            return new String(in.readNBytes(8192), StandardCharsets.UTF_8).trim();
+        }
     }
 
     private static void writePlan(
