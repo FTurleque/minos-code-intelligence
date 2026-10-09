@@ -16,11 +16,12 @@ class HostedReadPermissionTest {
     @Test
     void aViewerCannotReadTheAuditTrail() throws Exception {
         HostedControlPlaneTestSupport.Harness harness = HostedControlPlaneTestSupport.harness();
+        HostedControlPlaneService service = harness.service();
         String owner = harness.bootstrapOwner();
         String viewer = harness.grantAndIssue(owner, "viewer", HostedRole.VIEWER);
         long chainedBefore = harness.state().auditSequence();
 
-        SecurityException failure = assertThrows(SecurityException.class, () -> harness.service().audit(viewer, 10));
+        SecurityException failure = assertThrows(SecurityException.class, () -> service.audit(viewer, 10));
         assertEquals("hosted permission denied: AUDIT_READ", failure.getMessage());
         assertEquals(chainedBefore, harness.state().auditSequence(), "a read refusal is not chained (ADR 0035)");
     }
@@ -28,22 +29,24 @@ class HostedReadPermissionTest {
     @Test
     void aContributorCannotReadTheAuditTrailNorTheRetentionPlan() throws Exception {
         HostedControlPlaneTestSupport.Harness harness = HostedControlPlaneTestSupport.harness();
+        HostedControlPlaneService service = harness.service();
         String owner = harness.bootstrapOwner();
         String contributor = harness.grantAndIssue(owner, "contributor", HostedRole.CONTRIBUTOR);
 
         assertEquals("hosted permission denied: AUDIT_READ",
-                assertThrows(SecurityException.class, () -> harness.service().audit(contributor, 10)).getMessage());
+                assertThrows(SecurityException.class, () -> service.audit(contributor, 10)).getMessage());
         assertEquals("hosted permission denied: RETENTION_MANAGE",
-                assertThrows(SecurityException.class, () -> harness.service().retentionPlan(contributor)).getMessage());
+                assertThrows(SecurityException.class, () -> service.retentionPlan(contributor)).getMessage());
     }
 
     @Test
     void anAuditorReadsTheAuditTrailButNotTheRetentionPlan() throws Exception {
         HostedControlPlaneTestSupport.Harness harness = HostedControlPlaneTestSupport.harness();
+        HostedControlPlaneService service = harness.service();
         String owner = harness.bootstrapOwner();
         String auditor = harness.grantAndIssue(owner, "auditor", HostedRole.AUDITOR);
 
-        assertDoesNotThrow(() -> harness.service().audit(auditor, 10));
-        assertThrows(SecurityException.class, () -> harness.service().retentionPlan(auditor));
+        assertDoesNotThrow(() -> service.audit(auditor, 10));
+        assertThrows(SecurityException.class, () -> service.retentionPlan(auditor));
     }
 }
