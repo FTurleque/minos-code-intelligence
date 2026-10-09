@@ -96,6 +96,9 @@ pitest {
     timestampedReports = false
     failWhenNoMutations = false
     jvmArgs = listOf("-Xmx512m")
+    // recalcitrantProcessForcedKill goes through IntelliJ's UnixProcessManager, whose native C library the PIT minion
+    // cannot load on Linux ("Couldn't load c library"); it passes under `gradle test`. PIT refuses a red baseline.
+    excludedTestClasses = setOf("com.minos.intellij.protocol.MinosProcessSupervisorTest")
 }
 
 // PIT runs the tests outside the IntelliJ test sandbox: it needs the platform classes the plugin compiles against.
