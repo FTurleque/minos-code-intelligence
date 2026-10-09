@@ -4,7 +4,7 @@ MINOS dispose de cinq outils d'audit. Quatre sont **à la demande**, hors du bui
 
 - Couverture mesurée, registre des exécutions, état de référence et point de reprise : [code-audit-couverture.md](code-audit-couverture.md).
 - Constats qualifiés et plan de correction : [code-audit-constats.md](code-audit-constats.md).
-- Changements OpenSpec : `openspec/changes/ajouter-audit-spotbugs-pitest/` (intégration initiale) et les changements cités dans les constats.
+- Changements OpenSpec : `openspec/changes/archive/2026-10-09-ajouter-audit-spotbugs-pitest/` (intégration initiale, archivé ; exigences dans `openspec/specs/audit-qualite-code`) et les changements cités dans les constats.
 
 ## Rôle respectif des outils
 
