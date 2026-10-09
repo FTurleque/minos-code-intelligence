@@ -306,11 +306,11 @@ Les lots SpotBugs du § 4 (1 à 6) restent valables : les 197 alertes du réacte
 | Changement | Constats | Statut |
 |---|---|---|
 | `ajouter-audit-spotbugs-pitest` (existant, 14/18) | intégration initiale | tâches 5.1 à 5.4 ouvertes ; 5.3 reprise par `renforcer-tests-revelees-par-mutation` |
-| `etendre-audit-outille-a-tout-le-perimetre` | H01, H02, H04, H06, H08 (mesure), H09, H21 | 11/13 au 2026-10-09 ; restent la clé NVD (H04) et un run de `code-audit.yml` sur GitHub |
+| `etendre-audit-outille-a-tout-le-perimetre` | H01, H02, H04, H06, H08 (mesure), H09, H21 | 12/13 au 2026-10-09 ; reste la clé NVD (H04) ; `code-audit.yml` validé (run 37976513603) |
 | `renforcer-tests-revelees-par-mutation` | H07, H14, H15 | **archivé** le 2026-10-09 (`archive/2026-10-09-…`), exigences reportées dans `specs/controle-tenant-heberge` |
 | `couvrir-reprise-apres-interruption-du-stockage` | H12, H13 | **archivé** le 2026-10-09, nouvelle spec `specs/persistance-snapshots` |
 | `corriger-documentation-plugin-et-suivi-audit` | H10, H11, H19 | **archivé** le 2026-10-09, exigence reportée dans `specs/client-intellij` |
 | `aligner-dependances-de-test-testcontainers` | H03, H05, H24 | 6/8 au 2026-10-09 ; restent la décision `dependencyConvergence` et le rejeu Dependency-Check (H03, attend docker-java) |
-| `revoquer-droits-appcontainer-apres-arret-brutal` | H22, H23 | 6/7 au 2026-10-09 ; reste le PIT de `minos-runtime-local` sur un runner jetable |
+| `revoquer-droits-appcontainer-apres-arret-brutal` | H22, H23 | **archivé** le 2026-10-09 (PIT `minos-runtime-local` sur runner Linux jetable ; tests Windows du bac à sable encore à muter sur Windows), exigences reportées dans `specs/confinement-code-non-fiable` |
 
 Traçabilité : constat (§ 5) → preuve (fiche, exécution E.. de la couverture) → exigence (spec du changement) → tâche (`tasks.md`) → validation (commande et rapport à rejouer).

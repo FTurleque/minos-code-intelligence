@@ -20,7 +20,7 @@
 
 ## 4. Audit
 
-- [ ] 4.1 Rejouer le PIT de `minos-runtime-local` sur un runner éphémère (`docs/quality/code-audit-couverture.md` § 7.3) ; consigner les résultats.
+- [x] 4.1 Rejouer le PIT de `minos-runtime-local` sur un runner éphémère (`docs/quality/code-audit-couverture.md` § 7.3) ; consigner les résultats. — Runner GitHub jetable, [run 37976513603](https://github.com/FTurleque/minos-code-intelligence/actions/runs/37976513603) : 2 013 mutants, 877 tués par une assertion (44 %, 60 % des couverts), 567 survivants, 547 sans couverture, 22 délais. Les tests Windows du bac à sable ne s'exécutent pas sur Linux : le PIT de leurs classes reste à faire sur un runner Windows jetable.
 
 ## Évidence d'implémentation (2026-10-08)
 
