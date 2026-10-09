@@ -1,4 +1,4 @@
-name: "${MINOS_COMPOSE_PROJECT}"
+name: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
 
 # Resource ceilings (audit S11), one definition per role, overridable from the runtime .env.
 # Merged into each service with `<<: *limits-<role>`. `memswap_limit` equals `mem_limit`: no swap.
@@ -27,8 +27,8 @@ x-limits-job: &limits-job
 services:
   minos-mcp:
     <<: *limits-query
-    image: "${MINOS_IMAGE}"
-    container_name: "${MINOS_CONTAINER_NAME}"
+    image: "${MINOS_IMAGE:?MINOS_IMAGE is required}"
+    container_name: "${MINOS_CONTAINER_NAME:?MINOS_CONTAINER_NAME is required}"
     entrypoint: [sleep, infinity]
     init: true
     network_mode: none
@@ -43,7 +43,7 @@ services:
     working_dir: /workspace/projects
     volumes:
       - type: bind
-        source: "${MINOS_DATA_DIR}"
+        source: "${MINOS_DATA_DIR:?MINOS_DATA_DIR is required}"
         target: /var/lib/minos
         read_only: true
       - type: volume
@@ -51,7 +51,7 @@ services:
         target: /var/lib/minos/tools
         read_only: true
       - type: bind
-        source: "${MINOS_PROJECTS_DIR}"
+        source: "${MINOS_PROJECTS_DIR:?MINOS_PROJECTS_DIR is required}"
         target: /workspace/projects
         read_only: true
     read_only: true
@@ -62,14 +62,14 @@ services:
     restart: unless-stopped
     stop_grace_period: 10s
     labels:
-      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
-      io.minos.version: "${MINOS_VERSION}"
-      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
+      io.minos.version: "${MINOS_VERSION:?MINOS_VERSION is required}"
+      io.minos.revision: "${MINOS_GIT_COMMIT:?MINOS_GIT_COMMIT is required}"
       io.minos.runtime-plane: query
 
   minos-admin:
     <<: *limits-admin
-    image: "${MINOS_IMAGE}"
+    image: "${MINOS_IMAGE:?MINOS_IMAGE is required}"
     entrypoint: [java, -cp, /opt/minos/minos.jar, com.minos.cli.MinosLauncher]
     init: true
     environment:
@@ -89,14 +89,14 @@ services:
     working_dir: /workspace/projects
     volumes:
       - type: bind
-        source: "${MINOS_DATA_DIR}"
+        source: "${MINOS_DATA_DIR:?MINOS_DATA_DIR is required}"
         target: /var/lib/minos
       - type: volume
         source: minos-provider-tools
         target: /var/lib/minos/tools
         read_only: true
       - type: bind
-        source: "${MINOS_PROJECTS_DIR}"
+        source: "${MINOS_PROJECTS_DIR:?MINOS_PROJECTS_DIR is required}"
         target: /workspace/projects
         read_only: true
     read_only: true
@@ -107,16 +107,16 @@ services:
     security_opt: [no-new-privileges:true]
     restart: "no"
     labels:
-      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
-      io.minos.version: "${MINOS_VERSION}"
-      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
+      io.minos.version: "${MINOS_VERSION:?MINOS_VERSION is required}"
+      io.minos.revision: "${MINOS_GIT_COMMIT:?MINOS_GIT_COMMIT is required}"
       io.minos.runtime-plane: admin
 
   minos-bootstrap:
     <<: *limits-job
-    image: "${MINOS_IMAGE}"
+    image: "${MINOS_IMAGE:?MINOS_IMAGE is required}"
     entrypoint: [java, -cp, /opt/minos/minos.jar, com.minos.cli.DockerRuntimeBootstrap]
-    command: [configure-project-paths, "${MINOS_HOST_PROJECTS_ROOT}", /workspace/projects]
+    command: [configure-project-paths, "${MINOS_HOST_PROJECTS_ROOT:?MINOS_HOST_PROJECTS_ROOT is required}", /workspace/projects]
     init: true
     network_mode: none
     environment:
@@ -124,7 +124,7 @@ services:
       MINOS_RUNTIME_LOCATION: docker
     volumes:
       - type: bind
-        source: "${MINOS_DATA_DIR}"
+        source: "${MINOS_DATA_DIR:?MINOS_DATA_DIR is required}"
         target: /var/lib/minos
     read_only: true
     tmpfs:
@@ -133,9 +133,9 @@ services:
     security_opt: [no-new-privileges:true]
     restart: "no"
     labels:
-      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
-      io.minos.version: "${MINOS_VERSION}"
-      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
+      io.minos.version: "${MINOS_VERSION:?MINOS_VERSION is required}"
+      io.minos.revision: "${MINOS_GIT_COMMIT:?MINOS_GIT_COMMIT is required}"
       io.minos.runtime-plane: bootstrap
 
   # Docker Desktop's WSL2 bind-mount translation always shows a freshly created
@@ -156,7 +156,7 @@ services:
   # back only those two capabilities instead of the full default set.
   minos-data-bootstrap:
     <<: *limits-job
-    image: "${MINOS_IMAGE}"
+    image: "${MINOS_IMAGE:?MINOS_IMAGE is required}"
     entrypoint: [/bin/sh, -c]
     command:
       - |
@@ -169,7 +169,7 @@ services:
     network_mode: none
     volumes:
       - type: bind
-        source: "${MINOS_DATA_DIR}"
+        source: "${MINOS_DATA_DIR:?MINOS_DATA_DIR is required}"
         target: /var/lib/minos
     read_only: true
     tmpfs:
@@ -179,14 +179,14 @@ services:
     security_opt: [no-new-privileges:true]
     restart: "no"
     labels:
-      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
-      io.minos.version: "${MINOS_VERSION}"
-      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
+      io.minos.version: "${MINOS_VERSION:?MINOS_VERSION is required}"
+      io.minos.revision: "${MINOS_GIT_COMMIT:?MINOS_GIT_COMMIT is required}"
       io.minos.runtime-plane: data-bootstrap
 
   minos-tools-bootstrap:
     <<: *limits-job
-    image: "${MINOS_IMAGE}"
+    image: "${MINOS_IMAGE:?MINOS_IMAGE is required}"
     entrypoint: [/bin/sh, -c]
     command:
       - |
@@ -204,7 +204,7 @@ services:
     init: true
     network_mode: none
     environment:
-      MINOS_GIT_COMMIT: "${MINOS_GIT_COMMIT}"
+      MINOS_GIT_COMMIT: "${MINOS_GIT_COMMIT:?MINOS_GIT_COMMIT is required}"
     volumes:
       - type: volume
         source: minos-provider-tools
@@ -216,14 +216,14 @@ services:
     security_opt: [no-new-privileges:true]
     restart: "no"
     labels:
-      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
-      io.minos.version: "${MINOS_VERSION}"
-      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
+      io.minos.version: "${MINOS_VERSION:?MINOS_VERSION is required}"
+      io.minos.revision: "${MINOS_GIT_COMMIT:?MINOS_GIT_COMMIT is required}"
       io.minos.runtime-plane: tools-bootstrap
 
   minos-provider-probe:
     <<: *limits-job
-    image: "${MINOS_IMAGE}"
+    image: "${MINOS_IMAGE:?MINOS_IMAGE is required}"
     entrypoint: [/bin/sh, -c]
     command:
       - |
@@ -271,13 +271,13 @@ services:
     security_opt: [no-new-privileges:true]
     restart: "no"
     labels:
-      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
-      io.minos.version: "${MINOS_VERSION}"
-      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
+      io.minos.version: "${MINOS_VERSION:?MINOS_VERSION is required}"
+      io.minos.revision: "${MINOS_GIT_COMMIT:?MINOS_GIT_COMMIT is required}"
       io.minos.runtime-plane: provider-probe
 
 volumes:
   minos-provider-tools:
     labels:
-      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
       io.minos.runtime-plane: provider-tools
