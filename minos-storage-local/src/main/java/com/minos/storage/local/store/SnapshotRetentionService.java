@@ -115,14 +115,18 @@ public final class SnapshotRetentionService {
         int deleted = 0;
         try (DirectoryStream<Path> entries = Files.newDirectoryStream(directory)) {
             for (Path entry : entries) {
-                String name = entry.getFileName().toString();
-                if (!isReclaimableTemporaryName(name)) continue;
-                if (Files.isSymbolicLink(entry) || !Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)) continue;
-                if (!Files.getLastModifiedTime(entry, LinkOption.NOFOLLOW_LINKS).toInstant().isBefore(cutoff)) continue;
-                if (Files.deleteIfExists(entry)) deleted++;
+                if (isStaleTemporary(entry, cutoff) && Files.deleteIfExists(entry)) deleted++;
             }
         }
         return deleted;
+    }
+
+    /** A regular (not linked) prepared-snapshot or pointer temporary last modified before {@code cutoff}. */
+    private static boolean isStaleTemporary(Path entry, Instant cutoff) throws IOException {
+        return isReclaimableTemporaryName(entry.getFileName().toString())
+                && !Files.isSymbolicLink(entry)
+                && Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)
+                && Files.getLastModifiedTime(entry, LinkOption.NOFOLLOW_LINKS).toInstant().isBefore(cutoff);
     }
 
     private static boolean isReclaimableTemporaryName(String name) {
