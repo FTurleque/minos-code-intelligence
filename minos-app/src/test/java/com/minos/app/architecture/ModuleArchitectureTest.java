@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 /**
  * Class-level architecture rules over the compiled production classes of every module of the reactor.
@@ -59,8 +58,8 @@ class ModuleArchitectureTest {
     private static final Map<String, Set<String>> ALLOWED = Map.ofEntries(
             Map.entry("minos-domain", Set.of()),
             Map.entry("minos-engine", Set.of("minos-domain")),
-            Map.entry("minos-runtime-local", Set.of("minos-engine")),
-            Map.entry("minos-storage-local", Set.of("minos-engine")),
+            Map.entry("minos-runtime-local", Set.of("minos-domain", "minos-engine")),
+            Map.entry("minos-storage-local", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-storage-postgresql", Set.of("minos-domain", "minos-engine", "minos-storage-local")),
             Map.entry("minos-provider-scip",
                     Set.of("minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local")),
@@ -69,11 +68,11 @@ class ModuleArchitectureTest {
             Map.entry("minos-bootstrap", Set.of("minos-domain", "minos-engine", "minos-application",
                     "minos-runtime-local", "minos-storage-local", "minos-provider-scip", "minos-integration-git",
                     "minos-storage-postgresql")),
-            Map.entry("minos-nexus", Set.of("minos-domain", "minos-application", "minos-bootstrap")),
+            Map.entry("minos-nexus", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
             Map.entry("minos-cli",
                     Set.of("minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap")),
             Map.entry("minos-api", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
-            Map.entry("minos-mcp", Set.of("minos-application", "minos-bootstrap")),
+            Map.entry("minos-mcp", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
             Map.entry("minos-app", Set.of("minos-domain", "minos-engine", "minos-runtime-local",
                     "minos-storage-local", "minos-storage-postgresql", "minos-provider-scip",
                     "minos-integration-git", "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli",
@@ -182,15 +181,12 @@ class ModuleArchitectureTest {
     }
 
     /**
-     * Strict reading of the ADR 0022 / A2 table, <b>a proposal, not an established decision</b>: a module's classes
-     * would only use classes of the modules it is allowed to declare. The table bounds the edges declared in the
-     * POMs; Maven also lets a class use a module reached transitively (for example an adapter calling
-     * {@code com.minos.domain.Preconditions} through minos-engine), and no ADR forbids it. Measured on demand with
-     * {@code -Dminos.audit.archunit.strict=true}; every module is evaluated before the test fails, so the report
-     * lists all undeclared module uses at once (docs/quality/code-audit-constats.md).
+     * ADR 0058: a module's classes only use classes of the modules it declares. The table bounds the edges declared
+     * in the POMs; without this rule Maven would also let a class use a module reached transitively (for example an
+     * adapter calling {@code com.minos.domain.Preconditions} through minos-engine). Every module is evaluated before
+     * the test fails, so the report lists all undeclared module uses at once.
      */
     @Test
-    @EnabledIfSystemProperty(named = "minos.audit.archunit.strict", matches = "true")
     void everyModuleOnlyUsesItsAllowedModules() {
         Map<String, Map<String, Integer>> undeclared = new TreeMap<>();
         List<String> details = new ArrayList<>();

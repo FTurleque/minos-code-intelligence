@@ -49,7 +49,7 @@ Les versions Maven sont des propriétés du `pom.xml` parent (`spotbugs.*`, `pit
 
 | Profil | Activé par défaut | Effet |
 |---|---|---|
-| *(aucun)* | — | `clean verify` ne charge ni SpotBugs, ni PIT, ni Dependency-Check. Les règles ArchUnit établies tournent avec les tests de `minos-app` ; la mesure stricte (`everyModuleOnlyUsesItsAllowedModules`) est sautée sauf `-Dminos.audit.archunit.strict=true` |
+| *(aucun)* | — | `clean verify` ne charge ni SpotBugs, ni PIT, ni Dependency-Check. Les règles ArchUnit établies tournent avec les tests de `minos-app` ; depuis l'ADR 0058, la règle `everyModuleOnlyUsesItsAllowedModules` (aucun usage d'un module non déclaré) en fait partie |
 | `audit-spotbugs` | non | lie le but `spotbugs` (rapport, ne fait jamais échouer) à `verify`. Le contrôle bloquant `spotbugs:check` se lance explicitement |
 | `audit-mutation` | non | déclare `pitest-maven`, sans liaison à une phase ; `targetClasses` et `targetTests` valent `com.minos.*` |
 | `audit-dependency-check` | non | déclare `dependency-check-maven` (non hérité) pour le but `aggregate` à la racine ; dépendances livrées seulement ; rapports HTML, JSON, SARIF dans `target/dependency-check/` |
@@ -100,8 +100,6 @@ python scripts/quality/audit-report-summary.py pit --all
 
 ```bash
 ./mvnw -B -ntp -pl minos-app -am test -Dtest=ModuleArchitectureTest -Dsurefire.failIfNoSpecifiedTests=false
-# mesure stricte (proposition, non établie par un ADR) :
-./mvnw -B -ntp -pl minos-app -am test -Dtest=ModuleArchitectureTest -Dsurefire.failIfNoSpecifiedTests=false -Dminos.audit.archunit.strict=true
 ```
 
 Les règles établies et leur source :
@@ -114,7 +112,7 @@ Les règles établies et leur source :
 | `applicationOnlyKnowsPorts` | ADR 0042 (A2) : `minos-application` ne connaît que des ports |
 | `surfacesDoNotCompileAgainstTheCompositionRootOrAdapters` | ADR 0042 (A2) : les surfaces n'atteignent la racine de composition qu'à l'exécution |
 | `coreModulesStayAtTheBottom` | ADR 0022 : le domaine ne dépend d'aucun module, le moteur du seul domaine |
-| `everyModuleOnlyUsesItsAllowedModules` (opt-in) | **proposition** : lecture stricte de `ALLOWED_DEPENDENCIES` (une classe n'utilise que les modules que son POM a le droit de déclarer). Aucun ADR n'interdit l'usage transitif ; voir le constat MINOS-AUD-H08 |
+| `everyModuleOnlyUsesItsAllowedModules` | ADR 0058 : une classe n'utilise que les modules que son module déclare ; l'usage transitif est interdit (constat MINOS-AUD-H08) |
 
 Le test lit les sorties de compilation depuis le répertoire de travail du dépôt (Surefire `workingDirectory`) : lancez-le après une compilation du réacteur.
 
