@@ -22,4 +22,4 @@
 
 ## 5. Validation
 
-- [ ] 5.1 `./mvnw -B -ntp clean verify` sous Windows et CI Ubuntu ; PIT ciblé sur `com.minos.storage.local.*` pour constater que les nouveaux tests tuent des mutants auparavant survivants.
+- [ ] 5.1 `./mvnw -B -ntp clean verify` sous Windows et CI Ubuntu ; PIT ciblé sur `com.minos.storage.local.*` pour constater que les nouveaux tests tuent des mutants auparavant survivants. — PIT ciblé `com.minos.storage.local.*` le 2026-10-08 (tests d'arrêt brutal exclus : leur JVM fille charge les classes non mutées) : 1 728 mutants, 1 102 tués par une assertion (1 062 à l'audit), 409 survivants (518) ; 90 délais dépassés (18) dus à un build Gradle lancé en parallèle, à rejouer seul. Restent : `clean verify` Windows et Ubuntu.
