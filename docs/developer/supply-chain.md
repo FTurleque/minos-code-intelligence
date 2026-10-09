@@ -131,6 +131,19 @@ Dependabot réécrit **ensemble** le tag et le digest, ou seulement le digest qu
 
 **Ce qui a été vérifié, et ce qui ne l'a pas été.** Rejoué hors ligne sur les fichiers réels (S23-SUIVI, « Renommage des compose ») : le nom est apparié ; les `FROM` des Dockerfile ne le sont pas ; l'analyse lit deux dépendances (`pgvector/pgvector` `0.8.2-pg17`, `ollama/ollama` `0.32.0`) avec leur digest ; la réécriture du défaut interpolé ne change que la ligne visée (digest seul, ou tag et digest). **Non rejoué** : l'interrogation du registre Docker Hub et le choix du tag candidat (lus dans `docker/update_checker.rb`, non exécutés) : la première PR de Dependabot sur ces fichiers est la preuve de bout en bout, à surveiller le lundi suivant la fusion.
 
+## Téléchargements Docker Hub authentifiés
+
+Docker Hub limite les téléchargements anonymes par adresse de runner. Le 9 octobre 2026, la limite (« 429 toomanyrequests ») a fait échouer les images de base (`golang`, `rust`, `eclipse-temurin`), `pgvector` des tests PostgreSQL et les qualifications Docker, contrôles obligatoires compris.
+
+Les jobs Linux qui téléchargent des images passent par `docker/login-action` (épinglé par SHA) quand les secrets du dépôt existent :
+
+| Secret | Contenu |
+|---|---|
+| `DOCKERHUB_USERNAME` | nom du compte Docker Hub |
+| `DOCKERHUB_TOKEN` | jeton d'accès Docker Hub en **lecture seule** (*Account settings → Personal access tokens*, droits « Public Repo Read-only ») |
+
+Jobs concernés : `Verify (ubuntu-24.04)` de `pr-ci.yml` (Testcontainers réutilise la connexion du démon Docker), `docker-release-validation.yml`, `release-promotion-gate.yml`, `docker-upgrade-qualification.yml` et le job PIT de `code-audit.yml`. Sans ces secrets (dépôt non configuré, PR depuis un fork), l'étape est sautée et les téléchargements restent anonymes : rien ne casse, la limite s'applique.
+
 ## Frontière avec la CI
 
 Aucune modification de workflow GitHub Actions n'est incluse dans S5 en juillet 2026. L'épinglage immuable des actions, les checks distants et la branch protection restent dans M21-S2, explicitement en pause jusqu'en août.
