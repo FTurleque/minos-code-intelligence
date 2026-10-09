@@ -159,12 +159,25 @@ jobs:
         os: [ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
 
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
+      # Docker Hub limits anonymous pulls per runner address (429 toomanyrequests on 2026-10-09 stopped base images,
+      # pgvector for the PostgreSQL tests, and the Docker qualifications). With the repository secrets
+      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), pulls are authenticated, Testcontainers
+      # included; without them (forks, secrets not created) this step is skipped and pulls stay anonymous.
+      - name: Log in to Docker Hub (when the secrets exist)
+        if: ${{ runner.os == 'Linux' && env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Assert exact candidate HEAD (Unix)
         if: runner.os != 'Windows'

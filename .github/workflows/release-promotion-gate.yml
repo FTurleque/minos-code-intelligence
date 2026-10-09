@@ -13,8 +13,10 @@ name: Release Promotion Gate
 #
 # GitHub-hosted ubuntu-24.04 only: no privately-registered runner, no personal machine, no private
 # infrastructure repository. This repository is public; runs from forked PRs get the default
-# read-only GITHUB_TOKEN GitHub already grants for `pull_request` (not `pull_request_target`), no
-# secrets are used anywhere in this workflow, and permissions are the minimum each job needs.
+# read-only GITHUB_TOKEN GitHub already grants for `pull_request` (not `pull_request_target`), and
+# permissions are the minimum each job needs. The only secrets read are the optional DOCKERHUB_USERNAME /
+# DOCKERHUB_TOKEN, passed to docker/login-action to authenticate image pulls; GitHub does not expose them to
+# forked PRs, where the login step is skipped and pulls stay anonymous.
 
 on:
   pull_request:
@@ -37,12 +39,25 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
+      # Docker Hub limits anonymous pulls per runner address (429 toomanyrequests on 2026-10-09 stopped base images,
+      # pgvector for the PostgreSQL tests, and the Docker qualifications). With the repository secrets
+      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), pulls are authenticated, Testcontainers
+      # included; without them (forks, secrets not created) this step is skipped and pulls stay anonymous.
+      - name: Log in to Docker Hub (when the secrets exist)
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Assert exact candidate HEAD
         shell: bash
