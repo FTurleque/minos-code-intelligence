@@ -71,7 +71,7 @@ class HostedProductionBoundaryTest {
 
     @Test
     void facadeStaysThinAndCohesiveServicesAreRealSourceFiles(@TempDir Path ignored) throws Exception {
-        Path sourceRoot = Path.of("minos-engine/src/main/java/com/minos/hosted");
+        Path sourceRoot = repositoryRoot().resolve("minos-engine/src/main/java/com/minos/hosted");
         String facade = Files.readString(sourceRoot.resolve("HostedControlPlaneService.java"));
         assertTrue(facade.lines().count() <= 260L, "hosted facade must remain thin");
         for (String component : List.of(
@@ -114,5 +114,15 @@ class HostedProductionBoundaryTest {
             }
             values.put(state.tenantId(), state);
         }
+    }
+
+    /** The reactor root, found from any working directory (Surefire uses the root, PIT the module). */
+    private static Path repositoryRoot() {
+        for (Path directory = Path.of("").toAbsolutePath(); directory != null; directory = directory.getParent()) {
+            if (Files.isRegularFile(directory.resolve("pom.xml")) && Files.isDirectory(directory.resolve("minos-engine"))) {
+                return directory;
+            }
+        }
+        throw new IllegalStateException("reactor root not found above " + Path.of("").toAbsolutePath());
     }
 }

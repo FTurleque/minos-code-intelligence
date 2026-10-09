@@ -32,5 +32,5 @@ Convention de traçabilité : chaque tâche cite `[« nom exact de l'exigence »
 
 - [ ] 5.1 Exécuter les commandes bash sous Linux ou macOS et le workflow `code-audit.yml` (déclenchement manuel) pour les qualifier.
 - [ ] 5.2 Décider du traitement des 197 alertes SpotBugs (corriger, fixer une base, ou exclure les faux positifs démontrés) avant tout contrôle bloquant en CI.
-- [ ] 5.3 Traiter les mutants survivants de `HostedAuditChain.verify` (changement séparé, tests d'abord).
-- [ ] 5.4 Rendre `HostedProductionBoundaryTest` indépendant du répertoire de travail, puis retirer `-Duser.dir` du profil.
+- [x] 5.3 Traiter les mutants survivants de `HostedAuditChain.verify` (changement séparé, tests d'abord). — Fait dans le changement `renforcer-tests-revelees-par-mutation` (H07, P1), commit `5b9ef15b`, archivé le 2026-10-09 ; les 4 gardes de `verify` restées vivantes sont des mutants équivalents (gardes du constructeur de `HostedTenantState`).
+- [x] 5.4 Rendre `HostedProductionBoundaryTest` indépendant du répertoire de travail ; décider du sort de `-Duser.dir` dans le profil. — Décision du 2026-10-09 : `-Duser.dir` reste, c'est la convention de Surefire (`workingDirectory` à la racine) et de nombreux tests en dépendent (`fixtures/`, racine des références de caractérisation). `HostedProductionBoundaryTest` et `Golden` trouvent désormais seuls la racine (vérifié sous Surefire, et sous PIT sans `-Duser.dir` pour `HostedProductionBoundaryTest`).
