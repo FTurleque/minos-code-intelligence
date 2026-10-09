@@ -7,16 +7,16 @@
 ## 1. Test d'abord (machine jetable Windows)
 
 - [x] 1.1 Test Windows : reprise d'un run mort dont un chemin est journalisé sans avoir été accordé (`aJournaledPathWhoseGrantWasNeverAppliedIsRecoveredAsANoOp`) ; la reprise d'un run tué après l'octroi était déjà couverte (`aSandboxWhoseOwnerWasKilledIsRecoveredByTheNextLauncher`).
-- [ ] 1.2 Vérification en fin de classe des tests de bac à sable : aucune entrée de leur SID ne reste.
+- [x] 1.2 Vérification en fin de classe des tests de bac à sable : aucune entrée de leur SID ne reste. — `AppContainerGrantLeakCheck` (extension JUnit) sur `WindowsAppContainerRecoveryOwnershipTest` et `WindowsAppContainerWorkerSandboxBackendTest` : entrées explicites `S-1-15-2-…` du JDK relevées avant et après la classe ; vert (9 + 15 tests). Autotest `AppContainerGrantLeakCheckTest`.
 
 ## 2. Journal et reprise
 
 - [x] 2.1 Journal écrit avant `icacls /grant` dans les trois boucles d'octroi du gabarit ; retrait à la reprise sous la preuve de propriété A01 (existant) ; rejouer `check-minos-01.py`, `check-post228-hardening.py`, `check-audit-remediation-v2.py` et les tests de `WindowsAppContainerRecoveryOwnershipTest`.
-- [ ] 2.2 Amender l'ADR 0038 si la conception le confirme.
+- [x] 2.2 Amender l'ADR 0038 si la conception le confirme. — ADR 0038 § 3 amendée.
 
 ## 3. Diagnostic
 
-- [ ] 3.1 Recensement des entrées orphelines (lecture seule, retrait sur confirmation) ; tests.
+- [x] 3.1 Recensement des entrées orphelines (lecture seule, retrait sur confirmation) ; tests. — `scripts/windows/Find-MinosAppContainerGrants.ps1` : racines `MINOS_HOME	ools`, `JAVA_HOME` et `-Path` ; SID des runs vivants exclus (verrou tenu) ; journaux sans propriétaire prouvable signalés ; `-Remove` sous `ShouldProcess`. Test `OrphanAppContainerGrantDiagnosticTest` (rapport sans changement, `-WhatIf` sans changement, retrait).
 
 ## 4. Audit
 
