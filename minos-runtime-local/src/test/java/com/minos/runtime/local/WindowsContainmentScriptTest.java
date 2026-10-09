@@ -197,8 +197,11 @@ class WindowsContainmentScriptTest {
                 {"readPaths", "Grant-AppContainerDirectory $path $sid '(OI)(CI)RX'"},
                 {"readFiles", "Grant-AppContainerFile $path $sid"},
                 {"writePaths", "Grant-AppContainerDirectory $path $sid '(OI)(CI)M'"}}) {
-            String journal = "        $granted.Add($path)\n"
-                    + "        Write-Recovery $journal $containerProfile $sid $granted\n";
+            // The closing delimiter sits 8 columns left of the content: the text block keeps that 8-space indent.
+            String journal = """
+                            $granted.Add($path)
+                            Write-Recovery $journal $containerProfile $sid $granted
+                    """;
             String apply = "        " + grant[1] + "\n";
             String loop = "    foreach ($path in $" + grant[0] + ") {\n";
             value = replaceExactlyOnce(
