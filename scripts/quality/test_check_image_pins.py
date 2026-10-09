@@ -113,6 +113,14 @@ class CheckImagePinsTest(unittest.TestCase):
     def test_the_minos_image_variable_is_the_only_unpinned_reference_allowed(self):
         self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml": 'services:\n  s:\n    image: "${MINOS_IMAGE}"\n'}))
 
+    def test_a_required_variable_guard_keeps_the_same_rule(self):
+        # MINOS-AUD-H20: ${VAR:?message} is still the launcher-provided variable, nothing more.
+        self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml":
+                                            'services:\n  s:\n    image: "${MINOS_IMAGE:?MINOS_IMAGE is required}"\n'}))
+        failures = self.run_gate({"docker/compose-mcp.prod.yaml":
+                                  'services:\n  s:\n    image: "${OTHER_IMAGE:?OTHER_IMAGE is required}"\n'})
+        self.assertEqual(1, len(failures), failures)
+
     def test_a_second_copy_of_a_compose_pinned_service_image_is_refused(self):
         failures = self.run_gate({
             "docker/Dockerfile.mcp": PINNED_DOCKERFILE,

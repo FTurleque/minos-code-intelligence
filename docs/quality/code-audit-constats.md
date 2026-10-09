@@ -99,30 +99,30 @@ Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité
 
 | ID | Titre | Qualification | Prio | Preuve | Changement OpenSpec |
 |---|---|---|---|---|---|
-| H01 | Les rapports SpotBugs du plugin Maven ne prouvent pas le périmètre analysé | Défaut confirmé (outillage) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
-| H02 | Dependency-Check rapproche deux modules MINOS de CPE tiers (43 CVE du serveur PostgreSQL) | Faux positif | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
+| H01 | Les rapports SpotBugs du plugin Maven ne prouvent pas le périmètre analysé | Défaut confirmé (outillage), **corrigé** (#371 : `spotbugs-cli.py` et `--strict` dans `code-audit.yml`) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
+| H02 | Dependency-Check rapproche deux modules MINOS de CPE tiers (43 CVE du serveur PostgreSQL) | Faux positif, **traité** (#371 : deux suppressions liées à un artefact et un CPE) | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H03 | Quatre CVE dans le client HTTP embarqué par Testcontainers (tests seulement) | Risque | P3 | E | `aligner-dependances-de-test-testcontainers` |
 | H04 | La clé NVD de l'environnement est refusée ; Dependency-Check 13.0.0 ne rafraîchit pas sans clé | Décision ouverte (environnement) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
-| H05 | Testcontainers mélange deux versions majeures (cœur 2.0.5, modules 1.21.4) ; `slf4j-api` ne converge pas | Risque | P3 | E | `aligner-dependances-de-test-testcontainers` |
+| H05 | Testcontainers mélange deux versions majeures (cœur 2.0.5, modules 1.21.4) ; `slf4j-api` ne converge pas | Risque, **corrigé** (#369 : BOM 2.0.5, `slf4j.version`) | P3 | E | `aligner-dependances-de-test-testcontainers` |
 | H06 | Gitleaks n'est ni configuré ni exécuté par la CI ; la règle par défaut ne produit que des faux positifs | **Corrigé** le 2026-10-09 (`.gitleaks.toml`, `secret-scan.yml`) | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H07 | Faiblesses de tests révélées par PIT (chaîne d'audit et autorisation en P1) | Faiblesse de test ; **P1 corrigés** (`5b9ef15b`) | P1 à P3 | E | `renforcer-tests-revelees-par-mutation` |
 | H08 | Usages de modules non déclarés ; surfaces qui consomment directement des ports du moteur | **Décidé** le 2026-10-09 (ADR 0058 : arêtes déclarées, règle stricte obligatoire) | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` (mesure) ; décision par ADR |
-| H09 | Le plugin IntelliJ échappe aux contrôles locaux (hors réacteur, sans Gradle, sorties périmées) | Faiblesse (couverture) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
+| H09 | Le plugin IntelliJ échappe aux contrôles locaux (hors réacteur, sans Gradle, sorties périmées) | Faiblesse (couverture), **corrigée** (#372, #374 : wrapper Gradle, SpotBugs et PIT, job dans `code-audit.yml`) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H10 | La documentation du plugin indique un chemin `…\MINOS\bin\minos.cmd` qui n'existe pas | Défaut confirmé (documentation), **corrigé** (`93093b7a`) | P2 | L | `corriger-documentation-plugin-et-suivi-audit` |
 | H11 | Le suivi de l'audit d'octobre décrit comme « en local / PR ouverte » des correctifs fusionnés | Dérive documentaire | P3 | L | `corriger-documentation-plugin-et-suivi-audit` |
-| H12 | Aucun test d'arrêt brutal entre écriture temporaire et renommage d'un snapshot, de pointeur actif tronqué, ni de migration PostgreSQL d'une base peuplée | Faiblesse de test | P2 | A | `couvrir-reprise-apres-interruption-du-stockage` |
-| H13 | Les pointeurs temporaires `.active-*.tmp` laissés par un arrêt brutal ne sont jamais récupérés | Risque | P3 | A | `couvrir-reprise-apres-interruption-du-stockage` |
+| H12 | Aucun test d'arrêt brutal entre écriture temporaire et renommage d'un snapshot, de pointeur actif tronqué, ni de migration PostgreSQL d'une base peuplée | Faiblesse de test, **couverte** (#368, aucun défaut trouvé) | P2 | A | `couvrir-reprise-apres-interruption-du-stockage` |
+| H13 | Les pointeurs temporaires `.active-*.tmp` laissés par un arrêt brutal ne sont jamais récupérés | Risque, **corrigé** (#368 : balayage après 24 h sous le bail) | P3 | A | `couvrir-reprise-apres-interruption-du-stockage` |
 | H14 | Un refus dont l'identifiant de requête est invalide est rejeté avant l'authentification, sans trace | Défaut confirmé (test rouge), **corrigé** | P3 | E | `renforcer-tests-revelees-par-mutation` (décision) |
 | H15 | `HostedAuditDelivery` n'attrape que `IOException` | Défaut confirmé (test rouge), **corrigé** | P3 | E | `renforcer-tests-revelees-par-mutation` (décision) |
 | H16 | Les limitations d'une requête de relations sont lues sur un second chargement du snapshot actif | Risque | P3 | A | — (lot 2 de `declarer-limites-impact-scip`) |
 | H17 | Linux : `--nproc=128` limite toutes les tâches de l'utilisateur réel, pas un processus | Risque (non exécuté) | P3 | A | — (lié à A03) |
 | H18 | Windows : la sonde AppContainer lit sa sortie après la fin du processus | Risque (non exécuté) | P3 | A | — (lié à A07) |
 | H19 | `scripts/intellij/run-minos.ps1` lance `mvnw package` avant le serveur MCP sur stdio | Non reproduit | — | E | `corriger-documentation-plugin-et-suivi-audit` |
-| H20 | Variables obligatoires des fichiers Compose sans garde `${VAR:?message}` | Amélioration | P3 | E | — |
+| H20 | Variables obligatoires des fichiers Compose sans garde `${VAR:?message}` | Amélioration, **faite** le 2026-10-09 (35 gardes par fichier ; configuration résolue identique quand les variables sont fournies) | P3 | E | — |
 | H21 | Alertes SpotBugs nouvelles du plugin IntelliJ (11) | Faux positifs (4), convention (5), **2 corrigées** le 2026-10-08 | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H22 | Les droits accordés au bac à sable AppContainer ne sont pas retirés quand le lanceur est tué (460 entrées sur le JDK) | Défaut confirmé ; journal avant octroi **corrigé**, fuite des `MINOS_HOME` de test ouverte | P2 | E | `revoquer-droits-appcontainer-apres-arret-brutal` |
 | H23 | Incident d'environnement pendant le PIT de `minos-runtime-local` (JDK inutilisable, profil illisible ; cause non établie) | Risque confirmé (outillage) | P1 | E | `revoquer-droits-appcontainer-apres-arret-brutal` (précautions d'exécution) |
-| H24 | Sous Windows (Ryuk désactivé), une JVM de test tuée laisse son conteneur PostgreSQL en vie | Risque confirmé (outillage de test) | P2 | E | `aligner-dependances-de-test-testcontainers` |
+| H24 | Sous Windows (Ryuk désactivé), une JVM de test tuée laisse son conteneur PostgreSQL en vie | Risque confirmé (outillage de test), **corrigé** (#369 : Ryuk réactivé, socket `/var/run/docker.sock`) | P2 | E | `aligner-dependances-de-test-testcontainers` |
 
 ### Fiches
 
