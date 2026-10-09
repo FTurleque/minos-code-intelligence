@@ -105,22 +105,22 @@ Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité
 | H04 | La clé NVD de l'environnement est refusée ; Dependency-Check 13.0.0 ne rafraîchit pas sans clé | Décision ouverte (environnement) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H05 | Testcontainers mélange deux versions majeures (cœur 2.0.5, modules 1.21.4) ; `slf4j-api` ne converge pas | Risque | P3 | E | `aligner-dependances-de-test-testcontainers` |
 | H06 | Gitleaks n'est ni configuré ni exécuté par la CI ; la règle par défaut ne produit que des faux positifs | Décision ouverte | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
-| H07 | Faiblesses de tests révélées par PIT (chaîne d'audit et autorisation en P1) | Faiblesse de test | P1 à P3 | E | `renforcer-tests-revelees-par-mutation` |
+| H07 | Faiblesses de tests révélées par PIT (chaîne d'audit et autorisation en P1) | Faiblesse de test ; **P1 corrigés** (`5b9ef15b`) | P1 à P3 | E | `renforcer-tests-revelees-par-mutation` |
 | H08 | Usages de modules non déclarés ; surfaces qui consomment directement des ports du moteur | Décision ouverte | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` (mesure) ; décision par ADR |
 | H09 | Le plugin IntelliJ échappe aux contrôles locaux (hors réacteur, sans Gradle, sorties périmées) | Faiblesse (couverture) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
-| H10 | La documentation du plugin indique un chemin `…\MINOS\bin\minos.cmd` qui n'existe pas | Défaut confirmé (documentation) | P2 | L | `corriger-documentation-plugin-et-suivi-audit` |
+| H10 | La documentation du plugin indique un chemin `…\MINOS\bin\minos.cmd` qui n'existe pas | Défaut confirmé (documentation), **corrigé** (`93093b7a`) | P2 | L | `corriger-documentation-plugin-et-suivi-audit` |
 | H11 | Le suivi de l'audit d'octobre décrit comme « en local / PR ouverte » des correctifs fusionnés | Dérive documentaire | P3 | L | `corriger-documentation-plugin-et-suivi-audit` |
 | H12 | Aucun test d'arrêt brutal entre écriture temporaire et renommage d'un snapshot, de pointeur actif tronqué, ni de migration PostgreSQL d'une base peuplée | Faiblesse de test | P2 | A | `couvrir-reprise-apres-interruption-du-stockage` |
 | H13 | Les pointeurs temporaires `.active-*.tmp` laissés par un arrêt brutal ne sont jamais récupérés | Risque | P3 | A | `couvrir-reprise-apres-interruption-du-stockage` |
-| H14 | Un refus dont l'identifiant de requête est invalide est rejeté avant l'authentification, sans trace | Risque | P3 | A | `renforcer-tests-revelees-par-mutation` (décision) |
-| H15 | `HostedAuditDelivery` n'attrape que `IOException` | Risque | P3 | A | `renforcer-tests-revelees-par-mutation` (décision) |
+| H14 | Un refus dont l'identifiant de requête est invalide est rejeté avant l'authentification, sans trace | Défaut confirmé (test rouge), **corrigé** | P3 | E | `renforcer-tests-revelees-par-mutation` (décision) |
+| H15 | `HostedAuditDelivery` n'attrape que `IOException` | Défaut confirmé (test rouge), **corrigé** | P3 | E | `renforcer-tests-revelees-par-mutation` (décision) |
 | H16 | Les limitations d'une requête de relations sont lues sur un second chargement du snapshot actif | Risque | P3 | A | — (lot 2 de `declarer-limites-impact-scip`) |
 | H17 | Linux : `--nproc=128` limite toutes les tâches de l'utilisateur réel, pas un processus | Risque (non exécuté) | P3 | A | — (lié à A03) |
 | H18 | Windows : la sonde AppContainer lit sa sortie après la fin du processus | Risque (non exécuté) | P3 | A | — (lié à A07) |
-| H19 | `scripts/intellij/run-minos.ps1` lance `mvnw package` avant le serveur MCP sur stdio | À vérifier | P3 | A | `corriger-documentation-plugin-et-suivi-audit` |
+| H19 | `scripts/intellij/run-minos.ps1` lance `mvnw package` avant le serveur MCP sur stdio | Non reproduit | — | E | `corriger-documentation-plugin-et-suivi-audit` |
 | H20 | Variables obligatoires des fichiers Compose sans garde `${VAR:?message}` | Amélioration | P3 | E | — |
 | H21 | Alertes SpotBugs nouvelles du plugin IntelliJ (11) | Faux positifs (5) et à qualifier (6) | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
-| H22 | Les droits accordés au bac à sable AppContainer ne sont pas retirés quand le lanceur est tué (460 entrées sur le JDK) | Défaut confirmé | P1 | E | `revoquer-droits-appcontainer-apres-arret-brutal` |
+| H22 | Les droits accordés au bac à sable AppContainer ne sont pas retirés quand le lanceur est tué (460 entrées sur le JDK) | Défaut confirmé ; journal avant octroi **corrigé**, fuite des `MINOS_HOME` de test ouverte | P2 | E | `revoquer-droits-appcontainer-apres-arret-brutal` |
 | H23 | Incident d'environnement pendant le PIT de `minos-runtime-local` (JDK inutilisable, profil illisible ; cause non établie) | Risque confirmé (outillage) | P1 | E | `revoquer-droits-appcontainer-apres-arret-brutal` (précautions d'exécution) |
 | H24 | Sous Windows (Ryuk désactivé), une JVM de test tuée laisse son conteneur PostgreSQL en vie | Risque confirmé (outillage de test) | P2 | E | `aligner-dependances-de-test-testcontainers` |
 
@@ -173,6 +173,8 @@ PIT a analysé 7 modules sur 14 (`minos-runtime-local` partiellement) : voir § 
 
 **Stockage local (P2).** `minos-storage-local` : 518 survivants, concentrés dans `FileSemanticVectorStore` (84), `FileRuntimeObservationStore` (73), `FileProjectFingerprintSnapshotStore` (70), `FileHostedControlPlaneStore` (52) et `FileSymbolSnapshotStore` (46), à qualifier avec H12.
 
+**Mutants équivalents documentés (`renforcer-tests-revelees-par-mutation`, tâche 1.3).** Dans `HostedAuditChain.verify`, les mutants qui retirent les gardes des lignes 94 (événement non chaîné), 100 (autre tenant), 103 (lien rompu) et 110 (ancre, deux mutants) sont **équivalents** : le constructeur de `HostedTenantState` refuse déjà ces états, et tout état vérifié passe par lui. Ces gardes restent en place (défense en profondeur). Le mutant de la ligne 91 (calcul de la séquence attendue d'une chaîne vide) l'est aussi : la boucle ne s'exécute pas. `HostedAuditChainTamperingTest` couvre désormais les gardes atteignables (constructeur, et ligne 97 de `verify`).
+
 **Autorisation (P1, faiblesse de test).** `HostedAuthorizationService.authorizeRead:54` : supprimer la garde `role().allows(permission)` de la voie de lecture ne fait échouer aucun test ; aucun test ne vérifie qu'un VIEWER ou un CONTRIBUTOR est refusé sur `audit()` (`AUDIT_READ`) ou sur le plan de rétention.
 
 **Jetons (P2, faiblesse de test).** `HmacHostedIdentityProvider` : 19 survivants sur les bornes de décodage (`decode:116-129`, `decodeCanonical:139-143`, `readString:160-165`, `writeString:151`), l'expiration (`authenticate:58`, `:73`) et l'émission (`issue:42`). Les bornes exactes et les jetons tronqués ou surdimensionnés ne sont pas testés.
@@ -204,7 +206,7 @@ PIT a analysé 7 modules sur 14 (`minos-runtime-local` partiellement) : voir § 
 
 #### MINOS-AUD-H11 — Suivi de l'audit d'octobre périmé
 
-- **Preuve (L)** : `docs/audit/constats.md` § 2 et § 6 et `docs/audit/README.md` § 9 décrivent B01–B04, C01–C06, C16, A01, A02, C04, B07–B09, B13, D01, D06, D10 comme « corrigés en local », « PR ouverte » ou « CI à observer », alors que les commits correspondants (`82dc354b`, `f87f2250`, `9bc1129d`, `9f3e2911`, `14596db2`, `93e10c3a`) sont dans `develop`. **Correction** : ligne de suivi datée ajoutée dans `docs/audit/README.md` § 10 ; mise à jour du § 6 de `constats.md` au prochain lot documentaire.
+- **Preuve (L)** : `docs/audit/constats.md` § 2 et § 6 et `docs/audit/README.md` § 9 décrivent B01–B04, C01–C06, C16, A01, A02, C04, B07–B09, B13, D01, D06, D10 comme « corrigés en local », « PR ouverte » ou « CI à observer », alors que les commits correspondants (`82dc354b`, `f87f2250`, `9bc1129d`, `9f3e2911`, `14596db2`, `93e10c3a`, `67872cc8`) sont dans `develop`. **Correction faite** : ligne de suivi datée dans `docs/audit/README.md` § 10 et état daté en tête du § 6 de `constats.md` (commit fusionné et statut revérifié de chaque changement).
 
 #### MINOS-AUD-H12 et H13 — Reprise après interruption du stockage
 
@@ -220,7 +222,7 @@ Relevés par lecture déléguée (A), non réexécutés ; chaque point dit ce qu
 - **H16** `ProjectQueryService.java:64-70` recharge le snapshot actif pour les limitations, séparément de `findRelationships` (`:58-61`) : pendant une promotion, résultats et limitations peuvent venir de deux snapshots, et le décodage complet est payé deux fois (D03).
 - **H17** `LinuxBubblewrapWorkerSandboxBackend.java:343` : `RLIMIT_NPROC` compte les tâches de l'utilisateur réel ; l'ADR 0038 et `remote-worker-sandbox-disposition.md:52` parlent d'une limite par processus. À confirmer sous Linux avec un utilisateur qui a déjà plus de 128 tâches.
 - **H18** `WindowsAppContainerWorkerSandboxBackend.java` (≈ ligne 404) : `probeExitedCleanly` ne lit la sortie qu'après la fin ; le correctif A01 ajoute un `Write-Warning` par journal sans propriétaire. À confirmer sous Windows avec de nombreux journaux orphelins.
-- **H19** `scripts/intellij/run-minos.ps1:15-17` lance `mvnw package` avant le serveur MCP sur stdio : une ligne de Maven sur la sortie standard précéderait le flux JSON-RPC. À confirmer en lançant le script depuis un client MCP.
+- **H19** `scripts/intellij/run-minos.ps1:15-17` lance `mvnw package` avant le serveur MCP sur stdio : une ligne de Maven sur la sortie standard précéderait le flux JSON-RPC. **Non reproduit (E)** : en cas de succès, `mvnw.cmd -q -DskipTests package` n'écrit aucune ligne sur la sortie standard ; en cas d'échec, le script s'arrête avant le démarrage du serveur.
 
 #### MINOS-AUD-H20 — Garde des variables Compose
 
@@ -235,12 +237,12 @@ Relevés par lecture déléguée (A), non réexécutés ; chaque point dit ce qu
 
 #### MINOS-AUD-H22 — Les droits accordés au bac à sable AppContainer ne sont pas retirés quand le lanceur est tué
 
-- **Preuve (E)** : la racine du JDK `C:\Users\fturl\.jdks\openjdk-24.0.1` porte 460 entrées **explicites** `(OI)(CI)RX` pour des SID `S-1-15-2-…` (`icacls`). Le script `minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1.template` accorde ces droits par `Grant-AppContainerDirectory` (lignes 469-476, appelée ligne 525 pour chaque chemin en lecture, `(OI)(CI)RX`) et ne les retire que par `Remove-AppContainerPath` (fonction lignes 486-489, appelée ligne 558 dans le bloc de nettoyage), qui ne s'exécute pas si le processus est tué. Un lanceur tué (timeout, arrêt brutal, minion PIT abattu) laisse donc une entrée **persistante** sur un répertoire de l'hôte partagé avec d'autres programmes. La récupération ajoutée par A01/A02 traite les profils et répertoires de run, pas ces entrées.
+- **Preuve (E)** : la racine du JDK `C:\Users\fturl\.jdks\openjdk-24.0.1` porte 460 entrées **explicites** `(OI)(CI)RX` pour des SID `S-1-15-2-…` (`icacls`). Le script `minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1.template` accorde ces droits par `Grant-AppContainerDirectory` (lignes 469-476, appelée ligne 525 pour chaque chemin en lecture, `(OI)(CI)RX`) et ne les retire que par `Remove-AppContainerPath` (fonction lignes 486-489, appelée ligne 558 dans le bloc de nettoyage), qui ne s'exécute pas si le processus est tué. Un lanceur tué (timeout, arrêt brutal, minion PIT abattu) laisse donc une entrée **persistante** sur un répertoire de l'hôte partagé avec d'autres programmes. **Correction de diagnostic (8 octobre, soir)** : la reprise ajoutée par A01 retire bien les entrées **journalisées** d'un run mort au lancement suivant dans le même `MINOS_HOME`. Les fuites viennent (1) de l'ordre « octroi puis journal », corrigé depuis (journal d'abord), et (2) des répertoires de reprise jamais réutilisés : `MINOS_HOME` temporaire des tests, minions PIT tués. En production, le risque résiduel est donc faible ; sur un poste de développement ou un runner qui tue des tests, les entrées s'accumulent.
 - **Impact** : accumulation sans borne d'entrées d'ACL sur le JDK et les répertoires d'outils (chaque entrée héritée par tous les fichiers en dessous), coût croissant des contrôles d'accès, et droits de lecture laissés à d'anciens conteneurs. Le lien avec l'incident H23 n'est pas démontré.
 - **Comportement attendu** : fail-closed et réversibilité (ADR 0036, 0038) ; aucune modification de l'hôte ne survit à un run, y compris après un arrêt brutal ; la récupération par propriétaire (`isoler-recuperation-appcontainer-par-proprietaire`) doit couvrir aussi les ACL.
 - **Correction proposée** : journaliser chaque autorisation (chemin, SID) dans le répertoire de récupération **avant** de l'appliquer, et la retirer à la reprise d'un run mort (même verrou de propriété que A01) ; ou préférer des copies privées des runtimes plutôt que des droits sur les originaux ; outil de nettoyage des entrées orphelines pour les postes déjà touchés. **Validation** : test Windows qui tue le lanceur après l'octroi puis vérifie qu'une reprise retire l'entrée ; `icacls` sur le JDK sans entrée `S-1-15-2-…` après la suite de tests.
 - **Reproduit (E28)** : pendant le PIT de `minos-cli`, après réparation du poste, 3 entrées `S-1-15-2-…` `(OI)(CI)RX` sont apparues sur la racine du JDK et y sont restées après l'arrêt de tous les lanceurs (aucun processus de bac à sable vivant).
-- **Qualification** : défaut confirmé, reproduit en exécution ; **P1**.
+- **Qualification** : défaut confirmé, reproduit en exécution ; **P2** après correction de diagnostic (production : seul l'ordre octroi/journal, corrigé ; environnement de test : fuite documentée). **Corrigé en partie** : journal avant octroi.
 
 #### MINOS-AUD-H23 — Incident d'environnement pendant le PIT de `minos-runtime-local`
 

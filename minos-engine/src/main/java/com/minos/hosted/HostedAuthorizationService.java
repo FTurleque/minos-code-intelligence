@@ -65,7 +65,6 @@ final class HostedAuthorizationService {
             String resourceType,
             String resourceId
     ) throws IOException {
-        String safeRequestId = HostedPrincipal.safeId(requestId, "requestId");
         HostedAccessClaims claims = identities.authenticate(bearerToken, clock.instant());
         HostedTenantState state = loadVerified(claims.tenantId());
         if (!claims.keyId().equals(state.keyId())) {
@@ -78,9 +77,12 @@ final class HostedAuthorizationService {
         Optional<HostedPrincipal> membership = member(state, claims.principalId());
         boolean allowed = membership.isPresent() && membership.orElseThrow().role().allows(permission);
         if (!allowed) {
-            recordDenial(state, claims.principalId(), action, resourceType, resourceId, safeRequestId);
+            // MINOS-AUD-H14: authorization precedes the validation of the request id, as for every other
+            // identifier; an invalid one is recorded by its bounded stand-in, never by its raw value.
+            recordDenial(state, claims.principalId(), action, resourceType, resourceId, refusalResourceId(requestId));
             throw new SecurityException("hosted permission denied: " + permission);
         }
+        String safeRequestId = HostedPrincipal.safeId(requestId, "requestId");
         return new MutationContext(claims, state, membership.orElseThrow(), safeRequestId);
     }
 

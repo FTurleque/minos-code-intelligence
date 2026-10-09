@@ -220,6 +220,31 @@ class WindowsAppContainerRecoveryOwnershipTest {
         assertFalse(Files.exists(orphan), "an orphan lock that nobody holds must be removed: " + first.output());
     }
 
+    /**
+     * MINOS-AUD-H22: a grant is journaled before icacls applies it, so a launcher killed between the two leaves a
+     * journaled path that carries no entry. The next launcher must recover such a journal as an ordinary dead run:
+     * removing an entry that was never set is a no-op, the journal and its lock disappear, and the launch succeeds.
+     */
+    @Test
+    void aJournaledPathWhoseGrantWasNeverAppliedIsRecoveredAsANoOp() throws Exception {
+        Fixture fixture = fixture("journal-first");
+        Path recovery = Files.createDirectories(fixture.home().resolve("sandbox").resolve(CURRENT_RECOVERY));
+        Path neverGranted = Files.createTempDirectory("minos-appcontainer-owner-journal-first-path-");
+        Path journal = recovery.resolve("Minos.Worker.journal-first.json");
+        Files.writeString(journal, "{\"profile\":\"Minos.Worker.journal-first\",\"sid\":\"" + FOREIGN_SID
+                + "\",\"paths\":[\"" + neverGranted.toString().replace("\\", "\\\\") + "\"]}", StandardCharsets.UTF_8);
+        Path lock = Files.createFile(lockOf(journal));
+        assertFalse(fixture.acl(neverGranted.toString()).contains(FOREIGN_SID), "the path must carry no entry");
+
+        Sandbox next = fixture.start("next", "exit 0\n");
+        assertTrue(next.process().waitFor(90, TimeUnit.SECONDS), "launcher timed out: " + next.output());
+
+        assertEquals(0, next.process().exitValue(), next.output());
+        assertFalse(Files.exists(journal), "the journal of the dead run must be recovered: " + next.output());
+        assertFalse(Files.exists(lock), "the lock of the dead run must be removed: " + next.output());
+        assertFalse(fixture.acl(neverGranted.toString()).contains(FOREIGN_SID));
+    }
+
     private static boolean canOpenForWriting(Path file) {
         try (var ignored = Files.newByteChannel(file, java.nio.file.StandardOpenOption.READ,
                 java.nio.file.StandardOpenOption.WRITE)) {
@@ -284,11 +309,21 @@ class WindowsAppContainerRecoveryOwnershipTest {
             while (System.nanoTime() < deadline) {
                 if (!sandbox.process().isAlive()) throw launcherExited(sandbox);
                 Optional<Journal> journal = findJournal(directory);
-                if (journal.isPresent() && !journal.get().paths().isEmpty()) return journal.get();
+                // MINOS-AUD-H22: a path is journaled before icacls grants it, so "journaled" is not yet "granted".
+                if (journal.isPresent() && !journal.get().paths().isEmpty() && allGranted(journal.get())) {
+                    return journal.get();
+                }
                 // Attend la fin du lanceur pendant au plus un intervalle : une sortie prematuree se voit tout de suite.
                 if (sandbox.process().waitFor(JOURNAL_POLL_MILLIS, TimeUnit.MILLISECONDS)) throw launcherExited(sandbox);
             }
             throw new AssertionError("no recovery journal with grants appeared: " + sandbox.output());
+        }
+
+        private boolean allGranted(Journal journal) throws Exception {
+            for (String path : journal.paths()) {
+                if (!acl(path).contains(journal.sid())) return false;
+            }
+            return true;
         }
 
         Optional<Journal> findJournal(String onlyDirectory) throws IOException {
