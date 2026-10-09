@@ -45,8 +45,9 @@ class HostedAuditChainTamperingTest {
     void aRemovedMiddleEventIsRefusedAsABrokenChain() {
         List<HostedAuditEvent> events = threeEvents().auditEvents();
 
+        List<HostedAuditEvent> chainEvents = List.of(events.get(0), events.get(2));
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> stateWith(List.of(events.get(0), events.get(2)), 3, HostedAuditEvent.GENESIS_HASH));
+                () -> stateWith(chainEvents, 3, HostedAuditEvent.GENESIS_HASH));
         assertEquals("broken audit hash chain", failure.getMessage());
     }
 
@@ -65,8 +66,9 @@ class HostedAuditChainTamperingTest {
     void permutedEventsAreRefused() {
         List<HostedAuditEvent> events = threeEvents().auditEvents();
 
+        List<HostedAuditEvent> chainEvents = List.of(events.get(0), events.get(2), events.get(1));
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> stateWith(List.of(events.get(0), events.get(2), events.get(1)), 2, HostedAuditEvent.GENESIS_HASH));
+                () -> stateWith(chainEvents, 2, HostedAuditEvent.GENESIS_HASH));
         assertEquals("broken audit hash chain", failure.getMessage());
     }
 
@@ -76,8 +78,9 @@ class HostedAuditChainTamperingTest {
         HostedAuditEvent first = events.get(0);
         HostedAuditEvent backwards = signed(withLink(events.get(1), 1, TENANT, first.hash()));
 
+        List<HostedAuditEvent> chainEvents = List.of(first, backwards);
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> stateWith(List.of(first, backwards), 1, HostedAuditEvent.GENESIS_HASH));
+                () -> stateWith(chainEvents, 1, HostedAuditEvent.GENESIS_HASH));
         assertEquals("audit sequence is not strictly increasing", failure.getMessage());
     }
 
@@ -86,8 +89,9 @@ class HostedAuditChainTamperingTest {
         List<HostedAuditEvent> events = threeEvents().auditEvents();
         HostedAuditEvent foreign = signed(withLink(events.get(0), 1, OTHER_TENANT, HostedAuditEvent.GENESIS_HASH));
 
+        List<HostedAuditEvent> chainEvents = List.of(foreign);
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> stateWith(List.of(foreign), 1, HostedAuditEvent.GENESIS_HASH));
+                () -> stateWith(chainEvents, 1, HostedAuditEvent.GENESIS_HASH));
         assertEquals("cross-tenant audit event", failure.getMessage());
     }
 
@@ -96,8 +100,9 @@ class HostedAuditChainTamperingTest {
         HostedAuditEvent unchained = chain.unchainedRefusal(
                 emptyTenant(), "owner", "WORKSPACE_CREATE", "WORKSPACE", "new", "req-9", "primary");
 
+        List<HostedAuditEvent> chainEvents = List.of(unchained);
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> stateWith(List.of(unchained), 0, HostedAuditEvent.GENESIS_HASH));
+                () -> stateWith(chainEvents, 0, HostedAuditEvent.GENESIS_HASH));
         assertEquals("unchained audit event cannot be part of the audit chain", failure.getMessage());
     }
 

@@ -30,9 +30,11 @@ class HostedAuditBoundaryTest {
                 HostedAuditEvent.Outcome.ALLOWED, "last", belowCapacity.keyId(), belowCapacity.version());
         assertEquals(HostedRetentionPolicy.MAX_AUDIT_EVENTS, atCapacity.auditEvents().size());
 
+        String keyId = atCapacity.keyId();
+        long version = atCapacity.version();
         IllegalStateException refused = assertThrows(IllegalStateException.class, () -> chain.append(
                 atCapacity, "owner", "AUDIT_FILL", "TENANT", "beyond",
-                HostedAuditEvent.Outcome.ALLOWED, "beyond", atCapacity.keyId(), atCapacity.version()));
+                HostedAuditEvent.Outcome.ALLOWED, "beyond", keyId, version));
         assertEquals("hosted audit hard capacity reached; apply retention explicitly", refused.getMessage());
     }
 

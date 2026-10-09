@@ -21,11 +21,12 @@ class HostedRequestIdAndSinkFailureTest {
     @Test
     void aCallerWithoutRightsAndAnInvalidRequestIdIsRefusedAndTraced() throws Exception {
         var harness = HostedControlPlaneTestSupport.harness();
+        HostedControlPlaneService service = harness.service();
         String owner = harness.bootstrapOwner();
         String viewer = harness.grantAndIssue(owner, "viewer", HostedRole.VIEWER);
         int before = harness.state().auditEvents().size();
 
-        assertThrows(SecurityException.class, () -> harness.service().createWorkspace(viewer, "bad request", "X"));
+        assertThrows(SecurityException.class, () -> service.createWorkspace(viewer, "bad request", "X"));
 
         assertEquals(before + 1, harness.state().auditEvents().size(), "the refusal must leave a chained trace");
         HostedAuditEvent refusal = harness.state().auditEvents().getLast();
@@ -37,10 +38,11 @@ class HostedRequestIdAndSinkFailureTest {
     @Test
     void anAuthorizedCallerWithAnInvalidRequestIdStillGetsAnInvalidRequestWithoutEvent() throws Exception {
         var harness = HostedControlPlaneTestSupport.harness();
+        HostedControlPlaneService service = harness.service();
         String owner = harness.bootstrapOwner();
         HostedTenantState before = harness.state();
 
-        assertThrows(IllegalArgumentException.class, () -> harness.service().createWorkspace(owner, "bad request", "X"));
+        assertThrows(IllegalArgumentException.class, () -> service.createWorkspace(owner, "bad request", "X"));
 
         assertEquals(before, harness.state(), "no event, no version change");
     }
