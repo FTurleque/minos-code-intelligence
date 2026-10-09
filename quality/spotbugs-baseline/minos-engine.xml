@@ -1,0 +1,911 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="ce35e2d43742bc2f0ff684f7da6e8795" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.discovery.DefaultDiscoveryPlugins.lambda$containsVisibleMarkerExtension$1(Path)</LongMessage>
+    <Class classname="com.minos.discovery.DefaultDiscoveryPlugins" primary="true">
+      <SourceLine classname="com.minos.discovery.DefaultDiscoveryPlugins" start="29" end="240" sourcepath="com/minos/discovery/DefaultDiscoveryPlugins.java" sourcefile="DefaultDiscoveryPlugins.java">
+        <Message>At DefaultDiscoveryPlugins.java:[lines 29-240]</Message>
+      </SourceLine>
+      <Message>In class com.minos.discovery.DefaultDiscoveryPlugins</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.discovery.DefaultDiscoveryPlugins" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$containsVisibleMarkerExtension$1" primary="true">
+      <SourceLine endBytecode="59" classname="com.minos.discovery.DefaultDiscoveryPlugins" start="184" end="184" sourcepath="com/minos/discovery/DefaultDiscoveryPlugins.java" sourcefile="DefaultDiscoveryPlugins.java" startBytecode="0" />
+      <Message>In method com.minos.discovery.DefaultDiscoveryPlugins.lambda$containsVisibleMarkerExtension$1(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.discovery.DefaultDiscoveryPlugins" start="184" end="184" sourcepath="com/minos/discovery/DefaultDiscoveryPlugins.java" sourcefile="DefaultDiscoveryPlugins.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at DefaultDiscoveryPlugins.java:[line 184]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.discovery.DefaultDiscoveryPlugins" start="184" end="184" sourcepath="com/minos/discovery/DefaultDiscoveryPlugins.java" sourcefile="DefaultDiscoveryPlugins.java" startBytecode="1">
+      <Message>Known null at DefaultDiscoveryPlugins.java:[line 184]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="1a980d57714db0135d5828fc0c883b03" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.discovery.DefaultDiscoveryPlugins.lambda$extensionLanguage$0(Set, ProjectDiscovery$Language, Path)</LongMessage>
+    <Class classname="com.minos.discovery.DefaultDiscoveryPlugins" primary="true">
+      <SourceLine classname="com.minos.discovery.DefaultDiscoveryPlugins" start="29" end="240" sourcepath="com/minos/discovery/DefaultDiscoveryPlugins.java" sourcefile="DefaultDiscoveryPlugins.java">
+        <Message>At DefaultDiscoveryPlugins.java:[lines 29-240]</Message>
+      </SourceLine>
+      <Message>In class com.minos.discovery.DefaultDiscoveryPlugins</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.discovery.DefaultDiscoveryPlugins" signature="(Ljava/util/Set;Lcom/minos/discovery/ProjectDiscovery$Language;Ljava/nio/file/Path;)Ljava/util/Optional;" name="lambda$extensionLanguage$0" primary="true">
+      <SourceLine endBytecode="147" classname="com.minos.discovery.DefaultDiscoveryPlugins" start="153" end="154" sourcepath="com/minos/discovery/DefaultDiscoveryPlugins.java" sourcefile="DefaultDiscoveryPlugins.java" startBytecode="0" />
+      <Message>In method com.minos.discovery.DefaultDiscoveryPlugins.lambda$extensionLanguage$0(Set, ProjectDiscovery$Language, Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.discovery.DefaultDiscoveryPlugins" start="153" end="153" sourcepath="com/minos/discovery/DefaultDiscoveryPlugins.java" sourcefile="DefaultDiscoveryPlugins.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at DefaultDiscoveryPlugins.java:[line 153]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.discovery.DefaultDiscoveryPlugins" start="153" end="153" sourcepath="com/minos/discovery/DefaultDiscoveryPlugins.java" sourcefile="DefaultDiscoveryPlugins.java" startBytecode="1">
+      <Message>Known null at DefaultDiscoveryPlugins.java:[line 153]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="e8d9eca70f00c90d07e2514897e56cca" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.discovery.ProjectDiscovery.buildSystems() risque d'exposer sa représentation interne en renvoyant com.minos.discovery.ProjectDiscovery.buildSystems</LongMessage>
+    <Class classname="com.minos.discovery.ProjectDiscovery" primary="true">
+      <SourceLine classname="com.minos.discovery.ProjectDiscovery" start="17" end="106" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java">
+        <Message>At ProjectDiscovery.java:[lines 17-106]</Message>
+      </SourceLine>
+      <Message>In class com.minos.discovery.ProjectDiscovery</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.discovery.ProjectDiscovery" signature="()Ljava/util/Set;" name="buildSystems" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.discovery.ProjectDiscovery" start="17" end="17" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java" startBytecode="0" />
+      <Message>In method com.minos.discovery.ProjectDiscovery.buildSystems()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.discovery.ProjectDiscovery" signature="Ljava/util/Set;" name="buildSystems" primary="true">
+      <SourceLine classname="com.minos.discovery.ProjectDiscovery" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java">
+        <Message>In ProjectDiscovery.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.discovery.ProjectDiscovery.buildSystems</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.discovery.ProjectDiscovery" start="17" end="17" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java" startBytecode="4" primary="true">
+      <Message>At ProjectDiscovery.java:[line 17]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5dbc6100ac0d3066198bbd10af7a6525" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.discovery.ProjectDiscovery.languages() risque d'exposer sa représentation interne en renvoyant com.minos.discovery.ProjectDiscovery.languages</LongMessage>
+    <Class classname="com.minos.discovery.ProjectDiscovery" primary="true">
+      <SourceLine classname="com.minos.discovery.ProjectDiscovery" start="17" end="106" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java">
+        <Message>At ProjectDiscovery.java:[lines 17-106]</Message>
+      </SourceLine>
+      <Message>In class com.minos.discovery.ProjectDiscovery</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.discovery.ProjectDiscovery" signature="()Ljava/util/Set;" name="languages" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.discovery.ProjectDiscovery" start="17" end="17" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java" startBytecode="0" />
+      <Message>In method com.minos.discovery.ProjectDiscovery.languages()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.discovery.ProjectDiscovery" signature="Ljava/util/Set;" name="languages" primary="true">
+      <SourceLine classname="com.minos.discovery.ProjectDiscovery" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java">
+        <Message>In ProjectDiscovery.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.discovery.ProjectDiscovery.languages</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.discovery.ProjectDiscovery" start="17" end="17" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java" startBytecode="4" primary="true">
+      <Message>At ProjectDiscovery.java:[line 17]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="ce78ec9cbe6f3cddf05aeff2441b4293" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.discovery.ProjectDiscovery$DiscoveredModule.buildSystems() risque d'exposer sa représentation interne en renvoyant com.minos.discovery.ProjectDiscovery$DiscoveredModule.buildSystems</LongMessage>
+    <Class classname="com.minos.discovery.ProjectDiscovery$DiscoveredModule" primary="true">
+      <SourceLine classname="com.minos.discovery.ProjectDiscovery$DiscoveredModule" start="81" end="94" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java">
+        <Message>At ProjectDiscovery.java:[lines 81-94]</Message>
+      </SourceLine>
+      <Message>In class com.minos.discovery.ProjectDiscovery$DiscoveredModule</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.discovery.ProjectDiscovery$DiscoveredModule" signature="()Ljava/util/Set;" name="buildSystems" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.discovery.ProjectDiscovery$DiscoveredModule" start="81" end="81" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java" startBytecode="0" />
+      <Message>In method com.minos.discovery.ProjectDiscovery$DiscoveredModule.buildSystems()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.discovery.ProjectDiscovery$DiscoveredModule" signature="Ljava/util/Set;" name="buildSystems" primary="true">
+      <SourceLine classname="com.minos.discovery.ProjectDiscovery$DiscoveredModule" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java">
+        <Message>In ProjectDiscovery.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.discovery.ProjectDiscovery$DiscoveredModule.buildSystems</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.discovery.ProjectDiscovery$DiscoveredModule" start="81" end="81" sourcepath="com/minos/discovery/ProjectDiscovery.java" sourcefile="ProjectDiscovery.java" startBytecode="4" primary="true">
+      <Message>At ProjectDiscovery.java:[line 81]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="1eee421d6a0d3a2face15a01193a169c" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.discovery.ProjectIgnorePolicy$1.visitFile(Path, BasicFileAttributes)</LongMessage>
+    <Class classname="com.minos.discovery.ProjectIgnorePolicy$1" primary="true">
+      <SourceLine classname="com.minos.discovery.ProjectIgnorePolicy$1" start="149" end="175" sourcepath="com/minos/discovery/ProjectIgnorePolicy.java" sourcefile="ProjectIgnorePolicy.java">
+        <Message>At ProjectIgnorePolicy.java:[lines 149-175]</Message>
+      </SourceLine>
+      <Message>In class com.minos.discovery.ProjectIgnorePolicy$1</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.discovery.ProjectIgnorePolicy$1" signature="(Ljava/nio/file/Path;Ljava/nio/file/attribute/BasicFileAttributes;)Ljava/nio/file/FileVisitResult;" name="visitFile" primary="true">
+      <SourceLine endBytecode="176" classname="com.minos.discovery.ProjectIgnorePolicy$1" start="163" end="170" sourcepath="com/minos/discovery/ProjectIgnorePolicy.java" sourcefile="ProjectIgnorePolicy.java" startBytecode="0" />
+      <Message>In method com.minos.discovery.ProjectIgnorePolicy$1.visitFile(Path, BasicFileAttributes)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="49" classname="com.minos.discovery.ProjectIgnorePolicy$1" start="168" end="168" sourcepath="com/minos/discovery/ProjectIgnorePolicy.java" sourcefile="ProjectIgnorePolicy.java" startBytecode="49" primary="true">
+      <Message>Dereferenced at ProjectIgnorePolicy.java:[line 168]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="44" classname="com.minos.discovery.ProjectIgnorePolicy$1" start="168" end="168" sourcepath="com/minos/discovery/ProjectIgnorePolicy.java" sourcefile="ProjectIgnorePolicy.java" startBytecode="44">
+      <Message>Known null at ProjectIgnorePolicy.java:[line 168]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="4cb053a68ce3ecce8ee1d21eac26a44f" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.IncrementalIndexingPlan.changedFiles() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.IncrementalIndexingPlan.changedFiles</LongMessage>
+    <Class classname="com.minos.incremental.IncrementalIndexingPlan" primary="true">
+      <SourceLine classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="114" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java">
+        <Message>At IncrementalIndexingPlan.java:[lines 14-114]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.IncrementalIndexingPlan</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.IncrementalIndexingPlan" signature="()Ljava/util/List;" name="changedFiles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="14" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.IncrementalIndexingPlan.changedFiles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.IncrementalIndexingPlan" signature="Ljava/util/List;" name="changedFiles" primary="true">
+      <SourceLine classname="com.minos.incremental.IncrementalIndexingPlan" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java">
+        <Message>In IncrementalIndexingPlan.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.IncrementalIndexingPlan.changedFiles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="14" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java" startBytecode="4" primary="true">
+      <Message>At IncrementalIndexingPlan.java:[line 14]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="d74f6429e6aef944f05a068efa8277e8" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.IncrementalIndexingPlan.incrementalCapableIndexerIds() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.IncrementalIndexingPlan.incrementalCapableIndexerIds</LongMessage>
+    <Class classname="com.minos.incremental.IncrementalIndexingPlan" primary="true">
+      <SourceLine classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="114" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java">
+        <Message>At IncrementalIndexingPlan.java:[lines 14-114]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.IncrementalIndexingPlan</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.IncrementalIndexingPlan" signature="()Ljava/util/List;" name="incrementalCapableIndexerIds" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="14" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.IncrementalIndexingPlan.incrementalCapableIndexerIds()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.IncrementalIndexingPlan" signature="Ljava/util/List;" name="incrementalCapableIndexerIds" primary="true">
+      <SourceLine classname="com.minos.incremental.IncrementalIndexingPlan" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java">
+        <Message>In IncrementalIndexingPlan.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.IncrementalIndexingPlan.incrementalCapableIndexerIds</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="14" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java" startBytecode="4" primary="true">
+      <Message>At IncrementalIndexingPlan.java:[line 14]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="2c1b80c9988c062c7942cf98220a6d24" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.IncrementalIndexingPlan.missingIncrementalCapabilityIndexerIds() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.IncrementalIndexingPlan.missingIncrementalCapabilityIndexerIds</LongMessage>
+    <Class classname="com.minos.incremental.IncrementalIndexingPlan" primary="true">
+      <SourceLine classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="114" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java">
+        <Message>At IncrementalIndexingPlan.java:[lines 14-114]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.IncrementalIndexingPlan</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.IncrementalIndexingPlan" signature="()Ljava/util/List;" name="missingIncrementalCapabilityIndexerIds" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="14" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.IncrementalIndexingPlan.missingIncrementalCapabilityIndexerIds()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.IncrementalIndexingPlan" signature="Ljava/util/List;" name="missingIncrementalCapabilityIndexerIds" primary="true">
+      <SourceLine classname="com.minos.incremental.IncrementalIndexingPlan" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java">
+        <Message>In IncrementalIndexingPlan.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.IncrementalIndexingPlan.missingIncrementalCapabilityIndexerIds</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="14" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java" startBytecode="4" primary="true">
+      <Message>At IncrementalIndexingPlan.java:[line 14]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="2c449be18ac16523b3fdba403e888498" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.IncrementalIndexingPlan.reasons() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.IncrementalIndexingPlan.reasons</LongMessage>
+    <Class classname="com.minos.incremental.IncrementalIndexingPlan" primary="true">
+      <SourceLine classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="114" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java">
+        <Message>At IncrementalIndexingPlan.java:[lines 14-114]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.IncrementalIndexingPlan</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.IncrementalIndexingPlan" signature="()Ljava/util/List;" name="reasons" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="14" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.IncrementalIndexingPlan.reasons()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.IncrementalIndexingPlan" signature="Ljava/util/List;" name="reasons" primary="true">
+      <SourceLine classname="com.minos.incremental.IncrementalIndexingPlan" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java">
+        <Message>In IncrementalIndexingPlan.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.IncrementalIndexingPlan.reasons</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="14" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java" startBytecode="4" primary="true">
+      <Message>At IncrementalIndexingPlan.java:[line 14]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="ff9c60f073a83215f82a3d11a024efe2" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.IncrementalIndexingPlan.selectedIndexerIds() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.IncrementalIndexingPlan.selectedIndexerIds</LongMessage>
+    <Class classname="com.minos.incremental.IncrementalIndexingPlan" primary="true">
+      <SourceLine classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="114" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java">
+        <Message>At IncrementalIndexingPlan.java:[lines 14-114]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.IncrementalIndexingPlan</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.IncrementalIndexingPlan" signature="()Ljava/util/List;" name="selectedIndexerIds" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="14" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.IncrementalIndexingPlan.selectedIndexerIds()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.IncrementalIndexingPlan" signature="Ljava/util/List;" name="selectedIndexerIds" primary="true">
+      <SourceLine classname="com.minos.incremental.IncrementalIndexingPlan" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java">
+        <Message>In IncrementalIndexingPlan.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.IncrementalIndexingPlan.selectedIndexerIds</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.IncrementalIndexingPlan" start="14" end="14" sourcepath="com/minos/incremental/IncrementalIndexingPlan.java" sourcefile="IncrementalIndexingPlan.java" startBytecode="4" primary="true">
+      <Message>At IncrementalIndexingPlan.java:[line 14]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="eb77de8bea1a393751be77caa3e3d8f1" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.ProjectChangeSet.addedFiles() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.ProjectChangeSet.addedFiles</LongMessage>
+    <Class classname="com.minos.incremental.ProjectChangeSet" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectChangeSet" start="14" end="79" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java">
+        <Message>At ProjectChangeSet.java:[lines 14-79]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.ProjectChangeSet</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.ProjectChangeSet" signature="()Ljava/util/List;" name="addedFiles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.ProjectChangeSet" start="14" end="14" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.ProjectChangeSet.addedFiles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.ProjectChangeSet" signature="Ljava/util/List;" name="addedFiles" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectChangeSet" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java">
+        <Message>In ProjectChangeSet.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.ProjectChangeSet.addedFiles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.ProjectChangeSet" start="14" end="14" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java" startBytecode="4" primary="true">
+      <Message>At ProjectChangeSet.java:[line 14]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="8a0eb31e65b63c1eb9f3fa13d090bf10" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.ProjectChangeSet.deletedFiles() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.ProjectChangeSet.deletedFiles</LongMessage>
+    <Class classname="com.minos.incremental.ProjectChangeSet" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectChangeSet" start="14" end="79" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java">
+        <Message>At ProjectChangeSet.java:[lines 14-79]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.ProjectChangeSet</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.ProjectChangeSet" signature="()Ljava/util/List;" name="deletedFiles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.ProjectChangeSet" start="14" end="14" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.ProjectChangeSet.deletedFiles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.ProjectChangeSet" signature="Ljava/util/List;" name="deletedFiles" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectChangeSet" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java">
+        <Message>In ProjectChangeSet.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.ProjectChangeSet.deletedFiles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.ProjectChangeSet" start="14" end="14" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java" startBytecode="4" primary="true">
+      <Message>At ProjectChangeSet.java:[line 14]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5ed6a4daaef6b01e8a3531d0ce7cc141" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.ProjectChangeSet.modifiedFiles() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.ProjectChangeSet.modifiedFiles</LongMessage>
+    <Class classname="com.minos.incremental.ProjectChangeSet" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectChangeSet" start="14" end="79" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java">
+        <Message>At ProjectChangeSet.java:[lines 14-79]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.ProjectChangeSet</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.ProjectChangeSet" signature="()Ljava/util/List;" name="modifiedFiles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.ProjectChangeSet" start="14" end="14" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.ProjectChangeSet.modifiedFiles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.ProjectChangeSet" signature="Ljava/util/List;" name="modifiedFiles" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectChangeSet" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java">
+        <Message>In ProjectChangeSet.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.ProjectChangeSet.modifiedFiles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.ProjectChangeSet" start="14" end="14" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java" startBytecode="4" primary="true">
+      <Message>At ProjectChangeSet.java:[line 14]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="6c588a7ee35b22d0b27b05cde19a86fa" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.ProjectChangeSet.unchangedFiles() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.ProjectChangeSet.unchangedFiles</LongMessage>
+    <Class classname="com.minos.incremental.ProjectChangeSet" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectChangeSet" start="14" end="79" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java">
+        <Message>At ProjectChangeSet.java:[lines 14-79]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.ProjectChangeSet</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.ProjectChangeSet" signature="()Ljava/util/List;" name="unchangedFiles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.ProjectChangeSet" start="14" end="14" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.ProjectChangeSet.unchangedFiles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.ProjectChangeSet" signature="Ljava/util/List;" name="unchangedFiles" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectChangeSet" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java">
+        <Message>In ProjectChangeSet.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.ProjectChangeSet.unchangedFiles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.ProjectChangeSet" start="14" end="14" sourcepath="com/minos/incremental/ProjectChangeSet.java" sourcefile="ProjectChangeSet.java" startBytecode="4" primary="true">
+      <Message>At ProjectChangeSet.java:[line 14]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="1f5d5d61ffa64b730838ca02c4f0d320" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.incremental.ProjectFingerprintService.ancestorDescriptors(Path, Path, ProjectIgnorePolicy, SourceBudgetPolicy$Tracker)</LongMessage>
+    <Class classname="com.minos.incremental.ProjectFingerprintService" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="357" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
+        <Message>At ProjectFingerprintService.java:[lines 32-357]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.ProjectFingerprintService</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.ProjectFingerprintService" signature="(Ljava/nio/file/Path;Ljava/nio/file/Path;Lcom/minos/discovery/ProjectIgnorePolicy;Lcom/minos/source/SourceBudgetPolicy$Tracker;)Ljava/util/List;" name="ancestorDescriptors" primary="true">
+      <SourceLine endBytecode="712" classname="com.minos.incremental.ProjectFingerprintService" start="228" end="251" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.ProjectFingerprintService.ancestorDescriptors(Path, Path, ProjectIgnorePolicy, SourceBudgetPolicy$Tracker)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="128" classname="com.minos.incremental.ProjectFingerprintService" start="237" end="237" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java" startBytecode="128" primary="true">
+      <Message>Dereferenced at ProjectFingerprintService.java:[line 237]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="123" classname="com.minos.incremental.ProjectFingerprintService" start="237" end="237" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java" startBytecode="123">
+      <Message>Known null at ProjectFingerprintService.java:[line 237]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="c6d5bc1e6ab8ac1c9b5e12c6441b0a23" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.incremental.ProjectFingerprintService.isAncestorDescriptor(Path)</LongMessage>
+    <Class classname="com.minos.incremental.ProjectFingerprintService" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="357" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
+        <Message>At ProjectFingerprintService.java:[lines 32-357]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.ProjectFingerprintService</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.ProjectFingerprintService" signature="(Ljava/nio/file/Path;)Z" name="isAncestorDescriptor" primary="true">
+      <SourceLine endBytecode="166" classname="com.minos.incremental.ProjectFingerprintService" start="255" end="257" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.ProjectFingerprintService.isAncestorDescriptor(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="26" classname="com.minos.incremental.ProjectFingerprintService" start="256" end="256" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java" startBytecode="26" primary="true">
+      <Message>Dereferenced at ProjectFingerprintService.java:[line 256]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="21" classname="com.minos.incremental.ProjectFingerprintService" start="256" end="256" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java" startBytecode="21">
+      <Message>Known null at ProjectFingerprintService.java:[line 256]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="f2e1d46995290b6c2288a3b3e10c5c20" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.incremental.ProjectFingerprintService.isRootControlFile(Path)</LongMessage>
+    <Class classname="com.minos.incremental.ProjectFingerprintService" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="357" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
+        <Message>At ProjectFingerprintService.java:[lines 32-357]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.ProjectFingerprintService</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.incremental.ProjectFingerprintService" signature="(Ljava/nio/file/Path;)Z" name="isRootControlFile" primary="true">
+      <SourceLine endBytecode="98" classname="com.minos.incremental.ProjectFingerprintService" start="307" end="307" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.ProjectFingerprintService.isRootControlFile(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="19" classname="com.minos.incremental.ProjectFingerprintService" start="308" end="308" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java" startBytecode="19" primary="true">
+      <Message>Dereferenced at ProjectFingerprintService.java:[line 308]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="14" classname="com.minos.incremental.ProjectFingerprintService" start="308" end="308" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java" startBytecode="14">
+      <Message>Known null at ProjectFingerprintService.java:[line 308]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="be0815c597f7004ce2d96b41f1d1f5af" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.ProjectInvalidationAssessment.changedSourceFiles() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.ProjectInvalidationAssessment.changedSourceFiles</LongMessage>
+    <Class classname="com.minos.incremental.ProjectInvalidationAssessment" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectInvalidationAssessment" start="15" end="97" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java">
+        <Message>At ProjectInvalidationAssessment.java:[lines 15-97]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.ProjectInvalidationAssessment</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.ProjectInvalidationAssessment" signature="()Ljava/util/List;" name="changedSourceFiles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.ProjectInvalidationAssessment" start="15" end="15" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.ProjectInvalidationAssessment.changedSourceFiles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.ProjectInvalidationAssessment" signature="Ljava/util/List;" name="changedSourceFiles" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectInvalidationAssessment" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java">
+        <Message>In ProjectInvalidationAssessment.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.ProjectInvalidationAssessment.changedSourceFiles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.ProjectInvalidationAssessment" start="15" end="15" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java" startBytecode="4" primary="true">
+      <Message>At ProjectInvalidationAssessment.java:[line 15]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="733c703e9502723a2aef73cf104e21d" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.ProjectInvalidationAssessment.changedTestFiles() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.ProjectInvalidationAssessment.changedTestFiles</LongMessage>
+    <Class classname="com.minos.incremental.ProjectInvalidationAssessment" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectInvalidationAssessment" start="15" end="97" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java">
+        <Message>At ProjectInvalidationAssessment.java:[lines 15-97]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.ProjectInvalidationAssessment</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.ProjectInvalidationAssessment" signature="()Ljava/util/List;" name="changedTestFiles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.ProjectInvalidationAssessment" start="15" end="15" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.ProjectInvalidationAssessment.changedTestFiles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.ProjectInvalidationAssessment" signature="Ljava/util/List;" name="changedTestFiles" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectInvalidationAssessment" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java">
+        <Message>In ProjectInvalidationAssessment.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.ProjectInvalidationAssessment.changedTestFiles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.ProjectInvalidationAssessment" start="15" end="15" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java" startBytecode="4" primary="true">
+      <Message>At ProjectInvalidationAssessment.java:[line 15]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="81936fba378bcb68c6bf2b752e0db222" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.incremental.ProjectInvalidationAssessment.unqualifiedChangedFiles() risque d'exposer sa représentation interne en renvoyant com.minos.incremental.ProjectInvalidationAssessment.unqualifiedChangedFiles</LongMessage>
+    <Class classname="com.minos.incremental.ProjectInvalidationAssessment" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectInvalidationAssessment" start="15" end="97" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java">
+        <Message>At ProjectInvalidationAssessment.java:[lines 15-97]</Message>
+      </SourceLine>
+      <Message>In class com.minos.incremental.ProjectInvalidationAssessment</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.incremental.ProjectInvalidationAssessment" signature="()Ljava/util/List;" name="unqualifiedChangedFiles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.incremental.ProjectInvalidationAssessment" start="15" end="15" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java" startBytecode="0" />
+      <Message>In method com.minos.incremental.ProjectInvalidationAssessment.unqualifiedChangedFiles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.incremental.ProjectInvalidationAssessment" signature="Ljava/util/List;" name="unqualifiedChangedFiles" primary="true">
+      <SourceLine classname="com.minos.incremental.ProjectInvalidationAssessment" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java">
+        <Message>In ProjectInvalidationAssessment.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.incremental.ProjectInvalidationAssessment.unqualifiedChangedFiles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.incremental.ProjectInvalidationAssessment" start="15" end="15" sourcepath="com/minos/incremental/ProjectInvalidationAssessment.java" sourcefile="ProjectInvalidationAssessment.java" startBytecode="4" primary="true">
+      <Message>At ProjectInvalidationAssessment.java:[line 15]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="b26010b8fe629cd6caa3ab081e90149f" cweid="459" rank="16" abbrev="OS" category="BAD_PRACTICE" priority="2" type="OS_OPEN_STREAM" instanceOccurrenceMax="0">
+    <ShortMessage>La méthode peut ne pas fermer un flux</ShortMessage>
+    <LongMessage>La méthode com.minos.io.BoundedFileDigest.sha256Exact(Path, long, String) peut ne pas fermer un flux</LongMessage>
+    <Class classname="com.minos.io.BoundedFileDigest" primary="true">
+      <SourceLine classname="com.minos.io.BoundedFileDigest" start="18" end="46" sourcepath="com/minos/io/BoundedFileDigest.java" sourcefile="BoundedFileDigest.java">
+        <Message>At BoundedFileDigest.java:[lines 18-46]</Message>
+      </SourceLine>
+      <Message>In class com.minos.io.BoundedFileDigest</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.io.BoundedFileDigest" signature="(Ljava/nio/file/Path;JLjava/lang/String;)Ljava/lang/String;" name="sha256Exact" primary="true">
+      <SourceLine endBytecode="120" classname="com.minos.io.BoundedFileDigest" start="22" end="27" sourcepath="com/minos/io/BoundedFileDigest.java" sourcefile="BoundedFileDigest.java" startBytecode="0" />
+      <Message>In method com.minos.io.BoundedFileDigest.sha256Exact(Path, long, String)</Message>
+    </Method>
+    <Type role="TYPE_CLOSEIT" descriptor="Ljava/io/InputStream;">
+      <SourceLine classname="java.io.InputStream" start="63" end="805" sourcepath="java/io/InputStream.java" sourcefile="InputStream.java">
+        <Message>At InputStream.java:[lines 63-805]</Message>
+      </SourceLine>
+      <Message>Need to close java.io.InputStream </Message>
+    </Type>
+    <SourceLine endBytecode="173" classname="com.minos.io.BoundedFileDigest" start="37" end="37" sourcepath="com/minos/io/BoundedFileDigest.java" sourcefile="BoundedFileDigest.java" startBytecode="173" primary="true">
+      <Message>At BoundedFileDigest.java:[line 37]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="8a61790d1e84372e0f394c6f6bad6185" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.io.PrivateLocalStorage.currentOwner(Path)</LongMessage>
+    <Class classname="com.minos.io.PrivateLocalStorage" primary="true">
+      <SourceLine classname="com.minos.io.PrivateLocalStorage" start="76" end="747" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java">
+        <Message>At PrivateLocalStorage.java:[lines 76-747]</Message>
+      </SourceLine>
+      <Message>In class com.minos.io.PrivateLocalStorage</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.io.PrivateLocalStorage" signature="(Ljava/nio/file/Path;)Ljava/nio/file/attribute/UserPrincipal;" name="currentOwner" primary="true">
+      <SourceLine endBytecode="247" classname="com.minos.io.PrivateLocalStorage" start="275" end="286" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java" startBytecode="0" />
+      <Message>In method com.minos.io.PrivateLocalStorage.currentOwner(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="39" classname="com.minos.io.PrivateLocalStorage" start="280" end="280" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java" startBytecode="39" primary="true">
+      <Message>Method invoked at PrivateLocalStorage.java:[line 280]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="20" classname="com.minos.io.PrivateLocalStorage" start="279" end="279" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java" startBytecode="20">
+      <Message>Known null at PrivateLocalStorage.java:[line 279]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="1da1ece657759afd4d86a4134096b778" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.io.StaleScratchReclamation$Sweep.isCandidate(Path)</LongMessage>
+    <Class classname="com.minos.io.StaleScratchReclamation$Sweep" primary="true">
+      <SourceLine classname="com.minos.io.StaleScratchReclamation$Sweep" start="128" end="199" sourcepath="com/minos/io/StaleScratchReclamation.java" sourcefile="StaleScratchReclamation.java">
+        <Message>At StaleScratchReclamation.java:[lines 128-199]</Message>
+      </SourceLine>
+      <Message>In class com.minos.io.StaleScratchReclamation$Sweep</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.io.StaleScratchReclamation$Sweep" signature="(Ljava/nio/file/Path;)Z" name="isCandidate" primary="true">
+      <SourceLine endBytecode="148" classname="com.minos.io.StaleScratchReclamation$Sweep" start="165" end="165" sourcepath="com/minos/io/StaleScratchReclamation.java" sourcefile="StaleScratchReclamation.java" startBytecode="0" />
+      <Message>In method com.minos.io.StaleScratchReclamation$Sweep.isCandidate(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="28" classname="com.minos.io.StaleScratchReclamation$Sweep" start="166" end="166" sourcepath="com/minos/io/StaleScratchReclamation.java" sourcefile="StaleScratchReclamation.java" startBytecode="28" primary="true">
+      <Message>Dereferenced at StaleScratchReclamation.java:[line 166]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="23" classname="com.minos.io.StaleScratchReclamation$Sweep" start="166" end="166" sourcepath="com/minos/io/StaleScratchReclamation.java" sourcefile="StaleScratchReclamation.java" startBytecode="23">
+      <Message>Known null at StaleScratchReclamation.java:[line 166]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="e2d14a1293885781b141e5a875ee716d" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.IndexerDescriptor.buildSystems() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.IndexerDescriptor.buildSystems</LongMessage>
+    <Class classname="com.minos.orchestration.IndexerDescriptor" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexerDescriptor" start="17" end="65" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java">
+        <Message>At IndexerDescriptor.java:[lines 17-65]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.IndexerDescriptor</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.IndexerDescriptor" signature="()Ljava/util/Set;" name="buildSystems" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.IndexerDescriptor" start="17" end="17" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.IndexerDescriptor.buildSystems()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.IndexerDescriptor" signature="Ljava/util/Set;" name="buildSystems" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexerDescriptor" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java">
+        <Message>In IndexerDescriptor.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.IndexerDescriptor.buildSystems</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.IndexerDescriptor" start="17" end="17" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java" startBytecode="4" primary="true">
+      <Message>At IndexerDescriptor.java:[line 17]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="656015d2fb60753bcb9bbe4e6962288e" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.IndexerDescriptor.capabilities() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.IndexerDescriptor.capabilities</LongMessage>
+    <Class classname="com.minos.orchestration.IndexerDescriptor" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexerDescriptor" start="17" end="65" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java">
+        <Message>At IndexerDescriptor.java:[lines 17-65]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.IndexerDescriptor</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.IndexerDescriptor" signature="()Ljava/util/Set;" name="capabilities" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.IndexerDescriptor" start="17" end="17" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.IndexerDescriptor.capabilities()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.IndexerDescriptor" signature="Ljava/util/Set;" name="capabilities" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexerDescriptor" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java">
+        <Message>In IndexerDescriptor.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.IndexerDescriptor.capabilities</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.IndexerDescriptor" start="17" end="17" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java" startBytecode="4" primary="true">
+      <Message>At IndexerDescriptor.java:[line 17]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="dafd90dd0babafd679925ffa8d2778a2" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.IndexerDescriptor.languages() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.IndexerDescriptor.languages</LongMessage>
+    <Class classname="com.minos.orchestration.IndexerDescriptor" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexerDescriptor" start="17" end="65" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java">
+        <Message>At IndexerDescriptor.java:[lines 17-65]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.IndexerDescriptor</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.IndexerDescriptor" signature="()Ljava/util/Set;" name="languages" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.IndexerDescriptor" start="17" end="17" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.IndexerDescriptor.languages()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.IndexerDescriptor" signature="Ljava/util/Set;" name="languages" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexerDescriptor" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java">
+        <Message>In IndexerDescriptor.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.IndexerDescriptor.languages</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.IndexerDescriptor" start="17" end="17" sourcepath="com/minos/orchestration/IndexerDescriptor.java" sourcefile="IndexerDescriptor.java" startBytecode="4" primary="true">
+      <Message>At IndexerDescriptor.java:[line 17]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5ed91692e16e19a44e09ebafbd6bd8d9" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.IndexerNegotiationResult.uncoveredLanguages() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.IndexerNegotiationResult.uncoveredLanguages</LongMessage>
+    <Class classname="com.minos.orchestration.IndexerNegotiationResult" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexerNegotiationResult" start="14" end="30" sourcepath="com/minos/orchestration/IndexerNegotiationResult.java" sourcefile="IndexerNegotiationResult.java">
+        <Message>At IndexerNegotiationResult.java:[lines 14-30]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.IndexerNegotiationResult</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.IndexerNegotiationResult" signature="()Ljava/util/Set;" name="uncoveredLanguages" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.IndexerNegotiationResult" start="14" end="14" sourcepath="com/minos/orchestration/IndexerNegotiationResult.java" sourcefile="IndexerNegotiationResult.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.IndexerNegotiationResult.uncoveredLanguages()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.IndexerNegotiationResult" signature="Ljava/util/Set;" name="uncoveredLanguages" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexerNegotiationResult" sourcepath="com/minos/orchestration/IndexerNegotiationResult.java" sourcefile="IndexerNegotiationResult.java">
+        <Message>In IndexerNegotiationResult.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.IndexerNegotiationResult.uncoveredLanguages</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.IndexerNegotiationResult" start="14" end="14" sourcepath="com/minos/orchestration/IndexerNegotiationResult.java" sourcefile="IndexerNegotiationResult.java" startBytecode="4" primary="true">
+      <Message>At IndexerNegotiationResult.java:[line 14]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="27a86113d15f033c9b390b4095080bb7" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation.missingCapabilities() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation.missingCapabilities</LongMessage>
+    <Class classname="com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation" start="40" end="60" sourcepath="com/minos/orchestration/IndexerNegotiationResult.java" sourcefile="IndexerNegotiationResult.java">
+        <Message>At IndexerNegotiationResult.java:[lines 40-60]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation" signature="()Ljava/util/Set;" name="missingCapabilities" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation" start="40" end="40" sourcepath="com/minos/orchestration/IndexerNegotiationResult.java" sourcefile="IndexerNegotiationResult.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation.missingCapabilities()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation" signature="Ljava/util/Set;" name="missingCapabilities" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation" sourcepath="com/minos/orchestration/IndexerNegotiationResult.java" sourcefile="IndexerNegotiationResult.java">
+        <Message>In IndexerNegotiationResult.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation.missingCapabilities</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.IndexerNegotiationResult$IndexerEvaluation" start="40" end="40" sourcepath="com/minos/orchestration/IndexerNegotiationResult.java" sourcefile="IndexerNegotiationResult.java" startBytecode="4" primary="true">
+      <Message>At IndexerNegotiationResult.java:[line 40]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="c8572fe0d9648f7ccb4360fe339e7a6d" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.IndexingRequirements.requiredCapabilities() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.IndexingRequirements.requiredCapabilities</LongMessage>
+    <Class classname="com.minos.orchestration.IndexingRequirements" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexingRequirements" start="11" end="33" sourcepath="com/minos/orchestration/IndexingRequirements.java" sourcefile="IndexingRequirements.java">
+        <Message>At IndexingRequirements.java:[lines 11-33]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.IndexingRequirements</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.IndexingRequirements" signature="()Ljava/util/Set;" name="requiredCapabilities" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.IndexingRequirements" start="11" end="11" sourcepath="com/minos/orchestration/IndexingRequirements.java" sourcefile="IndexingRequirements.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.IndexingRequirements.requiredCapabilities()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.IndexingRequirements" signature="Ljava/util/Set;" name="requiredCapabilities" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexingRequirements" sourcepath="com/minos/orchestration/IndexingRequirements.java" sourcefile="IndexingRequirements.java">
+        <Message>In IndexingRequirements.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.IndexingRequirements.requiredCapabilities</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.IndexingRequirements" start="11" end="11" sourcepath="com/minos/orchestration/IndexingRequirements.java" sourcefile="IndexingRequirements.java" startBytecode="4" primary="true">
+      <Message>At IndexingRequirements.java:[line 11]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="df2865bfccc8be41c19e7d41ca250de4" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.IndexingRun$ExecutionCheckpoint.changedFiles() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.IndexingRun$ExecutionCheckpoint.changedFiles</LongMessage>
+    <Class classname="com.minos.orchestration.IndexingRun$ExecutionCheckpoint" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexingRun$ExecutionCheckpoint" start="239" end="302" sourcepath="com/minos/orchestration/IndexingRun.java" sourcefile="IndexingRun.java">
+        <Message>At IndexingRun.java:[lines 239-302]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.IndexingRun$ExecutionCheckpoint</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.IndexingRun$ExecutionCheckpoint" signature="()Ljava/util/List;" name="changedFiles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.IndexingRun$ExecutionCheckpoint" start="239" end="239" sourcepath="com/minos/orchestration/IndexingRun.java" sourcefile="IndexingRun.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.IndexingRun$ExecutionCheckpoint.changedFiles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.IndexingRun$ExecutionCheckpoint" signature="Ljava/util/List;" name="changedFiles" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexingRun$ExecutionCheckpoint" sourcepath="com/minos/orchestration/IndexingRun.java" sourcefile="IndexingRun.java">
+        <Message>In IndexingRun.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.IndexingRun$ExecutionCheckpoint.changedFiles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.IndexingRun$ExecutionCheckpoint" start="239" end="239" sourcepath="com/minos/orchestration/IndexingRun.java" sourcefile="IndexingRun.java" startBytecode="4" primary="true">
+      <Message>At IndexingRun.java:[line 239]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="9ad34150d70b7ee3521b88d899816cfd" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest.changedFiles() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest.changedFiles</LongMessage>
+    <Class classname="com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest" start="236" end="339" sourcepath="com/minos/orchestration/IndexingRuntimePorts.java" sourcefile="IndexingRuntimePorts.java">
+        <Message>At IndexingRuntimePorts.java:[lines 236-339]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest" signature="()Ljava/util/List;" name="changedFiles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest" start="236" end="236" sourcepath="com/minos/orchestration/IndexingRuntimePorts.java" sourcefile="IndexingRuntimePorts.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest.changedFiles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest" signature="Ljava/util/List;" name="changedFiles" primary="true">
+      <SourceLine classname="com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest" sourcepath="com/minos/orchestration/IndexingRuntimePorts.java" sourcefile="IndexingRuntimePorts.java">
+        <Message>In IndexingRuntimePorts.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest.changedFiles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.IndexingRuntimePorts$IndexingExecutionRequest" start="236" end="236" sourcepath="com/minos/orchestration/IndexingRuntimePorts.java" sourcefile="IndexingRuntimePorts.java" startBytecode="4" primary="true">
+      <Message>At IndexingRuntimePorts.java:[line 236]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="81e60e43603671db046f2b1d7bff6644" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.ProviderConformanceKit$ConformanceResult.capabilities() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.ProviderConformanceKit$ConformanceResult.capabilities</LongMessage>
+    <Class classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" primary="true">
+      <SourceLine classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" start="81" end="115" sourcepath="com/minos/orchestration/ProviderConformanceKit.java" sourcefile="ProviderConformanceKit.java">
+        <Message>At ProviderConformanceKit.java:[lines 81-115]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.ProviderConformanceKit$ConformanceResult</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" signature="()Ljava/util/Map;" name="capabilities" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" start="81" end="81" sourcepath="com/minos/orchestration/ProviderConformanceKit.java" sourcefile="ProviderConformanceKit.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.ProviderConformanceKit$ConformanceResult.capabilities()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" signature="Ljava/util/Map;" name="capabilities" primary="true">
+      <SourceLine classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" sourcepath="com/minos/orchestration/ProviderConformanceKit.java" sourcefile="ProviderConformanceKit.java">
+        <Message>In ProviderConformanceKit.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.ProviderConformanceKit$ConformanceResult.capabilities</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" start="81" end="81" sourcepath="com/minos/orchestration/ProviderConformanceKit.java" sourcefile="ProviderConformanceKit.java" startBytecode="4" primary="true">
+      <Message>At ProviderConformanceKit.java:[line 81]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="3b55b47ba2dbb601ca3d359bfaf851ab" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.ProviderConformanceKit$ConformanceResult.counts() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.ProviderConformanceKit$ConformanceResult.counts</LongMessage>
+    <Class classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" primary="true">
+      <SourceLine classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" start="81" end="115" sourcepath="com/minos/orchestration/ProviderConformanceKit.java" sourcefile="ProviderConformanceKit.java">
+        <Message>At ProviderConformanceKit.java:[lines 81-115]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.ProviderConformanceKit$ConformanceResult</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" signature="()Ljava/util/Map;" name="counts" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" start="81" end="81" sourcepath="com/minos/orchestration/ProviderConformanceKit.java" sourcefile="ProviderConformanceKit.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.ProviderConformanceKit$ConformanceResult.counts()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" signature="Ljava/util/Map;" name="counts" primary="true">
+      <SourceLine classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" sourcepath="com/minos/orchestration/ProviderConformanceKit.java" sourcefile="ProviderConformanceKit.java">
+        <Message>In ProviderConformanceKit.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.ProviderConformanceKit$ConformanceResult.counts</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.ProviderConformanceKit$ConformanceResult" start="81" end="81" sourcepath="com/minos/orchestration/ProviderConformanceKit.java" sourcefile="ProviderConformanceKit.java" startBytecode="4" primary="true">
+      <Message>At ProviderConformanceKit.java:[line 81]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="2cfa131a12ffd2fff34bd80d3592792a" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.orchestration.ProviderOperationalProfile.qualificationPlatforms() risque d'exposer sa représentation interne en renvoyant com.minos.orchestration.ProviderOperationalProfile.qualificationPlatforms</LongMessage>
+    <Class classname="com.minos.orchestration.ProviderOperationalProfile" primary="true">
+      <SourceLine classname="com.minos.orchestration.ProviderOperationalProfile" start="24" end="56" sourcepath="com/minos/orchestration/ProviderOperationalProfile.java" sourcefile="ProviderOperationalProfile.java">
+        <Message>At ProviderOperationalProfile.java:[lines 24-56]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.ProviderOperationalProfile</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.ProviderOperationalProfile" signature="()Ljava/util/Set;" name="qualificationPlatforms" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.orchestration.ProviderOperationalProfile" start="24" end="24" sourcepath="com/minos/orchestration/ProviderOperationalProfile.java" sourcefile="ProviderOperationalProfile.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.ProviderOperationalProfile.qualificationPlatforms()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.orchestration.ProviderOperationalProfile" signature="Ljava/util/Set;" name="qualificationPlatforms" primary="true">
+      <SourceLine classname="com.minos.orchestration.ProviderOperationalProfile" sourcepath="com/minos/orchestration/ProviderOperationalProfile.java" sourcefile="ProviderOperationalProfile.java">
+        <Message>In ProviderOperationalProfile.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.orchestration.ProviderOperationalProfile.qualificationPlatforms</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.orchestration.ProviderOperationalProfile" start="24" end="24" sourcepath="com/minos/orchestration/ProviderOperationalProfile.java" sourcefile="ProviderOperationalProfile.java" startBytecode="4" primary="true">
+      <Message>At ProviderOperationalProfile.java:[line 24]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="3e12da2bcf4181f97257e8428432e80e" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.registry.RegisteredWorkspace.projectIds() risque d'exposer sa représentation interne en renvoyant com.minos.registry.RegisteredWorkspace.projectIds</LongMessage>
+    <Class classname="com.minos.registry.RegisteredWorkspace" primary="true">
+      <SourceLine classname="com.minos.registry.RegisteredWorkspace" start="12" end="31" sourcepath="com/minos/registry/RegisteredWorkspace.java" sourcefile="RegisteredWorkspace.java">
+        <Message>At RegisteredWorkspace.java:[lines 12-31]</Message>
+      </SourceLine>
+      <Message>In class com.minos.registry.RegisteredWorkspace</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.registry.RegisteredWorkspace" signature="()Ljava/util/List;" name="projectIds" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.registry.RegisteredWorkspace" start="12" end="12" sourcepath="com/minos/registry/RegisteredWorkspace.java" sourcefile="RegisteredWorkspace.java" startBytecode="0" />
+      <Message>In method com.minos.registry.RegisteredWorkspace.projectIds()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.registry.RegisteredWorkspace" signature="Ljava/util/List;" name="projectIds" primary="true">
+      <SourceLine classname="com.minos.registry.RegisteredWorkspace" sourcepath="com/minos/registry/RegisteredWorkspace.java" sourcefile="RegisteredWorkspace.java">
+        <Message>In RegisteredWorkspace.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.registry.RegisteredWorkspace.projectIds</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.registry.RegisteredWorkspace" start="12" end="12" sourcepath="com/minos/registry/RegisteredWorkspace.java" sourcefile="RegisteredWorkspace.java" startBytecode="4" primary="true">
+      <Message>At RegisteredWorkspace.java:[line 12]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="bc1ab494771f0edbd0de32a94d884ade" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.registry.UnreadableRegistryException.unreadable() risque d'exposer sa représentation interne en renvoyant com.minos.registry.UnreadableRegistryException.unreadable</LongMessage>
+    <Class classname="com.minos.registry.UnreadableRegistryException" primary="true">
+      <SourceLine classname="com.minos.registry.UnreadableRegistryException" start="22" end="54" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java">
+        <Message>At UnreadableRegistryException.java:[lines 22-54]</Message>
+      </SourceLine>
+      <Message>In class com.minos.registry.UnreadableRegistryException</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.registry.UnreadableRegistryException" signature="()Ljava/util/List;" name="unreadable" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.registry.UnreadableRegistryException" start="49" end="49" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java" startBytecode="0" />
+      <Message>In method com.minos.registry.UnreadableRegistryException.unreadable()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.registry.UnreadableRegistryException" signature="Ljava/util/List;" name="unreadable" primary="true">
+      <SourceLine classname="com.minos.registry.UnreadableRegistryException" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java">
+        <Message>In UnreadableRegistryException.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.registry.UnreadableRegistryException.unreadable</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.registry.UnreadableRegistryException" start="49" end="49" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java" startBytecode="4" primary="true">
+      <Message>At UnreadableRegistryException.java:[line 49]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="52a94635b585ffb5607a4e348810bdc3" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.store.SnapshotQueryView.queryStore() risque d'exposer sa représentation interne en renvoyant com.minos.store.SnapshotQueryView.queryStore</LongMessage>
+    <Class classname="com.minos.store.SnapshotQueryView" primary="true">
+      <SourceLine classname="com.minos.store.SnapshotQueryView" start="11" end="27" sourcepath="com/minos/store/SnapshotQueryView.java" sourcefile="SnapshotQueryView.java">
+        <Message>At SnapshotQueryView.java:[lines 11-27]</Message>
+      </SourceLine>
+      <Message>In class com.minos.store.SnapshotQueryView</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.store.SnapshotQueryView" signature="()Lcom/minos/store/InMemoryCodeKnowledgeStore;" name="queryStore" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.store.SnapshotQueryView" start="11" end="11" sourcepath="com/minos/store/SnapshotQueryView.java" sourcefile="SnapshotQueryView.java" startBytecode="0" />
+      <Message>In method com.minos.store.SnapshotQueryView.queryStore()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.store.SnapshotQueryView" signature="Lcom/minos/store/InMemoryCodeKnowledgeStore;" name="queryStore" primary="true">
+      <SourceLine classname="com.minos.store.SnapshotQueryView" sourcepath="com/minos/store/SnapshotQueryView.java" sourcefile="SnapshotQueryView.java">
+        <Message>In SnapshotQueryView.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.store.SnapshotQueryView.queryStore</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.store.SnapshotQueryView" start="11" end="11" sourcepath="com/minos/store/SnapshotQueryView.java" sourcefile="SnapshotQueryView.java" startBytecode="4" primary="true">
+      <Message>At SnapshotQueryView.java:[line 11]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="7b85bb1601bb5e904099ac41109b0997" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode expose sa représentation interne en incorporant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode new com.minos.store.SnapshotQueryView(SnapshotDescriptor, CodeKnowledgeSnapshot, InMemoryCodeKnowledgeStore, long) risque d'exposer sa représentation interne en stockant un objet externe modifiable dans com.minos.store.SnapshotQueryView.queryStore</LongMessage>
+    <Class classname="com.minos.store.SnapshotQueryView" primary="true">
+      <SourceLine classname="com.minos.store.SnapshotQueryView" start="11" end="27" sourcepath="com/minos/store/SnapshotQueryView.java" sourcefile="SnapshotQueryView.java">
+        <Message>At SnapshotQueryView.java:[lines 11-27]</Message>
+      </SourceLine>
+      <Message>In class com.minos.store.SnapshotQueryView</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.store.SnapshotQueryView" signature="(Lcom/minos/store/SnapshotDescriptor;Lcom/minos/store/CodeKnowledgeSnapshot;Lcom/minos/store/InMemoryCodeKnowledgeStore;J)V" name="&lt;init&gt;" primary="true">
+      <SourceLine endBytecode="201" classname="com.minos.store.SnapshotQueryView" start="17" end="24" sourcepath="com/minos/store/SnapshotQueryView.java" sourcefile="SnapshotQueryView.java" startBytecode="0" />
+      <Message>In method new com.minos.store.SnapshotQueryView(SnapshotDescriptor, CodeKnowledgeSnapshot, InMemoryCodeKnowledgeStore, long)</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.store.SnapshotQueryView" signature="Lcom/minos/store/InMemoryCodeKnowledgeStore;" name="queryStore" primary="true">
+      <SourceLine classname="com.minos.store.SnapshotQueryView" sourcepath="com/minos/store/SnapshotQueryView.java" sourcefile="SnapshotQueryView.java">
+        <Message>In SnapshotQueryView.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.store.SnapshotQueryView.queryStore</Message>
+    </Field>
+    <LocalVariable role="LOCAL_VARIABLE_NAMED" pc="54" name="queryStore" register="3">
+      <Message>Local variable named queryStore</Message>
+    </LocalVariable>
+    <SourceLine endBytecode="54" classname="com.minos.store.SnapshotQueryView" start="17" end="17" sourcepath="com/minos/store/SnapshotQueryView.java" sourcefile="SnapshotQueryView.java" startBytecode="54" primary="true">
+      <Message>At SnapshotQueryView.java:[line 17]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>

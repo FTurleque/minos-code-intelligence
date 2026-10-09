@@ -1,0 +1,95 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="82e72066569b84e57ecd9bb03457c0a7" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.nexus.NexusExportContract$ExportRelation.evidence() risque d'exposer sa représentation interne en renvoyant com.minos.nexus.NexusExportContract$ExportRelation.evidence</LongMessage>
+    <Class classname="com.minos.nexus.NexusExportContract$ExportRelation" primary="true">
+      <SourceLine classname="com.minos.nexus.NexusExportContract$ExportRelation" start="113" end="140" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java">
+        <Message>At NexusExportContract.java:[lines 113-140]</Message>
+      </SourceLine>
+      <Message>In class com.minos.nexus.NexusExportContract$ExportRelation</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.nexus.NexusExportContract$ExportRelation" signature="()Ljava/util/List;" name="evidence" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.nexus.NexusExportContract$ExportRelation" start="113" end="113" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java" startBytecode="0" />
+      <Message>In method com.minos.nexus.NexusExportContract$ExportRelation.evidence()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.nexus.NexusExportContract$ExportRelation" signature="Ljava/util/List;" name="evidence" primary="true">
+      <SourceLine classname="com.minos.nexus.NexusExportContract$ExportRelation" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java">
+        <Message>In NexusExportContract.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.nexus.NexusExportContract$ExportRelation.evidence</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.nexus.NexusExportContract$ExportRelation" start="113" end="113" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java" startBytecode="4" primary="true">
+      <Message>At NexusExportContract.java:[line 113]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="3d4a1f5835b23ce53c1c1128cb26a089" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.nexus.NexusExportContract$ExportSnapshot.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.nexus.NexusExportContract$ExportSnapshot.limitations</LongMessage>
+    <Class classname="com.minos.nexus.NexusExportContract$ExportSnapshot" primary="true">
+      <SourceLine classname="com.minos.nexus.NexusExportContract$ExportSnapshot" start="23" end="38" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java">
+        <Message>At NexusExportContract.java:[lines 23-38]</Message>
+      </SourceLine>
+      <Message>In class com.minos.nexus.NexusExportContract$ExportSnapshot</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" start="23" end="23" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java" startBytecode="0" />
+      <Message>In method com.minos.nexus.NexusExportContract$ExportSnapshot.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.nexus.NexusExportContract$ExportSnapshot" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java">
+        <Message>In NexusExportContract.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.nexus.NexusExportContract$ExportSnapshot.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" start="23" end="23" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java" startBytecode="4" primary="true">
+      <Message>At NexusExportContract.java:[line 23]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="4383f31f837e0093518553174866131f" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.nexus.NexusExportContract$ExportSnapshot.relations() risque d'exposer sa représentation interne en renvoyant com.minos.nexus.NexusExportContract$ExportSnapshot.relations</LongMessage>
+    <Class classname="com.minos.nexus.NexusExportContract$ExportSnapshot" primary="true">
+      <SourceLine classname="com.minos.nexus.NexusExportContract$ExportSnapshot" start="23" end="38" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java">
+        <Message>At NexusExportContract.java:[lines 23-38]</Message>
+      </SourceLine>
+      <Message>In class com.minos.nexus.NexusExportContract$ExportSnapshot</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" signature="()Ljava/util/List;" name="relations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" start="23" end="23" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java" startBytecode="0" />
+      <Message>In method com.minos.nexus.NexusExportContract$ExportSnapshot.relations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" signature="Ljava/util/List;" name="relations" primary="true">
+      <SourceLine classname="com.minos.nexus.NexusExportContract$ExportSnapshot" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java">
+        <Message>In NexusExportContract.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.nexus.NexusExportContract$ExportSnapshot.relations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" start="23" end="23" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java" startBytecode="4" primary="true">
+      <Message>At NexusExportContract.java:[line 23]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="bb2dedfe5c81339b09bf7fc34c487465" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.nexus.NexusExportContract$ExportSnapshot.symbols() risque d'exposer sa représentation interne en renvoyant com.minos.nexus.NexusExportContract$ExportSnapshot.symbols</LongMessage>
+    <Class classname="com.minos.nexus.NexusExportContract$ExportSnapshot" primary="true">
+      <SourceLine classname="com.minos.nexus.NexusExportContract$ExportSnapshot" start="23" end="38" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java">
+        <Message>At NexusExportContract.java:[lines 23-38]</Message>
+      </SourceLine>
+      <Message>In class com.minos.nexus.NexusExportContract$ExportSnapshot</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" signature="()Ljava/util/List;" name="symbols" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" start="23" end="23" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java" startBytecode="0" />
+      <Message>In method com.minos.nexus.NexusExportContract$ExportSnapshot.symbols()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" signature="Ljava/util/List;" name="symbols" primary="true">
+      <SourceLine classname="com.minos.nexus.NexusExportContract$ExportSnapshot" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java">
+        <Message>In NexusExportContract.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.nexus.NexusExportContract$ExportSnapshot.symbols</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.nexus.NexusExportContract$ExportSnapshot" start="23" end="23" sourcepath="com/minos/nexus/NexusExportContract.java" sourcefile="NexusExportContract.java" startBytecode="4" primary="true">
+      <Message>At NexusExportContract.java:[line 23]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>
