@@ -1,0 +1,1314 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="90c32cbdba2e088f70cf1efd9b8ea1e0" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto.advancedAdded() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto.advancedAdded</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" start="116" end="128" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 116-128]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" signature="()Ljava/util/List;" name="advancedAdded" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" start="116" end="116" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto.advancedAdded()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" signature="Ljava/util/List;" name="advancedAdded" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto.advancedAdded</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" start="116" end="116" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 116]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="d2bbac69ca362f1c6a1b231aae831246" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto.limitations</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" start="116" end="128" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 116-128]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" start="116" end="116" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactDto" start="116" end="116" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 116]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="deb5af60e6132664862bed152d9d4b14" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto.programEdgePath() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto.programEdgePath</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto" start="103" end="113" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 103-113]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto" signature="()Ljava/util/List;" name="programEdgePath" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto" start="103" end="103" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto.programEdgePath()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto" signature="Ljava/util/List;" name="programEdgePath" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto.programEdgePath</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$AdvancedImpactItemDto" start="103" end="103" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 103]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="b58eb5024c9779f959e9f5bcc68c9c8d" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto.evidence() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto.evidence</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto" start="72" end="84" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 72-84]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto" signature="()Ljava/util/List;" name="evidence" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto" start="72" end="72" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto.evidence()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto" signature="Ljava/util/List;" name="evidence" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto.evidence</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramEdgeDto" start="72" end="72" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 72]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="6b7a309f26e74fc12eb73da92b901a7e" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.capabilities() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.capabilities</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="100" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 87-100]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" signature="()Ljava/util/List;" name="capabilities" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="87" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.capabilities()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" signature="Ljava/util/List;" name="capabilities" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.capabilities</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="87" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 87]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="d77b628a04d7743a5c8d9167e21ed2c5" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.edges() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.edges</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="100" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 87-100]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" signature="()Ljava/util/List;" name="edges" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="87" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.edges()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" signature="Ljava/util/List;" name="edges" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.edges</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="87" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 87]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="57c8414b5e16eddb0dc34cd6c357a5d3" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.limitations</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="100" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 87-100]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="87" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="87" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 87]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5d6cabc4a8e8a949b7597b801dc741f0" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.nodes() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.nodes</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="100" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 87-100]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" signature="()Ljava/util/List;" name="nodes" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="87" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.nodes()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" signature="Ljava/util/List;" name="nodes" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto.nodes</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$ProgramGraphDto" start="87" end="87" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 87]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="2a6413f9cfe7a9d773abc3256d37a059" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.edgePath() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.edgePath</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" start="131" end="147" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 131-147]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" signature="()Ljava/util/List;" name="edgePath" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" start="131" end="131" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.edgePath()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" signature="Ljava/util/List;" name="edgePath" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.edgePath</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" start="131" end="131" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 131]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="14000f6fa18b81e1f1c764c0ede3e69b" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.nodePath() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.nodePath</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" start="131" end="147" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 131-147]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" signature="()Ljava/util/List;" name="nodePath" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" start="131" end="131" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.nodePath()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" signature="Ljava/util/List;" name="nodePath" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.nodePath</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" start="131" end="131" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 131]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="e6326b5d562bdbbb1341c118b5d86eed" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.sanitizerNodeIds() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.sanitizerNodeIds</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" start="131" end="147" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 131-147]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" signature="()Ljava/util/List;" name="sanitizerNodeIds" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" start="131" end="131" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.sanitizerNodeIds()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" signature="Ljava/util/List;" name="sanitizerNodeIds" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto.sanitizerNodeIds</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityPathDto" start="131" end="131" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 131]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="65268976003c418bba7a592e939b7feb" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto.limitations</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" start="150" end="159" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 150-159]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" start="150" end="150" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" start="150" end="150" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 150]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="8a58138815c7b8324848c71396fac88" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto.observedPaths() risque d'exposer sa représentation interne en renvoyant com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto.observedPaths</LongMessage>
+    <Class classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" start="150" end="159" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>At AdvancedCodeIntelligenceApi.java:[lines 150-159]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" signature="()Ljava/util/List;" name="observedPaths" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" start="150" end="150" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto.observedPaths()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" signature="Ljava/util/List;" name="observedPaths" primary="true">
+      <SourceLine classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java">
+        <Message>In AdvancedCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto.observedPaths</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.AdvancedCodeIntelligenceApi$SecurityReportDto" start="150" end="150" sourcepath="com/minos/api/AdvancedCodeIntelligenceApi.java" sourcefile="AdvancedCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At AdvancedCodeIntelligenceApi.java:[line 150]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5c65f60c0da8c9c1f220035709062aa5" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.LocalMinosApi.team() risque d'exposer sa représentation interne en renvoyant com.minos.api.LocalMinosApi.teamApi</LongMessage>
+    <Class classname="com.minos.api.LocalMinosApi" primary="true">
+      <SourceLine classname="com.minos.api.LocalMinosApi" start="68" end="528" sourcepath="com/minos/api/LocalMinosApi.java" sourcefile="LocalMinosApi.java">
+        <Message>At LocalMinosApi.java:[lines 68-528]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.LocalMinosApi</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.LocalMinosApi" signature="()Lcom/minos/api/MinosTeamApi;" name="team" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.LocalMinosApi" start="240" end="240" sourcepath="com/minos/api/LocalMinosApi.java" sourcefile="LocalMinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.LocalMinosApi.team()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.LocalMinosApi" signature="Lcom/minos/api/MinosTeamApi;" name="teamApi" primary="true">
+      <SourceLine classname="com.minos.api.LocalMinosApi" sourcepath="com/minos/api/LocalMinosApi.java" sourcefile="LocalMinosApi.java">
+        <Message>In LocalMinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.LocalMinosApi.teamApi</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.LocalMinosApi" start="240" end="240" sourcepath="com/minos/api/LocalMinosApi.java" sourcefile="LocalMinosApi.java" startBytecode="4" primary="true">
+      <Message>At LocalMinosApi.java:[line 240]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="b648f2766a53732a2f0b7dd1a7227a62" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureDependencyDto.sampleDependencyIds() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureDependencyDto.sampleDependencyIds</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureDependencyDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDependencyDto" start="494" end="509" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 494-509]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureDependencyDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDependencyDto" signature="()Ljava/util/List;" name="sampleDependencyIds" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureDependencyDto" start="494" end="494" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureDependencyDto.sampleDependencyIds()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDependencyDto" signature="Ljava/util/List;" name="sampleDependencyIds" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDependencyDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureDependencyDto.sampleDependencyIds</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureDependencyDto" start="494" end="494" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 494]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="fdf011a10fad89280ced0b6d0221d56" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureDto.buildSystems() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureDto.buildSystems</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="491" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 430-491]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="()Ljava/util/List;" name="buildSystems" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureDto.buildSystems()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="Ljava/util/List;" name="buildSystems" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureDto.buildSystems</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 430]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="eab6a7e0e375b0e090eb467596bd725" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureDto.languages() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureDto.languages</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="491" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 430-491]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="()Ljava/util/List;" name="languages" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureDto.languages()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="Ljava/util/List;" name="languages" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureDto.languages</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 430]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="2dba2edbbbb853768668b938c1a7ead6" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureDto.limitations</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="491" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 430-491]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 430]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="57d2360a035bf83a648b8aeeb4a19fa3" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureDto.modules() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureDto.modules</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="491" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 430-491]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="()Ljava/util/List;" name="modules" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureDto.modules()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="Ljava/util/List;" name="modules" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureDto.modules</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 430]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="9e3a20da48539cc07e42b6cb4ae865bc" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureDto.technologies() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureDto.technologies</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="491" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 430-491]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="()Ljava/util/List;" name="technologies" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureDto.technologies()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="Ljava/util/List;" name="technologies" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureDto.technologies</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 430]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="e6edffc77c3dba1872207b512552cfbe" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureDto.topIncomingModuleIds() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureDto.topIncomingModuleIds</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="491" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 430-491]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="()Ljava/util/List;" name="topIncomingModuleIds" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureDto.topIncomingModuleIds()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="Ljava/util/List;" name="topIncomingModuleIds" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureDto.topIncomingModuleIds</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 430]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="7e6dd42d82a9f9d4494a31e51baebfb5" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureDto.topOutgoingModuleIds() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureDto.topOutgoingModuleIds</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="491" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 430-491]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="()Ljava/util/List;" name="topOutgoingModuleIds" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureDto.topOutgoingModuleIds()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureDto" signature="Ljava/util/List;" name="topOutgoingModuleIds" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureDto.topOutgoingModuleIds</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureDto" start="430" end="430" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 430]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="2762f519a5ca59db0179c3e7ac71ff34" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureGraphDto.dependencies() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureGraphDto.dependencies</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureGraphDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureGraphDto" start="512" end="530" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 512-530]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureGraphDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureGraphDto" signature="()Ljava/util/List;" name="dependencies" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureGraphDto" start="512" end="512" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureGraphDto.dependencies()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureGraphDto" signature="Ljava/util/List;" name="dependencies" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureGraphDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureGraphDto.dependencies</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureGraphDto" start="512" end="512" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 512]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="7eb9057397c9348dc71129768be9c501" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureGraphDto.modules() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureGraphDto.modules</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureGraphDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureGraphDto" start="512" end="530" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 512-530]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureGraphDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureGraphDto" signature="()Ljava/util/List;" name="modules" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureGraphDto" start="512" end="512" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureGraphDto.modules()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureGraphDto" signature="Ljava/util/List;" name="modules" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureGraphDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureGraphDto.modules</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureGraphDto" start="512" end="512" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 512]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="466907d5dde456342e30c7e084847f55" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureModuleDto.buildSystems() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureModuleDto.buildSystems</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureModuleDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureModuleDto" start="414" end="427" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 414-427]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureModuleDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureModuleDto" signature="()Ljava/util/List;" name="buildSystems" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureModuleDto" start="414" end="414" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureModuleDto.buildSystems()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureModuleDto" signature="Ljava/util/List;" name="buildSystems" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureModuleDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureModuleDto.buildSystems</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureModuleDto" start="414" end="414" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 414]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="64bc4f4abd0229a118a8f6d8d5af969c" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ArchitectureModuleDto.languages() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ArchitectureModuleDto.languages</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ArchitectureModuleDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureModuleDto" start="414" end="427" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 414-427]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ArchitectureModuleDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ArchitectureModuleDto" signature="()Ljava/util/List;" name="languages" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ArchitectureModuleDto" start="414" end="414" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ArchitectureModuleDto.languages()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ArchitectureModuleDto" signature="Ljava/util/List;" name="languages" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ArchitectureModuleDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ArchitectureModuleDto.languages</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ArchitectureModuleDto" start="414" end="414" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 414]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="4a2b838227094f0e1108ceef12297932" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ImpactItemDto.path() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ImpactItemDto.path</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ImpactItemDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ImpactItemDto" start="573" end="584" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 573-584]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ImpactItemDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ImpactItemDto" signature="()Ljava/util/List;" name="path" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ImpactItemDto" start="573" end="573" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ImpactItemDto.path()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ImpactItemDto" signature="Ljava/util/List;" name="path" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ImpactItemDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ImpactItemDto.path</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ImpactItemDto" start="573" end="573" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 573]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="e3dd44cb6224a0c18d8e16c9117f004e" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ImpactReportDto.impacts() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ImpactReportDto.impacts</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ImpactReportDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ImpactReportDto" start="587" end="609" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 587-609]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ImpactReportDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ImpactReportDto" signature="()Ljava/util/List;" name="impacts" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ImpactReportDto" start="587" end="587" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ImpactReportDto.impacts()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ImpactReportDto" signature="Ljava/util/List;" name="impacts" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ImpactReportDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ImpactReportDto.impacts</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ImpactReportDto" start="587" end="587" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 587]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="e48d103edee76adb6b76f941a75b6e41" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ImpactReportDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ImpactReportDto.limitations</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ImpactReportDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ImpactReportDto" start="587" end="609" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 587-609]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ImpactReportDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ImpactReportDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ImpactReportDto" start="587" end="587" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ImpactReportDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ImpactReportDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ImpactReportDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ImpactReportDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ImpactReportDto" start="587" end="587" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 587]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="3d3f6942e4f15b09046e378473ff4a3b" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ImpactReportDto.potentiallyImpactedTests() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ImpactReportDto.potentiallyImpactedTests</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ImpactReportDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ImpactReportDto" start="587" end="609" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 587-609]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ImpactReportDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ImpactReportDto" signature="()Ljava/util/List;" name="potentiallyImpactedTests" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ImpactReportDto" start="587" end="587" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ImpactReportDto.potentiallyImpactedTests()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ImpactReportDto" signature="Ljava/util/List;" name="potentiallyImpactedTests" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ImpactReportDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ImpactReportDto.potentiallyImpactedTests</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ImpactReportDto" start="587" end="587" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 587]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="69adece71785461181f9657abaf376b1" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ModuleContextDto.technologies() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ModuleContextDto.technologies</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ModuleContextDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ModuleContextDto" start="534" end="549" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 534-549]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ModuleContextDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ModuleContextDto" signature="()Ljava/util/List;" name="technologies" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ModuleContextDto" start="534" end="534" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ModuleContextDto.technologies()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ModuleContextDto" signature="Ljava/util/List;" name="technologies" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ModuleContextDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ModuleContextDto.technologies</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ModuleContextDto" start="534" end="534" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 534]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="c6a662e1c248246104686cec9bd0ca65" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ProjectDto.buildSystems() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ProjectDto.buildSystems</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ProjectDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ProjectDto" start="236" end="275" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 236-275]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ProjectDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ProjectDto" signature="()Ljava/util/List;" name="buildSystems" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ProjectDto" start="236" end="236" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ProjectDto.buildSystems()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ProjectDto" signature="Ljava/util/List;" name="buildSystems" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ProjectDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ProjectDto.buildSystems</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ProjectDto" start="236" end="236" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 236]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="b4697c6dfa528d752970d892763ffd82" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$ProjectDto.languages() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$ProjectDto.languages</LongMessage>
+    <Class classname="com.minos.api.MinosApi$ProjectDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ProjectDto" start="236" end="275" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 236-275]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$ProjectDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$ProjectDto" signature="()Ljava/util/List;" name="languages" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$ProjectDto" start="236" end="236" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$ProjectDto.languages()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$ProjectDto" signature="Ljava/util/List;" name="languages" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$ProjectDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$ProjectDto.languages</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$ProjectDto" start="236" end="236" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 236]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5af48cca9715f72aff6b998b62701656" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$RelationshipDto.evidence() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$RelationshipDto.evidence</LongMessage>
+    <Class classname="com.minos.api.MinosApi$RelationshipDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$RelationshipDto" start="395" end="411" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 395-411]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$RelationshipDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$RelationshipDto" signature="()Ljava/util/List;" name="evidence" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$RelationshipDto" start="395" end="395" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$RelationshipDto.evidence()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$RelationshipDto" signature="Ljava/util/List;" name="evidence" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$RelationshipDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$RelationshipDto.evidence</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$RelationshipDto" start="395" end="395" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 395]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="12d46f661f38ad640f9232c5794a27e2" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosApi$UsageDto.roles() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosApi$UsageDto.roles</LongMessage>
+    <Class classname="com.minos.api.MinosApi$UsageDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$UsageDto" start="381" end="392" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>At MinosApi.java:[lines 381-392]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosApi$UsageDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosApi$UsageDto" signature="()Ljava/util/List;" name="roles" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosApi$UsageDto" start="381" end="381" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosApi$UsageDto.roles()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosApi$UsageDto" signature="Ljava/util/List;" name="roles" primary="true">
+      <SourceLine classname="com.minos.api.MinosApi$UsageDto" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java">
+        <Message>In MinosApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosApi$UsageDto.roles</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosApi$UsageDto" start="381" end="381" sourcepath="com/minos/api/MinosApi.java" sourcefile="MinosApi.java" startBytecode="4" primary="true">
+      <Message>At MinosApi.java:[line 381]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="3b7af8bdc0e3aaae64fc64f0d50b0352" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$GitActivityDto.files() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$GitActivityDto.files</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="228" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 209-228]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$GitActivityDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" signature="()Ljava/util/List;" name="files" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="209" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$GitActivityDto.files()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" signature="Ljava/util/List;" name="files" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$GitActivityDto.files</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="209" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 209]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="2243f3640d0308ec702f0d012ce69e62" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$GitActivityDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$GitActivityDto.limitations</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="228" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 209-228]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$GitActivityDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="209" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$GitActivityDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$GitActivityDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="209" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 209]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="ccd4c867bea444cea05ae1f8c36e3350" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$GitActivityDto.recentCommits() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$GitActivityDto.recentCommits</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="228" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 209-228]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$GitActivityDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" signature="()Ljava/util/List;" name="recentCommits" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="209" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$GitActivityDto.recentCommits()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" signature="Ljava/util/List;" name="recentCommits" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$GitActivityDto.recentCommits</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="209" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 209]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="aa504896a71e158dbb69befe5fe32449" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$GitActivityDto.zones() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$GitActivityDto.zones</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="228" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 209-228]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$GitActivityDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" signature="()Ljava/util/List;" name="zones" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="209" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$GitActivityDto.zones()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" signature="Ljava/util/List;" name="zones" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$GitActivityDto.zones</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$GitActivityDto" start="209" end="209" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 209]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="1c3d7390f36c7252e78a48b5e50c4dd9" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$GitCommitDto.changedPaths() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$GitCommitDto.changedPaths</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$GitCommitDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitCommitDto" start="179" end="189" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 179-189]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$GitCommitDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitCommitDto" signature="()Ljava/util/List;" name="changedPaths" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$GitCommitDto" start="179" end="179" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$GitCommitDto.changedPaths()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitCommitDto" signature="Ljava/util/List;" name="changedPaths" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitCommitDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$GitCommitDto.changedPaths</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$GitCommitDto" start="179" end="179" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 179]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="bcac22961c38591c0602f3e0e2bc928d" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto.limitations</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto" start="163" end="176" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 163-176]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto" start="163" end="163" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$GitRepositoryDto" start="163" end="163" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 163]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="c24f8ccb3009d7767d3807ef505a8b06" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$WorkspaceDto.projectIds() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$WorkspaceDto.projectIds</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceDto" start="113" end="122" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 113-122]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$WorkspaceDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceDto" signature="()Ljava/util/List;" name="projectIds" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceDto" start="113" end="113" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$WorkspaceDto.projectIds()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceDto" signature="Ljava/util/List;" name="projectIds" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$WorkspaceDto.projectIds</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceDto" start="113" end="113" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 113]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="74c243abba765d1692ab398adb3d492d" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.crossRepositoryRelationships() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.crossRepositoryRelationships</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" start="257" end="271" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 257-271]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" signature="()Ljava/util/List;" name="crossRepositoryRelationships" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" start="257" end="257" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.crossRepositoryRelationships()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" signature="Ljava/util/List;" name="crossRepositoryRelationships" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.crossRepositoryRelationships</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" start="257" end="257" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 257]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5a72980ac12327e857c5d5c069d6c232" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.limitations</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" start="257" end="271" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 257-271]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" start="257" end="257" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" start="257" end="257" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 257]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="d93edab44db68f5767a55a7cb377b97c" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.projects() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.projects</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" start="257" end="271" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 257-271]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" signature="()Ljava/util/List;" name="projects" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" start="257" end="257" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.projects()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" signature="Ljava/util/List;" name="projects" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto.projects</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceIntelligenceDto" start="257" end="257" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 257]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="beacc3f98e1f0087b59f815bc011defb" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto.workspaces() risque d'exposer sa représentation interne en renvoyant com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto.workspaces</LongMessage>
+    <Class classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto" start="132" end="141" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>At MinosMultiRepositoryApi.java:[lines 132-141]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto" signature="()Ljava/util/List;" name="workspaces" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto" start="132" end="132" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto.workspaces()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto" signature="Ljava/util/List;" name="workspaces" primary="true">
+      <SourceLine classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java">
+        <Message>In MinosMultiRepositoryApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto.workspaces</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.MinosMultiRepositoryApi$WorkspaceInventoryDto" start="132" end="132" sourcepath="com/minos/api/MinosMultiRepositoryApi.java" sourcefile="MinosMultiRepositoryApi.java" startBytecode="4" primary="true">
+      <Message>At MinosMultiRepositoryApi.java:[line 132]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="8e4c858bca5b081ebe1d0206e3faada5" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.ProviderPlatformApi$ProviderDto.capabilities() risque d'exposer sa représentation interne en renvoyant com.minos.api.ProviderPlatformApi$ProviderDto.capabilities</LongMessage>
+    <Class classname="com.minos.api.ProviderPlatformApi$ProviderDto" primary="true">
+      <SourceLine classname="com.minos.api.ProviderPlatformApi$ProviderDto" start="19" end="38" sourcepath="com/minos/api/ProviderPlatformApi.java" sourcefile="ProviderPlatformApi.java">
+        <Message>At ProviderPlatformApi.java:[lines 19-38]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.ProviderPlatformApi$ProviderDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.ProviderPlatformApi$ProviderDto" signature="()Ljava/util/Map;" name="capabilities" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.ProviderPlatformApi$ProviderDto" start="19" end="19" sourcepath="com/minos/api/ProviderPlatformApi.java" sourcefile="ProviderPlatformApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.ProviderPlatformApi$ProviderDto.capabilities()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.ProviderPlatformApi$ProviderDto" signature="Ljava/util/Map;" name="capabilities" primary="true">
+      <SourceLine classname="com.minos.api.ProviderPlatformApi$ProviderDto" sourcepath="com/minos/api/ProviderPlatformApi.java" sourcefile="ProviderPlatformApi.java">
+        <Message>In ProviderPlatformApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.ProviderPlatformApi$ProviderDto.capabilities</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.ProviderPlatformApi$ProviderDto" start="19" end="19" sourcepath="com/minos/api/ProviderPlatformApi.java" sourcefile="ProviderPlatformApi.java" startBytecode="4" primary="true">
+      <Message>At ProviderPlatformApi.java:[line 19]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="9346027907318bfb79b1dc1050c49d39" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto.signals() risque d'exposer sa représentation interne en renvoyant com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto.signals</LongMessage>
+    <Class classname="com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto" start="161" end="177" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>At SemanticCodeIntelligenceApi.java:[lines 161-177]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto" signature="()Ljava/util/List;" name="signals" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto" start="161" end="161" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto.signals()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto" signature="Ljava/util/List;" name="signals" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>In SemanticCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto.signals</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.SemanticCodeIntelligenceApi$ContextItemDto" start="161" end="161" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At SemanticCodeIntelligenceApi.java:[line 161]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="e54669018942e1f222036049c69af6b3" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto.items() risque d'exposer sa représentation interne en renvoyant com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto.items</LongMessage>
+    <Class classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" start="180" end="193" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>At SemanticCodeIntelligenceApi.java:[lines 180-193]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" signature="()Ljava/util/List;" name="items" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" start="180" end="180" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto.items()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" signature="Ljava/util/List;" name="items" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>In SemanticCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto.items</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" start="180" end="180" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At SemanticCodeIntelligenceApi.java:[line 180]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="7b793bbba457fe73211fb3c32404e146" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto.limitations</LongMessage>
+    <Class classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" start="180" end="193" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>At SemanticCodeIntelligenceApi.java:[lines 180-193]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" start="180" end="180" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>In SemanticCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridContextDto" start="180" end="180" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At SemanticCodeIntelligenceApi.java:[line 180]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="127ad7f6834e4b9fd63762a7647c28f" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto.signals() risque d'exposer sa représentation interne en renvoyant com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto.signals</LongMessage>
+    <Class classname="com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto" start="80" end="91" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>At SemanticCodeIntelligenceApi.java:[lines 80-91]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto" signature="()Ljava/util/List;" name="signals" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto" start="80" end="80" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto.signals()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto" signature="Ljava/util/List;" name="signals" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>In SemanticCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto.signals</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridHitDto" start="80" end="80" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At SemanticCodeIntelligenceApi.java:[line 80]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="a67dfd83aa230eecad5b386acf200bc" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto.hits() risque d'exposer sa représentation interne en renvoyant com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto.hits</LongMessage>
+    <Class classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" start="146" end="158" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>At SemanticCodeIntelligenceApi.java:[lines 146-158]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" signature="()Ljava/util/List;" name="hits" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" start="146" end="146" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto.hits()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" signature="Ljava/util/List;" name="hits" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>In SemanticCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto.hits</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" start="146" end="146" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At SemanticCodeIntelligenceApi.java:[line 146]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5c9fdc4562cd287cebba4e0faa3bba5e" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto.limitations</LongMessage>
+    <Class classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" start="146" end="158" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>At SemanticCodeIntelligenceApi.java:[lines 146-158]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" start="146" end="146" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>In SemanticCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.SemanticCodeIntelligenceApi$HybridSearchDto" start="146" end="146" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At SemanticCodeIntelligenceApi.java:[line 146]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="53867fc01d9602e9b3082488d5bbdc74" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto.limitations</LongMessage>
+    <Class classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto" start="94" end="109" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>At SemanticCodeIntelligenceApi.java:[lines 94-109]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto" start="94" end="94" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>In SemanticCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexStatusDto" start="94" end="94" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At SemanticCodeIntelligenceApi.java:[line 94]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="b19555c7917cdb78504a5e6a6cbfb4b5" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto.limitations</LongMessage>
+    <Class classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto" start="112" end="128" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>At SemanticCodeIntelligenceApi.java:[lines 112-128]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto" start="112" end="112" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>In SemanticCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticIndexUpdateDto" start="112" end="112" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At SemanticCodeIntelligenceApi.java:[line 112]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="dce11bc235a8ef4bdf9255e27b302c7d" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto.hits() risque d'exposer sa représentation interne en renvoyant com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto.hits</LongMessage>
+    <Class classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" start="131" end="143" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>At SemanticCodeIntelligenceApi.java:[lines 131-143]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" signature="()Ljava/util/List;" name="hits" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" start="131" end="131" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto.hits()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" signature="Ljava/util/List;" name="hits" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>In SemanticCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto.hits</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" start="131" end="131" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At SemanticCodeIntelligenceApi.java:[line 131]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="3097313d4ab7ec2743e3643239aac373" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto.limitations() risque d'exposer sa représentation interne en renvoyant com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto.limitations</LongMessage>
+    <Class classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" start="131" end="143" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>At SemanticCodeIntelligenceApi.java:[lines 131-143]</Message>
+      </SourceLine>
+      <Message>In class com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" signature="()Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" start="131" end="131" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="0" />
+      <Message>In method com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto.limitations()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" signature="Ljava/util/List;" name="limitations" primary="true">
+      <SourceLine classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java">
+        <Message>In SemanticCodeIntelligenceApi.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto.limitations</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.api.SemanticCodeIntelligenceApi$SemanticSearchDto" start="131" end="131" sourcepath="com/minos/api/SemanticCodeIntelligenceApi.java" sourcefile="SemanticCodeIntelligenceApi.java" startBytecode="4" primary="true">
+      <Message>At SemanticCodeIntelligenceApi.java:[line 131]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>

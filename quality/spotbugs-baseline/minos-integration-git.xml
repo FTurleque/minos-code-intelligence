@@ -1,0 +1,98 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="ba2120092b156eeca95467945b8ed611" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="2">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.integration.git.JGitRemoteRepositoryMaterializer.evict(String)</LongMessage>
+    <Class classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" primary="true">
+      <SourceLine classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="51" end="433" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java">
+        <Message>At JGitRemoteRepositoryMaterializer.java:[lines 51-433]</Message>
+      </SourceLine>
+      <Message>In class com.minos.integration.git.JGitRemoteRepositoryMaterializer</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" signature="(Ljava/lang/String;)V" name="evict" primary="true">
+      <SourceLine endBytecode="1241" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="282" end="330" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java" startBytecode="0" />
+      <Message>In method com.minos.integration.git.JGitRemoteRepositoryMaterializer.evict(String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="96" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="292" end="292" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java" startBytecode="96" primary="true">
+      <Message>Dereferenced at JGitRemoteRepositoryMaterializer.java:[line 292]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="91" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="292" end="292" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java" startBytecode="91">
+      <Message>Known null at JGitRemoteRepositoryMaterializer.java:[line 292]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="1" instanceHash="ba2120092b156eeca95467945b8ed611" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="2">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.integration.git.JGitRemoteRepositoryMaterializer.evict(String)</LongMessage>
+    <Class classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" primary="true">
+      <SourceLine classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="51" end="433" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java">
+        <Message>At JGitRemoteRepositoryMaterializer.java:[lines 51-433]</Message>
+      </SourceLine>
+      <Message>In class com.minos.integration.git.JGitRemoteRepositoryMaterializer</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" signature="(Ljava/lang/String;)V" name="evict" primary="true">
+      <SourceLine endBytecode="1241" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="282" end="330" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java" startBytecode="0" />
+      <Message>In method com.minos.integration.git.JGitRemoteRepositoryMaterializer.evict(String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="163" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="298" end="298" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java" startBytecode="163" primary="true">
+      <Message>Dereferenced at JGitRemoteRepositoryMaterializer.java:[line 298]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="158" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="298" end="298" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java" startBytecode="158">
+      <Message>Known null at JGitRemoteRepositoryMaterializer.java:[line 298]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="2" instanceHash="ba2120092b156eeca95467945b8ed611" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="2">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.integration.git.JGitRemoteRepositoryMaterializer.evict(String)</LongMessage>
+    <Class classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" primary="true">
+      <SourceLine classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="51" end="433" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java">
+        <Message>At JGitRemoteRepositoryMaterializer.java:[lines 51-433]</Message>
+      </SourceLine>
+      <Message>In class com.minos.integration.git.JGitRemoteRepositoryMaterializer</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" signature="(Ljava/lang/String;)V" name="evict" primary="true">
+      <SourceLine endBytecode="1241" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="282" end="330" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java" startBytecode="0" />
+      <Message>In method com.minos.integration.git.JGitRemoteRepositoryMaterializer.evict(String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="210" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="302" end="302" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java" startBytecode="210" primary="true">
+      <Message>Dereferenced at JGitRemoteRepositoryMaterializer.java:[line 302]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="205" classname="com.minos.integration.git.JGitRemoteRepositoryMaterializer" start="302" end="302" sourcepath="com/minos/integration/git/JGitRemoteRepositoryMaterializer.java" sourcefile="JGitRemoteRepositoryMaterializer.java" startBytecode="205">
+      <Message>Known null at JGitRemoteRepositoryMaterializer.java:[line 302]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="64b95c37c4bbbf7422e7907474846847" rank="16" abbrev="CT" category="BAD_PRACTICE" priority="2" type="CT_CONSTRUCTOR_THROW" instanceOccurrenceMax="0">
+    <ShortMessage>Be wary of letting constructors throw exceptions.</ShortMessage>
+    <LongMessage>Exception thrown in class com.minos.integration.git.RemoteCloneBudget at new com.minos.integration.git.RemoteCloneBudget(Path, RemoteRepositoryCachePolicy) will leave the constructor. The object under construction remains partially initialized and may be vulnerable to Finalizer attacks.</LongMessage>
+    <Class classname="com.minos.integration.git.RemoteCloneBudget" primary="true">
+      <SourceLine classname="com.minos.integration.git.RemoteCloneBudget" start="22" end="147" sourcepath="com/minos/integration/git/RemoteCloneBudget.java" sourcefile="RemoteCloneBudget.java">
+        <Message>At RemoteCloneBudget.java:[lines 22-147]</Message>
+      </SourceLine>
+      <Message>In class com.minos.integration.git.RemoteCloneBudget</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.integration.git.RemoteCloneBudget" signature="(Ljava/nio/file/Path;Lcom/minos/integration/git/RemoteRepositoryCachePolicy;)V" name="&lt;init&gt;" primary="true">
+      <SourceLine endBytecode="185" classname="com.minos.integration.git.RemoteCloneBudget" start="24" end="32" sourcepath="com/minos/integration/git/RemoteCloneBudget.java" sourcefile="RemoteCloneBudget.java" startBytecode="0" />
+      <Message>In method new com.minos.integration.git.RemoteCloneBudget(Path, RemoteRepositoryCachePolicy)</Message>
+    </Method>
+    <SourceLine endBytecode="15" classname="com.minos.integration.git.RemoteCloneBudget" start="25" end="25" sourcepath="com/minos/integration/git/RemoteCloneBudget.java" sourcefile="RemoteCloneBudget.java" startBytecode="15" primary="true">
+      <Message>At RemoteCloneBudget.java:[line 25]</Message>
+    </SourceLine>
+    <SourceLine endBytecode="15" classname="com.minos.integration.git.RemoteCloneBudget" start="25" end="25" sourcepath="com/minos/integration/git/RemoteCloneBudget.java" sourcefile="RemoteCloneBudget.java" startBytecode="15">
+      <Message>At RemoteCloneBudget.java:[line 25]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_ANOTHER_INSTANCE" endBytecode="27" classname="com.minos.integration.git.RemoteCloneBudget" start="26" end="26" sourcepath="com/minos/integration/git/RemoteCloneBudget.java" sourcefile="RemoteCloneBudget.java" startBytecode="27">
+      <Message>Another occurrence at RemoteCloneBudget.java:[line 26]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>

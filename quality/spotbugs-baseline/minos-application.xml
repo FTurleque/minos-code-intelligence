@@ -1,0 +1,125 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="d7bf8111b7fe46fcbf0cef10dfd351ed" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode expose sa représentation interne en incorporant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.application.MinosApplication$Builder.projectRegistry(ProjectRegistry) risque d'exposer sa représentation interne en stockant un objet externe modifiable dans com.minos.application.MinosApplication$Builder.projectRegistry</LongMessage>
+    <Class classname="com.minos.application.MinosApplication$Builder" primary="true">
+      <SourceLine classname="com.minos.application.MinosApplication$Builder" start="359" end="487" sourcepath="com/minos/application/MinosApplication.java" sourcefile="MinosApplication.java">
+        <Message>At MinosApplication.java:[lines 359-487]</Message>
+      </SourceLine>
+      <Message>In class com.minos.application.MinosApplication$Builder</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.application.MinosApplication$Builder" signature="(Lcom/minos/registry/ProjectRegistry;)Lcom/minos/application/MinosApplication$Builder;" name="projectRegistry" primary="true">
+      <SourceLine endBytecode="68" classname="com.minos.application.MinosApplication$Builder" start="373" end="374" sourcepath="com/minos/application/MinosApplication.java" sourcefile="MinosApplication.java" startBytecode="0" />
+      <Message>In method com.minos.application.MinosApplication$Builder.projectRegistry(ProjectRegistry)</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.application.MinosApplication$Builder" signature="Lcom/minos/registry/ProjectRegistry;" name="projectRegistry" primary="true">
+      <SourceLine classname="com.minos.application.MinosApplication$Builder" sourcepath="com/minos/application/MinosApplication.java" sourcefile="MinosApplication.java">
+        <Message>In MinosApplication.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.application.MinosApplication$Builder.projectRegistry</Message>
+    </Field>
+    <LocalVariable role="LOCAL_VARIABLE_UNKNOWN" pc="7" name="?" register="-1">
+      <Message>Local variable stored in JVM register ?</Message>
+    </LocalVariable>
+    <SourceLine endBytecode="8" classname="com.minos.application.MinosApplication$Builder" start="373" end="373" sourcepath="com/minos/application/MinosApplication.java" sourcefile="MinosApplication.java" startBytecode="8" primary="true">
+      <Message>At MinosApplication.java:[line 373]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="276123295b463a5240bdaed4f401b955" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode expose sa représentation interne en incorporant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.application.MinosApplication$Builder.semanticVectorStore(SemanticVectorStore) risque d'exposer sa représentation interne en stockant un objet externe modifiable dans com.minos.application.MinosApplication$Builder.semanticVectorStore</LongMessage>
+    <Class classname="com.minos.application.MinosApplication$Builder" primary="true">
+      <SourceLine classname="com.minos.application.MinosApplication$Builder" start="359" end="487" sourcepath="com/minos/application/MinosApplication.java" sourcefile="MinosApplication.java">
+        <Message>At MinosApplication.java:[lines 359-487]</Message>
+      </SourceLine>
+      <Message>In class com.minos.application.MinosApplication$Builder</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.application.MinosApplication$Builder" signature="(Lcom/minos/semantic/SemanticVectorStore;)Lcom/minos/application/MinosApplication$Builder;" name="semanticVectorStore" primary="true">
+      <SourceLine endBytecode="68" classname="com.minos.application.MinosApplication$Builder" start="393" end="394" sourcepath="com/minos/application/MinosApplication.java" sourcefile="MinosApplication.java" startBytecode="0" />
+      <Message>In method com.minos.application.MinosApplication$Builder.semanticVectorStore(SemanticVectorStore)</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.application.MinosApplication$Builder" signature="Lcom/minos/semantic/SemanticVectorStore;" name="semanticVectorStore" primary="true">
+      <SourceLine classname="com.minos.application.MinosApplication$Builder" sourcepath="com/minos/application/MinosApplication.java" sourcefile="MinosApplication.java">
+        <Message>In MinosApplication.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.application.MinosApplication$Builder.semanticVectorStore</Message>
+    </Field>
+    <LocalVariable role="LOCAL_VARIABLE_UNKNOWN" pc="7" name="?" register="-1">
+      <Message>Local variable stored in JVM register ?</Message>
+    </LocalVariable>
+    <SourceLine endBytecode="8" classname="com.minos.application.MinosApplication$Builder" start="393" end="393" sourcepath="com/minos/application/MinosApplication.java" sourcefile="MinosApplication.java" startBytecode="8" primary="true">
+      <Message>At MinosApplication.java:[line 393]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="56fee42ed03f4897270b0024069ddd3d" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.application.ProviderPlatformService$ProviderView.capabilities() risque d'exposer sa représentation interne en renvoyant com.minos.application.ProviderPlatformService$ProviderView.capabilities</LongMessage>
+    <Class classname="com.minos.application.ProviderPlatformService$ProviderView" primary="true">
+      <SourceLine classname="com.minos.application.ProviderPlatformService$ProviderView" start="107" end="142" sourcepath="com/minos/application/ProviderPlatformService.java" sourcefile="ProviderPlatformService.java">
+        <Message>At ProviderPlatformService.java:[lines 107-142]</Message>
+      </SourceLine>
+      <Message>In class com.minos.application.ProviderPlatformService$ProviderView</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.application.ProviderPlatformService$ProviderView" signature="()Ljava/util/Map;" name="capabilities" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.application.ProviderPlatformService$ProviderView" start="107" end="107" sourcepath="com/minos/application/ProviderPlatformService.java" sourcefile="ProviderPlatformService.java" startBytecode="0" />
+      <Message>In method com.minos.application.ProviderPlatformService$ProviderView.capabilities()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.application.ProviderPlatformService$ProviderView" signature="Ljava/util/Map;" name="capabilities" primary="true">
+      <SourceLine classname="com.minos.application.ProviderPlatformService$ProviderView" sourcepath="com/minos/application/ProviderPlatformService.java" sourcefile="ProviderPlatformService.java">
+        <Message>In ProviderPlatformService.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.application.ProviderPlatformService$ProviderView.capabilities</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.application.ProviderPlatformService$ProviderView" start="107" end="107" sourcepath="com/minos/application/ProviderPlatformService.java" sourcefile="ProviderPlatformService.java" startBytecode="4" primary="true">
+      <Message>At ProviderPlatformService.java:[line 107]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="d43b46a1d3335b3cc98e6e3d114cdea2" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.application.semantic.SemanticIndexService.vectorStore() risque d'exposer sa représentation interne en renvoyant com.minos.application.semantic.SemanticIndexService.store</LongMessage>
+    <Class classname="com.minos.application.semantic.SemanticIndexService" primary="true">
+      <SourceLine classname="com.minos.application.semantic.SemanticIndexService" start="26" end="232" sourcepath="com/minos/application/semantic/SemanticIndexService.java" sourcefile="SemanticIndexService.java">
+        <Message>At SemanticIndexService.java:[lines 26-232]</Message>
+      </SourceLine>
+      <Message>In class com.minos.application.semantic.SemanticIndexService</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.application.semantic.SemanticIndexService" signature="()Lcom/minos/semantic/SemanticVectorStore;" name="vectorStore" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.application.semantic.SemanticIndexService" start="52" end="52" sourcepath="com/minos/application/semantic/SemanticIndexService.java" sourcefile="SemanticIndexService.java" startBytecode="0" />
+      <Message>In method com.minos.application.semantic.SemanticIndexService.vectorStore()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.application.semantic.SemanticIndexService" signature="Lcom/minos/semantic/SemanticVectorStore;" name="store" primary="true">
+      <SourceLine classname="com.minos.application.semantic.SemanticIndexService" sourcepath="com/minos/application/semantic/SemanticIndexService.java" sourcefile="SemanticIndexService.java">
+        <Message>In SemanticIndexService.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.application.semantic.SemanticIndexService.store</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.application.semantic.SemanticIndexService" start="52" end="52" sourcepath="com/minos/application/semantic/SemanticIndexService.java" sourcefile="SemanticIndexService.java" startBytecode="4" primary="true">
+      <Message>At SemanticIndexService.java:[line 52]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="e80e35a21c0ea15f958b05334b40b21a" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.program.analysis.FileProgramGraphProvider.sha256(Path[])</LongMessage>
+    <Class classname="com.minos.program.analysis.FileProgramGraphProvider" primary="true">
+      <SourceLine classname="com.minos.program.analysis.FileProgramGraphProvider" start="44" end="343" sourcepath="com/minos/program/analysis/FileProgramGraphProvider.java" sourcefile="FileProgramGraphProvider.java">
+        <Message>At FileProgramGraphProvider.java:[lines 44-343]</Message>
+      </SourceLine>
+      <Message>In class com.minos.program.analysis.FileProgramGraphProvider</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.program.analysis.FileProgramGraphProvider" signature="([Ljava/nio/file/Path;)Ljava/lang/String;" name="sha256" primary="true">
+      <SourceLine endBytecode="373" classname="com.minos.program.analysis.FileProgramGraphProvider" start="333" end="343" sourcepath="com/minos/program/analysis/FileProgramGraphProvider.java" sourcefile="FileProgramGraphProvider.java" startBytecode="0" />
+      <Message>In method com.minos.program.analysis.FileProgramGraphProvider.sha256(Path[])</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="40" classname="com.minos.program.analysis.FileProgramGraphProvider" start="336" end="336" sourcepath="com/minos/program/analysis/FileProgramGraphProvider.java" sourcefile="FileProgramGraphProvider.java" startBytecode="40" primary="true">
+      <Message>Dereferenced at FileProgramGraphProvider.java:[line 336]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="35" classname="com.minos.program.analysis.FileProgramGraphProvider" start="336" end="336" sourcepath="com/minos/program/analysis/FileProgramGraphProvider.java" sourcefile="FileProgramGraphProvider.java" startBytecode="35">
+      <Message>Known null at FileProgramGraphProvider.java:[line 336]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>

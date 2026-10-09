@@ -10,7 +10,7 @@ on:
         type: boolean
         default: true
       spotbugs_blocking:
-        description: SpotBugs en mode bloquant (spotbugs:check) au lieu du rapport seul
+        description: SpotBugs bloquant sur toute alerte absente de la base figée (quality/spotbugs-baseline)
         type: boolean
         default: false
       run_mutation:
@@ -62,19 +62,26 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Analyser (rapport ou contrôle bloquant)
+      - name: Analyser
+        shell: bash
+        run: |
+          chmod +x mvnw
+          ./mvnw --batch-mode --no-transfer-progress -Paudit-spotbugs -DskipTests compile spotbugs:spotbugs -fae
+
+      # Tâche 5.2 de ajouter-audit-spotbugs-pitest : les 197 alertes du 2026-10-09 sont figées dans
+      # quality/spotbugs-baseline (comparées par instanceHash). En mode bloquant, seule une alerte absente de la base
+      # fait échouer le job ; une alerte de la base qui disparaît est signalée, à retirer de la base.
+      - name: Résumer les rapports (et comparer à la base en mode bloquant)
+        if: always()
         shell: bash
         env:
           BLOCKING: ${{ inputs.spotbugs_blocking }}
         run: |
-          chmod +x mvnw
-          goal=spotbugs:spotbugs
-          if [ "$BLOCKING" = "true" ]; then goal=spotbugs:check; fi
-          ./mvnw --batch-mode --no-transfer-progress -Paudit-spotbugs -DskipTests compile "$goal" -fae
-
-      - name: Résumer les rapports
-        if: always()
-        run: python scripts/quality/audit-report-summary.py spotbugs
+          if [ "$BLOCKING" = "true" ]; then
+            python scripts/quality/audit-report-summary.py spotbugs --baseline-dir quality/spotbugs-baseline
+          else
+            python scripts/quality/audit-report-summary.py spotbugs
+          fi
 
       # MINOS-AUD-H01 : le XML du plugin Maven ne compte pas les classes analysées. La ligne de commande, avec les
       # réglages du profil, écrit un ClassStats par classe ; --strict échoue si un module n'est pas analysé en entier.

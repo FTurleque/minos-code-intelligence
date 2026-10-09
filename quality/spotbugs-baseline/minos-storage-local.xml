@@ -1,0 +1,1007 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="3aa7f8e6fc74e8b2632351c63e3736d1" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.storage.local.LocalStorageBackend.indexStateStore() risque d'exposer sa représentation interne en renvoyant com.minos.storage.local.LocalStorageBackend.indexStateStore</LongMessage>
+    <Class classname="com.minos.storage.local.LocalStorageBackend" primary="true">
+      <SourceLine classname="com.minos.storage.local.LocalStorageBackend" start="34" end="76" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java">
+        <Message>At LocalStorageBackend.java:[lines 34-76]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.LocalStorageBackend</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.LocalStorageBackend" signature="()Lcom/minos/orchestration/IndexStateStore;" name="indexStateStore" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.storage.local.LocalStorageBackend" start="72" end="72" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.LocalStorageBackend.indexStateStore()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.local.LocalStorageBackend" signature="Lcom/minos/orchestration/IndexStateStore;" name="indexStateStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.LocalStorageBackend" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java">
+        <Message>In LocalStorageBackend.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.local.LocalStorageBackend.indexStateStore</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.storage.local.LocalStorageBackend" start="72" end="72" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="4" primary="true">
+      <Message>At LocalStorageBackend.java:[line 72]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="8c23081a7a452236656658363a096b59" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.storage.local.LocalStorageBackend.projectRegistry() risque d'exposer sa représentation interne en renvoyant com.minos.storage.local.LocalStorageBackend.projectRegistry</LongMessage>
+    <Class classname="com.minos.storage.local.LocalStorageBackend" primary="true">
+      <SourceLine classname="com.minos.storage.local.LocalStorageBackend" start="34" end="76" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java">
+        <Message>At LocalStorageBackend.java:[lines 34-76]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.LocalStorageBackend</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.LocalStorageBackend" signature="()Lcom/minos/registry/ProjectRegistry;" name="projectRegistry" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.storage.local.LocalStorageBackend" start="70" end="70" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.LocalStorageBackend.projectRegistry()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.local.LocalStorageBackend" signature="Lcom/minos/registry/ProjectRegistry;" name="projectRegistry" primary="true">
+      <SourceLine classname="com.minos.storage.local.LocalStorageBackend" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java">
+        <Message>In LocalStorageBackend.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.local.LocalStorageBackend.projectRegistry</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.storage.local.LocalStorageBackend" start="70" end="70" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="4" primary="true">
+      <Message>At LocalStorageBackend.java:[line 70]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5605cae57a77c413c6287325658eae6f" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.storage.local.LocalStorageBackend.semanticVectorStore() risque d'exposer sa représentation interne en renvoyant com.minos.storage.local.LocalStorageBackend.semanticVectorStore</LongMessage>
+    <Class classname="com.minos.storage.local.LocalStorageBackend" primary="true">
+      <SourceLine classname="com.minos.storage.local.LocalStorageBackend" start="34" end="76" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java">
+        <Message>At LocalStorageBackend.java:[lines 34-76]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.LocalStorageBackend</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.LocalStorageBackend" signature="()Lcom/minos/semantic/SemanticVectorStore;" name="semanticVectorStore" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.storage.local.LocalStorageBackend" start="74" end="74" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.LocalStorageBackend.semanticVectorStore()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.local.LocalStorageBackend" signature="Lcom/minos/semantic/SemanticVectorStore;" name="semanticVectorStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.LocalStorageBackend" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java">
+        <Message>In LocalStorageBackend.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.local.LocalStorageBackend.semanticVectorStore</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.storage.local.LocalStorageBackend" start="74" end="74" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="4" primary="true">
+      <Message>At LocalStorageBackend.java:[line 74]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="ad01b8d4f4021b9d721a06d7ab969ec7" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.storage.local.LocalStorageBackend.snapshotStore() risque d'exposer sa représentation interne en renvoyant com.minos.storage.local.LocalStorageBackend.snapshotStore</LongMessage>
+    <Class classname="com.minos.storage.local.LocalStorageBackend" primary="true">
+      <SourceLine classname="com.minos.storage.local.LocalStorageBackend" start="34" end="76" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java">
+        <Message>At LocalStorageBackend.java:[lines 34-76]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.LocalStorageBackend</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.LocalStorageBackend" signature="()Lcom/minos/store/CodeKnowledgeSnapshotStore;" name="snapshotStore" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.storage.local.LocalStorageBackend" start="71" end="71" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.LocalStorageBackend.snapshotStore()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.local.LocalStorageBackend" signature="Lcom/minos/store/CodeKnowledgeSnapshotStore;" name="snapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.LocalStorageBackend" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java">
+        <Message>In LocalStorageBackend.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.local.LocalStorageBackend.snapshotStore</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.storage.local.LocalStorageBackend" start="71" end="71" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="4" primary="true">
+      <Message>At LocalStorageBackend.java:[line 71]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="f294373b4cd1003999a09f6c350b7b86" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.LocalStorageBackend.namespace(Path, String)</LongMessage>
+    <Class classname="com.minos.storage.local.LocalStorageBackend" primary="true">
+      <SourceLine classname="com.minos.storage.local.LocalStorageBackend" start="34" end="76" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java">
+        <Message>At LocalStorageBackend.java:[lines 34-76]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.LocalStorageBackend</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.LocalStorageBackend" signature="(Ljava/nio/file/Path;Ljava/lang/String;)Ljava/nio/file/Path;" name="namespace" primary="true">
+      <SourceLine endBytecode="150" classname="com.minos.storage.local.LocalStorageBackend" start="61" end="66" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.LocalStorageBackend.namespace(Path, String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="25" classname="com.minos.storage.local.LocalStorageBackend" start="62" end="62" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="25" primary="true">
+      <Message>Dereferenced at LocalStorageBackend.java:[line 62]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="19" classname="com.minos.storage.local.LocalStorageBackend" start="62" end="62" sourcepath="com/minos/storage/local/LocalStorageBackend.java" sourcefile="LocalStorageBackend.java" startBytecode="19">
+      <Message>Known null at LocalStorageBackend.java:[line 62]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="2067c09f41b7f08c75cc749ef775c773" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.LocalStorageRetentionService.compact(UUID, PersistentRetentionPolicy)</LongMessage>
+    <Class classname="com.minos.storage.local.LocalStorageRetentionService" primary="true">
+      <SourceLine classname="com.minos.storage.local.LocalStorageRetentionService" start="35" end="114" sourcepath="com/minos/storage/local/LocalStorageRetentionService.java" sourcefile="LocalStorageRetentionService.java">
+        <Message>At LocalStorageRetentionService.java:[lines 35-114]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.LocalStorageRetentionService</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.LocalStorageRetentionService" signature="(Ljava/util/UUID;Lcom/minos/storage/PersistentRetentionPolicy;)Lcom/minos/storage/StorageRetentionService$RetentionResult;" name="compact" primary="true">
+      <SourceLine endBytecode="735" classname="com.minos.storage.local.LocalStorageRetentionService" start="76" end="83" sourcepath="com/minos/storage/local/LocalStorageRetentionService.java" sourcefile="LocalStorageRetentionService.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.LocalStorageRetentionService.compact(UUID, PersistentRetentionPolicy)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="48" classname="com.minos.storage.local.LocalStorageRetentionService" start="79" end="79" sourcepath="com/minos/storage/local/LocalStorageRetentionService.java" sourcefile="LocalStorageRetentionService.java" startBytecode="48" primary="true">
+      <Message>Dereferenced at LocalStorageRetentionService.java:[line 79]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="39" classname="com.minos.storage.local.LocalStorageRetentionService" start="79" end="79" sourcepath="com/minos/storage/local/LocalStorageRetentionService.java" sourcefile="LocalStorageRetentionService.java" startBytecode="39">
+      <Message>Known null at LocalStorageRetentionService.java:[line 79]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="f1cfa6b6fdfcae31bdccaa87147e77a7" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.compactLocked(UUID, Set, int)</LongMessage>
+    <Class classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="67" end="735" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java">
+        <Message>At FileProjectFingerprintSnapshotStore.java:[lines 67-735]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" signature="(Ljava/util/UUID;Ljava/util/Set;I)Lcom/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore$FingerprintRetentionResult;" name="compactLocked" primary="true">
+      <SourceLine endBytecode="964" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="326" end="365" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.compactLocked(UUID, Set, int)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="118" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="339" end="339" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="118" primary="true">
+      <Message>Dereferenced at FileProjectFingerprintSnapshotStore.java:[line 339]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="113" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="339" end="339" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="113">
+      <Message>Known null at FileProjectFingerprintSnapshotStore.java:[line 339]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="18bab302270e44c907f23ae04df3222f" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.filesForIdHash(Path, String)</LongMessage>
+    <Class classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="67" end="735" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java">
+        <Message>At FileProjectFingerprintSnapshotStore.java:[lines 67-735]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" signature="(Ljava/nio/file/Path;Ljava/lang/String;)Ljava/util/List;" name="filesForIdHash" primary="true">
+      <SourceLine endBytecode="480" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="566" end="579" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.filesForIdHash(Path, String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="84" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="572" end="572" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="84" primary="true">
+      <Message>Dereferenced at FileProjectFingerprintSnapshotStore.java:[line 572]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="79" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="572" end="572" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="79">
+      <Message>Known null at FileProjectFingerprintSnapshotStore.java:[line 572]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="94eb2ceacab20809297a5f54e2147567" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.lambda$filesForIdHash$0(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="67" end="735" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java">
+        <Message>At FileProjectFingerprintSnapshotStore.java:[lines 67-735]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$filesForIdHash$0" primary="true">
+      <SourceLine endBytecode="53" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="578" end="578" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.lambda$filesForIdHash$0(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="578" end="578" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at FileProjectFingerprintSnapshotStore.java:[line 578]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="578" end="578" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="1">
+      <Message>Known null at FileProjectFingerprintSnapshotStore.java:[line 578]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="b8cf7d3caaaea265ba3f0f8b243d38a4" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.lambda$snapshotFiles$0(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="67" end="735" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java">
+        <Message>At FileProjectFingerprintSnapshotStore.java:[lines 67-735]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$snapshotFiles$0" primary="true">
+      <SourceLine endBytecode="53" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="592" end="592" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.lambda$snapshotFiles$0(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="592" end="592" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at FileProjectFingerprintSnapshotStore.java:[line 592]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="592" end="592" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="1">
+      <Message>Known null at FileProjectFingerprintSnapshotStore.java:[line 592]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="cfbbe93d38257a67826dd49febf9c141" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.promoteLocked(UUID, String)</LongMessage>
+    <Class classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="67" end="735" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java">
+        <Message>At FileProjectFingerprintSnapshotStore.java:[lines 67-735]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" signature="(Ljava/util/UUID;Ljava/lang/String;)V" name="promoteLocked" primary="true">
+      <SourceLine endBytecode="673" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="168" end="208" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.promoteLocked(UUID, String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="138" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="187" end="187" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="138" primary="true">
+      <Message>Dereferenced at FileProjectFingerprintSnapshotStore.java:[line 187]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="133" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="187" end="187" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="133">
+      <Message>Known null at FileProjectFingerprintSnapshotStore.java:[line 187]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="9729ddf45037a7348173e91f117a1c27" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.publishLocked(ProjectFingerprintSnapshot, Path, Path, String)</LongMessage>
+    <Class classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="67" end="735" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java">
+        <Message>At FileProjectFingerprintSnapshotStore.java:[lines 67-735]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" signature="(Lcom/minos/incremental/ProjectFingerprintSnapshot;Ljava/nio/file/Path;Ljava/nio/file/Path;Ljava/lang/String;)Lcom/minos/incremental/ProjectFingerprintSnapshot;" name="publishLocked" primary="true">
+      <SourceLine endBytecode="548" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="128" end="155" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.publishLocked(ProjectFingerprintSnapshot, Path, Path, String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="82" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="135" end="135" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="82" primary="true">
+      <Message>Dereferenced at FileProjectFingerprintSnapshotStore.java:[line 135]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="77" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="135" end="135" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="77">
+      <Message>Known null at FileProjectFingerprintSnapshotStore.java:[line 135]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="cc2fb91853c282b773a31a883bc554d7" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.resolveFile(Path, String)</LongMessage>
+    <Class classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="67" end="735" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java">
+        <Message>At FileProjectFingerprintSnapshotStore.java:[lines 67-735]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" signature="(Ljava/nio/file/Path;Ljava/lang/String;)Ljava/nio/file/Path;" name="resolveFile" primary="true">
+      <SourceLine endBytecode="176" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="667" end="674" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.resolveFile(Path, String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="58" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="671" end="671" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="58" primary="true">
+      <Message>Dereferenced at FileProjectFingerprintSnapshotStore.java:[line 671]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="52" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="671" end="671" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="52">
+      <Message>Known null at FileProjectFingerprintSnapshotStore.java:[line 671]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="ad21a3f1afe120e7373c6df35dfa72a5" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.snapshotFiles(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="67" end="735" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java">
+        <Message>At FileProjectFingerprintSnapshotStore.java:[lines 67-735]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" signature="(Ljava/nio/file/Path;)Ljava/util/List;" name="snapshotFiles" primary="true">
+      <SourceLine endBytecode="359" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="583" end="593" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.snapshotFiles(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="51" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="587" end="587" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="51" primary="true">
+      <Message>Dereferenced at FileProjectFingerprintSnapshotStore.java:[line 587]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="46" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="587" end="587" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="46">
+      <Message>Known null at FileProjectFingerprintSnapshotStore.java:[line 587]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="dc112a6ccea827799047bd1856535c0a" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.verifyFileNameChecksum(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="67" end="735" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java">
+        <Message>At FileProjectFingerprintSnapshotStore.java:[lines 67-735]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" signature="(Ljava/nio/file/Path;)V" name="verifyFileNameChecksum" primary="true">
+      <SourceLine endBytecode="223" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="623" end="633" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore.verifyFileNameChecksum(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="623" end="623" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at FileProjectFingerprintSnapshotStore.java:[line 623]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore" start="623" end="623" sourcepath="com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java" sourcefile="FileProjectFingerprintSnapshotStore.java" startBytecode="1">
+      <Message>Known null at FileProjectFingerprintSnapshotStore.java:[line 623]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="615451dfb7922258b01d79bcc8e47123" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.orchestration.FileIndexStateStore.idFromPropertiesFile(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.orchestration.FileIndexStateStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="66" end="675" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java">
+        <Message>At FileIndexStateStore.java:[lines 66-675]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.orchestration.FileIndexStateStore</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.orchestration.FileIndexStateStore" signature="(Ljava/nio/file/Path;)Ljava/util/UUID;" name="idFromPropertiesFile" primary="true">
+      <SourceLine endBytecode="202" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="607" end="615" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.orchestration.FileIndexStateStore.idFromPropertiesFile(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="607" end="607" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at FileIndexStateStore.java:[line 607]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="607" end="607" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="1">
+      <Message>Known null at FileIndexStateStore.java:[line 607]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="6a41f90ebefbed4007b4f065bdc13360" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.orchestration.FileIndexStateStore.lambda$propertyFiles$0(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.orchestration.FileIndexStateStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="66" end="675" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java">
+        <Message>At FileIndexStateStore.java:[lines 66-675]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.orchestration.FileIndexStateStore</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.orchestration.FileIndexStateStore" signature="(Ljava/nio/file/Path;)Z" name="lambda$propertyFiles$0" primary="true">
+      <SourceLine endBytecode="59" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="596" end="596" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.orchestration.FileIndexStateStore.lambda$propertyFiles$0(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="596" end="596" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at FileIndexStateStore.java:[line 596]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="596" end="596" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="1">
+      <Message>Known null at FileIndexStateStore.java:[line 596]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="d813ee059da23048d691b19c28d49acc" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.orchestration.FileIndexStateStore.lambda$propertyFiles$1(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.orchestration.FileIndexStateStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="66" end="675" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java">
+        <Message>At FileIndexStateStore.java:[lines 66-675]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.orchestration.FileIndexStateStore</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.orchestration.FileIndexStateStore" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$propertyFiles$1" primary="true">
+      <SourceLine endBytecode="53" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="602" end="602" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.orchestration.FileIndexStateStore.lambda$propertyFiles$1(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="602" end="602" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at FileIndexStateStore.java:[line 602]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="602" end="602" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="1">
+      <Message>Known null at FileIndexStateStore.java:[line 602]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="33e9bca474984825d0f754057eff6fff" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.orchestration.FileIndexStateStore.migrateRunLocators()</LongMessage>
+    <Class classname="com.minos.storage.local.orchestration.FileIndexStateStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="66" end="675" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java">
+        <Message>At FileIndexStateStore.java:[lines 66-675]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.orchestration.FileIndexStateStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.orchestration.FileIndexStateStore" signature="()V" name="migrateRunLocators" primary="true">
+      <SourceLine endBytecode="697" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="506" end="535" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.orchestration.FileIndexStateStore.migrateRunLocators()</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="88" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="513" end="513" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="88" primary="true">
+      <Message>Dereferenced at FileIndexStateStore.java:[line 513]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="83" classname="com.minos.storage.local.orchestration.FileIndexStateStore" start="513" end="513" sourcepath="com/minos/storage/local/orchestration/FileIndexStateStore.java" sourcefile="FileIndexStateStore.java" startBytecode="83">
+      <Message>Known null at FileIndexStateStore.java:[line 513]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="3dc3388c72aed25cd3101bd5ef24d8c0" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.registry.LocalProjectRegistry.idFromPropertiesFile(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.registry.LocalProjectRegistry" primary="true">
+      <SourceLine classname="com.minos.storage.local.registry.LocalProjectRegistry" start="53" end="461" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java">
+        <Message>At LocalProjectRegistry.java:[lines 53-461]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.registry.LocalProjectRegistry</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.registry.LocalProjectRegistry" signature="(Ljava/nio/file/Path;)Ljava/util/UUID;" name="idFromPropertiesFile" primary="true">
+      <SourceLine endBytecode="202" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="353" end="361" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.registry.LocalProjectRegistry.idFromPropertiesFile(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="353" end="353" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at LocalProjectRegistry.java:[line 353]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="353" end="353" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="1">
+      <Message>Known null at LocalProjectRegistry.java:[line 353]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="79e13d2364d51d5304efeec04206399b" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.registry.LocalProjectRegistry.lambda$propertyEntries$0(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.registry.LocalProjectRegistry" primary="true">
+      <SourceLine classname="com.minos.storage.local.registry.LocalProjectRegistry" start="53" end="461" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java">
+        <Message>At LocalProjectRegistry.java:[lines 53-461]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.registry.LocalProjectRegistry</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.registry.LocalProjectRegistry" signature="(Ljava/nio/file/Path;)Z" name="lambda$propertyEntries$0" primary="true">
+      <SourceLine endBytecode="59" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="394" end="394" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.registry.LocalProjectRegistry.lambda$propertyEntries$0(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="394" end="394" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at LocalProjectRegistry.java:[line 394]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="394" end="394" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="1">
+      <Message>Known null at LocalProjectRegistry.java:[line 394]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="ae7fd789579fb3f3eeab925ac45415fa" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.registry.LocalProjectRegistry.lambda$propertyEntries$1(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.registry.LocalProjectRegistry" primary="true">
+      <SourceLine classname="com.minos.storage.local.registry.LocalProjectRegistry" start="53" end="461" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java">
+        <Message>At LocalProjectRegistry.java:[lines 53-461]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.registry.LocalProjectRegistry</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.registry.LocalProjectRegistry" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$propertyEntries$1" primary="true">
+      <SourceLine endBytecode="53" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="395" end="395" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.registry.LocalProjectRegistry.lambda$propertyEntries$1(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="395" end="395" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at LocalProjectRegistry.java:[line 395]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="395" end="395" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="1">
+      <Message>Known null at LocalProjectRegistry.java:[line 395]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="1c23e2e5fa94a5d99d92bd4551a1e6ed" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.registry.LocalProjectRegistry.migrateLegacyProject(Path, RegisteredProject, String)</LongMessage>
+    <Class classname="com.minos.storage.local.registry.LocalProjectRegistry" primary="true">
+      <SourceLine classname="com.minos.storage.local.registry.LocalProjectRegistry" start="53" end="461" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java">
+        <Message>At LocalProjectRegistry.java:[lines 53-461]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.registry.LocalProjectRegistry</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.registry.LocalProjectRegistry" signature="(Ljava/nio/file/Path;Lcom/minos/registry/RegisteredProject;Ljava/lang/String;)V" name="migrateLegacyProject" primary="true">
+      <SourceLine endBytecode="313" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="329" end="339" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.registry.LocalProjectRegistry.migrateLegacyProject(Path, RegisteredProject, String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="7" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="329" end="329" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="7" primary="true">
+      <Message>Dereferenced at LocalProjectRegistry.java:[line 329]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="2" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="329" end="329" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="2">
+      <Message>Known null at LocalProjectRegistry.java:[line 329]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="1054c8f4552e18c69aded6a09c813d3f" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.registry.LocalProjectRegistry.writePropertiesAtomically(Path, Properties)</LongMessage>
+    <Class classname="com.minos.storage.local.registry.LocalProjectRegistry" primary="true">
+      <SourceLine classname="com.minos.storage.local.registry.LocalProjectRegistry" start="53" end="461" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java">
+        <Message>At LocalProjectRegistry.java:[lines 53-461]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.registry.LocalProjectRegistry</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.registry.LocalProjectRegistry" signature="(Ljava/nio/file/Path;Ljava/util/Properties;)V" name="writePropertiesAtomically" primary="true">
+      <SourceLine endBytecode="347" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="430" end="442" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.registry.LocalProjectRegistry.writePropertiesAtomically(Path, Properties)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="24" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="431" end="431" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="24" primary="true">
+      <Message>Dereferenced at LocalProjectRegistry.java:[line 431]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="19" classname="com.minos.storage.local.registry.LocalProjectRegistry" start="431" end="431" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="19">
+      <Message>Known null at LocalProjectRegistry.java:[line 431]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="c3563b7e21c7344eb72a5b453cdcdd6a" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.registry.LocalProjectRegistry$Scan.entryName(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.registry.LocalProjectRegistry$Scan" primary="true">
+      <SourceLine classname="com.minos.storage.local.registry.LocalProjectRegistry$Scan" start="470" end="493" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java">
+        <Message>At LocalProjectRegistry.java:[lines 470-493]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.registry.LocalProjectRegistry$Scan</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.registry.LocalProjectRegistry$Scan" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="entryName" primary="true">
+      <SourceLine endBytecode="83" classname="com.minos.storage.local.registry.LocalProjectRegistry$Scan" start="485" end="486" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.registry.LocalProjectRegistry$Scan.entryName(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.registry.LocalProjectRegistry$Scan" start="485" end="485" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at LocalProjectRegistry.java:[line 485]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.registry.LocalProjectRegistry$Scan" start="485" end="485" sourcepath="com/minos/storage/local/registry/LocalProjectRegistry.java" sourcefile="LocalProjectRegistry.java" startBytecode="1">
+      <Message>Known null at LocalProjectRegistry.java:[line 485]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="47459c35f7c407e9ddffc8060b01fc97" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.FileHostedControlPlaneStore.tenantFile(UUID)</LongMessage>
+    <Class classname="com.minos.storage.local.store.FileHostedControlPlaneStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.FileHostedControlPlaneStore" start="55" end="461" sourcepath="com/minos/storage/local/store/FileHostedControlPlaneStore.java" sourcefile="FileHostedControlPlaneStore.java">
+        <Message>At FileHostedControlPlaneStore.java:[lines 55-461]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.FileHostedControlPlaneStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.store.FileHostedControlPlaneStore" signature="(Ljava/util/UUID;)Ljava/nio/file/Path;" name="tenantFile" primary="true">
+      <SourceLine endBytecode="138" classname="com.minos.storage.local.store.FileHostedControlPlaneStore" start="389" end="391" sourcepath="com/minos/storage/local/store/FileHostedControlPlaneStore.java" sourcefile="FileHostedControlPlaneStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.FileHostedControlPlaneStore.tenantFile(UUID)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="34" classname="com.minos.storage.local.store.FileHostedControlPlaneStore" start="390" end="390" sourcepath="com/minos/storage/local/store/FileHostedControlPlaneStore.java" sourcefile="FileHostedControlPlaneStore.java" startBytecode="34" primary="true">
+      <Message>Dereferenced at FileHostedControlPlaneStore.java:[line 390]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="25" classname="com.minos.storage.local.store.FileHostedControlPlaneStore" start="390" end="390" sourcepath="com/minos/storage/local/store/FileHostedControlPlaneStore.java" sourcefile="FileHostedControlPlaneStore.java" startBytecode="25">
+      <Message>Known null at FileHostedControlPlaneStore.java:[line 390]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5fab52beef42a7377455b6ccbfc3315b" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.FileRuntimeObservationStore.lambda$sessionFiles$0(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.store.FileRuntimeObservationStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="60" end="516" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java">
+        <Message>At FileRuntimeObservationStore.java:[lines 60-516]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.FileRuntimeObservationStore</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.store.FileRuntimeObservationStore" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$sessionFiles$0" primary="true">
+      <SourceLine endBytecode="53" classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="432" end="432" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.FileRuntimeObservationStore.lambda$sessionFiles$0(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="432" end="432" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at FileRuntimeObservationStore.java:[line 432]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="432" end="432" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java" startBytecode="1">
+      <Message>Known null at FileRuntimeObservationStore.java:[line 432]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="1640c5e0144764f8c2e3953d4612f4d0" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.FileRuntimeObservationStore.projectDirectory(UUID)</LongMessage>
+    <Class classname="com.minos.storage.local.store.FileRuntimeObservationStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="60" end="516" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java">
+        <Message>At FileRuntimeObservationStore.java:[lines 60-516]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.FileRuntimeObservationStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.store.FileRuntimeObservationStore" signature="(Ljava/util/UUID;)Ljava/nio/file/Path;" name="projectDirectory" primary="true">
+      <SourceLine endBytecode="133" classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="449" end="451" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.FileRuntimeObservationStore.projectDirectory(UUID)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="29" classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="450" end="450" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java" startBytecode="29" primary="true">
+      <Message>Dereferenced at FileRuntimeObservationStore.java:[line 450]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="20" classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="450" end="450" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java" startBytecode="20">
+      <Message>Known null at FileRuntimeObservationStore.java:[line 450]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="64b4f4a8a65b79e7b3efed602e0f5097" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.FileRuntimeObservationStore.readVerified(Path, UUID)</LongMessage>
+    <Class classname="com.minos.storage.local.store.FileRuntimeObservationStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="60" end="516" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java">
+        <Message>At FileRuntimeObservationStore.java:[lines 60-516]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.FileRuntimeObservationStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.store.FileRuntimeObservationStore" signature="(Ljava/nio/file/Path;Ljava/util/UUID;)Lcom/minos/dynamic/CorrelatedRuntimeSession;" name="readVerified" primary="true">
+      <SourceLine endBytecode="392" classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="221" end="237" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.FileRuntimeObservationStore.readVerified(Path, UUID)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="41" classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="224" end="224" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java" startBytecode="41" primary="true">
+      <Message>Dereferenced at FileRuntimeObservationStore.java:[line 224]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="36" classname="com.minos.storage.local.store.FileRuntimeObservationStore" start="224" end="224" sourcepath="com/minos/storage/local/store/FileRuntimeObservationStore.java" sourcefile="FileRuntimeObservationStore.java" startBytecode="36">
+      <Message>Known null at FileRuntimeObservationStore.java:[line 224]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="6b178638a82fc7eb608d8613d56273d9" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.storage.local.store.FileSymbolSnapshotStore.retentionService() risque d'exposer sa représentation interne en renvoyant com.minos.storage.local.store.FileSymbolSnapshotStore.retentionService</LongMessage>
+    <Class classname="com.minos.storage.local.store.FileSymbolSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.FileSymbolSnapshotStore" start="56" end="403" sourcepath="com/minos/storage/local/store/FileSymbolSnapshotStore.java" sourcefile="FileSymbolSnapshotStore.java">
+        <Message>At FileSymbolSnapshotStore.java:[lines 56-403]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.FileSymbolSnapshotStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.store.FileSymbolSnapshotStore" signature="()Lcom/minos/storage/local/store/SnapshotRetentionService;" name="retentionService" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.storage.local.store.FileSymbolSnapshotStore" start="258" end="258" sourcepath="com/minos/storage/local/store/FileSymbolSnapshotStore.java" sourcefile="FileSymbolSnapshotStore.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.FileSymbolSnapshotStore.retentionService()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.local.store.FileSymbolSnapshotStore" signature="Lcom/minos/storage/local/store/SnapshotRetentionService;" name="retentionService" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.FileSymbolSnapshotStore" sourcepath="com/minos/storage/local/store/FileSymbolSnapshotStore.java" sourcefile="FileSymbolSnapshotStore.java">
+        <Message>In FileSymbolSnapshotStore.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.local.store.FileSymbolSnapshotStore.retentionService</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.storage.local.store.FileSymbolSnapshotStore" start="258" end="258" sourcepath="com/minos/storage/local/store/FileSymbolSnapshotStore.java" sourcefile="FileSymbolSnapshotStore.java" startBytecode="4" primary="true">
+      <Message>At FileSymbolSnapshotStore.java:[line 258]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="9bd4fca0469f2bb17319b1eadb537ba8" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec() risque d'exposer sa représentation interne en renvoyant com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec</LongMessage>
+    <Class classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="58" end="61" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
+        <Message>At KnowledgeSnapshotCodecs.java:[lines 58-61]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" signature="()Lcom/minos/storage/local/store/SnapshotCodec;" name="codec" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="58" end="58" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" signature="Lcom/minos/storage/local/store/SnapshotCodec;" name="codec" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
+        <Message>In KnowledgeSnapshotCodecs.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="58" end="58" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="4" primary="true">
+      <Message>At KnowledgeSnapshotCodecs.java:[line 58]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="7183890bbd0bb0b232793c7ec598d960" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode expose sa représentation interne en incorporant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode new com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection(SnapshotCodec, long) risque d'exposer sa représentation interne en stockant un objet externe modifiable dans com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec</LongMessage>
+    <Class classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="58" end="61" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
+        <Message>At KnowledgeSnapshotCodecs.java:[lines 58-61]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" signature="(Lcom/minos/storage/local/store/SnapshotCodec;J)V" name="&lt;init&gt;" primary="true">
+      <SourceLine endBytecode="95" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="59" end="61" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="0" />
+      <Message>In method new com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection(SnapshotCodec, long)</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" signature="Lcom/minos/storage/local/store/SnapshotCodec;" name="codec" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
+        <Message>In KnowledgeSnapshotCodecs.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec</Message>
+    </Field>
+    <LocalVariable role="LOCAL_VARIABLE_NAMED" pc="13" name="codec" register="1">
+      <Message>Local variable named codec</Message>
+    </LocalVariable>
+    <SourceLine endBytecode="13" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="59" end="59" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="13" primary="true">
+      <Message>At KnowledgeSnapshotCodecs.java:[line 59]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="390feeea30304eac58165c79ffd3ef0a" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.SnapshotProjectLease.lockFile(Path, String)</LongMessage>
+    <Class classname="com.minos.storage.local.store.SnapshotProjectLease" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.SnapshotProjectLease" start="30" end="91" sourcepath="com/minos/storage/local/store/SnapshotProjectLease.java" sourcefile="SnapshotProjectLease.java">
+        <Message>At SnapshotProjectLease.java:[lines 30-91]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.SnapshotProjectLease</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.store.SnapshotProjectLease" signature="(Ljava/nio/file/Path;Ljava/lang/String;)Ljava/nio/file/Path;" name="lockFile" primary="true">
+      <SourceLine endBytecode="311" classname="com.minos.storage.local.store.SnapshotProjectLease" start="61" end="72" sourcepath="com/minos/storage/local/store/SnapshotProjectLease.java" sourcefile="SnapshotProjectLease.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.SnapshotProjectLease.lockFile(Path, String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="43" classname="com.minos.storage.local.store.SnapshotProjectLease" start="63" end="63" sourcepath="com/minos/storage/local/store/SnapshotProjectLease.java" sourcefile="SnapshotProjectLease.java" startBytecode="43" primary="true">
+      <Message>Dereferenced at SnapshotProjectLease.java:[line 63]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="30" classname="com.minos.storage.local.store.SnapshotProjectLease" start="62" end="62" sourcepath="com/minos/storage/local/store/SnapshotProjectLease.java" sourcefile="SnapshotProjectLease.java" startBytecode="30">
+      <Message>Known null at SnapshotProjectLease.java:[line 62]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="8e3f2a99ebf70353cf29da439c69a2b" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.SnapshotRepository.lambda$listSnapshotFiles$1(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.store.SnapshotRepository" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.SnapshotRepository" start="20" end="90" sourcepath="com/minos/storage/local/store/SnapshotRepository.java" sourcefile="SnapshotRepository.java">
+        <Message>At SnapshotRepository.java:[lines 20-90]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.SnapshotRepository</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.store.SnapshotRepository" signature="(Ljava/nio/file/Path;)Z" name="lambda$listSnapshotFiles$1" primary="true">
+      <SourceLine endBytecode="108" classname="com.minos.storage.local.store.SnapshotRepository" start="85" end="86" sourcepath="com/minos/storage/local/store/SnapshotRepository.java" sourcefile="SnapshotRepository.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.SnapshotRepository.lambda$listSnapshotFiles$1(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.store.SnapshotRepository" start="85" end="85" sourcepath="com/minos/storage/local/store/SnapshotRepository.java" sourcefile="SnapshotRepository.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at SnapshotRepository.java:[line 85]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.store.SnapshotRepository" start="85" end="85" sourcepath="com/minos/storage/local/store/SnapshotRepository.java" sourcefile="SnapshotRepository.java" startBytecode="1">
+      <Message>Known null at SnapshotRepository.java:[line 85]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="624bd971829939fa9755d73dcee974fe" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.SnapshotRepository.lambda$listSnapshotFiles$2(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.store.SnapshotRepository" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.SnapshotRepository" start="20" end="90" sourcepath="com/minos/storage/local/store/SnapshotRepository.java" sourcefile="SnapshotRepository.java">
+        <Message>At SnapshotRepository.java:[lines 20-90]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.SnapshotRepository</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.store.SnapshotRepository" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$listSnapshotFiles$2" primary="true">
+      <SourceLine endBytecode="53" classname="com.minos.storage.local.store.SnapshotRepository" start="88" end="88" sourcepath="com/minos/storage/local/store/SnapshotRepository.java" sourcefile="SnapshotRepository.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.SnapshotRepository.lambda$listSnapshotFiles$2(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.store.SnapshotRepository" start="88" end="88" sourcepath="com/minos/storage/local/store/SnapshotRepository.java" sourcefile="SnapshotRepository.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at SnapshotRepository.java:[line 88]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.store.SnapshotRepository" start="88" end="88" sourcepath="com/minos/storage/local/store/SnapshotRepository.java" sourcefile="SnapshotRepository.java" startBytecode="1">
+      <Message>Known null at SnapshotRepository.java:[line 88]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="8a994d2207d74b8206aa5bb6663187e0" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.SnapshotRetentionService.applyPolicyLocked(UUID, String, SnapshotRetentionPolicy, Set)</LongMessage>
+    <Class classname="com.minos.storage.local.store.SnapshotRetentionService" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.SnapshotRetentionService" start="24" end="196" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java">
+        <Message>At SnapshotRetentionService.java:[lines 24-196]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.SnapshotRetentionService</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.local.store.SnapshotRetentionService" signature="(Ljava/util/UUID;Ljava/lang/String;Lcom/minos/storage/local/store/SnapshotRetentionPolicy;Ljava/util/Set;)Lcom/minos/storage/local/store/SnapshotRetentionService$RetentionResult;" name="applyPolicyLocked" primary="true">
+      <SourceLine endBytecode="785" classname="com.minos.storage.local.store.SnapshotRetentionService" start="151" end="189" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.SnapshotRetentionService.applyPolicyLocked(UUID, String, SnapshotRetentionPolicy, Set)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="351" classname="com.minos.storage.local.store.SnapshotRetentionService" start="186" end="186" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="351" primary="true">
+      <Message>Dereferenced at SnapshotRetentionService.java:[line 186]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="346" classname="com.minos.storage.local.store.SnapshotRetentionService" start="186" end="186" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="346">
+      <Message>Known null at SnapshotRetentionService.java:[line 186]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="53e1410905b27003557bc9b0a6a8ec37" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.SnapshotRetentionService.isStaleTemporary(Path, Instant)</LongMessage>
+    <Class classname="com.minos.storage.local.store.SnapshotRetentionService" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.SnapshotRetentionService" start="24" end="196" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java">
+        <Message>At SnapshotRetentionService.java:[lines 24-196]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.SnapshotRetentionService</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.store.SnapshotRetentionService" signature="(Ljava/nio/file/Path;Ljava/time/Instant;)Z" name="isStaleTemporary" primary="true">
+      <SourceLine endBytecode="151" classname="com.minos.storage.local.store.SnapshotRetentionService" start="126" end="126" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.SnapshotRetentionService.isStaleTemporary(Path, Instant)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.store.SnapshotRetentionService" start="126" end="126" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at SnapshotRetentionService.java:[line 126]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.store.SnapshotRetentionService" start="126" end="126" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="1">
+      <Message>Known null at SnapshotRetentionService.java:[line 126]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="671388817575fb37ba1d850764e29dd7" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.SnapshotRetentionService.lambda$applyPolicyLocked$0(String, Path)</LongMessage>
+    <Class classname="com.minos.storage.local.store.SnapshotRetentionService" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.SnapshotRetentionService" start="24" end="196" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java">
+        <Message>At SnapshotRetentionService.java:[lines 24-196]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.SnapshotRetentionService</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.store.SnapshotRetentionService" signature="(Ljava/lang/String;Ljava/nio/file/Path;)Z" name="lambda$applyPolicyLocked$0" primary="true">
+      <SourceLine endBytecode="67" classname="com.minos.storage.local.store.SnapshotRetentionService" start="163" end="163" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.SnapshotRetentionService.lambda$applyPolicyLocked$0(String, Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.store.SnapshotRetentionService" start="163" end="163" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at SnapshotRetentionService.java:[line 163]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.store.SnapshotRetentionService" start="163" end="163" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="1">
+      <Message>Known null at SnapshotRetentionService.java:[line 163]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="ac8a1c925615ed31c29e71a4146d85f6" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.SnapshotRetentionService.lambda$applyPolicyLocked$2(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.store.SnapshotRetentionService" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.SnapshotRetentionService" start="24" end="196" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java">
+        <Message>At SnapshotRetentionService.java:[lines 24-196]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.SnapshotRetentionService</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.store.SnapshotRetentionService" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$applyPolicyLocked$2" primary="true">
+      <SourceLine endBytecode="53" classname="com.minos.storage.local.store.SnapshotRetentionService" start="172" end="172" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.SnapshotRetentionService.lambda$applyPolicyLocked$2(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.store.SnapshotRetentionService" start="172" end="172" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at SnapshotRetentionService.java:[line 172]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.store.SnapshotRetentionService" start="172" end="172" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="1">
+      <Message>Known null at SnapshotRetentionService.java:[line 172]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="57a8c7a21cdf8d0106cf6acb5a4856e5" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.SnapshotRetentionService.lambda$applyPolicyLocked$3(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.store.SnapshotRetentionService" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.SnapshotRetentionService" start="24" end="196" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java">
+        <Message>At SnapshotRetentionService.java:[lines 24-196]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.SnapshotRetentionService</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.store.SnapshotRetentionService" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$applyPolicyLocked$3" primary="true">
+      <SourceLine endBytecode="53" classname="com.minos.storage.local.store.SnapshotRetentionService" start="177" end="177" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.SnapshotRetentionService.lambda$applyPolicyLocked$3(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.store.SnapshotRetentionService" start="177" end="177" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at SnapshotRetentionService.java:[line 177]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.store.SnapshotRetentionService" start="177" end="177" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="1">
+      <Message>Known null at SnapshotRetentionService.java:[line 177]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="496073464b4d698dad23514895e6d21e" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.SnapshotRetentionService.lambda$applyPolicyLocked$4(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.store.SnapshotRetentionService" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.SnapshotRetentionService" start="24" end="196" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java">
+        <Message>At SnapshotRetentionService.java:[lines 24-196]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.SnapshotRetentionService</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.store.SnapshotRetentionService" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$applyPolicyLocked$4" primary="true">
+      <SourceLine endBytecode="53" classname="com.minos.storage.local.store.SnapshotRetentionService" start="180" end="180" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.SnapshotRetentionService.lambda$applyPolicyLocked$4(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.store.SnapshotRetentionService" start="180" end="180" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at SnapshotRetentionService.java:[line 180]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.store.SnapshotRetentionService" start="180" end="180" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="1">
+      <Message>Known null at SnapshotRetentionService.java:[line 180]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="e9dfffbc00755b20e7311dec35b68fd7" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.storage.local.store.SnapshotRetentionService.lambda$listSnapshotFiles$0(Path)</LongMessage>
+    <Class classname="com.minos.storage.local.store.SnapshotRetentionService" primary="true">
+      <SourceLine classname="com.minos.storage.local.store.SnapshotRetentionService" start="24" end="196" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java">
+        <Message>At SnapshotRetentionService.java:[lines 24-196]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.local.store.SnapshotRetentionService</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.storage.local.store.SnapshotRetentionService" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="lambda$listSnapshotFiles$0" primary="true">
+      <SourceLine endBytecode="53" classname="com.minos.storage.local.store.SnapshotRetentionService" start="37" end="37" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="0" />
+      <Message>In method com.minos.storage.local.store.SnapshotRetentionService.lambda$listSnapshotFiles$0(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.storage.local.store.SnapshotRetentionService" start="37" end="37" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at SnapshotRetentionService.java:[line 37]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.storage.local.store.SnapshotRetentionService" start="37" end="37" sourcepath="com/minos/storage/local/store/SnapshotRetentionService.java" sourcefile="SnapshotRetentionService.java" startBytecode="1">
+      <Message>Known null at SnapshotRetentionService.java:[line 37]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>

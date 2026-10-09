@@ -71,6 +71,19 @@ python scripts/quality/audit-report-summary.py spotbugs
 
 Le contrôle bloquant échoue s'il reste une alerte `Medium` ou plus. Réglages : `-Dspotbugs.failThreshold=High`, `-Dspotbugs.threshold=Low`, `-Dspotbugs.effort=Default`, `-Dspotbugs.maxAllowedViolations=50`.
 
+### SpotBugs : base figée
+
+Les 197 alertes du 9 octobre 2026 sont figées dans `quality/spotbugs-baseline/<module>.xml` (une par module, réduites aux `BugInstance`, sans chemin du poste). Elles restent dans les rapports ; seul le contrôle par la base les ignore :
+
+```bash
+./mvnw -B -ntp -fae -Paudit-spotbugs -DskipTests compile spotbugs:spotbugs
+python scripts/quality/audit-report-summary.py spotbugs --baseline-dir quality/spotbugs-baseline
+```
+
+Une alerte est identifiée par son `instanceHash`, que SpotBugs conserve quand des lignes bougent ou que le reste de la classe change. La commande échoue sur toute alerte absente de la base (`NEW <module>: <motif> at <fichier>:<ligne>`) et compte les alertes de la base qui ont disparu. Vérifié le 9 octobre : 0 nouvelle sur le code courant, et une méthode `Boolean` renvoyant `null` ajoutée exprès est signalée (`NP_BOOLEAN_RETURN_NULL`, code de sortie 1). Le mode bloquant de `code-audit.yml` (`spotbugs_blocking`) applique cette comparaison.
+
+Une alerte corrigée doit être retirée de la base (régénérer le fichier du module avec le rapport du jour, réduit aux `BugInstance`). Une nouvelle alerte ne s'y ajoute pas en silence : on la corrige, ou on la justifie dans `quality/spotbugs-exclude.xml`. L'option `excludeBugsFile` du plugin Maven 4.10.4.1, essayée d'abord, n'excluait aucune alerte : la comparaison est faite par le script.
+
 ### SpotBugs : prouver le périmètre analysé
 
 Le XML du plugin Maven 4.10.4.1 ne contient **aucune statistique de classes** (`total_classes="0"`, aucun `ClassStats` ; `num_packages` ne compte que les packages qui ont une alerte). Il ne prouve donc pas quelles classes ont été analysées : `audit-report-summary.py spotbugs` le signale `UNPROVEN` (échec avec `--strict`). Pour le prouver, rejouer SpotBugs en ligne de commande avec les mêmes réglages ; son XML porte un `ClassStats` par classe :
@@ -166,7 +179,7 @@ Ce harnais n'exécute ni Gradle, ni le plugin Gradle `org.jetbrains.intellij.pla
 
 ### Déclenchement manuel dans GitHub Actions
 
-`.github/workflows/code-audit.yml` (`workflow_dispatch` uniquement) lance SpotBugs (rapport ou `spotbugs:check`), PIT sur un module choisi (`mutation_module`, toutes ses classes) et Dependency-Check (livré puis tests, avec le secret `NVD_API_KEY`), exécute les synthèses et publie les rapports en artefacts. **Ce workflow n'a pas été exécuté sur GitHub** : il passe les contrôles statiques du dépôt (`check-workflow-pins.py`, `check-single-execution.py`).
+`.github/workflows/code-audit.yml` (`workflow_dispatch` uniquement) lance SpotBugs (rapport, ou contrôle par la base figée), PIT sur un module choisi (`mutation_module`, toutes ses classes) et Dependency-Check (livré puis tests, avec le secret `NVD_API_KEY`), exécute les synthèses et publie les rapports en artefacts. **Ce workflow n'a pas été exécuté sur GitHub** : il passe les contrôles statiques du dépôt (`check-workflow-pins.py`, `check-single-execution.py`).
 
 ## Chemins des rapports
 
@@ -212,7 +225,7 @@ Indicateurs : **mutation score** (tués / générés), **force des tests** (tué
 - **Tests d'un autre module.** PIT n'exécute que les tests du module analysé (`crossModule=false`). Une classe couverte seulement par des tests d'un module aval (`minos-app`, `minos-bootstrap`, `minos-cli`…) apparaît `NO_COVERAGE` ou `SURVIVED` à tort. Avant de conclure à un test manquant, cherchez la classe dans les autres modules (`grep -rl NomDeClasse */src/test`), ou mutez-la depuis le module aval avec `-Dpit.crossModule=true`.
 - **Répertoire de travail.** `pitest-maven` n'a pas de paramètre `workingDirectory` ; la configuration passe `-Duser.dir=<racine>` aux JVM de PIT parce que des tests lisent des chemins relatifs à la racine (`HostedProductionBoundaryTest`).
 - **Mutants équivalents.** PIT ne les distingue pas ; ils se démontrent au cas par cas.
-- **Aucun seuil** PIT ni SpotBugs bloquant n'est imposé.
+- **Aucun seuil** PIT n'est imposé ; SpotBugs n'est bloquant qu'à la demande, contre la base figée (aucune alerte nouvelle).
 - **SpotBugs sans greffons** (`find-sec-bugs`, `fb-contrib` absents).
 - **ArchUnit et dépendances dynamiques.** Le bytecode ne montre pas un chargement par `ServiceLoader` ou par réflexion : la règle « surfaces sans racine de composition » ne voit que les références compilées.
 - **Linux, macOS et GitHub Actions.** Les mesures viennent de Windows ; les commandes bash et le workflow `code-audit.yml` n'ont pas été exécutés hors de ce poste.

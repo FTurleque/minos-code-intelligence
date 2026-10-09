@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="57a9171951df8cfedfb74eff8a4d3dda" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.mcp.MinosMcpHandshakeProbe.extension(Path)</LongMessage>
+    <Class classname="com.minos.mcp.MinosMcpHandshakeProbe" primary="true">
+      <SourceLine classname="com.minos.mcp.MinosMcpHandshakeProbe" start="26" end="112" sourcepath="com/minos/mcp/MinosMcpHandshakeProbe.java" sourcefile="MinosMcpHandshakeProbe.java">
+        <Message>At MinosMcpHandshakeProbe.java:[lines 26-112]</Message>
+      </SourceLine>
+      <Message>In class com.minos.mcp.MinosMcpHandshakeProbe</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.mcp.MinosMcpHandshakeProbe" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="extension" primary="true">
+      <SourceLine endBytecode="129" classname="com.minos.mcp.MinosMcpHandshakeProbe" start="106" end="108" sourcepath="com/minos/mcp/MinosMcpHandshakeProbe.java" sourcefile="MinosMcpHandshakeProbe.java" startBytecode="0" />
+      <Message>In method com.minos.mcp.MinosMcpHandshakeProbe.extension(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.mcp.MinosMcpHandshakeProbe" start="106" end="106" sourcepath="com/minos/mcp/MinosMcpHandshakeProbe.java" sourcefile="MinosMcpHandshakeProbe.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at MinosMcpHandshakeProbe.java:[line 106]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.mcp.MinosMcpHandshakeProbe" start="106" end="106" sourcepath="com/minos/mcp/MinosMcpHandshakeProbe.java" sourcefile="MinosMcpHandshakeProbe.java" startBytecode="1">
+      <Message>Known null at MinosMcpHandshakeProbe.java:[line 106]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>

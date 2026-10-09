@@ -57,7 +57,7 @@ def compiled_classes(module: Path, root: Path) -> int:
     return sum(1 for _ in classes.rglob("*.class")) if classes.is_dir() else 0
 
 
-def spotbugs(root: Path, top: int, reports_dir: Path | None, strict: bool) -> int:
+def spotbugs(root: Path, top: int, reports_dir: Path | None, strict: bool, baseline_dir: Path | None = None) -> int:
     """``reports_dir`` reads ``<module>.xml`` written by the SpotBugs command line instead of the Maven reports.
 
     The XML of spotbugs-maven-plugin 4.10.4.1 carries no class statistics (``total_classes="0"``, no
@@ -67,6 +67,8 @@ def spotbugs(root: Path, top: int, reports_dir: Path | None, strict: bool) -> in
     total: Counter[tuple[str, str]] = Counter()
     problems: list[str] = []
     unproven: list[str] = []
+    new_findings: list[str] = []
+    fixed = 0
     print(f"{'module':28} {'classes':>7} {'analysed':>8} {'bugs':>5}  priorities")
     for module in module_dirs(root):
         compiled = compiled_classes(module, root)
@@ -92,6 +94,10 @@ def spotbugs(root: Path, top: int, reports_dir: Path | None, strict: bool) -> in
             problems.append(f"{module.name}: {errors.get('errors')} analysis errors, "
                             f"{errors.get('missingClasses')} missing classes")
         total.update((bug.get("type", "?"), PRIORITY.get(bug.get("priority", ""), "?")) for bug in bugs)
+        if baseline_dir is not None:
+            module_new, module_fixed = compare_with_baseline(module.name, bugs, baseline_dir / f"{module.name}.xml")
+            new_findings += module_new
+            fixed += module_fixed
     print(f"{'TOTAL':28} {'':7} {'':8} {sum(total.values()):5}")
     for (pattern, priority), count in total.most_common(top):
         print(f"  {count:4}  {priority:6} {pattern}")
@@ -101,9 +107,38 @@ def spotbugs(root: Path, top: int, reports_dir: Path | None, strict: bool) -> in
               file=sys.stderr)
         if strict:
             problems.append("analysed scope unproven")
+    if baseline_dir is not None:
+        print(f"BASELINE {baseline_dir}: {len(new_findings)} new finding(s), {fixed} baseline finding(s) gone")
+        for finding in new_findings:
+            print(f"  NEW {finding}", file=sys.stderr)
+        if new_findings:
+            problems.append(f"{len(new_findings)} SpotBugs finding(s) not in the baseline")
     for problem in problems:
         print(f"INCOMPLETE: {problem}", file=sys.stderr)
     return 1 if problems else 0
+
+
+def compare_with_baseline(module: str, bugs: list[ET.Element], baseline: Path) -> tuple[list[str], int]:
+    """Findings absent from the frozen baseline, and the number of baseline findings no longer reported.
+
+    A finding is identified by its ``instanceHash``, which SpotBugs keeps across line moves and edits elsewhere in
+    the class; equal hashes are counted (``instanceOccurrenceNum`` tells them apart). A module without a baseline file
+    has an empty baseline: every finding in it is new.
+    """
+    known: Counter[str] = Counter()
+    if baseline.is_file():
+        known.update(bug.get("instanceHash", "") for bug in ET.parse(baseline).getroot().findall("BugInstance"))
+    current: Counter[str] = Counter(bug.get("instanceHash", "") for bug in bugs)
+    new_hashes = current - known
+    described: list[str] = []
+    for bug in bugs:
+        digest = bug.get("instanceHash", "")
+        if new_hashes[digest] > 0:
+            new_hashes[digest] -= 1
+            line = bug.find("SourceLine")
+            where = f"{line.get('sourcepath', '?')}:{line.get('start', '?')}" if line is not None else "?"
+            described.append(f"{module}: {bug.get('type', '?')} at {where}")
+    return described, sum((known - current).values())
 
 
 def percent(part: int, whole: int) -> int:
@@ -210,6 +245,8 @@ def main() -> int:
     sb.add_argument("--top", type=int, default=15, help="patterns listed (default 15)")
     sb.add_argument("--reports-dir", type=Path, help="directory of <module>.xml from the SpotBugs command line")
     sb.add_argument("--strict", action="store_true", help="fail when a report cannot prove the analysed scope")
+    sb.add_argument("--baseline-dir", type=Path,
+                    help="directory of <module>.xml frozen findings: fail on any finding not in it (quality/spotbugs-baseline)")
     pit_command = commands.add_parser("pit")
     target = pit_command.add_mutually_exclusive_group(required=True)
     target.add_argument("--module", help="module whose target/pit-reports is read, e.g. minos-engine")
@@ -218,7 +255,7 @@ def main() -> int:
     dependency_check_command.add_argument("report", type=Path, help="dependency-check-report.json")
     args = parser.parse_args()
     if args.command == "spotbugs":
-        return spotbugs(args.root, args.top, args.reports_dir, args.strict)
+        return spotbugs(args.root, args.top, args.reports_dir, args.strict, args.baseline_dir)
     if args.command == "pit":
         return pit(args.root, args.module, args.all)
     return dependency_check(args.report)

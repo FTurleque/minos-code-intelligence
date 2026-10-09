@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="f434de2043f94460fc72282a71fee338" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.semantic.SemanticVector.values() risque d'exposer sa représentation interne en renvoyant com.minos.semantic.SemanticVector.values</LongMessage>
+    <Class classname="com.minos.semantic.SemanticVector" primary="true">
+      <SourceLine classname="com.minos.semantic.SemanticVector" start="9" end="43" sourcepath="com/minos/semantic/SemanticVector.java" sourcefile="SemanticVector.java">
+        <Message>At SemanticVector.java:[lines 9-43]</Message>
+      </SourceLine>
+      <Message>In class com.minos.semantic.SemanticVector</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.semantic.SemanticVector" signature="()Ljava/util/List;" name="values" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.semantic.SemanticVector" start="9" end="9" sourcepath="com/minos/semantic/SemanticVector.java" sourcefile="SemanticVector.java" startBytecode="0" />
+      <Message>In method com.minos.semantic.SemanticVector.values()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.semantic.SemanticVector" signature="Ljava/util/List;" name="values" primary="true">
+      <SourceLine classname="com.minos.semantic.SemanticVector" sourcepath="com/minos/semantic/SemanticVector.java" sourcefile="SemanticVector.java">
+        <Message>In SemanticVector.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.semantic.SemanticVector.values</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.semantic.SemanticVector" start="9" end="9" sourcepath="com/minos/semantic/SemanticVector.java" sourcefile="SemanticVector.java" startBytecode="4" primary="true">
+      <Message>At SemanticVector.java:[line 9]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>
