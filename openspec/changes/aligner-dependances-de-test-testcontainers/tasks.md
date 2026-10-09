@@ -9,7 +9,7 @@
 ## 2. slf4j
 
 - [x] 2.1 `slf4j-api` dans `dependencyManagement` (`slf4j.version`) ; `dependency:tree` sans version divergente ; vérifier que le jar ombré embarque toujours une seule version. — `slf4j-api` et `slf4j-simple` gérés par `slf4j.version` ; `dependency:tree` du réacteur : 2.0.20 partout.
-- [ ] 2.2 Décision sur `dependencyConvergence` (Enforcer) ; si oui, l'ajouter et corriger les divergences qu'elle révèle.
+- [x] 2.2 Décision sur `dependencyConvergence` (Enforcer) ; si oui, l'ajouter et corriger les divergences qu'elle révèle. — Non (décision de l'utilisateur, 2026-10-09) : `slf4j-api` converge déjà par `dependencyManagement` ; la règle s'appliquerait à tout le réacteur et ferait échouer le build sur le moindre écart transitif, pour un gain faible sur des dépendances de test.
 
 ## 3. Conteneurs orphelins sous Windows (H24)
 
