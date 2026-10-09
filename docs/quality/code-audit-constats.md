@@ -116,7 +116,7 @@ Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité
 | H15 | `HostedAuditDelivery` n'attrape que `IOException` | Défaut confirmé (test rouge), **corrigé** | P3 | E | `renforcer-tests-revelees-par-mutation` (décision) |
 | H16 | Les limitations d'une requête de relations sont lues sur un second chargement du snapshot actif | Risque | P3 | A | — (lot 2 de `declarer-limites-impact-scip`) |
 | H17 | Linux : `--nproc=128` limite toutes les tâches de l'utilisateur réel, pas un processus | Risque (non exécuté) | P3 | A | — (lié à A03) |
-| H18 | Windows : la sonde AppContainer lit sa sortie après la fin du processus | Risque (non exécuté) | P3 | A | — (lié à A07) |
+| H18 | Windows : la sonde AppContainer lit sa sortie après la fin du processus | Défaut confirmé (reproduit), **corrigé** le 2026-10-09 (sortie dans un fichier) | P3 | A | — (lié à A07) |
 | H19 | `scripts/intellij/run-minos.ps1` lance `mvnw package` avant le serveur MCP sur stdio | Non reproduit | — | E | `corriger-documentation-plugin-et-suivi-audit` |
 | H20 | Variables obligatoires des fichiers Compose sans garde `${VAR:?message}` | Amélioration | P3 | E | — |
 | H21 | Alertes SpotBugs nouvelles du plugin IntelliJ (11) | Faux positifs (4), convention (5), **2 corrigées** le 2026-10-08 | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
@@ -221,7 +221,7 @@ Relevés par lecture déléguée (A), non réexécutés ; chaque point dit ce qu
 - **H15** `HostedAuditDelivery.java:27,52` n'attrape que `IOException` ; `recordDenial` (ligne 155) est hors du `try`. Le seul sink embarqué ne fait rien : impact nul aujourd'hui, réel pour un sink tiers. À confirmer par un test avec un sink qui lève une `RuntimeException`.
 - **H16** `ProjectQueryService.java:64-70` recharge le snapshot actif pour les limitations, séparément de `findRelationships` (`:58-61`) : pendant une promotion, résultats et limitations peuvent venir de deux snapshots, et le décodage complet est payé deux fois (D03).
 - **H17** `LinuxBubblewrapWorkerSandboxBackend.java:343` : `RLIMIT_NPROC` compte les tâches de l'utilisateur réel ; l'ADR 0038 et `remote-worker-sandbox-disposition.md:52` parlent d'une limite par processus. À confirmer sous Linux avec un utilisateur qui a déjà plus de 128 tâches.
-- **H18** `WindowsAppContainerWorkerSandboxBackend.java` (≈ ligne 404) : `probeExitedCleanly` ne lit la sortie qu'après la fin ; le correctif A01 ajoute un `Write-Warning` par journal sans propriétaire. À confirmer sous Windows avec de nombreux journaux orphelins.
+- **H18** `WindowsAppContainerWorkerSandboxBackend.java` (≈ ligne 404) : `probeExitedCleanly` ne lit la sortie qu'après la fin ; le correctif A01 ajoute un `Write-Warning` par journal sans propriétaire. À confirmer sous Windows avec de nombreux journaux orphelins. **Confirmé et corrigé le 2026-10-09** : avec une sortie de 1 Mo lue seulement après la fin, le processus ne se termine pas en 15 s (bloqué sur son écriture), donc la sonde aurait conclu à un bac à sable indisponible ; `probeSucceeds` envoie maintenant la sortie dans un fichier, lu après la fin (`AppContainerProbeOutputTest`).
 - **H19** `scripts/intellij/run-minos.ps1:15-17` lance `mvnw package` avant le serveur MCP sur stdio : une ligne de Maven sur la sortie standard précéderait le flux JSON-RPC. **Non reproduit (E)** : en cas de succès, `mvnw.cmd -q -DskipTests package` n'écrit aucune ligne sur la sortie standard ; en cas d'échec, le script s'arrête avant le démarrage du serveur.
 
 #### MINOS-AUD-H20 — Garde des variables Compose
