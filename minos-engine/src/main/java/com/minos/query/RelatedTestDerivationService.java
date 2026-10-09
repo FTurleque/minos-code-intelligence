@@ -27,6 +27,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -62,10 +63,10 @@ public final class RelatedTestDerivationService {
      * doit suivre une minuscule ou un chiffre. La fin d'un mot en minuscules n'est jamais un suffixe :
      * {@code Audit}, {@code Commit}, {@code Limit}, {@code Latest} et {@code Contest} restent entiers.
      */
-    private static final Pattern TEST_SUFFIX = Pattern.compile(
-            "(?:[._-](?i:tests?|spec(?:ification)?s?|it)"
-                    + "|(?:Tests?|Spec(?:ification)?s?)"
-                    + "|(?<=[a-z0-9])I[Tt])$"
+    private static final List<Pattern> TEST_SUFFIXES = List.of(
+            Pattern.compile("[._-](?i:tests?|spec(?:ification)?s?|it)$"),
+            Pattern.compile("(?:Tests?|Spec(?:ification)?s?)$"),
+            Pattern.compile("(?<=[a-z0-9])I[Tt]$")
     );
     private static final Set<String> TEST_SOURCE_SETS = Set.of(
             "test", "tests", "it", "integrationtest", "integration-test"
@@ -410,7 +411,18 @@ public final class RelatedTestDerivationService {
     }
 
     private static String stripTestSuffix(String value) {
-        return value == null ? "" : TEST_SUFFIX.matcher(value).replaceFirst("");
+        if (value == null) {
+            return "";
+        }
+        // Les trois motifs finissent à la fin du nom : retirer le plus long revient au motif le plus à gauche.
+        int cut = value.length();
+        for (Pattern suffix : TEST_SUFFIXES) {
+            Matcher matcher = suffix.matcher(value);
+            if (matcher.find()) {
+                cut = Math.min(cut, matcher.start());
+            }
+        }
+        return value.substring(0, cut);
     }
 
     private static String stripTestFileSuffix(String value) {
@@ -468,7 +480,7 @@ public final class RelatedTestDerivationService {
         String[] segments = normalized.split("/");
         int last = segments.length - 1;
         String fileName = segments[last];
-        if (fileName.matches(".*\\.(?:test|spec)\\.[^/]+$") || hasTestFileNameConvention(fileName)) {
+        if (hasTestFileName(fileName)) {
             return true;
         }
         boolean jvmSource = JVM_SOURCE_EXTENSIONS.stream().anyMatch(fileName::endsWith);
@@ -478,24 +490,50 @@ public final class RelatedTestDerivationService {
             if (segment.isEmpty() || ".".equals(segment)) {
                 continue;
             }
-            if ("src".equals(segment) && index + 1 < last) {
-                String sourceSet = segments[index + 1];
-                if ("main".equals(sourceSet)) {
-                    return false;
-                }
-                if (TEST_SOURCE_SETS.contains(sourceSet)) {
-                    return true;
-                }
+            SourceSetKind sourceSet = sourceSetKind(segments, index, last);
+            if (sourceSet == SourceSetKind.MAIN) {
+                return false;
             }
-            if ("__tests__".equals(segment) || isTestProjectDirectory(segment)) {
-                return true;
-            }
-            if (TEST_ROOT_DIRECTORIES.contains(segment) && (firstDirectory || !jvmSource)) {
+            if (sourceSet == SourceSetKind.TEST || isTestDirectory(segment, firstDirectory, jvmSource)) {
                 return true;
             }
             firstDirectory = false;
         }
         return false;
+    }
+
+    /** Ce que dit un segment {@code src} du source set qui le suit : production, test, ou rien de net. */
+    private enum SourceSetKind { MAIN, TEST, OTHER }
+
+    private static SourceSetKind sourceSetKind(String[] segments, int index, int last) {
+        if (!"src".equals(segments[index]) || index + 1 >= last) {
+            return SourceSetKind.OTHER;
+        }
+        String sourceSet = segments[index + 1];
+        if ("main".equals(sourceSet)) {
+            return SourceSetKind.MAIN;
+        }
+        return TEST_SOURCE_SETS.contains(sourceSet) ? SourceSetKind.TEST : SourceSetKind.OTHER;
+    }
+
+    /** {@code __tests__}, {@code Foo.Tests}, ou {@code test}/{@code tests} (racine du projet, ou toute profondeur hors JVM). */
+    private static boolean isTestDirectory(String segment, boolean firstDirectory, boolean jvmSource) {
+        return "__tests__".equals(segment)
+                || isTestProjectDirectory(segment)
+                || (TEST_ROOT_DIRECTORIES.contains(segment) && (firstDirectory || !jvmSource));
+    }
+
+    /** {@code *.test.*}, {@code *.spec.*}, {@code foo_test.go}, {@code test_foo.py} : le nom du fichier seul. */
+    private static boolean hasTestFileName(String fileName) {
+        return hasMarkerFollowedByText(fileName, ".test.")
+                || hasMarkerFollowedByText(fileName, ".spec.")
+                || hasTestFileNameConvention(fileName);
+    }
+
+    /** Le marqueur apparait, suivi d'au moins un caractere (la forme {@code .test.js}, pas {@code foo.test.}). */
+    private static boolean hasMarkerFollowedByText(String fileName, String marker) {
+        int at = fileName.indexOf(marker);
+        return at >= 0 && at + marker.length() < fileName.length();
     }
 
     /** {@code foo_test.go}, {@code foo_test.py}, {@code foo_test.cc} et {@code test_foo.py}, jamais {@code contest.py}. */

@@ -39,6 +39,7 @@ flowchart LR
 - [CLI, API Java, MCP et export NEXUS](developer/public-surfaces.md)
 - [Multi-dépôts et intelligence Git](developer/multi-repo-git.md)
 - [Tests, validation et contribution](developer/testing.md)
+- [Audit de code : SpotBugs et PIT](quality/code-audit.md)
 
 ## Décisions architecturales
 

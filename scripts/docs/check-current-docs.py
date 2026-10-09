@@ -23,6 +23,8 @@ RELEASE_WORKFLOW = ".github/workflows/release-windows.yml"
 JACOCO_CHECKER = "scripts/quality/check-jacoco.py"
 INSTALLER = "packaging/windows/minos-installer.iss.template"
 CLIENT_DETECTOR = "scripts/install/detect-mcp-clients.ps1"
+INTELLIJ_DOC = "docs/user/intellij-plugin.md"
+WINDOWS_DISTRIBUTION = "scripts/release/build-windows-distribution.ps1"
 
 PUBLISHED_101_COMMIT = "f762025d66e33c40324c811079f1527d122f90f9"
 PUBLISHED_101_URL = "https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1"
@@ -205,6 +207,21 @@ def validate_installer_contract() -> None:
     ))
 
 
+def validate_intellij_launcher_path() -> None:
+    r"""MINOS-AUD-H10: the launcher path the plugin documentation proposes must exist in a standard install.
+
+    The installer installs into ``{localappdata}\Programs\MINOS`` and the distribution writes ``minos.cmd`` at
+    its root (no ``bin`` folder): a documented path under ``Programs\MINOS\bin`` names a file that is never there.
+    """
+    installer = read(INSTALLER)
+    require(INSTALLER, installer, r"DefaultDirName={localappdata}\Programs\MINOS")
+    distribution = read(WINDOWS_DISTRIBUTION)
+    require(WINDOWS_DISTRIBUTION, distribution, "(Join-Path $Distribution 'minos.cmd')")
+    doc = read(INTELLIJ_DOC)
+    forbid(INTELLIJ_DOC, doc, r"Programs\MINOS\bin\minos.cmd")
+    require(INTELLIJ_DOC, doc, r"AppData\Local\Programs\MINOS\minos.cmd")
+
+
 def main() -> int:
     validators = (
         validate_current_state,
@@ -212,6 +229,7 @@ def main() -> int:
         validate_security_and_storage,
         validate_ci_contracts,
         validate_installer_contract,
+        validate_intellij_launcher_path,
     )
     try:
         for validator in validators:

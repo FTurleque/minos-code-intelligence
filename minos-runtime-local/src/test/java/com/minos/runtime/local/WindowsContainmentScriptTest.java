@@ -132,6 +132,7 @@ class WindowsContainmentScriptTest {
         if ("windows-appcontainer-sandbox-v4.ps1".equals(launcher)) {
             assembled = removeApprovedPrivateStorageHardening(assembled);
             assembled = removeApprovedOwnershipRecovery(assembled, golden);
+            assembled = removeApprovedJournalBeforeGrant(assembled);
         }
         assertEquals(expected, assembled,
                 launcher + " drifted beyond the approved containment remediations");
@@ -175,6 +176,38 @@ class WindowsContainmentScriptTest {
                     Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
                 }""",
                 "ownership lock release");
+    }
+
+    /**
+     * MINOS-AUD-H22: each grant is journaled before {@code icacls} applies it, so that a launcher killed between
+     * the two never leaves an entry that no journal names. The only accepted differences are the order of the three
+     * statements in each grant loop and the comment that explains it.
+     */
+    private static String removeApprovedJournalBeforeGrant(String assembled) {
+        String value = replaceExactlyOnce(
+                assembled,
+                """
+                    # MINOS-AUD-H22: every grant is journaled before icacls applies it. A launcher killed between the two leaves a
+                    # journaled path without an entry, which recovery removes as a no-op; the reverse order left an entry that no
+                    # journal named, and that no recovery could ever remove.
+                """,
+                "",
+                "journal-before-grant comment");
+        for (String[] grant : new String[][] {
+                {"readPaths", "Grant-AppContainerDirectory $path $sid '(OI)(CI)RX'"},
+                {"readFiles", "Grant-AppContainerFile $path $sid"},
+                {"writePaths", "Grant-AppContainerDirectory $path $sid '(OI)(CI)M'"}}) {
+            // The closing delimiter sits 8 columns left of the content: the text block keeps that 8-space indent.
+            String journal = """
+                            $granted.Add($path)
+                            Write-Recovery $journal $containerProfile $sid $granted
+                    """;
+            String apply = "        " + grant[1] + "\n";
+            String loop = "    foreach ($path in $" + grant[0] + ") {\n";
+            value = replaceExactlyOnce(
+                    value, loop + journal + apply, loop + apply + journal, "journal before grant (" + grant[0] + ")");
+        }
+        return value;
     }
 
     private static String removeApprovedPrivateStorageHardening(String assembled) throws Exception {

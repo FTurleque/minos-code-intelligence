@@ -1,0 +1,332 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="52cebdc2467e92fd59910cfffa8816e6" cweid="459" rank="16" abbrev="OS" category="BAD_PRACTICE" priority="2" type="OS_OPEN_STREAM" instanceOccurrenceMax="0">
+    <ShortMessage>La méthode peut ne pas fermer un flux</ShortMessage>
+    <LongMessage>La méthode com.minos.adapter.scip.ScipSymbolSnapshotImporter.freeze(Path) peut ne pas fermer un flux</LongMessage>
+    <Class classname="com.minos.adapter.scip.ScipSymbolSnapshotImporter" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.ScipSymbolSnapshotImporter" start="43" end="232" sourcepath="com/minos/adapter/scip/ScipSymbolSnapshotImporter.java" sourcefile="ScipSymbolSnapshotImporter.java">
+        <Message>At ScipSymbolSnapshotImporter.java:[lines 43-232]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.ScipSymbolSnapshotImporter</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.adapter.scip.ScipSymbolSnapshotImporter" signature="(Ljava/nio/file/Path;)Lcom/minos/adapter/scip/ScipSymbolSnapshotImporter$FrozenArtifact;" name="freeze" primary="true">
+      <SourceLine endBytecode="202" classname="com.minos.adapter.scip.ScipSymbolSnapshotImporter" start="126" end="164" sourcepath="com/minos/adapter/scip/ScipSymbolSnapshotImporter.java" sourcefile="ScipSymbolSnapshotImporter.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.ScipSymbolSnapshotImporter.freeze(Path)</Message>
+    </Method>
+    <Type role="TYPE_CLOSEIT" descriptor="Ljava/io/InputStream;">
+      <SourceLine classname="java.io.InputStream" start="63" end="805" sourcepath="java/io/InputStream.java" sourcefile="InputStream.java">
+        <Message>At InputStream.java:[lines 63-805]</Message>
+      </SourceLine>
+      <Message>Need to close java.io.InputStream </Message>
+    </Type>
+    <SourceLine endBytecode="181" classname="com.minos.adapter.scip.ScipSymbolSnapshotImporter" start="148" end="148" sourcepath="com/minos/adapter/scip/ScipSymbolSnapshotImporter.java" sourcefile="ScipSymbolSnapshotImporter.java" startBytecode="181" primary="true">
+      <Message>At ScipSymbolSnapshotImporter.java:[line 148]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="7cc3952eb87d4b6042a192787b69294b" rank="16" abbrev="CT" category="BAD_PRACTICE" priority="2" type="CT_CONSTRUCTOR_THROW" instanceOccurrenceMax="0">
+    <ShortMessage>Be wary of letting constructors throw exceptions.</ShortMessage>
+    <LongMessage>Exception thrown in class com.minos.adapter.scip.runtime.AbstractScipProcessPlanFactory at new com.minos.adapter.scip.runtime.AbstractScipProcessPlanFactory(Path, String, String) will leave the constructor. The object under construction remains partially initialized and may be vulnerable to Finalizer attacks.</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.AbstractScipProcessPlanFactory" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.AbstractScipProcessPlanFactory" start="21" end="75" sourcepath="com/minos/adapter/scip/runtime/AbstractScipProcessPlanFactory.java" sourcefile="AbstractScipProcessPlanFactory.java">
+        <Message>At AbstractScipProcessPlanFactory.java:[lines 21-75]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.AbstractScipProcessPlanFactory</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.adapter.scip.runtime.AbstractScipProcessPlanFactory" signature="(Ljava/nio/file/Path;Ljava/lang/String;Ljava/lang/String;)V" name="&lt;init&gt;" primary="true">
+      <SourceLine endBytecode="135" classname="com.minos.adapter.scip.runtime.AbstractScipProcessPlanFactory" start="27" end="31" sourcepath="com/minos/adapter/scip/runtime/AbstractScipProcessPlanFactory.java" sourcefile="AbstractScipProcessPlanFactory.java" startBytecode="0" />
+      <Message>In method new com.minos.adapter.scip.runtime.AbstractScipProcessPlanFactory(Path, String, String)</Message>
+    </Method>
+    <SourceLine endBytecode="8" classname="com.minos.adapter.scip.runtime.AbstractScipProcessPlanFactory" start="28" end="28" sourcepath="com/minos/adapter/scip/runtime/AbstractScipProcessPlanFactory.java" sourcefile="AbstractScipProcessPlanFactory.java" startBytecode="8" primary="true">
+      <Message>At AbstractScipProcessPlanFactory.java:[line 28]</Message>
+    </SourceLine>
+    <SourceLine endBytecode="8" classname="com.minos.adapter.scip.runtime.AbstractScipProcessPlanFactory" start="28" end="28" sourcepath="com/minos/adapter/scip/runtime/AbstractScipProcessPlanFactory.java" sourcefile="AbstractScipProcessPlanFactory.java" startBytecode="8">
+      <Message>At AbstractScipProcessPlanFactory.java:[line 28]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="4853add725fccb7b7a66af8d1ce8e4a3" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.BoundedProviderSourceProbe$1.visitFile(Path, BasicFileAttributes)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.BoundedProviderSourceProbe$1" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.BoundedProviderSourceProbe$1" start="53" end="89" sourcepath="com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java" sourcefile="BoundedProviderSourceProbe.java">
+        <Message>At BoundedProviderSourceProbe.java:[lines 53-89]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.BoundedProviderSourceProbe$1</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.adapter.scip.runtime.BoundedProviderSourceProbe$1" signature="(Ljava/nio/file/Path;Ljava/nio/file/attribute/BasicFileAttributes;)Ljava/nio/file/FileVisitResult;" name="visitFile" primary="true">
+      <SourceLine endBytecode="244" classname="com.minos.adapter.scip.runtime.BoundedProviderSourceProbe$1" start="70" end="83" sourcepath="com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java" sourcefile="BoundedProviderSourceProbe.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.BoundedProviderSourceProbe$1.visitFile(Path, BasicFileAttributes)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="88" classname="com.minos.adapter.scip.runtime.BoundedProviderSourceProbe$1" start="79" end="79" sourcepath="com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java" sourcefile="BoundedProviderSourceProbe.java" startBytecode="88" primary="true">
+      <Message>Dereferenced at BoundedProviderSourceProbe.java:[line 79]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="83" classname="com.minos.adapter.scip.runtime.BoundedProviderSourceProbe$1" start="79" end="79" sourcepath="com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java" sourcefile="BoundedProviderSourceProbe.java" startBytecode="83">
+      <Message>Known null at BoundedProviderSourceProbe.java:[line 79]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="da3ee8d76d2ed9848807606a934284d" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager.directoryDigest(Path)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager" start="40" end="514" sourcepath="com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java" sourcefile="ManagedPolyglotScipRuntimeManager.java">
+        <Message>At ManagedPolyglotScipRuntimeManager.java:[lines 40-514]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager" signature="(Ljava/nio/file/Path;)Ljava/lang/String;" name="directoryDigest" primary="true">
+      <SourceLine endBytecode="1081" classname="com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager" start="375" end="421" sourcepath="com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java" sourcefile="ManagedPolyglotScipRuntimeManager.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager.directoryDigest(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="109" classname="com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager" start="388" end="388" sourcepath="com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java" sourcefile="ManagedPolyglotScipRuntimeManager.java" startBytecode="109" primary="true">
+      <Message>Dereferenced at ManagedPolyglotScipRuntimeManager.java:[line 388]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="104" classname="com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager" start="388" end="388" sourcepath="com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java" sourcefile="ManagedPolyglotScipRuntimeManager.java" startBytecode="104">
+      <Message>Known null at ManagedPolyglotScipRuntimeManager.java:[line 388]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="14517b27275784bd9461a185b4ec34a4" rank="16" abbrev="ENV" category="BAD_PRACTICE" priority="2" type="ENV_USE_PROPERTY_INSTEAD_OF_ENV" instanceOccurrenceMax="0">
+    <ShortMessage>It is preferable to use portable Java property instead of environment variable.</ShortMessage>
+    <LongMessage>It is preferable to use portable Java property 'java.home' instead of environment variable 'JAVA_HOME' in method com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager.inspectJavaInstalled().</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="82" end="775" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java">
+        <Message>At ManagedScipProviderRuntimeManager.java:[lines 82-775]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" signature="()Lcom/minos/runtime/ProviderRuntimeStatus;" name="inspectJavaInstalled" primary="true">
+      <SourceLine endBytecode="671" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="226" end="249" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager.inspectJavaInstalled()</Message>
+    </Method>
+    <String value="JAVA_HOME">
+      <Message>Value JAVA_HOME</Message>
+    </String>
+    <String value="java.home">
+      <Message>Value java.home</Message>
+    </String>
+    <SourceLine endBytecode="182" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="238" end="238" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="182" primary="true">
+      <Message>At ManagedScipProviderRuntimeManager.java:[line 238]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="eff8d2ad3d7902f16357283daa9ce3d5" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager.extractZipBounded(Path, Path, long, long)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="82" end="775" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java">
+        <Message>At ManagedScipProviderRuntimeManager.java:[lines 82-775]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" signature="(Ljava/nio/file/Path;Ljava/nio/file/Path;JJ)V" name="extractZipBounded" primary="true">
+      <SourceLine endBytecode="906" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="660" end="692" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager.extractZipBounded(Path, Path, long, long)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="164" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="676" end="676" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="164" primary="true">
+      <Message>Method invoked at ManagedScipProviderRuntimeManager.java:[line 676]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="155" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="676" end="676" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="155">
+      <Message>Known null at ManagedScipProviderRuntimeManager.java:[line 676]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="d4b4c27b4ee7ccd9fec4a6fdda4c686a" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager.gitBashForGit(Path)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="82" end="775" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java">
+        <Message>At ManagedScipProviderRuntimeManager.java:[lines 82-775]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" signature="(Ljava/nio/file/Path;)Ljava/util/Optional;" name="gitBashForGit" primary="true">
+      <SourceLine endBytecode="185" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="731" end="734" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager.gitBashForGit(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="19" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="731" end="731" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="19" primary="true">
+      <Message>Dereferenced at ManagedScipProviderRuntimeManager.java:[line 731]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="14" classname="com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager" start="731" end="731" sourcepath="com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="14">
+      <Message>Known null at ManagedScipProviderRuntimeManager.java:[line 731]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="f2e7d8dc98ac212b7629430b70053609" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="1">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager.providerEnvironment(Path, Path)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" start="63" end="282" sourcepath="com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java" sourcefile="ManagedScipPythonRuntimeManager.java">
+        <Message>At ManagedScipPythonRuntimeManager.java:[lines 63-282]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" signature="(Ljava/nio/file/Path;Ljava/nio/file/Path;)Ljava/util/Map;" name="providerEnvironment" primary="true">
+      <SourceLine endBytecode="298" classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" start="230" end="237" sourcepath="com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java" sourcefile="ManagedScipPythonRuntimeManager.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager.providerEnvironment(Path, Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="24" classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" start="231" end="231" sourcepath="com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java" sourcefile="ManagedScipPythonRuntimeManager.java" startBytecode="24" primary="true">
+      <Message>Dereferenced at ManagedScipPythonRuntimeManager.java:[line 231]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="19" classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" start="231" end="231" sourcepath="com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java" sourcefile="ManagedScipPythonRuntimeManager.java" startBytecode="19">
+      <Message>Known null at ManagedScipPythonRuntimeManager.java:[line 231]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="1" instanceHash="f2e7d8dc98ac212b7629430b70053609" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="1">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager.providerEnvironment(Path, Path)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" start="63" end="282" sourcepath="com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java" sourcefile="ManagedScipPythonRuntimeManager.java">
+        <Message>At ManagedScipPythonRuntimeManager.java:[lines 63-282]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" signature="(Ljava/nio/file/Path;Ljava/nio/file/Path;)Ljava/util/Map;" name="providerEnvironment" primary="true">
+      <SourceLine endBytecode="298" classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" start="230" end="237" sourcepath="com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java" sourcefile="ManagedScipPythonRuntimeManager.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager.providerEnvironment(Path, Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="59" classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" start="232" end="232" sourcepath="com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java" sourcefile="ManagedScipPythonRuntimeManager.java" startBytecode="59" primary="true">
+      <Message>Dereferenced at ManagedScipPythonRuntimeManager.java:[line 232]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="54" classname="com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager" start="232" end="232" sourcepath="com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java" sourcefile="ManagedScipPythonRuntimeManager.java" startBytecode="54">
+      <Message>Known null at ManagedScipPythonRuntimeManager.java:[line 232]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="cb825ec2c4989e206de8e6a57197af09" rank="16" abbrev="ENV" category="BAD_PRACTICE" priority="2" type="ENV_USE_PROPERTY_INSTEAD_OF_ENV" instanceOccurrenceMax="0">
+    <ShortMessage>It is preferable to use portable Java property instead of environment variable.</ShortMessage>
+    <LongMessage>It is preferable to use portable Java property 'java.home' instead of environment variable 'JAVA_HOME' in method com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory.requireProjectJdk().</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory" start="35" end="305" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java">
+        <Message>At ScipJavaProcessPlanFactory.java:[lines 35-305]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory" signature="()V" name="requireProjectJdk" primary="true">
+      <SourceLine endBytecode="239" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory" start="296" end="305" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory.requireProjectJdk()</Message>
+    </Method>
+    <String value="JAVA_HOME">
+      <Message>Value JAVA_HOME</Message>
+    </String>
+    <String value="java.home">
+      <Message>Value java.home</Message>
+    </String>
+    <SourceLine endBytecode="3" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory" start="296" end="296" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="3" primary="true">
+      <Message>At ScipJavaProcessPlanFactory.java:[line 296]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="fde996eea106d6c74a5bd03533a85f6d" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1.preVisitDirectory(Path, BasicFileAttributes)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="201" end="244" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java">
+        <Message>At ScipJavaProcessPlanFactory.java:[lines 201-244]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" signature="(Ljava/nio/file/Path;Ljava/nio/file/attribute/BasicFileAttributes;)Ljava/nio/file/FileVisitResult;" name="preVisitDirectory" primary="true">
+      <SourceLine endBytecode="257" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="205" end="218" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1.preVisitDirectory(Path, BasicFileAttributes)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="51" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="209" end="209" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="51" primary="true">
+      <Message>Dereferenced at ScipJavaProcessPlanFactory.java:[line 209]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="46" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="209" end="209" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="46">
+      <Message>Known null at ScipJavaProcessPlanFactory.java:[line 209]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5cadfed4d0e7bb762466a20f4eeb9978" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1.visitFile(Path, BasicFileAttributes)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="201" end="244" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java">
+        <Message>At ScipJavaProcessPlanFactory.java:[lines 201-244]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" signature="(Ljava/nio/file/Path;Ljava/nio/file/attribute/BasicFileAttributes;)Ljava/nio/file/FileVisitResult;" name="visitFile" primary="true">
+      <SourceLine endBytecode="302" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="223" end="238" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1.visitFile(Path, BasicFileAttributes)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="76" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="229" end="229" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="76" primary="true">
+      <Message>Dereferenced at ScipJavaProcessPlanFactory.java:[line 229]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="71" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="229" end="229" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="71">
+      <Message>Known null at ScipJavaProcessPlanFactory.java:[line 229]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="26501eccf315f9c1e673932b4d683c8a" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1.visitFile(Path, BasicFileAttributes)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="201" end="244" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java">
+        <Message>At ScipJavaProcessPlanFactory.java:[lines 201-244]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" signature="(Ljava/nio/file/Path;Ljava/nio/file/attribute/BasicFileAttributes;)Ljava/nio/file/FileVisitResult;" name="visitFile" primary="true">
+      <SourceLine endBytecode="302" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="223" end="238" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1.visitFile(Path, BasicFileAttributes)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="134" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="236" end="236" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="134" primary="true">
+      <Message>Method invoked at ScipJavaProcessPlanFactory.java:[line 236]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="125" classname="com.minos.adapter.scip.runtime.ScipJavaProcessPlanFactory$1" start="236" end="236" sourcepath="com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="125">
+      <Message>Known null at ScipJavaProcessPlanFactory.java:[line 236]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="5b1d41e87cc1c3f1fbda4102dd6a9f51" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.ScipPythonProcessPlanFactory.create(IndexingRuntimePorts$IndexingExecutionRequest, Path)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.ScipPythonProcessPlanFactory" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.ScipPythonProcessPlanFactory" start="25" end="71" sourcepath="com/minos/adapter/scip/runtime/ScipPythonProcessPlanFactory.java" sourcefile="ScipPythonProcessPlanFactory.java">
+        <Message>At ScipPythonProcessPlanFactory.java:[lines 25-71]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.ScipPythonProcessPlanFactory</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.adapter.scip.runtime.ScipPythonProcessPlanFactory" signature="(Lcom/minos/orchestration/IndexingRuntimePorts$IndexingExecutionRequest;Ljava/nio/file/Path;)Lcom/minos/runtime/local/IndexerProcessPlan;" name="create" primary="true">
+      <SourceLine endBytecode="400" classname="com.minos.adapter.scip.runtime.ScipPythonProcessPlanFactory" start="38" end="57" sourcepath="com/minos/adapter/scip/runtime/ScipPythonProcessPlanFactory.java" sourcefile="ScipPythonProcessPlanFactory.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.ScipPythonProcessPlanFactory.create(IndexingRuntimePorts$IndexingExecutionRequest, Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="110" classname="com.minos.adapter.scip.runtime.ScipPythonProcessPlanFactory" start="47" end="47" sourcepath="com/minos/adapter/scip/runtime/ScipPythonProcessPlanFactory.java" sourcefile="ScipPythonProcessPlanFactory.java" startBytecode="110" primary="true">
+      <Message>Dereferenced at ScipPythonProcessPlanFactory.java:[line 47]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="105" classname="com.minos.adapter.scip.runtime.ScipPythonProcessPlanFactory" start="47" end="47" sourcepath="com/minos/adapter/scip/runtime/ScipPythonProcessPlanFactory.java" sourcefile="ScipPythonProcessPlanFactory.java" startBytecode="105">
+      <Message>Known null at ScipPythonProcessPlanFactory.java:[line 47]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>

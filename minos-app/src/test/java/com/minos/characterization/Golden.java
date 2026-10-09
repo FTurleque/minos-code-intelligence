@@ -18,9 +18,20 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 final class Golden {
     static final String WRITE_PROPERTY = "minos.characterization.write";
-    private static final Path DIRECTORY = Path.of("minos-app", "src", "test", "resources", "characterization");
+    private static final Path DIRECTORY =
+            repositoryRoot().resolve(Path.of("minos-app", "src", "test", "resources", "characterization"));
 
     private Golden() {
+    }
+
+    /** The reactor root, found from any working directory (Surefire uses the root, PIT the module). */
+    private static Path repositoryRoot() {
+        for (Path directory = Path.of("").toAbsolutePath(); directory != null; directory = directory.getParent()) {
+            if (Files.isRegularFile(directory.resolve("pom.xml")) && Files.isDirectory(directory.resolve("minos-engine"))) {
+                return directory;
+            }
+        }
+        throw new IllegalStateException("reactor root not found above " + Path.of("").toAbsolutePath());
     }
 
     static void assertMatches(String name, String actual) throws IOException {

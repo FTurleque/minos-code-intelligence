@@ -1,0 +1,464 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="f623aa6bd38e80476b96981dfc549c26" cweid="440" rank="17" abbrev="DMI" category="STYLE" priority="2" type="DMI_HARDCODED_ABSOLUTE_FILENAME" instanceOccurrenceMax="0">
+    <ShortMessage>Chemin absolu codé en dur dans le code</ShortMessage>
+    <LongMessage>Chemin de fichier codé en dur dans le code de com.minos.runtime.local.CommandLocator.&lt;static initializer for CommandLocator&gt;()</LongMessage>
+    <Class classname="com.minos.runtime.local.CommandLocator" primary="true">
+      <SourceLine classname="com.minos.runtime.local.CommandLocator" start="23" end="318" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java">
+        <Message>At CommandLocator.java:[lines 23-318]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.CommandLocator</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.runtime.local.CommandLocator" signature="()V" name="&lt;clinit&gt;" primary="true">
+      <SourceLine endBytecode="23" classname="com.minos.runtime.local.CommandLocator" start="23" end="24" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.CommandLocator.&lt;static initializer for CommandLocator&gt;()</Message>
+    </Method>
+    <String role="FILE_NAME" value="/bin">
+      <Message>File name /bin</Message>
+    </String>
+    <SourceLine endBytecode="32" classname="com.minos.runtime.local.CommandLocator" start="25" end="25" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="32" primary="true">
+      <Message>At CommandLocator.java:[line 25]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="590fac2da53a5b25fb28daad5f190926" cweid="440" rank="17" abbrev="DMI" category="STYLE" priority="2" type="DMI_HARDCODED_ABSOLUTE_FILENAME" instanceOccurrenceMax="0">
+    <ShortMessage>Chemin absolu codé en dur dans le code</ShortMessage>
+    <LongMessage>Chemin de fichier codé en dur dans le code de com.minos.runtime.local.CommandLocator.&lt;static initializer for CommandLocator&gt;()</LongMessage>
+    <Class classname="com.minos.runtime.local.CommandLocator" primary="true">
+      <SourceLine classname="com.minos.runtime.local.CommandLocator" start="23" end="318" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java">
+        <Message>At CommandLocator.java:[lines 23-318]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.CommandLocator</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.runtime.local.CommandLocator" signature="()V" name="&lt;clinit&gt;" primary="true">
+      <SourceLine endBytecode="23" classname="com.minos.runtime.local.CommandLocator" start="23" end="24" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.CommandLocator.&lt;static initializer for CommandLocator&gt;()</Message>
+    </Method>
+    <String role="FILE_NAME" value="/sbin">
+      <Message>File name /sbin</Message>
+    </String>
+    <SourceLine endBytecode="52" classname="com.minos.runtime.local.CommandLocator" start="25" end="25" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="52" primary="true">
+      <Message>At CommandLocator.java:[line 25]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="b003c3bfbbf36fbb94197c4042ad4d9" cweid="440" rank="17" abbrev="DMI" category="STYLE" priority="2" type="DMI_HARDCODED_ABSOLUTE_FILENAME" instanceOccurrenceMax="0">
+    <ShortMessage>Chemin absolu codé en dur dans le code</ShortMessage>
+    <LongMessage>Chemin de fichier codé en dur dans le code de com.minos.runtime.local.CommandLocator.&lt;static initializer for CommandLocator&gt;()</LongMessage>
+    <Class classname="com.minos.runtime.local.CommandLocator" primary="true">
+      <SourceLine classname="com.minos.runtime.local.CommandLocator" start="23" end="318" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java">
+        <Message>At CommandLocator.java:[lines 23-318]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.CommandLocator</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.runtime.local.CommandLocator" signature="()V" name="&lt;clinit&gt;" primary="true">
+      <SourceLine endBytecode="23" classname="com.minos.runtime.local.CommandLocator" start="23" end="24" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.CommandLocator.&lt;static initializer for CommandLocator&gt;()</Message>
+    </Method>
+    <String role="FILE_NAME" value="/usr/bin">
+      <Message>File name /usr/bin</Message>
+    </String>
+    <SourceLine endBytecode="22" classname="com.minos.runtime.local.CommandLocator" start="25" end="25" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="22" primary="true">
+      <Message>At CommandLocator.java:[line 25]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="9a3c3d34f9840963a6bee09e76096d6a" cweid="440" rank="17" abbrev="DMI" category="STYLE" priority="2" type="DMI_HARDCODED_ABSOLUTE_FILENAME" instanceOccurrenceMax="0">
+    <ShortMessage>Chemin absolu codé en dur dans le code</ShortMessage>
+    <LongMessage>Chemin de fichier codé en dur dans le code de com.minos.runtime.local.CommandLocator.&lt;static initializer for CommandLocator&gt;()</LongMessage>
+    <Class classname="com.minos.runtime.local.CommandLocator" primary="true">
+      <SourceLine classname="com.minos.runtime.local.CommandLocator" start="23" end="318" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java">
+        <Message>At CommandLocator.java:[lines 23-318]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.CommandLocator</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.runtime.local.CommandLocator" signature="()V" name="&lt;clinit&gt;" primary="true">
+      <SourceLine endBytecode="23" classname="com.minos.runtime.local.CommandLocator" start="23" end="24" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.CommandLocator.&lt;static initializer for CommandLocator&gt;()</Message>
+    </Method>
+    <String role="FILE_NAME" value="/usr/sbin">
+      <Message>File name /usr/sbin</Message>
+    </String>
+    <SourceLine endBytecode="42" classname="com.minos.runtime.local.CommandLocator" start="25" end="25" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="42" primary="true">
+      <Message>At CommandLocator.java:[line 25]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="db3059a290223226e5aa2608d95a7d48" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.CommandLocator.isBatch(Path)</LongMessage>
+    <Class classname="com.minos.runtime.local.CommandLocator" primary="true">
+      <SourceLine classname="com.minos.runtime.local.CommandLocator" start="23" end="318" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java">
+        <Message>At CommandLocator.java:[lines 23-318]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.CommandLocator</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.runtime.local.CommandLocator" signature="(Ljava/nio/file/Path;)Z" name="isBatch" primary="true">
+      <SourceLine endBytecode="116" classname="com.minos.runtime.local.CommandLocator" start="309" end="310" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.CommandLocator.isBatch(Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="6" classname="com.minos.runtime.local.CommandLocator" start="309" end="309" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="6" primary="true">
+      <Message>Dereferenced at CommandLocator.java:[line 309]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="1" classname="com.minos.runtime.local.CommandLocator" start="309" end="309" sourcepath="com/minos/runtime/local/CommandLocator.java" sourcefile="CommandLocator.java" startBytecode="1">
+      <Message>Known null at CommandLocator.java:[line 309]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="3b3db08c98d2284d8c7664997afb071d" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="1">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.DistributedArtifactBundleStore.createBundle(Path, DistributedArtifactManifest, Path)</LongMessage>
+    <Class classname="com.minos.runtime.local.DistributedArtifactBundleStore" primary="true">
+      <SourceLine classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="83" end="659" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java">
+        <Message>At DistributedArtifactBundleStore.java:[lines 83-659]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.DistributedArtifactBundleStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.DistributedArtifactBundleStore" signature="(Ljava/nio/file/Path;Lcom/minos/remote/DistributedArtifactManifest;Ljava/nio/file/Path;)Ljava/nio/file/Path;" name="createBundle" primary="true">
+      <SourceLine endBytecode="888" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="118" end="154" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.DistributedArtifactBundleStore.createBundle(Path, DistributedArtifactManifest, Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="162" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="132" end="132" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="162" primary="true">
+      <Message>Method invoked at DistributedArtifactBundleStore.java:[line 132]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="153" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="132" end="132" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="153">
+      <Message>Known null at DistributedArtifactBundleStore.java:[line 132]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="1" instanceHash="3b3db08c98d2284d8c7664997afb071d" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="1">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.DistributedArtifactBundleStore.createBundle(Path, DistributedArtifactManifest, Path)</LongMessage>
+    <Class classname="com.minos.runtime.local.DistributedArtifactBundleStore" primary="true">
+      <SourceLine classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="83" end="659" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java">
+        <Message>At DistributedArtifactBundleStore.java:[lines 83-659]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.DistributedArtifactBundleStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.DistributedArtifactBundleStore" signature="(Ljava/nio/file/Path;Lcom/minos/remote/DistributedArtifactManifest;Ljava/nio/file/Path;)Ljava/nio/file/Path;" name="createBundle" primary="true">
+      <SourceLine endBytecode="888" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="118" end="154" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.DistributedArtifactBundleStore.createBundle(Path, DistributedArtifactManifest, Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="181" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="133" end="133" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="181" primary="true">
+      <Message>Method invoked at DistributedArtifactBundleStore.java:[line 133]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="168" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="133" end="133" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="168">
+      <Message>Known null at DistributedArtifactBundleStore.java:[line 133]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="f0db6007ae136d544ff20361e2e47be2" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="1">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.DistributedArtifactBundleStore.evict(String)</LongMessage>
+    <Class classname="com.minos.runtime.local.DistributedArtifactBundleStore" primary="true">
+      <SourceLine classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="83" end="659" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java">
+        <Message>At DistributedArtifactBundleStore.java:[lines 83-659]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.DistributedArtifactBundleStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.DistributedArtifactBundleStore" signature="(Ljava/lang/String;)V" name="evict" primary="true">
+      <SourceLine endBytecode="1102" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="479" end="526" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.DistributedArtifactBundleStore.evict(String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="96" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="489" end="489" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="96" primary="true">
+      <Message>Dereferenced at DistributedArtifactBundleStore.java:[line 489]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="91" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="489" end="489" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="91">
+      <Message>Known null at DistributedArtifactBundleStore.java:[line 489]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="1" instanceHash="f0db6007ae136d544ff20361e2e47be2" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="1">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.DistributedArtifactBundleStore.evict(String)</LongMessage>
+    <Class classname="com.minos.runtime.local.DistributedArtifactBundleStore" primary="true">
+      <SourceLine classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="83" end="659" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java">
+        <Message>At DistributedArtifactBundleStore.java:[lines 83-659]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.DistributedArtifactBundleStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.DistributedArtifactBundleStore" signature="(Ljava/lang/String;)V" name="evict" primary="true">
+      <SourceLine endBytecode="1102" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="479" end="526" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.DistributedArtifactBundleStore.evict(String)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getFileName">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getFileName()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="124" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="492" end="492" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="124" primary="true">
+      <Message>Dereferenced at DistributedArtifactBundleStore.java:[line 492]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="119" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="492" end="492" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="119">
+      <Message>Known null at DistributedArtifactBundleStore.java:[line 492]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="c8edfa0b87bc54ed10bb8e8bb11743" cweid="396" rank="17" abbrev="REC" category="STYLE" priority="2" type="REC_CATCH_EXCEPTION" instanceOccurrenceMax="0">
+    <ShortMessage>java.lang.Exception est intercepté alors qu'Exception n'est jamais lancé</ShortMessage>
+    <LongMessage>La méthode com.minos.runtime.local.DistributedArtifactBundleStore.validCached(Path, DistributedArtifactManifest) intercepte Exception, mais Exception n'est pas lancé dans le bloc try/catch et RuntimeException n'est pas appelé</LongMessage>
+    <Class classname="com.minos.runtime.local.DistributedArtifactBundleStore" primary="true">
+      <SourceLine classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="83" end="659" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java">
+        <Message>At DistributedArtifactBundleStore.java:[lines 83-659]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.DistributedArtifactBundleStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.DistributedArtifactBundleStore" signature="(Ljava/nio/file/Path;Lcom/minos/remote/DistributedArtifactManifest;)Z" name="validCached" primary="true">
+      <SourceLine endBytecode="533" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="458" end="474" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.DistributedArtifactBundleStore.validCached(Path, DistributedArtifactManifest)</Message>
+    </Method>
+    <SourceLine endBytecode="173" classname="com.minos.runtime.local.DistributedArtifactBundleStore" start="473" end="473" sourcepath="com/minos/runtime/local/DistributedArtifactBundleStore.java" sourcefile="DistributedArtifactBundleStore.java" startBytecode="173" primary="true">
+      <Message>At DistributedArtifactBundleStore.java:[line 473]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="2dd8c39ef67c9dadaa17d363f360a5b4" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.FileResumableRunMarkers.unmark(UUID)</LongMessage>
+    <Class classname="com.minos.runtime.local.FileResumableRunMarkers" primary="true">
+      <SourceLine classname="com.minos.runtime.local.FileResumableRunMarkers" start="32" end="87" sourcepath="com/minos/runtime/local/FileResumableRunMarkers.java" sourcefile="FileResumableRunMarkers.java">
+        <Message>At FileResumableRunMarkers.java:[lines 32-87]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.FileResumableRunMarkers</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.FileResumableRunMarkers" signature="(Ljava/util/UUID;)V" name="unmark" primary="true">
+      <SourceLine endBytecode="176" classname="com.minos.runtime.local.FileResumableRunMarkers" start="50" end="57" sourcepath="com/minos/runtime/local/FileResumableRunMarkers.java" sourcefile="FileResumableRunMarkers.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.FileResumableRunMarkers.unmark(UUID)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="71" classname="com.minos.runtime.local.FileResumableRunMarkers" start="56" end="56" sourcepath="com/minos/runtime/local/FileResumableRunMarkers.java" sourcefile="FileResumableRunMarkers.java" startBytecode="71" primary="true">
+      <Message>Method invoked at FileResumableRunMarkers.java:[line 56]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="66" classname="com.minos.runtime.local.FileResumableRunMarkers" start="56" end="56" sourcepath="com/minos/runtime/local/FileResumableRunMarkers.java" sourcefile="FileResumableRunMarkers.java" startBytecode="66">
+      <Message>Known null at FileResumableRunMarkers.java:[line 56]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="8c4547fc2d3571b88ac53d9a4403722d" cweid="440" rank="17" abbrev="DMI" category="STYLE" priority="2" type="DMI_HARDCODED_ABSOLUTE_FILENAME" instanceOccurrenceMax="0">
+    <ShortMessage>Chemin absolu codé en dur dans le code</ShortMessage>
+    <LongMessage>Chemin de fichier codé en dur dans le code de com.minos.runtime.local.LinuxBubblewrapWorkerSandboxBackend.&lt;static initializer for LinuxBubblewrapWorkerSandboxBackend&gt;()</LongMessage>
+    <Class classname="com.minos.runtime.local.LinuxBubblewrapWorkerSandboxBackend" primary="true">
+      <SourceLine classname="com.minos.runtime.local.LinuxBubblewrapWorkerSandboxBackend" start="40" end="472" sourcepath="com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java" sourcefile="LinuxBubblewrapWorkerSandboxBackend.java">
+        <Message>At LinuxBubblewrapWorkerSandboxBackend.java:[lines 40-472]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.LinuxBubblewrapWorkerSandboxBackend</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.runtime.local.LinuxBubblewrapWorkerSandboxBackend" signature="()V" name="&lt;clinit&gt;" primary="true">
+      <SourceLine endBytecode="9" classname="com.minos.runtime.local.LinuxBubblewrapWorkerSandboxBackend" start="40" end="53" sourcepath="com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java" sourcefile="LinuxBubblewrapWorkerSandboxBackend.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.LinuxBubblewrapWorkerSandboxBackend.&lt;static initializer for LinuxBubblewrapWorkerSandboxBackend&gt;()</Message>
+    </Method>
+    <String role="FILE_NAME" value="/bin/sh">
+      <Message>File name /bin/sh</Message>
+    </String>
+    <SourceLine endBytecode="18" classname="com.minos.runtime.local.LinuxBubblewrapWorkerSandboxBackend" start="53" end="53" sourcepath="com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java" sourcefile="LinuxBubblewrapWorkerSandboxBackend.java" startBytecode="18" primary="true">
+      <Message>At LinuxBubblewrapWorkerSandboxBackend.java:[line 53]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="32e8b22eede06bfbcf1b632e893b8bc" cweid="440" rank="17" abbrev="DMI" category="STYLE" priority="2" type="DMI_HARDCODED_ABSOLUTE_FILENAME" instanceOccurrenceMax="0">
+    <ShortMessage>Chemin absolu codé en dur dans le code</ShortMessage>
+    <LongMessage>Chemin de fichier codé en dur dans le code de com.minos.runtime.local.LinuxCgroupJob.&lt;static initializer for LinuxCgroupJob&gt;()</LongMessage>
+    <Class classname="com.minos.runtime.local.LinuxCgroupJob" primary="true">
+      <SourceLine classname="com.minos.runtime.local.LinuxCgroupJob" start="36" end="797" sourcepath="com/minos/runtime/local/LinuxCgroupJob.java" sourcefile="LinuxCgroupJob.java">
+        <Message>At LinuxCgroupJob.java:[lines 36-797]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.LinuxCgroupJob</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.runtime.local.LinuxCgroupJob" signature="()V" name="&lt;clinit&gt;" primary="true">
+      <SourceLine endBytecode="23" classname="com.minos.runtime.local.LinuxCgroupJob" start="36" end="62" sourcepath="com/minos/runtime/local/LinuxCgroupJob.java" sourcefile="LinuxCgroupJob.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.LinuxCgroupJob.&lt;static initializer for LinuxCgroupJob&gt;()</Message>
+    </Method>
+    <String role="FILE_NAME" value="/sys/fs/cgroup">
+      <Message>File name /sys/fs/cgroup</Message>
+    </String>
+    <SourceLine endBytecode="18" classname="com.minos.runtime.local.LinuxCgroupJob" start="39" end="39" sourcepath="com/minos/runtime/local/LinuxCgroupJob.java" sourcefile="LinuxCgroupJob.java" startBytecode="18" primary="true">
+      <Message>At LinuxCgroupJob.java:[line 39]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="6b88c74c6373a6a0fd0ee94adb1934e8" cweid="412" rank="7" abbrev="USO" category="SECURITY" priority="2" type="USO_UNSAFE_METHOD_SYNCHRONIZATION" instanceOccurrenceMax="0">
+    <ShortMessage>Instead of synchronized methods, use private final lock objects with block synchronization</ShortMessage>
+    <LongMessage>Method com.minos.runtime.local.LinuxCgroupJob.close() uses intrinsic lock of class com.minos.runtime.local.LinuxCgroupJob for synchronization, that is exposed by static com.minos.runtime.local.LinuxCgroupJob.configure(Ljava/nio/file/Path;Lcom/minos/runtime/local/LinuxCgroupJob$Limits;)Lcom/minos/runtime/local/LinuxCgroupJob;,\nstatic com.minos.runtime.local.LinuxCgroupJob.create(Ljava/nio/file/Path;Ljava/lang/String;Lcom/minos/runtime/local/LinuxCgroupJob$Limits;)Lcom/minos/runtime/local/LinuxCgroupJob;,\nstatic com.minos.runtime.local.LinuxCgroupJob.createOwnershipOnly(Ljava/nio/file/Path;Ljava/lang/String;)Lcom/minos/runtime/local/LinuxCgroupJob;.</LongMessage>
+    <Class classname="com.minos.runtime.local.LinuxCgroupJob" primary="true">
+      <SourceLine classname="com.minos.runtime.local.LinuxCgroupJob" start="36" end="797" sourcepath="com/minos/runtime/local/LinuxCgroupJob.java" sourcefile="LinuxCgroupJob.java">
+        <Message>At LinuxCgroupJob.java:[lines 36-797]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.LinuxCgroupJob</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.LinuxCgroupJob" signature="()V" name="close" primary="true">
+      <SourceLine synthetic="true" endBytecode="145" classname="com.minos.runtime.local.LinuxCgroupJob" start="764" end="772" sourcepath="com/minos/runtime/local/LinuxCgroupJob.java" sourcefile="LinuxCgroupJob.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.LinuxCgroupJob.close()</Message>
+    </Method>
+    <String value="static com.minos.runtime.local.LinuxCgroupJob.configure(Ljava/nio/file/Path;Lcom/minos/runtime/local/LinuxCgroupJob$Limits;)Lcom/minos/runtime/local/LinuxCgroupJob;,\nstatic com.minos.runtime.local.LinuxCgroupJob.create(Ljava/nio/file/Path;Ljava/lang/String;Lcom/minos/runtime/local/LinuxCgroupJob$Limits;)Lcom/minos/runtime/local/LinuxCgroupJob;,\nstatic com.minos.runtime.local.LinuxCgroupJob.createOwnershipOnly(Ljava/nio/file/Path;Ljava/lang/String;)Lcom/minos/runtime/local/LinuxCgroupJob;">
+      <Message>Value static com.minos.runtime.local.LinuxCgroupJob.configure(Ljava/nio/file/Path;Lcom/minos/runtime/local/LinuxCgroupJob$Limits;)Lcom/minos/runtime/local/LinuxCgroupJob;,\nstatic com.minos.runtime.local.LinuxCgroupJob.create(Ljava/nio/file/Path;Ljava/lang/String;Lcom/minos/runtime/local/LinuxCgroupJob$Limits;)Lcom/minos/runtime/local/LinuxCgroupJob;,\nstatic com.minos.runtime.local.LinuxCgroupJob.createOwnershipOnly(Ljava/nio/file/Path;Ljava/lang/String;)Lcom/minos/runtime/local/LinuxCgroupJob;</Message>
+    </String>
+    <SourceLine synthetic="true" endBytecode="145" classname="com.minos.runtime.local.LinuxCgroupJob" start="764" end="772" sourcepath="com/minos/runtime/local/LinuxCgroupJob.java" sourcefile="LinuxCgroupJob.java" startBytecode="0">
+      <Message>At LinuxCgroupJob.java:[lines 764-772]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="8d43b36edde8d7d07c46100db6871b4a" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.LocalIsolatedIndexWorker.execute(DistributedIndexing$WorkerRequest)</LongMessage>
+    <Class classname="com.minos.runtime.local.LocalIsolatedIndexWorker" primary="true">
+      <SourceLine classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="61" end="265" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java">
+        <Message>At LocalIsolatedIndexWorker.java:[lines 61-265]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.LocalIsolatedIndexWorker</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" signature="(Lcom/minos/remote/DistributedIndexing$WorkerRequest;)Lcom/minos/remote/DistributedIndexing$WorkerResponse;" name="execute" primary="true">
+      <SourceLine endBytecode="1718" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="148" end="252" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.LocalIsolatedIndexWorker.execute(DistributedIndexing$WorkerRequest)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="745" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="248" end="248" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java" startBytecode="745" primary="true">
+      <Message>Method invoked at LocalIsolatedIndexWorker.java:[line 248]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="740" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="248" end="248" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java" startBytecode="740">
+      <Message>Known null at LocalIsolatedIndexWorker.java:[line 248]</Message>
+    </SourceLine>
+    <Property name="edu.umd.cs.findbugs.detect.NullDerefProperty.DEREFS_ARE_CLONED" value="true" />
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="394cea11c17d4c89d7b7498536ebd086" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.ProcessIndexerExecutor.move(Path, Path)</LongMessage>
+    <Class classname="com.minos.runtime.local.ProcessIndexerExecutor" primary="true">
+      <SourceLine classname="com.minos.runtime.local.ProcessIndexerExecutor" start="41" end="622" sourcepath="com/minos/runtime/local/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java">
+        <Message>At ProcessIndexerExecutor.java:[lines 41-622]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.ProcessIndexerExecutor</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.runtime.local.ProcessIndexerExecutor" signature="(Ljava/nio/file/Path;Ljava/nio/file/Path;)V" name="move" primary="true">
+      <SourceLine endBytecode="323" classname="com.minos.runtime.local.ProcessIndexerExecutor" start="601" end="622" sourcepath="com/minos/runtime/local/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.ProcessIndexerExecutor.move(Path, Path)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="62" classname="com.minos.runtime.local.ProcessIndexerExecutor" start="613" end="613" sourcepath="com/minos/runtime/local/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="62" primary="true">
+      <Message>Method invoked at ProcessIndexerExecutor.java:[line 613]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="47" classname="com.minos.runtime.local.ProcessIndexerExecutor" start="613" end="613" sourcepath="com/minos/runtime/local/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="47">
+      <Message>Known null at ProcessIndexerExecutor.java:[line 613]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="7cf7aea83679ceac146085113a5571c8" cweid="396" rank="17" abbrev="REC" category="STYLE" priority="2" type="REC_CATCH_EXCEPTION" instanceOccurrenceMax="0">
+    <ShortMessage>java.lang.Exception est intercepté alors qu'Exception n'est jamais lancé</ShortMessage>
+    <LongMessage>La méthode com.minos.runtime.local.ProcessIndexerExecutor.executePrepared(IndexingRuntimePorts$IndexingExecutionRequest, ProcessIndexerExecutor$ProcessPlanTransformer, Path) intercepte Exception, mais Exception n'est pas lancé dans le bloc try/catch et RuntimeException n'est pas appelé</LongMessage>
+    <Class classname="com.minos.runtime.local.ProcessIndexerExecutor" primary="true">
+      <SourceLine classname="com.minos.runtime.local.ProcessIndexerExecutor" start="41" end="622" sourcepath="com/minos/runtime/local/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java">
+        <Message>At ProcessIndexerExecutor.java:[lines 41-622]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.ProcessIndexerExecutor</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.ProcessIndexerExecutor" signature="(Lcom/minos/orchestration/IndexingRuntimePorts$IndexingExecutionRequest;Lcom/minos/runtime/local/ProcessIndexerExecutor$ProcessPlanTransformer;Ljava/nio/file/Path;)Lcom/minos/orchestration/IndexingRuntimePorts$IndexingArtifact;" name="executePrepared" primary="true">
+      <SourceLine endBytecode="2567" classname="com.minos.runtime.local.ProcessIndexerExecutor" start="91" end="176" sourcepath="com/minos/runtime/local/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.ProcessIndexerExecutor.executePrepared(IndexingRuntimePorts$IndexingExecutionRequest, ProcessIndexerExecutor$ProcessPlanTransformer, Path)</Message>
+    </Method>
+    <SourceLine endBytecode="661" classname="com.minos.runtime.local.ProcessIndexerExecutor" start="161" end="161" sourcepath="com/minos/runtime/local/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="661" primary="true">
+      <Message>At ProcessIndexerExecutor.java:[line 161]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="473db8c7725915c6f14d8d1edb72d332" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.ProviderWorkspaceFiles$1.visitFile(Path, BasicFileAttributes)</LongMessage>
+    <Class classname="com.minos.runtime.local.ProviderWorkspaceFiles$1" primary="true">
+      <SourceLine classname="com.minos.runtime.local.ProviderWorkspaceFiles$1" start="50" end="90" sourcepath="com/minos/runtime/local/ProviderWorkspaceFiles.java" sourcefile="ProviderWorkspaceFiles.java">
+        <Message>At ProviderWorkspaceFiles.java:[lines 50-90]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.ProviderWorkspaceFiles$1</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.ProviderWorkspaceFiles$1" signature="(Ljava/nio/file/Path;Ljava/nio/file/attribute/BasicFileAttributes;)Ljava/nio/file/FileVisitResult;" name="visitFile" primary="true">
+      <SourceLine endBytecode="317" classname="com.minos.runtime.local.ProviderWorkspaceFiles$1" start="68" end="84" sourcepath="com/minos/runtime/local/ProviderWorkspaceFiles.java" sourcefile="ProviderWorkspaceFiles.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.ProviderWorkspaceFiles$1.visitFile(Path, BasicFileAttributes)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="133" classname="com.minos.runtime.local.ProviderWorkspaceFiles$1" start="81" end="81" sourcepath="com/minos/runtime/local/ProviderWorkspaceFiles.java" sourcefile="ProviderWorkspaceFiles.java" startBytecode="133" primary="true">
+      <Message>Method invoked at ProviderWorkspaceFiles.java:[line 81]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="124" classname="com.minos.runtime.local.ProviderWorkspaceFiles$1" start="81" end="81" sourcepath="com/minos/runtime/local/ProviderWorkspaceFiles.java" sourcefile="ProviderWorkspaceFiles.java" startBytecode="124">
+      <Message>Known null at ProviderWorkspaceFiles.java:[line 81]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="a56171c5206f0d91ce99668a7936d81f" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.SandboxLauncherScript.verify()</LongMessage>
+    <Class classname="com.minos.runtime.local.SandboxLauncherScript" primary="true">
+      <SourceLine classname="com.minos.runtime.local.SandboxLauncherScript" start="55" end="323" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java">
+        <Message>At SandboxLauncherScript.java:[lines 55-323]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.SandboxLauncherScript</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.SandboxLauncherScript" signature="()V" name="verify" primary="true">
+      <SourceLine endBytecode="329" classname="com.minos.runtime.local.SandboxLauncherScript" start="136" end="153" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.SandboxLauncherScript.verify()</Message>
+    </Method>
+    <LocalVariable role="LOCAL_VARIABLE_VALUE_OF" pc="10" name="directory" register="1">
+      <Message>Value loaded from directory</Message>
+    </LocalVariable>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="11" classname="com.minos.runtime.local.SandboxLauncherScript" start="137" end="137" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="11" primary="true">
+      <Message>Dereferenced at SandboxLauncherScript.java:[line 137]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="4" classname="com.minos.runtime.local.SandboxLauncherScript" start="136" end="136" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="4">
+      <Message>Known null at SandboxLauncherScript.java:[line 136]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="d5aeb8f1d71b1bdd165999597b94f712" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.SandboxLauncherScript.verify()</LongMessage>
+    <Class classname="com.minos.runtime.local.SandboxLauncherScript" primary="true">
+      <SourceLine classname="com.minos.runtime.local.SandboxLauncherScript" start="55" end="323" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java">
+        <Message>At SandboxLauncherScript.java:[lines 55-323]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.SandboxLauncherScript</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.SandboxLauncherScript" signature="()V" name="verify" primary="true">
+      <SourceLine endBytecode="329" classname="com.minos.runtime.local.SandboxLauncherScript" start="136" end="153" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.SandboxLauncherScript.verify()</Message>
+    </Method>
+    <LocalVariable role="LOCAL_VARIABLE_VALUE_OF" pc="40" name="root" register="2">
+      <Message>Value loaded from root</Message>
+    </LocalVariable>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="41" classname="com.minos.runtime.local.SandboxLauncherScript" start="143" end="143" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="41" primary="true">
+      <Message>Dereferenced at SandboxLauncherScript.java:[line 143]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="11" classname="com.minos.runtime.local.SandboxLauncherScript" start="137" end="137" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="11">
+      <Message>Known null at SandboxLauncherScript.java:[line 137]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="f564f631adf7972720d3d778f1da04db" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.SandboxLauncherScript.verify()</LongMessage>
+    <Class classname="com.minos.runtime.local.SandboxLauncherScript" primary="true">
+      <SourceLine classname="com.minos.runtime.local.SandboxLauncherScript" start="55" end="323" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java">
+        <Message>At SandboxLauncherScript.java:[lines 55-323]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.SandboxLauncherScript</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.SandboxLauncherScript" signature="()V" name="verify" primary="true">
+      <SourceLine endBytecode="329" classname="com.minos.runtime.local.SandboxLauncherScript" start="136" end="153" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.SandboxLauncherScript.verify()</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="58" classname="com.minos.runtime.local.SandboxLauncherScript" start="142" end="142" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="58" primary="true">
+      <Message>Method invoked at SandboxLauncherScript.java:[line 142]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="41" classname="com.minos.runtime.local.SandboxLauncherScript" start="143" end="143" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="41">
+      <Message>Known null at SandboxLauncherScript.java:[line 143]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>

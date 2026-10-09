@@ -20,7 +20,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -235,12 +237,12 @@ class MinosStrongProcessLauncherTest {
                 List.of(cmd.toString(), "/d", "/v:off", "/s", "/c", " "));
         for (List<String> command : refused) {
             int exit = runPlan(launcher, ownership, "cmd-c", command);
-            assertTrue(exit != 0, "a raw cmd plan of another shape must be refused: " + command);
+            assertNotEquals(0, exit, "a raw cmd plan of another shape must be refused: " + command);
             assertFalse(Files.exists(marker), "the refused plan started a process: " + command);
         }
         int unknownMode = runPlan(launcher, ownership, "evil",
                 List.of(cmd.toString(), "/d", "/v:off", "/s", "/c", echo));
-        assertTrue(unknownMode != 0, "an unknown command mode must be refused");
+        assertNotEquals(0, unknownMode, "an unknown command mode must be refused");
         assertFalse(Files.exists(marker));
         assertFalse(hasPlans(ownership), "the launcher must leave no plan behind");
 
@@ -249,7 +251,7 @@ class MinosStrongProcessLauncherTest {
         Path accepted = temp.resolve("accepted.txt");
         int ok = runPlan(launcher, ownership, "cmd-c", List.of(cmd.toString(), "/d", "/v:off", "/s", "/c",
                 "echo started > " + '"' + accepted + '"'));
-        assertTrue(ok == 0, "the exact raw cmd shape must be accepted");
+        assertEquals(0, ok, "the exact raw cmd shape must be accepted");
         assertTrue(Files.exists(accepted), "the accepted plan must have started cmd.exe");
     }
 

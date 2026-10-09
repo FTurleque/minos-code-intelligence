@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Exclusions SpotBugs de MINOS (profil audit-spotbugs, docs/quality/code-audit.md).
+
+  Regle : aucune exclusion globale par motif. Chaque exclusion cible UNE classe (et, si possible, UNE methode)
+  pour UN motif, et porte au-dessus un commentaire qui dit pourquoi l'alerte est un faux positif, qui l'a
+  constate et a quelle date. Une alerte reelle se corrige ou se consigne ; elle ne s'exclut pas.
+
+  Modele (a copier, ne pas activer tel quel ; ajouter au-dessus un commentaire date et motive) :
+
+    <Match>
+      <Class name="com.minos.exemple.UneClasse"/>
+      <Method name="uneMethode"/>
+      <Bug pattern="NOM_DU_MOTIF"/>
+    </Match>
+-->
+<FindBugsFilter>
+</FindBugsFilter>

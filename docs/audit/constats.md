@@ -316,6 +316,23 @@ Les annexes sont conservées telles que remises ; ce tableau fait foi quand il l
 
 ## 6. Suivi des corrections
 
+### État au 2026-10-08 (MINOS-AUD-H11)
+
+Tous les changements suivis ci-dessous sont **fusionnés dans `develop`** depuis le 2026-10-07 (PR 351 et 352, cette dernière portant 353 à 357) et archivés dans `openspec/changes/archive/` (`3f8b016d`). Les mentions « corrigé en local », « PR ouverte » ou « CI à observer » des tableaux qui suivent décrivent l'état au moment de chaque correction ; elles sont conservées comme historique.
+
+| Changement | Commit fusionné | Constats | Statut revérifié au HEAD `902e2bfa` |
+|---|---|---|---|
+| `fiabiliser-chaine-audit-tenant` | `82dc354b` | B01, B02, B03, B04 | corrigés ; B04 : clé retirée = décision ouverte. Les gardes d'intégrité de la chaîne n'avaient aucun test (H07) : tests ajoutés par `renforcer-tests-revelees-par-mutation` |
+| `diagnostiquer-statut-mcp-et-erreurs` | `f87f2250` | C01, C02, C03, C05, C06, C16, D02 | corrigés ; C03 et D02 partiels (découverte encore payée par `project list`, décodage complet du snapshot) |
+| `declarer-limites-impact-scip` | `93e10c3a` | F01, F02, F04 | F04 corrigé ; F01 et F02 partiels (trois sorties sans la limitation) |
+| `isoler-recuperation-appcontainer-par-proprietaire` | `9bc1129d` | A01, A02 | A01 corrigé par lecture ; A02 partiel (résidus `appcontainer-probe-*`) ; nouveau défaut voisin H22 (droits AppContainer non retirés après arrêt brutal, reproduit) |
+| `corriger-lancement-plugin-intellij-windows` | `9f3e2911` | C04 | corrigé par lecture (exécution dans une IDE réelle non faite) |
+| `durcir-configuration-postgresql-et-secrets` | `14596db2` | B07, B08, B09, B13 | corrigés ; installateur sans test automatique ; B09 non exécuté sous Linux |
+| `tolerer-repertoires-illisibles-a-la-decouverte` | `67872cc8` | D01, D06, D10 | D01 (ignorés) et D06 corrigés ; D10 partiel (casse) |
+| `reconcilier-documentation-courante` | `48f8af8d`, `0f820a82` | G01, G03, G09 à G19 | corrigés ; G04 à G08, G20 restent des décisions |
+
+Détail de la revérification et des nouveaux constats : [`docs/quality/code-audit-constats.md`](../quality/code-audit-constats.md) § 5 et § 6.
+
 | Constat | Changement | État au 2026-10-06 | Preuve |
 |---|---|---|---|
 | MINOS-AUD-B01 | `fiabiliser-chaine-audit-tenant` | **Corrigé en local**, PR ouverte, CI de la PR à observer | tests rouges (3) devenus verts ; vecteurs HMAC inchangés ; `HostedAuditResourceIdCanonicalFormTest` |

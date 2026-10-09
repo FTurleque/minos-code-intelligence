@@ -64,8 +64,14 @@ class MinosProcessSupervisorOrphanTest {
     @EnabledOnOs(OS.WINDOWS)
     void normalRootExitStillCleansDetachedChildThroughProductionJobBoundaryOnWindows() throws Exception {
         Path pidFile = tmp.resolve("child.pid");
+        // The PID is written to a temporary name and renamed: the rename is atomic, so child.pid only ever appears
+        // complete and closed. Writing it in place let the test open it while Set-Content still held it (a sharing
+        // violation on Windows, seen once on 2026-10-09).
+        String pending = (pidFile + ".tmp").replace("'", "''");
         String command = "$p=Start-Process -PassThru ping -ArgumentList '-n','3600','127.0.0.1';"
-                + "Set-Content -NoNewline -LiteralPath '" + pidFile.toString().replace("'", "''") + "' -Value $p.Id;"
+                + "Set-Content -NoNewline -LiteralPath '" + pending + "' -Value $p.Id;"
+                + "Move-Item -LiteralPath '" + pending + "' -Destination '"
+                + pidFile.toString().replace("'", "''") + "';"
                 + "Start-Sleep -Milliseconds 500; exit 0";
         ProcessBuilder builder = new ProcessBuilder(List.of(
                 powershell().toString(), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command));

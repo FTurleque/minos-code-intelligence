@@ -12,6 +12,9 @@ import java.util.function.Consumer;
 public final class MinosUiController {
 
     private final Project project;
+    // MINOS-AUD-H21: a private lock, so code holding the public service instance cannot contend for it, and no
+    // delivery ever runs while it is held.
+    private final Object lock = new Object();
     private MinosToolWindowPanel panel;
     private Consumer<MinosToolWindowPanel> pendingDelivery;
 
@@ -23,10 +26,13 @@ public final class MinosUiController {
         return project.getService(MinosUiController.class);
     }
 
-    public synchronized void attach(MinosToolWindowPanel value) {
-        panel = value;
-        Consumer<MinosToolWindowPanel> pending = pendingDelivery;
-        pendingDelivery = null;
+    public void attach(MinosToolWindowPanel value) {
+        Consumer<MinosToolWindowPanel> pending;
+        synchronized (lock) {
+            panel = value;
+            pending = pendingDelivery;
+            pendingDelivery = null;
+        }
         if (pending != null) {
             pending.accept(value);
         }
@@ -50,7 +56,7 @@ public final class MinosUiController {
 
     private void deliver(Consumer<MinosToolWindowPanel> delivery) {
         MinosToolWindowPanel current;
-        synchronized (this) {
+        synchronized (lock) {
             current = panel;
             if (current == null) {
                 pendingDelivery = delivery;

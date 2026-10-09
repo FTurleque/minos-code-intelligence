@@ -15,3 +15,9 @@ minos-app/src/test/resources/characterization/*.golden text eol=lf
 
 # A6 hybrid-ranking reference: compared byte for byte by HybridRankingEquivalenceTest, pinned to LF.
 minos-bootstrap/src/test/resources/hybrid-ranking/*.tsv text eol=lf
+
+# Gradle wrapper of the IntelliJ plugin (MINOS-AUD-H09): the POSIX script must keep LF to run on Linux runners,
+# the batch file CRLF, and the wrapper jar is binary.
+minos-intellij/gradlew text eol=lf
+minos-intellij/gradlew.bat text eol=crlf
+*.jar binary

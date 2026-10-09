@@ -10,6 +10,11 @@ updates:
       timezone: "Europe/Paris"
     open-pull-requests-limit: 10
     groups:
+      # Core and modules move together (MINOS-AUD-H05): they share one version through
+      # testcontainers-bom, and a 2.x core with 1.x modules once went unnoticed.
+      testcontainers:
+        patterns:
+          - "org.testcontainers:*"
       maven-runtime:
         dependency-type: "production"
       maven-development:

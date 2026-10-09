@@ -1,0 +1,127 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<BugCollection version="4.10.4">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="c2c47fb595cce0bdd3b731c89bdbb9c3" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.cli.AutonomousIndexOperations$ProviderView.diagnostics() risque d'exposer sa représentation interne en renvoyant com.minos.cli.AutonomousIndexOperations$ProviderView.diagnostics</LongMessage>
+    <Class classname="com.minos.cli.AutonomousIndexOperations$ProviderView" primary="true">
+      <SourceLine classname="com.minos.cli.AutonomousIndexOperations$ProviderView" start="40" end="59" sourcepath="com/minos/cli/AutonomousIndexOperations.java" sourcefile="AutonomousIndexOperations.java">
+        <Message>At AutonomousIndexOperations.java:[lines 40-59]</Message>
+      </SourceLine>
+      <Message>In class com.minos.cli.AutonomousIndexOperations$ProviderView</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.cli.AutonomousIndexOperations$ProviderView" signature="()Ljava/util/List;" name="diagnostics" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.cli.AutonomousIndexOperations$ProviderView" start="40" end="40" sourcepath="com/minos/cli/AutonomousIndexOperations.java" sourcefile="AutonomousIndexOperations.java" startBytecode="0" />
+      <Message>In method com.minos.cli.AutonomousIndexOperations$ProviderView.diagnostics()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.cli.AutonomousIndexOperations$ProviderView" signature="Ljava/util/List;" name="diagnostics" primary="true">
+      <SourceLine classname="com.minos.cli.AutonomousIndexOperations$ProviderView" sourcepath="com/minos/cli/AutonomousIndexOperations.java" sourcefile="AutonomousIndexOperations.java">
+        <Message>In AutonomousIndexOperations.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.cli.AutonomousIndexOperations$ProviderView.diagnostics</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.cli.AutonomousIndexOperations$ProviderView" start="40" end="40" sourcepath="com/minos/cli/AutonomousIndexOperations.java" sourcefile="AutonomousIndexOperations.java" startBytecode="4" primary="true">
+      <Message>At AutonomousIndexOperations.java:[line 40]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="83ccc479da21649bdfbea266947594b9" cweid="366" rank="17" abbrev="IS" category="MT_CORRECTNESS" priority="2" type="IS2_INCONSISTENT_SYNC" instanceOccurrenceMax="0">
+    <ShortMessage>Synchronisation incohérente</ShortMessage>
+    <LongMessage>Synchronisation incohérente de com.minos.cli.LazyApplication.application; verrouillée à 75%</LongMessage>
+    <Class classname="com.minos.cli.LazyApplication" primary="true">
+      <SourceLine classname="com.minos.cli.LazyApplication" start="68" end="177" sourcepath="com/minos/cli/LazyApplication.java" sourcefile="LazyApplication.java">
+        <Message>At LazyApplication.java:[lines 68-177]</Message>
+      </SourceLine>
+      <Message>In class com.minos.cli.LazyApplication</Message>
+    </Class>
+    <Field isStatic="false" classname="com.minos.cli.LazyApplication" signature="Lcom/minos/application/MinosApplication;" name="application" primary="true">
+      <SourceLine classname="com.minos.cli.LazyApplication" sourcepath="com/minos/cli/LazyApplication.java" sourcefile="LazyApplication.java">
+        <Message>In LazyApplication.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.cli.LazyApplication.application</Message>
+    </Field>
+    <Int role="INT_SYNC_PERCENT" value="75">
+      <Message>Synchronized 75% of the time</Message>
+    </Int>
+    <SourceLine role="SOURCE_LINE_UNSYNC_ACCESS" endBytecode="31" classname="com.minos.cli.LazyApplication" start="83" end="83" sourcepath="com/minos/cli/LazyApplication.java" sourcefile="LazyApplication.java" startBytecode="31" primary="true">
+      <Message>Unsynchronized access at LazyApplication.java:[line 83]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_SYNC_ACCESS" endBytecode="18" classname="com.minos.cli.LazyApplication" start="95" end="95" sourcepath="com/minos/cli/LazyApplication.java" sourcefile="LazyApplication.java" startBytecode="18">
+      <Message>Synchronized access at LazyApplication.java:[line 95]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_SYNC_ACCESS" endBytecode="51" classname="com.minos.cli.LazyApplication" start="102" end="102" sourcepath="com/minos/cli/LazyApplication.java" sourcefile="LazyApplication.java" startBytecode="51">
+      <Message>Synchronized access at LazyApplication.java:[line 102]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_SYNC_ACCESS" endBytecode="34" classname="com.minos.cli.LazyApplication" start="97" end="97" sourcepath="com/minos/cli/LazyApplication.java" sourcefile="LazyApplication.java" startBytecode="34">
+      <Message>Synchronized access at LazyApplication.java:[line 97]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="a168ebe55277ddf221fd76c1151a5fa1" cweid="412" rank="7" abbrev="USO" category="SECURITY" priority="2" type="USO_UNSAFE_METHOD_SYNCHRONIZATION" instanceOccurrenceMax="0">
+    <ShortMessage>Instead of synchronized methods, use private final lock objects with block synchronization</ShortMessage>
+    <LongMessage>Method com.minos.cli.LazyApplication.close() uses intrinsic lock of class com.minos.cli.LazyApplication for synchronization, that is exposed by static com.minos.cli.LazyApplication.of(Lcom/minos/application/MinosApplication;)Lcom/minos/cli/LazyApplication;,\nstatic com.minos.cli.LazyApplication.opening(Ljava/nio/file/Path;Lcom/minos/cli/LazyApplication$Opener;)Lcom/minos/cli/LazyApplication;.</LongMessage>
+    <Class classname="com.minos.cli.LazyApplication" primary="true">
+      <SourceLine classname="com.minos.cli.LazyApplication" start="68" end="177" sourcepath="com/minos/cli/LazyApplication.java" sourcefile="LazyApplication.java">
+        <Message>At LazyApplication.java:[lines 68-177]</Message>
+      </SourceLine>
+      <Message>In class com.minos.cli.LazyApplication</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.cli.LazyApplication" signature="()V" name="close" primary="true">
+      <SourceLine synthetic="true" endBytecode="98" classname="com.minos.cli.LazyApplication" start="174" end="177" sourcepath="com/minos/cli/LazyApplication.java" sourcefile="LazyApplication.java" startBytecode="0" />
+      <Message>In method com.minos.cli.LazyApplication.close()</Message>
+    </Method>
+    <String value="static com.minos.cli.LazyApplication.of(Lcom/minos/application/MinosApplication;)Lcom/minos/cli/LazyApplication;,\nstatic com.minos.cli.LazyApplication.opening(Ljava/nio/file/Path;Lcom/minos/cli/LazyApplication$Opener;)Lcom/minos/cli/LazyApplication;">
+      <Message>Value static com.minos.cli.LazyApplication.of(Lcom/minos/application/MinosApplication;)Lcom/minos/cli/LazyApplication;,\nstatic com.minos.cli.LazyApplication.opening(Ljava/nio/file/Path;Lcom/minos/cli/LazyApplication$Opener;)Lcom/minos/cli/LazyApplication;</Message>
+    </String>
+    <SourceLine synthetic="true" endBytecode="98" classname="com.minos.cli.LazyApplication" start="174" end="177" sourcepath="com/minos/cli/LazyApplication.java" sourcefile="LazyApplication.java" startBytecode="0">
+      <Message>At LazyApplication.java:[lines 174-177]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="1e4f1fc9d5b0f2724d5c577a50b596cf" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode expose sa représentation interne en incorporant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.cli.MinosCli$Builder.projectOperations(ProjectOperations) risque d'exposer sa représentation interne en stockant un objet externe modifiable dans com.minos.cli.MinosCli$Builder.projectOperations</LongMessage>
+    <Class classname="com.minos.cli.MinosCli$Builder" primary="true">
+      <SourceLine classname="com.minos.cli.MinosCli$Builder" start="276" end="362" sourcepath="com/minos/cli/MinosCli.java" sourcefile="MinosCli.java">
+        <Message>At MinosCli.java:[lines 276-362]</Message>
+      </SourceLine>
+      <Message>In class com.minos.cli.MinosCli$Builder</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.cli.MinosCli$Builder" signature="(Lcom/minos/application/ProjectOperations;)Lcom/minos/cli/MinosCli$Builder;" name="projectOperations" primary="true">
+      <SourceLine endBytecode="68" classname="com.minos.cli.MinosCli$Builder" start="281" end="282" sourcepath="com/minos/cli/MinosCli.java" sourcefile="MinosCli.java" startBytecode="0" />
+      <Message>In method com.minos.cli.MinosCli$Builder.projectOperations(ProjectOperations)</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.cli.MinosCli$Builder" signature="Lcom/minos/application/ProjectOperations;" name="projectOperations" primary="true">
+      <SourceLine classname="com.minos.cli.MinosCli$Builder" sourcepath="com/minos/cli/MinosCli.java" sourcefile="MinosCli.java">
+        <Message>In MinosCli.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.cli.MinosCli$Builder.projectOperations</Message>
+    </Field>
+    <LocalVariable role="LOCAL_VARIABLE_UNKNOWN" pc="7" name="?" register="-1">
+      <Message>Local variable stored in JVM register ?</Message>
+    </LocalVariable>
+    <SourceLine endBytecode="8" classname="com.minos.cli.MinosCli$Builder" start="281" end="281" sourcepath="com/minos/cli/MinosCli.java" sourcefile="MinosCli.java" startBytecode="8" primary="true">
+      <Message>At MinosCli.java:[line 281]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="d4e4928a518b9072c42befc62ffc3de0" rank="20" abbrev="FS" category="BAD_PRACTICE" priority="2" type="VA_FORMAT_STRING_USES_NEWLINE" instanceOccurrenceMax="0">
+    <ShortMessage>Format string should use %n rather than \n</ShortMessage>
+    <LongMessage>Format string should use %n rather than \n in com.minos.cli.RelationshipCommand.usage(RelationshipCommand$Operation)</LongMessage>
+    <Class classname="com.minos.cli.RelationshipCommand" primary="true">
+      <SourceLine classname="com.minos.cli.RelationshipCommand" start="43" end="81" sourcepath="com/minos/cli/RelationshipCommand.java" sourcefile="RelationshipCommand.java">
+        <Message>At RelationshipCommand.java:[lines 43-81]</Message>
+      </SourceLine>
+      <Message>In class com.minos.cli.RelationshipCommand</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.cli.RelationshipCommand" signature="(Lcom/minos/cli/RelationshipCommand$Operation;)Ljava/lang/String;" name="usage" primary="true">
+      <SourceLine endBytecode="69" classname="com.minos.cli.RelationshipCommand" start="74" end="74" sourcepath="com/minos/cli/RelationshipCommand.java" sourcefile="RelationshipCommand.java" startBytecode="0" />
+      <Message>In method com.minos.cli.RelationshipCommand.usage(RelationshipCommand$Operation)</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.lang.String" signature="([Ljava/lang/Object;)Ljava/lang/String;" name="formatted">
+      <SourceLine endBytecode="67" classname="java.lang.String" start="4530" end="4530" sourcepath="java/lang/String.java" sourcefile="String.java" startBytecode="0" />
+      <Message>Called method String.formatted(Object[])</Message>
+    </Method>
+    <String role="STRING_FORMAT_STRING" value="Usage: minos %s &lt;project&gt; &lt;symbol-id&gt; [options]\n\nOptions:\n  --limit &lt;count&gt;          Maximum results (default: 20, max: 1000)\n  --format &lt;text|json&gt;     Output format (default: text)\n  -h, --help               Show this help\n">
+      <Message>Format string "Usage: minos %s &lt;project&gt; &lt;symbol-id&gt; [options]\n\nOptions:\n  --limit &lt;count&gt;          Maximum results (default: 20, max: 1000)\n  --format &lt;text|json&gt;     Output format (default: text)\n  -h, --help               Show this help\n"</Message>
+    </String>
+    <SourceLine endBytecode="13" classname="com.minos.cli.RelationshipCommand" start="81" end="81" sourcepath="com/minos/cli/RelationshipCommand.java" sourcefile="RelationshipCommand.java" startBytecode="13" primary="true">
+      <Message>At RelationshipCommand.java:[line 81]</Message>
+    </SourceLine>
+  </BugInstance>
+</BugCollection>

@@ -42,7 +42,8 @@ FROM_LINE = re.compile(r"^\s*FROM\s+(?:--platform=\S+\s+)?(?P<ref>\S+)(?:\s+AS\s
                        re.IGNORECASE)
 IMAGE_KEY = re.compile(r"^\s*image:\s*(?P<value>.+?)\s*(?:#.*)?$")
 VARIABLE_WITH_DEFAULT = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:-(?P<default>[^}]+)\}$")
-VARIABLE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}$")
+# ${VAR} or ${VAR:?message} (a required variable, MINOS-AUD-H20): the value comes from the launcher.
+VARIABLE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?::\?[^}]*)?\}$")
 UNPINNED_ALLOWED_VARIABLES = frozenset({"MINOS_IMAGE"})
 
 # dependabot-core, docker/lib/dependabot/docker_compose/file_fetcher.rb (read 2026-10-02): the fetcher keeps a file of the

@@ -165,8 +165,9 @@ class SymbolQueryServiceTest {
                 symbol("symbol-b", "Beta", "com.acme.Beta", SymbolKind.CLASS, null, "src/Beta.java", 1, false)));
         SymbolQueryService service = new SymbolQueryService(store);
 
+        SymbolSearchCriteria byModule = new SymbolSearchCriteria("alpha", null, null, "module-main", 10);
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () ->
-                service.findSymbolResults(PROJECT_ID, new SymbolSearchCriteria("alpha", null, null, "module-main", 10)));
+                service.findSymbolResults(PROJECT_ID, byModule));
 
         assertTrue(refusal.getMessage().contains("module"), refusal.getMessage());
         assertFalse(refusal.getMessage().contains("/") || refusal.getMessage().contains("\\"), refusal.getMessage());

@@ -33,6 +33,8 @@ Sans racine cgroup déléguée réellement sondée, le backend Linux n'existe pa
 
 Le Job Object est créé et configuré **avant** le processus contenu, qui est créé suspendu, vérifié `TokenIsAppContainer`, assigné puis vérifié par `IsProcessInJob` avant `ResumeThread`. Les limites appliquées sont relues via `QueryInformationJobObject`, tout breakaway est explicitement refusé, une limite de temps CPU de job est ajoutée et `TerminateJobObject` est appelé sur tous les chemins de sortie.
 
+*Amendé le 2026-10-08 (MINOS-AUD-H22, H23) : les droits accordés au SID du conteneur sur l'hôte sont eux aussi un résidu.* Chaque chemin est inscrit au journal de récupération du run **avant** `icacls /grant` ; un lanceur tué entre les deux laisse une ligne sans entrée, dont le retrait est sans effet. La reprise qui prouve la mort du propriétaire (verrou exclusif, A01) retire chaque droit journalisé ; une propriété non prouvable n'est jamais récupérée. Les entrées que rien ne journalise (builds antérieurs, `MINOS_HOME` de test abandonné) sont recensées par `scripts/windows/Find-MinosAppContainerGrants.ps1`, en lecture seule, et retirées seulement avec `-Remove` et confirmation. Les classes de tests qui démarrent le vrai bac à sable vérifient en fin de classe qu'aucune entrée nouvelle ne reste sur le JDK.
+
 ### 4. Assumer le quota d'écriture comme supervision, pas comme garantie OS
 
 *Amendé par [0041](0041-indexation-distante-de-code-non-fiable.md) : cette supervision n'est pas un état transitoire « en attente d'une primitive » mais une décision. `UNTRUSTED_CODE_SUPPORTED` exige un quota `OS_ENFORCED` sur les octets **et** les entrées ; aucun backend intégré ne l'atteint, et l'indexation distante reste fermée sur tous les OS, avec un refus journalisé et diagnosticable.*

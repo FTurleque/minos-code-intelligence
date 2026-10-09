@@ -520,21 +520,24 @@ $ownership = New-OwnershipLock $recoveryDirectory $containerProfile
 
 try {
     $sid = [MinosAppContainerNativeV3]::CreateProfile($containerProfile)
+    # MINOS-AUD-H22: every grant is journaled before icacls applies it. A launcher killed between the two leaves a
+    # journaled path without an entry, which recovery removes as a no-op; the reverse order left an entry that no
+    # journal named, and that no recovery could ever remove.
     Write-Recovery $journal $containerProfile $sid $granted
     foreach ($path in $readPaths) {
-        Grant-AppContainerDirectory $path $sid '(OI)(CI)RX'
         $granted.Add($path)
         Write-Recovery $journal $containerProfile $sid $granted
+        Grant-AppContainerDirectory $path $sid '(OI)(CI)RX'
     }
     foreach ($path in $readFiles) {
-        Grant-AppContainerFile $path $sid
         $granted.Add($path)
         Write-Recovery $journal $containerProfile $sid $granted
+        Grant-AppContainerFile $path $sid
     }
     foreach ($path in $writePaths) {
-        Grant-AppContainerDirectory $path $sid '(OI)(CI)M'
         $granted.Add($path)
         Write-Recovery $journal $containerProfile $sid $granted
+        Grant-AppContainerDirectory $path $sid '(OI)(CI)M'
     }
     $exitCode = [MinosAppContainerNativeV3]::RunSandbox(
         $containerProfile,

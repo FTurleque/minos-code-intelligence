@@ -66,7 +66,7 @@ Les réglages de provenance du processus — **MINOS executable** et **MINOS_HOM
 Si MINOS n'est pas dans le `PATH`, renseigner le chemin absolu du launcher, par exemple :
 
 ```text
-C:\Users\<user>\AppData\Local\Programs\MINOS\bin\minos.cmd
+C:\Users\<user>\AppData\Local\Programs\MINOS\minos.cmd
 ```
 
 Un nom simple comme `minos.cmd` ou `minos` est résolu **avant** l'application du working directory projet et uniquement à partir d'entrées `PATH` absolues. Les éléments `PATH` vides ou relatifs et les chemins de launcher relatifs tels que `tools\minos.cmd` sont refusés : la racine du projet ne participe jamais à la résolution de l'exécutable.

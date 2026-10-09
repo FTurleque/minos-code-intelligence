@@ -11,6 +11,9 @@ import java.util.Objects;
  * committed mutation into an apparent caller failure: doing so can make retries unsafe and, for key
  * rotation/bootstrap, can strand the caller without a usable credential. External sinks can replay
  * the durable tenant audit chain after recovery.</p>
+ *
+ * <p>MINOS-AUD-H15: any failure of a sink, checked or not, is contained here; a third-party sink that throws a
+ * runtime exception must not turn a committed mutation into a failure, nor a refusal into another error.</p>
  */
 final class HostedAuditDelivery {
 
@@ -24,7 +27,7 @@ final class HostedAuditDelivery {
         Objects.requireNonNull(event, "event");
         try {
             sink.publish(event);
-        } catch (IOException exception) {
+        } catch (IOException | RuntimeException exception) {
             LOGGER.log(
                     System.Logger.Level.WARNING,
                     "Hosted audit export failed after durable commit; event remains replayable from the tenant audit chain"
@@ -49,7 +52,7 @@ final class HostedAuditDelivery {
                         + ", requestId=" + event.requestId() + ")");
         try {
             sink.publishUnchained(event);
-        } catch (IOException exception) {
+        } catch (IOException | RuntimeException exception) {
             LOGGER.log(
                     System.Logger.Level.WARNING,
                     "Hosted audit export of an unchained refusal failed; the refusal was enforced but is not"

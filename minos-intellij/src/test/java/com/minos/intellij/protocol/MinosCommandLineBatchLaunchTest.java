@@ -9,9 +9,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -74,9 +79,7 @@ class MinosCommandLineBatchLaunchTest {
         MinosStrongProcessLauncher.Launch launch = MinosStrongProcessLauncher.start(builder, home.toString());
         long childProcessId;
         try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
-            while (!Files.isRegularFile(childPid) && System.nanoTime() < deadline) Thread.sleep(50L);
-            assertTrue(Files.isRegularFile(childPid), "the batch launcher never started its child: " + supervisor.stderr());
+            assertTrue(awaitFile(childPid, 30), "the batch launcher never started its child: " + supervisor.stderr());
             childProcessId = Long.parseLong(Files.readString(childPid, StandardCharsets.US_ASCII).trim());
             assertTrue(ProcessHandle.of(childProcessId).map(ProcessHandle::isAlive).orElse(false),
                     "the child must be alive before the stop");
@@ -85,8 +88,7 @@ class MinosCommandLineBatchLaunchTest {
         }
 
         assertFalse(launch.process().isAlive(), "the batch launcher process must be dead");
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (isAlive(childProcessId) && System.nanoTime() < deadline) Thread.sleep(50L);
+        awaitExit(childProcessId, 10);
         assertFalse(isAlive(childProcessId), "the child of the batch launcher must be dead");
         assertEquals(List.of(), plans(home.resolve("intellij/process-ownership")),
                 "no ownership plan may remain after the launch");
@@ -111,6 +113,32 @@ class MinosCommandLineBatchLaunchTest {
             assertTrue(supervisor.waitFor(TimeUnit.SECONDS.toMillis(60)), "the batch launch timed out");
             supervisor.drainOutput();
             return new Run(supervisor.exitValue(), supervisor.stdout(), supervisor.stderr());
+        }
+    }
+
+    /** Attend la creation du fichier par une surveillance du dossier, sans dormir : faux si le delai est depasse. */
+    private static boolean awaitFile(Path file, long timeoutSeconds) throws IOException, InterruptedException {
+        try (WatchService watcher = file.getFileSystem().newWatchService()) {
+            file.getParent().register(watcher, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
+            while (!Files.isRegularFile(file)) {
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) return false;
+                WatchKey key = watcher.poll(remaining, TimeUnit.NANOSECONDS);
+                if (key != null) key.reset();
+            }
+            return true;
+        }
+    }
+
+    /** Attend la fin du processus par son futur de sortie : au-dela du delai, l'assertion de l'appelant le signale. */
+    private static void awaitExit(long processId, long timeoutSeconds) throws InterruptedException {
+        Optional<ProcessHandle> handle = ProcessHandle.of(processId);
+        if (handle.isEmpty()) return;
+        try {
+            handle.get().onExit().get(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (ExecutionException | TimeoutException stillRunning) {
+            // the caller asserts that the process is gone and reports it otherwise
         }
     }
 

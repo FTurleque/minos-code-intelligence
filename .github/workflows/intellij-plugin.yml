@@ -48,10 +48,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Gradle 9.6.1
+      # MINOS-AUD-H09 : la version vient du wrapper (minos-intellij/gradle/wrapper, SHA-256 de la distribution
+      # vérifié) ; setup-gradle valide aussi le gradle-wrapper.jar contre les sommes publiées par Gradle.
+      - name: Set up Gradle (wrapper)
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
         with:
-          gradle-version: '9.6.1'
           cache-provider: basic
 
       - name: Verify no MINOS engine dependency leaks into plugin
@@ -64,11 +65,11 @@ jobs:
 
       - name: Unit tests and plugin build
         working-directory: minos-intellij
-        run: gradle --no-daemon test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure
+        run: ./gradlew --no-daemon test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure
 
       - name: IntelliJ Plugin Verifier
         working-directory: minos-intellij
-        run: gradle --no-daemon verifyPlugin
+        run: ./gradlew --no-daemon verifyPlugin
 
       - name: Upload plugin and verification reports
         if: always()
@@ -100,16 +101,17 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Gradle 9.6.1
+      # MINOS-AUD-H09 : la version vient du wrapper (minos-intellij/gradle/wrapper, SHA-256 de la distribution
+      # vérifié) ; setup-gradle valide aussi le gradle-wrapper.jar contre les sommes publiées par Gradle.
+      - name: Set up Gradle (wrapper)
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
         with:
-          gradle-version: '9.6.1'
           cache-provider: basic
 
       - name: Run IntelliJ unit tests on Windows
         working-directory: minos-intellij
         shell: pwsh
-        run: gradle --no-daemon test
+        run: ./gradlew.bat --no-daemon test
 
       - name: Upload Windows ownership diagnostics
         if: always()

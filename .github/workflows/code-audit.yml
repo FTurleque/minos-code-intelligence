@@ -1,0 +1,239 @@
+name: Code audit (SpotBugs, PIT and Dependency-Check)
+
+on:
+  # Politique du dépôt : aucun déclenchement automatique. SpotBugs et PIT ne sont pas des contrôles de
+  # fusion ; ce workflow ne sert qu'à produire leurs rapports à la demande (docs/quality/code-audit.md).
+  workflow_dispatch:
+    inputs:
+      run_spotbugs:
+        description: Lancer SpotBugs (profil audit-spotbugs) sur tout le réacteur
+        type: boolean
+        default: true
+      spotbugs_blocking:
+        description: SpotBugs bloquant sur toute alerte absente de la base figée (quality/spotbugs-baseline)
+        type: boolean
+        default: false
+      run_mutation:
+        description: Lancer PIT (profil audit-mutation) sur toutes les classes du module choisi
+        type: boolean
+        default: false
+      mutation_module:
+        description: Module muté par PIT (avec -am ; les modules amont sont aussi mutés)
+        type: string
+        default: minos-engine
+      target_classes:
+        description: Classes mutées par PIT, séparées par des virgules (vide = toutes les classes com.minos.*)
+        type: string
+        default: ''
+      target_tests:
+        description: Tests exécutés par PIT, séparés par des virgules (vide = tous les tests com.minos.*)
+        type: string
+        default: ''
+      run_dependency_check:
+        description: Lancer OWASP Dependency-Check (profils audit-dependency-check et audit-dependency-check-tests)
+        type: boolean
+        default: false
+      run_intellij_plugin:
+        description: Lancer les tests, SpotBugs et PIT du plugin IntelliJ (Gradle, hors réacteur)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  spotbugs:
+    name: SpotBugs
+    if: ${{ inputs.run_spotbugs }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Installer Java 24
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Analyser
+        shell: bash
+        run: |
+          chmod +x mvnw
+          ./mvnw --batch-mode --no-transfer-progress -Paudit-spotbugs -DskipTests compile spotbugs:spotbugs -fae
+
+      # Tâche 5.2 de ajouter-audit-spotbugs-pitest : les 197 alertes du 2026-10-09 sont figées dans
+      # quality/spotbugs-baseline (comparées par instanceHash). En mode bloquant, seule une alerte absente de la base
+      # fait échouer le job ; une alerte de la base qui disparaît est signalée, à retirer de la base.
+      - name: Résumer les rapports (et comparer à la base en mode bloquant)
+        if: always()
+        shell: bash
+        env:
+          BLOCKING: ${{ inputs.spotbugs_blocking }}
+        run: |
+          if [ "$BLOCKING" = "true" ]; then
+            python scripts/quality/audit-report-summary.py spotbugs --baseline-dir quality/spotbugs-baseline
+          else
+            python scripts/quality/audit-report-summary.py spotbugs
+          fi
+
+      # MINOS-AUD-H01 : le XML du plugin Maven ne compte pas les classes analysées. La ligne de commande, avec les
+      # réglages du profil, écrit un ClassStats par classe ; --strict échoue si un module n'est pas analysé en entier.
+      - name: Prouver le périmètre analysé (ligne de commande)
+        if: always()
+        run: |
+          python scripts/quality/spotbugs-cli.py --output target/spotbugs-cli
+          python scripts/quality/audit-report-summary.py spotbugs --reports-dir target/spotbugs-cli --strict
+
+      - name: Publier les rapports SpotBugs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: spotbugs-reports
+          path: |
+            */target/spotbugsXml.xml
+            */target/spotbugsSarif.json
+            */target/reports/spotbugs.html
+            target/spotbugsXml.xml
+            target/spotbugsSarif.json
+            target/reports/spotbugs.html
+            target/spotbugs-cli/*.xml
+          if-no-files-found: error
+
+  mutation:
+    name: PIT (module choisi)
+    if: ${{ inputs.run_mutation }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Installer Java 24
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Muter
+        shell: bash
+        env:
+          TARGET_CLASSES: ${{ inputs.target_classes }}
+          TARGET_TESTS: ${{ inputs.target_tests }}
+        run: |
+          chmod +x mvnw
+          args=()
+          if [ -n "$TARGET_CLASSES" ]; then args+=("-DtargetClasses=$TARGET_CLASSES"); fi
+          if [ -n "$TARGET_TESTS" ]; then args+=("-DtargetTests=$TARGET_TESTS"); fi
+          ./mvnw --batch-mode --no-transfer-progress -Paudit-mutation -pl minos-engine -am \
+            -DfailWhenNoMutations=false test-compile org.pitest:pitest-maven:mutationCoverage "${args[@]}"
+
+      - name: Vérifier que PIT a réellement muté du code testé
+        run: python scripts/quality/audit-report-summary.py pit --module minos-engine
+
+      - name: Publier les rapports PIT
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pit-reports
+          path: |
+            */target/pit-reports
+            target/pit-reports
+          if-no-files-found: error
+
+  dependency-check:
+    name: OWASP Dependency-Check
+    if: ${{ inputs.run_dependency_check }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Installer Java 24
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Analyser les dépendances livrées puis celles des tests
+        shell: bash
+        env:
+          # Dependency-Check 13.0.0 ne sait pas rafraîchir le flux NVD sans clé (amont #8715) : sans ce secret, le job
+          # échoue sur l'erreur de mise à jour, jamais sur un faux « aucune vulnérabilité ».
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          chmod +x mvnw
+          ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+          ./mvnw --batch-mode --no-transfer-progress -Paudit-dependency-check             -DnvdApiKeyEnvironmentVariable=NVD_API_KEY org.owasp:dependency-check-maven:aggregate
+          ./mvnw --batch-mode --no-transfer-progress -Paudit-dependency-check-tests -DautoUpdate=false             org.owasp:dependency-check-maven:aggregate
+
+      - name: Résumer les rapports
+        if: always()
+        run: |
+          python scripts/quality/audit-report-summary.py dependency-check target/dependency-check/dependency-check-report.json
+          python scripts/quality/audit-report-summary.py dependency-check target/dependency-check-tests/dependency-check-report.json
+
+      - name: Publier les rapports Dependency-Check
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-check-reports
+          path: |
+            target/dependency-check
+            target/dependency-check-tests
+          if-no-files-found: error
+
+  # MINOS-AUD-H09 : le plugin IntelliJ est un build Gradle hors réacteur ; SpotBugs et PIT y sont configurés par
+  # build.gradle.kts avec les mêmes versions et réglages que les profils Maven. Dependency-Check n'y est pas encore
+  # (H04 : pas de mise à jour de la base sans clé NVD valide).
+  intellij-plugin:
+    name: Plugin IntelliJ (tests, SpotBugs, PIT)
+    if: ${{ inputs.run_intellij_plugin }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle (wrapper)
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+        with:
+          cache-provider: basic
+
+      - name: Tests, SpotBugs et PIT
+        working-directory: minos-intellij
+        run: ./gradlew --no-daemon test spotbugsMain pitest
+
+      - name: Publier les rapports du plugin
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: intellij-plugin-audit-reports
+          path: |
+            minos-intellij/build/reports/spotbugs/**
+            minos-intellij/build/reports/pitest/**
+            minos-intellij/build/test-results/**
+          if-no-files-found: error

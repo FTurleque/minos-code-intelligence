@@ -58,7 +58,7 @@ class PostgresJdbcUrlPolicyDriverParityTest {
     }
 
     @Test
-    void everyUrlWhoseSslModeKeyTheDriverIgnoresIsRefusedByThePolicy() throws Exception {
+    void everyUrlWhoseSslModeKeyTheDriverIgnoresIsRefusedByThePolicy() {
         int ignored = 0;
         for (String url : EXTERNAL_URLS) {
             if (!url.contains("?") || driverProperties(url).getProperty("sslmode") != null) continue;
@@ -69,7 +69,7 @@ class PostgresJdbcUrlPolicyDriverParityTest {
     }
 
     @Test
-    void aLoopbackUrlTheMinosPolicyAcceptsNeverCarriesAModeKeyTheDriverWouldIgnore() throws Exception {
+    void aLoopbackUrlTheMinosPolicyAcceptsNeverCarriesAModeKeyTheDriverWouldIgnore() {
         int refusedForTheKey = 0;
         for (String url : LOOPBACK_URLS) {
             boolean carriesAKey = url.toLowerCase(Locale.ROOT).contains("sslmode") || url.contains("ssl%6Dode");
@@ -101,7 +101,7 @@ class PostgresJdbcUrlPolicyDriverParityTest {
         return SslMode.of(driverProperties(url));
     }
 
-    private static Properties driverProperties(String url) throws Exception {
+    private static Properties driverProperties(String url) {
         Properties parsed = Driver.parseURL(url, new Properties());
         assertNotNull(parsed, "the driver must understand " + url);
         return parsed;

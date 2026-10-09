@@ -114,6 +114,7 @@ flowchart TB
 16. [Multi-dépôts et Git](multi-repo-git.md)
 17. [Supply-chain et provenance de release](supply-chain.md)
 18. [Tests et contribution](testing.md)
+19. [Audit de code : SpotBugs et PIT](../quality/code-audit.md)
 
 ## Build développeur
 
