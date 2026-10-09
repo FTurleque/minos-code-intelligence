@@ -63,10 +63,11 @@ def spotbugs_classpath(version: str, work: Path) -> str:
 def write_auxiliary_classpaths() -> None:
     """One ``target/spotbugs-auxclasspath.txt`` per module, written by a reactor build that also compiles.
 
-    ``compile`` in the same invocation makes Maven resolve sibling modules to their fresh ``target/classes``; a
-    separate run would resolve them to the jars installed in the local repository, possibly stale.
+    ``test-compile`` in the same invocation makes Maven resolve sibling modules, and the test-jar of minos-engine, to
+    their fresh output directories; a separate run, or ``compile`` alone on a fresh runner, looks them up in a
+    repository instead.
     """
-    subprocess.run(mvnw() + ["compile", "dependency:build-classpath", "-Dmdep.includeScope=compile",
+    subprocess.run(mvnw() + ["test-compile", "dependency:build-classpath", "-Dmdep.includeScope=compile",
                              f"-Dmdep.outputFile=target/{AUX_CLASSPATH}"], cwd=ROOT, check=True)
 
 

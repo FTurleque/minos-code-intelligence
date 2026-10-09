@@ -66,7 +66,10 @@ jobs:
         shell: bash
         run: |
           chmod +x mvnw
-          ./mvnw --batch-mode --no-transfer-progress -Paudit-spotbugs -DskipTests compile spotbugs:spotbugs -fae
+          # test-compile, not compile: minos-runtime-local and minos-storage-local depend on the test-jar of
+          # minos-engine, which the reactor only provides once test classes are compiled (on a fresh runner, compile
+          # alone sent Maven to Maven Central for it, 2026-10-09).
+          ./mvnw --batch-mode --no-transfer-progress -Paudit-spotbugs -DskipTests test-compile spotbugs:spotbugs -fae
 
       # Tâche 5.2 de ajouter-audit-spotbugs-pitest : les 197 alertes du 2026-10-09 sont figées dans
       # quality/spotbugs-baseline (comparées par instanceHash). En mode bloquant, seule une alerte absente de la base
@@ -129,18 +132,26 @@ jobs:
       - name: Muter
         shell: bash
         env:
+          MODULE: ${{ inputs.mutation_module }}
           TARGET_CLASSES: ${{ inputs.target_classes }}
           TARGET_TESTS: ${{ inputs.target_tests }}
         run: |
           chmod +x mvnw
+          # The module comes from a free-text input: accept only an existing reactor module directory.
+          if ! [[ "$MODULE" =~ ^minos-[a-z-]+$ ]] || [ ! -f "$MODULE/pom.xml" ]; then
+            echo "mutation_module must name a reactor module (minos-*): '$MODULE'" >&2
+            exit 1
+          fi
           args=()
           if [ -n "$TARGET_CLASSES" ]; then args+=("-DtargetClasses=$TARGET_CLASSES"); fi
           if [ -n "$TARGET_TESTS" ]; then args+=("-DtargetTests=$TARGET_TESTS"); fi
-          ./mvnw --batch-mode --no-transfer-progress -Paudit-mutation -pl minos-engine -am \
+          ./mvnw --batch-mode --no-transfer-progress -Paudit-mutation -pl "$MODULE" -am \
             -DfailWhenNoMutations=false test-compile org.pitest:pitest-maven:mutationCoverage "${args[@]}"
 
       - name: Vérifier que PIT a réellement muté du code testé
-        run: python scripts/quality/audit-report-summary.py pit --module minos-engine
+        env:
+          MODULE: ${{ inputs.mutation_module }}
+        run: python scripts/quality/audit-report-summary.py pit --module "$MODULE"
 
       - name: Publier les rapports PIT
         if: always()
