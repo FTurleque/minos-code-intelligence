@@ -91,3 +91,14 @@ SHALL continuer à invoquer la CLI avec les mêmes sous-commandes et options JSO
 #### Scenario: Version de protocole incompatible
 - **WHEN** le handshake renvoie une version de protocole différente de celle attendue par le plugin
 - **THEN** les actions sont bloquées avec un message qui cite la version attendue et la version reçue
+
+### Requirement: Le lanceur par défaut documenté existe dans une installation standard
+Le chemin du lanceur Windows que la documentation du plugin propose par défaut SHALL désigner le fichier que l'installateur et la distribution créent effectivement. Un contrôle du dépôt SHALL échouer si la documentation cite un autre emplacement.
+
+#### Scenario: Chemin documenté conforme
+- **WHEN** la documentation du plugin cite `%LOCALAPPDATA%\Programs\MINOS\minos.cmd`
+- **THEN** le contrôle documentaire réussit, ce chemin correspondant à `DefaultDirName` de l'installateur et à l'emplacement de `minos.cmd` dans la distribution
+
+#### Scenario: Chemin documenté inexistant
+- **WHEN** la documentation cite `…\Programs\MINOS\bin\minos.cmd`
+- **THEN** le contrôle documentaire échoue en nommant le fichier, la ligne et l'emplacement attendu

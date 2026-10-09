@@ -26,7 +26,7 @@
 ## 5. Validation
 
 - [x] 5.1 `./mvnw -B -ntp -Paudit-mutation -pl minos-engine -am -DfailWhenNoMutations=false -DtargetClasses='com.minos.hosted.*' -DtargetTests='com.minos.hosted.*' test-compile org.pitest:pitest-maven:mutationCoverage` : les survivants retenus passent à `KILLED` ; `audit-report-summary.py pit --module minos-engine`.
-- [ ] 5.2 `clean verify` sous Windows et CI Ubuntu.
+- [x] 5.2 `clean verify` sous Windows et CI Ubuntu. — 2026-10-09 : `clean verify` Ubuntu (tests PostgreSQL obligatoires) et Windows verts en CI, run `pr-ci.yml` 37923977474 (PR #376, tête `038173aa`, contient toute la pile).
 
 ## Évidence d'implémentation (2026-10-08)
 
