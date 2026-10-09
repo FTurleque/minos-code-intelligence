@@ -29,19 +29,19 @@ Une conclusion de couverture SpotBugs SHALL s'appuyer sur un rapport qui énumè
 - **THEN** le test échoue en nommant le module et le chemin attendu, sans évaluer de règle
 
 ### Requirement: Les règles d'architecture obligatoires reprennent uniquement des décisions établies
-Les règles d'architecture exécutées par défaut SHALL correspondre chacune à une décision acceptée (ADR 0022, 0042 ou 0044) et SHALL la citer. Une règle sans décision établie SHALL rester opt-in.
+Les règles d'architecture exécutées par défaut SHALL correspondre chacune à une décision acceptée (ADR 0022, 0042, 0044 ou 0058) et SHALL la citer. Une règle sans décision établie SHALL rester opt-in.
 
 #### Scenario: Règles établies évaluées par défaut
 - **WHEN** `clean verify` exécute les tests de `minos-app`
-- **THEN** sont vérifiés : aucun package compilé par deux modules (ADR 0044) ; aucun adaptateur vers l'application, la racine de composition, une surface ou l'assemblage (ADR 0042) ; l'application sans adaptateur, racine ni surface (ADR 0042) ; aucune surface vers la racine de composition, un adaptateur ou l'assemblage à la compilation (ADR 0042) ; le domaine sans dépendance interne et le moteur limité au domaine (ADR 0022)
+- **THEN** sont vérifiés : aucun package compilé par deux modules (ADR 0044) ; aucun adaptateur vers l'application, la racine de composition, une surface ou l'assemblage (ADR 0042) ; l'application sans adaptateur, racine ni surface (ADR 0042) ; aucune surface vers la racine de composition, un adaptateur ou l'assemblage à la compilation (ADR 0042) ; le domaine sans dépendance interne et le moteur limité au domaine (ADR 0022) ; aucune classe n'utilise un module que son module ne déclare pas (ADR 0058)
 
 #### Scenario: Violation d'une frontière établie
 - **WHEN** une classe d'un adaptateur référence une classe de `minos-application`
 - **THEN** `clean verify` échoue sur la règle correspondante et nomme la classe, la dépendance et l'ADR
 
-#### Scenario: Mesure stricte non décidée
-- **WHEN** `clean verify` s'exécute sans `-Dminos.audit.archunit.strict=true`
-- **THEN** la mesure des usages de modules non déclarés est sautée ; avec la propriété, elle liste tous les usages de tous les modules avant d'échouer
+#### Scenario: Usage d'un module non déclaré
+- **WHEN** une classe utilise un module que son module atteint seulement par une dépendance transitive
+- **THEN** `clean verify` échoue sur `everyModuleOnlyUsesItsAllowedModules`, qui liste tous les usages non déclarés de tous les modules (ADR 0058)
 
 ### Requirement: Dependency-Check distingue une erreur d'un résultat
 Les profils `audit-dependency-check` et `audit-dependency-check-tests` SHALL faire échouer le build sur toute erreur de mise à jour ou d'analyse (`failOnError=true`), SHALL produire un rapport agrégé sur tous les modules du réacteur, et SHALL séparer les dépendances livrées de celles des tests. La clé NVD SHALL être transmise par le nom d'une variable d'environnement, jamais par sa valeur.

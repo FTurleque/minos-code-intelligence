@@ -59,8 +59,9 @@ BOOTSTRAP_TEST_ONLY_ADAPTERS = frozenset({"minos-storage-postgresql"})
 ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     "minos-domain": frozenset(),
     "minos-engine": frozenset({"minos-domain"}),
-    "minos-runtime-local": frozenset({"minos-engine"}),
-    "minos-storage-local": frozenset({"minos-engine"}),
+    # ADR 0058: every module a class uses is declared, including the domain reached through minos-engine.
+    "minos-runtime-local": frozenset({"minos-domain", "minos-engine"}),
+    "minos-storage-local": frozenset({"minos-domain", "minos-engine"}),
     "minos-storage-postgresql": frozenset({"minos-domain", "minos-engine", "minos-storage-local"}),
     "minos-provider-scip": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local"
@@ -71,10 +72,10 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
         "minos-domain", "minos-engine", "minos-application", "minos-runtime-local", "minos-storage-local",
         "minos-provider-scip", "minos-integration-git", "minos-storage-postgresql"
     }),
-    "minos-nexus": frozenset({"minos-domain", "minos-application", "minos-bootstrap"}),
+    "minos-nexus": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     "minos-cli": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap"}),
     "minos-api": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
-    "minos-mcp": frozenset({"minos-application", "minos-bootstrap"}),
+    "minos-mcp": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     "minos-app": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local",
         "minos-storage-postgresql", "minos-provider-scip", "minos-integration-git",
