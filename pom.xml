@@ -94,6 +94,28 @@
         <pit.timeoutFactor>1.5</pit.timeoutFactor>
         <pit.mutators>DEFAULTS</pit.mutators>
         <pit.maxHeapMb>1024</pit.maxHeapMb>
+        <!--
+          PIT mutates every production class of the module it runs in (com.minos.*), with every test of that
+          module. crossModule=true also mutates upstream reactor classes against the tests of the current module
+          (much more expensive; used for the cross-module pass of docs/quality/code-audit.md).
+        -->
+        <pit.crossModule>false</pit.crossModule>
+
+        <!--
+          ArchUnit: test-scope library of minos-app (architecture tests over the compiled classes of every module,
+          docs/quality/code-audit.md). Same version as the MORPHEUS architecture tests.
+        -->
+        <archunit.version>1.5.1</archunit.version>
+        <!--
+          OWASP Dependency-Check: opt-in profiles audit-dependency-check (shipped scopes) and
+          audit-dependency-check-tests (test scope included). Same plugin version as MORPHEUS (d2-security).
+          13.0.0 cannot refresh the NVD feed anonymously (upstream #8715): pass the key by environment variable
+          name only, -DnvdApiKeyEnvironmentVariable=NVD_API_KEY, never by value on the command line.
+          Report only: failBuildOnCVSS=11 never fails on a score; failOnError=true makes a download or analysis
+          error a failed build, so an error is never read as "no vulnerability".
+        -->
+        <dependency-check.maven.plugin.version>13.0.0</dependency-check.maven.plugin.version>
+        <dependency-check.failBuildOnCVSS>11</dependency-check.failBuildOnCVSS>
     </properties>
 
     <dependencyManagement>
@@ -249,6 +271,7 @@
                             <outputFormat>XML</outputFormat>
                         </outputFormats>
                         <timestampedReports>false</timestampedReports>
+                        <crossModule>${pit.crossModule}</crossModule>
                         <threads>${pit.threads}</threads>
                         <timeoutConstant>${pit.timeoutConstant}</timeoutConstant>
                         <timeoutFactor>${pit.timeoutFactor}</timeoutFactor>
@@ -296,22 +319,95 @@
         </profile>
 
         <!--
-          audit-mutation: PIT mutation testing on a restricted scope (docs/quality/code-audit.md).
+          audit-mutation: PIT mutation testing (docs/quality/code-audit.md).
           Off by default and never bound to a phase: it runs only through pitest:mutationCoverage.
-          Default scope: the hosted authorization and audit-chain classes of minos-engine, with the tests of the
-          same module. Override without touching a POM: -DtargetClasses=... -DtargetTests=...
+          Default scope: every production class of each module (com.minos.*), with every test of the same module.
+          The initial three-class scope of minos-engine (2026-10-07) is no longer the default; narrow a run without
+          touching a POM: -DtargetClasses=... -DtargetTests=...
         -->
         <profile>
             <id>audit-mutation</id>
             <properties>
-                <targetClasses>com.minos.hosted.HostedAuditChain,com.minos.hosted.HostedAuthorizationService,com.minos.hosted.HostedPermission</targetClasses>
-                <targetTests>com.minos.hosted.*</targetTests>
+                <targetClasses>com.minos.*</targetClasses>
+                <targetTests>com.minos.*</targetTests>
             </properties>
             <build>
                 <plugins>
                     <plugin>
                         <groupId>org.pitest</groupId>
                         <artifactId>pitest-maven</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          audit-dependency-check: OWASP Dependency-Check over the dependencies that MINOS ships (compile, runtime,
+          provided and system scopes of every reactor module), one aggregated report at the reactor root
+          (target/dependency-check/). Off by default; run the goal explicitly:
+            mvnw -Paudit-dependency-check -DnvdApiKeyEnvironmentVariable=NVD_API_KEY \
+                 org.owasp:dependency-check-maven:aggregate
+          Not covered by this Maven scan: Maven plugins and their dependencies (build tooling), the Gradle-built
+          IntelliJ plugin (minos-intellij), Docker base images, embedded SCIP tools, Python scripts. See
+          docs/quality/code-audit.md.
+          OSS Index requires Sonatype credentials since 2025; it is disabled rather than left to fail silently.
+        -->
+        <profile>
+            <id>audit-dependency-check</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <version>${dependency-check.maven.plugin.version}</version>
+                        <inherited>false</inherited>
+                        <configuration>
+                            <formats>
+                                <format>HTML</format>
+                                <format>JSON</format>
+                                <format>SARIF</format>
+                            </formats>
+                            <prettyPrint>true</prettyPrint>
+                            <failBuildOnCVSS>${dependency-check.failBuildOnCVSS}</failBuildOnCVSS>
+                            <failOnError>true</failOnError>
+                            <skipTestScope>true</skipTestScope>
+                            <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
+                            <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
+                            <outputDirectory>${maven.multiModuleProjectDirectory}/target/dependency-check</outputDirectory>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          audit-dependency-check-tests: same scan with the test scope included (JUnit, Testcontainers, ArchUnit…).
+          These artifacts are never shipped but run on every machine that builds MINOS. Separate report directory
+          (target/dependency-check-tests/) so that the shipped view is never mixed with the build view.
+        -->
+        <profile>
+            <id>audit-dependency-check-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <version>${dependency-check.maven.plugin.version}</version>
+                        <inherited>false</inherited>
+                        <configuration>
+                            <formats>
+                                <format>HTML</format>
+                                <format>JSON</format>
+                                <format>SARIF</format>
+                            </formats>
+                            <prettyPrint>true</prettyPrint>
+                            <failBuildOnCVSS>${dependency-check.failBuildOnCVSS}</failBuildOnCVSS>
+                            <failOnError>true</failOnError>
+                            <skipTestScope>false</skipTestScope>
+                            <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
+                            <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
+                            <outputDirectory>${maven.multiModuleProjectDirectory}/target/dependency-check-tests</outputDirectory>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>

@@ -1,215 +1,229 @@
-# Audit de code : SpotBugs et PIT
+# Audit de code outillé : SpotBugs, PIT, ArchUnit, Dependency-Check et Gitleaks
 
-MINOS dispose de deux outils d'audit **à la demande**, hors du build habituel : SpotBugs (analyse statique du bytecode) et PIT (tests de mutation). Aucun des deux ne tourne dans `clean verify` ni dans `pr-ci.yml`, et aucun n'est un contrôle de fusion. Ils servent à repérer des défauts probables et des tests qui n'attrapent rien, puis à préparer des corrections par OpenSpec.
+MINOS dispose de cinq outils d'audit. Quatre sont **à la demande**, hors du build habituel : SpotBugs (analyse statique du bytecode), PIT (tests de mutation), OWASP Dependency-Check (vulnérabilités connues des dépendances) et Gitleaks (secrets dans les fichiers et l'historique Git). Le cinquième, ArchUnit, est une bibliothèque de test : ses règles établies tournent dans `clean verify` avec les autres tests de `minos-app`. Aucun des quatre premiers n'est un contrôle de fusion.
 
-Mesures et constats de la première exécution : [code-audit-constats.md](code-audit-constats.md). Changement OpenSpec : `openspec/changes/ajouter-audit-spotbugs-pitest/`.
+- Couverture mesurée, registre des exécutions, état de référence et point de reprise : [code-audit-couverture.md](code-audit-couverture.md).
+- Constats qualifiés et plan de correction : [code-audit-constats.md](code-audit-constats.md).
+- Changements OpenSpec : `openspec/changes/ajouter-audit-spotbugs-pitest/` (intégration initiale) et les changements cités dans les constats.
 
-## Rôle respectif des deux outils
+## Rôle respectif des outils
 
-| | SpotBugs | PIT (PITest) |
-|---|---|---|
-| Question posée | « Ce code contient-il un motif de bug connu ? » | « Si je casse ce code, les tests s'en aperçoivent-ils ? » |
-| Méthode | analyse statique du bytecode compilé, sans exécuter le code | mutation du bytecode (inversion d'une condition, suppression d'un appel, valeur de retour modifiée…), puis exécution des tests contre chaque mutant |
-| Détecte | exposition de représentation interne, déréférencement possible de `null`, ressources non fermées, synchronisation incohérente… | assertions absentes ou trop faibles, branches jamais vérifiées, code couvert mais non contrôlé |
-| Ne détecte pas | un défaut de logique métier sans motif connu | un bug dans du code que les tests n'exécutent pas : PIT ne juge que ce que les tests couvrent |
-| Coût | de l'ordre de la compilation | un cycle de tests par mutant : à réserver à un périmètre restreint |
-
-Ils sont complémentaires : SpotBugs regarde le code, PIT regarde les tests.
+| | SpotBugs | PIT (PITest) | ArchUnit | Dependency-Check | Gitleaks |
+|---|---|---|---|---|---|
+| Question posée | « Ce code contient-il un motif de bug connu ? » | « Si je casse ce code, les tests s'en aperçoivent-ils ? » | « Les classes compilées respectent-elles les frontières décidées ? » | « Une dépendance a-t-elle une vulnérabilité publiée ? » | « Un secret a-t-il été écrit dans un fichier ou un commit ? » |
+| Méthode | analyse statique du bytecode | mutation du bytecode, puis exécution des tests contre chaque mutant | import du bytecode de chaque module, règles exécutées par JUnit | identification des artefacts (CPE, purl), confrontation aux flux NVD, CISA KEV, RetireJS | expressions régulières et entropie sur les fichiers et les patchs Git |
+| Ne détecte pas | un défaut de logique sans motif connu | un bug dans du code non exécuté par les tests | une règle non écrite ; un usage dynamique (réflexion, `ServiceLoader`) | une vulnérabilité non publiée ; une dépendance hors Maven (plugin Gradle, image Docker, outil embarqué) | un secret au format inconnu ; ce qui n'est plus dans aucune référence Git accessible |
+| Coût | ≈ 2 min pour le réacteur | de quelques secondes à plusieurs heures selon le périmètre | quelques secondes | ≈ 15 s par analyse, base NVD à jour | quelques secondes |
 
 ## Prérequis et versions retenues
 
 | Élément | Version | Rôle | Vérifié |
 |---|---|---|---|
-| JDK | 24 (imposé par Maven Enforcer `[24,25)`) | compile le bytecode analysé (classes version 68) | exécuté : SpotBugs et PIT lisent les classes Java 24 du dépôt |
+| JDK | 24 (Maven Enforcer `[24,25)`) | compile le bytecode analysé (classes version 68) | exécuté |
 | Maven | wrapper du dépôt (3.10.0, plage Enforcer `[3.9,4.0)`) | `mvnw` / `mvnw.cmd` fait foi | exécuté |
 | `com.github.spotbugs:spotbugs-maven-plugin` | **4.10.4.1** | intégration Maven | exécuté |
-| `com.github.spotbugs:spotbugs` | **4.10.4** | moteur d'analyse, épinglé dans le plugin | exécuté (la version figure dans le rapport : `BugCollection version='4.10.4'`) |
+| `com.github.spotbugs:spotbugs` | **4.10.4** | moteur, épinglé dans le plugin ; aussi lancé en ligne de commande (`edu.umd.cs.findbugs.FindBugs2`) | exécuté |
 | `org.pitest:pitest-maven` | **1.30.0** | intégration Maven et moteur de mutation | exécuté |
-| `org.pitest:pitest-junit5-plugin` | **1.2.3** | lance les tests JUnit Platform sous PIT | exécuté (voir ci-dessous) |
+| `org.pitest:pitest-junit5-plugin` | **1.2.3** | lance les tests JUnit Platform sous PIT | exécuté (compatibilité JUnit 6 constatée, pas garantie, voir plus bas) |
+| `com.tngtech.archunit:archunit` | **1.5.1** | bibliothèque de test de `minos-app` (même version que les tests d'architecture de MORPHEUS) | exécuté |
+| `org.owasp:dependency-check-maven` | **13.0.0** (analyse) et **12.2.2** (mise à jour anonyme de la base, voir « Base NVD ») | profils `audit-dependency-check` et `audit-dependency-check-tests` (même version que le profil `d2-security` de MORPHEUS) | exécuté |
+| Gitleaks | **8.30.1** (binaire Windows officiel, somme SHA-256 vérifiée contre `gitleaks_8.30.1_checksums.txt`) | installé hors dépôt, pas une dépendance Maven | exécuté |
 
-Les versions sont des propriétés du `pom.xml` parent (`spotbugs.maven.plugin.version`, `spotbugs.version`, `pitest.maven.plugin.version`, `pitest.junit5.plugin.version`) ; aucune n'est `LATEST` ni une plage. Ce sont les dernières versions publiées sur Maven Central à la date de l'intégration (7 octobre 2026).
+Les versions Maven sont des propriétés du `pom.xml` parent (`spotbugs.*`, `pitest.*`, `archunit.version`, `dependency-check.maven.plugin.version`) ; aucune n'est `LATEST` ni une plage.
 
-**Compatibilité JUnit.** Le dépôt utilise JUnit Jupiter 6.1.3. Le POM de `pitest-junit5-plugin` 1.2.3 (publié en mai 2025, c'est la dernière version) est construit contre JUnit 5.9 et la plateforme 1.9 ; je n'ai pas trouvé de déclaration de compatibilité avec JUnit 6. La compatibilité n'est donc **pas** garantie : elle est **constatée**. Sur le périmètre initial, PIT a retenu 78 tests de `com.minos.hosted` (ceux qui exercent les classes visées), les a exécutés sans échec en l'absence de mutation (condition imposée par PIT) et a tué 58 mutants. Si une autre classe visée met en échec le lanceur, le premier suspect est cette version.
+**Compatibilité JUnit.** `pitest-junit5-plugin` 1.2.3 est construit contre JUnit 5.9 ; le dépôt utilise JUnit Jupiter 6.1.3. La compatibilité est **constatée** sur les exécutions consignées dans [code-audit-couverture.md](code-audit-couverture.md), pas garantie par l'éditeur.
 
-## Modules, classes et exclusions
+## Périmètre de chaque outil
 
-**SpotBugs** analyse le bytecode de production (`target/classes`, tests exclus : `includeTests=false`) de **tous les modules Java du reactor Maven** : `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage-local`, `minos-provider-scip`, `minos-integration-git`, `minos-application`, `minos-storage-postgresql`, `minos-bootstrap`, `minos-nexus`, `minos-cli`, `minos-api`, `minos-mcp`, `minos-app`. Hors périmètre : `minos-intellij` (Gradle, Java 21, hors reactor) et `fixtures/`.
+**SpotBugs** analyse le bytecode de production (`target/classes`, tests exclus) de **tous les modules du réacteur Maven**. Le plugin IntelliJ `minos-intellij` (Gradle, hors réacteur) est analysé par la ligne de commande sur ses classes recompilées (voir « Plugin IntelliJ »). Hors périmètre, faute de bytecode de production : `fixtures/` (projets d'exemple indexés par les tests), `benchmarks/`, les sources Java des scripts historiques (`scripts/history`, `scripts/m14`…).
 
-**PIT** ne mute que `minos-engine`, classes `com.minos.hosted.HostedAuditChain`, `HostedAuthorizationService` et `HostedPermission` (autorisations et chaîne d'audit du plan de contrôle hébergé), avec les tests du paquet `com.minos.hosted.*` du même module (18 classes de test et une classe de support). Ce périmètre est un point de départ : il se change sans modifier de POM (voir plus bas).
+**PIT** mute toutes les classes `com.minos.*` de chaque module avec tous les tests `com.minos.*` du même module (profil `audit-mutation`). La restriction initiale à trois classes de `minos-engine` (7 octobre 2026) n'est plus le défaut ; `-DtargetClasses` / `-DtargetTests` restreignent une exécution sans toucher au POM. `-Dpit.crossModule=true` mute aussi les classes amont du réacteur contre les tests du module courant (voir « Limites »).
 
-**Exclusions.** Aucune. `quality/spotbugs-exclude.xml` est un filtre SpotBugs vide, branché dans la configuration, qui sert de point d'accueil et rappelle la règle ci-dessous. PIT n'exclut rien non plus, hors le comportement par défaut de l'outil.
+**ArchUnit** importe le bytecode de production des **14 modules** depuis leurs `target/classes` (`minos-app` : `target/classes` de la racine) dans `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java`. Le test vérifie d'abord que chaque module est importé **en entier** (nombre de `.class` sur disque = nombre de classes importées) : une sortie de compilation absente ou vide fait échouer le test au lieu de laisser les règles passer sur un périmètre vide. ArchUnit fait de plus échouer par défaut une règle dont le sujet est vide.
+
+**Dependency-Check** analyse les dépendances de tous les modules du réacteur en un rapport agrégé : livrées (portées compile, runtime, provided, system) avec `audit-dependency-check`, et avec la portée test en plus avec `audit-dependency-check-tests`. Il ne voit **pas** : les plugins Maven et leurs dépendances (outillage de build), le plugin IntelliJ (Gradle), les images Docker, les outils SCIP embarqués, les scripts Python. Les dépendances du plugin IntelliJ sont analysées à part (voir « Plugin IntelliJ »).
+
+**Gitleaks** analyse l'arbre de travail (fichiers suivis, non suivis et ignorés), l'historique local (toutes les références, `refs/stash` comprise) et l'historique distant complet par un **clone miroir hors dépôt** (branches, tags et `refs/pull/*`). Le clone de travail peut être superficiel (`git rev-parse --is-shallow-repository`) : son historique seul ne suffit pas.
 
 ## Profils Maven et effet exact
 
 | Profil | Activé par défaut | Effet |
 |---|---|---|
-| *(aucun)* | — | `clean verify` ne charge ni SpotBugs ni PIT. Les deux plugins n'existent que dans `pluginManagement` (version et configuration partagées) ; ils ne sont dans aucun cycle de vie. Vérifié sur le POM effectif de `minos-engine` sans profil, avec chacun des deux profils |
-| `audit-spotbugs` | non | déclare `spotbugs-maven-plugin` dans le build et lie le but `spotbugs` (rapport, ne fait jamais échouer) à la phase `verify`. Les réglages `effort=Max`, `threshold=Medium`, `failThreshold=Medium` sont des propriétés du POM parent (valables aussi sans profil pour un appel direct de `spotbugs:check`). Le contrôle bloquant `spotbugs:check` n'est **jamais** lié : il se lance explicitement |
-| `audit-mutation` | non | déclare `pitest-maven` dans le build, **sans liaison à une phase** : PIT ne s'exécute que par `pitest-maven:mutationCoverage`. Fixe le périmètre initial (propriétés `targetClasses`, `targetTests`) ; les ressources et délais sont des propriétés `pit.*` du POM parent |
+| *(aucun)* | — | `clean verify` ne charge ni SpotBugs, ni PIT, ni Dependency-Check. Les règles ArchUnit établies tournent avec les tests de `minos-app` ; la mesure stricte (`everyModuleOnlyUsesItsAllowedModules`) est sautée sauf `-Dminos.audit.archunit.strict=true` |
+| `audit-spotbugs` | non | lie le but `spotbugs` (rapport, ne fait jamais échouer) à `verify`. Le contrôle bloquant `spotbugs:check` se lance explicitement |
+| `audit-mutation` | non | déclare `pitest-maven`, sans liaison à une phase ; `targetClasses` et `targetTests` valent `com.minos.*` |
+| `audit-dependency-check` | non | déclare `dependency-check-maven` (non hérité) pour le but `aggregate` à la racine ; dépendances livrées seulement ; rapports HTML, JSON, SARIF dans `target/dependency-check/` |
+| `audit-dependency-check-tests` | non | idem avec la portée test ; rapports dans `target/dependency-check-tests/` |
 
-Paramètres communs (`pluginManagement`, `pom.xml`) :
-
-- SpotBugs : rapports `spotbugsXml.xml`, `spotbugsSarif.json` (SARIF, lisible par les outils de revue) et HTML ; filtre `quality/spotbugs-exclude.xml` ; tas 1 024 Mo ; délai 30 min.
-- PIT : rapports HTML et XML ; `timestampedReports=false` (chemin stable, écrasé à chaque exécution) ; mutateurs `DEFAULTS` ; 2 fils ; tas 1 024 Mo par minion ; `timeoutConstant=8000` ms et `timeoutFactor=1.5` ; `-Duser.dir` à la racine du dépôt (voir « Limites »).
+Paramètres communs de Dependency-Check : `failBuildOnCVSS=11` (aucun score ne fait échouer : outil d'audit, pas contrôle de fusion), `failOnError=true` (une erreur de téléchargement ou d'analyse fait échouer le build, elle n'est jamais lue comme « aucune vulnérabilité »), analyseur OSS Index désactivé (il exige désormais des identifiants Sonatype), analyseur .NET désactivé.
 
 ## Commandes
 
-Toutes se lancent depuis la racine du dépôt. Tout `-pl` est accompagné de `-am` : le POM parent utilise `${revision}`, et sans `-am` Maven ne résout pas les modules amont (exécuté : `Could not collect dependencies … minos-parent:pom:${revision}`).
+Toutes se lancent depuis la racine du dépôt. Tout `-pl` est accompagné de `-am` (le POM parent utilise `${revision}`). Sous PowerShell, **quotez chaque argument `-D`**.
 
-Sous PowerShell, **quotez chaque argument `-D`** : une virgule non quotée y devient un tableau, et les points sont mal gérés par PowerShell 5.1.
-
-### SpotBugs : rapport
-
-Tout le reactor :
-
-```powershell
-.\mvnw.cmd -B -ntp -Paudit-spotbugs "-DskipTests" compile spotbugs:spotbugs
-```
+### SpotBugs : rapport et contrôle bloquant
 
 ```bash
 ./mvnw -B -ntp -Paudit-spotbugs -DskipTests compile spotbugs:spotbugs
-```
-
-Un module et ses dépendances (ici `minos-engine`) :
-
-```powershell
-.\mvnw.cmd -B -ntp -Paudit-spotbugs -pl minos-engine -am "-DskipTests" compile spotbugs:spotbugs
-```
-
-```bash
-./mvnw -B -ntp -Paudit-spotbugs -pl minos-engine -am -DskipTests compile spotbugs:spotbugs
-```
-
-Synthèse par module et par motif :
-
-```bash
 python scripts/quality/audit-report-summary.py spotbugs
-```
-
-Le profil lie aussi le rapport à `verify` : `./mvnw -B -ntp -Paudit-spotbugs verify` produit les rapports après les tests (compte tenu du coût de `verify`, la commande ci-dessus est préférable).
-
-### SpotBugs : contrôle bloquant
-
-```powershell
-.\mvnw.cmd -B -ntp -fae -Paudit-spotbugs "-DskipTests" compile spotbugs:check
-```
-
-```bash
 ./mvnw -B -ntp -fae -Paudit-spotbugs -DskipTests compile spotbugs:check
 ```
 
-Le build **échoue** s'il reste au moins une alerte de gravité `Medium` ou plus (`failThreshold=Medium`, `maxAllowedViolations=0` par défaut). `-fae` laisse chaque module aller au bout pour lister tous ceux qui échouent. Réglages sans toucher au POM : `"-Dspotbugs.failThreshold=High"` (seules les alertes `High` bloquent), `"-Dspotbugs.threshold=Low"` (rapporte aussi les alertes de faible confiance), `"-Dspotbugs.effort=Default"` (analyse moins profonde, plus rapide), `"-Dspotbugs.maxAllowedViolations=50"` (tolère un nombre d'alertes par module).
+Le contrôle bloquant échoue s'il reste une alerte `Medium` ou plus. Réglages : `-Dspotbugs.failThreshold=High`, `-Dspotbugs.threshold=Low`, `-Dspotbugs.effort=Default`, `-Dspotbugs.maxAllowedViolations=50`.
 
-**Le contrôle bloquant est rouge aujourd'hui** sur 12 modules sur 14 (197 alertes `Medium`) : il ne peut devenir un contrôle de fusion qu'après une décision sur ces alertes (corriger, ou fixer une base). Avec `-Dspotbugs.failThreshold=High`, il est vert : aucune alerte `High`.
+### SpotBugs : prouver le périmètre analysé
 
-### PIT : périmètre initial
-
-```powershell
-.\mvnw.cmd -B -ntp -Paudit-mutation -pl minos-engine -am "-DfailWhenNoMutations=false" test-compile org.pitest:pitest-maven:mutationCoverage
-python scripts/quality/audit-report-summary.py pit --module minos-engine
-```
+Le XML du plugin Maven 4.10.4.1 ne contient **aucune statistique de classes** (`total_classes="0"`, aucun `ClassStats` ; `num_packages` ne compte que les packages qui ont une alerte). Il ne prouve donc pas quelles classes ont été analysées : `audit-report-summary.py spotbugs` le signale `UNPROVEN` (échec avec `--strict`). Pour le prouver, rejouer SpotBugs en ligne de commande avec les mêmes réglages ; son XML porte un `ClassStats` par classe :
 
 ```bash
-./mvnw -B -ntp -Paudit-mutation -pl minos-engine -am -DfailWhenNoMutations=false test-compile org.pitest:pitest-maven:mutationCoverage \
-  && python scripts/quality/audit-report-summary.py pit --module minos-engine
+./mvnw -B -ntp -o -DskipTests compile dependency:build-classpath -Dmdep.outputFile=target/sb-cp.txt -Dmdep.includeScope=compile
+# pour chaque module (minos-app : classes dans target/classes à la racine, classpath dans minos-app/target/sb-cp.txt) :
+java -Xmx2g -cp <classpath de com.github.spotbugs:spotbugs:4.10.4> edu.umd.cs.findbugs.FindBugs2 \
+  -effort:max -medium -xml:withMessages -output <dossier>/<module>.xml \
+  -auxclasspathFromFile <fichier du classpath du module, une entrée par ligne> \
+  -exclude quality/spotbugs-exclude.xml <module>/target/classes
+python scripts/quality/audit-report-summary.py spotbugs --reports-dir <dossier>
 ```
 
-Pourquoi `-DfailWhenNoMutations=false` : `-am` applique le but PIT aux modules amont (ici `minos-domain`), qui ne contiennent aucune des classes visées, et PIT échoue par défaut quand il ne trouve aucune mutation. Désactiver ce garde-fou rendrait invisible une analyse vide dans le module visé ; c'est pourquoi la commande enchaîne `audit-report-summary.py pit`, qui **échoue** (code 1) si le rapport manque, ne contient aucune mutation, ou si aucun mutant n'est couvert par un test. Une exécution PIT sans cette seconde commande n'est pas une preuve.
+Le classpath du moteur s'obtient avec `dependency:build-classpath` sur un POM jetable qui ne déclare que `com.github.spotbugs:spotbugs:4.10.4`. Sous Windows, ne nommez pas un fichier `aux.txt` : `AUX` est un nom de périphérique réservé. La relecture du 8 octobre a produit les mêmes alertes (mêmes `instanceHash`) que le plugin Maven, module par module.
 
-Changer les classes ou les tests, sans modifier de POM :
-
-```powershell
-.\mvnw.cmd -B -ntp -Paudit-mutation -pl minos-engine -am "-DfailWhenNoMutations=false" "-DtargetClasses=com.minos.hosted.HostedTenantService,com.minos.hosted.HostedWorkspaceService" "-DtargetTests=com.minos.hosted.*" test-compile org.pitest:pitest-maven:mutationCoverage
-```
+### PIT : tout le réacteur ou un module
 
 ```bash
-./mvnw -B -ntp -Paudit-mutation -pl minos-engine -am -DfailWhenNoMutations=false \
-  -DtargetClasses=com.minos.hosted.HostedTenantService,com.minos.hosted.HostedWorkspaceService \
-  -DtargetTests='com.minos.hosted.*' test-compile org.pitest:pitest-maven:mutationCoverage
+./mvnw -B -ntp -fn -Paudit-mutation -DfailWhenNoMutations=false -Dpit.threads=10 -Djacoco.skip=true \
+  test-compile org.pitest:pitest-maven:mutationCoverage
+python scripts/quality/audit-report-summary.py pit --all
 ```
 
-`targetClasses` et `targetTests` sont des listes de noms de classes ou de motifs (`*`) séparés par des virgules. Pour muter un autre module, remplacez `-pl minos-engine` par ce module et `--module` par le même nom. Autres réglages : `"-Dpit.threads=4"`, `"-Dpit.timeoutConstant=15000"`, `"-Dpit.timeoutFactor=2"`, `"-Dpit.maxHeapMb=2048"`, `"-Dpit.mutators=STRONGER"` (jeu de mutateurs plus large, plus lent).
+- `-fn` et non `-fae` : avec `-fae`, un module en échec fait sauter tous les modules qui en dépendent.
+- Reprise après interruption : **pas de `-rf :<module>`** : il sort les modules amont du réacteur, et Maven ne trouve pas leurs artefacts (`${revision}`, rien n'est installé dans `~/.m2`), « Could not collect dependencies », constaté. Relancer tout le réacteur en limitant `-DtargetClasses` aux paquets des modules restants : les modules amont n'ont alors aucune classe à muter. L'historique incrémental de PIT (`-DwithHistory`) n'est **pas** utilisable : depuis PIT 1.30, il exige un greffon commercial (« History has been enabled but no history plugin has been installed », constaté).
+- `-Djacoco.skip=true` évite que l'agent JaCoCo de `prepare-agent` soit repris dans la ligne de commande des JVM de PIT.
+- Un module : `-pl <module> -am` puis `audit-report-summary.py pit --module <module>`. `-am` mute aussi les modules amont : pour ne muter que le module visé, restreindre `-DtargetClasses` à ses packages.
+- `audit-report-summary.py pit` sépare les mutants **tués par une assertion** (`KILLED`) des **timeouts et erreurs** (`TIMED_OUT`, `MEMORY_ERROR`, `RUN_ERROR`) : PIT compte ces derniers comme détectés, mais ils prouvent qu'un mutant a cassé la JVM de test, pas qu'une assertion l'a vu.
+
+### ArchUnit
+
+```bash
+./mvnw -B -ntp -pl minos-app -am test -Dtest=ModuleArchitectureTest -Dsurefire.failIfNoSpecifiedTests=false
+# mesure stricte (proposition, non établie par un ADR) :
+./mvnw -B -ntp -pl minos-app -am test -Dtest=ModuleArchitectureTest -Dsurefire.failIfNoSpecifiedTests=false -Dminos.audit.archunit.strict=true
+```
+
+Les règles établies et leur source :
+
+| Test | Décision |
+|---|---|
+| `everyModuleIsImportedCompletely` | garde contre un périmètre vide ou partiel (14 modules, chaque `.class` importée) |
+| `everyPackageBelongsToOneModule` | ADR 0044 § 1 sur le bytecode (aucun package compilé par deux modules) |
+| `adaptersDoNotReachBackIntoUpperLayers` | ADR 0042 (A2) : un adaptateur n'atteint ni l'application, ni la racine de composition, ni une surface, ni l'assemblage |
+| `applicationOnlyKnowsPorts` | ADR 0042 (A2) : `minos-application` ne connaît que des ports |
+| `surfacesDoNotCompileAgainstTheCompositionRootOrAdapters` | ADR 0042 (A2) : les surfaces n'atteignent la racine de composition qu'à l'exécution |
+| `coreModulesStayAtTheBottom` | ADR 0022 : le domaine ne dépend d'aucun module, le moteur du seul domaine |
+| `everyModuleOnlyUsesItsAllowedModules` (opt-in) | **proposition** : lecture stricte de `ALLOWED_DEPENDENCIES` (une classe n'utilise que les modules que son POM a le droit de déclarer). Aucun ADR n'interdit l'usage transitif ; voir le constat MINOS-AUD-H08 |
+
+Le test lit les sorties de compilation depuis le répertoire de travail du dépôt (Surefire `workingDirectory`) : lancez-le après une compilation du réacteur.
+
+### Dependency-Check
+
+```bash
+./mvnw -B -ntp -Paudit-dependency-check -DnvdApiKeyEnvironmentVariable=NVD_API_KEY org.owasp:dependency-check-maven:aggregate
+./mvnw -B -ntp -Paudit-dependency-check-tests -DautoUpdate=false org.owasp:dependency-check-maven:aggregate
+python scripts/quality/audit-report-summary.py dependency-check target/dependency-check/dependency-check-report.json
+python scripts/quality/audit-report-summary.py dependency-check target/dependency-check-tests/dependency-check-report.json
+```
+
+La clé NVD se passe **par le nom** de la variable d'environnement (`-DnvdApiKeyEnvironmentVariable=NVD_API_KEY`), jamais par sa valeur sur la ligne de commande. `audit-report-summary.py dependency-check` affiche la date de la base (`NVD API Last Checked`, `NVD API Last Modified`) et échoue sur toute exception d'analyse.
+
+**Base NVD.** Dependency-Check 13.0.0 ne sait pas rafraîchir le flux NVD sans clé (anomalie amont #8715, constatée aussi dans MORPHEUS). Si la clé est absente ou refusée (`Invalid API Key` dans le journal), le build échoue : c'est une **erreur d'infrastructure, pas un résultat**. Repli constaté le 8 octobre : rafraîchir anonymement la base avec 12.2.2, qui écrit le même schéma H2, puis analyser avec 13.0.0 sans mise à jour :
+
+```bash
+./mvnw -B -ntp -N -DdataDirectory=<base> -DossindexAnalyzerEnabled=false org.owasp:dependency-check-maven:12.2.2:update-only
+./mvnw -B -ntp -Paudit-dependency-check -DautoUpdate=false -DdataDirectory=<base> org.owasp:dependency-check-maven:13.0.0:aggregate
+```
+
+Placez la base hors du dépôt et hors du dépôt Maven partagé (`-DdataDirectory`), pour qu'une autre analyse concurrente (MORPHEUS) ne verrouille pas le même fichier H2.
+
+### Gitleaks
+
+```bash
+gitleaks version                                    # 8.30.1
+git rev-parse --is-shallow-repository               # true : l'historique local est tronqué
+git clone --mirror https://github.com/FTurleque/minos-code-intelligence.git <hors dépôt>/mirror.git
+gitleaks git <hors dépôt>/mirror.git --log-opts="--all" --redact=100 --report-format json --report-path <hors dépôt>/mirror-history.json --exit-code 0
+gitleaks git . --log-opts="--all" --redact=100 --report-format json --report-path <hors dépôt>/local-history.json --exit-code 0
+gitleaks dir . --redact=100 --report-format json --report-path <hors dépôt>/worktree.json --exit-code 0
+```
+
+`--redact=100` remplace chaque valeur par `REDACTED` dans le rapport ; les rapports s'écrivent **hors du périmètre analysé** pour ne pas être réanalysés. Pour qualifier une alerte sans afficher la valeur, ne publiez que sa **forme** (longueur, alphabet hexadécimal ou base 64) et la ligne masquée. La règle `sourcegraph-access-token` de la configuration par défaut correspond à **toute** chaîne hexadécimale de 40 caractères : épinglages d'actions GitHub, SHA de commit, versions d'outils.
+
+### Plugin IntelliJ (Gradle, hors réacteur)
+
+Gradle n'est pas installé sur le poste de développement et `minos-intellij/` n'a pas de `gradlew`. Les classes de `minos-intellij/build/` peuvent être périmées (le 8 octobre, elles dataient du 12 août alors que les sources avaient changé le 7 octobre) : ne les analysez pas telles quelles. Harnais constaté :
+
+1. compiler `src/main/java` avec `javac --release 21` contre `<IDE>/lib/*` (IntelliJ IDEA `IU-261.22158.277`, la plateforme cible de `build.gradle.kts`) et `gson-2.14.0.jar` ; idem pour `src/test/java` avec JUnit 6.1.3 ;
+2. lancer les tests par l'API `LauncherFactory` de JUnit Platform 6.1.3 ;
+3. lancer SpotBugs en ligne de commande sur les classes recompilées, `<IDE>/lib/*` en classpath auxiliaire ;
+4. analyser les dépendances déclarées dans `build.gradle.kts` (`implementation`, `testImplementation`, `testRuntimeOnly`) par un POM jetable qui les reproduit, avec `dependency-check-maven:check`.
+
+Ce harnais n'exécute ni Gradle, ni le plugin Gradle `org.jetbrains.intellij.platform`, ni le plugin dans une IDE réelle ; il n'analyse pas la plateforme IntelliJ elle-même (fournie par l'IDE, non livrée).
 
 ### Déclenchement manuel dans GitHub Actions
 
-`.github/workflows/code-audit.yml` (`workflow_dispatch` uniquement) lance SpotBugs (rapport ou `spotbugs:check`) et/ou PIT, exécute la synthèse et publie les rapports en artefacts. Aucun déclenchement automatique. **Ce workflow n'a pas été exécuté** : son contenu a passé les contrôles statiques du dépôt (immutabilité des actions, exécution unique) mais pas un run GitHub.
+`.github/workflows/code-audit.yml` (`workflow_dispatch` uniquement) lance SpotBugs (rapport ou `spotbugs:check`), PIT sur un module choisi (`mutation_module`, toutes ses classes) et Dependency-Check (livré puis tests, avec le secret `NVD_API_KEY`), exécute les synthèses et publie les rapports en artefacts. **Ce workflow n'a pas été exécuté sur GitHub** : il passe les contrôles statiques du dépôt (`check-workflow-pins.py`, `check-single-execution.py`).
 
 ## Chemins des rapports
 
-| Outil | Module | Fichiers |
-|---|---|---|
-| SpotBugs | chaque module `minos-*` | `<module>/target/spotbugsXml.xml` (exploitable), `<module>/target/spotbugsSarif.json` (SARIF), `<module>/target/reports/spotbugs.html` (lecture humaine) |
-| SpotBugs | `minos-app` | **dans le `target/` de la racine** (`target/spotbugsXml.xml`…), car son POM fixe `<directory>` à `${maven.multiModuleProjectDirectory}/target`. `clean` supprime ce répertoire |
-| PIT | `minos-engine` | `minos-engine/target/pit-reports/index.html` (lecture humaine, un fichier par classe sous `com.minos.hosted/`), `minos-engine/target/pit-reports/mutations.xml` (exploitable) |
+| Outil | Fichiers |
+|---|---|
+| SpotBugs (Maven) | `<module>/target/spotbugsXml.xml`, `spotbugsSarif.json`, `reports/spotbugs.html` ; `minos-app` : dans le `target/` de la racine |
+| SpotBugs (ligne de commande) | dossier choisi, un `<module>.xml` par module |
+| PIT | `<module>/target/pit-reports/mutations.xml` et `index.html` ; `minos-app` : `target/pit-reports/` à la racine |
+| ArchUnit | `target/surefire-reports/com.minos.app.architecture.ModuleArchitectureTest.txt` (racine, `minos-app`) |
+| Dependency-Check | `target/dependency-check/` et `target/dependency-check-tests/` (`.html`, `.json`, `.sarif`) |
+| Gitleaks | dossier choisi **hors du dépôt** |
+
+`clean` supprime tous les `target/`. Les rapports volumineux ne se versionnent pas : conservez-les comme artefacts du workflow `code-audit.yml` ou dans un dossier local hors dépôt (celui du 8 octobre est cité dans [code-audit-couverture.md](code-audit-couverture.md)).
 
 ## Interpréter SpotBugs
 
-Chaque alerte porte un **motif** (`type`, par exemple `EI_EXPOSE_REP`), une **priorité** (1 `High`, 2 `Medium`, 3 `Low`), une classe, une méthode et une ligne. Le rapport HTML groupe par catégorie et explique chaque motif ; le XML contient aussi une empreinte stable de l'alerte (`instanceHash`).
-
-- Lisez d'abord les alertes `High`, puis le motif le plus fréquent : un motif répété 100 fois dit plus sur une convention du code (par exemple des enregistrements qui exposent leurs listes) que sur 100 défauts distincts.
-- Une alerte n'est pas un bug : c'est un motif qui en cause souvent. Décidez au cas par cas : **corriger**, **consigner** (constat OpenSpec), ou **exclure** si c'est un faux positif.
-- Le niveau `Medium` retenu rapporte les alertes de confiance moyenne et haute ; `Low` est volontairement écarté.
+Chaque alerte porte un **motif** (`type`), une **priorité** (1 `High`, 2 `Medium`, 3 `Low`), une classe, une méthode, une ligne et une empreinte stable (`instanceHash`). Lisez d'abord les alertes `High`, puis le motif le plus fréquent : un motif répété cent fois dit plus sur une convention du code que sur cent défauts distincts. Une alerte n'est pas un bug : **corriger**, **consigner** (constat OpenSpec) ou **exclure** si c'est un faux positif démontré.
 
 ## Interpréter PIT
-
-PIT génère des mutants et classe chacun :
 
 | Statut | Signification | Que faire |
 |---|---|---|
 | `KILLED` | au moins un test a échoué sur le mutant : le comportement est contrôlé | rien |
-| `SURVIVED` | le code a été exécuté par un test, mais **aucun test n'a échoué** : le comportement modifié n'est pas contrôlé | écrire ou renforcer une assertion, **ou** conclure à un mutant équivalent (le changement ne modifie pas le comportement observable) |
-| `NO_COVERAGE` | aucun test n'exécute cette ligne | ajouter un test ; ou le code est mort |
-| `TIMED_OUT` | le mutant a provoqué une boucle ou une attente infinie, détectée par le délai | compté comme tué par PIT : un test a bien « vu » une différence. Si les timeouts sont nombreux sans raison, allongez `pit.timeoutConstant` |
-| `MEMORY_ERROR`, `RUN_ERROR` | le mutant a fait échouer la JVM de test | compté comme tué ; à ignorer sauf s'ils dominent |
+| `SURVIVED` | le code a été exécuté par un test, mais **aucun test n'a échoué** | écrire ou renforcer une assertion, **ou** démontrer un mutant équivalent |
+| `NO_COVERAGE` | aucun test du module n'exécute cette ligne | ajouter un test ; vérifier qu'un test d'un autre module ne la couvre pas (voir « Limites ») ; ou le code est mort |
+| `TIMED_OUT` | le mutant a provoqué une boucle ou une attente au-delà du délai | **pas une preuve de solidité** : à examiner, surtout s'ils sont nombreux |
+| `MEMORY_ERROR`, `RUN_ERROR` | le mutant a fait échouer la JVM de test | idem |
+| `NON_VIABLE` | le mutant ne se charge pas | ignorer |
 
-Indicateurs du rapport :
-
-- **Mutation score** : mutants tués / mutants générés.
-- **Test strength** : mutants tués / mutants **couverts** (hors `NO_COVERAGE`). Il mesure la qualité des assertions là où les tests passent.
-- **Line coverage (mutated classes only)** : couverture de lignes des seules classes mutées.
-
-**Couverture et détection de mutation ne sont pas la même mesure.** JaCoCo (les gates `check-jacoco.py`) compte les lignes et branches *exécutées* par les tests. Un test qui appelle une méthode sans rien vérifier la couvre à 100 % et laisse survivre tous ses mutants. Une couverture élevée avec beaucoup de survivants signale des tests qui exécutent sans contrôler ; l'inverse (couverture basse, peu de survivants sur ce qui est couvert) signale un code peu testé mais bien vérifié. Ne remplacez pas l'une par l'autre.
-
-Sur le périmètre initial, 93 % des lignes des classes mutées sont couvertes, mais 12 mutants survivent : la couverture ne dit pas quelles vérifications manquent, PIT oui.
+Indicateurs : **mutation score** (tués / générés), **force des tests** (tués / couverts). `audit-report-summary.py` calcule les deux **sans** compter timeouts et erreurs comme des tués. **Couverture et détection de mutation ne sont pas la même mesure** : JaCoCo compte les lignes exécutées, PIT les comportements vérifiés.
 
 ## Faux positifs et exclusions
 
-Une alerte ne s'exclut que si elle est démontrée fausse. Règles :
-
-1. Une exclusion vise **une classe**, si possible **une méthode**, pour **un motif** (`<Class>`, `<Method>`, `<Bug pattern=…/>`). Pas d'exclusion par motif seul sur tout le dépôt, pas de joker sur les paquets.
-2. Un commentaire au-dessus dit pourquoi l'alerte est fausse, qui l'a constaté et à quelle date.
-3. Une alerte *réelle* mais acceptée (coût de correction, décision d'architecture) ne s'exclut pas : elle se consigne comme constat ou se couvre par un ADR.
-4. L'exclusion se fait dans `quality/spotbugs-exclude.xml`, relue en PR. Un motif réglé globalement pour faire passer le contrôle est un refus de relecture.
-5. Côté PIT, un mutant équivalent se documente dans le constat qui le concerne. `excludedClasses`, `excludedMethods` et `excludedTestClasses` ne servent qu'à des cas précis du même ordre (voir « Limites » pour la seule exclusion pressentie).
-
-## Coût d'exécution observé
-
-Mesures sur un poste Windows 10, JDK 24.0.1, Maven 3.10.0, cache Maven chaud, une exécution chacune (ordre de grandeur, pas une garantie) :
-
-| Opération | Durée |
-|---|---|
-| SpotBugs, tout le reactor (compilation comprise), 14 modules | environ 2 min 20 s |
-| SpotBugs, `minos-engine` avec `minos-domain` | environ 35 s |
-| PIT, périmètre initial (73 mutants, 889 exécutions de test) | 56 s pour PIT, 57 s pour le build Maven |
-
-Le coût de PIT croît à peu près avec le nombre de mutants multiplié par le nombre de tests qui couvrent chacun. Cinq cents mutants avec des tests plus lourds se compteront en dizaines de minutes : élargissez le périmètre par paliers, en mesurant.
+1. Une exclusion SpotBugs vise **une classe**, si possible **une méthode**, pour **un motif**, avec un commentaire daté qui dit pourquoi l'alerte est fausse.
+2. Une alerte *réelle* mais acceptée ne s'exclut pas : elle se consigne comme constat ou se couvre par un ADR.
+3. Côté PIT, un mutant équivalent se documente dans le constat qui le concerne ; une classe peu testée ne s'exclut pas.
+4. Côté Dependency-Check, une suppression vise un couple précis (purl ou fichier, CPE ou CVE), avec la démonstration de la fausse correspondance. Aucune n'est en place au 8 octobre : les faux positifs sont qualifiés dans les constats.
+5. Côté Gitleaks, une liste d'autorisations se limite à une forme démontrée (par exemple un SHA d'action après `uses: …@`), jamais à un fichier entier.
 
 ## Limites connues
 
-- **Tests d'un autre module.** PIT n'exécute que les tests du module analysé : ceux de son `target/test-classes` et de son classpath de test (`crossModule` vaut `false` par défaut). Une classe de `minos-engine` couverte seulement par des tests de `minos-storage-local`, `minos-application` ou `minos-app` apparaîtra `NO_COVERAGE` ou `SURVIVED` à tort. C'est un comportement documenté de l'outil ; il n'a pas été exercé ici sur un cas réel, le périmètre initial ayant ses tests dans le même module. Avant de conclure à un test manquant, cherchez la classe dans les autres modules (`grep -rl NomDeClasse */src/test`).
-- **Répertoire de travail.** Surefire est configuré avec `workingDirectory` à la racine du dépôt, car des tests lisent des chemins `minos-engine/src/…`. `pitest-maven` n'a pas ce paramètre (`Parameter 'workingDirectory' is unknown`, constaté) ; sans correctif, `HostedProductionBoundaryTest` échoue hors mutation et PIT refuse de continuer (constaté). La configuration passe donc `-Duser.dir=<racine>` aux JVM de PIT. C'est un contournement : un test qui dépend d'un autre répertoire de travail y serait sensible. La solution propre serait un test qui localise le dépôt sans dépendre du répertoire courant.
-- **Mutants équivalents.** Certains survivants ne sont pas des défauts de test (le changement ne modifie pas le comportement observable, par exemple une vérification redondante avec une autre). PIT ne les distingue pas.
-- **Aucun seuil.** `mutationThreshold`, `coverageThreshold` et `testStrengthThreshold` valent 0 : aucun seuil n'est imposé avant de connaître le premier périmètre.
-- **SpotBugs sans greffons.** Ni `find-sec-bugs` ni `fb-contrib` : le jeu de règles est celui de SpotBugs seul.
-- **Linux/macOS et GitHub Actions.** Toutes les mesures viennent de Windows. Les commandes bash sont l'équivalent exact des commandes PowerShell exécutées mais n'ont pas été lancées sous Linux ni macOS ; le workflow `code-audit.yml` n'a pas tourné.
-- **`total_classes` à 0.** Le résumé du XML SpotBugs 4.10.4 affiche `total_classes="0"` bien que les alertes soient correctement rapportées ; ne l'utilisez pas pour compter les classes analysées.
+- **Code qui modifie l'hôte : machine jetable obligatoire.** Sous Windows, les tests de `minos-runtime-local` (et ceux de `minos-bootstrap`, `minos-cli`, `minos-app` qui démarrent le bac à sable) accordent des droits AppContainer sur de vrais répertoires de l'hôte. Sous PIT, des mutants et des timeouts tuent ces lanceurs avant leur nettoyage : les droits restent (MINOS-AUD-H22), et le PIT du 8 octobre a coïncidé avec la perte du JDK et de la lecture du profil du poste (H23). Mutez ces modules sur un runner éphémère ou une VM, jamais sur un poste de travail.
+- **Tests d'un autre module.** PIT n'exécute que les tests du module analysé (`crossModule=false`). Une classe couverte seulement par des tests d'un module aval (`minos-app`, `minos-bootstrap`, `minos-cli`…) apparaît `NO_COVERAGE` ou `SURVIVED` à tort. Avant de conclure à un test manquant, cherchez la classe dans les autres modules (`grep -rl NomDeClasse */src/test`), ou mutez-la depuis le module aval avec `-Dpit.crossModule=true`.
+- **Répertoire de travail.** `pitest-maven` n'a pas de paramètre `workingDirectory` ; la configuration passe `-Duser.dir=<racine>` aux JVM de PIT parce que des tests lisent des chemins relatifs à la racine (`HostedProductionBoundaryTest`).
+- **Mutants équivalents.** PIT ne les distingue pas ; ils se démontrent au cas par cas.
+- **Aucun seuil** PIT ni SpotBugs bloquant n'est imposé.
+- **SpotBugs sans greffons** (`find-sec-bugs`, `fb-contrib` absents).
+- **ArchUnit et dépendances dynamiques.** Le bytecode ne montre pas un chargement par `ServiceLoader` ou par réflexion : la règle « surfaces sans racine de composition » ne voit que les références compilées.
+- **Linux, macOS et GitHub Actions.** Les mesures viennent de Windows ; les commandes bash et le workflow `code-audit.yml` n'ont pas été exécutés hors de ce poste.
 
 ## Préparer des corrections avec OpenSpec
 
-Les rapports alimentent le workflow `openspec/` du dépôt ; ils ne le remplacent pas.
-
-1. **Choisir un lot cohérent**, pas une alerte isolée : un motif dans un module (par exemple `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` dans `minos-storage-local`), ou les survivants d'une classe critique (par exemple `HostedAuditChain.verify`).
-2. **Qualifier** : défaut confirmé, faux positif, mutant équivalent ou décision à prendre. Pour chaque alerte, citez le motif, la classe, la méthode, la ligne et l'`instanceHash` (SpotBugs), ou la classe, la méthode, la ligne et le mutateur (PIT).
-3. **Ouvrir un changement** : `openspec new change <nom-en-français>`. La proposition liste les constats (tableau constat / qualification / traitement), les modules touchés et ce qui est hors périmètre ; la spec exprime l'exigence testable (« la vérification de la chaîne d'audit refuse une séquence non contiguë ») ; les tâches nomment les scripts `check-*.py` et les scopes JaCoCo à rejouer.
-4. **Écrire d'abord le test qui tue le mutant** ou qui échoue sur le défaut, puis corriger. Rejouer ensuite l'outil sur le même périmètre : un survivant doit passer à `KILLED`, une alerte doit disparaître du rapport.
-5. **Mesurer avant d'imposer un seuil** : un seuil PIT ou un `spotbugs:check` bloquant ne se décide qu'avec une base chiffrée et une décision explicite (ADR si le choix est structurant).
+1. **Choisir un lot cohérent** : un motif dans un module, les survivants d'une classe critique, une famille de vulnérabilités.
+2. **Qualifier** : défaut confirmé, faux positif, mutant équivalent, risque ou décision. Citer motif, classe, méthode, ligne et `instanceHash` (SpotBugs), ou classe, méthode, ligne et mutateur (PIT), ou purl, CPE et CVE (Dependency-Check).
+3. **Ouvrir un changement** OpenSpec : tableau constat / qualification / traitement, exigence testable, tâches qui nomment les scripts et scopes à rejouer.
+4. **Écrire d'abord le test** qui tue le mutant ou échoue sur le défaut, puis corriger ; rejouer l'outil sur le même périmètre.
+5. **Mesurer avant d'imposer un seuil** : un seuil PIT, un `spotbugs:check` ou un `failBuildOnCVSS` bloquant ne se décide qu'avec une base chiffrée et une décision explicite.
