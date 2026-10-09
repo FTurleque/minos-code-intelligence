@@ -12,8 +12,8 @@
 ## 2. À faire
 
 - [ ] 2.1 Clé NVD valide dans l'environnement de l'utilisateur et comme secret `NVD_API_KEY` du dépôt (action de l'utilisateur, H04) ; rejouer `update-only` avec la clé.
-- [ ] 2.2 Automatiser dans `code-audit.yml` la relecture SpotBugs en ligne de commande et `audit-report-summary.py spotbugs --reports-dir … --strict` (H01).
-- [ ] 2.3 `quality/dependency-check-suppressions.xml` limité aux deux faux rapprochements de H02, branché sur les deux profils avec `failBuildOnUnusedSuppressionRule=true` ; test : rejouer E17 (0 alerte `com.minos`).
+- [x] 2.2 Automatiser dans `code-audit.yml` la relecture SpotBugs en ligne de commande et `audit-report-summary.py spotbugs --reports-dir … --strict` (H01). — 2026-10-08 : `scripts/quality/spotbugs-cli.py` et étape « Prouver le périmètre analysé » du job SpotBugs ; local : 14 modules analysés en entier, 197 alertes, `--strict` vert ; `check-workflow-pins.py`, `check-single-execution.py` verts.
+- [x] 2.3 `quality/dependency-check-suppressions.xml` limité aux deux faux rapprochements de H02, branché sur les deux profils avec `failBuildOnUnusedSuppressionRule=true` ; test : rejouer E17 (0 alerte `com.minos`). — 2026-10-08 : E17 rejoué (`-DautoUpdate=false`) : 37 dépendances, 0 exception, aucune vulnérabilité ; 43 alertes supprimées, toutes sur `minos-storage-postgresql` ; règle inutilisée vérifiée par l'analyseur.
 - [ ] 2.4 Wrapper Gradle de `minos-intellij` et job plugin dans `code-audit.yml` (tests, SpotBugs, Dependency-Check, PIT) (H09) ; qualifier les 6 alertes « à qualifier » de H21.
 - [ ] 2.5 Décision de l'utilisateur sur Gitleaks en CI (H06) ; si oui : `.gitleaks.toml` à listes d'autorisation par forme, job `pull_request` avec `fetch-depth: 0`, rapport rédigé en artefact.
 - [ ] 2.6 Exécuter `code-audit.yml` sur GitHub (SpotBugs, PIT d'un module, Dependency-Check) et consigner le run.

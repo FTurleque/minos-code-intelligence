@@ -72,6 +72,14 @@ jobs:
         if: always()
         run: python scripts/quality/audit-report-summary.py spotbugs
 
+      # MINOS-AUD-H01 : le XML du plugin Maven ne compte pas les classes analysées. La ligne de commande, avec les
+      # réglages du profil, écrit un ClassStats par classe ; --strict échoue si un module n'est pas analysé en entier.
+      - name: Prouver le périmètre analysé (ligne de commande)
+        if: always()
+        run: |
+          python scripts/quality/spotbugs-cli.py --output target/spotbugs-cli
+          python scripts/quality/audit-report-summary.py spotbugs --reports-dir target/spotbugs-cli --strict
+
       - name: Publier les rapports SpotBugs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -84,6 +92,7 @@ jobs:
             target/spotbugsXml.xml
             target/spotbugsSarif.json
             target/reports/spotbugs.html
+            target/spotbugs-cli/*.xml
           if-no-files-found: error
 
   mutation:

@@ -76,16 +76,11 @@ Le contrôle bloquant échoue s'il reste une alerte `Medium` ou plus. Réglages 
 Le XML du plugin Maven 4.10.4.1 ne contient **aucune statistique de classes** (`total_classes="0"`, aucun `ClassStats` ; `num_packages` ne compte que les packages qui ont une alerte). Il ne prouve donc pas quelles classes ont été analysées : `audit-report-summary.py spotbugs` le signale `UNPROVEN` (échec avec `--strict`). Pour le prouver, rejouer SpotBugs en ligne de commande avec les mêmes réglages ; son XML porte un `ClassStats` par classe :
 
 ```bash
-./mvnw -B -ntp -o -DskipTests compile dependency:build-classpath -Dmdep.outputFile=target/sb-cp.txt -Dmdep.includeScope=compile
-# pour chaque module (minos-app : classes dans target/classes à la racine, classpath dans minos-app/target/sb-cp.txt) :
-java -Xmx2g -cp <classpath de com.github.spotbugs:spotbugs:4.10.4> edu.umd.cs.findbugs.FindBugs2 \
-  -effort:max -medium -xml:withMessages -output <dossier>/<module>.xml \
-  -auxclasspathFromFile <fichier du classpath du module, une entrée par ligne> \
-  -exclude quality/spotbugs-exclude.xml <module>/target/classes
-python scripts/quality/audit-report-summary.py spotbugs --reports-dir <dossier>
+python scripts/quality/spotbugs-cli.py --output target/spotbugs-cli
+python scripts/quality/audit-report-summary.py spotbugs --reports-dir target/spotbugs-cli --strict
 ```
 
-Le classpath du moteur s'obtient avec `dependency:build-classpath` sur un POM jetable qui ne déclare que `com.github.spotbugs:spotbugs:4.10.4`. Sous Windows, ne nommez pas un fichier `aux.txt` : `AUX` est un nom de périphérique réservé. La relecture du 8 octobre a produit les mêmes alertes (mêmes `instanceHash`) que le plugin Maven, module par module.
+`spotbugs-cli.py` compile le réacteur et écrit le classpath de chaque module dans la même invocation Maven (sinon les modules voisins se résolvent vers les jars du dépôt local, peut-être périmés), résout `com.github.spotbugs:spotbugs` à la version `spotbugs.version` du POM, puis lance `FindBugs2` par module (`-effort:max -medium -xml:withMessages`, `quality/spotbugs-exclude.xml`). Le job SpotBugs de `code-audit.yml` l'exécute après l'analyse Maven et publie `target/spotbugs-cli/*.xml`. La relecture du 8 octobre a produit les mêmes alertes (mêmes `instanceHash`) que le plugin Maven, module par module.
 
 ### PIT : tout le réacteur ou un module
 
@@ -206,7 +201,7 @@ Indicateurs : **mutation score** (tués / générés), **force des tests** (tué
 1. Une exclusion SpotBugs vise **une classe**, si possible **une méthode**, pour **un motif**, avec un commentaire daté qui dit pourquoi l'alerte est fausse.
 2. Une alerte *réelle* mais acceptée ne s'exclut pas : elle se consigne comme constat ou se couvre par un ADR.
 3. Côté PIT, un mutant équivalent se documente dans le constat qui le concerne ; une classe peu testée ne s'exclut pas.
-4. Côté Dependency-Check, une suppression vise un couple précis (purl ou fichier, CPE ou CVE), avec la démonstration de la fausse correspondance. Aucune n'est en place au 8 octobre : les faux positifs sont qualifiés dans les constats.
+4. Côté Dependency-Check, une suppression vise un couple précis (purl ou fichier, CPE ou CVE), avec la démonstration de la fausse correspondance. `quality/dependency-check-suppressions.xml` n'en contient que deux, les faux rapprochements de modules MINOS de H02 (`minos-storage-postgresql` ↔ serveur PostgreSQL, `minos-nexus` ↔ project-nexus) ; `failBuildOnUnusedSuppressionRule=true` fait échouer l'analyse dès qu'une règle ne sert plus.
 5. Côté Gitleaks, une liste d'autorisations se limite à une forme démontrée (par exemple un SHA d'action après `uses: …@`), jamais à un fichier entier.
 
 ## Limites connues

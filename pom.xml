@@ -387,6 +387,10 @@
                             </formats>
                             <prettyPrint>true</prettyPrint>
                             <failBuildOnCVSS>${dependency-check.failBuildOnCVSS}</failBuildOnCVSS>
+                            <suppressionFiles>
+                                <suppressionFile>${maven.multiModuleProjectDirectory}/quality/dependency-check-suppressions.xml</suppressionFile>
+                            </suppressionFiles>
+                            <failBuildOnUnusedSuppressionRule>true</failBuildOnUnusedSuppressionRule>
                             <failOnError>true</failOnError>
                             <skipTestScope>true</skipTestScope>
                             <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
@@ -420,6 +424,10 @@
                             </formats>
                             <prettyPrint>true</prettyPrint>
                             <failBuildOnCVSS>${dependency-check.failBuildOnCVSS}</failBuildOnCVSS>
+                            <suppressionFiles>
+                                <suppressionFile>${maven.multiModuleProjectDirectory}/quality/dependency-check-suppressions.xml</suppressionFile>
+                            </suppressionFiles>
+                            <failBuildOnUnusedSuppressionRule>true</failBuildOnUnusedSuppressionRule>
                             <failOnError>true</failOnError>
                             <skipTestScope>false</skipTestScope>
                             <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
