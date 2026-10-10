@@ -20,12 +20,14 @@ Self-test: scripts/quality/test_check_ci_wiring.py.
 """
 from __future__ import annotations
 
-import argparse
 import itertools
 import json
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gate_cli  # noqa: E402 - après l'ajout du dossier du script au chemin
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ".github/workflows"
@@ -296,13 +298,8 @@ def check(root: Path) -> tuple[list[str], int, int]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
-    arguments = parser.parse_args()
-    failures, resolved, wired = check(arguments.root)
-    if failures:
-        for failure in failures:
-            print(f"CI WIRING GATE FAILED: {failure}", file=sys.stderr)
+    failures, resolved, wired = check(gate_cli.parse_root(__doc__, DEFAULT_ROOT))
+    if gate_cli.report_failures("CI WIRING GATE", failures):
         return 1
     print(f"CI WIRING GATE SUCCESS (required checks resolved={resolved}, gate self-tests wired in "
           f"'{INVARIANTS_JOB}'={wired})")

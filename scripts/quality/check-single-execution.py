@@ -33,10 +33,12 @@ Self-test: scripts/quality/test_check_single_execution.py.
 """
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gate_cli  # noqa: E402 - après l'ajout du dossier du script au chemin
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ".github/workflows"
@@ -133,13 +135,8 @@ def check(root: Path) -> tuple[list[str], int, int]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
-    arguments = parser.parse_args()
-    failures, total, automatic = check(arguments.root)
-    if failures:
-        for failure in failures:
-            print(f"SINGLE EXECUTION GATE FAILED: {failure}", file=sys.stderr)
+    failures, total, automatic = check(gate_cli.parse_root(__doc__, DEFAULT_ROOT))
+    if gate_cli.report_failures("SINGLE EXECUTION GATE", failures):
         return 1
     print(f"SINGLE EXECUTION GATE SUCCESS (workflows={total}, started on pull_request or push={automatic}, "
           f"controls=4, each run once per OS in {PR_CI})")
