@@ -1,0 +1,259 @@
+[
+  {
+    "numero": 1,
+    "titre": "Remettre les dispositifs de mesure en marche",
+    "pourquoi": "Aucune correction ultérieure n'est vérifiable tant qu'un gate peut être rouge, un auto-test absent ou un test de confinement sauté sans rien bloquer. Ce sprint ne touche presque pas au code applicatif.",
+    "sortie": "Chaque gate du job invariants et chaque auto-test de gate sont des checks exigés par le ruleset ; un test de confinement sauté fait échouer le job de son OS ; la garde de frontières refuse un cycle de packages et une arête interdite par l'ADR 0042 ; la documentation d'architecture courante est contrôlée contre les POM.",
+    "constats": [
+      "AUD-DEP-09",
+      "AUD-TST-07",
+      "AUD-TST-08",
+      "AUD-TST-03",
+      "AUD-TST-06",
+      "AUD-ARC-10",
+      "AUD-ARC-06",
+      "AUD-TST-13",
+      "AUD-ARC-03"
+    ],
+    "charge_jours": [
+      3.0,
+      11
+    ],
+    "composition": {
+      "Moyenne": 3,
+      "Faible": 6
+    }
+  },
+  {
+    "numero": 2,
+    "titre": "Failles de sécurité et observabilité",
+    "pourquoi": "Les deux défauts de sécurité exploitables (dépôt Git parent piégé, installation des providers avec l'environnement complet) sont locaux et d'effort court. L'observabilité vient ensuite, avant les refontes qui pourraient régresser sans laisser de trace.",
+    "sortie": "Aucune commande lancée par MINOS hors bac à sable ne reçoit les variables MINOS_TEAM_KEY_* ou de jeton, aucun dépôt Git n'est ouvert hors de la racine demandée, et une erreur du SDK MCP, de JGit ou d'une tâche du plugin laisse une trace journalisée sans chemin absolu.",
+    "constats": [
+      "AUD-DEP-08",
+      "AUD-QUA-04",
+      "AUD-QUA-06",
+      "AUD-SEC-01",
+      "AUD-SEC-02",
+      "AUD-SEC-12",
+      "AUD-SEC-13"
+    ],
+    "charge_jours": [
+      2.5,
+      9
+    ],
+    "composition": {
+      "Élevée": 1,
+      "Moyenne": 3,
+      "Faible": 3
+    }
+  },
+  {
+    "numero": 3,
+    "titre": "Socle d'exécution supporté",
+    "pourquoi": "Le JDK 24 et Node 20 ne reçoivent plus de correctifs. La migration exige que les tests de confinement s'exécutent réellement (sprint 1) pour qualifier le nouveau JDK sous Linux et Windows.",
+    "sortie": "Le jar, les images Docker et l'installateur tournent sur un JDK LTS et un Node maintenus, Dependabot peut proposer leurs montées majeures, et l'inventaire de provenance décrit ce qui est réellement installé.",
+    "constats": [
+      "AUD-DEP-01",
+      "AUD-DEP-02",
+      "AUD-DEP-15",
+      "AUD-DEP-10",
+      "AUD-DEP-14",
+      "AUD-DEP-16",
+      "AUD-DEP-03"
+    ],
+    "charge_jours": [
+      6.75,
+      20
+    ],
+    "composition": {
+      "Élevée": 1,
+      "Moyenne": 2,
+      "Faible": 4
+    }
+  },
+  {
+    "numero": 4,
+    "titre": "Chemin de requête : ne plus relire le snapshot",
+    "pourquoi": "Le chemin de requête MCP relit et redécode le snapshot plusieurs fois par appel. Les corrections sont locales aux stores et aux services sémantiques, et leurs effets se mesurent avec les compteurs déjà utilisés par ARCHI-SUIVI.",
+    "sortie": "Une requête hybride lit le snapshot actif au plus une fois et ne charge aucun vecteur, un snapshot de la taille de ce dépôt tient dans le cache de vues, et la synchronisation sémantique PostgreSQL ne réécrit que les documents modifiés.",
+    "constats": [
+      "AUD-PERF-03",
+      "AUD-PERF-01",
+      "AUD-PERF-02",
+      "AUD-PERF-11",
+      "AUD-PERF-05",
+      "AUD-PERF-07",
+      "AUD-PERF-13",
+      "AUD-PERF-06",
+      "AUD-PERF-12"
+    ],
+    "charge_jours": [
+      3.75,
+      13
+    ],
+    "composition": {
+      "Élevée": 1,
+      "Moyenne": 5,
+      "Faible": 3
+    }
+  },
+  {
+    "numero": 5,
+    "titre": "Chaîne de release et d'approvisionnement",
+    "pourquoi": "La chaîne de livraison a des trous indépendants du code : pas de signature, un déclenchement de release du plugin qui ne part jamais, des dépendances livrées sans veille. Regroupés parce qu'ils touchent les mêmes workflows.",
+    "sortie": "Une release Windows publiée est signée et attestée, le plugin IntelliJ est publié par la même release, et chaque dépendance livrée (Maven, Gradle, npm, outils embarqués) est couverte par une veille de vulnérabilités ou un verrou de sommes.",
+    "constats": [
+      "AUD-DEP-04",
+      "AUD-DEP-05",
+      "AUD-DEP-06",
+      "AUD-DEP-07",
+      "AUD-DEP-11",
+      "AUD-DEP-12",
+      "AUD-DEP-13"
+    ],
+    "charge_jours": [
+      2.5,
+      9
+    ],
+    "composition": {
+      "Moyenne": 4,
+      "Faible": 3
+    }
+  },
+  {
+    "numero": 6,
+    "titre": "Couverture réelle et plugin IntelliJ",
+    "pourquoi": "Une fois les gates exigés et l'auto-test JaCoCo branché (sprint 1), on peut étendre le gate de couverture sans risquer de le rendre faux en silence.",
+    "sortie": "Le gate JaCoCo porte un plancher global et couvre les classes du cœur aujourd'hui hors scope, `mvnw verify` passe sur un poste sans JAVA_HOME, et le plugin a une couverture mesurée à chaque PR.",
+    "constats": [
+      "AUD-TST-01",
+      "AUD-TST-02",
+      "AUD-TST-04",
+      "AUD-TST-05",
+      "AUD-TST-09",
+      "AUD-TST-10",
+      "AUD-TST-11",
+      "AUD-TST-12",
+      "AUD-QUA-01",
+      "AUD-TST-18"
+    ],
+    "charge_jours": [
+      5.5,
+      18
+    ],
+    "composition": {
+      "Moyenne": 4,
+      "Faible": 6
+    }
+  },
+  {
+    "numero": 7,
+    "titre": "Sorties publiques : messages, MCP, rendus",
+    "pourquoi": "Résidus connus des audits de septembre et d'octobre sur ce que MINOS écrit vers l'extérieur. Lot homogène : messages d'erreur, sorties MCP, rendus Mermaid.",
+    "sortie": "Aucune sortie CLI, MCP ou API n'émet de chemin absolu, d'e-mail d'auteur ou de HTML non échappé, et un argument MCP inconnu est refusé avec une erreur d'usage.",
+    "constats": [
+      "AUD-SEC-04",
+      "AUD-SEC-05",
+      "AUD-SEC-07",
+      "AUD-SEC-08",
+      "AUD-SEC-09",
+      "AUD-SEC-10",
+      "AUD-SEC-11"
+    ],
+    "charge_jours": [
+      1.75,
+      7
+    ],
+    "composition": {
+      "Faible": 7
+    }
+  },
+  {
+    "numero": 8,
+    "titre": "Confinement et E/S privées",
+    "pourquoi": "Touche le bac à sable et les primitives d'E/S. Placé après le sprint 1 parce que ces changements ne sont vérifiables que si les tests de confinement s'exécutent réellement sur les deux OS.",
+    "sortie": "Toute écriture sous MINOS_HOME passe par la primitive et le gate le prouve sans nouvelle exception, aucune entrée publique de runtime-local n'exécute un provider hors bac à sable, et le suivi de processus ne sonde plus à 10 ms.",
+    "constats": [
+      "AUD-SEC-03",
+      "AUD-SEC-06",
+      "AUD-ARC-09",
+      "AUD-QUA-10",
+      "AUD-PERF-08"
+    ],
+    "charge_jours": [
+      2.75,
+      9
+    ],
+    "composition": {
+      "Moyenne": 1,
+      "Faible": 4
+    }
+  },
+  {
+    "numero": 9,
+    "titre": "Une seule orchestration d'indexation",
+    "pourquoi": "Deux orchestrations de l'indexation coexistent ; il faut en garder une avant de toucher au hachage de l'arbre (PERF-04) ou de déplacer le workflow hors de la CLI (sprint 10), sinon chaque correctif s'écrit deux fois.",
+    "sortie": "Une seule classe orchestre l'indexation incrémentale et c'est celle qu'appelle la CLI ; aucune classe publique de src/main n'est appelée que par des tests hors liste blanche ; le port IndexStateStore a un type d'erreur unique.",
+    "constats": [
+      "AUD-ARC-02",
+      "AUD-QUA-02",
+      "AUD-PERF-04",
+      "AUD-ARC-04",
+      "AUD-QUA-03",
+      "AUD-PERF-09"
+    ],
+    "charge_jours": [
+      4.5,
+      14
+    ],
+    "composition": {
+      "Moyenne": 5,
+      "Faible": 1
+    }
+  },
+  {
+    "numero": 10,
+    "titre": "Frontières d'architecture",
+    "pourquoi": "Chantiers structurels déjà décidés en ADR (0055, 0057, 0058) ou à trancher (0047). Ils supposent la garde de frontières durcie (sprint 1), l'orchestration unique (sprint 9) et la correction bornée du cache (sprint 4).",
+    "sortie": "Les surfaces n'importent plus minos-engine hors d'une liste à cliquet, aucun adaptateur n'importe un autre adaptateur, et l'ADR 0047 est accepté ou rejeté.",
+    "constats": [
+      "AUD-ARC-01",
+      "AUD-ARC-08",
+      "AUD-ARC-05",
+      "AUD-ARC-07",
+      "AUD-ARC-11",
+      "AUD-ARC-12"
+    ],
+    "charge_jours": [
+      14,
+      38
+    ],
+    "composition": {
+      "Moyenne": 4,
+      "Faible": 2
+    }
+  },
+  {
+    "numero": 11,
+    "titre": "Hygiène de fond",
+    "pourquoi": "Hygiène sans urgence, à faire quand les fichiers concernés ont fini de bouger.",
+    "sortie": "Un seul cache LRU pondéré et une seule arithmétique bornée dans le code de production, aucun identifiant de jalon dans les noms de production, et les scripts partagent leurs fonctions communes.",
+    "constats": [
+      "AUD-QUA-05",
+      "AUD-QUA-07",
+      "AUD-QUA-08",
+      "AUD-QUA-09",
+      "AUD-QUA-11",
+      "AUD-PERF-10"
+    ],
+    "charge_jours": [
+      4.5,
+      14
+    ],
+    "composition": {
+      "Moyenne": 1,
+      "Faible": 5
+    }
+  }
+]
