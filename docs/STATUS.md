@@ -87,7 +87,7 @@ La qualification courante est volontairement séparée entre gates produit actue
 
 ### PR Validation
 
-`.github/workflows/pr-ci.yml` est le pipeline de PR unique (constat C1 de l'audit 2026-09, voir [`docs/audit/CI-HYGIENE-SUIVI.md`](audit/CI-HYGIENE-SUIVI.md)), avec trois jobs sans dépendance entre eux, qui tournent en parallèle :
+`.github/workflows/pr-ci.yml` est le pipeline de PR unique (constat C1 de l'audit 2026-09, voir [`docs/audit/archive/2026-09/CI-HYGIENE-SUIVI.md`](audit/archive/2026-09/CI-HYGIENE-SUIVI.md)), avec trois jobs sans dépendance entre eux, qui tournent en parallèle :
 
 - **`vulnerability-scan`** : gate de vulnérabilités des dépendances (OSV-Scanner, workflow réutilisable épinglé par SHA) ;
 - **`invariants`** : un unique **gate statique ciblé Ubuntu**, sans Maven ni Java — épinglage supply-chain des workflows, frontières de modules, cohérence documentaire courante, `product-facts`, garde-fou de non-réaccumulation d'artefacts de jalon, invariants MND/MNE/post-MNE (y compris les neuf gates de jalon actifs M21–M28), invariants post-#228, invariants d'audit-remédiation v2/P0-P2/MINOS-01, provenance Inno Setup, tests unitaires du vérificateur Docker upgrade — chaque contrôle une seule fois, quel que soit l'OS de `verify` ;

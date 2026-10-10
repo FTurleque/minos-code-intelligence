@@ -1,8 +1,8 @@
 # 0047 — Snapshot en mémoire : dédoublonnage des chaînes, table de chaînes, pagination ou mappage
 
-Status: Proposed (2026-09-29) — aucune implémentation ; mesures dans [`ARCHI-SUIVI.md`](../audit/ARCHI-SUIVI.md) (lot 3, A6, § A6.3 et § A6.11).
+Status: Proposed (2026-09-29) — aucune implémentation ; mesures dans [`ARCHI-SUIVI.md`](../audit/archive/2026-09/ARCHI-SUIVI.md) (lot 3, A6, § A6.3 et § A6.11).
 
-Complète l'audit [`AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md) (constat A6, point 5). S'appuie sur l'[ADR 0046](0046-format-de-snapshot-v3-chaines-utf8.md) (format V3) et l'[ADR 0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) (vue de requête en mémoire, index reconstruits, cache borné).
+Complète l'audit [`AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md) (constat A6, point 5). S'appuie sur l'[ADR 0046](0046-format-de-snapshot-v3-chaines-utf8.md) (format V3) et l'[ADR 0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) (vue de requête en mémoire, index reconstruits, cache borné).
 
 ## Contexte
 

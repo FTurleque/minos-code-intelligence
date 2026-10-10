@@ -1,9 +1,9 @@
 # Banc de scalabilité des snapshots (audit A6)
 
-Mesures du lot A6 de `docs/audit/AUDIT-2026-09.md` (mémoire et scalabilité) : taille et composition
+Mesures du lot A6 de `docs/audit/archive/2026-09/AUDIT-2026-09.md` (mémoire et scalabilité) : taille et composition
 des snapshots persistés, ratio SCIP → snapshot, empreinte en tas, recherche hybride, analyse d'impact
 et part de la découverte dans `LocalProjectArchitectureQuery`. Les résultats et leur lecture sont
-consignés dans `docs/audit/ARCHI-SUIVI.md`, partie « Lot 3 — A6 ».
+consignés dans `docs/audit/archive/2026-09/ARCHI-SUIVI.md`, partie « Lot 3 — A6 ».
 
 Le banc ne tourne jamais dans `mvn verify` : la classe
 `minos-bootstrap/src/test/java/com/minos/bootstrap/scalability/SnapshotScalabilityBenchmark.java` est un
