@@ -42,3 +42,6 @@ __pycache__/
 .claude/worktrees/
 .claude/scheduled_tasks.*
 .claude/checkpoints/
+
+# Filtres RTK locaux (propres au poste)
+.rtk/
