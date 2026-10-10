@@ -7,7 +7,7 @@ Ce document est un guide de travail, pas une preuve de capacités livrées.
 
 1. Lire les instructions réellement présentes dans le checkout et les ADR pertinents.
 2. Partir de develop courant, relever son SHA et comparer avec c9a339088f81b6b31c65c7ad12bc718be2a98a7b.
-3. Lire docs/audit/S23-SUIVI.md et les suivis du domaine ; préserver les travaux et modifications locales de l'utilisateur.
+3. Lire docs/audit/archive/2026-09/S23-SUIVI.md et les suivis du domaine ; préserver les travaux et modifications locales de l'utilisateur.
 4. Sélectionner **une tâche** de ROADMAP.md dont les dépendances et décisions sont satisfaites. Toutes sont TODO à la création de cette étude.
 5. Distinguer chemin existant et nom proposé. Vérifier les packages réels après les refactorings de septembre.
 6. Pour U0, produire le protocole concret avant d'optimiser. Pour U4/U7, le spike peut aboutir à un no-go : ne pas transformer automatiquement une expérience en dépendance produit.

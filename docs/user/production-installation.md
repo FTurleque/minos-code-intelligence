@@ -4,7 +4,7 @@ Ce guide décrit le parcours utilisateur de MINOS sous Windows.
 
 Le parcours normal ne nécessite **ni clone Git, ni Maven, ni JDK pour exécuter MINOS** : la distribution Windows contient son propre runtime Java, **et les indexeurs de MINOS** (voir §2 bis) : après l'installation, aucune commande `tools install` n'est à lancer, y compris sur un poste neuf sans réseau. Ce que la distribution ne contient pas, c'est la toolchain du **projet analysé** (JDK, Git Bash, Go, SDK .NET…) : elle appartient au poste de développement, MINOS la détecte et la nomme (`minos.cmd doctor`) sans l'installer. Voir l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md).
 
-> État au **10 août 2026** : `v1.0.0` et `v1.0.1` sont **publiées et immuables**. `v1.0.1` a été publiée le **9 août 2026** après qualification Windows/Linux, PostgreSQL/pgvector, MCP, IntelliJ, installateur et supply-chain. L'issue #98 (sandbox worker OS réelle) est fermée sur le plan des primitives Linux/Windows, mais la qualification pour du code non fiable reste refusée : `remote index` est fail-closed sur tous les OS (voir le constat A1 de [`../audit/AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md)).
+> État au **10 août 2026** : `v1.0.0` et `v1.0.1` sont **publiées et immuables**. `v1.0.1` a été publiée le **9 août 2026** après qualification Windows/Linux, PostgreSQL/pgvector, MCP, IntelliJ, installateur et supply-chain. L'issue #98 (sandbox worker OS réelle) est fermée sur le plan des primitives Linux/Windows, mais la qualification pour du code non fiable reste refusée : `remote index` est fail-closed sur tous les OS (voir le constat A1 de [`../audit/AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md)).
 
 ## 1. Parcours recommandé
 

@@ -11,7 +11,7 @@ une contrainte du graphe de dépendances Maven, pas une question de simplicité.
 comme en test, et `minos-app` dépend d'elles : tout ce qu'elles doivent atteindre, même en portée `test`,
 ne peut pas vivre dans `minos-app` sans cycle. `minos-app` reste l'assemblage final distribué (lanceur, JAR
 ombré, backends optionnels comme PostgreSQL). La mise à jour du critère A2 de
-[`../audit/AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md) revient à l'utilisateur, à la clôture.
+[`../audit/AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md) revient à l'utilisateur, à la clôture.
 
 Conditions attachées à la décision (chacune prouvée par un test ou par le script de frontières) :
 

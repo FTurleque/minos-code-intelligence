@@ -1,6 +1,6 @@
 # Audit outillé de MINOS — couverture, exécutions et reprise
 
-Audit du **8 octobre 2026** avec les cinq outils SpotBugs, PIT, ArchUnit, OWASP Dependency-Check et Gitleaks, sur tout le périmètre applicable du dépôt. Ce document contient l'état de référence, l'inventaire, la matrice de couverture, le registre des exécutions et le point de reprise. Les constats qualifiés et le plan de correction sont dans [code-audit-constats.md](code-audit-constats.md) (§ 5 à § 8), la méthode et les commandes dans [code-audit.md](code-audit.md). Ce document complète l'[audit d'octobre](../audit/README.md) sans le remplacer.
+Audit du **8 octobre 2026** avec les cinq outils SpotBugs, PIT, ArchUnit, OWASP Dependency-Check et Gitleaks, sur tout le périmètre applicable du dépôt. Ce document contient l'état de référence, l'inventaire, la matrice de couverture, le registre des exécutions et le point de reprise. Les constats qualifiés et le plan de correction sont dans [code-audit-constats.md](code-audit-constats.md) (§ 5 à § 8), la méthode et les commandes dans [code-audit.md](code-audit.md). Ce document complète l'[audit d'octobre](../audit/archive/2026-10-06/README.md) sans le remplacer.
 
 > **Lecture.** Pour chaque outil, ce document sépare quatre choses : l'outil a été **exécuté** ; le **périmètre réellement analysé** (compté, pas supposé) ; les **résultats** obtenus ; les **conclusions démontrées**. Un build vert n'est jamais pris pour une couverture. « Couverture intégrale » n'est employé nulle part : chaque outil a son périmètre et ses limites, écrits ci-dessous.
 
@@ -9,7 +9,7 @@ Audit du **8 octobre 2026** avec les cinq outils SpotBugs, PIT, ArchUnit, OWASP 
 | Élément | Valeur |
 |---|---|
 | Commit audité | `902e2bfa66b8f7a9d3694edad9b032b0d8c7f9c3` (`develop`, 2026-10-08 00:21 +02:00) |
-| Modifications locales pendant l'audit | configuration d'audit uniquement : `pom.xml`, `minos-app/pom.xml`, `.github/workflows/code-audit.yml`, `scripts/quality/audit-report-summary.py`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java`, documents de `docs/quality/` et `docs/audit/README.md`, changements OpenSpec. **Aucun code de production modifié.** `Claude outputs/` (non suivi, à l'utilisateur) laissé intact |
+| Modifications locales pendant l'audit | configuration d'audit uniquement : `pom.xml`, `minos-app/pom.xml`, `.github/workflows/code-audit.yml`, `scripts/quality/audit-report-summary.py`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java`, documents de `docs/quality/` et `docs/audit/archive/2026-10-06/README.md`, changements OpenSpec. **Aucun code de production modifié.** `Claude outputs/` (non suivi, à l'utilisateur) laissé intact |
 | Poste | Windows 10 Pro 10.0.19045, AMD Ryzen 7 5700G (8 cœurs / 16 fils), 48 Go |
 | JDK | OpenJDK 24.0.1 |
 | Maven | wrapper 3.10.0 |

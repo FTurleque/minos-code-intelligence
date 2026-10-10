@@ -1,0 +1,670 @@
+# Constats — audit du 10 octobre 2026
+
+90 constats au HEAD `816cdd0c`, triés par sévérité puis par axe. Chaque constat porte son sprint (voir [`sprints.md`](sprints.md)), ses prérequis et ce qu'il débloque. Source de données : [`findings.json`](findings.json).
+
+Colonnes : **Connu** renvoie à l'identifiant d'un audit antérieur quand le constat était déjà ouvert ; **Confiance** distingue *confirmé* (vu dans le code ou exécuté) de *plausible* (dépend d'un contexte non vérifiable ici).
+
+
+## Élevée (3)
+
+
+### AUD-SEC-01 — Analyse Git : le dépôt est cherché en remontant sans plafond ni contrôle de propriétaire, et `git status` (JGit) peut exécuter un filtre `clean` déclaré par ce dépôt
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S2
+- **Preuve** : minos-integration-git/src/main/java/com/minos/integration/git/GitIntelligenceService.java:186-187 `new FileRepositoryBuilder().findGitDir(root.toFile())` (aucun `setMustExist`, aucun `addCeilingDirectory`, aucune comparaison de propriétaire du gitdir trouvé) ; :207 `Status status = repository.isBare() ? null : git.status().call();`. Appelants : `minos git-activity` (GitActivityCommand) et l'API Java (LocalMinosMultiRepositoryApi.java:192, :203). JGit exécute les filtres externes pendant la comparaison de contenu du statut : `javap -c org/eclipse/jgit/treewalk/WorkingTreeIterator.class` (jar 5.13.3 trouvé sur l'hôte) montre `getCleanFilterCommand` puis `FS.runInShell` (lignes 714-748 du désassemblage). pom.xml:62 fixe JGit 7.8.0, dont le comportement n'a pas pu être vérifié ici. — Relecture : JGit amont master 6e68739f (08/10/2026) org.eclipse.jgit/src/org/eclipse/jgit/treewalk/WorkingTreeIterator.java:479-496 `fs.runInShell(filterCommand…)` atteint depuis isModified :958-961 (entrée SMUDGED) ; aucune gestion de safe.directory dans JGit. Remplace la référence au jar 5.13.3.
+- **Impact** : Si la racine d'un projet enregistré n'a pas son propre `.git`, MINOS remonte jusqu'au premier `.git` parent : sur un poste partagé, un `C:\.git` (création de dossier à la racine de C: autorisée aux utilisateurs authentifiés par défaut) ou un `/tmp/.git` posé par un autre compte fournit la configuration (`filter.<x>.clean`) et l'index (entrées « smudged » qui forcent la vérification de contenu) : la commande déclarée s'exécute sous l'identité de la victime, hors bac à sable, au premier `git-activity`. Même effet pour un dépôt reçu en archive avec son `.git`. C'est le schéma de CVE-2022-24765, que git a corrigé par `safe.directory` et que JGit ne reproduit pas, à notre connaissance. Sans exploitation, l'analyse porte au minimum sur un autre dépôt que celui demandé.
+- **Action** : Ouvrir le dépôt exactement : `setGitDir(root.resolve(".git"))` avec `setMustExist(true)`, ou `addCeilingDirectory(root.getParent())`, et refuser un gitdir situé hors de la racine. Refuser un gitdir dont le propriétaire n'est pas l'utilisateur courant. Neutraliser les filtres avant le statut : retirer les sections `filter` de la configuration en mémoire, ou calculer `clean` sans vérification de contenu. Écrire un test avec un `.git` parent piégé (filtre qui crée un fichier témoin).
+
+### AUD-PERF-01 — Recherche hybride avec index sémantique READY : 5 chargements du snapshot actif, 4 lectures de métadonnées et de taille, et un chargement complet de l'index vectoriel par requête (sans cache sous PostgreSQL)
+
+- **Axe** : Performance · **Effort** : M · **Confiance** : confirmé · **Sprint** : S4 · **Connu** : ARCHI-SUIVI § A6.8 (partiel)
+- **Débloque** : AUD-PERF-06
+- **Preuve** : minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java:59 (`snapshots.loadActiveKnowledge`), :61 (`semanticIndex.status`), :63-64 (`semanticIndex.activeIndex(...)`), :74 → SemanticSearchService.java:41 et :53 (`indexService.status` avant ET après). SemanticIndexService.java:59-64 : `activeIndex` rappelle `status(project)` puis `store.load(...)` ; :68 chaque `status` fait `snapshots.loadActiveKnowledge(project.id())` pour ne lire que `snapshotId()`, :69 `store.metadata`, :103 `sizeBytes`. Total par requête : 5 `loadActiveKnowledge`, 4 `metadata`, 4 `sizeBytes`, 1 `load` complet de l'index, 1 `search`. L'index n'est utilisé que pour la liste de documents et `builtAtEpochMilli` (HybridSearchService.java:65-72). PostgreSQL : PostgresSemanticVectorStore.java:35 `load` sans cache → PostgresSemanticReadQueries.java:56-83 `SELECT ... d.content, d.embedding::text ... ORDER BY d.stable_key` puis `parseVector` (:134-148, `split(",")` + `Double.parseDouble` par composante) ; :114-125 `sizeBytes` = `SUM(octet_length(content)+pg_column_size(embedding))` sur tous les documents, :36-54 `metadata` = `COUNT` sur tous les documents. Mesure de raisonnement (script Python, float32 en représentation décimale la plus courte, 768 dimensions) : 9 498 octets de texte par vecteur ; au budget par défaut (SemanticIndexBudget.java:15-18, 192 Mio de `double[]` → 32 768 documents à 768 dimensions) ≈ 311 Mo de texte transférés et analysés à chaque requête hybride. — Relecture : partie « double chargement par SemanticIndexService.status » déjà consignée dans docs/audit/ARCHI-SUIVI.md § A6.8 et :929 (connu partiel) ; le chargement complet de l'index pgvector par requête est nouveau. Tas par défaut : aucun -Xmx/MaxRAMPercentage dans docker/compose-mcp.connected.yaml (:13 mem_limit 3g, :120 JAVA_TOOL_OPTIONS sans option de tas), donc ≈ 768 Mio de tas, qu'une seule requête au budget par défaut peut épuiser.
+- **Impact** : Chemin MCP interactif (`minos_hybrid_search`, `minos_hybrid_context`, `ide hybrid-context`) dans la configuration documentée « connected » (PostgreSQL + Ollama, docker/compose-mcp.connected.yaml) : chaque requête rapatrie ~300 Mo de texte, alloue ~200 Mo de `double[]` et des centaines de Mo de chaînes (pilote pgjdbc qui tamponne le résultat entier par défaut), alors que la recherche vectorielle elle-même est faite côté base (`search`). Plusieurs requêtes simultanées approchent le plafond de 3 Gio du conteneur de requêtes. Côté fichier, au-delà de 64 Mio persistés (voir AUD-PERF-03), les 5 chargements sont 5 décodages complets (0,75 à 1,46 s chacun mesurés au § A6.4 d'ARCHI-SUIVI) : 4 à 7 s par requête. L'audit A6 n'avait identifié que le double chargement (cas sémantique désactivé).
+- **Action** : 1) Ajouter au port `CodeKnowledgeSnapshotStore` une lecture du seul identifiant/descripteur actif (même correction que MINOS-AUD-D03 : `activeSnapshotRepository.read` en local, `knowledge_active` en PostgreSQL) et l'utiliser dans `SemanticIndexService.status`. 2) Dans `HybridSearchService.search`, calculer `status` une seule fois et le passer à `SemanticSearchService` (surcharge interne), et ne plus appeler `activeIndex` : l'identité de corpus peut se fonder sur `IndexMetadata` (snapshotId, provider, modèle, dimensions, builtAt) et les documents se lire sans les vecteurs (`SELECT ... sans embedding` ou méthode `documents(projectId)` du port). 3) Ne calculer `sizeBytes` que pour `minos_semantic_index_status`, pas sur le chemin de requête. Test : compteur de `loadActiveKnowledge`/`load` sur un faux store, attendu 1 et 0 par requête hybride.
+
+### AUD-DEP-01 — Tous les livrables tournent sur le JDK 24.0.2, version non-LTS sans correctif de sécurité depuis juillet 2025, et l'outillage interdit d'en sortir
+
+- **Axe** : Dépendances · **Effort** : L · **Confiance** : confirmé · **Sprint** : S3
+- **Prérequis** : AUD-TST-03
+- **Preuve** : docker/Dockerfile.mcp:4 `FROM eclipse-temurin:24.0.2_12-jre@sha256:…` ; docker/Dockerfile.mcp.release:6 `FROM eclipse-temurin:24.0.2_12-jdk@sha256:…` ; pom.xml:44 `<maven.compiler.release>24` et pom.xml:191 `<requireJavaVersion><version>[24,25)` ; .github/dependabot.yml:70-71 ignore `eclipse-temurin` en `semver-major` ; scripts/release/build-windows-distribution.ps1:156,268-280 (jpackage/jlink embarque le runtime du JDK 24 de `setup-java java-version: '24'`, .github/workflows/release-windows.yml:114-119). JDK 24 est une version non-LTS remplacée par la 25 LTS (GA 16/09/2025) ; 24.0.2 (juillet 2025) est sa dernière mise à jour publique.
+- **Impact** : Le serveur MCP, le CLI, le pilote PostgreSQL (TLS) et le runtime embarqué dans l'installeur Windows et les deux images Docker restent exposés à toutes les vulnérabilités JDK corrigées par les CPU d'octobre 2025 à juillet 2026 ; Dependabot ne fait que rafraîchir le digest du même 24.0.2 et ne proposera jamais la 25, et l'enforcer fait échouer tout build sur un JDK 25. Les docs (TOOLCHAIN_POLICY.md) ne mentionnent pas cette fin de support.
+- **Action** : Ouvrir le changement de base prévu par docs/TOOLCHAIN_POLICY.md vers Java 25 LTS : `maven.compiler.release` 25, enforcer `[25,26)`, `setup-java` 25 dans les 13 workflows, `eclipse-temurin:25.x` (jre/jdk) dans les deux Dockerfiles, `verify-run-configurations.ps1:112` ; qualifier Linux/Windows/Docker/installeur. En attendant, inscrire le risque au registre (docs/architecture/risks/register.md) avec une échéance. Préalable : un ADR qui remplace l'ADR 0005 (« Aligner sur Java 24 »).
+
+## Moyenne (32)
+
+
+### AUD-ARC-01 — Les surfaces pilotent directement le moteur : 103 références à minos-engine dans 30 fichiers, et le workflow d'indexation vit dans la CLI, sans aucun cliquet contre une nouvelle dépendance
+
+- **Axe** : Architecture · **Effort** : L · **Confiance** : confirmé · **Sprint** : S10 · **Connu** : SH-05 / ADR 0057 §2 ; MINOS-AUD-H08 (décidé par ADR 0058)
+- **Prérequis** : AUD-ARC-02, AUD-ARC-10
+- **Preuve** : Graphe reconstruit des imports src/main (architecture-graphe.json) : minos-cli→minos-engine 76 références / 21 fichiers, minos-api 16 / 5, minos-nexus 6 / 1, minos-mcp 5 / 3. minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java:166 « IndexingLifecycleService lifecycle = new IndexingLifecycleService(executors, snapshotStager, snapshotPromoter, stateStore, resumableRunMarkers); » ; aucun autre module ne construit ce service (grep sur minos-api, minos-mcp, minos-application : 0). La règle ArchUnit minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java (everyModuleOnlyUsesItsAllowedModules) et ALLOWED_DEPENDENCIES de scripts/architecture/check-module-boundaries.py raisonnent au grain module : minos-cli/minos-api/minos-mcp/minos-nexus → minos-engine étant autorisés (ADR 0058 §3), un 77e import d'un port du moteur dans la CLI passe les deux gardes.
+- **Impact** : L'objectif de l'ADR 0057 (§2 et §6 : surfaces consommatrices de cas d'usage) recule à chaque commit sans signal ; l'indexation n'est atteignable que par la CLI (API, MCP et plugin doivent lancer un processus CLI), et toute garantie d'indexation (bail, reprise, empreinte) est codée dans une surface. SH-05 (À faire) doit déplacer un code qui continue de grossir.
+- **Action** : Avant SH-05 : figer la dette par un cliquet au grain classe (liste blanche des types du moteur consommés par chaque surface, générée aujourd'hui et ne pouvant que décroître) dans ModuleArchitectureTest ; puis réaliser SH-05 (cas d'usage IndexProject dans minos-application, la CLI ne garde que l'analyse d'arguments et le rendu).
+
+### AUD-ARC-02 — Deux orchestrations de l'indexation incrémentale coexistent : IncrementalIndexingCoordinator (moteur, public, 4 classes de test) n'a aucun appelant en production, la CLI réimplémente le flux
+
+- **Axe** : Architecture, Qualité · **Effort** : M · **Confiance** : confirmé · **Sprint** : S9
+- **Débloque** : AUD-ARC-01, AUD-PERF-04
+- **Preuve** : minos-engine/src/main/java/com/minos/incremental/IncrementalIndexingCoordinator.java:23 « public final class IncrementalIndexingCoordinator » (219 lignes, « Orchestration M7 complète : découverte, empreinte, invalidation, négociation, planification, exécution ») ; grep -rln IncrementalIndexingCoordinator */src/main → seul son propre fichier ; usages : IncrementalIndexingCoordinatorTest, IncrementalIndexingDiagnosticRedactionTest (minos-bootstrap), IncrementalIndexingRealFixtureTest (minos-app), IncrementalIndexingDiscoveryOrderTest (minos-engine). Le flux réel est minos-cli/.../LocalAutonomousIndexOperations.java:150-185. Conséquence déjà payée : docs/audit/constats.md:407 (D06) « l'empreinte est capturée avant la découverte, dans le coordinateur et dans la CLI » — correctif écrit deux fois. Le coordinateur porte 6 des 9 imports com.minos.incremental→com.minos.orchestration du cycle de packages AUD-ARC-06.
+- **Impact** : Des tests d'intégration réels (fixture, rédaction des diagnostics) valident un chemin que le produit n'emprunte pas : un défaut corrigé ou testé dans le coordinateur peut rester présent dans la CLI, et inversement. SH-05 risque de créer une troisième orchestration au lieu de converger.
+- **Action** : Trancher dans SH-05 : soit le coordinateur devient le cas d'usage unique appelé par la CLI (et ses tests deviennent ceux du produit), soit il est supprimé et ses tests sont reportés sur LocalAutonomousIndexOperations / le futur cas d'usage. Ajouter IncrementalIndexingCoordinator à la cartographie SH-01.
+
+### AUD-ARC-03 — Correction incomplète de G16/G17 : arc42/05 donne des dépendances fausses pour 7 modules sur 14, dont 4 arêtes surface/adaptateur interdites par ADR 0042, et SYNTHESE.md maintient PostgreSQL → minos-application
+
+- **Axe** : Architecture · **Effort** : S · **Confiance** : confirmé · **Sprint** : S1 · **Connu** : MINOS-AUD-G17 (déclaré corrigé), MINOS-AUD-E11 (SYNTHESE)
+- **Preuve** : docs/architecture/arc42/05-vue-blocs.md:102 (minos-cli) liste minos-integration-git, minos-storage-local, minos-provider-scip, minos-runtime-local ; :107 (minos-api) liste minos-storage-local, minos-cli, minos-integration-git ; :96 (minos-nexus) liste minos-storage-local ; :130 (minos-storage-postgresql) liste minos-application ; :62 et :69 omettent minos-domain (ajouté par ADR 0058) ; :113 (minos-mcp) ne cite que minos-application ; :67 range InMemoryCodeKnowledgeStore dans minos-storage-local (il est dans minos-engine, com.minos.store). Les POM réels (sortie du gate) : minos-cli = application, bootstrap(runtime), domain, engine, nexus. docs/architecture/SYNTHESE.md:80 et :117 « minos-storage-postgresql dépend de minos-application — confirmé intentionnel … StorageBackend (package com.minos.storage, dans minos-application) » alors que com.minos.storage est dans minos-engine. docs/audit/constats.md:421 déclare G16/G17 « corrigés » ; python3 scripts/docs/check-current-docs.py → SUCCESS (ne contrôle pas ces listes). Les diagrammes docs/architecture/diagrams/c4-container.md:19-28 et arc42/05 §5.1 omettent les arêtes surfaces→moteur (103 références) et adaptateur→adaptateur.
+- **Impact** : La documentation courante décrit comme normale une architecture que les gardes interdisent (surfaces → adaptateurs) et masque la dette réelle (surfaces → moteur) : un contributeur ou un agent qui s'y fie proposera des arêtes refusées par le gate, ou sous-estimera SH-05/SH-09.
+- **Action** : Générer les listes « Dépendances » de arc42/05 depuis les POM (comme module-dependencies.md) ou les remplacer par un lien vers ce fichier généré ; passer SYNTHESE.md au statut historique ; ajouter au diagramme conteneur les arêtes surfaces→moteur et adaptateur→adaptateur ; étendre check-current-docs.py pour comparer toute liste de modules d'arc42 aux POM.
+
+### AUD-ARC-04 — A8 toujours ouvert et élargi : deux découvertes ServiceLoader sans chargeur explicite ni refus des doublons, dont une par laquelle le moteur atteint un adaptateur hors de la racine de composition
+
+- **Axe** : Architecture · **Effort** : S · **Confiance** : confirmé · **Sprint** : S9 · **Connu** : A8 (AUDIT-2026-09) ; SH-10
+- **Preuve** : minos-bootstrap/src/main/java/com/minos/bootstrap/StorageBackendSelection.java:23 « for (StorageBackendProvider provider : ServiceLoader.load(StorageBackendProvider.class)) { if (...equalsIgnoreCase(provider.id())) return provider.open(configuration); » (chargeur de contexte du thread, premier fournisseur gagnant). minos-engine/src/main/java/com/minos/orchestration/StableFileSystemIdentity.java:46 « ServiceLoader.load(ExecutionPathIdentityProvider.class) », fournisseur com.minos.runtime.local.WindowsExecutionPathIdentityProvider déclaré dans minos-runtime-local/src/main/resources/META-INF/services/com.minos.orchestration.ExecutionPathIdentityProvider. Le même dépôt applique le bon motif ailleurs : minos-application/.../MinosApplicationComposers.java:36 et minos-cli/.../McpLaunchRoutes.java:31 (chargeur explicite, échec si zéro ou plusieurs). Sous Windows, fileKey() et « unix:dev,ino » étant indisponibles, l'identité dépend du seul fournisseur découvert : IndexingRuntimePorts.java:149-152 renvoie Optional.empty() et le lancement est refusé (:187-190).
+- **Impact** : Dans un hôte Java embarquant l'API publique (ADR 0018) avec un chargeur de contexte différent : backend PostgreSQL « not available » et, sous Windows, refus de lancer tout provider local (fail-closed, donc indisponibilité et non faille). Deux fournisseurs de même id : choix arbitraire silencieux. Le câblage moteur→runtime-local échappe aux deux gardes de frontières.
+- **Action** : Aligner les deux sites sur MinosApplicationComposers : ServiceLoader.load(X.class, X.class.getClassLoader()), refus explicite de deux fournisseurs de même id ; pour l'identité de chemin, injecter le fournisseur depuis minos-bootstrap (IndexingRuntimePorts) plutôt qu'une découverte statique dans le moteur. Ajouter un test avec un chargeur de contexte vide.
+
+### AUD-ARC-05 — minos-engine, annoncé « ports », est à 72 % du code concret : 12 136 lignes de classes contre 1 042 d'interfaces, et il lance lui-même icacls.exe, rôle que l'ADR 0022 réserve au runtime local
+
+- **Axe** : Architecture · **Effort** : L · **Confiance** : confirmé · **Sprint** : S10 · **Connu** : A5 (AUDIT-2026-09) ; SH-08
+- **Prérequis** : AUD-ARC-10, AUD-SEC-06
+- **Preuve** : minos-engine : 169 fichiers, 16 932 lignes ; 33 fichiers d'interfaces = 1 042 lignes, 70 fichiers de classes = 12 136 lignes (le reste en records/enums). Packages les plus lourds : orchestration 40 fichiers / 4 463 l., io 16 / 2 640 l., hosted 32 / 2 431 l. (RBAC, chaîne d'audit HMAC, rétention : un cas d'usage complet). minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java:634 « Process process = new ProcessBuilder(Path.of(systemRoot, "System32", "icacls.exe").toString(), path, "/inheritance:d", ...) ». docs/adr/0022-maven-reactor-and-module-boundaries.md:71 range « moteur → runtime process local concret » parmi les dépendances qui « doivent devenir impossibles ».
+- **Impact** : Le module que tous les adaptateurs et toutes les surfaces importent porte aussi des mécanismes OS et des cas d'usage métier : chaque modification de l'E/S Windows ou du plan de contrôle recompile et re-teste tout le reactor, et la frontière « noyau sans infrastructure » n'est vérifiée par aucune garde.
+- **Action** : Dans SH-08 : extraire le mécanisme ACL Windows (icacls) derrière un port fourni par minos-runtime-local ou un module d'E/S plateforme ; déplacer hosted vers minos-application (ou un module dédié) en laissant ses ports dans le moteur ; ajouter une règle ArchUnit « minos-engine n'appelle ni ProcessBuilder ni Runtime.exec ».
+
+### AUD-ARC-07 — A9 toujours ouvert : les deux backends reconstruisent un InMemoryCodeKnowledgeStore complet par snapshot lu, ADR 0047 toujours « Proposed » et ADR 0056 non commencé
+
+- **Axe** : Architecture · **Effort** : L · **Confiance** : confirmé · **Sprint** : S10 · **Connu** : A9 (AUDIT-2026-09) ; MINOS-AUD-E09
+- **Prérequis** : AUD-PERF-03
+- **Preuve** : minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java:279 « InMemoryCodeKnowledgeStore indexedStore = new InMemoryCodeKnowledgeStore(snapshot); » ; minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java:142 « InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot); » ; docs/adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md:3 « Status: Proposed (2026-09-29) — aucune implémentation » ; docs/roadmap/storage-hexagonal-2026-10/README.md:123 SH-04 (port de lecture, ADR 0056) « À faire ».
+- **Impact** : La taille du projet indexable reste bornée par le tas de chaque processus (CLI, MCP) ; tant que ADR 0047 n'est pas tranché, SH-04 conçoit un port de lecture sans savoir si l'implémentation sera paginée ou mappée.
+- **Action** : Trancher ADR 0047 (option A internement au décodage, mesurée, comme premier pas) avant SH-04, puis faire dépendre les requêtes du port de lecture et non de InMemoryCodeKnowledgeStore.
+
+### AUD-ARC-08 — Couplages adaptateur → adaptateur inchangés : le provider SCIP instancie quatre FileSymbolSnapshotStore et PostgreSQL réutilise codecs et registre de chemins du backend local
+
+- **Axe** : Architecture · **Effort** : L · **Confiance** : confirmé · **Sprint** : S10 · **Connu** : MINOS-AUD-E04 ; SH-03, SH-06
+- **Prérequis** : AUD-ARC-10
+- **Preuve** : minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java:41, :82, :112, :131 « new FileSymbolSnapshotStore(...) » (staging et magasin provider toujours sur fichiers, quel que soit le backend choisi) ; minos-storage-postgresql : PostgresSnapshotPayloadCodec.java:4-5 et PostgresCodeKnowledgeSnapshotStore.java:8-9 importent com.minos.storage.local.store.KnowledgeSnapshotCodecs/SnapshotCodec, PostgresProjectRegistry.java:5 importe com.minos.storage.local.registry.ProjectPathMappingStore. Graphe : provider-scip→runtime-local 25 réf./12 fichiers (admis par ADR 0022), provider-scip→storage-local 1 import, storage-postgresql→storage-local 6 / 3 fichiers.
+- **Impact** : Avec PostgreSQL, une partie de l'état (staging SCIP, magasin provider, correspondances de chemins) reste sur le système de fichiers local : le backend « remplaçant » n'est pas autonome, et SH-02/SH-03/SH-06 ne peuvent pas être livrés indépendamment.
+- **Action** : Exécuter SH-03 (codec commun hors des backends) puis SH-06 (SnapshotStager/SnapshotPromoter injectés dans ScipProjectSnapshotLifecycle par minos-bootstrap) ; intégrer d'abord les 4 écarts de E04 au plan.
+
+### AUD-QUA-01 — Le lanceur Job Object C# du plugin IntelliJ (350 lignes) est une copie manuelle, divergente de 70 lignes, du script assemblé par fragments dans minos-runtime-local, sans contrôle de parité
+
+- **Axe** : Qualité · **Effort** : M · **Confiance** : confirmé · **Sprint** : S6
+- **Prérequis** : AUD-TST-13
+- **Preuve** : minos-intellij/src/main/resources/com/minos/intellij/protocol/windows-cli-job-owner-v1.ps1:16 (`public static class MinosJobObjectOwnerV1`, CreateJobObject:108/154, contrôle de breakaway:225) ; côté moteur, le même code est assemblé depuis minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-fragments/ (14 fragments) et figé par WindowsContainmentScriptTest:43 contre la base qualifiée. Commande : `diff windows-cli-job-owner-v1.ps1 golden/windows-job-object-owner-v1.ps1 | grep -c '^[<>]'` → 70 (signature `Run(..., bool rawCmd)`, `using System.IO`, messages et blocs différents). Mesure de duplication (fenêtres de 8 lignes normalisées) : 98 fenêtres communes, premier couple de tout le dépôt. Aucun test ni gate ne compare la copie du plugin aux fragments (`grep -rn cli-job-owner scripts .github minos-runtime-local/src/test` → vide).
+- **Impact** : Code de confinement de processus (P/Invoke Job Object, interdiction du breakaway, ligne de commande) maintenu en deux exemplaires : un correctif de sécurité appliqué aux fragments du moteur (cf. C-04 sur la citation `cmd /s /c`) n'atteint pas le plugin, et rien ne signale l'écart.
+- **Action** : Générer la ressource du plugin à partir des mêmes fragments au build Gradle (tâche qui lit `windows-fragments/` et un gabarit `windows-cli-job-owner-v1.ps1.template`), ou, a minima, ajouter un test/gate qui extrait les blocs C# communs (imports kernel32, structures de limites, vérification de configuration du job) des deux scripts et exige leur égalité, les différences assumées (rawCmd, messages) étant listées nommément.
+
+### AUD-QUA-02 — Environ 380 lignes de services de production ne sont appelées que par des tests (hors IncrementalIndexingCoordinator, traité par AUD-ARC-02), et deux gates en imposent la couverture
+
+- **Axe** : Qualité, Architecture · **Effort** : M · **Confiance** : confirmé · **Sprint** : S9
+- **Preuve** : Zéro référence depuis un src/main (commande : `grep -rlw <Classe> --include=*.java --include=*.xml --include=*.kts minos-*/src/main | grep -v <Classe>.java | wc -l` → 0 pour chacune) : minos-engine/src/main/java/com/minos/incremental/IncrementalIndexingCoordinator.java:8 (219 l., « Orchestration M7 complète », 4 tests), ProjectFingerprintSnapshotAlignmentService.java (41 l.), minos-engine/.../orchestration/IndexerProviderRegistry.java (58 l.), minos-application/.../program/analysis/InterproceduralFlowService.java (110 l.), ProgramGraphEvaluator.java (46 l.), minos-application/.../semantic/SemanticSearchEvaluator.java (70 l.), minos-nexus/.../NexusSemanticSignalService.java (52 l.). Les gates les figent : scripts/quality/check-jacoco.py:29 (portée incluant ProgramGraphEvaluator et InterproceduralFlowService), :53 (SemanticSearchEvaluator), scripts/quality/check-java-ast-provider-consistency.py:109 (exige `ProgramGraphEvaluator().evaluate`). L'annexe D de l'audit d'octobre note déjà que le coordinateur « n'est pas appelé en production » (docs/audit/annexes/D-cycle-de-vie.md:282) sans en faire un constat.
+- **Impact** : Code testé, mesuré et documenté comme s'il était le chemin réel (12 documents citent IncrementalIndexingCoordinator) : les relecteurs et les audits lisent un orchestrateur qui ne tourne pas (l'annexe D y a relevé un motif de défaut), chaque refactorisation du moteur doit le maintenir compilable, et les seuils JaCoCo comptent une couverture qui ne protège rien.
+- **Action** : Pour chaque classe, décider explicitement : brancher (si c'est une capacité promise), déplacer vers src/test ou vers un module d'évaluation/benchmark (évaluateurs), ou supprimer ; retirer en même temps les portées JaCoCo et les exigences de gate correspondantes. Ajouter au gate de frontières un contrôle « aucune classe publique de src/main sans référence de production hors liste blanche nominative » (même principe à cliquet que check-private-io). `CodeKnowledgeSnapshotBinaryCodec` relève déjà de E11 et les ports hébergés non qualifiés (`HostedAvailabilityPort`, `HostedTransportSecurityPort`) sont des frontières déclarées : à garder hors de ce lot.
+
+### AUD-QUA-03 — Le port IndexStateStore n'a pas de contrat d'erreur : UncheckedIOException côté fichiers, IllegalStateException côté PostgreSQL, d'où des catch (RuntimeException) qui requalifient aussi les bogues en erreurs d'E/S
+
+- **Axe** : Qualité · **Effort** : M · **Confiance** : confirmé · **Sprint** : S9
+- **Preuve** : minos-engine/src/main/java/com/minos/orchestration/IndexStateStore.java:18-26 (findProjectState, findRun, listRuns, saveProjectState, saveRun : aucun `throws`). Implémentations : minos-storage-local/.../FileIndexStateStore.java:173, :636, :644 (`throw new UncheckedIOException("cannot read MINOS project state: " + file, …)`) ; minos-storage-postgresql/.../PostgresIndexStateStore.java:107-108 (`return new IllegalStateException("PostgreSQL index state store failed to " + action, cause)`). Appelant : minos-application/.../ProjectIndexStateReconciler.java:183, :191, :199, :207 (`catch (RuntimeException failure) { throw new IOException("failed to read project index state …", failure); }`). Même IllegalStateException utilisée pour un refus métier : minos-engine/.../minos-engine/src/main/java/com/minos/orchestration/IndexingRunExecutor.java:78 (`resume-only indexing refused`). 43 `catch (RuntimeException|UncheckedIOException|IllegalStateException)` en production hors plugin. — Relecture : Remplacer « IndexingRunExecutor.java:79 » par « minos-engine/src/main/java/com/minos/orchestration/IndexingRunExecutor.java:78 » (et LocalAutonomousIndexOperations.java:153 pour le même refus côté CLI).
+- **Impact** : Un NullPointerException ou une violation d'invariant dans un store devient « failed to read project index state » (IOException) : diagnostic trompeur, et la politique de tolérance (Q24/Q26) ou de reprise ne peut pas distinguer une panne d'E/S d'un défaut de programmation ou d'un refus métier. Chaque nouvel appelant doit redécouvrir qu'il faut attraper RuntimeException.
+- **Action** : Donner au port un type d'échec unique et vérifié (par exemple `IndexStateStoreException extends IOException`, ou `throws IOException` sur les cinq méthodes) levé par les trois implémentations ; remplacer les `catch (RuntimeException)` de ProjectIndexStateReconciler par ce type ; réserver IllegalStateException aux violations d'invariant et donner aux refus métier (`RESUME_ONLY`) une exception dédiée.
+
+### AUD-QUA-04 — Plugin IntelliJ : trois tâches d'arrière-plan copiées attrapent Throwable et n'écrivent aucun journal ; un échec sans message s'affiche « Unknown failure » sans trace nulle part
+
+- **Axe** : Qualité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S2
+- **Preuve** : minos-intellij/src/main/java/com/minos/intellij/actions/MinosM21Actions.java:204, minos-intellij/src/main/java/com/minos/intellij/actions/MinosEditorActions.java:69 et :83, minos-intellij/src/main/java/com/minos/intellij/ui/MinosToolWindowPanel.java:280 : `} catch (Throwable throwable) { failure = throwable; }` dans trois `Task.Backgroundable` quasi identiques (8 fenêtres dupliquées entre MinosEditorActions:31-40 et MinosM21Actions:81-90). Affichage : MinosToolWindowPanel.java:141 `failure.getMessage() == null ? "Unknown failure" : failure.getMessage()`. `grep -rn "Logger\|LOG\.\|thisLogger" minos-intellij/src/main/java` → aucune occurrence.
+- **Impact** : Un NullPointerException, une erreur de parsing JSON ou une OutOfMemoryError dans le plugin produit un panneau « ERROR: Unknown failure » sans pile dans idea.log : le support ne peut rien diagnostiquer, et les Error de la JVM sont avalées au lieu d'être rapportées par la plateforme.
+- **Action** : Factoriser une seule tâche d'arrière-plan (classe utilitaire du plugin) qui laisse passer ProcessCanceledException et les Error, journalise toute autre exception avec `Logger.getInstance(...)` (pile complète dans idea.log) et affiche le type quand le message est absent ; la faire utiliser par les trois appelants.
+
+### AUD-QUA-05 — Huit caches LRU pondérés et treize helpers d'addition bornée réécrits à la main ; le même nom safeAdd a trois sémantiques différentes
+
+- **Axe** : Qualité · **Effort** : M · **Confiance** : confirmé · **Sprint** : S11
+- **Preuve** : `new LinkedHashMap<>(…, 0.75f, true)` avec comptage de poids, éviction et statistiques propres : minos-application/.../ProgramGraphService.java:44, FingerprintConstrainedJavaProgramGraphProvider.java:44, SemanticSearchService.java:27, HybridSearchService.java:42, minos-storage-local/.../FileSemanticVectorStore.java:61, FileSymbolSnapshotStore.java:59, minos-storage-postgresql/.../PostgresCodeKnowledgeSnapshotStore.java:56 (+ HostedDenialThrottle.java:28). Helpers `private static long saturatingAdd|safeAdd` : 13 copies. Sémantiques : saturation (FileSymbolSnapshotStore.java:371, HybridSearchService.java:234…), exception de budget (minos-application/.../output/DeterministicJson.java:241-242 `throw new OutputBudgetExceededException()`), exception d'état (RuntimeIntelligenceService.java:303-306 `Math.addExact` → IllegalStateException).
+- **Impact** : Chaque cache réimplémente le même invariant délicat (poids décrémenté à chaque retrait, borne en entrées et en octets, accès sous verrou car un get en ordre d'accès mute la carte) : une correction ou une métrique ajoutée à l'un n'atteint pas les sept autres. Un appel à `safeAdd` copié d'un fichier à l'autre change silencieusement de comportement (saturer au lieu d'échouer).
+- **Action** : Introduire dans minos-engine (ou minos-domain) un `BoundedWeightedLruCache<K,V>` thread-safe avec statistiques et un `BoundedArithmetic` (saturatingAdd / addOrThrow nommés explicitement), migrer les huit caches un par un sous leurs tests existants ; renommer d'abord les `safeAdd` selon leur sémantique réelle.
+
+### AUD-SEC-02 — Installation des providers : scip-java est résolu par Coursier sans empreinte épinglée hors Windows et exécuté hors bac à sable, et les commandes d'installation reçoivent l'environnement complet
+
+- **Axe** : Sécurité · **Effort** : M · **Confiance** : confirmé · **Sprint** : S2
+- **Preuve** : minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java:300-303 et :311-313 : `coursier launch org.scip-code:scip-java:<version> --jvm system --main … -- --version` (coordonnée seule, sans hachage) ; :748-752 `run()` : `new ProcessBuilder(command)` sans `environment().clear()`. Le classpath épinglé n'existe que pour Windows : embedded-tools.json:231-239 (`assembled/scip-java-classpath-0.13.1-windows-x64.zip`). ManagedPolyglotScipRuntimeManager.java:450-455 (`dotnet tool install`, `go install`) et ManagedScipPythonRuntimeManager.java:252-256 (`npm ci`) héritent eux aussi de tout l'environnement. Contraste : ProcessIndexerExecutor.java:291-299 retire explicitement l'environnement des providers (« it may carry tokens and passwords »).
+- **Impact** : Sous Linux, `tools install` télécharge les jars de scip-java et leurs dépendances transitives, puis les exécute sur l'hôte, sans bac à sable, avec `MINOS_TEAM_KEY_*` (clés maîtresses du plan de contrôle), `MINOS_TEAM_TOKEN`, `GITHUB_TOKEN`/`MINOS_REMOTE_TOKEN*` dans l'environnement. L'intégrité repose sur TLS et sur la configuration Coursier de l'utilisateur (miroirs, `COURSIER_REPOSITORIES`), pas sur le catalogue épinglé que l'ADR 0040 applique partout ailleurs. Un dépôt amont compromis ou un miroir hostile vaut une exécution de code avec ces secrets.
+- **Action** : Épingler le classpath de scip-java sur toutes les plateformes : publier l'artefact « assembled » Linux, ou vérifier chaque jar résolu contre une liste SHA-256 du catalogue avant tout lancement. Exécuter les commandes d'installation avec l'environnement de `ProviderProcessEnvironment.applyForTrustedLauncher`, plus les variables de proxy et de cache nécessaires. Ne plus lancer scip-java pour sonder sa version : lire la version dans le manifeste du jar vérifié.
+
+### AUD-TST-02 — Le gate JaCoCo ne regarde que 48 % des lignes de production : 17 classes du cœur hors de tout scope, en plus des 7 déjà citées par T2
+
+- **Axe** : Tests · **Effort** : M · **Confiance** : confirmé · **Sprint** : S6 · **Connu** : T2
+- **Prérequis** : AUD-TST-07, AUD-TST-08
+- **Preuve** : Script d'appariement (préfixes de `SCOPES` chargés depuis scripts/quality/check-jacoco.py contre les 522 fichiers main du réacteur) : 221/522 fichiers, 34 212/70 982 lignes sous un scope (48 %) ; minos-cli 19 %, provider-scip 27 %, engine 37 %, storage-local 37 %, bootstrap 38 %, application 43 %. Classes du cœur hors scope : storage-local `SnapshotBinaryCodecSupport` (1 038 l. — le préfixe `com/minos/storage/local/store/SnapshotCodec` de check-jacoco.py:18 ne mesure que les enveloppes `SnapshotCodecV1..V3` de 52-57 l.), `FileProjectFingerprintSnapshotStore` (766), `FileIndexStateStore` (686), `LocalProjectRegistry` (496) ; engine `PrivateLocalStorage` (748), `RelatedTestDerivationService` (636), `IndexingRuntimePorts` (393), `IndexingLifecycleService` (231), et les primitives `ConfinedFileOpener` (336) / `DurableAtomicFile` (267) / `LeaseDeadline` (78, aucun test qui la nomme) ; runtime-local `CgroupJobOwnership` (531), `RunDirectoryRetention` (447), `WindowsJobObjectProcessOwnership` (144) ; provider-scip `ManagedScipProviderRuntimeManager` (776), `ScipSymbolSnapshotImporter` (275), `ScipProjectSnapshotLifecycle` (231) ; plus ceux déjà cités par T2 (`MinosApplication`, `LocalProjectOperations`, `GitIntelligenceService`, `IndexCommand`, `ProjectCommand`, `LocalAutonomousIndexOperations`, `CliCommandSupport`). — Mesure : la couverture réelle hors scope n'est pas faible (83 % des lignes au global), c'est le gate qui ne la protège pas.
+- **Impact** : Le codec binaire des snapshots, les primitives d'E/S confinées, le marquage de propriété des cgroups (S3) et la rétention des runs peuvent voir leur couverture s'éroder silencieusement ; PIT avait déjà relevé 35 survivants sur `PrivateLocalStorage` (H07).
+- **Action** : Créer trois scopes : `storage-codec-and-state` (SnapshotBinaryCodecSupport, FileIndexStateStore, FileProjectFingerprintSnapshotStore, LocalProjectRegistry), `confined-io-primitives` (com/minos/io/), `process-ownership` (CgroupJobOwnership, RunDirectoryRetention, WindowsJobObjectProcessOwnership avec `platform`) ; planchers fixés au niveau mesuré par le `verify` CI moins 2 points.
+
+### AUD-TST-03 — Les tests de confinement Linux (bubblewrap, cgroup v2) et Windows (AppContainer) se sautent en silence : aucun interrupteur « requis » comme pour PostgreSQL
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S1
+- **Débloque** : AUD-DEP-01, AUD-PERF-08, AUD-SEC-06
+- **Preuve** : minos-runtime-local/src/test/java/com/minos/runtime/local/LinuxCgroupJobContainmentTest.java:181-185 et LinuxCgroupJobOwnershipIsolationTest.java:322-326 : `assumeTrue(root.isPresent(), "a delegated cgroup v2 root is required…")` ; LinuxBubblewrapWorkerSandboxBackendTest.java:36,71,131,160 `assumeTrue(discovered.isPresent(), …)` ; LinuxStrongProcessOwnershipContainmentTest.java:76 ; WindowsAppContainerWorkerSandboxBackendTest.java : 12 `assumeTrue(discovered.isPresent(), …)`. À l'inverse minos-storage-postgresql/src/test/java/com/minos/storage/postgresql/PostgresTestSupport.java:32-58 transforme l'absence de Docker en échec quand `minos.postgresql.tests.required=true` (pom.xml:212, .github/workflows/pr-ci.yml:248). `grep -rn "tests.required" minos-*/src/test` : seule la propriété PostgreSQL existe ; aucun workflow ne contrôle le nombre de tests sautés. — Mesure : `mvnw verify` complet sous Windows le 10/10 : minos-runtime-local 343 tests dont 38 sautés, sans qu'aucune sortie ne signale lesquels relèvent du confinement Linux.
+- **Impact** : Si la découverte du bac à sable échoue sur le runner (profil AppArmor userns, délégation cgroup, mise à jour d'image GitHub), la preuve de non-régression de S3 (isolation entre deux instances partageant une racine cgroup) et de l'agrégat de limites disparaît en restant verte. Seuls les scopes `provider-sandbox-linux`/`-windows` (55 % sur deux classes) limitent la perte ; `CgroupJobOwnership` n'en fait pas partie.
+- **Action** : Introduire `minos.sandbox.tests.required` (mis à `true` dans pr-ci.yml sur les deux OS) : dans ces classes, remplacer `assumeTrue(discover…)` par un échec explicite quand la propriété est vraie, sur le modèle de `PostgresTestSupport`.
+
+### AUD-TST-04 — Le dépôt PostgreSQL des sessions runtime n'est exécuté par aucun test et se cache derrière le scope de paquet à 60 %
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S6
+- **Preuve** : minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresRuntimeObservationStore.java:28-130 (save avec règle d'immuabilité, find, deux `list` dont un filtre JSON `payload->'session'->>'snapshotId'` l.99-100) branché par PostgresStorageBackend.java:35,45. `grep -rn "PostgresRuntimeObservationStore\|runtimeObservation" minos-storage-postgresql/src/test` : aucune occurrence ; `PostgresStorageBackend` n'est référencé par aucun test. Le scope check-jacoco.py:173 `m30-postgresql-pgvector` agrège tout le paquet (`com/minos/storage/postgresql/`) sans plancher de classe. L'équivalent fichier `FileRuntimeObservationStore` a deux tests dédiés.
+- **Impact** : L'import et la lecture de sessions runtime sous backend PostgreSQL (immutabilité, ordre, filtre par snapshot) ne sont vérifiés que par la production ; une régression SQL n'apparaîtrait qu'à l'usage.
+- **Action** : Écrire `PostgresRuntimeObservationStoreTest` (étend `PostgresTestSupport`) : sauvegarde idempotente, conflit de contenu, `list` avec et sans snapshot, limite ; idéalement une suite de contrat commune avec `FileRuntimeObservationStore`. Ajouter un `prefixMinimums` pour cette classe dans `m30-postgresql-pgvector`.
+
+### AUD-TST-05 — Plugin IntelliJ : aucune couverture mesurée en CI de PR (seul le PIT manuel de code-audit.yml en donne une), 10 classes sur 24 (39 % des lignes) sans aucun test, dont toute l'UI, les actions et `MinosProjectService`
+
+- **Axe** : Tests · **Effort** : M · **Confiance** : confirmé · **Sprint** : S6
+- **Preuve** : minos-intellij/build.gradle.kts:11,70-72,89-107 : greffon PIT et `useJUnitPlatform()`, aucun JaCoCo. Appariement par nom (script) : sans référence dans un test `MinosToolWindowPanel` (403 l.), `MinosM21Actions` (231), `MinosEditorActions` (226), `MinosProjectService` (154), `MinosSettingsConfigurable` (123), `MinosSettingsState` (85), `MinosUiController` (77), `MinosNavigation` (43), `MinosRegistryNotice` (25), `MinosToolWindowFactory` (21) — 1 388/3 600 lignes. SpotBugs signale déjà `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` dans `MinosProjectService:121` (docs/quality/code-audit-couverture.md § 5.1). Les 15 fichiers de test ne couvrent que `protocol/` et `ui/ArchitectureGraphPanel`.
+- **Impact** : Toute régression d'interface, de paramétrage ou d'orchestration des actions côté IDE n'est détectée qu'en usage manuel ; la CI du plugin ne peut pas signaler d'érosion faute de mesure.
+- **Action** : Brancher JaCoCo dans build.gradle.kts avec un rapport publié par intellij-plugin.yml ; extraire la logique de `MinosProjectService`/`MinosM21Actions` dans des classes testables sans plateforme (comme `protocol/`) ; tests `BasePlatformTestCase` pour la fenêtre d'outils.
+
+### AUD-PERF-02 — Construction des documents sémantiques : le fichier source est relu et décodé en entier pour chaque symbole, à chaque `minos index` avec embeddings et à la première requête hybride de chaque snapshot
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : confirmé · **Sprint** : S4 · **Connu** : ARCHI-SUIVI § A6.8
+- **Preuve** : minos-application/src/main/java/com/minos/application/semantic/SemanticDocumentFactory.java:69-74 (commentaire « a file is not reread once per symbol » puis `sourceReader.readExcerpt(location, 2, CHUNK_MAX_TOKENS)` par symbole) ; minos-application/src/main/java/com/minos/context/LocalSourceReader.java:131-137 (« Reads the current file contents for every excerpt request », cache retiré) : ouverture confinée, lecture complète, découpage en lignes et `getBytes(UTF_8)` par ligne à chaque extrait. Appelants : minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java:276-279 (`synchronizeSemanticIfConfigured` après chaque indexation réussie), HybridSearchService.java:136 (`documentFactory.build` à chaque reconstruction du corpus structuré). Mesure existante (docs/audit/ARCHI-SUIVI.md § A6.3.4) : ≈ 6 ms par document, 112,7 s pour 19 115 documents, 467 à 515 s pour 81 095. — Relecture : déjà consigné hors périmètre dans docs/audit/ARCHI-SUIVI.md § A6.8 (ligne « LocalSourceReader relit le fichier entier pour chaque extrait ») et :882 ; le renvoi « connu: MINOS-AUD-F06 » est inexact (F06 = garde de fraîcheur, pas la relecture). Aggravant vérifié : LocalAutonomousIndexOperations.java:155 appelle synchronizeSemanticIfConfigured même en NO_CHANGES et SemanticIndexService.java:113-117 reconstruit alors tous les documents.
+- **Impact** : Coût en O(symboles du fichier × taille du fichier) : plusieurs minutes ajoutées à chaque `minos index` dès qu'un provider d'embeddings est configuré, et une première requête hybride MCP de plusieurs minutes après chaque nouveau snapshot (ou à chaque requête quand le corpus dépasse le plafond de 256 Mio du cache). Aggravant relevé à la relecture : un `minos index` sans changement (NO_CHANGES) relance quand même la synchronisation sémantique complète (LocalAutonomousIndexOperations.java:155 → SemanticIndexService.java:113-117).
+- **Action** : La boucle traite déjà les symboles fichier par fichier (`symbolsByFile`) : lire la source UNE fois par fichier dans `build` (méthode `LocalSourceReader.load(fileId)` renvoyant un objet d'extraits) et découper les extraits en mémoire. La fraîcheur n'est pas affectée (cache de portée d'appel, jeté à la fin du fichier), ce qui lève l'objection qui avait fait retirer l'ancien cache. Corriger le commentaire. Test : compteur d'ouvertures = nombre de fichiers distincts ; documents identiques à l'octet sur les fixtures.
+
+### AUD-PERF-03 — Cache de vues de requête : poids estimé à 8 fois la taille persistée (1,4 mesuré), donc tout snapshot de plus de 64 Mio n'est jamais mis en cache et chaque requête MCP le relit et le décode
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : confirmé · **Sprint** : S4 · **Connu** : ARCHI-SUIVI § A6.8 ; ADR 0047 décision 1
+- **Débloque** : AUD-ARC-07, AUD-PERF-11
+- **Preuve** : minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java:44 `QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L`, :367 `safeMultiply(Files.size(snapshot), 8)`, :41 plafond 512 Mio, :247 admission `weight <= maxQueryCacheWeightBytes` ; même constante dans minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java:44 et :449. En plus, chaque reconstruction lit le fichier deux fois : FileSymbolSnapshotStore.java:274 `verifyChecksum` (passe SHA-256 complète) puis :275 `codec.read`. Mesures existantes (ARCHI-SUIVI § A6.4 point 5, ADR 0047) : vue = 1,4 × le fichier ; ce dépôt (194,6 Mo en V3) n'est jamais mis en cache ; relecture 0,75 à 1,46 s par requête. — Relecture : connu — docs/audit/ARCHI-SUIVI.md § A6.8 (« QUERY_VIEW_PERSISTED_AMPLIFICATION = 8 … contre 1,4 mesuré ») et docs/adr/0047-…md:36 (décision 1 « hors de cet ADR »). Renseigner connu = « ARCHI-SUIVI § A6.8 » plutôt que A9.
+- **Impact** : Sur tout projet moyen à gros, chaque appel MCP (symboles, usages, impact, architecture, hybride…) paie une relecture complète du snapshot ; la correction bornée recommandée en premier par l'ADR 0047 (§ Décision 1) n'est toujours pas faite au HEAD. Effet multiplié par AUD-PERF-01.
+- **Action** : Remplacer le facteur 8 par la mesure (1,4 à 1,5 avec marge, ou poids calculé depuis les compteurs seuls) dans les deux stores, sous un test de poids comparé au tas retenu (même méthode que `HybridCorpusWeightTest`). Fusionner vérification SHA-256 et décodage en un seul parcours (flux `DigestInputStream` sous le décodeur, rejet en fin de lecture avant publication de la vue).
+
+### AUD-PERF-04 — Une indexation hache tout l'arbre source au moins trois fois (empreinte avant, empreinte du scope racine, empreinte après), sans réutilisation ni raccourci taille/date
+
+- **Axe** : Performance · **Effort** : M · **Confiance** : confirmé · **Sprint** : S9
+- **Prérequis** : AUD-ARC-02
+- **Preuve** : minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java:316 `fingerprintService.capture(project.rootPath())` (avant) ; minos-engine/src/main/java/com/minos/orchestration/IndexingRunExecutor.java:320-321 `computeIfAbsent(relative, scope -> captureScopeFingerprint(...))` → ExecutionCheckpoints.java:39 `captureScope(projectRoot, projectRelativeRoot)` ; pour le scope racine c'est exactement `capture(root)` (ProjectFingerprintService.java:59-61 : `capture` = `captureScope(root, "")`) ; LocalAutonomousIndexOperations.java:200 `fingerprintService.capture(...)` (après). ProjectFingerprintService.java:329-336 : chaque capture rouvre et hache chaque fichier en entier, sans comparer taille et date à la baseline.
+- **Impact** : Jusqu'à 3 × 2 Gio lus et hachés par run au budget source maximal (SourceBudgetPolicy, 100 000 fichiers / 2 Gio), même pour une indexation incrémentale où un seul fichier a changé ; s'ajoute au parcours de découverte (12,7 à 36 s mesurés sur ce dépôt).
+- **Action** : Réutiliser l'empreinte « avant » pour le scope racine (même politique d'ignore, même racine : passer le `ProjectFingerprint` déjà calculé au `RunContext`, ou dériver l'empreinte d'un sous-scope depuis l'empreinte projet par filtrage des chemins). Pour l'empreinte « après », envisager un raccourci (taille, mtime, clé de fichier) contre l'empreinte « avant » prise dans le même run, avec relecture complète en cas de doute ; le documenter dans l'ADR 0039 car il touche la preuve de stabilité.
+
+### AUD-PERF-05 — `minos_architecture_graph` en Mermaid ou DOT avec un module : deux découvertes complètes du dépôt et deux chargements du snapshot pour une seule requête
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : confirmé · **Sprint** : S4 · **Connu** : ARCHI-SUIVI § A6.8 (partiel)
+- **Preuve** : minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java:176-177 : `getArchitectureIntelligence(request.project())` puis `getModuleContext(request.project(), request.module()).module().id()` ; minos-application/src/main/java/com/minos/architecture/LocalProjectArchitectureQuery.java:59-63 : les deux méthodes appellent `loadContext`, qui (:81-85) refait `snapshotStore.loadActiveKnowledge` et `discoveryService.discover(project.rootPath())`. Mesure existante (ARCHI-SUIVI § A6.3.6) : découverte 12,7 s (worktree) à 36,3 s, 96 % du coût d'une requête d'architecture. — Relecture : connu — docs/audit/ARCHI-SUIVI.md § A6.8 (découverte = 96 % d'une requête d'architecture, « lot perf ») ; le doublement par MinosApplicationMcpBackend.java:176-177 n'y figure pas et reste l'apport du constat.
+- **Impact** : La requête MCP la plus lente du produit coûte le double sans raison (25 à 72 s sur ce dépôt), et dépasse plus facilement les délais des clients MCP.
+- **Action** : Calculer l'identifiant de module depuis la vue déjà obtenue (`intelligenceService.moduleContext(view, module)` exposé par le port, ou une méthode `getArchitectureGraph(project, module)` qui charge le contexte une fois). Ne remet pas en cause la décision A4 de ne pas mettre en cache. Test : `ProjectDiscoveryService` espion, une seule découverte par appel.
+
+### AUD-PERF-06 — Synchronisation sémantique PostgreSQL : l'index entier est supprimé puis réinséré (vecteurs sérialisés en texte) à chaque `minos index`, même quand presque tous les vecteurs sont réutilisés
+
+- **Axe** : Performance · **Effort** : M · **Confiance** : confirmé · **Sprint** : S4
+- **Prérequis** : AUD-PERF-01
+- **Preuve** : minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresSemanticWriteQueries.java:20-24 `replace` = `deleteDocuments` (tous les documents du projet) + `upsertMetadata` + `insertDocuments` (:69-86, lots de 500, `CAST(? AS vector)` sur `vectorLiteral` textuel :35-42). SemanticIndexService.java:132-133 recharge d'abord l'index précédent complet (`store.load`, texte des vecteurs, voir AUD-PERF-01) pour la réutilisation, puis :172 `replaceConditionally` réécrit tout. Déclenché après chaque indexation réussie : LocalAutonomousIndexOperations.java:276-279.
+- **Impact** : Chaque indexation incrémentale réécrit ~300 Mo de texte vecteur (budget par défaut) et autant de WAL, sous verrou de mutation du projet, et laisse autant de tuples morts à nettoyer (vacuum) ; le temps de synchronisation croît avec la taille de l'index au lieu du nombre de documents modifiés.
+- **Action** : Écrire un différentiel dans la transaction conditionnelle : `DELETE ... WHERE project_id=? AND stable_key <> ALL(?)` pour les clés retirées, `INSERT ... ON CONFLICT (project_id, stable_key) DO UPDATE` seulement pour les documents ajoutés ou modifiés, `UPDATE semantic_documents SET snapshot_id=?` pour les réutilisés (ou sortir `snapshot_id` des lignes vers les métadonnées). Lire l'index précédent sans les vecteurs (clé + checksum) pour décider de la réutilisation. Envoyer les vecteurs en binaire (`float4[]` casté en `vector`) plutôt qu'en texte.
+
+### AUD-PERF-07 — Graphe de programme : la clé de cache est calculée avant la recherche en cache et, sans empreinte exacte du snapshot, hache toutes les sources Java à chaque appel, même en cas de succès du cache
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : plausible · **Sprint** : S4
+- **Preuve** : minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java:115 `providerKey(project, snapshot)` avant `cache.get(key)` (:120-126) ; FingerprintConstrainedJavaProgramGraphProvider.java:61-63 : sans empreinte exacte, `delegate.cacheKey` → JavaProgramGraphEngine.java:25-30 → JavaSourceWorkspace.java:97-118 `stateFingerprint` : SHA-256 de chaque source Java (`updateBounded(digest, source.path(), ...)`). L'empreinte n'est promue que si l'arbre est resté stable pendant le run : LocalAutonomousIndexOperations.java:200-208 (`if (stable) ... fingerprintStore.promote`).
+- **Impact** : Après une indexation pendant laquelle un fichier a été modifié (cas courant en IDE), chaque appel `minos_program_graph`, `minos_impact_v2` et `minos_security_paths` relit et hache toutes les sources Java du projet avant même de consulter le cache.
+- **Action** : Mémoriser la clé de fournisseur par (projet, snapshotId) avec une invalidation légère (taille + mtime des sources découvertes) pour le chemin de repli, ou documenter et signaler une limitation `PROGRAM_GRAPH_FINGERPRINT_UNAVAILABLE` qui désactive l'analyse Java au lieu de la recalculer. Mesurer `cacheStats().providerKeyNanos()` (déjà exposé) avant et après.
+
+### AUD-PERF-08 — Suivi de propriété des processus : `ProcessHandle.descendants()` interrogé toutes les 10 ms pendant toute l'exécution, toujours au HEAD et dupliqué dans le plugin IntelliJ
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : confirmé · **Sprint** : S8 · **Connu** : Q16
+- **Prérequis** : AUD-TST-03
+- **Preuve** : minos-runtime-local/src/main/java/com/minos/runtime/local/ProcessOwnershipTracker.java:27 `OWNERSHIP_POLL_MILLIS = 10L`, :96-104 boucle `remember(process.descendants().toList())` puis `Thread.sleep(10)`. Copie conforme : minos-intellij/src/main/java/com/minos/intellij/protocol/MinosProcessSupervisor.java:36 `OWNERSHIP_POLL_MILLIS = 10L`, :213-223 (thread virtuel par processus CLI lancé par l'IDE).
+- **Impact** : `descendants()` énumère toute la table des processus (parcours de /proc sous Linux, instantané Toolhelp sous Windows) : 100 énumérations par seconde pendant chaque indexation (des minutes), et dans le processus de l'IDE pour chaque commande MINOS lancée par le plugin.
+- **Action** : Sondage adaptatif (10 ms pendant la première seconde puis 100 à 250 ms), ou s'appuyer sur le confinement noyau quand il existe (cgroup, Job Object) et ne garder le sondage qu'en repli. Factoriser la logique entre runtime-local et le plugin.
+
+### AUD-DEP-02 — L'image Docker embarque Node.js 20.20.2, hors support depuis le 30/04/2026, alors que la distribution Windows exécute le même scip-typescript 0.4.0 sous Node 24
+
+- **Axe** : Dépendances · **Effort** : M · **Confiance** : confirmé · **Sprint** : S3
+- **Preuve** : minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/embedded-tools.json:145 `"version": "20.20.2"` (linux-x64) contre :133 `"version": "24.20.0"` (windows-x64) ; docker/Dockerfile.mcp.release:13 `ARG NODE_VERSION=20.20.2` et :89-90 « scip-typescript 0.4.0 documents Node 18/20 support. Keep the last pinned Node 20 line » ; même Node exécute scip-python (Dockerfile.mcp.release:130-141, `npm ci`).
+- **Impact** : Le runtime qui analyse le code des dépôts indexés (contenu non fiable) ne reçoit plus de correctif de sécurité ; et l'argument de compatibilité est contredit par la distribution Windows, qui fait tourner la même version du provider sous Node 24 : l'une des deux plateformes exécute une combinaison non qualifiée.
+- **Action** : Qualifier scip-typescript 0.4.0 et scip-python 0.6.6 sous Node 24 LTS sur Linux (les fixtures TypeScript existent), aligner `NODE_VERSION`/`NODE_LINUX_SHA256` et le manifeste, puis retirer la mention « Node 18/20 only » de l'inventaire ; sinon, documenter explicitement la dérogation et son échéance dans le registre des risques.
+
+### AUD-DEP-03 — Les dépendances npm livrées (2 lockfiles, 66 paquets) et les 11 artefacts de embedded-tools.json n'ont aucune veille de vulnérabilité automatisée
+
+- **Axe** : Dépendances · **Effort** : M · **Confiance** : confirmé · **Sprint** : S3
+- **Preuve** : .github/dependabot.yml : écosystèmes maven, gradle, github-actions, docker, docker-compose — ni `npm`, ni suivi de embedded-tools.json ; lockfiles livrés nommés minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/scip-typescript-package-lock.json (5 paquets, typescript 5.9.3) et scip-python-package-lock.json (61 paquets, dont inflight 1.0.6, glob 7.2.3) ; .github/workflows/pr-ci.yml:19-27 OSV-Scanner `--recursive` : ses extracteurs npm reconnaissent `package-lock.json`, pas un nom préfixé (non exécuté ici) ; Dependency-Check (pom.xml, profil audit-dependency-check) exclut explicitement « embedded SCIP tools ».
+- **Impact** : Une CVE dans Node, Maven 3.9.16, coursier, rust-analyzer, scip-* ou une dépendance npm de scip-python ne déclenche ni PR Dependabot ni échec du gate OSV ; ces composants sont pourtant installés chez l'utilisateur (zip Windows, image Docker) et exécutent du code de dépôts tiers.
+- **Action** : Renommer les lockfiles en `<outil>/package-lock.json` (avec un `package.json` minimal) pour qu'OSV et Dependabot `npm` les lisent, ou passer `--lockfile=package-lock.json:<chemin>` à OSV ; ajouter un contrôle périodique (script + workflow planifié) qui compare les versions de embedded-tools.json à OSV/endoflife.date.
+
+### AUD-DEP-04 — Le plugin IntelliJ résout ses dépendances Gradle sans verrou ni vérification de somme : aucun scanner ne les analyse
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : confirmé · **Sprint** : S5
+- **Preuve** : minos-intellij/ : ni `gradle.lockfile` ni `gradle/verification-metadata.xml` (ls minos-intellij minos-intellij/gradle → seul `wrapper/`) ; minos-intellij/build.gradle.kts:6-11,25-27 (plugins et dépendances en versions directes) ; .github/workflows/code-audit.yml:286-288 « Dependency-Check n'y est pas encore » ; OSV-Scanner ne lit pas `build.gradle.kts` sans lockfile. — Relecture : connu partiel — openspec/changes/etendre-audit-outille-a-tout-le-perimetre/tasks.md:17 (« Dependency-Check du plugin reporté après H04 ») ; le verrou/la vérification de sommes Gradle restent nouveaux.
+- **Impact** : Le zip publié du plugin (gson, plugins Gradle, IntelliJ Platform Gradle Plugin 2.19.0) n'est couvert ni par le gate OSV ni par Dependency-Check, et une dépendance altérée sur le dépôt distant serait acceptée sans contrôle d'intégrité.
+- **Action** : Activer `dependencyLocking { lockAllConfigurations() }` et versionner `gradle.lockfile`, générer `verification-metadata.xml` (`--write-verification-metadata sha256`) ; OSV lira alors le lockfile.
+
+### AUD-DEP-05 — Les workflows de release construisent le plugin avec Gradle 9.6.1 alors que le wrapper qualifié par la CI est en 9.8.0
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : confirmé · **Sprint** : S5
+- **Preuve** : .github/workflows/intellij-plugin-release.yml:89-92 et release-windows.yml:98-101 `gradle-version: '9.6.1'` puis `gradle --no-daemon …` (intellij-plugin-release.yml:113, release-windows.yml:107) ; minos-intellij/gradle/wrapper/gradle-wrapper.properties `gradle-9.8.0-bin.zip` (commit Dependabot 45b21b49 du 09/10) ; intellij-plugin.yml:68 utilise `./gradlew` ; docs/TOOLCHAIN_POLICY.md:19 annonce encore 9.6.1 « through the wrapper » ; intellij-plugin-release.yml:24,144 `runs-on: ubuntu-latest`.
+- **Impact** : L'artefact publié est produit par une chaîne que la CI de PR n'exécute jamais (et sur une image de runner flottante) : une incompatibilité Gradle/plugin n'apparaît qu'au moment de la release, et Dependabot, qui ne suit que le wrapper, creusera l'écart à chaque montée.
+- **Action** : Remplacer `gradle-version` + `gradle` par `./gradlew` (comme intellij-plugin.yml), épingler `ubuntu-24.04`, mettre à jour TOOLCHAIN_POLICY.md, et étendre check-workflow-pins.py pour refuser `gradle-version:` et `*-latest`.
+
+### AUD-DEP-06 — La release Windows est publiée sans signature Authenticode ni attestation de provenance : le script de signature n'est appelé par aucun workflow
+
+- **Axe** : Dépendances · **Effort** : M · **Confiance** : confirmé · **Sprint** : S5
+- **Preuve** : scripts/release/sign-windows-artifact.ps1 : aucune référence dans .github/workflows ni scripts/release (grep `sign-windows-artifact`) ; `MINOS_REQUIRE_SIGNED_RELEASE` n'est lu que par scripts/history/m21/run-s5.ps1:90 ; .github/workflows/release-windows.yml:173-175 et 249-251 publient setup.exe/zip avec seulement des `.sha256` co-hébergés ; aucune `actions/attest-build-provenance` ; docs/developer/supply-chain.md renvoie encore à `scripts/m21/run-s5.ps1` (déplacé sous scripts/history/).
+- **Impact** : Un utilisateur ne peut pas distinguer un installeur légitime d'un installeur substitué (les sommes SHA-256 sont publiées au même endroit que le binaire) ; SmartScreen avertit à chaque installation ; la politique « signature obligatoire » documentée n'est plus exécutée par rien.
+- **Action** : Ajouter au job `publish` une attestation `actions/attest-build-provenance` (épinglée par SHA, `id-token: write`, `attestations: write`) sur setup, zip et SBOM ; brancher sign-windows-artifact.ps1 (ou Trusted/Azure Signing) dans le job build quand un certificat existe, avec un garde-fou qui échoue si `MINOS_REQUIRE_SIGNED_RELEASE=1` ; corriger le chemin dans supply-chain.md.
+
+### AUD-DEP-07 — Le workflow de publication du plugin IntelliJ ne se déclenche pas sur une release créée par le workflow Windows (événement émis par GITHUB_TOKEN)
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : confirmé · **Sprint** : S5
+- **Preuve** : .github/workflows/release-windows.yml:22-23 `GH_TOKEN: ${{ github.token }}` puis scripts/release/publish-windows-release.ps1:344-349 `gh release create $Tag … --target $TargetCommit` ; .github/workflows/intellij-plugin-release.yml:3-5 `on: release: types: [published]`. GitHub ne crée pas de nouveau run pour un événement produit avec GITHUB_TOKEN (hors workflow_dispatch/repository_dispatch).
+- **Impact** : Une release publiée par le chemin nominal n'a jamais le zip du plugin attaché ; personne n'est averti, et le build vérifié par tag (résolution du commit, contrôle du tag déplacé) n'est exécuté qu'en cas de création manuelle de la release.
+- **Action** : Appeler le workflow du plugin depuis release-windows.yml (`workflow_call` en job `needs: publish`, ou `gh workflow run` + `workflow_dispatch` avec le tag), ou créer la release avec un jeton d'application GitHub ; vérifier sur la dernière release que l'asset est présent.
+
+### AUD-DEP-08 — Journalisation des bibliothèques supprimée dans le livrable : slf4j-nop efface les erreurs du SDK MCP et de JGit
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : confirmé · **Sprint** : S2
+- **Preuve** : minos-app/pom.xml:30 `<artifactId>slf4j-nop</artifactId>` (seul binding du jar ombré) ; le code MINOS journalise par `System.Logger` (26 fichiers, 0 import org.slf4j en main) ; le SDK MCP 2.0.1 et JGit 7.8 journalisent via SLF4J. Lié à MINOS-AUD-C13 (l'avertissement du validateur de schéma est déjà signalé perdu).
+- **Impact** : Les erreurs de transport/désérialisation JSON-RPC du SDK MCP et les échecs réseau/pack de JGit disparaissent en production (Docker, Windows, plugin) : diagnostic d'un incident client impossible sans rebuild.
+- **Action** : Remplacer `slf4j-nop` par `org.slf4j:slf4j-jdk-platform-logging` (même version 2.0.20) pour router SLF4J vers `System.Logger`, donc vers stderr comme le reste de MINOS (jamais stdout, réservé à MCP stdio) ; ajouter un test de non-régression sur le jar ombré vérifiant le binding.
+
+### AUD-DEP-09 — Les gates statiques, OSV, Gitleaks et le plugin IntelliJ ne sont toujours pas imposés par le ruleset
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : plausible · **Sprint** : S1 · **Connu** : G6
+- **Preuve** : .github/workflows/pr-ci.yml:113 « this job is not a required check, audit G6 » ; docs/audit/AUDIT-2026-09.md:400-404 (G5, G6 ouverts) ; exécution locale des 18 gates du job `invariants` + 10 auto-tests : tous rc=0 au HEAD 816cdd0c (check-workflow-pins : 87 `uses` externes épinglés) — leur état vert actuel ne dépend que de la discipline.
+- **Impact** : Un gate rouge (épinglage, frontières, manifeste d'outils) ou une CVE remontée par OSV ne bloque pas une fusion ; tout l'appareil de contrôle est consultatif.
+- **Action** : Ajouter au ruleset main+develop les checks `Static invariants (single run)`, `Dependency vulnerability gate`, `Gitleaks`, `Verify (ubuntu-24.04)`, `Verify (windows-2022)` ; pour le plugin (filtré par chemins), un job agrégateur toujours exécuté qui réussit quand le plugin n'est pas touché.
+
+## Faible (44)
+
+
+### AUD-ARC-06 — Les quatre cycles de packages relevés le 6/10 sont toujours là (15 packages) et aucune des deux gardes ne contrôle les cycles
+
+- **Axe** : Architecture · **Effort** : M · **Confiance** : confirmé · **Sprint** : S1 · **Connu** : MINOS-AUD-E10
+- **Preuve** : Tarjan sur 277 arêtes package→package (architecture-graphe.json, cycles_packages) : minos-application {application, application.dynamic, application.semantic, architecture, impact, output, program.analysis, workspace} — pivot com.minos.application.ProjectResolver importé par 6 packages alors que MinosApplication (même package) les importe tous ; com.minos.output (13 rendus consommés par 21 fichiers de minos-cli et 2 de minos-mcp) importe architecture, impact, semantic, dynamic, program.analysis. minos-engine {discovery, discovery.spi} (8 et 6 imports) et {incremental, orchestration} (15 et 3). minos-intellij {protocol, service, ui} (MinosCliClient → ui.MinosRegistryNotice). check-module-boundaries.py et ModuleArchitectureTest ne contiennent aucune règle de cycle (grep « cycle » : seulement le cycle Maven entre modules).
+- **Impact** : Les packages de l'application ne sont pas séparables (prérequis de SH-09, découpe par capacité) ; un nouveau cycle peut apparaître sans signal ; le rendu (présentation) reste couplé aux cas d'usage.
+- **Action** : Sortir ProjectResolver dans son propre package (casse l'essentiel du SCC de 8), déplacer com.minos.output vers les surfaces ou un package de rendu sans dépendance retour, déplacer ProjectDiscovery/ProjectIgnorePolicy référencés par discovery.spi ; puis ajouter slices().matching("com.minos.(**)").should().beFreeOfCycles() dans ModuleArchitectureTest (ADR 0057 §7), en cliquet sur les cycles restants.
+
+### AUD-ARC-09 — A11 toujours présent : trois entrées publiques de minos-runtime-local exécutent un provider sans bac à sable
+
+- **Axe** : Architecture · **Effort** : S · **Confiance** : confirmé · **Sprint** : S8 · **Connu** : A11 (AUDIT-2026-09)
+- **Preuve** : minos-runtime-local/src/main/java/com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor.java:30 « public StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, Path minosHome) » (localIsolation = null) ; ProcessIndexerExecutor.java:39 « public final class » et :65 « public IndexingArtifact execute(...) { return executeSandboxed(request, (plan, runDirectory) -> plan); } » ; WorkerSandboxBackend.java:79 « static WorkerSandboxBackend nativeEphemeralWorkspace() » (implicitement public dans une interface publique), dont execute (:111-123) délègue sans isolation hors politique DENY. Seul site de construction en production : minos-provider-scip/.../StrongOwnedProcessExecutors.java:28-29 (variante à 3 arguments).
+- **Impact** : Latent : un futur appelant (autre provider, bootstrap) peut exécuter du code d'un projet indexé hors confinement en compilant sans avertissement.
+- **Action** : Rendre package-private le constructeur à 2 arguments et ProcessIndexerExecutor.execute (ou les retirer), et déplacer nativeEphemeralWorkspace() dans une classe non publique ; ajouter un test par réflexion qui échoue si une entrée publique sans isolation réapparaît.
+
+### AUD-ARC-10 — E02 toujours ouvert : les 13 auto-tests du garde de frontières ne couvrent toujours aucune règle A2 et la reconnaissance des dépendances internes repose sur le littéral « com.minos »
+
+- **Axe** : Architecture · **Effort** : S · **Confiance** : confirmé · **Sprint** : S1 · **Connu** : MINOS-AUD-E02
+- **Débloque** : AUD-ARC-01, AUD-ARC-05, AUD-ARC-08
+- **Preuve** : python3 -m unittest scripts/architecture/test_check_module_boundaries.py → « Ran 13 tests … OK » ; les 13 cas (lignes 87-185) portent sur A3 (propriété des packages) et A7 (reactor) ; aucun n'appelle check_hexagonal_boundaries, check_source_boundaries, check_no_hidden_internal_dependencies ni check_dependency_policy. scripts/architecture/check-module-boundaries.py:149 « if dependency.findtext("m:groupId", ...) != "com.minos": continue ». Atténuation au HEAD : ModuleArchitectureTest (bytecode, complétude d'import vérifiée) attraperait un usage réel de classe et une source dupliquée (« compiled by both »).
+- **Impact** : SH-02/SH-11 vont réécrire ces règles : une régression qui les affaiblit resterait verte côté gate Python (job invariants) ; seul le verify complet (plus lent) la verrait.
+- **Action** : Ajouter un cas rejeté et un cas accepté par règle A2 dans test_check_module_boundaries.py (même schéma Tree), refuser tout groupId contenant « ${ », et tout <build> dans un <profile>.
+
+### AUD-ARC-11 — minos-app n'est pas qu'un assemblage : il porte un transport MCP Docker et un pont NEXUS, que la CLI atteint par une dépendance d'exécution non déclarée
+
+- **Axe** : Architecture · **Effort** : M · **Confiance** : confirmé · **Sprint** : S10
+- **Preuve** : minos-app/src/main/java/com/minos/app/DockerMcpTransport.java:114 et :190 « new ProcessBuilder(command) » (214 lignes), McpBackendConfigurationStore.java (127 l., utilise com.minos.io.DurableAtomicFile/PrivateLocalStorage), McpBackendRouter.java ; minos-app/src/main/java/com/minos/integration/nexus/NexusExportBridgeMain.java (package com.minos.integration.* hors de minos-integration-git). minos-cli/src/main/java/com/minos/cli/McpLaunchRoutes.java:19-20 « the minos-app module must be on the classpath » : minos-cli dépend à l'exécution de minos-app (service McpLaunchRoute), arête absente de tous les POM et de module-dependencies.md. ALLOWED_DEPENDENCIES et ModuleArchitectureTest autorisent minos-app vers les 13 autres modules.
+- **Impact** : Une fonctionnalité (lancement Docker du serveur MCP, persistance de configuration) vit dans le module dont la politique est la plus permissive et qu'aucune règle de couche ne décrit ; la carte des dépendances générée ne montre pas que « minos mcp » est inutilisable sans l'assemblage.
+- **Action** : Déplacer le transport et la configuration MCP Docker dans minos-mcp (ou un module de lancement), ne laisser à minos-app que l'assemblage du JAR et l'enregistrement de services ; documenter l'arête d'exécution cli→app dans module-dependencies.md ; renommer com.minos.integration.nexus en com.minos.app.nexus.
+
+### AUD-ARC-12 — Le nom d'un package ne dit pas son module : 24 packages com.minos.* sans préfixe de module dans engine, application et domain, et des hiérarchies partagées entre modules
+
+- **Axe** : Architecture · **Effort** : M · **Confiance** : confirmé · **Sprint** : S10
+- **Preuve** : Inventaire (architecture-graphe.json, modules[].packages) : minos-engine possède 16 packages racine (com.minos.io, .hosted, .orchestration, .storage, .runtime, .dynamic…), minos-application 6 sur 9 (com.minos.architecture, .impact, .output, .context, .workspace, .program.analysis), minos-domain 2 sur 3 (com.minos.program, .semantic). com.minos.program (domain) et com.minos.program.analysis (application) ; com.minos.runtime (engine) et com.minos.runtime.local (runtime-local) ; com.minos.storage (engine) et com.minos.storage.local/.postgresql ; com.minos.dynamic (engine) et com.minos.application.dynamic ; adaptateurs préfixés de trois façons (com.minos.adapter.scip, com.minos.integration.git, com.minos.storage.local).
+- **Impact** : Les gardes, la couverture JaCoCo et les règles ArchUnit doivent maintenir des tables nom→module à la main (déjà relevé dans E04 pour les préfixes JaCoCo) ; un lecteur ne peut pas déduire la couche d'un import.
+- **Action** : Profiter de SH-01/SH-02 (déplacements déjà prévus) pour fixer une convention com.minos.<couche>.<capacité> et la vérifier dans check-module-boundaries.py (préfixe autorisé par module) ; ne pas renommer les packages publics de minos-api.
+
+### AUD-QUA-06 — Journalisation : deux régimes coexistent, certains WARNING écrivent chemins absolus et exception complète alors que la règle du dépôt est de n'en écrire aucun
+
+- **Axe** : Qualité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S2
+- **Preuve** : Avec chemin absolu et cause : minos-runtime-local/.../RunDirectoryRetention.java:180 (`"MINOS could not reclaim run directory " + target, failure`), :201 (`… quarantined run " + child, exception`), minos-runtime-local/.../ProviderResidueReclamation.java:63 (`"… provider residue in " + directory, exception`). Régime inverse dans les mêmes modules : RunDirectoryRetention.java:327-328 (classe seule), ProcessIdentity.java:47 (« without the cause: it may carry a path »), ProjectIgnorePolicy.java:77-78 (chemin relatif + classe), IndexingRunExecutor.java:114-115. Règle écrite : docs/audit/PROMPT-FIABILITE.md:127 (« messages … sans chemin absolu »). Le serveur MCP stdio journalise sur stderr, capturé par les clients MCP.
+- **Impact** : Le nom d'utilisateur et l'arborescence de MINOS_HOME finissent dans les journaux des clients MCP/IDE selon la classe qui échoue ; incohérence qui rend la règle invérifiable.
+- **Action** : Aligner les trois sites sur le régime majoritaire (chemin relatif à la racine gérée + type d'exception) et ajouter au gate check-private-io (ou à un test ArchUnit) une interdiction de concaténer un `Path` absolu dans un appel `LOGGER.log`.
+
+### AUD-QUA-07 — Méthodes longues concentrées dans quelques services : 40 méthodes de plus de 80 lignes, dont analyze (131 l., 22 décisions) et ingest (154 l.)
+
+- **Axe** : Qualité · **Effort** : M · **Confiance** : confirmé · **Sprint** : S11
+- **Preuve** : Script de mesure (accolades, hors records) sur tous les src/main : 4 876 méthodes, 40 ≥ 80 lignes. Hors constructeurs canoniques et tables : minos-provider-scip/.../ScipIngestionAdapter.java:51 `ingest` 154 l. ; minos-application/.../impact/ImpactAnalysisService.java:56 `analyze` 131 l., 22 points de décision, indentation 8 ; minos-application/.../context/CodeSearchService.java:43 `search` 119 l. ; WindowsAppContainerWorkerSandboxBackend.java:246 `sandboxPlan` 108 l. ; LocalIsolatedIndexWorker.java:147 `execute` 107 l., 16 décisions. minos-engine/.../IndexingRunExecutor.java:47 `execute` prend 14 paramètres alors qu'un record `Ports` existe déjà (:847). Aucun fichier de production ne dépasse 1 040 lignes.
+- **Impact** : Points de friction locaux pour la relecture et les tests de mutation (PIT) ; pas de dette systémique.
+- **Action** : Découper ImpactAnalysisService.analyze et ScipIngestionAdapter.ingest en étapes nommées (collecte, normalisation, dérivation) ; faire passer IndexingRunExecutor.execute par un objet requête qui regroupe les ports (le record `Ports` existant). Pas de seuil bloquant à introduire.
+
+### AUD-QUA-08 — Des numéros de jalon subsistent dans des identifiants de production (MinosM21Actions, qualifiedM24Providers, M17_DEFAULT_FILE_NAMES…) contrairement à la convention de l'ADR 0043
+
+- **Axe** : Qualité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S11
+- **Preuve** : minos-intellij/src/main/java/com/minos/intellij/actions/MinosM21Actions.java:23, minos-intellij/src/main/java/com/minos/intellij/protocol/MinosM21Client.java:14 (8 actions déclarées dans plugin.xml:39-49 sous `MinosM21Actions$…`) ; minos-provider-scip/.../ScipIndexerCatalog.java:50 `qualifiedM17Providers`, :63 `qualifiedM24Providers` (appelé par minos-bootstrap DefaultMinosApplicationComposer) ; minos-engine/.../incremental/BuildDescriptorPolicy.java:15 `M17_DEFAULT_FILE_NAMES`, :29 `M24_ADDITIONAL_FILE_NAMES`, `m17Defaults`/`m24Defaults` dans 4 fichiers. docs/adr/0043-retrait-des-artefacts-de-jalon.md:26 et docs/audit/PROMPT-FIABILITE.md:127 (« aucun nouveau numéro de jalon dans un nom de fichier »).
+- **Impact** : Le nom ne dit pas ce que la méthode garantit (quel ensemble de fournisseurs, quels descripteurs) : il faut connaître l'historique des jalons pour savoir lequel appeler ; la convention est appliquée aux scripts mais pas au code.
+- **Action** : Renommer par capacité (`MinosAdvancedAnalysisActions`, `qualifiedProviders()` / `legacyJavaProviders()`, `DEFAULT_BUILD_DESCRIPTORS` / `POLYGLOT_BUILD_DESCRIPTORS`) ; pour les classes d'actions IntelliJ, garder les identifiants d'action `Minos.*` de plugin.xml inchangés pour ne pas casser les raccourcis utilisateur.
+
+### AUD-QUA-09 — Scripts sans bibliothèque partagée : fonctions PowerShell et Python recopiées entre scripts vivants, avec variantes divergentes
+
+- **Axe** : Qualité · **Effort** : M · **Confiance** : confirmé · **Sprint** : S11
+- **Preuve** : PowerShell (hors scripts/history) : `Invoke-NativeChecked` défini dans 6 scripts vivants en 3 variantes (scripts/ci/qualify-docker-upgrade.ps1:32 sans relâcher `$ErrorActionPreference` ; scripts/release/build-windows-distribution.ps1 et publish-windows-release.ps1 avec ; scripts/m24/bootstrap-windows-toolchains.ps1 avec Start-Process et paramètres différents) ; `Resolve-Python` en 8 variantes distinctes (md5 différents) dans 8 scripts vivants ; `Read-BoundedUtf8` et `Require-Identifier` identiques dans docker/scripts/configure-m30-docker-services.ps1:45,51 et scripts/install/configure-runtime-settings.ps1:55,84 ; `Test-CeilingOverride`/`Get-PreservedCeilingOverrides` dans docker/scripts/mcp-lifecycle.ps1:205,218 et docker/scripts/prod-mcp.ps1:49,62. scripts/lib ne contient que MinosExitCode.ps1. Python : `find_ci_wiring_violations` (37 lignes) identique dans scripts/quality/check-compose-limits.py:162 et scripts/quality/check-image-pins.py:189 (31 fenêtres de 6 lignes communes, premier couple des scripts Python).
+- **Impact** : Une correction de lecture bornée (`Read-BoundedUtf8`, fonction de sécurité) ou du câblage CI des gates doit être faite en deux endroits ; les variantes de `Invoke-NativeChecked` réagissent différemment à un natif qui écrit sur stderr selon l'hôte PowerShell.
+- **Action** : Créer scripts/lib/MinosNative.ps1 (Invoke-NativeChecked, Resolve-Python, Read-BoundedUtf8, Require-Identifier) dot-sourcé par les scripts vivants, sur le modèle de MinosExitCode.ps1 ; extraire scripts/quality/_ci_wiring.py importé par les deux gates. Laisser les scripts gelés par assertion (ADR 0043) hors du lot.
+
+### AUD-QUA-10 — Point d'injection de test statique et mutable toujours présent en production dans ConfinedFileOpener (résidu ouvert de Q15)
+
+- **Axe** : Qualité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S8 · **Connu** : Q15
+- **Preuve** : minos-engine/src/main/java/com/minos/io/ConfinedFileOpener.java:64 `static volatile Runnable beforeOpenForTests = () -> { };` (13 occurrences dans le dépôt, toutes en test hormis la déclaration et l'appel). Q15 est toujours « CONFIRMÉ » (non clos) dans docs/audit/AUDIT-2026-09.md:531 ; la partie « I/O dans le constructeur de IndexingExecutionRequest » n'est plus visible au HEAD (IndexingRuntimePorts.java:236-280 ne fait que des validations).
+- **Impact** : État global partagé par toute la JVM dans le chemin d'ouverture confiné : un test qui oublie de le restaurer perturbe les tests parallèles, et la classe de sécurité porte un crochet modifiable depuis le package.
+- **Action** : Injecter le crochet par un paramètre package-private (`openRegularFileNoFollow(path, Runnable beforeOpen)`) appelé par la méthode publique avec un no-op ; supprimer le champ statique. Mettre à jour Q15 : partie I/O du record close, partie seam ouverte.
+
+### AUD-QUA-11 — Commentaires et Javadoc : 170 fichiers de production contiennent du français, dont 27 mélangent français et anglais dans le même fichier (Q18 toujours ouvert)
+
+- **Axe** : Qualité · **Effort** : M · **Confiance** : confirmé · **Sprint** : S11 · **Connu** : Q18
+- **Preuve** : Commande : `grep -rlE '^\s*(\*|//).*[éèàùêç]' --include=*.java minos-*/src/main | wc -l` → 170 sur 547 ; parmi eux, 27 contiennent aussi des commentaires anglais (« the/is/never/when »). Exemples : minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java:21 (« Serveur MCP local … ») au milieu de Javadoc anglaise ; minos-engine/.../IndexingRunExecutor.java (Javadoc « Rouvre le run interrompu » à côté de blocs anglais) ; minos-runtime-local/.../FileResumableRunMarkers.java:67. Q18 : docs/audit/AUDIT-2026-09.md:534, « CONFIRMÉ ».
+- **Impact** : Hygiène : la Javadoc publique de minos-api et des ports n'a pas de langue de référence.
+- **Action** : Fixer la langue par module (convention écrite dans CONTRIBUTING.md) et commencer par les 27 fichiers mixtes ; pas de traduction en masse.
+
+### AUD-SEC-03 — S17 tient encore : le gate d'E/S privées ignore `newOutputStream` (23 appels), `createTempFile` (8), `createDirectory` (5), `copy` (4), `newBufferedWriter` (3) et `move` (14)
+
+- **Axe** : Sécurité · **Effort** : M · **Confiance** : confirmé · **Sprint** : S8 · **Connu** : S17
+- **Preuve** : `python3 scripts/architecture/check-private-io.py` → `PRIVATE I/O PRIMITIVES GATE SUCCESS (sources=522, allowlisted-occurrences=37, forbidden=8, primitives=4)`. scripts/architecture/check-private-io.py:54-63 : `FORBIDDEN` ne contient que createDirectories, write, writeString, newInputStream, Files.*, FileChannel.open, AsynchronousFileChannel.open, FileChannel.lock. Décompte par `grep -rnE "Files\.<api>\(" --include=*.java */src/main` : newOutputStream 23, move 14, createTempFile 8, createDirectory 5, copy 4, newBufferedWriter 3, createTempDirectory 1. Exemple : ManagedPolyglotScipRuntimeManager.java:449 `Files.createTempFile(workingDirectory…)` directement sous MINOS_HOME.
+- **Impact** : Rien n'empêche une nouvelle écriture brute sous MINOS_HOME, qui suivrait un lien ou laisserait des droits trop larges. La règle « un seul endroit décide des droits » repose sur la discipline des contributeurs, pas sur une contrainte.
+- **Action** : Ajouter ces API à `FORBIDDEN` et inscrire les occurrences actuelles dans la liste à cliquet (avec justification), puis les migrer vers `PrivateLocalStorage`/`DurableAtomicFile`, comme prévu pour S17.
+
+### AUD-SEC-04 — S18 tient encore : `MinosRuntimeSettings.load` suit un lien avant la primitive, qui le refuse avec un chemin absolu dans le message
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S7 · **Connu** : S18
+- **Preuve** : minos-engine/src/main/java/com/minos/storage/MinosRuntimeSettings.java:64 `if (Files.isRegularFile(configuration))` (suit les liens) ; minos-engine/src/main/java/com/minos/io/BoundedProperties.java:157-160 `source = file.toAbsolutePath()…` puis `throw new IOException(label(boundary) + " must be a regular non-symlink file: " + source)` ; aussi DurableAtomicFile.java:227 `"filesystem does not support required directory durability sync: " + directory`.
+- **Impact** : Les chemins absolus (nom d'utilisateur, structure de MINOS_HOME) restent dans les exceptions des primitives. Ils sont bloqués en sortie publique par `PublicErrorMessages`, mais cette barrière est heuristique (voir AUD-SEC-05).
+- **Action** : Remplacer le chemin par une étiquette fixe dans ces deux messages, et appeler `BoundedProperties.load` sans pré-test `isRegularFile` (traiter `NoSuchFileException` comme « absent »).
+
+### AUD-SEC-05 — S19 tient encore : un chemin absolu collé à un caractère d'identifiant (ex. `\u001b[31m/home/…`) échappe à `PublicErrorMessages`
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S7 · **Connu** : S19
+- **Preuve** : minos-engine/src/main/java/com/minos/diagnostics/PublicErrorMessages.java:72-74 `if (index > 0 && isPathIdentifierChar(detail.charAt(index - 1))) continue;` et :102-104 (lettre, chiffre, `_`, `.`, `-` considérés comme partie du mot) : `m/home/u/x`, `abcC:\\Users\\u` ou `v1.2/home/…` ne déclenchent pas la détection.
+- **Impact** : La dernière barrière avant stdout (CLI), avant la réponse MCP (`clientError`, MinosMcpTools.java:228) et avant l'API laisse passer un chemin précédé d'un identifiant ou d'une séquence ANSI. Le cas est étroit.
+- **Action** : Détecter `/` suivi d'un segment de chemin plausible (`/[^\s/]+/`) sans exiger de frontière de mot, et `[A-Za-z]:[\\/]` partout. Accepter quelques faux positifs, qui se replient sur un message générique.
+
+### AUD-SEC-06 — S16 tient encore : la réécriture de DACL efface les ACE conditionnelles invisibles à Java, et le backend AppContainer écrit ses ACE hors de `PrivateLocalStorage`
+
+- **Axe** : Sécurité · **Effort** : M · **Confiance** : confirmé · **Sprint** : S8 · **Connu** : S16
+- **Prérequis** : AUD-TST-03
+- **Débloque** : AUD-ARC-05
+- **Preuve** : minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java:64-71 (limite documentée : « a conditional DENY (XD) is invisible to Java as well, so the rewrite drops it ») et :381-390 (`getAcl()` puis `setAcl(desired)`) ; minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java:714 (`icacls.exe` invoqué directement par le backend).
+- **Impact** : Sous Windows, une restriction conditionnelle posée par un administrateur sur MINOS_HOME est supprimée sans trace, contrairement à la règle établie par S15 (« ne jamais lever une restriction d'administrateur »). Deux composants décident des droits.
+- **Action** : Lire la DACL complète (`icacls /save` ou `GetNamedSecurityInfo` natif), refuser d'écrire quand une ACE conditionnelle est présente, et faire passer les octrois AppContainer par une primitive unique.
+
+### AUD-SEC-07 — S10 (Ollama) tient encore : `minos-ollama` est accepté hors Docker, en HTTP clair, et un corps d'erreur de 16 Mio est recopié dans l'exception
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S7 · **Connu** : S10
+- **Preuve** : minos-application/src/main/java/com/minos/application/semantic/OllamaEmbeddingProvider.java:155-157 `if (MANAGED_DOCKER_HOST.equals(value)) return true;` sans condition sur le mode d'exécution (Docker ou natif) ; :102-105 (http accepté) ; :88-92 `throw new IOException("… failed with HTTP " + status + ": " + response)` avec `response` jusqu'à `MAX_RESPONSE_BYTES = 16 * 1024 * 1024` (:36, :176).
+- **Impact** : Un poste natif configuré sur `minos-ollama` (copie d'une configuration Docker) résout ce nom à un seul composant par DNS, LLMNR ou NBT-NS. Un attaquant du réseau local peut y répondre et recevoir en clair le code source envoyé pour l'embedding. Le corps d'erreur renvoyé par le serveur gonfle les journaux et les messages.
+- **Action** : N'accepter `minos-ollama` que si `minos.runtime.location=docker` (comme `StrongOwnedProcessExecutors.isDockerRuntimeLocation`). Tronquer le corps d'erreur à environ 512 caractères et le faire passer par `PublicErrorMessages.sanitize`.
+
+### AUD-SEC-08 — S10 (Mermaid) tient encore : `<` et `>` ne sont pas échappés dans les libellés, qui contiennent volontairement du HTML (`<br/>`)
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : plausible · **Sprint** : S7 · **Connu** : S10
+- **Preuve** : minos-application/src/main/java/com/minos/output/ArchitectureResultRenderer.java:168-172 (`module.name() + "<br/>" + module.relativePath()` dans `m0["…"]`) ; :273-279 `mermaidText` n'échappe que `&`, `"`, `|` et les fins de ligne. Les noms de modules viennent des fichiers de build du dépôt indexé (entrée hostile) et sortent par `minos_architecture_graph format=mermaid`.
+- **Impact** : Un nom de module comme `<img src=x onerror=…>` atteint le consommateur du diagramme. Mermaid en `securityLevel: strict` (valeur par défaut, non surchargeable par directive) l'assainit ; un consommateur en mode `loose` ou un rendu HTML maison l'exécuterait.
+- **Action** : Échapper `<` et `>` (`&lt;` et `&gt;`) dans `mermaidText` et construire le saut de ligne après l'échappement.
+
+### AUD-SEC-09 — S10/C13 tiennent encore : le serveur MCP ignore les arguments inconnus alors que le schéma publie `additionalProperties:false`
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S7 · **Connu** : MINOS-AUD-C13
+- **Preuve** : minos-mcp/src/main/java/com/minos/mcp/McpToolSchemas.java:191 (`"additionalProperties":false`) ; minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java:366-437 : les extracteurs lisent des clés nommées, et `arguments()` (:435-437) ne compare jamais l'ensemble des clés reçues au schéma.
+- **Impact** : Un client mal formé ou hostile n'est pas averti qu'un argument mal orthographié (`limt`, `sessionID`) est ignoré : la requête est servie avec les valeurs par défaut. Le contrat publié n'est pas tenu côté serveur si le SDK ne valide pas (C13).
+- **Action** : Dans `tool(…)`, rejeter toute clé absente de la liste des propriétés du schéma (`IllegalArgumentException("unknown MCP argument: <clé bornée>")`), et ajouter un test de bout en bout.
+
+### AUD-SEC-10 — S10 tient encore : le MCP expose `rootPath` en absolu et `git-activity`/l'API exposent les e-mails des auteurs
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S7 · **Connu** : S10
+- **Preuve** : minos-application/src/main/java/com/minos/output/ProjectJson.java:32 `"rootPath", project.rootPath()` rendu par minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java:88 ; minos-integration-git/src/main/java/com/minos/integration/git/GitIntelligenceService.java:136 `commit.getAuthorIdent().getEmailAddress()`, publié par minos-cli/src/main/java/com/minos/cli/GitActivityCommand.java:133 et minos-api/src/main/java/com/minos/api/LocalMinosMultiRepositoryApi.java:268.
+- **Impact** : Le nom du compte local et l'arborescence partent vers le modèle connecté au MCP. Les e-mails des contributeurs (donnée personnelle) sortent en clair dans le JSON, alors que `PublicErrorMessages` masque ailleurs ce même type d'information.
+- **Action** : Exposer côté MCP un chemin relatif à MINOS_HOME ou un indicateur seulement. Masquer ou hacher l'e-mail par défaut, avec une option explicite pour l'afficher.
+
+### AUD-SEC-11 — Les règles source/puits/assainisseur de `minos_security_paths` viennent exclusivement du dépôt analysé (`.minos/java-advanced-provider.properties`), sans le dire
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S7
+- **Preuve** : minos-application/src/main/java/com/minos/program/analysis/JavaSourceProgramGraphProvider.java:23 `SECURITY_CONFIG = ".minos/java-advanced-provider.properties"` ; JavaSecurityRules.java:20-32 (seule source de règles, lue dans la racine du projet) ; JavaProgramGraphAssembler.java:75-78 : limitations `JAVA_SECURITY_FLOW_INTRAPROCEDURAL_CONFIGURED_RULES_ONLY` et `JAVA_SECURITY_RULES_NOT_CONFIGURED`, sans mention de la provenance. La description MCP (MinosMcpTools.java:123) annonce des « observed source-to-sink paths and sanitizers ».
+- **Impact** : Un dépôt hostile déclare ses propres puits comme assainisseurs, ou omet ses sources : l'outil de sécurité exposé au modèle conclut alors à l'absence de chemin. Le sidecar `.minos/program-graph-v1` (FileProgramGraphProvider.java:47, limitation `ADVANCED_PROGRAM_FACTS_PROVIDER_ASSERTED`) suit la même logique de faits déclarés par le dépôt.
+- **Action** : Ajouter une limitation explicite `SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY`. Permettre des règles d'opérateur hors du dépôt (sous MINOS_HOME) qui priment, et refuser par défaut qu'un fichier du dépôt déclare des assainisseurs.
+
+### AUD-SEC-12 — Les scripts d'installation écrivent le mot de passe PostgreSQL avec l'ACL héritée, puis la restreignent, et ne revérifient pas un fichier existant
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : confirmé · **Sprint** : S2
+- **Preuve** : scripts/install/configure-runtime-settings.ps1:236-238 (`WriteAllText($SecretPath, $Secret …)` puis `Restrict-FileToCurrentUser`, :71-75) ; docker/scripts/configure-m30-docker-services.ps1:127-130 (même séquence) et :113-116 (fichier existant accepté sans contrôle d'ACL). Si `icacls` échoue, l'exception est levée mais le fichier reste en place.
+- **Impact** : Avec un DataRoot personnalisé (installation avancée, par exemple sur `D:\`, où les Utilisateurs héritent de la lecture), le mot de passe est lisible par les autres comptes locaux pendant la fenêtre d'écriture, ou durablement si la restriction échoue. Le défaut sous `%LOCALAPPDATA%` limite l'exposition.
+- **Action** : Créer le fichier avec une ACL restreinte dès sa création (`FileSecurity` passé à `File.Create`), ou d'abord un fichier vide restreint, puis l'écriture. Supprimer le fichier si la restriction échoue, et revérifier l'ACL d'un fichier existant.
+
+### AUD-SEC-13 — Le lanceur de développement `minos.cmd` appelle `java` sans chemin : cmd.exe le cherche d'abord dans le répertoire courant, qui est le projet quand le plugin le lance
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : plausible · **Sprint** : S2
+- **Preuve** : minos.cmd:9 `java -jar "%MINOS_JAR%" %*` ; minos-intellij/src/main/java/com/minos/intellij/protocol/MinosCliClient.java:139-143 (`builder.directory(project.getBasePath())`). Le lanceur distribué est sûr : scripts/release/build-windows-distribution.ps1:352 `"%~dp0app\minos.exe" %*`.
+- **Impact** : Un développeur qui fait pointer le plugin (réglage par défaut `minos.cmd`, résolu par le PATH) vers le lanceur de la racine du dépôt MINOS, et qui ouvre un projet contenant `java.bat` ou `java.exe`, exécute ce fichier hors bac à sable. Le périmètre se limite aux postes de développement.
+- **Action** : Utiliser `"%JAVA_HOME%\bin\java.exe"`, ou résoudre `java` par `where` en excluant `.`, dans minos.cmd.
+
+### AUD-TST-01 — Toujours aucun seuil de couverture global au HEAD : 28 scopes ciblés, aucun but `jacoco:check`, planchers de 12 % à 80 %
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S6 · **Connu** : T1
+- **Prérequis** : AUD-TST-07
+- **Preuve** : pom.xml:217-238 (jacoco-maven-plugin : seulement `prepare-agent` et `report`, aucun but `check` ni `<rule>`) ; scripts/quality/check-jacoco.py:13-196 (28 scopes listés par `--help`) ; planchers les plus bas : check-jacoco.py:173-174 `nexus-export` line 0.30 / branch 0.12, `m27-team-hosted-control-plane` 0.45/0.25, `semantic-vector-store` 0.45/0.20, plancher de classe `ScipJavaProcessPlanFactory` branch 0.15, `StrongProcessOwnershipIndexerExecutor` 0.35/0.18. `python3 scripts/quality/check-jacoco.py --help` liste les 28 scopes. — Mesure : rapport JaCoCo agrégé du `mvnw verify` Windows du 10/10 : 83,0 % des lignes (25 306 / 30 500) et 66,4 % des branches couvertes, minos-nexus le plus bas (45,2 % des lignes).
+- **Impact** : Une classe hors scope peut perdre toute sa couverture sans qu'aucun gate ne rougisse ; la couverture globale du réacteur n'est ni mesurée ni bornée en CI.
+- **Action** : Ajouter un scope `global` (préfixe `com/minos/`) au plancher mesuré au HEAD moins 2 points, à cliquet (relevé à chaque sprint), en plus des scopes ciblés ; publier le chiffre dans `jacoco-gate.json`.
+
+### AUD-TST-06 — 21 tests de minos-runtime-local passent à vide sur l'autre OS (`if (plateforme) return;`) au lieu d'être comptés comme sautés
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S1
+- **Preuve** : `grep -rcE 'if \(.*(currentPlatform\(\)|isWindows).*\) *return;'` : WindowsAppContainerWorkerSandboxBackendTest.java 14, LinuxBubblewrapWorkerSandboxBackendTest.java 4 (l.34, 69, 129, 158), WindowsNonElevatedIndexingTest.java 2 (l.41, 75), CommandLocatorTest.java 1 (l.169). Le reste du dépôt utilise `@EnabledOnOs` (63 annotations).
+- **Impact** : Les rapports Surefire gonflent le nombre de tests verts sur chaque OS ; un test devenu inapplicable par erreur (garde inversée) reste vert sans trace.
+- **Action** : Remplacer ces gardes par `@EnabledOnOs(OS.WINDOWS)` / `@EnabledOnOs(OS.LINUX)` ou `assumeTrue`, pour que le saut soit visible.
+
+### AUD-TST-07 — L'auto-test de check-jacoco.py n'est exécuté par aucun workflow, alors que celui de chaque autre gate l'est
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S1
+- **Débloque** : AUD-TST-01, AUD-TST-02
+- **Preuve** : `python3 scripts/quality/check-jacoco.py --self-test` → `MINOS JACOCO GATE SELF-TEST SUCCESS (8 scenarios)`, rc=0. `grep -rn "check-jacoco" .github/workflows` : seulement pr-ci.yml:257 et :277 (exécution sur le rapport), jamais `--self-test` ; pr-ci.yml:69-118 lance les auto-tests de single-execution, image-pins, compose-limits, tools-manifest, module-boundaries, private-io et partial-result-consumers.
+- **Impact** : Une régression de la logique du gate (préfixe mort, plancher de classe, exclusion de plateforme) passerait inaperçue : c'est précisément la logique qui garantit les scopes.
+- **Action** : Ajouter une étape `python scripts/quality/check-jacoco.py --self-test` au job `invariants` de pr-ci.yml.
+
+### AUD-TST-08 — Le scope `m29-backend-routing` lit toujours un rapport JaCoCo obtenu par redirection du `<directory>` de minos-app
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S1 · **Connu** : T4
+- **Débloque** : AUD-TST-02
+- **Preuve** : scripts/quality/check-jacoco.py:155 `"report": "target/site/jacoco/jacoco.xml"` ; minos-app/pom.xml:37 `<directory>${maven.multiModuleProjectDirectory}/target</directory>`.
+- **Impact** : Un retour de minos-app à son `target/` propre ferait échouer ce scope (rapport introuvable) ou, si un autre module écrivait à la racine, mesurerait autre chose.
+- **Action** : Pointer le scope sur `minos-app/target/site/jacoco/jacoco.xml` après avoir rendu à minos-app son répertoire, ou passer ces classes dans le rapport agrégé.
+
+### AUD-TST-09 — Trois tests d'idempotence PostgreSQL n'ont aucune assertion : ils ne prouvent que l'absence d'exception
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S6
+- **Preuve** : minos-storage-postgresql/src/test/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStoreTest.java:81-88 (`publish` deux fois, rien vérifié) ; PostgresFingerprintSnapshotStoreTest.java:33-40 (idem) ; PostgresSchemaMigratorTest.java:46-49 (`migrate()` deux fois, `schema_version` non relue). Analyse de 2 304 méthodes de test : ces 3 sont les seules sans assertion hors tests de concurrence.
+- **Impact** : Une seconde publication qui dupliquerait des lignes ou une migration qui réappliquerait une étape non destructive resterait verte.
+- **Action** : Après le second appel, relire et comparer (nombre de lignes, contenu du snapshot, `schema_version` = `CURRENT_VERSION`).
+
+### AUD-TST-10 — Onze tests de verrou prouvent l'attente par un `Thread.sleep(100–300 ms)` suivi de `assertFalse(isDone())`
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S6
+- **Preuve** : LocalStorageRetentionLockTest.java:77, FileHostedControlPlaneStoreLockTest.java:74, JGitRemoteRepositoryMaterializerLockTest.java:72, ProjectIndexLeaseTest.java:37, ProjectMutationSemanticVectorStoreTest.java:76, PostgresRetentionMutationLockTest.java:51, PostgresProjectMutationLockIntegrationTest.java:56, ProjectMutationIndexStateStoreTest.java:110 et :151, IndexingLifecycleServiceTest.java:118, IncrementalIndexingCoordinatorTest.java:104 (motif `Thread.sleep(300); assertFalse(x.isDone(), "… waits for the lock holder")`). Au total 48 `Thread.sleep` dans 33 fichiers de test.
+- **Impact** : Sur un runner chargé, un verrou supprimé peut laisser ces tests verts (le concurrent n'a pas encore tourné) : faux négatif, pas instabilité.
+- **Action** : Faire signaler par le concurrent son entrée dans l'attente (latch posé juste avant l'appel bloquant, ou observation de l'état du thread `WAITING`/`TIMED_WAITING`) avant d'affirmer `!isDone()`.
+
+### AUD-TST-11 — Mutation : 10 modules complets et 1 partiel sur 14, cli/bootstrap/app jamais mutés, et le document de couverture se contredit (« 3 modules sur 14 ») et ignore le PIT du plugin désormais exécuté
+
+- **Axe** : Tests · **Effort** : M · **Confiance** : confirmé · **Sprint** : S6
+- **Preuve** : docs/quality/code-audit-couverture.md:229 « PIT est incomplet : 11 modules sur 14 analysés » et tableau § 5.2 (minos-runtime-local : 560 RUN_ERROR non analysés ; minos-cli rapport vide ; bootstrap, app : pas de rapport ; plugin bloqué) ; même document l.288 : « PIT n'a analysé que 3 modules sur 14 ». .github/workflows/code-audit.yml:3-6 : `workflow_dispatch` seul, aucun seuil. Score mesuré : 45 % tués/mutants, 61 % tués/couverts (§ 5.2).
+- **Impact** : La force des tests de la CLI, de la composition (bootstrap) et du jar livré reste inconnue ; le chiffre « 3/14 » repris par d'autres documents sous-estime le travail fait et brouille le point de reprise.
+- **Action** : Corriger § 7 du document ; exécuter `code-audit.yml` sur runner éphémère pour minos-cli, minos-bootstrap, minos-app et rejouer les 560 mutants de minos-runtime-local ; ensuite seulement fixer un plancher PIT par module (décision ouverte dans `etendre-audit-outille-a-tout-le-perimetre`).
+
+### AUD-TST-12 — Les refus de `WindowsJobObjectProcessOwnership` (NUL dans le plan, exécutable absent ou introuvable) n'ont aucun test
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S6
+- **Preuve** : minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsJobObjectProcessOwnership.java:92-107 (`provider executable is missing`, `is not resolvable`) et :138-142 (`forbidden NUL`) ; seul test : WindowsLauncherScriptPlacementTest.java:47-55 (emplacement du lanceur). `grep -rn "forbidden NUL\|provider executable is missing\|not resolvable" minos-*/src/test` : aucune occurrence. La classe n'est dans aucun scope JaCoCo (check-jacoco.py:131-138 ne liste que le backend AppContainer et `WindowsContainmentScript`).
+- **Impact** : Le format du plan transmis au lanceur PowerShell (frontière de confiance du chemin à propriété forte sous Windows) peut régresser sans signal.
+- **Action** : Test `@EnabledOnOs(WINDOWS)` : plan avec NUL refusé, exécutable absolu absent refusé, relatif introuvable refusé, environnement assaini et encodé Base64 ; ajouter la classe au scope `provider-sandbox-windows`.
+
+### AUD-TST-13 — La CI du plugin IntelliJ ne se déclenche pas quand change le code qui produit le JSON qu'il consomme
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S1
+- **Débloque** : AUD-QUA-01
+- **Preuve** : .github/workflows/intellij-plugin.yml:6-12 : filtres `minos-intellij/**`, `minos-cli/**`, `minos-integration-git/**` seulement ; les rendus JSON sont dans minos-application/src/main/java/com/minos/output/ (ProjectJson, SymbolResultRenderer, ArchitectureResultRenderer…), lus par minos-intellij/src/main/java/com/minos/intellij/protocol/MinosM21Client.java:97-103 et MinosProjectList.java. Atténuation : minos-app/src/test/resources/characterization/cli-json.golden fige ces sorties.
+- **Impact** : Après une régénération délibérée d'un golden, une PR qui change la forme d'une réponse CLI ne relance pas les tests du plugin ; l'incompatibilité n'apparaît qu'au prochain changement du plugin.
+- **Action** : Ajouter `minos-application/src/main/java/com/minos/output/**`, `minos-domain/**` et `minos-app/src/test/resources/characterization/**` aux filtres de chemins.
+
+### AUD-TST-18 — Un test de minos-provider-scip dépend d'une variable JAVA_HOME ambiante sous Windows : `mvnw verify` échoue sans elle
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : S6
+- **Preuve** : Exécution `mvnw.cmd -B -ntp verify` sur le poste Windows du mainteneur (10/10/2026, HEAD 816cdd0c, JDK 24.0.1, shell sans JAVA_HOME) : `ManagedScipProviderRuntimeManagerTest.probesPinnedScipJavaWithSystemJdkAndPropagatesKotlinToTheWindowsRuntime:64 IllegalState scip-java requires a project JDK: JAVA_HOME is not set` → BUILD FAILURE sur minos-provider-scip (123 tests, 1 erreur). Cause : minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManagerTest.java:47-64 (branche `CommandLocator.isWindows()`) appelle `ScipJavaProcessPlanFactory.create`, qui lit l'environnement réel : ScipJavaProcessPlanFactory.java:298 `throw new IllegalStateException("scip-java requires a project JDK: JAVA_HOME is not set")`.
+- **Impact** : Le build n'est pas hermétique : il passe en CI (setup-java pose JAVA_HOME) et sur un poste configuré, échoue ailleurs, et masque tous les modules suivants du reactor (9 modules SKIPPED). Un contributeur ou un outil lancé sans JAVA_HOME conclut à une régression qui n'existe pas.
+- **Action** : Injecter l'environnement dans ScipJavaProcessPlanFactory (fournisseur de variables, comme ProviderProcessEnvironment) et le fixer dans le test ; à défaut, poser JAVA_HOME dans `<environmentVariables>` de surefire pour ce module.
+
+### AUD-PERF-09 — Tests liés : une preuve par emplacement de référence, sans plafond, est persistée dans chaque relation RELATED_TEST
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : plausible · **Sprint** : S9
+- **Preuve** : minos-engine/src/main/java/com/minos/query/RelatedTestDerivationService.java:209-226 : chaque occurrence résolue d'un fichier de test vers un symbole de production ajoute une `Evidence` DIRECT_REFERENCE avec sa localisation ; :615-628 `Candidate.add` ne dédoublonne que sur (type, description, fichier:ligne:colonne), donc une preuve par emplacement distinct. Le codec persiste toutes les preuves : minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotBinaryCodecSupport.java:559-565 (tri puis écriture de chaque preuve), plafond de lecture `MAX_EVIDENCE = 1_000_000` (:80).
+- **Impact** : La taille des relations RELATED_TEST croît avec le nombre de références des tests vers la production (chaînes de description, deux références et une localisation par preuve), ce qui pèse sur la taille du snapshot, sur le plafond de 256 Mio et sur le tas relu. Ampleur non mesurée ici.
+- **Action** : Mesurer d'abord la part des preuves RELATED_TEST dans le snapshot de ce dépôt (banc `benchmarks/scalability`). Si elle est notable : garder les N premiers emplacements par type de preuve (ordre déterministe) et un compteur, en le signalant dans la description.
+
+### AUD-PERF-10 — Recherche de symboles : le rang de correspondance (jusqu'à 7 `toLowerCase`) est recalculé dans le filtre puis à chaque comparaison du tri
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : confirmé · **Sprint** : S11 · **Connu** : MINOS-AUD-F13
+- **Preuve** : minos-engine/src/main/java/com/minos/store/InMemoryCodeKnowledgeStore.java:121-128 : `.filter(symbol -> matchRank(...) < Integer.MAX_VALUE)` puis `.sorted(Comparator.comparingInt(symbol -> matchRank(symbol, normalizedQuery))...)` ; :322-347 `matchRank` appelle `toLowerCase(Locale.ROOT)` sur name, qualifiedName et symbolKey à chaque fois (:397-407). Le repli parcourt tout le projet (:281-286) dès que les correspondances exactes ne remplissent pas la limite.
+- **Impact** : Pour une requête courte sur ~40 000 symboles, de l'ordre de 2 × n·log n appels à `matchRank` et plusieurs millions de chaînes temporaires par appel `minos_find_symbols` / `minos_search_code`.
+- **Action** : Calculer le rang une fois par candidat (paire rang/symbole) et précalculer les formes minuscules dans `SymbolIndexes` à la construction de la vue ; supprimer le rang 6 sur `symbolKey` (voir MINOS-AUD-F13).
+
+### AUD-PERF-11 — Analyse d'impact et impact avancé reconstruisent et retrient leurs index d'arêtes à chaque appel
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : confirmé · **Sprint** : S4 · **Connu** : ARCHI-SUIVI § A6.8
+- **Prérequis** : AUD-PERF-03
+- **Preuve** : minos-application/src/main/java/com/minos/impact/ImpactAnalysisService.java:76 `incomingRelationships(snapshot, symbolsById)` (tri de toutes les relations, :199-220) à chaque `analyze` ; minos-application/src/main/java/com/minos/program/analysis/AdvancedImpactService.java:93-95 `graph.edges().stream().sorted(...)` sur tout le graphe de programme (jusqu'à 500 000 arêtes publiques) à chaque appel, alors que le graphe lui-même est en cache. Mesure existante (ARCHI-SUIVI § A6.3.5) : 15 ms (1 réplique) à 68,5 ms (3 répliques), 100 % du coût étant la préparation. — Relecture : connu — docs/audit/ARCHI-SUIVI.md § A6.8 (« ImpactAnalysisService reconstruit la table des symboles et l'index trié des arêtes entrantes à chaque appel ») et :927.
+- **Impact** : Coût fixe linéaire en taille de snapshot par appel `minos_impact` / `minos_impact_v2` ; faible aujourd'hui, mais il s'ajoute au rechargement d'AUD-PERF-03.
+- **Action** : Porter l'index des arêtes entrantes triées dans `SnapshotQueryView` (construit une fois avec la vue) et l'adjacence dans l'entrée de cache de `ProgramGraphService`. Ne pas introduire d'arrêt anticipé de la traversée (infirmé par la mesure, voir AUD-PERF-14).
+
+### AUD-PERF-12 — Pool JDBC : `isValid()` (un aller-retour réseau) à l'emprunt ET à la restitution de chaque connexion
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : confirmé · **Sprint** : S4
+- **Preuve** : minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java:415-419 `usable(connection)` à l'emprunt, :434 `usable(connection)` à la restitution ; :474-479 `connection.isValid(...)`.
+- **Impact** : Deux allers-retours supplémentaires par `withConnection` ; une requête hybride PostgreSQL en ouvre une quinzaine (AUD-PERF-01), soit une trentaine d'allers-retours inutiles, sensibles quand la base est distante.
+- **Action** : Valider seulement à l'emprunt d'une connexion restée inactive au-delà d'un seuil (ex. 30 s), et à la restitution se contenter de `isClosed()` et de l'état de transaction.
+
+### AUD-PERF-13 — Rapport runtime d'un symbole : recherche linéaire dans tous les symboles du snapshot au lieu de l'index de la vue
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : confirmé · **Sprint** : S4
+- **Preuve** : minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java:183 `snapshot.symbols().stream().filter(value -> symbolId.equals(value.id())).findFirst()`, alors que `InMemoryCodeKnowledgeStore.findSymbolById` (minos-engine/.../store/InMemoryCodeKnowledgeStore.java:97-101) est disponible via `loadActiveQueryView`.
+- **Impact** : Parcours O(n) par appel `minos_runtime_symbol` ; quelques millisecondes, hygiène.
+- **Action** : Charger la `SnapshotQueryView` et utiliser `findSymbolById`.
+
+### AUD-DEP-10 — L'inventaire de provenance de l'image Docker annonce des toolchains périmées (.NET 10.0.302, Go 1.26.5, Rust 1.97.1) au lieu de celles réellement installées
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : confirmé · **Sprint** : S3
+- **Preuve** : docker/Dockerfile.mcp.release:2-4 `FROM rust:1.98.1…`, `golang:1.27.0…`, `dotnet/sdk:10.0.401…` (montée Dependabot 4b3b3416 du 07/10) contre :230-232 littéraux `"sdk":"10.0.302"`, `"toolchain":"1.26.5"`, `"toolchain":"1.97.1"` écrits dans /opt/minos/provider-evidence/provider-inventory.json ; check-tools-manifest.py rc=0 (ne contrôle pas ces littéraux).
+- **Impact** : La preuve de provenance livrée dans chaque image est fausse et le restera à chaque montée Dependabot ; une analyse d'incident ou de CVE s'appuierait sur des versions inexactes.
+- **Action** : Déclarer les versions en `ARG` (DOTNET_SDK_VERSION, GO_VERSION, RUST_VERSION) dérivées du tag, ou les relire au build (`dotnet --version`, `go env GOVERSION`, `rustc --version`) pour générer l'inventaire ; ajouter la règle à check-tools-manifest.py.
+
+### AUD-DEP-11 — Build Maven non reproductible : ni `project.build.outputTimestamp` ni `requirePluginVersions`
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : confirmé · **Sprint** : S5
+- **Preuve** : pom.xml:40-120 (aucune propriété `project.build.outputTimestamp` ; grep négatif sur tout le dépôt hors docs) ; pom.xml:182-196 enforcer limité à `requireJavaVersion`/`requireMavenVersion [3.9,4.0)` ; maven-resources/install/clean non épinglés (versions par défaut de la distribution Maven) ; minos-app/pom.xml:56-74 shade sans horodatage fixe.
+- **Impact** : Deux builds du même commit produisent des jars (dont `-all.jar`, base de l'image et de l'installeur) de SHA-256 différents : RELEASE-MANIFEST.json et le SBOM ne peuvent pas être revérifiés par reconstruction indépendante ; un Maven 3.9.x local résout d'autres plugins par défaut que le wrapper 3.10.0.
+- **Action** : Ajouter `<project.build.outputTimestamp>` (fixé par le script de release sur la date du commit), la règle enforcer `requirePluginVersions`, épingler les plugins du cycle par défaut en `pluginManagement`, puis vérifier avec `artifact:compare` / double build.
+
+### AUD-DEP-12 — Les 22 `actions/checkout` conservent le jeton GITHUB_TOKEN et le job de PR `verify` n'a pas de délai maximal
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : confirmé · **Sprint** : S5
+- **Preuve** : grep `persist-credentials` sur .github/workflows : 0 occurrence pour 22 checkouts, dont release-windows.yml:237-241 (job `publish`, `contents: write`) ; pr-ci.yml:154-160 job `verify` sans `timeout-minutes` (défaut 360 min, × 2 OS) alors qu'il exécute le code de la PR (`mvnw clean verify`).
+- **Impact** : Le jeton reste lisible par toute étape ultérieure (plugins Maven, tests, scripts PowerShell) ; un test bloqué immobilise deux runners six heures.
+- **Action** : Ajouter `persist-credentials: false` partout où aucun `git push`/`git fetch` authentifié ne suit (le `git fetch origin main` de pr-ci.yml:208 fonctionne en public), `timeout-minutes: 90` sur `verify`, et faire vérifier les deux par check-workflow-pins.py.
+
+### AUD-DEP-13 — Le jeton Docker Hub est exposé au code de la PR pendant `mvnw clean verify`
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : confirmé · **Sprint** : S5
+- **Preuve** : .github/workflows/pr-ci.yml:162-180 `docker/login-action` (secrets DOCKERHUB_USERNAME/TOKEN, commit 4fc3a6b4) dans le job qui exécute ensuite pr-ci.yml:248 `./mvnw … clean verify` ; même schéma code-audit.yml:175-190 (PIT) et docker-release-validation.yml:32-50.
+- **Impact** : Les identifiants sont écrits dans ~/.docker/config.json et lisibles par tout test ou plugin Maven de la PR (PR de branches du dépôt et pushes sur develop/main) ; le jeton est documenté en lecture seule, ce qui borne l'impact à l'usage du quota et à l'identité du compte.
+- **Action** : Garder le jeton en lecture seule « Public Repo Read-only » (le vérifier), le restreindre à un environnement GitHub, ou isoler les pulls dans une étape préalable (`docker pull` des images épinglées) suivie de `docker logout` avant `mvnw`.
+
+### AUD-DEP-14 — CVE du client HTTP de Testcontainers toujours présentes en portée test (Testcontainers 2.0.5 inchangé)
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : plausible · **Sprint** : S3 · **Connu** : MINOS-AUD-H03
+- **Preuve** : pom.xml:61 `<testcontainers.version>2.0.5</testcontainers.version>` (inchangé depuis l'audit du 8/10) ; docs/quality/code-audit-constats.md:143-147 (H03 : httpclient5 5.5.1 / httpcore5 5.3.6 embarqués par docker-java-transport-zerodep 3.7.1, statut « Risque », non corrigé). Rapport Dependency-Check non rejoué ici (réseau Maven Central refusé).
+- **Impact** : Machines de build et CI seulement ; exploitation improbable (pair = démon Docker local).
+- **Action** : Monter le BOM Testcontainers dès qu'une version embarque httpcore5 ≥ 5.4.3 et httpclient5 ≥ 5.6.3 ; rejouer le profil audit-dependency-check-tests.
+
+### AUD-DEP-15 — L'image du plan de requête MCP embarque toute la chaîne de compilation (JDK, gcc, Go, Rust, .NET SDK, pip)
+
+- **Axe** : Dépendances · **Effort** : M · **Confiance** : confirmé · **Sprint** : S3
+- **Preuve** : docker/Dockerfile.mcp.release:6 base `-jdk`, :61-63 `python3-pip … build-essential pkg-config libicu-dev`, :66-69 copie cargo/rustup/go/dotnet ; docker/compose-mcp.connected.yaml:40 et :106 : `minos-mcp` (requête) et `minos-admin` (indexation) utilisent la même `${MINOS_IMAGE}` ; aucun `HEALTHCHECK` dans les deux Dockerfiles.
+- **Impact** : Le conteneur de requête, persistant (`restart: unless-stopped`), offre une surface et un volume de CVE d'image (scanner) très supérieurs à son besoin (un JRE) ; mitigé par `read_only`, `cap_drop: [ALL]`, `no-new-privileges` et un réseau `internal`.
+- **Action** : Produire deux cibles multi-stage depuis Dockerfile.mcp.release : `query` (JRE + jar, déjà proche de Dockerfile.mcp) et `admin` (toolchains), et faire pointer `minos-mcp` sur la première.
+
+### AUD-DEP-16 — Le jar ombré et l'image Docker ne conservent pas les NOTICE des dépendances Apache-2.0
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : plausible · **Sprint** : S3
+- **Preuve** : minos-app/pom.xml:64-67 transformers limités à `ServicesResourceTransformer` et `ManifestResourceTransformer` (pas d'`ApacheNoticeResourceTransformer`/`ApacheLicenseResourceTransformer`) ; docker/Dockerfile.mcp:17 et Dockerfile.mcp.release (COPY minos.jar) ne copient aucun THIRD-PARTY-NOTICES ; docs/developer/supply-chain.md : les notices sont « un index de coordonnées » qui « ne remplace pas le texte de licence ».
+- **Impact** : Les fichiers META-INF/NOTICE homonymes (Jackson 2 et 3) s'écrasent à l'ombrage ; l'image Docker redistribue ces composants sans aucune notice, ce que l'article 4(d) d'Apache-2.0 exige.
+- **Action** : Ajouter les deux transformers Apache au shade, copier `supply-chain/THIRD-PARTY-NOTICES.txt` et les LICENSE/NOTICE agrégés dans l'image (`/opt/minos/licenses`).
+
+## Info (11)
+
+
+### AUD-ARC-13 — A10 toujours plausible : le chemin de source le plus long fait 125 caractères relatifs, sans garde de longueur dans le dépôt
+
+- **Axe** : Architecture · **Effort** : S · **Confiance** : plausible · **Sprint** : hors sprint (Info) · **Connu** : A10 (AUDIT-2026-09)
+- **Preuve** : find . -name '*.java' | awk '{print length}' : minos-storage-local/src/test/java/com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStoreConcurrencyTest.java = 125 caractères ; avec target/surefire-reports/TEST-<FQN>.xml et une racine de clonage Windows typique (~40 car.), la marge sous 260 reste d'environ 70 à 90 caractères. grep -rn "MAX_PATH|longpaths" scripts .github → aucune garde (seule occurrence de 260 : une limite de lignes dans check-vertical-decomposition-consistency.py:183).
+- **Impact** : Aucun échec observé ; le risque grandit avec SH-02 (nouveau préfixe minos-storage) et les noms de tests longs.
+- **Action** : Ajouter au job invariants un contrôle « chemin relatif ≤ 150 caractères » sur les sources et ressources, et activer core.longpaths dans les workflows Windows.
+
+### AUD-ARC-14 — Mécanismes solides à ne pas « simplifier » : gate de frontières vert, test ArchUnit à import prouvé complet, découverte SPI en échec rapide, API publique sans type interne
+
+- **Axe** : Architecture · **Effort** : S · **Confiance** : confirmé · **Sprint** : hors sprint (Info)
+- **Preuve** : python3 scripts/architecture/check-module-boundaries.py → « M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules=14, sources=522, …, packagePolicy=A3-ADR-0044, reactor=root-pom-modules) », 45 packages chacun dans un seul module ; check-private-io.py → SUCCESS ; auto-tests 13/13 et 30/30 OK. ModuleArchitectureTest.everyModuleIsImportedCompletely compare le nombre de .class sur disque à l'import (aucune règle ne passe à vide). MinosApplicationComposers.java:36 et McpLaunchRoutes.java:31 : chargeur explicite, refus de zéro ou plusieurs fournisseurs. Les interfaces publiques de minos-api (MinosApi, MinosTeamApi…) n'importent aucun type com.minos.domain/engine (seules les implémentations Local*Api le font). Graphe Maven et graphe d'imports sans cycle entre modules ; aucune arête d'import application→adaptateur ni adaptateur→application/surface.
+- **Impact** : Ces mécanismes bornent les régressions de frontières ; les retirer ou les assouplir pendant SH-02/SH-11 rouvrirait A2/A3/A7.
+- **Action** : Aucune ; servir de modèle pour AUD-ARC-04 et AUD-ARC-06.
+
+### AUD-QUA-12 — Hygiène de base mesurée solide : 2,7 % de duplication Java, aucun TODO/FIXME, aucune Locale ni Charset implicite, 38 catch vides tous justifiés
+
+- **Axe** : Qualité · **Effort** : S · **Confiance** : confirmé · **Sprint** : hors sprint (Info)
+- **Preuve** : Duplication (fenêtres de 8 lignes normalisées identiques, 567 fichiers, 45 812 lignes utiles) : ≈ 1 216 lignes couvertes, surtout des records miroirs (Relationship/RelationshipResult, ScipIngestionReport/ScipSymbolSnapshotReport). `grep -rnE '\b(TODO|FIXME|XXX|HACK)\b'` → 0 ; `toLowerCase()/toUpperCase()` sans Locale → 0 ; `String.format` sans Locale.ROOT → 0 ; `getBytes()`/lecteurs sans charset → 0 ; `printStackTrace` → 0 ; 38 catch vides, chacun commenté (ex. PrivateLocalStorage.java:354, LinuxCgroupJob.java:781) ; 24 relances sans cause, délibérées pour ne pas transporter de chemin (MinosRuntimeSettings.java:136-142, SandboxLauncherScript.java:148, ProcessIdentity.java:47) ; flux de fichiers tous en try-with-resources ; statiques mutables tous `volatile` ou gardés (LinuxCgroupJob.java:61-62 sous DISCOVERY_LOCK) ; aucun fichier > 1 040 lignes.
+- **Impact** : Ces relances sans cause et catch commentés sont une doctrine (pas de chemin dans les messages publics, cf. PublicErrorMessages) : un outil ou un relecteur qui les « corrigerait » en ajoutant la cause réintroduirait des fuites de chemins.
+- **Action** : Aucune correction ; documenter la doctrine « cause omise volontairement » par un commentaire normalisé (déjà présent sur la plupart des sites) pour que les règles SpotBugs/PMD futures soient supprimées site par site et non globalement.
+
+### AUD-SEC-14 — S10 (« séparateur `\0` sans préfixe de longueur ») n'est plus exploitable : tous les champs chaînés refusent `\0`
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : confirmé · **Sprint** : hors sprint (Info) · **Connu** : S10
+- **Preuve** : minos-engine/src/main/java/com/minos/hosted/HostedAuditChain.java:159-161 (concaténation par `\0`) ; HostedAuditEvent.java:56-62 : chaque champ passe par `HostedPrincipal.safeId` (motif `[A-Za-z0-9][A-Za-z0-9._:@+\-]{0,127}`) ou `HostedPrincipal.text`, qui rejette `\0`, `\n`, `\r` et `\t` (HostedPrincipal.java:31-36). Les points d'AAD sans version (S10) relèvent de la décision MINOS-AUD-B05, toujours ouverte (FileHostedControlPlaneStore.java:260-262).
+- **Impact** : Aucune collision n'est constructible. Le point peut être clos dans le suivi de S10 sans changer de code.
+- **Action** : Clore ce point de S10 en citant la validation des champs. Garder un test qui vérifie le rejet de `\0` pour chaque champ chaîné.
+
+### AUD-SEC-15 — Mécanismes solides vérifiés au HEAD (à ne pas « corriger ») : aucun secret en clair, SQL entièrement paramétré, confinement des providers et des téléchargements
+
+- **Axe** : Sécurité · **Effort** : S · **Confiance** : confirmé · **Sprint** : hors sprint (Info)
+- **Preuve** : Secrets : `grep -RniE "password|secret|token|apikey|BEGIN .*PRIVATE"` hors tests et motifs `AKIA…/ghp_…/sk-…` : aucune valeur ; les mots de passe passent par fichier (docker/compose-mcp.connected.yaml:290-297, `_FILE`), `.gitleaks.toml` est présent. SQL : toutes les requêtes de minos-storage-postgresql (y compris PostgresSemanticReadQueries.java:87-100 et PostgresSemanticWriteQueries.java:71-74) sont des `PreparedStatement` ; le schéma passe par `enquoteIdentifier` et `format('%I')` (PostgresSchemaMigrator.java:23, :50-52) ; TLS `verify-full` est exigé hors bouclage (PostgresJdbcUrlPolicy.java:72-80). Providers : environnement en liste blanche (ProcessIndexerExecutor.java:291-299) ; la copie refuse les liens (ProviderWorkspaceFiles.java:76-78) ; bwrap en `--unshare-all --cap-drop ALL --new-session` (LinuxBubblewrapWorkerSandboxBackend.java:349-357) ; repli natif refusé (StrongProcessOwnershipIndexerExecutor.java:107-112). Téléchargements : HTTPS imposé et SHA-256 vérifié (EmbeddedToolsCatalog.java:61, PinnedArtifactSource.java:220-225), zip-slip bloqué (ManagedScipProviderRuntimeManager.java:668-671), `npm ci --ignore-scripts` (:277). Git distant : point de terminaison épinglé à chaque connexion (JGitCloneDeadline.java:121-133). cmd.exe : `"` et `%` refusés (CommandLocator.java:257-267). Lecture de sources confinée (ConfinedFileOpener, LocalSourceReader.java:31-35) ; parse javac en `-proc:none` (JavaAstParser.java:44) ; aucun analyseur XML (pas de XXE) ; aucun serveur HTTP ni CORS (MCP en stdio, message borné à 1 Mio, MinosMcpServer.java:26). Jetons HMAC comparés en temps constant (HmacHostedIdentityProvider.java:69).
+- **Impact** : Ces points ferment les vecteurs principaux d'un dépôt indexé hostile. Une « simplification » qui en retirerait un rouvrirait une faille.
+- **Action** : Aucune ; conserver les tests qui épinglent ces comportements.
+
+### AUD-TST-14 — Aucun test désactivé : 0 `@Disabled`, les tests conditionnels sont tous liés à l'OS et les deux OS exécutent le `verify` complet en CI
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : hors sprint (Info)
+- **Preuve** : `grep -rn "@Disabled" minos-*/src/test` : 0. `@EnabledOnOs` : 32 WINDOWS, 14 LINUX, 17 {LINUX, MAC} (dont 18 dans le plugin). .github/workflows/pr-ci.yml:157-160 matrice `ubuntu-24.04` + `windows-2022`, l.248 (Linux, PostgreSQL requis) et l.253 (Windows) ; gate JaCoCo sur chaque OS (l.257, l.277, ce dernier avec `--skip-scope m30-postgresql-pgvector`) ; intellij-plugin.yml:68 (Linux) et :114 (Windows) exécutent `gradlew test`.
+- **Impact** : Aucun test Windows-only ou Linux-only ne dépend d'un seul poste : chacun tourne sur un runner de son OS à chaque PR (hors PostgreSQL sous Windows, qualifié sous Linux). À ne pas « corriger ».
+- **Action** : Aucune ; conserver la matrice.
+
+### AUD-TST-15 — Les 12 goldens de caractérisation sont comparés octet pour octet, une référence absente échoue et la régénération n'est possible que sur demande explicite
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : hors sprint (Info)
+- **Preuve** : minos-app/src/test/java/com/minos/characterization/Golden.java:37-50 (écriture seulement si `-Dminos.characterization.write=true`, sinon `fail("characterization golden is missing…")` et première différence affichée) ; 12 fichiers sous minos-app/src/test/resources/characterization/, tous référencés par A2SurfaceCharacterizationTest.java:82-452 ; la propriété n'apparaît dans aucun pom, workflow ou script (`grep -rn characterization.write`). Les scripts PowerShell embarqués ont leur propre golden (minos-runtime-local/src/test/resources/com/minos/runtime/local/golden/, WindowsContainmentScriptTest.java:123-150).
+- **Impact** : Mécanisme sain : une dérive de sortie CLI/MCP/API est visible dans le diff de PR. À ne pas assouplir.
+- **Action** : Aucune.
+
+### AUD-TST-16 — Pyramide : 2 304 tests, 80 % unitaires (dont 48 % sur système de fichiers réel), 15 % d'intégration processus/OS, 2 % PostgreSQL réel, 2 % goldens, 7 e2e sur le jar ombré
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : hors sprint (Info) · **Connu** : T5
+- **Preuve** : Classement des 2 304 méthodes `@Test`/`@ParameterizedTest`/`@RepeatedTest` par script : unitaire avec FS réel 1 103, unitaire pur 748, intégration processus/OS 342, PostgreSQL Testcontainers 51, goldens 39, intégration nommée 14, e2e failsafe 7 (minos-app/src/test/java/com/minos/packaging/*IT.java). Par module (méthodes) : engine 600, runtime-local 343, cli 287, storage-local 228, application 137, provider-scip 123, bootstrap 117, app 116, api 81, postgresql 80, intellij 71, mcp 56, integration-git 33, domain 22, nexus 10.
+- **Impact** : Pyramide saine en forme ; la faiblesse est la répartition (domain 22, nexus 10, integration-git 33 pour 1 752 lignes) déjà notée par T5, et la dépendance massive au disque réel (tests lents sous PIT : 2 h pour runtime-local).
+- **Action** : Aucune action propre ; traiter T5 via AUD-TST-02.
+
+### AUD-TST-17 — T3 est levé au HEAD pour S1, S2 et S3 mais reste listé sans statut dans l'audit de septembre
+
+- **Axe** : Tests · **Effort** : S · **Confiance** : confirmé · **Sprint** : hors sprint (Info) · **Connu** : T3
+- **Preuve** : docs/audit/AUDIT-2026-09.md:559 (T3 sans colonne d'état). Tests présents : minos-engine/src/test/java/com/minos/hosted/HostedRoleGovernanceTest.java (S1), HostedDenialSaturationTest.java et minos-storage-local/src/test/java/com/minos/storage/local/store/HostedDenialByteBudgetTest.java (S2), minos-runtime-local/src/test/java/com/minos/runtime/local/LinuxCgroupJobOwnershipIsolationTest.java (S3, 10 tests, sautés sans cgroup délégué — voir AUD-TST-03). Q1 non revérifié.
+- **Impact** : Un lecteur du registre croit encore ces correctifs sans test de non-régression.
+- **Action** : Marquer T3 clos pour S1–S3 (avec renvoi vers ces classes) et vérifier le test de Q1.
+
+### AUD-PERF-14 — Info — mécanismes à ne pas « corriger » sans nouvelle mesure : recherche pgvector exacte, traversée d'impact sans arrêt anticipé, pas de cache d'architecture
+
+- **Axe** : Performance · **Effort** : S · **Confiance** : confirmé · **Sprint** : hors sprint (Info)
+- **Preuve** : PostgresSemanticVectorStore.java:22 `searchEngine() = "pgvector-exact-cosine"` et aucun index ANN dans PostgresSchemaMigrator.java:96-97 : choix explicite de l'ADR 0031 § 8 (« Exact cosine linear scan remains the reference retrieval backend »). docs/audit/ARCHI-SUIVI.md § A6.4 point 3 : `maxResults` appliqué après traversée complète = « INFIRMÉ en pratique » (portée ≤ 52 symboles) ; § A4.8 : analyses d'architecture ≈ 1 % du temps, découverte 96 %. Remarque : la colonne `embedding vector NOT NULL` (PostgresSchemaMigrator.java:96) n'a pas de dimension fixée ; pgvector exige une colonne dimensionnée pour créer un index HNSW/ivfflat.
+- **Impact** : Évite de rouvrir des optimisations déjà infirmées. Le jour où un index ANN serait justifié par une mesure, il faudra d'abord une migration de type (`vector(n)` par modèle, ou table par dimension), à prévoir dans la décision.
+- **Action** : Aucune action immédiate. Consigner la contrainte de dimension dans l'ADR 0031 ou dans `docs/developer/semantic-retrieval-2.md`.
+
+### AUD-DEP-17 — Points solides à ne pas « corriger » : épinglage par SHA des actions, digests d'images, sommes SHA-256 des outils, compose durci
+
+- **Axe** : Dépendances · **Effort** : S · **Confiance** : confirmé · **Sprint** : hors sprint (Info)
+- **Preuve** : Exécutés au HEAD, rc=0 : check-workflow-pins.py (87 `uses` externes épinglés par SHA, Inno 6.7.1), check-image-pins.py (4 fichiers, `image:tag@sha256`), check-compose-limits.py (2 fichiers), check-tools-manifest.py (11 composants) et leurs auto-tests ; .mvn/wrapper/maven-wrapper.properties `distributionSha256Sum` ; gradle-wrapper.properties `distributionSha256Sum` ; Dockerfile.mcp.release : sha256sum -c sur chaque binaire, apt sur snapshot Ubuntu daté, NuGet local vérifié, GOSUMDB forcé ; compose : `cap_drop: [ALL]`, `read_only`, `no-new-privileges`, réseau `internal`, `pids_limit`/`mem_limit`, mot de passe PostgreSQL par fichier secret ; secret-scan.yml vérifie la somme de Gitleaks ; permissions par défaut `contents: read` partout, `pull_request_target` absent.
+- **Impact** : Aucun : ces mécanismes bornent les risques de chaîne d'approvisionnement ; les retirer au nom de la simplification rouvrirait des constats clos.
+- **Action** : Aucune ; conserver et rendre ces gates obligatoires (AUD-DEP-09).

@@ -4,7 +4,7 @@
 Audit finding C2: three workflows (pr-ci, M19, M20) each ran a complete ``./mvnw clean verify``,
 ``product-facts.py``, ``check-jacoco.py`` and the Linux sandbox toolchain installation on the same
 PR. The M19 and M20 workflows were retired because ``pr-ci.yml`` already carried every one of their
-assertions (see docs/audit/S23-SUIVI.md, "Lot 3"). This gate keeps it that way.
+assertions (see docs/audit/archive/2026-09/S23-SUIVI.md, "Lot 3"). This gate keeps it that way.
 
 The four controls it owns are the expensive ones that a duplicated workflow would copy:
 

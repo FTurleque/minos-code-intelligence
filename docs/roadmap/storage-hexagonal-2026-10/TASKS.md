@@ -11,7 +11,7 @@ Toutes les tâches sont **À faire**. P1/P2 indiquent un ordre de travail archit
 - État : À faire
 - Priorité : P1
 - Dépendances : aucune
-- Point d'entrée : `pom.xml`, `scripts/architecture/check-module-boundaries.py`, `docs/audit/ARCHI-SUIVI.md`, `docs/adr/0042-racine-de-composition.md`
+- Point d'entrée : `pom.xml`, `scripts/architecture/check-module-boundaries.py`, `docs/audit/archive/2026-09/ARCHI-SUIVI.md`, `docs/adr/0042-racine-de-composition.md`
 
 ### Actions
 
@@ -174,7 +174,7 @@ Tests Ollama existants déplacés, tests de bootstrap/provider absent et tests h
 - État : À faire
 - Priorité : P2
 - Dépendances : SH-01
-- Point d'entrée : `minos-engine/src/main/java/com/minos/io`, `scripts/architecture/check-private-io.py`, `scripts/architecture/private-io-allowlist.json`, `docs/audit/SEC-SUIVI.md`
+- Point d'entrée : `minos-engine/src/main/java/com/minos/io`, `scripts/architecture/check-private-io.py`, `scripts/architecture/private-io-allowlist.json`, `docs/audit/archive/2026-09/SEC-SUIVI.md`
 
 ### Actions
 
