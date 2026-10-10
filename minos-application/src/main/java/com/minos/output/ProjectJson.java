@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import static com.minos.output.DeterministicJson.object;
+import static com.minos.output.json.DeterministicJson.object;
 
 /**
  * Projections JSON d'un projet, partagées par la CLI ({@code project inspect}, {@code index-status}) et le MCP

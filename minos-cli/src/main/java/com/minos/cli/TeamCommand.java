@@ -3,7 +3,7 @@ package com.minos.cli;
 import com.minos.hosted.HostedControlPlaneService;
 import com.minos.hosted.HostedRetentionPolicy;
 import com.minos.hosted.HostedRole;
-import com.minos.output.DeterministicJson;
+import com.minos.output.json.DeterministicJson;
 import com.minos.output.HostedControlPlaneRenderer;
 
 import java.io.IOException;

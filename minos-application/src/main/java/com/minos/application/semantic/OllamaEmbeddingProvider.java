@@ -2,7 +2,7 @@ package com.minos.application.semantic;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.minos.output.DeterministicJson;
+import com.minos.output.json.DeterministicJson;
 import com.minos.semantic.SemanticVector;
 
 import java.io.IOException;

@@ -8,6 +8,7 @@ import com.minos.impact.ImpactedSymbol;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import com.minos.output.json.DeterministicJson;
 
 /** Deterministic transport-neutral rendering of M8 impact analysis. */
 public final class ImpactResultRenderer {

@@ -10,6 +10,7 @@ import com.minos.application.dynamic.RuntimeIntelligenceService.SymbolRuntimeRep
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import com.minos.output.json.DeterministicJson;
 
 /** Deterministic JSON renderer for M26 runtime evidence. */
 public final class RuntimeIntelligenceRenderer {

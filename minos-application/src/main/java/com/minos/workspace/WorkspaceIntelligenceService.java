@@ -1,6 +1,6 @@
 package com.minos.workspace;
 
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.domain.ProviderReference;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;

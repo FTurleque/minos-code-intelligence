@@ -522,15 +522,6 @@ KNOWN_PACKAGE_CYCLES: dict[str, tuple[frozenset[str], str]] = {
         "minos-engine: IncrementalIndexingPlan and ProjectFingerprintService are used by the lifecycle, "
         "which the planner and the coordinator use back",
     ),
-    "application-resolution-and-output": (
-        frozenset({
-            "com.minos.application", "com.minos.application.dynamic", "com.minos.application.semantic",
-            "com.minos.architecture", "com.minos.impact", "com.minos.output", "com.minos.program.analysis",
-            "com.minos.workspace",
-        }),
-        "minos-application: ProjectResolver is imported by six packages that MinosApplication imports back, "
-        "and application.semantic imports output.DeterministicJson while output imports the query packages",
-    ),
     "intellij-plugin": (
         frozenset({"com.minos.intellij.protocol", "com.minos.intellij.service", "com.minos.intellij.ui"}),
         "minos-intellij (outside the reactor): MinosCliClient reaches ui.MinosRegistryNotice",

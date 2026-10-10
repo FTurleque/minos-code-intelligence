@@ -18,7 +18,7 @@ import com.minos.output.AdvancedAnalysisResultRenderer;
 import com.minos.output.ArchitectureResultRenderer;
 import com.minos.output.CodeIntelligenceResultRenderer;
 import com.minos.output.CodeSearchRenderer;
-import com.minos.output.DeterministicJson;
+import com.minos.output.json.DeterministicJson;
 import com.minos.output.ProjectJson;
 import com.minos.output.ImpactResultRenderer;
 import com.minos.output.HostedControlPlaneRenderer;

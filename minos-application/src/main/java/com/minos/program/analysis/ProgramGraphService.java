@@ -1,6 +1,6 @@
 package com.minos.program.analysis;
 
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.domain.Evidence;
 import com.minos.domain.Origin;
 import com.minos.domain.SymbolLocation;

@@ -1,4 +1,4 @@
-package com.minos.output;
+package com.minos.output.json;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;

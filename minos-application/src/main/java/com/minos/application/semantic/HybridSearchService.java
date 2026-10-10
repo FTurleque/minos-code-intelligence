@@ -1,6 +1,6 @@
 package com.minos.application.semantic;
 
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.InformationNature;
 import com.minos.domain.Relationship;

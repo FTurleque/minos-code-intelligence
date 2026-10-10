@@ -8,6 +8,7 @@ import com.minos.application.semantic.SemanticSearchService;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import com.minos.output.json.DeterministicJson;
 
 /** Deterministic JSON projection shared by M20 transport surfaces. */
 public final class SemanticAnalysisResultRenderer {

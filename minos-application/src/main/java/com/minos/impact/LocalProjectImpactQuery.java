@@ -1,6 +1,6 @@
 package com.minos.impact;
 
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;

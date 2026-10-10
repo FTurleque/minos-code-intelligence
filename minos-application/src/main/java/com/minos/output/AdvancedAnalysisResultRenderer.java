@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Function;
+import com.minos.output.json.DeterministicJson;
 
 /** Deterministic JSON renderer for additive M19 public surfaces. */
 public final class AdvancedAnalysisResultRenderer {

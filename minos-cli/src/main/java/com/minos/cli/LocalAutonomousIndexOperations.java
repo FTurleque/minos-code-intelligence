@@ -2,7 +2,7 @@ package com.minos.cli;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectIndexStateReconciler;
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.incremental.IncrementalIndexingPlan;
 import com.minos.incremental.IncrementalIndexingPlanner;

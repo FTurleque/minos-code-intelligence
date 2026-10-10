@@ -1,7 +1,7 @@
 package com.minos.api;
 
 import com.minos.application.MinosApplication;
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.api.MinosApi.ErrorCode;
 import com.minos.api.MinosApi.MinosApiException;
 import com.minos.diagnostics.PublicErrorMessages;

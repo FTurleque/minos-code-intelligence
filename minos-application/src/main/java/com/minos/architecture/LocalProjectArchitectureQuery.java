@@ -1,6 +1,6 @@
 package com.minos.architecture;
 
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.registry.ProjectRegistry;

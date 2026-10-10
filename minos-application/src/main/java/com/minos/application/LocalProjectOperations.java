@@ -28,6 +28,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import com.minos.application.resolution.ProjectResolver;
 
 /** Local application adapter over the selected MINOS storage backend. */
 public final class LocalProjectOperations implements ProjectOperations, AutoCloseable {

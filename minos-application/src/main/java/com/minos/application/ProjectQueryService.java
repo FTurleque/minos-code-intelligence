@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import com.minos.application.resolution.ProjectResolver;
 
 /** Application-level read service over the active Code Intelligence snapshot of a project. */
 public final class ProjectQueryService {

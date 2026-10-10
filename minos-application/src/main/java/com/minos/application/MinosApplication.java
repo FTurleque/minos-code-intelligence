@@ -50,6 +50,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.minos.domain.Preconditions.requireText;
+import com.minos.application.resolution.ProjectResolver;
 
 /** Long-lived composition root for one MINOS home and one selected storage backend. */
 public final class MinosApplication implements AutoCloseable {

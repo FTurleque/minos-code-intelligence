@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import com.minos.output.json.DeterministicJson;
 
 class ProjectJsonTest {
 

@@ -1,4 +1,4 @@
-package com.minos.output;
+package com.minos.output.json;
 
 import com.minos.domain.InformationNature;
 import com.minos.domain.Origin;
@@ -14,6 +14,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import com.minos.output.AdvancedAnalysisResultRenderer;
 
 class DeterministicJsonBudgetTest {
 

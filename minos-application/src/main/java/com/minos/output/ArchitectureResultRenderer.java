@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import com.minos.output.json.DeterministicJson;
 
 /** Deterministic transport-neutral rendering of M6 architecture intelligence. */
 public final class ArchitectureResultRenderer {
