@@ -5,7 +5,7 @@ on:
   # every pull request that does not touch those paths. The `changes` job computes the plugin scope instead
   # (scripts/ci/plugin-gate.py) and the `gate` job always reports a verdict.
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, tmp/plugin-scope-base]
   push:
     branches: [main, develop]
   workflow_dispatch:
