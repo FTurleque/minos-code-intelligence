@@ -85,7 +85,7 @@ def main() -> None:
     for pattern, reason in ASK_RULES:
         if pattern.search(relative):
             if relative.startswith("docs/adr/") and not (project_root() / relative).exists():
-                continue  # un nouvel ADR se crée librement (skill minos-adr)
+                continue  # un nouvel ADR se crée librement (commande /minos:adr)
             permission("ask", f"{relative} : {reason}")
 
 

@@ -32,4 +32,4 @@ Le code **3** signifie *résultat partiel* (inventaire ou index incomplet, entr�
 Détails : `docs/user/troubleshooting.md`, `docs/user/cli.md`, `docs/user/production-installation.md`, `docs/user/docker-runtime.md`.
 
 ## 4. Conclure
-Cause établie / probable / inconnue, preuve (commande + sortie), contournement, et — si c'est un défaut — constat pour un changement OpenSpec (skill `minos-audit-sprint`) avec test rouge. Un diagnostic de sécurité suit `SECURITY.md`.
+Cause établie / probable / inconnue, preuve (commande + sortie), contournement, et — si c'est un défaut — constat pour un changement OpenSpec (`/opsx:propose`) avec test rouge. Un diagnostic de sécurité suit `SECURITY.md`.

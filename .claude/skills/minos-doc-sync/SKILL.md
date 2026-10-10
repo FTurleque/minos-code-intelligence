@@ -12,7 +12,7 @@ description: Mettre à jour la documentation courante de MINOS après un changem
 | Progression, travaux ouverts, prochains sprints | `docs/ROADMAP.md` |
 | Utilisation (CLI, MCP, installation, plugin, diagnostics) | `docs/user/` |
 | Architecture, gates, tests, supply-chain | `docs/developer/` (gates : `quality-gates.md`) |
-| Décisions durables | `docs/adr/` (skill `minos-adr`) |
+| Décisions durables | `docs/adr/` (commande `/minos:adr`) |
 | Avancement d'un audit | `docs/audit/<date>/SUIVI.md` |
 | Preuves d'époque | **ne pas modifier** : `docs/history/`, `docs/audit/archive/`, `openspec/changes/archive/` |
 

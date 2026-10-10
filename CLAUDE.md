@@ -9,7 +9,7 @@ Répondre **en français**, quelle que soit la langue de la demande ou des sorti
 | Élément | Rôle |
 |---|---|
 | `rules/` | Règles par type de fichier (chargées quand on touche `*.java`, `*.ps1`, `.github/workflows/**`, `openspec/**`, etc.) |
-| `skills/minos-*` | Savoir-faire : vérification locale, gates littéraux, PR et CI, ADR, sprint d'audit, documentation, sécurité, release, dépendances, scripts Windows |
+| `skills/minos-*` | Savoir-faire : vérification locale, gates littéraux, PR et CI, documentation, sécurité, release, dépendances, incidents |
 | `agents/` | Sous-agents spécialisés : revue d'architecture, revue de sécurité, exécution des gates, vérification d'un changement OpenSpec, auteur de tests, triage de CI |
 | `commands/minos/` | Commandes `/minos:*` (`gates`, `verify`, `pr`, `merge`, `sprint`, `adr`, `docs-sync`, `status`, `audit-archive`, `deps`) ; les commandes `/opsx:*` d'OpenSpec sont conservées |
 | `hooks/` | Garde-fous automatiques : Git et GitHub, fichiers protégés, secrets, rappel des gates, contexte de session |

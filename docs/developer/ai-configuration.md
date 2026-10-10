@@ -10,10 +10,10 @@ Le dépôt embarque la configuration qui permet à un assistant de code (Claude 
 | `CLAUDE.md` | Importe `AGENTS.md` ; consignes propres à Claude Code (langue, méthode, pièges d'outillage) |
 | `.claude/settings.json` | Permissions partagées (lecture seule et gates autorisés, opérations destructives refusées ou confirmées) et branchement des hooks |
 | `.claude/rules/*.md` | Règles chargées selon les fichiers touchés (`paths:`) : Java de production, tests, gates Python, scripts Windows, workflows, documentation, OpenSpec, plugin IntelliJ ; `securite.md` est transversale |
-| `.claude/skills/minos-*` | Savoir-faire invoqués par le modèle ou l'utilisateur : `minos-verify-local`, `minos-literal-gates`, `minos-pr-flow`, `minos-adr`, `minos-audit-sprint`, `minos-doc-sync`, `minos-security-checklist`, `minos-release-promotion`, `minos-dependency-update`, `minos-incident-triage` |
+| `.claude/skills/minos-*` | Savoir-faire invoqués par le modèle ou l'utilisateur : `minos-verify-local`, `minos-literal-gates`, `minos-pr-flow`, `minos-doc-sync`, `minos-security-checklist`, `minos-release-promotion`, `minos-dependency-update`, `minos-incident-triage` |
 | `.claude/skills/openspec-*`, `.claude/commands/opsx/` | Skills et commandes OpenSpec (générés par `openspec init` / `openspec update`) |
 | `.claude/agents/` | Sous-agents : `minos-architecture-reviewer`, `minos-security-reviewer`, `minos-gate-runner`, `minos-spec-verifier`, `minos-test-author`, `minos-ci-triage` |
-| `.claude/commands/minos/` | Commandes `/minos:gates`, `verify`, `pr`, `merge`, `sprint`, `adr`, `docs-sync`, `status`, `audit-archive`, `deps` |
+| `.claude/commands/minos/` | Commandes `/minos:gates`, `verify`, `pr`, `merge`, `sprint` (de l'audit aux changements OpenSpec, après le skill général `audit-application`), `adr`, `docs-sync`, `status`, `audit-archive`, `deps` |
 | `.claude/hooks/` | Garde-fous automatiques (ci-dessous) |
 | `.claude/scripts/run_gates.py` | Rejoue les gates du job `invariants` en lisant la liste dans `pr-ci.yml` (jamais recopiée) |
 
