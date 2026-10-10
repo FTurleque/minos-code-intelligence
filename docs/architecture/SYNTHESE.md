@@ -1,5 +1,7 @@
 # Synthèse exécutive — Documentation d'architecture MINOS Code Intelligence
 
+> **Document historique (état du 2026-08-06).** Il n'est plus tenu à jour et ne fait pas foi. L'architecture courante est décrite par [`arc42/05-vue-blocs.md`](arc42/05-vue-blocs.md), dont les listes de dépendances sont confrontées aux POM par `scripts/architecture/check-module-boundaries.py` (règle A9), et par le fichier généré [`diagrams/module-dependencies.md`](diagrams/module-dependencies.md). Les lignes I-3 et « Hypothèses à valider » ci-dessous ont été corrigées le 2026-10-10 (audit AUD-ARC-03).
+
 Date de production : 2026-08-06  
 Version analysée : 1.0.1-SNAPSHOT (branche `develop`, HEAD `a0ed8ab`)  
 Mise à jour partielle le 2026-10-07 : décompte des modules, racine de composition et index des ADR ; le reste de la synthèse décrit l'état du 2026-08-06.
@@ -77,7 +79,7 @@ Voir [quality/scenarios.md](quality/scenarios.md) — section « Scénarios manq
 |---|------------|---------|
 | I-1 | ADR-0036 est à l'état `Proposed` dans l'index mais le code semble déjà en tenir compte (fail-closed). Vérifier si l'ADR doit passer à `Accepted`. | Faible |
 | I-2 | La dépendance `minos-mcp → minos-cli` transitoire mentionnée dans ADR-0022 (DT-01) est-elle encore présente après M15-S4 ? À vérifier dans le code courant. | Moyenne |
-| I-3 | `minos-storage-postgresql` dépend de `minos-application` — **confirmé intentionnel** : le module PostgreSQL implémente `StorageBackend`, `ProjectRegistry` et `ProjectFingerprintSnapshotStore` qui sont des ports définis dans `minos-application`. C'est une décision de concevoir le backend PostgreSQL comme remplacement de toute la couche locale, pas seulement du port engine. Aucune action requise, mais l'ADR-0025 devrait mentionner explicitement ce niveau. | Faible (documentaire) |
+| I-3 | **Corrigé (2026-10-10).** `minos-storage-postgresql` ne dépend pas de `minos-application` : un adaptateur n'en dépend jamais (ADR-0042). Les ports `StorageBackend`, `ProjectRegistry` et `ProjectFingerprintSnapshotStore` qu'il implémente sont dans `minos-engine`. | Faible (documentaire, corrigé) |
 | I-4 | ADR-0037 indique « parité Docker pending » mais aucune date cible précise n'est donnée pour S2–S8. Le registre des risques R-01 est daté M29-S8 sans date calendaire. | Faible |
 
 ---
@@ -114,7 +116,7 @@ Voir [quality/scenarios.md](quality/scenarios.md) — section « Scénarios manq
 
 | Hypothèse | Preuve requise |
 |-----------|---------------|
-| La dépendance `minos-storage-postgresql → minos-application` est intentionnelle | **Confirmé** : `PostgresStorageBackend` implémente `StorageBackend` (package `com.minos.storage`, dans `minos-application`). `PostgresProjectRegistry` implémente `ProjectRegistry` et `PostgresFingerprintSnapshotStore` implémente `ProjectFingerprintSnapshotStore`. |
+| La dépendance `minos-storage-postgresql → minos-application` est intentionnelle | **Infirmé (2026-10-10)** : le POM ne la déclare pas ; `PostgresStorageBackend` implémente `StorageBackend` (`com.minos.storage`, dans `minos-engine`). |
 | ADR-0036 est déjà implémenté dans la codebase courante | Grep sur `fail-closed` et conditions de validation dans `minos-app` |
 | La parité fonctionnelle Docker (indexation) sera atteinte avant M29-S8 | Résultats des jalons S2–S7 |
 | Le protocole CLI JSON IntelliJ est stable et testé | Présence de tests dans `minos-cli` ou `minos-api` |

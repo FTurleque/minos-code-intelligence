@@ -112,46 +112,76 @@ def fail(message: str) -> None:
     raise RuntimeError(message)
 
 
-def parse_pom(module: str) -> ET.Element:
-    pom = ROOT / module / "pom.xml"
+def parse_pom(module: str, root: Path = ROOT) -> ET.Element:
+    pom = root / module / "pom.xml"
     if not pom.is_file():
         fail(f"{module}: missing pom.xml")
     return ET.parse(pom).getroot()
 
 
+def repository_group_id(root: Path = ROOT) -> str:
+    """The groupId of the reactor, read from its root POM: the only group an internal dependency may use."""
+    pom = root / "pom.xml"
+    if not pom.is_file():
+        fail("root pom.xml is missing: the internal groupId cannot be read")
+    group = ET.parse(pom).getroot().findtext("m:groupId", default="", namespaces=NS).strip()
+    if not group or "${" in group:
+        fail("root pom.xml declares no literal <groupId>: the internal groupId cannot be read")
+    return group
+
+
 def check_pom_layout(module: str, root: ET.Element) -> None:
-    build = root.find("m:build", NS)
-    if build is None:
-        return
-
-    if build.find("m:sourceDirectory", NS) is not None:
-        fail(f"{module}: custom sourceDirectory is forbidden")
-    if build.find("m:testSourceDirectory", NS) is not None:
-        fail(f"{module}: custom testSourceDirectory is forbidden")
-
-    for plugin in build.findall("m:plugins/m:plugin", NS):
-        artifact = plugin.findtext("m:artifactId", default="", namespaces=NS)
-        if artifact != "maven-compiler-plugin":
+    """No custom source layout, at the root of the POM or hidden in a <profile> (plugins in a profile are fine)."""
+    builds = [("", root.find("m:build", NS))]
+    builds += [(f" in profile '{profile.findtext('m:id', default='?', namespaces=NS)}'", profile.find("m:build", NS))
+               for profile in root.findall("m:profiles/m:profile", NS)]
+    for where, build in builds:
+        if build is None:
             continue
-        configuration = plugin.find("m:configuration", NS)
-        if configuration is None:
-            continue
-        if configuration.find("m:includes", NS) is not None:
-            fail(f"{module}: maven-compiler-plugin <includes> is forbidden")
-        if configuration.find("m:excludes", NS) is not None:
-            fail(f"{module}: maven-compiler-plugin <excludes> is forbidden")
+        for tag in ("sourceDirectory", "testSourceDirectory"):
+            if build.find(f"m:{tag}", NS) is not None:
+                fail(f"{module}: custom {tag}{where} is forbidden")
+        plugins = build.findall("m:plugins/m:plugin", NS) + build.findall("m:pluginManagement/m:plugins/m:plugin", NS)
+        for plugin in plugins:
+            artifact = plugin.findtext("m:artifactId", default="", namespaces=NS)
+            if artifact != "maven-compiler-plugin":
+                continue
+            configuration = plugin.find("m:configuration", NS)
+            if configuration is None:
+                continue
+            for tag in ("includes", "excludes"):
+                if configuration.find(f"m:{tag}", NS) is not None:
+                    fail(f"{module}: maven-compiler-plugin <{tag}>{where} is forbidden")
 
 
-def minos_dependencies(module: str, root: ET.Element) -> dict[str, str]:
+def is_internal_dependency(module: str, dependency: ET.Element, group_id: str) -> str | None:
+    """The artifactId when `dependency` designates a MINOS module, else None. Refuses a module under another group.
+
+    A dependency is internal because of its artifactId, not because of a group name written in this script (E02): a
+    module declared with an unresolved or look-alike groupId would otherwise be taken for a third-party library and
+    escape every rule.
+    """
+    artifact = dependency.findtext("m:artifactId", default="", namespaces=NS)
+    group = dependency.findtext("m:groupId", default="", namespaces=NS).strip()
+    if artifact in ARTIFACT_TO_MODULE:
+        if group != group_id:
+            fail(f"{module}: internal artifact {artifact} is declared with groupId '{group}', expected '{group_id}' "
+                 "(an unresolved or look-alike groupId hides an internal dependency)")
+        return artifact
+    if group == group_id:
+        fail(f"{module}: unknown internal artifact dependency {group_id}:{artifact}")
+    return None
+
+
+def minos_dependencies(module: str, root: ET.Element, group_id: str | None = None) -> dict[str, str]:
     """Direct internal dependencies of one POM, with their Maven scope (default: compile)."""
+    group_id = group_id or repository_group_id()
     dependencies: dict[str, str] = {}
     for dependency in root.findall("m:dependencies/m:dependency", NS):
-        if dependency.findtext("m:groupId", default="", namespaces=NS) != "com.minos":
+        artifact = is_internal_dependency(module, dependency, group_id)
+        if artifact is None:
             continue
-        artifact = dependency.findtext("m:artifactId", default="", namespaces=NS)
-        target = ARTIFACT_TO_MODULE.get(artifact)
-        if target is None:
-            fail(f"{module}: unknown internal artifact dependency com.minos:{artifact}")
+        target = ARTIFACT_TO_MODULE[artifact]
         if target == module:
             fail(f"{module}: self-dependency is forbidden")
         scope = (dependency.findtext("m:scope", default="", namespaces=NS) or "compile").strip()
@@ -165,13 +195,14 @@ def minos_dependencies(module: str, root: ET.Element) -> dict[str, str]:
 SCOPE_STRENGTH = {"test": 0, "runtime": 1, "provided": 2, "system": 2, "compile": 3, "import": 3}
 
 
-def check_no_hidden_internal_dependencies(module: str, root: ET.Element) -> None:
+def check_no_hidden_internal_dependencies(module: str, root: ET.Element, group_id: str | None = None) -> None:
     """A2: an internal dependency must be a plain, reviewable edge of <dependencies>.
 
     Maven also resolves dependencies declared inside <profiles> (activated by OS, property or
     file) and pins versions through <dependencyManagement>; a MINOS module declared there would
     escape the policy above. Only the reactor parent may manage internal versions.
     """
+    group_id = group_id or repository_group_id()
     hidden = (
         ("m:profiles/m:profile/m:dependencies/m:dependency", "a <profile>"),
         ("m:profiles/m:profile/m:dependencyManagement/m:dependencies/m:dependency", "a <profile> <dependencyManagement>"),
@@ -179,11 +210,11 @@ def check_no_hidden_internal_dependencies(module: str, root: ET.Element) -> None
     )
     for path, location in hidden:
         for dependency in root.findall(path, NS):
-            if dependency.findtext("m:groupId", default="", namespaces=NS) != "com.minos":
-                continue
             artifact = dependency.findtext("m:artifactId", default="", namespaces=NS)
+            if artifact not in ARTIFACT_TO_MODULE and dependency.findtext("m:groupId", default="", namespaces=NS) != group_id:
+                continue
             fail(
-                f"{module}: internal dependency com.minos:{artifact} is declared in {location}; "
+                f"{module}: internal dependency {group_id}:{artifact} is declared in {location}; "
                 "MINOS module dependencies must be declared directly in <dependencies>"
             )
 
@@ -273,18 +304,24 @@ def check_dependency_policy(scoped: dict[str, dict[str, str]]) -> None:
 
 
 SOURCE_IMPORT = re.compile(r"^\s*import\s+(static\s+)?([\w.]+?)(\.\*)?\s*;", re.MULTILINE)
-SOURCE_QUALIFIED = re.compile(r"\bcom\.minos(?:\.[a-z_]\w*)+\.[A-Z]\w*")
+
+
+def qualified_name_pattern(group_id: str) -> re.Pattern[str]:
+    """A fully qualified class name under the reactor groupId (read from the root POM, never written here)."""
+    return re.compile(r"\b" + re.escape(group_id) + r"(?:\.[a-z_]\w*)+\.[A-Z]\w*")
+
+
 SOURCE_WORD = re.compile(r"\b[A-Z]\w*\b")
 COMMENTS_AND_LITERALS = re.compile(
     r"//[^\n]*|/\*.*?\*/|\"\"\".*?\"\"\"|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", re.DOTALL)
 
 
-def adapter_classes() -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+def adapter_classes(root: Path = ROOT) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
     """Top-level production classes of every adapter module: FQN -> module, package -> name -> module."""
     by_fqn: dict[str, str] = {}
     by_package: dict[str, dict[str, str]] = {}
     for module in sorted(ADAPTER_MODULES):
-        source_root = ROOT / module / "src" / "main" / "java"
+        source_root = root / module / "src" / "main" / "java"
         if not source_root.is_dir():
             continue
         for source in sorted(source_root.rglob("*.java")):
@@ -304,7 +341,7 @@ def resolve_adapter_class(name: str, by_fqn: dict[str, str]) -> str | None:
     return None
 
 
-def check_source_boundaries() -> None:
+def check_source_boundaries(root: Path = ROOT, group_id: str | None = None) -> None:
     """A2 / ADR 0042 — the POM rules do not see sources.
 
     No production class outside the adapters and the composition root (minos-bootstrap) may name a
@@ -314,11 +351,12 @@ def check_source_boundaries() -> None:
     surfaces, reaches adapters only through ports wired by minos-bootstrap. Comments and string literals
     are ignored.
     """
-    by_fqn, by_package = adapter_classes()
+    by_fqn, by_package = adapter_classes(root)
+    qualified_name = qualified_name_pattern(group_id or repository_group_id(root))
     guarded = [module for module in MODULES if module not in ADAPTER_MODULES and module != BOOTSTRAP_MODULE]
     violations: list[str] = []
     for module in guarded:
-        source_root = ROOT / module / "src" / "main" / "java"
+        source_root = root / module / "src" / "main" / "java"
         if not source_root.is_dir():
             continue
         for source in sorted(source_root.rglob("*.java")):
@@ -336,7 +374,7 @@ def check_source_boundaries() -> None:
                 if resolved:
                     found.add(resolved)
             body = SOURCE_IMPORT.sub(" ", code)
-            for qualified in SOURCE_QUALIFIED.findall(body):
+            for qualified in qualified_name.findall(body):
                 resolved = resolve_adapter_class(qualified, by_fqn)
                 if resolved:
                     found.add(resolved)
@@ -344,7 +382,7 @@ def check_source_boundaries() -> None:
             for simple in by_package.get(package, {}):
                 if simple in words:
                     found.add(package + "." + simple)
-            relative = source.relative_to(ROOT).as_posix()
+            relative = source.relative_to(root).as_posix()
             for adapter_class in sorted(found):
                 owner = by_fqn.get(adapter_class) or sorted(set(by_package[adapter_class[:-2]].values()))[0]
                 violations.append(f"{relative} -> {adapter_class} [{owner}]")
@@ -353,13 +391,13 @@ def check_source_boundaries() -> None:
              "adapter class; reach it through a port wired by minos-bootstrap): " + "; ".join(violations))
 
 
-def check_java_layout() -> tuple[int, dict[str, int]]:
+def check_java_layout(root: Path = ROOT) -> tuple[int, dict[str, int]]:
     owners: dict[str, str] = {}
     counts: dict[str, int] = {}
     total = 0
 
     for module in MODULES:
-        source_root = ROOT / module / "src" / "main" / "java"
+        source_root = root / module / "src" / "main" / "java"
         module_count = 0
         if source_root.is_dir():
             for source in sorted(source_root.rglob("*.java")):
@@ -465,6 +503,249 @@ def check_package_ownership(root: Path = ROOT, modules: tuple[str, ...] = MODULE
     return len(owners)
 
 
+# A8 / AUD-ARC-06 — package cycles, as a ratchet. The reactor modules and the IntelliJ plugin (outside the reactor,
+# no com.minos:* artifact) are read as one graph package -> package, from imports and fully qualified names of the
+# production sources (comments and string literals ignored). A strongly connected component of more than one package
+# is a cycle. A cycle may exist only if it is listed below; a listed cycle must still be exactly a component, so the
+# table can only shrink, by a visible edit, when a cycle is broken. Lifting them is the change
+# `casser-les-cycles-de-packages`. What this does not see: references through reflection, ServiceLoader, or a type
+# only named through a generic parameter without import (no bytecode is read). An edge added inside a listed cycle is
+# not seen either: the packages of the component do not change.
+EXTERNAL_SOURCE_ROOTS = ("minos-intellij",)
+KNOWN_PACKAGE_CYCLES: dict[str, tuple[frozenset[str], str]] = {
+    "engine-discovery": (
+        frozenset({"com.minos.discovery", "com.minos.discovery.spi"}),
+        "minos-engine: the SPI detectors import ProjectDiscovery and ProjectIgnorePolicy, which use the SPI back",
+    ),
+    "engine-incremental-orchestration": (
+        frozenset({"com.minos.incremental", "com.minos.orchestration"}),
+        "minos-engine: IncrementalIndexingPlan and ProjectFingerprintService are used by the lifecycle, "
+        "which the planner and the coordinator use back",
+    ),
+    "application-resolution-and-output": (
+        frozenset({
+            "com.minos.application", "com.minos.application.dynamic", "com.minos.application.semantic",
+            "com.minos.architecture", "com.minos.impact", "com.minos.output", "com.minos.program.analysis",
+            "com.minos.workspace",
+        }),
+        "minos-application: ProjectResolver is imported by six packages that MinosApplication imports back, "
+        "and application.semantic imports output.DeterministicJson while output imports the query packages",
+    ),
+    "intellij-plugin": (
+        frozenset({"com.minos.intellij.protocol", "com.minos.intellij.service", "com.minos.intellij.ui"}),
+        "minos-intellij (outside the reactor): MinosCliClient reaches ui.MinosRegistryNotice",
+    ),
+}
+
+
+def declared_classes(root: Path, owners: tuple[str, ...]) -> tuple[dict[str, str], list[tuple[str, str, str]]]:
+    """Every production class (FQN -> package) of the owners, and each source as (relative path, package, code)."""
+    classes: dict[str, str] = {}
+    sources: list[tuple[str, str, str]] = []
+    for owner in owners:
+        source_root = root / owner / "src" / "main" / "java"
+        if not source_root.is_dir():
+            continue
+        for source in sorted(source_root.rglob("*.java")):
+            code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+            match = PACKAGE.search(code)
+            package = match.group(1) if match else ""
+            classes[".".join(source.relative_to(source_root).with_suffix("").parts)] = package
+            sources.append((source.relative_to(root).as_posix(), package, code))
+    return classes, sources
+
+
+def package_of_name(name: str, wildcard: bool, classes: dict[str, str], packages: set[str]) -> str | None:
+    """The declared package a (possibly nested or static) import or qualified name designates, if any."""
+    if wildcard and name in packages:
+        return name
+    parts = name.split(".")
+    for size in range(len(parts), 0, -1):
+        candidate = ".".join(parts[:size])
+        if candidate in classes:
+            return classes[candidate]
+    return None
+
+
+def packages_used_by(code: str, classes: dict[str, str], packages: set[str],
+                     qualified_name: re.Pattern[str]) -> list[str]:
+    """Declared packages named by the imports and the fully qualified names of one source."""
+    used = [package_of_name(name, bool(wildcard), classes, packages)
+            for _, name, wildcard in SOURCE_IMPORT.findall(code)]
+    body = SOURCE_IMPORT.sub(" ", code)
+    used += [package_of_name(name, False, classes, packages) for name in qualified_name.findall(body)]
+    return [package for package in used if package is not None]
+
+
+def package_graph(root: Path, owners: tuple[str, ...], group_id: str) -> tuple[
+        dict[str, set[str]], dict[tuple[str, str], str], set[str]]:
+    """Package -> packages it uses, one witness file per edge, and every declared package."""
+    classes, sources = declared_classes(root, owners)
+    packages = set(classes.values())
+    qualified_name = qualified_name_pattern(group_id)
+    edges: dict[str, set[str]] = {package: set() for package in packages}
+    witness: dict[tuple[str, str], str] = {}
+    for relative, package, code in sources:
+        for target in packages_used_by(code, classes, packages, qualified_name):
+            if target != package:
+                edges[package].add(target)
+                witness.setdefault((package, target), relative)
+    return edges, witness, packages
+
+
+def strongly_connected_components(edges: dict[str, set[str]]) -> list[frozenset[str]]:
+    """Components of more than one node (iterative Tarjan: no recursion limit, deterministic order)."""
+    index: dict[str, int] = {}
+    low: dict[str, int] = {}
+    on_stack: set[str] = set()
+    stack: list[str] = []
+    components: list[frozenset[str]] = []
+    counter = 0
+    for start in sorted(edges):
+        if start in index:
+            continue
+        work = [(start, iter(sorted(edges[start])))]
+        index[start] = low[start] = counter
+        counter += 1
+        stack.append(start)
+        on_stack.add(start)
+        while work:
+            node, neighbours = work[-1]
+            advanced = False
+            for neighbour in neighbours:
+                if neighbour not in index:
+                    index[neighbour] = low[neighbour] = counter
+                    counter += 1
+                    stack.append(neighbour)
+                    on_stack.add(neighbour)
+                    work.append((neighbour, iter(sorted(edges.get(neighbour, ())))))
+                    advanced = True
+                    break
+                if neighbour in on_stack:
+                    low[node] = min(low[node], index[neighbour])
+            if advanced:
+                continue
+            work.pop()
+            if work:
+                parent = work[-1][0]
+                low[parent] = min(low[parent], low[node])
+            if low[node] == index[node]:
+                members = []
+                while True:
+                    member = stack.pop()
+                    on_stack.discard(member)
+                    members.append(member)
+                    if member == node:
+                        break
+                if len(members) > 1:
+                    components.append(frozenset(members))
+    return components
+
+
+def check_package_cycles(root: Path = ROOT, modules: tuple[str, ...] = MODULES,
+                         external: tuple[str, ...] = EXTERNAL_SOURCE_ROOTS,
+                         known: dict[str, tuple[frozenset[str], str]] | None = None,
+                         group_id: str | None = None) -> tuple[int, int]:
+    """A8 — no package cycle outside KNOWN_PACKAGE_CYCLES, and no listed cycle that is not exactly a cycle."""
+    known = KNOWN_PACKAGE_CYCLES if known is None else known
+    edges, witness, packages = package_graph(root, (*modules, *external), group_id or repository_group_id(root))
+    components = strongly_connected_components(edges)
+    listed = {members: name for name, (members, _) in known.items()}
+    problems: list[str] = []
+    for component in sorted(components, key=sorted):
+        if component in listed:
+            continue
+        inside = sorted((a, b) for a in component for b in edges[a] if b in component)
+        evidence = "; ".join(f"{a} -> {b} [{witness[(a, b)]}]" for a, b in inside[:6])
+        problems.append(f"package cycle not in KNOWN_PACKAGE_CYCLES: {', '.join(sorted(component))} ({evidence})")
+    current = set(components)
+    for name, (members, _) in sorted(known.items()):
+        if frozenset(members) not in current:
+            problems.append(f"KNOWN_PACKAGE_CYCLES entry '{name}' is no longer exactly a package cycle: remove or "
+                            "tighten it (the ratchet only shrinks)")
+    if problems:
+        fail("A8 package cycles: " + "; ".join(problems))
+    return len(components), len(packages)
+
+
+# A9 / AUD-ARC-03 — the dependency lists of the current architecture document are checked against the POMs. The
+# structure is the contract: a `### minos-…` heading, and under it a bullet labelled "Dépendances". A document that
+# loses that shape fails, it does not pass by default (ADR 0043 section 3). Prose elsewhere is not checked.
+ARCHITECTURE_BLOCKS_DOC = ROOT / "docs" / "architecture" / "arc42" / "05-vue-blocs.md"
+MODULE_HEADING = re.compile(r"^###\s+(minos-[a-z0-9-]+)")
+ANY_HEADING = re.compile(r"^#{1,3}\s")
+DEPENDENCIES_BULLET = re.compile(r"^-\s+\*\*Dépendances\*\*\s*:\s*(.*)$")
+MODULE_TOKEN = re.compile(r"`(minos-[a-z0-9-]+)`")
+
+
+def documented_dependency_lines(document: Path) -> dict[str, list[str]]:
+    """Module -> its "Dépendances" bullets, for each `### minos-…` section of the document."""
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in document.read_text(encoding="utf-8").splitlines():
+        heading = MODULE_HEADING.match(line)
+        if heading:
+            current = heading.group(1)
+            sections.setdefault(current, [])
+        elif ANY_HEADING.match(line):
+            current = None
+        elif current is not None:
+            bullet = DEPENDENCIES_BULLET.match(line)
+            if bullet:
+                sections[current].append(bullet.group(1))
+    return sections
+
+
+def documentation_problem(module: str, lines: list[str], expected: set[str], modules: tuple[str, ...]) -> str | None:
+    """Why the "Dépendances" bullets of one module section do not match its POM, or None when they do."""
+    if len(lines) != 1:
+        return f"{module}: expected one 'Dépendances' line in its section, found {len(lines)}"
+    text = lines[0]
+    if module == ASSEMBLY_MODULE and "tous les modules" in text.casefold():
+        missing = set(modules) - {module} - expected
+        return f"{module}: documented as depending on all modules, the POM misses {', '.join(sorted(missing))}" \
+            if missing else None
+    documented = set(MODULE_TOKEN.findall(text)) - {module}
+    if documented == expected:
+        return None
+    line = ", ".join(f"`{name}`" for name in sorted(expected)) or "aucune"
+    return (f"{module}: documented {sorted(documented)}, POM declares {sorted(expected)}; "
+            f"expected line: - **Dépendances** : {line}")
+
+
+def check_architecture_documentation(graph: dict[str, frozenset[str]], document: Path = ARCHITECTURE_BLOCKS_DOC,
+                                     modules: tuple[str, ...] = MODULES) -> int:
+    """A9 — every module's "Dépendances" line in the arc42 block view equals its direct internal POM dependencies."""
+    if not document.is_file():
+        fail(f"A9 architecture document is missing: {document}")
+    sections = documented_dependency_lines(document)
+    problems: list[str] = []
+    for module in modules:
+        if module not in sections:
+            problems.append(f"{module} has no section in {document.name}")
+            continue
+        problem = documentation_problem(module, sections[module], set(graph[module]), modules)
+        if problem:
+            problems.append(problem)
+    problems += [f"{document.name} has a section for {module}, which is not a governed module"
+                 for module in sorted(set(sections) - set(modules))]
+    if problems:
+        fail("A9 current architecture documentation diverges from the POMs: " + "; ".join(problems))
+    return len(modules)
+
+
+def check_pom_rules(root: Path = ROOT) -> dict[str, dict[str, str]]:
+    """Every POM rule over the governed modules; returns the scoped internal dependencies of each module."""
+    group_id = repository_group_id(root)
+    poms = {module: parse_pom(module, root) for module in MODULES}
+    for module, pom in poms.items():
+        check_pom_layout(module, pom)
+        check_no_hidden_internal_dependencies(module, pom, group_id)
+    scoped = {module: minos_dependencies(module, pom, group_id) for module, pom in poms.items()}
+    check_dependency_policy(scoped)
+    return scoped
+
+
 def mermaid_id(module: str) -> str:
     return module.replace("-", "_")
 
@@ -506,20 +787,21 @@ def render_dependency_document(graph: dict[str, frozenset[str]]) -> str:
     return "\n".join(lines)
 
 
-def check_or_write_dependency_document(graph: dict[str, frozenset[str]], write_doc: bool) -> None:
+def check_or_write_dependency_document(graph: dict[str, frozenset[str]], write_doc: bool,
+                                       document: Path = GENERATED_DEPENDENCY_DOC) -> None:
     expected = render_dependency_document(graph)
     if write_doc:
-        GENERATED_DEPENDENCY_DOC.parent.mkdir(parents=True, exist_ok=True)
-        GENERATED_DEPENDENCY_DOC.write_text(expected, encoding="utf-8", newline="\n")
-        print(f"M21 generated dependency documentation: {GENERATED_DEPENDENCY_DOC.relative_to(ROOT)}")
+        document.parent.mkdir(parents=True, exist_ok=True)
+        document.write_text(expected, encoding="utf-8", newline="\n")
+        print(f"M21 generated dependency documentation: {document.name}")
         return
 
-    if not GENERATED_DEPENDENCY_DOC.is_file():
+    if not document.is_file():
         fail(
             "generated module dependency documentation is missing; run: "
             "python scripts/architecture/check-module-boundaries.py --write-doc"
         )
-    actual = GENERATED_DEPENDENCY_DOC.read_text(encoding="utf-8")
+    actual = document.read_text(encoding="utf-8")
     if actual != expected:
         fail(
             "generated module dependency documentation is stale; run: "
@@ -536,25 +818,27 @@ def main() -> int:
         write_doc = "--write-doc" in arguments
 
         check_reactor_modules()
-        roots = {module: parse_pom(module) for module in MODULES}
-        for module, root in roots.items():
-            check_pom_layout(module, root)
-            check_no_hidden_internal_dependencies(module, root)
-        scoped = {module: minos_dependencies(module, root) for module, root in roots.items()}
+        scoped = check_pom_rules()
         graph = {module: frozenset(dependencies) for module, dependencies in scoped.items()}
-        check_dependency_policy(scoped)
         total, counts = check_java_layout()
         check_source_boundaries()
         packages = check_package_ownership()
+        cycles, cycle_packages = check_package_cycles()
+        documented = check_architecture_documentation(graph)
         check_or_write_dependency_document(graph, write_doc)
         for module in MODULES:
             dependencies = ",".join(sorted(graph[module])) or "-"
             print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")
         print(f"A3 package ownership: packages={packages}, each owned by exactly one module")
+        print(f"A8 package cycles: {cycles} known cycles over "
+              f"{sum(len(members) for members, _ in KNOWN_PACKAGE_CYCLES.values())} packages, none new "
+              f"({cycle_packages} packages analysed, plugin included)")
+        print(f"A9 architecture document: {documented} module sections match the POM dependencies")
         print(
             f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "
             f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042, "
-            f"packagePolicy=A3-ADR-0044, reactor=root-pom-modules)"
+            f"packagePolicy=A3-ADR-0044, cyclePolicy=A8-ratchet, documentation=A9-arc42-05, "
+            f"reactor=root-pom-modules)"
         )
         return 0
     except Exception as exception:
