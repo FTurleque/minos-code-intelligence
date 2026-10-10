@@ -11,3 +11,8 @@
 /minos-storage-local/ @FTurleque
 /minos-storage-postgresql/ @FTurleque
 /minos-integration-git/ @FTurleque
+
+# AI assistant configuration: hooks and permissions run commands on contributors' machines.
+/.claude/ @FTurleque
+/AGENTS.md @FTurleque
+/CLAUDE.md @FTurleque
