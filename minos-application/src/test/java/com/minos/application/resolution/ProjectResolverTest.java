@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -84,7 +85,7 @@ class ProjectResolverTest {
             assertEquals(ProjectResolver.ErrorCode.INVALID_PROJECT_REFERENCE, invalid.code());
             assertEquals(invalid.getMessage(), invalid.publicMessage());
         }
-        assertEquals(null, assertThrows(ProjectResolver.ResolutionException.class,
+        assertNull(assertThrows(ProjectResolver.ResolutionException.class,
                 () -> resolver.resolve(oversized)).reference());
     }
 
