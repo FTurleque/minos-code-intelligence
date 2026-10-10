@@ -2,13 +2,13 @@
 
 Status: Accepted (2026-09-26) — option (b) retenue : l'indexation distante de code non fiable reste fermée par décision, le refus est journalisé et diagnosticable, les revendications sont alignées sur ce que l'OS applique. L'option (a) reste chiffrée ci-dessous pour un ADR ultérieur si un besoin `remote index` est confirmé.
 
-Complète et amende la §4 de [0038](0038-aggregate-worker-resource-containment.md) (quota d'écriture assumé comme supervision) ; s'appuie sur [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) (claims sandbox qualifiés par plateforme) et sur la correction documentaire G2 du sprint 1 ([`../audit/SPRINT-1-SUIVI.md`](../audit/SPRINT-1-SUIVI.md), V3).
+Complète et amende la §4 de [0038](0038-aggregate-worker-resource-containment.md) (quota d'écriture assumé comme supervision) ; s'appuie sur [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) (claims sandbox qualifiés par plateforme) et sur la correction documentaire G2 du sprint 1 ([`../audit/SPRINT-1-SUIVI.md`](../audit/archive/2026-09/SPRINT-1-SUIVI.md), V3).
 
 Toutes les références `fichier:ligne` ci-dessous ont été relues sur la base `38756b28`.
 
 ## 1. Contexte
 
-L'audit ([`../audit/AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md), § 3 A1) constate que `remote index` est refusé sur tous les OS parce que le quota d'écriture disque des deux backends sandbox est `SUPERVISED_HARD_KILL`, que la qualification exige `OS_ENFORCED` sur cette dimension, et que le repli vers le backend natif se fait sans journal. Le sprint 1 (G2) a aligné le README, `docs/STATUS.md`, `docs/ROADMAP.md` et `docs/user/{cli,remote-indexing,installation,production-installation}.md` sur ce fait, et le gate `scripts/docs/product-facts.py:126-132` verrouille désormais la phrase exacte de `docs/STATUS.md:13`. **Le fond n'est pas tranché** : faut-il rendre ce quota réellement appliqué par l'OS (et rouvrir `remote index`), ou assumer la fermeture comme une décision d'architecture ?
+L'audit ([`../audit/AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md), § 3 A1) constate que `remote index` est refusé sur tous les OS parce que le quota d'écriture disque des deux backends sandbox est `SUPERVISED_HARD_KILL`, que la qualification exige `OS_ENFORCED` sur cette dimension, et que le repli vers le backend natif se fait sans journal. Le sprint 1 (G2) a aligné le README, `docs/STATUS.md`, `docs/ROADMAP.md` et `docs/user/{cli,remote-indexing,installation,production-installation}.md` sur ce fait, et le gate `scripts/docs/product-facts.py:126-132` verrouille désormais la phrase exacte de `docs/STATUS.md:13`. **Le fond n'est pas tranché** : faut-il rendre ce quota réellement appliqué par l'OS (et rouvrir `remote index`), ou assumer la fermeture comme une décision d'architecture ?
 
 Le principe directeur reste celui de l'ADR 0038 : une revendication d'isolation qui n'est pas exactement vraie est pire qu'une absence de revendication.
 
@@ -180,6 +180,6 @@ Consignés à la livraison (sprint 2, revue `verif-qualite` V24, V29, V31, V33).
 
 ## Liens
 
-- audit : [`../audit/AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md) (A1, G2) ; suivi sprint 1 : [`../audit/SPRINT-1-SUIVI.md`](../audit/SPRINT-1-SUIVI.md)
+- audit : [`../audit/AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md) (A1, G2) ; suivi sprint 1 : [`../audit/SPRINT-1-SUIVI.md`](../audit/archive/2026-09/SPRINT-1-SUIVI.md)
 - ADR amendé : [0038](0038-aggregate-worker-resource-containment.md) §4 ; ADR liés : [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md), [0039](0039-reprise-indexation-apres-interruption.md) (intersection `runs/`)
 - utilisateur : [`../user/remote-indexing.md`](../user/remote-indexing.md), [`../user/cli.md`](../user/cli.md) ; développeur : [`../developer/remote-worker-sandbox-disposition.md`](../developer/remote-worker-sandbox-disposition.md)

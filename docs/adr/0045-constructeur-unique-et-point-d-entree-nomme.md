@@ -1,8 +1,8 @@
 # 0045 — Constructeur unique et point d'entrée nommé ; racine de composition regroupée par domaine
 
-Status: Accepted (2026-09-29) — mis en œuvre ; historique, inventaire et preuves dans [`ARCHI-SUIVI.md`](../audit/ARCHI-SUIVI.md) (lot 2, A4).
+Status: Accepted (2026-09-29) — mis en œuvre ; historique, inventaire et preuves dans [`ARCHI-SUIVI.md`](../audit/archive/2026-09/ARCHI-SUIVI.md) (lot 2, A4).
 
-Complète l'audit [`AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md) (constat A4). Prolonge l'[ADR 0042](0042-racine-de-composition.md) (racine de composition, ordre d'initialisation) et l'[ADR 0044](0044-un-package-un-module.md), dont il garde toutes les frontières.
+Complète l'audit [`AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md) (constat A4). Prolonge l'[ADR 0042](0042-racine-de-composition.md) (racine de composition, ordre d'initialisation) et l'[ADR 0044](0044-un-package-un-module.md), dont il garde toutes les frontières.
 
 ## Contexte
 
