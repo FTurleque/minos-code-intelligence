@@ -13,7 +13,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -132,7 +131,7 @@ class LinuxCgroupJobContainmentTest {
     void theSandboxJoinsTheJobBeforeItExecutesAnyProviderCode(@TempDir Path temporary) throws Exception {
         Path root = requireDelegatedRoot();
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent(), "a Linux sandbox backend is required");
+        SandboxTestSupport.requireBackend(discovered, "a Linux sandbox backend is required");
         LinuxCgroupJob job = LinuxCgroupJob.create(
                 root, "minos-plan-" + UUID.randomUUID(), LinuxCgroupJob.Limits.DEFAULT);
         try {
@@ -157,7 +156,7 @@ class LinuxCgroupJobContainmentTest {
     @Test
     void theQualifiedBackendDeclaresTheAggregateContainmentItReallyEnforces() {
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent(), "a Linux sandbox backend is required");
+        SandboxTestSupport.requireBackend(discovered, "a Linux sandbox backend is required");
         WorkerSandboxQualification qualification = discovered.orElseThrow().qualification();
 
         assertTrue(qualification.containment().aggregateJobBoundaryEnforced());
@@ -179,10 +178,7 @@ class LinuxCgroupJobContainmentTest {
     }
 
     private static Path requireDelegatedRoot() {
-        Optional<Path> root = LinuxCgroupJob.delegatedRoot();
-        assumeTrue(root.isPresent(),
-                "a delegated cgroup v2 root is required; set " + LinuxCgroupJob.ROOT_ENVIRONMENT_VARIABLE);
-        return root.orElseThrow();
+        return SandboxTestSupport.requireDelegatedCgroupRoot();
     }
 
     private static void run(LinuxCgroupJob job, int timeoutSeconds, String... command) throws Exception {

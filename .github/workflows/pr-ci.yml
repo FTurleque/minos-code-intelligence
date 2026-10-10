@@ -260,12 +260,12 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$
-          ./mvnw -B -ntp -Dminos.postgresql.tests.required=true clean verify
+          ./mvnw -B -ntp -Dminos.postgresql.tests.required=true -Dminos.sandbox.tests.required=true clean verify
 
       - name: Maven clean verify (Windows)
         if: runner.os == 'Windows'
         shell: powershell
-        run: .\mvnw.cmd -B -ntp clean verify
+        run: .\mvnw.cmd -B -ntp "-Dminos.sandbox.tests.required=true" clean verify
 
       - name: Targeted JaCoCo gate (full)
         if: runner.os != 'Windows'

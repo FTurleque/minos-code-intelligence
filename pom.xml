@@ -46,6 +46,8 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <!-- Local developer default. CI/release overrides this with -D...=true. -->
         <minos.postgresql.tests.required>false</minos.postgresql.tests.required>
+        <!-- Same contract for the OS confinement qualification (bubblewrap, cgroup v2, AppContainer). -->
+        <minos.sandbox.tests.required>false</minos.sandbox.tests.required>
 
         <scip.java.bindings.version>0.10.0</scip.java.bindings.version>
         <mcp.sdk.version>2.0.1</mcp.sdk.version>
@@ -210,6 +212,7 @@
                     <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
                     <systemPropertyVariables>
                         <minos.postgresql.tests.required>${minos.postgresql.tests.required}</minos.postgresql.tests.required>
+                        <minos.sandbox.tests.required>${minos.sandbox.tests.required}</minos.sandbox.tests.required>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

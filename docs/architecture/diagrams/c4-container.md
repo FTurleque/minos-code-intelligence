@@ -25,8 +25,12 @@ flowchart TB
     bootstrap -->|"câble"| adapters
     application --> engine
     adapters --> engine
+    adapters -->|"entre adaptateurs"| adapters
+    surfaces -.->|"dette déclarée (ADR-0058) : types du moteur"| engine
     engine --> domain
 ```
 
 Lecture : les flèches descendent vers le cœur ; `minos-bootstrap` est le seul module non adaptateur qui connaît
 des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne dépendent pas des adaptateurs.
+
+Deux familles d'arêtes réelles sont dessinées pour ne pas masquer la dette : la flèche pointillée `surfaces → minos-engine` (les surfaces consomment encore des types du moteur ; l'ADR-0058 la déclare, l'ADR-0057 point 6 vise à la résorber) et la boucle sur « Adaptateurs » (`minos-provider-scip` → `minos-storage-local` et `minos-runtime-local`, `minos-storage-postgresql` → `minos-storage-local`). Le détail exact est dans [module-dependencies.md](module-dependencies.md), fichier généré qui fait foi.

@@ -2,6 +2,8 @@ package com.minos.runtime.local;
 
 import com.minos.runtime.local.CgroupJobOwnership.Mark;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -18,15 +20,15 @@ import java.util.logging.LogRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Two MINOS instances sharing one delegated cgroup v2 root: the sweep of the second instance must
  * never kill the jobs of the first, while a job whose owner died is reclaimed.
  *
  * <p>Requires a delegated cgroup v2 root (see {@link LinuxCgroupJob#ROOT_ENVIRONMENT_VARIABLE});
- * skipped everywhere else, including Windows and Linux hosts without delegation.</p>
+ * skipped on Windows by {@code @EnabledOnOs} and, on Linux hosts without delegation, by the sandbox availability check.</p>
  */
+@EnabledOnOs(OS.LINUX)
 class LinuxCgroupJobOwnershipIsolationTest {
 
     private static final Path SHELL = Path.of("/bin/sh");
@@ -320,10 +322,7 @@ class LinuxCgroupJobOwnershipIsolationTest {
     }
 
     private static Path requireDelegatedRoot() {
-        Optional<Path> root = LinuxCgroupJob.delegatedRoot();
-        assumeTrue(root.isPresent(),
-                "a delegated cgroup v2 root is required; set " + LinuxCgroupJob.ROOT_ENVIRONMENT_VARIABLE);
-        return root.orElseThrow();
+        return SandboxTestSupport.requireDelegatedCgroupRoot();
     }
 
     private static Mark deadOwnerMark() throws Exception {
