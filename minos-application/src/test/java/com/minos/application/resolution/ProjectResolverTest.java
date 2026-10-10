@@ -185,8 +185,8 @@ class ProjectResolverTest {
         assertThrows(NullPointerException.class, () -> new ProjectResolver(null));
         assertThrows(NullPointerException.class, () -> new ProjectResolver.Resolution(null, List.of()));
         assertThrows(NullPointerException.class, () -> new ProjectResolver.Resolution(alpha, null));
-        assertThrows(NullPointerException.class,
-                () -> new ProjectResolver(new FakeRegistry(List.of())).resolveById(null));
+        ProjectResolver resolver = new ProjectResolver(new FakeRegistry(List.of()));
+        assertThrows(NullPointerException.class, () -> resolver.resolveById(null));
     }
 
     private static RegisteredProject project(String displayName) {
