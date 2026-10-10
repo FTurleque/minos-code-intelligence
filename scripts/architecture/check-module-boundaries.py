@@ -538,9 +538,8 @@ KNOWN_PACKAGE_CYCLES: dict[str, tuple[frozenset[str], str]] = {
 }
 
 
-def package_graph(root: Path, owners: tuple[str, ...], group_id: str) -> tuple[
-        dict[str, set[str]], dict[tuple[str, str], str], set[str]]:
-    """Package -> packages it uses, one witness file per edge, and every declared package."""
+def declared_classes(root: Path, owners: tuple[str, ...]) -> tuple[dict[str, str], list[tuple[str, str, str]]]:
+    """Every production class (FQN -> package) of the owners, and each source as (relative path, package, code)."""
     classes: dict[str, str] = {}
     sources: list[tuple[str, str, str]] = []
     for owner in owners:
@@ -548,35 +547,47 @@ def package_graph(root: Path, owners: tuple[str, ...], group_id: str) -> tuple[
         if not source_root.is_dir():
             continue
         for source in sorted(source_root.rglob("*.java")):
-            text = source.read_text(encoding="utf-8")
-            code = COMMENTS_AND_LITERALS.sub(" ", text)
+            code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
             match = PACKAGE.search(code)
             package = match.group(1) if match else ""
-            classes[".".join((*source.relative_to(source_root).with_suffix("").parts,))] = package
+            classes[".".join(source.relative_to(source_root).with_suffix("").parts)] = package
             sources.append((source.relative_to(root).as_posix(), package, code))
+    return classes, sources
+
+
+def package_of_name(name: str, wildcard: bool, classes: dict[str, str], packages: set[str]) -> str | None:
+    """The declared package a (possibly nested or static) import or qualified name designates, if any."""
+    if wildcard and name in packages:
+        return name
+    parts = name.split(".")
+    for size in range(len(parts), 0, -1):
+        candidate = ".".join(parts[:size])
+        if candidate in classes:
+            return classes[candidate]
+    return None
+
+
+def packages_used_by(code: str, classes: dict[str, str], packages: set[str],
+                     qualified_name: re.Pattern[str]) -> list[str]:
+    """Declared packages named by the imports and the fully qualified names of one source."""
+    used = [package_of_name(name, bool(wildcard), classes, packages)
+            for _, name, wildcard in SOURCE_IMPORT.findall(code)]
+    body = SOURCE_IMPORT.sub(" ", code)
+    used += [package_of_name(name, False, classes, packages) for name in qualified_name.findall(body)]
+    return [package for package in used if package is not None]
+
+
+def package_graph(root: Path, owners: tuple[str, ...], group_id: str) -> tuple[
+        dict[str, set[str]], dict[tuple[str, str], str], set[str]]:
+    """Package -> packages it uses, one witness file per edge, and every declared package."""
+    classes, sources = declared_classes(root, owners)
     packages = set(classes.values())
     qualified_name = qualified_name_pattern(group_id)
     edges: dict[str, set[str]] = {package: set() for package in packages}
     witness: dict[tuple[str, str], str] = {}
-
-    def package_of(name: str, wildcard: bool) -> str | None:
-        if wildcard and name in packages:
-            return name
-        parts = name.split(".")
-        for size in range(len(parts), 0, -1):
-            candidate = ".".join(parts[:size])
-            if candidate in classes:
-                return classes[candidate]
-        return None
-
     for relative, package, code in sources:
-        used: list[str | None] = []
-        for _, name, wildcard in SOURCE_IMPORT.findall(code):
-            used.append(package_of(name, bool(wildcard)))
-        body = SOURCE_IMPORT.sub(" ", code)
-        used += [package_of(name, False) for name in qualified_name.findall(body)]
-        for target in used:
-            if target is not None and target != package:
+        for target in packages_used_by(code, classes, packages, qualified_name):
+            if target != package:
                 edges[package].add(target)
                 witness.setdefault((package, target), relative)
     return edges, witness, packages
@@ -667,49 +678,57 @@ DEPENDENCIES_BULLET = re.compile(r"^-\s+\*\*Dépendances\*\*\s*:\s*(.*)$")
 MODULE_TOKEN = re.compile(r"`(minos-[a-z0-9-]+)`")
 
 
-def check_architecture_documentation(graph: dict[str, frozenset[str]], document: Path = ARCHITECTURE_BLOCKS_DOC,
-                                     modules: tuple[str, ...] = MODULES) -> int:
-    """A9 — every module's "Dépendances" line in the arc42 block view equals its direct internal POM dependencies."""
-    if not document.is_file():
-        fail(f"A9 architecture document is missing: {document}")
-    sections: dict[str, list[str | None]] = {}
+def documented_dependency_lines(document: Path) -> dict[str, list[str]]:
+    """Module -> its "Dépendances" bullets, for each `### minos-…` section of the document."""
+    sections: dict[str, list[str]] = {}
     current: str | None = None
     for line in document.read_text(encoding="utf-8").splitlines():
         heading = MODULE_HEADING.match(line)
         if heading:
             current = heading.group(1)
             sections.setdefault(current, [])
-            continue
-        if ANY_HEADING.match(line):
+        elif ANY_HEADING.match(line):
             current = None
-            continue
-        bullet = DEPENDENCIES_BULLET.match(line)
-        if current is not None and bullet:
-            sections[current].append(bullet.group(1))
+        elif current is not None:
+            bullet = DEPENDENCIES_BULLET.match(line)
+            if bullet:
+                sections[current].append(bullet.group(1))
+    return sections
+
+
+def documentation_problem(module: str, lines: list[str], expected: set[str], modules: tuple[str, ...]) -> str | None:
+    """Why the "Dépendances" bullets of one module section do not match its POM, or None when they do."""
+    if len(lines) != 1:
+        return f"{module}: expected one 'Dépendances' line in its section, found {len(lines)}"
+    text = lines[0]
+    if module == ASSEMBLY_MODULE and "tous les modules" in text.casefold():
+        missing = set(modules) - {module} - expected
+        return f"{module}: documented as depending on all modules, the POM misses {', '.join(sorted(missing))}" \
+            if missing else None
+    documented = set(MODULE_TOKEN.findall(text)) - {module}
+    if documented == expected:
+        return None
+    line = ", ".join(f"`{name}`" for name in sorted(expected)) or "aucune"
+    return (f"{module}: documented {sorted(documented)}, POM declares {sorted(expected)}; "
+            f"expected line: - **Dépendances** : {line}")
+
+
+def check_architecture_documentation(graph: dict[str, frozenset[str]], document: Path = ARCHITECTURE_BLOCKS_DOC,
+                                     modules: tuple[str, ...] = MODULES) -> int:
+    """A9 — every module's "Dépendances" line in the arc42 block view equals its direct internal POM dependencies."""
+    if not document.is_file():
+        fail(f"A9 architecture document is missing: {document}")
+    sections = documented_dependency_lines(document)
     problems: list[str] = []
     for module in modules:
         if module not in sections:
             problems.append(f"{module} has no section in {document.name}")
             continue
-        lines = sections[module]
-        if len(lines) != 1:
-            problems.append(f"{module}: expected one 'Dépendances' line in its section, found {len(lines)}")
-            continue
-        expected = set(graph[module])
-        text = lines[0]
-        if module == ASSEMBLY_MODULE and "tous les modules" in text.casefold():
-            everything = set(modules) - {module}
-            if expected != everything:
-                problems.append(f"{module}: documented as depending on all modules, the POM misses "
-                                f"{', '.join(sorted(everything - expected))}")
-            continue
-        documented = set(MODULE_TOKEN.findall(text)) - {module}
-        if documented != expected:
-            line = ", ".join(f"`{name}`" for name in sorted(expected)) or "aucune"
-            problems.append(f"{module}: documented {sorted(documented)}, POM declares {sorted(expected)}; "
-                            f"expected line: - **Dépendances** : {line}")
-    for module in sorted(set(sections) - set(modules)):
-        problems.append(f"{document.name} has a section for {module}, which is not a governed module")
+        problem = documentation_problem(module, sections[module], set(graph[module]), modules)
+        if problem:
+            problems.append(problem)
+    problems += [f"{document.name} has a section for {module}, which is not a governed module"
+                 for module in sorted(set(sections) - set(modules))]
     if problems:
         fail("A9 current architecture documentation diverges from the POMs: " + "; ".join(problems))
     return len(modules)
