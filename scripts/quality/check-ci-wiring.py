@@ -73,6 +73,39 @@ def strip_quotes(value: str) -> str:
     return value
 
 
+def event_sections(block: list[tuple[int, str]]) -> dict[str, list[str]]:
+    """The lines nested under each event of an ``on:`` block (the event's inline value comes first when present)."""
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    for _, line in block[1:]:
+        header = EVENT_HEADER.match(line)
+        if header and not line.startswith("   "):
+            current = header.group(1)
+            sections[current] = [header.group(2)] if header.group(2) else []
+        elif current is not None:
+            sections[current].append(line)
+    return sections
+
+
+def branches_of(body: list[str]) -> list[str] | None:
+    """The ``branches:`` filter of one event (inline list or block items), None when the event has none."""
+    for index, line in enumerate(body):
+        match = re.match(r"^\s{4}branches\s*:\s*(.*)$", line)
+        if not match:
+            continue
+        inline = INLINE_LIST.search(match.group(1))
+        if inline:
+            return [strip_quotes(item) for item in inline.group(1).split(",") if item.strip()]
+        items: list[str] = []
+        for following in body[index + 1:]:
+            item = re.match(r"^\s{6}-\s*(.+?)\s*$", following)
+            if not item:
+                break
+            items.append(strip_quotes(item.group(1)))
+        return items
+    return None
+
+
 def pull_request_trigger(text: str) -> dict | None:
     """``{"branches": [...] | None, "filtered": bool}`` for the pull_request trigger, None when absent."""
     block = top_level_block(code_lines(text), "on")
@@ -82,122 +115,121 @@ def pull_request_trigger(text: str) -> dict | None:
     if head:  # on: [push, pull_request]  /  on: pull_request
         events = [item.strip() for item in re.sub(r"[\[\]]", "", head).split(",")]
         return {"branches": None, "filtered": False} if "pull_request" in events else None
-    sections: dict[str, list[str]] = {}
-    current = None
-    for _, line in block[1:]:
-        header = EVENT_HEADER.match(line)
-        if header and not line.startswith("   "):
-            current = header.group(1)
-            sections[current] = [header.group(2)] if header.group(2) else []
-        elif current is not None:
-            sections[current].append(line)
-    if "pull_request" not in sections:
+    body = event_sections(block).get("pull_request")
+    if body is None:
         return None
-    body = sections["pull_request"]
     filtered = any(re.match(r"^\s{4}(paths|paths-ignore)\s*:", line) for line in body)
-    branches: list[str] | None = None
-    for index, line in enumerate(body):
-        match = re.match(r"^\s{4}branches\s*:\s*(.*)$", line)
-        if not match:
-            continue
-        inline = INLINE_LIST.search(match.group(1))
-        if inline:
-            branches = [strip_quotes(item) for item in inline.group(1).split(",") if item.strip()]
-        else:
-            branches = []
-            for following in body[index + 1:]:
-                item = re.match(r"^\s{6}-\s*(.+?)\s*$", following)
-                if not item:
-                    break
-                branches.append(strip_quotes(item.group(1)))
-    return {"branches": branches, "filtered": filtered}
+    return {"branches": branches_of(body), "filtered": filtered}
+
+
+def scan_job(lines: list[tuple[int, str]]) -> dict:
+    """The ``name:``, whether it ``uses:`` a reusable workflow, and the inline matrix axes of one job's lines."""
+    job: dict = {"raw_name": None, "uses": False, "lines": lines, "matrix": {}}
+    for _, line in lines:
+        field = JOB_FIELD.match(line)
+        if field and field.group(1) == "name" and job["raw_name"] is None:
+            job["raw_name"] = strip_quotes(field.group(2))
+        elif field and field.group(1) == "uses":
+            job["uses"] = True
+        entry = MATRIX_ENTRY.match(line)
+        if entry and not line.startswith("    name"):
+            job["matrix"][entry.group(1)] = [strip_quotes(v) for v in entry.group(2).split(",") if v.strip()]
+    return job
+
+
+def expanded_names(raw_name: str, matrix: dict[str, list[str]]) -> list[str]:
+    """The check names a job reports: ``${{ matrix.key }}`` replaced by every combination of its axes."""
+    keys = sorted(set(MATRIX_REFERENCE.findall(raw_name)))
+    axes = [matrix.get(key, []) for key in keys]
+    if not keys or not all(axes):
+        return [raw_name]
+    names: list[str] = []
+    for combination in itertools.product(*axes):
+        values = dict(zip(keys, combination))
+        names.append(MATRIX_REFERENCE.sub(lambda match: values[match.group(1)], raw_name))
+    return names
 
 
 def jobs_of(text: str) -> dict[str, dict]:
     """``{job id: {"names": [...], "uses": bool, "lines": [...]}}`` with matrix names expanded."""
-    block = top_level_block(code_lines(text), "jobs")
-    jobs: dict[str, dict] = {}
-    current = None
-    for number, line in block[1:]:
+    grouped: dict[str, list[tuple[int, str]]] = {}
+    current: str | None = None
+    for number, line in top_level_block(code_lines(text), "jobs")[1:]:
         header = JOB_HEADER.match(line)
         if header:
             current = header.group(1)
-            jobs[current] = {"raw_name": None, "uses": False, "lines": [], "matrix": {}}
-            continue
-        if current is None:
-            continue
-        jobs[current]["lines"].append((number, line))
-        field = JOB_FIELD.match(line)
-        if field and field.group(1) == "name" and jobs[current]["raw_name"] is None:
-            jobs[current]["raw_name"] = strip_quotes(field.group(2))
-        elif field and field.group(1) == "uses":
-            jobs[current]["uses"] = True
-        entry = MATRIX_ENTRY.match(line)
-        if entry and not line.startswith("    name"):
-            jobs[current]["matrix"][entry.group(1)] = [strip_quotes(v) for v in entry.group(2).split(",") if v.strip()]
+            grouped[current] = []
+        elif current is not None:
+            grouped[current].append((number, line))
+    jobs = {job_id: scan_job(lines) for job_id, lines in grouped.items()}
     for job_id, job in jobs.items():
-        raw = job["raw_name"] or job_id
-        keys = sorted(set(MATRIX_REFERENCE.findall(raw)))
-        expanded: list[str] = []
-        axes = [job["matrix"].get(key, []) for key in keys]
-        if keys and all(axes):
-            for combination in itertools.product(*axes):
-                values = dict(zip(keys, combination))
-                expanded.append(MATRIX_REFERENCE.sub(lambda m: values[m.group(1)], raw))
-        else:
-            expanded.append(raw)
-        job["names"] = expanded
+        job["names"] = expanded_names(job["raw_name"] or job_id, job["matrix"])
     return jobs
 
 
-def check_required_checks(root: Path) -> tuple[list[str], int]:
-    failures: list[str] = []
-    manifest_path = root / MANIFEST
-    if not manifest_path.is_file():
-        return [f"{MANIFEST}: missing, the required checks are not declared"], 0
+def load_manifest(root: Path) -> tuple[dict | None, str | None]:
+    """The ``rulesets`` of the manifest, or (None, why it cannot be used)."""
+    path = root / MANIFEST
+    if not path.is_file():
+        return None, f"{MANIFEST}: missing, the required checks are not declared"
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        rulesets = manifest["rulesets"]
+        return json.loads(path.read_text(encoding="utf-8"))["rulesets"], None
     except (ValueError, KeyError) as error:
-        return [f"{MANIFEST}: unreadable ({error})"], 0
+        return None, f"{MANIFEST}: unreadable ({error})"
+
+
+def reporting_jobs(jobs: dict[str, dict], context: str, source: str) -> list[str]:
+    """The jobs that report ``context``: by name, or by calling job for a reusable workflow (``caller / called``)."""
+    if source == "reusable":
+        return [job_id for job_id, job in jobs.items()
+                if job["uses"] and any(context.startswith(name + " / ") for name in job["names"])]
+    return [job_id for job_id, job in jobs.items() if context in job["names"]]
+
+
+def reachability_problem(trigger: dict | None, workflow: str, branches: list[str]) -> str | None:
+    """Why a workflow cannot report on a pull request to every protected branch, or None when it can."""
+    if trigger is None:
+        return f"{workflow} does not start on pull_request, the check would never report"
+    if trigger["filtered"]:
+        return (f"{workflow} filters pull_request by paths/paths-ignore, the check would stay "
+                f"pending on every pull request outside the filter")
+    declared = trigger["branches"]
+    uncovered = [branch for branch in branches if declared is not None and branch not in declared]
+    if uncovered:
+        return f"{workflow} does not start on pull_request for {', '.join(uncovered)}"
+    return None
+
+
+def check_problem(root: Path, ruleset: str, branches: list[str], check: dict) -> str | None:
+    """Why one declared check does not resolve to a job that can report, or None when it does."""
+    context = check.get("context", "")
+    label = f"{MANIFEST}: '{context}' ({ruleset})"
+    workflow = check.get("workflow", "")
+    path = root / WORKFLOWS / workflow
+    if not workflow or not path.is_file():
+        return f"{label}: workflow '{workflow}' not found in {WORKFLOWS}"
+    text = path.read_text(encoding="utf-8")
+    matches = reporting_jobs(jobs_of(text), context, check.get("source", ""))
+    if len(matches) != 1:
+        return f"{label}: expected exactly one job of {workflow} to report it, found {len(matches)}"
+    problem = reachability_problem(pull_request_trigger(text), workflow, branches)
+    return f"{label}: {problem}" if problem else None
+
+
+def check_required_checks(root: Path) -> tuple[list[str], int]:
+    rulesets, unusable = load_manifest(root)
+    if rulesets is None:
+        return [unusable], 0
+    failures: list[str] = []
     resolved = 0
     for ruleset, definition in rulesets.items():
         branches = definition.get("branches", [])
         for check in definition.get("checks", []):
-            context = check.get("context", "")
-            source = check.get("source", "")
-            if source == "application":
-                resolved += 1
-                continue
-            label = f"{MANIFEST}: '{context}' ({ruleset})"
-            workflow = check.get("workflow", "")
-            path = root / WORKFLOWS / workflow
-            if not workflow or not path.is_file():
-                failures.append(f"{label}: workflow '{workflow}' not found in {WORKFLOWS}")
-                continue
-            text = path.read_text(encoding="utf-8")
-            jobs = jobs_of(text)
-            if source == "reusable":
-                matches = [job_id for job_id, job in jobs.items() if job["uses"]
-                           and any(context.startswith(name + " / ") for name in job["names"])]
+            problem = None if check.get("source") == "application" else check_problem(root, ruleset, branches, check)
+            if problem:
+                failures.append(problem)
             else:
-                matches = [job_id for job_id, job in jobs.items() if context in job["names"]]
-            if len(matches) != 1:
-                failures.append(f"{label}: expected exactly one job of {workflow} to report it, found {len(matches)}")
-                continue
-            trigger = pull_request_trigger(text)
-            if trigger is None:
-                failures.append(f"{label}: {workflow} does not start on pull_request, the check would never report")
-                continue
-            if trigger["filtered"]:
-                failures.append(f"{label}: {workflow} filters pull_request by paths/paths-ignore, the check would stay "
-                                f"pending on every pull request outside the filter")
-                continue
-            uncovered = [b for b in branches if trigger["branches"] is not None and b not in trigger["branches"]]
-            if uncovered:
-                failures.append(f"{label}: {workflow} does not start on pull_request for {', '.join(uncovered)}")
-                continue
-            resolved += 1
+                resolved += 1
     return failures, resolved
 
 
