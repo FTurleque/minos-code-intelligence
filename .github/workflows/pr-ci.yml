@@ -125,7 +125,7 @@ jobs:
       - name: Milestone artifact reference guard self-test
         run: python scripts/quality/check-milestone-artifact-references.py --self-test
 
-      - name: Partial-result consumer gate (heuristic: see its docstring for what it cannot see)
+      - name: Partial-result consumer gate (heuristic, see its docstring for what it cannot see)
         run: python scripts/quality/check-partial-result-consumers.py
 
       - name: Partial-result consumer gate self-test, shared-list and script-function tests
