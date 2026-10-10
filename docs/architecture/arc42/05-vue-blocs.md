@@ -31,6 +31,8 @@ flowchart TB
     bootstrap -->|"câble"| adapters
     application --> engine
     adapters --> engine
+    adapters -->|"entre adaptateurs"| adapters
+    surfaces -.->|"dette déclarée (ADR-0058) : types du moteur"| engine
     engine --> domain
 ```
 
@@ -50,7 +52,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 
 ### minos-engine
 - **Responsabilité** : définit les ports (interfaces) du moteur et les services provider-indépendants : requêtes, découverte de projet, planification incrémentale et orchestration de l'indexation (cycle de vie, exécution des runs, reprise) — [ADR 0044](../../adr/0044-un-package-un-module.md).
-- **Types clés** : `CodeKnowledgeStore` (port), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`, `ProjectDiscoveryService`, `IncrementalIndexingCoordinator`, `IndexingLifecycleService`, `IndexingRunExecutor`.
+- **Types clés** : `CodeKnowledgeStore` (port), `InMemoryCodeKnowledgeStore` (`com.minos.store`), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`, `ProjectDiscoveryService`, `IncrementalIndexingCoordinator`, `IndexingLifecycleService`, `IndexingRunExecutor`.
 - **Interfaces** : `CodeKnowledgeStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…).
 - **Dépendances** : `minos-domain`.
 - **Sources** : `minos-engine/src/main/java/com/minos/store/`, `com/minos/orchestration/`, `com/minos/query/`, `com/minos/discovery/`, `com/minos/incremental/`, `com/minos/hosted/` (modèle, ports et services du plan de contrôle d'équipe), `com/minos/dynamic/` (modèle et port des observations runtime).
@@ -59,14 +61,14 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Responsabilité** : infrastructure générique d'exécution locale de processus providers (CommandLocator, ProcessIndexerExecutor).
 - **Types clés** : `CommandLocator`, `ProcessIndexerExecutor`, `ProviderRuntimeManager`.
 - **Interfaces** : `ProviderRuntimeManager` (impl de `IndexingRuntimePorts`).
-- **Dépendances** : `minos-engine`.
+- **Dépendances** : `minos-domain`, `minos-engine`.
 - **Sources** : `minos-runtime-local/src/main/java/com/minos/runtime/local/`.
 
 ### minos-storage-local
 - **Responsabilité** : persistance locale des snapshots, vecteurs sémantiques, observations runtime, control plane tenant.
-- **Types clés** : `InMemoryCodeKnowledgeStore`, `SnapshotRepository`, `FileSemanticVectorStore`, `FileRuntimeObservationStore`, `FileHostedControlPlaneStore`.
+- **Types clés** : `SnapshotRepository`, `FileSemanticVectorStore`, `FileRuntimeObservationStore`, `FileHostedControlPlaneStore`.
 - **Interfaces** : implémente `CodeKnowledgeStore`, `SemanticVectorStore`, `RuntimeObservationStore`, `HostedControlPlaneStore`.
-- **Dépendances** : `minos-engine`.
+- **Dépendances** : `minos-domain`, `minos-engine`.
 - **Sources** : `minos-storage-local/src/main/java/com/minos/storage/local/` (sous-packages `store`, `registry`, `orchestration`, `incremental`).
 
 ### minos-provider-scip
@@ -93,24 +95,24 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 ### minos-nexus
 - **Responsabilité** : export read-only du snapshot normalisé au format contrat JSON NEXUS.
 - **Types clés** : `NexusExportContract`, `NexusExportService`.
-- **Dépendances** : `minos-domain`, `minos-application`, `minos-storage-local`.
+- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
 - **Sources** : `minos-nexus/src/main/java/`.
 
 ### minos-cli
 - **Responsabilité** : surface CLI stable — dispatcher `MinosCli`, toutes les commandes (project, index, search, find-symbol, architecture, impact, runtime, team…).
 - **Types clés** : `MinosCli`, `MinosCliRunner`, `MinosLauncher` et `DockerRuntimeBootstrap` (points d'entrée de processus, noms stables), SPI `McpLaunchRoute` (route `minos mcp`, fournie par `minos-app`).
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-integration-git`, `minos-storage-local`, `minos-provider-scip`, `minos-runtime-local`, `minos-nexus`.
+- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap`, `minos-nexus`. Aucun adaptateur : la CLI ouvre l'application par `MinosApplication.open` et n'atteint la racine de composition qu'à l'exécution (ADR 0042).
 - **Sources** : `minos-cli/src/main/java/com/minos/cli/`.
 
 ### minos-api
 - **Responsabilité** : API Java publique versionnée exposant les contrats stables.
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-storage-local`, `minos-cli`, `minos-integration-git`.
+- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap`.
 - **Sources** : `minos-api/src/main/java/`.
 
 ### minos-mcp
 - **Responsabilité** : serveur MCP STDIO read-only, catalogue d'outils MCP.
 - **Types clés** : `MinosMcpServer`, `MinosMcpApplicationTools`, `MinosApplicationMcpBackend`.
-- **Dépendances** : `minos-application`, `io.modelcontextprotocol.sdk:mcp 2.0.0`.
+- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap`, `io.modelcontextprotocol.sdk:mcp 2.0.0`.
 - **Sources** : `minos-mcp/src/main/java/com/minos/mcp/`.
 
 ### minos-bootstrap
@@ -126,8 +128,8 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 
 ### minos-storage-postgresql (optionnel)
 - **Responsabilité** : backend de stockage PostgreSQL/pgvector — implémente `StorageBackend`, `ProjectRegistry`, `ProjectFingerprintSnapshotStore`, `SemanticVectorStore`, `RuntimeObservationStore`, `IndexStateStore`.
-- **Note architecturale** : ce module dépend de `minos-application` car les interfaces `StorageBackend`, `ProjectRegistry` et `ProjectFingerprintSnapshotStore` sont définies dans `minos-application`. C'est intentionnel : le backend PostgreSQL remplace l'ensemble de la couche locale, pas seulement le port engine (voir ADR-0025).
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-storage-local`, `minos-application`, `postgresql 42.7.13`, `jackson 2.22`.
+- **Note architecturale** : ce module ne dépend pas de `minos-application` (un adaptateur n'en dépend jamais, ADR 0042). Les interfaces `StorageBackend` (`com.minos.storage`), `ProjectRegistry` (`com.minos.registry`) et `ProjectFingerprintSnapshotStore` (`com.minos.incremental`) sont définies dans `minos-engine` ; le backend PostgreSQL remplace l'ensemble de la couche locale, pas seulement le port de snapshot (voir ADR-0025).
+- **Dépendances** : `minos-domain`, `minos-engine`, `minos-storage-local`, `postgresql 42.7.13`, `jackson 2.22`.
 - **Sources** : `minos-storage-postgresql/src/main/java/`.
 
 ---
