@@ -11,6 +11,8 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -34,11 +36,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * {@code java.home} the sandbox has no business touching — reproducing an IntelliJ run configuration
  * whose JDK lives under {@code Program Files}.
  */
+@EnabledOnOs(OS.WINDOWS)
 class WindowsNonElevatedIndexingTest {
 
     @Test
     void currentProcessIsNotElevated() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path powershell = CommandLocator.windowsPowerShell().orElseThrow();
         Process probe = new ProcessBuilder(
                 powershell.toString(),
@@ -73,10 +75,9 @@ class WindowsNonElevatedIndexingTest {
 
     @Test
     void indexingSucceedsUnderAppContainerWhileHostJvmJavaHomeIsUnderASimulatedProgramFiles() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-non-elevated-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path project = Files.createTempDirectory("minos-non-elevated-project-");
         Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();

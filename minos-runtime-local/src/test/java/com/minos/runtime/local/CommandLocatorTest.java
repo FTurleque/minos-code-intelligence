@@ -165,8 +165,8 @@ class CommandLocatorTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void realWindowsPowerShellUsesCanonicalSystem32Host() throws Exception {
-        if (!CommandLocator.isWindows()) return;
         Path actual = CommandLocator.windowsPowerShell().orElseThrow();
         Path expected = Path.of(System.getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
                 .toRealPath();

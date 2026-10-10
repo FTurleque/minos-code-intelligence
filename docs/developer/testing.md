@@ -65,6 +65,22 @@ Le dépôt contient des fixtures qui servent à mesurer le comportement sur de v
 
 Les tests `*RealFixtureTest` doivent produire des mesures reproductibles, pas seulement des mocks.
 
+### Qualification du confinement (bubblewrap, cgroup v2, AppContainer)
+
+Les tests de `minos-runtime-local` qui qualifient le confinement des providers dépendent d'un mécanisme du système d'exploitation :
+
+| Système | Prérequis | Classes concernées |
+|---|---|---|
+| Linux | bubblewrap + prlimit, racine cgroup v2 déléguée (`MINOS_SANDBOX_CGROUP_ROOT`, voir `scripts/ci/delegate-linux-cgroup.sh`), capacité de propriété de processus forte | `LinuxBubblewrapWorkerSandboxBackendTest`, `LinuxBubblewrapWorkerSandboxIsolationTest`, `LinuxCgroupJobContainmentTest`, `LinuxCgroupJobOwnershipIsolationTest`, `LinuxStrongProcessOwnershipContainmentTest` |
+| Windows | AppContainer + Job Object | `WindowsAppContainerWorkerSandboxBackendTest`, `WindowsJobObjectContainmentTest`, `WindowsStrongProcessOwnershipContainmentTest`, `WindowsAppContainerRecoveryOwnershipTest`, `WindowsNonElevatedIndexingTest` |
+
+- Un test propre à une plateforme est restreint par `@EnabledOnOs` : il est **compté comme sauté** sur l'autre système (jamais un `return` anticipé qui le fait passer à vide).
+- Sur un poste, un mécanisme absent saute le test avec la raison de la découverte (comportement par défaut).
+- Avec `-Dminos.sandbox.tests.required=true`, un mécanisme absent **fait échouer** le test, avec les diagnostics de la découverte. `pr-ci.yml` passe cette propriété sur les deux commandes Maven (Ubuntu et Windows) ; `check-current-docs.py` garde sa présence. C'est le même contrat que `minos.postgresql.tests.required`. Sous PowerShell, citer l'argument (`"-Dminos.sandbox.tests.required=true"`) : un nom pointé non cité est découpé.
+- La décision est centralisée dans `SandboxTestSupport` (`requireBackend`, `requireDelegatedCgroupRoot`, `requireStrongCapability`). Ne pas écrire de `assumeTrue` direct pour exprimer la disponibilité d'un confinement.
+- Sauts d'hypothèse conservés, sans rapport avec la disponibilité du confinement : `/dev/shm` absent, `python3` absent, compte détenant `WRITE_DAC` sur `%SystemRoot%`, verrou étranger ouvrable en écriture, et l'exemption volontaire de `WindowsNonElevatedIndexingTest` sur un runner de CI (élevé par conception).
+- Si une image de runner dérive (AppArmor, délégation cgroup) et que la CI devient rouge, c'est le signal voulu : qualifier la nouvelle image ; ne retirer l'argument de l'étape concernée que par décision explicite, avec un commentaire daté.
+
 ### Replays d’intégration
 
 Exemples :

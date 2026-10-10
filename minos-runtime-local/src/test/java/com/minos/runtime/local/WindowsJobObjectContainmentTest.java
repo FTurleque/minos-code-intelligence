@@ -27,7 +27,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Adversarial proof that the Windows Job Object is the real process boundary: the provider joins it
@@ -41,7 +40,7 @@ class WindowsJobObjectContainmentTest {
     void neitherChildNorGrandchildSurvivesTheJobObject() throws Exception {
         Path home = Files.createTempDirectory("minos-windows-job-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "a Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "a Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path powershell = CommandLocator.windowsPowerShell().orElseThrow();
         Path project = Files.createTempDirectory("minos-windows-job-project-");
@@ -129,7 +128,7 @@ class WindowsJobObjectContainmentTest {
     void theSandboxPlanCarriesEveryAggregateJobLimit() throws Exception {
         Path home = Files.createTempDirectory("minos-windows-job-plan-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "a Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "a Windows AppContainer backend is required");
         Path working = Files.createTempDirectory("minos-windows-job-plan-working-");
         Path run = Files.createTempDirectory("minos-windows-job-plan-run-");
         Path powershell = CommandLocator.windowsPowerShell().orElseThrow();
@@ -163,7 +162,7 @@ class WindowsJobObjectContainmentTest {
     void theQualifiedBackendDeclaresTheAggregateContainmentItReallyEnforces() throws Exception {
         Path home = Files.createTempDirectory("minos-windows-job-claim-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "a Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "a Windows AppContainer backend is required");
         WorkerSandboxQualification qualification = discovered.orElseThrow().qualification();
 
         assertTrue(qualification.containment().aggregateJobBoundaryEnforced());
