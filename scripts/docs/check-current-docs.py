@@ -156,8 +156,32 @@ def validate_security_and_storage() -> None:
     ))
 
 
+# Same detection as scripts/quality/check-single-execution.py: a Maven wrapper invocation that runs verify.
+MAVEN_VERIFY = re.compile(r"(?:^|[\s/\\])mvnw(?:\.cmd)?(?=\s).*\bverify\b")
+SANDBOX_TESTS_REQUIRED = "-Dminos.sandbox.tests.required=true"
+
+
+def maven_verify_lines(workflow: str) -> list[tuple[int, str]]:
+    """Numbered, non-comment lines of the workflow that run a Maven verify."""
+    numbered = enumerate(workflow.splitlines(), start=1)
+    return [(number, line) for number, line in numbered
+            if MAVEN_VERIFY.search(line) and not line.lstrip().startswith("#")]
+
+
+def require_sandbox_qualification_on_every_verify(workflow: str) -> None:
+    """Each Maven verify of the PR workflow must make an unavailable OS confinement a failure, not a skip."""
+    verifies = maven_verify_lines(workflow)
+    if len(verifies) < 2:
+        raise RuntimeError(f"{PR_WORKFLOW}: expected a Maven verify per operating system, found {len(verifies)}")
+    missing = [number for number, line in verifies if SANDBOX_TESTS_REQUIRED not in line]
+    if missing:
+        raise RuntimeError(f"{PR_WORKFLOW}:{missing[0]}: Maven verify does not pass {SANDBOX_TESTS_REQUIRED}: "
+                           "an unavailable sandbox would be skipped instead of failing the job")
+
+
 def validate_ci_contracts() -> None:
     workflow = read(PR_WORKFLOW)
+    require_sandbox_qualification_on_every_verify(workflow)
     require_regex(PR_WORKFLOW, workflow, r"(?m)^\s*push:\s*$", "push qualification trigger")
     require_all(PR_WORKFLOW, workflow, (
         "branches: [main, develop]", "Dependency vulnerability gate",

@@ -264,7 +264,7 @@ class WindowsAppContainerRecoveryOwnershipTest {
     private static Fixture fixture(String name) throws IOException {
         Path home = Files.createTempDirectory("minos-appcontainer-owner-" + name + "-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows AppContainer backend is required");
         return new Fixture(home, discovered.orElseThrow(),
                 CommandLocator.windowsPowerShell().orElseThrow(() -> new AssertionError("PowerShell is unavailable")));
     }

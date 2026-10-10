@@ -33,7 +33,6 @@ import java.util.concurrent.TimeoutException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Windows Job Object ownership: a descendant the provider detaches must still die with the job.
@@ -132,7 +131,7 @@ class WindowsStrongProcessOwnershipContainmentTest {
                             PROVIDER_TIMEOUT);
                 });
         StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(delegate, home);
-        assumeTrue(executor.capability().strong(), () -> String.join("; ", executor.capability().diagnostics()));
+        SandboxTestSupport.requireStrongCapability(executor.capability().strong(), executor.capability().diagnostics());
 
         var artifact = executor.execute(request(project));
         long detachedPid = awaitPublishedPid(pidFile, home);
@@ -166,7 +165,7 @@ class WindowsStrongProcessOwnershipContainmentTest {
                         runDirectory.resolve("never.scip"),
                         PROVIDER_TIMEOUT));
         StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(delegate, home);
-        assumeTrue(executor.capability().strong(), () -> String.join("; ", executor.capability().diagnostics()));
+        SandboxTestSupport.requireStrongCapability(executor.capability().strong(), executor.capability().diagnostics());
 
         ExecutorService runner = Executors.newSingleThreadExecutor(task -> {
             Thread thread = new Thread(task, "strong-ownership-timeout-execution");

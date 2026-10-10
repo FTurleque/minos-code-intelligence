@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @EnabledOnOs(OS.LINUX)
 class LinuxStrongProcessOwnershipContainmentTest {
@@ -73,7 +72,7 @@ class LinuxStrongProcessOwnershipContainmentTest {
                             Duration.ofSeconds(30));
                 });
         StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(delegate, home);
-        assumeTrue(executor.capability().strong(), () -> String.join("; ", executor.capability().diagnostics()));
+        SandboxTestSupport.requireStrongCapability(executor.capability().strong(), executor.capability().diagnostics());
         IndexingExecutionRequest request = request(project);
         Path jobDirectory = LinuxCgroupJob.delegatedRoot().orElseThrow()
                 .resolve(CgroupJobOwnership.CURRENT.markedName("minos-provider-" + request.runId()));
