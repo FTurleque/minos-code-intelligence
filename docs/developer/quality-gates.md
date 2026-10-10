@@ -16,7 +16,27 @@ La matrice obligatoire couvre :
 - vérification de l'immutabilité des références GitHub Actions ;
 - installation de `bubblewrap`, util-linux et du profil AppArmor officiel `bwrap-userns-restrict` sur Ubuntu afin que la qualification du worker sandbox Linux puisse réellement exercer les namespaces non privilégiés.
 
-Les workflows spécialisés IntelliJ, Windows Installer et Windows in-place upgrade complètent cette matrice selon les chemins modifiés. Les workflows de publication restent séparés et ne remplacent jamais la qualification de PR. Les anciens workflows M19 et M20, qui répétaient le job `verify` Ubuntu sur une partie des chemins, sont retirés (constat C2, voir ci-dessous).
+Les workflows spécialisés Windows Installer et Windows in-place upgrade complètent cette matrice selon les chemins modifiés ; le workflow IntelliJ s'exécute sur toute PR et calcule lui-même sa portée (voir « Checks exigés pour une fusion »). Les workflows de publication restent séparés et ne remplacent jamais la qualification de PR. Les anciens workflows M19 et M20, qui répétaient le job `verify` Ubuntu sur une partie des chemins, sont retirés (constat C2, voir ci-dessous).
+
+## Checks exigés pour une fusion (AUD-DEP-09)
+
+Un contrôle n'engage une fusion que si le ruleset de la branche l'exige. La liste attendue est **versionnée** dans `.github/required-checks.json` (un ruleset par entrée, avec ses branches et ses contextes) ; elle déclare, elle ne configure rien.
+
+| Contrôle | Contexte exigé |
+|---|---|
+| Build Maven, tests, JaCoCo | `Verify (ubuntu-24.04)`, `Verify (windows-2022)` |
+| Vulnérabilités des dépendances | `Dependency vulnerability gate / osv-scan` |
+| Gates statiques et leurs auto-tests | `Static invariants (single run)` |
+| Secrets (historique complet) | `Gitleaks` |
+| Plugin IntelliJ | `IntelliJ plugin (gate)` |
+| Analyse SonarCloud | `SonarCloud Code Analysis` |
+| Promotion vers `main` (ruleset de `main` seul) | `Docker upgrade evidence gate` |
+
+- `python scripts/quality/check-ci-wiring.py` (job `invariants`, auto-test `test_check_ci_wiring.py`) échoue si un contexte de la liste ne correspond à aucun job, ou à un job d'un workflow qui ne peut pas rendre de verdict sur une PR (déclencheur `pull_request` absent, branche non couverte, `paths:` ou `paths-ignore:`). Un `if:` de niveau job est admis. Il échoue aussi si un auto-test de gate (`scripts/**/test_*.py`, ou script à `--self-test`) n'est exécuté par aucune étape du job `invariants`.
+- **Le plugin IntelliJ** n'est plus filtré par chemins : `intellij-plugin.yml` s'exécute sur toute PR, `scripts/ci/plugin-gate.py scope` calcule si le plugin est concerné (rendus JSON de `minos-application/.../output/`, domaine, goldens de caractérisation, CLI, adaptateur Git, plugin), et le job `IntelliJ plugin (gate)` rend toujours un verdict.
+- **Écart avec GitHub** : `python scripts/quality/verify-ruleset.py` lit les rulesets réels (`gh api`, lecture seule) et nomme chaque contexte manquant ou en trop (code 0 : égalité ; 1 : écart ; 2 : lecture impossible). Il se lance à la main et n'est jamais exécuté en CI (il exigerait un jeton d'administration).
+- **Ordre de mise en service d'un nouveau check** : fusionner le workflow, le laisser s'exécuter sur au moins une PR, puis seulement l'ajouter au ruleset (Réglages → Règles → Rulesets → « Require status checks to pass »), puis lancer `verify-ruleset.py`. Un check exigé qui n'a jamais tourné bloque toutes les PR.
+- Les auto-tests de gates rejoués dans `invariants` comprennent désormais `check-jacoco.py --self-test` et `check-milestone-artifact-references.py --self-test`. Une ligne contenant `--self-test` n'est pas comptée par `check-single-execution.py` comme une exécution du gate.
 
 ## Chaque gate lourd s'exécute une seule fois par PR (C2)
 

@@ -110,7 +110,22 @@ jobs:
       - name: Milestone artifact reference guard
         run: python scripts/quality/check-milestone-artifact-references.py
 
-      - name: Partial-result consumer gate (advisory heuristic; this job is not a required check, audit G6)
+      - name: CI wiring gate (required checks resolve to jobs that can report; every gate self-test runs here)
+        run: python scripts/quality/check-ci-wiring.py
+
+      - name: CI wiring, ruleset comparison and plugin gate self-tests
+        run: |
+          python scripts/quality/test_check_ci_wiring.py -v
+          python scripts/quality/test_verify_ruleset.py -v
+          python scripts/ci/test_plugin_gate.py -v
+
+      - name: JaCoCo gate self-test (decision logic on synthetic reports; the gate itself runs in the verify jobs)
+        run: python scripts/quality/check-jacoco.py --self-test
+
+      - name: Milestone artifact reference guard self-test
+        run: python scripts/quality/check-milestone-artifact-references.py --self-test
+
+      - name: Partial-result consumer gate (heuristic, see its docstring for what it cannot see)
         run: python scripts/quality/check-partial-result-consumers.py
 
       - name: Partial-result consumer gate self-test, shared-list and script-function tests

@@ -13,7 +13,8 @@ The four controls it owns are the expensive ones that a duplicated workflow woul
 * ``scripts/quality/check-jacoco.py``;
 * ``scripts/ci/install-linux-sandbox-toolchain.sh``.
 
-Rules (line-based, comments and quoted ``paths:`` filter entries ignored):
+Rules (line-based, comments, quoted ``paths:`` filter entries and ``--self-test`` lines ignored: a gate's own
+self-test, such as ``check-jacoco.py --self-test``, is not an execution of the control):
 
 1. Among the workflows that start on ``pull_request`` or ``push``, only ``pr-ci.yml`` may run them.
    A second PR workflow that needs one of them must extend ``pr-ci.yml`` instead.
@@ -45,7 +46,8 @@ MAVEN_VERIFY = re.compile(r"(?:^|[\s/\\])mvnw(?P<cmd>\.cmd)?(?=\s).*\bverify\b")
 PRODUCT_FACTS = re.compile(r"scripts/docs/product-facts\.py")
 JACOCO = re.compile(r"scripts/quality/check-jacoco\.py")
 SANDBOX_TOOLCHAIN = re.compile(r"scripts/ci/install-linux-sandbox-toolchain\.sh")
-AUTOMATIC_EVENTS = re.compile(r"^  (?:pull_request|pull_request_target|push)\s*:")
+SELF_TEST = re.compile(r"(?:^|\s)--self-test\b")
+AUTOMATIC_EVENTS =re.compile(r"^  (?:pull_request|pull_request_target|push)\s*:")
 
 
 def command_lines(text: str) -> list[tuple[int, str]]:
@@ -85,6 +87,8 @@ def controls_of(text: str) -> dict[str, list[int]]:
         "jacoco-linux": [], "jacoco-windows": [], "sandbox-toolchain": [],
     }
     for number, line in command_lines(text):
+        if SELF_TEST.search(line):
+            continue  # a gate's own self-test is not an execution of the control it guards
         match = MAVEN_VERIFY.search(line)
         if match:
             found["maven-verify-windows" if match.group("cmd") else "maven-verify-unix"].append(number)
