@@ -143,6 +143,26 @@ class CheckSingleExecutionTest(unittest.TestCase):
                 self.assertIn(name, failures[0])
                 self.assertIn("found 0", failures[0])
 
+    def test_a_self_test_line_is_not_a_second_execution(self):
+        step = "      - name: JaCoCo gate self-test\n        run: python scripts/quality/check-jacoco.py --self-test\n"
+        self.assertEqual([], self.run_gate({"pr-ci.yml": PR_CI + step}))
+
+    def test_a_real_second_execution_is_still_refused_next_to_a_self_test(self):
+        step = ("      - name: JaCoCo gate self-test\n        run: python scripts/quality/check-jacoco.py --self-test\n"
+                "      - name: Again\n        run: python scripts/quality/check-jacoco.py\n")
+        failures = self.run_gate({"pr-ci.yml": PR_CI + step})
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("jacoco-linux", failures[0])
+        self.assertIn("found 2", failures[0])
+
+    def test_a_self_test_does_not_replace_the_only_executor(self):
+        only_self_test = PR_CI.replace("run: python scripts/quality/check-jacoco.py\n",
+                                       "run: python scripts/quality/check-jacoco.py --self-test\n", 1)
+        failures = self.run_gate({"pr-ci.yml": only_self_test})
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("jacoco-linux", failures[0])
+        self.assertIn("found 0", failures[0])
+
     def test_a_missing_or_manual_pr_ci_is_refused(self):
         self.assertEqual(1, len(self.run_gate({"other.yml": OTHER_PR_WORKFLOW})))
         manual = PR_CI.replace("  pull_request:\n    branches: [main, develop]\n  push:\n    branches: [main, develop]\n", "")

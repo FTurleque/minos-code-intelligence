@@ -1,0 +1,45 @@
+# Tasks
+
+Ordre dans chaque section : d'abord le test ou le gate qui échoue (rouge attendu), puis la correction, puis la preuve. Chaque tâche porte l'identifiant du constat qu'elle ferme. Les tâches marquées **(manuelle)** ou **(autorisation)** ne sont pas exécutées par l'implémentation seule.
+
+## 1. Auto-tests de gates rejoués (AUD-TST-07)
+
+- [x] 1.1 [AUD-TST-07] Rouge : dans `scripts/quality/test_check_single_execution.py`, ajouter les cas « un auto-test `check-jacoco.py --self-test` plus une exécution = succès », « deux exécutions sans `--self-test` = échec », « zéro exécution = échec » ; rejouer `python scripts/quality/test_check_single_execution.py -v` (le premier cas échoue). Ajouter temporairement l'étape `check-jacoco.py --self-test` à `invariants` et constater le rouge de `python scripts/quality/check-single-execution.py` et de `python scripts/remediation/check-audit-remediation-v2.py`.
+- [x] 1.2 [AUD-TST-07] Corriger `scripts/quality/check-single-execution.py` (`controls_of` ignore les lignes contenant `--self-test`) ; corriger `scripts/remediation/check-audit-remediation-v2.py:105-107` (le jeton `check-jacoco.py` est remplacé par la règle « aucune ligne du job `invariants` ne lance le gate sans `--self-test` » ; `mvnw`, `windows-2022`, `matrix:` restent interdits). Rejouer : `check-single-execution.py`, son auto-test, `check-audit-remediation-v2.py`.
+- [x] 1.3 [AUD-TST-07] Ajouter à `invariants` de `pr-ci.yml` les étapes `python scripts/quality/check-jacoco.py --self-test` et `python scripts/quality/check-milestone-artifact-references.py --self-test`. Preuve : les deux commandes en code 0 en local ; `check-single-execution.py`, `check-audit-remediation-v2.py`, `check-workflow-pins.py`, `check-p0-p2.py` verts.
+
+## 2. Rapport JaCoCo dérivé du POM (AUD-TST-08)
+
+- [x] 2.1 [AUD-TST-08] Rouge : ajouter à l'auto-test de `scripts/quality/check-jacoco.py` les scénarios 9 (POM avec `<directory>` redirigé vers le target racine), 10 (POM sans `<directory>`) et 11 (valeur inconnue → échec nommant module et valeur) ; ils échouent tant que `report_of` n'existe pas.
+- [x] 2.2 [AUD-TST-08] Implémenter la résolution `report_of` dans `check-jacoco.py` (tableau de la décision D6) et remplacer `"report": "target/site/jacoco/jacoco.xml"` du scope `m29-backend-routing` (`check-jacoco.py:155`) par `"report_of": "minos-app"` ; mettre à jour le message de fin de l'auto-test.
+- [x] 2.3 [AUD-TST-08] Preuve locale, sans `verify` : `python scripts/quality/check-jacoco.py --self-test` (code 0) puis `python scripts/quality/check-jacoco.py --skip-scope m24-polyglot-provider-platform` sur les rapports existants de `target/site/` ; le scope `m29-backend-routing` ne doit pas afficher « report not found » et sa couverture doit venir du rapport de `minos-app`. Rejouer `check-current-docs.py` (jeton `m29-backend-routing`) et `check-p0-p2.py`.
+
+## 3. Plugin IntelliJ : portée calculée et verdict (AUD-TST-13, AUD-DEP-09)
+
+- [x] 3.1 [AUD-TST-13] Rouge : écrire `scripts/ci/test_plugin_gate.py` : fichier de `com/minos/output/` → portée vraie ; `minos-app/src/test/resources/characterization/cli-json.golden` → vraie ; `README.md` → fausse ; événement `workflow_dispatch` ou base introuvable → vraie ; chaque préfixe de `PLUGIN_PATHS` désigne un chemin existant ; verdicts (`plugin=false` + jobs sautés → réussi ; `failure`/`cancelled` → échec ; `plugin=true` + job sauté → échec ; `changes` en échec → échec).
+- [x] 3.2 [AUD-TST-13] Écrire `scripts/ci/plugin-gate.py` (`scope`, `verdict`, liste `PLUGIN_PATHS` unique de la décision D4) jusqu'au vert de `python scripts/ci/test_plugin_gate.py -v`.
+- [x] 3.3 [AUD-DEP-09] Restructurer `.github/workflows/intellij-plugin.yml` : retirer `paths:` des deux déclencheurs, ajouter les jobs `changes` (nom `Plugin scope`) et `gate` (nom `IntelliJ plugin (gate)`, `if: always()`), conditionner `plugin` et `windows-ownership` (noms et étapes inchangés). Passer les valeurs d'événement par `env:`, jamais par interpolation dans `run:`. Rejouer `check-workflow-pins.py`, `check-current-docs.py` (jetons `Checkout exact candidate`, `buildPlugin`, `verifyPlugin`…, déclencheur `push:`), `check-single-execution.py`, `check-milestone-artifact-references.py`.
+
+## 4. Câblage et liste versionnée des checks (AUD-DEP-09, AUD-TST-07)
+
+- [x] 4.1 [AUD-DEP-09] Rouge : écrire `scripts/quality/test_check_ci_wiring.py` sur arbres temporaires : contexte sans job ; job renommé ; workflow filtré par `paths:` sous `pull_request` ; workflow introuvable ; matrice développée (`Verify (ubuntu-24.04)`) ; entrée `reusable` ; `test_*.py` non câblé ; script à `--self-test` non câblé ; appel de `verify-ruleset.py` sans `--from-json` dans un workflow ; arbre propre.
+- [x] 4.2 [AUD-DEP-09] Créer `.github/required-checks.json` (décision D1) et `scripts/quality/check-ci-wiring.py` ; le brancher dans `invariants` avec `test_check_ci_wiring.py`, `scripts/ci/test_plugin_gate.py` et `scripts/quality/test_verify_ruleset.py`. Rejouer `python scripts/quality/check-ci-wiring.py` sur le dépôt : il doit être rouge avant 1.3/3.3 et vert après.
+- [x] 4.3 [AUD-DEP-09] Rouge : `scripts/quality/test_verify_ruleset.py` avec des charges JSON enregistrées (conforme ; contexte manquant ; contexte en trop ; ruleset absent ; charge illisible → code 2).
+- [x] 4.4 [AUD-DEP-09] Écrire `scripts/quality/verify-ruleset.py` (`--repo`, `--from-json`, codes 0/1/2, lecture seule). Preuve : `python scripts/quality/test_verify_ruleset.py -v` ; puis, en lecture seule, `python scripts/quality/verify-ruleset.py` : **doit rendre le code 1** tant que l'action manuelle 6.1 n'est pas faite et nommer exactement `Static invariants (single run)`, `Gitleaks`, `IntelliJ plugin (gate)`.
+- [x] 4.5 [AUD-DEP-09] Mettre à jour le nom d'étape `pr-ci.yml:113` (retirer « this job is not a required check, audit G6 ») et la docstring `STATUS: advisory` de `scripts/quality/check-partial-result-consumers.py` ; rejouer ce gate, `check-audit-remediation-v2.py`, `check-current-docs.py`.
+
+## 5. Documentation
+
+- [x] 5.1 [AUD-DEP-09] `docs/developer/quality-gates.md` : section « Checks exigés » (liste versionnée, rôle de `check-ci-wiring.py`, procédure manuelle du ruleset, ordre de mise en service D8, usage de `verify-ruleset.py`). Rejouer `check-current-docs.py` et `check-milestone-artifact-references.py` (références de `verify-ruleset.py`, `plugin-gate.py`).
+- [x] 5.2 [AUD-TST-07] Mentionner dans la même page que les auto-tests de gates sont câblés et vérifiés par `check-ci-wiring.py`.
+
+## 6. Actions manuelles et autorisations
+
+- [ ] 6.1 **(manuelle)** [AUD-DEP-09] Après la fusion de ce changement dans `develop` **et** un premier run de `Static invariants (single run)`, `Gitleaks` et `IntelliJ plugin (gate)` sur une PR : ajouter ces trois contextes au ruleset « Protect main & develop » (id 20809312) : Réglages → Règles → Rulesets → « Require status checks to pass ». Ne pas les ajouter avant : un check exigé qui n'a jamais tourné bloque toute PR.
+- [ ] 6.2 **(manuelle)** [AUD-DEP-09] Lancer `python scripts/quality/verify-ruleset.py` : le code 0 ferme AUD-DEP-09 ; le consigner dans le suivi (section 7).
+- [ ] 6.3 **(autorisation)** [AUD-TST-13] Sur une PR jetable, avec votre accord : (a) PR qui ne touche que `README.md` → `IntelliJ plugin (gate)` vert, jobs du plugin sautés ; (b) PR qui touche `minos-application/src/main/java/com/minos/output/ProjectJson.java` → les deux jobs du plugin tournent. Ces deux runs lèvent la réserve « Partielle » du design.
+
+## 7. Clôture
+
+- [x] 7.1 Créer `docs/audit/2026-10-10/SUIVI.md` (si absent, sur le modèle de `docs/audit/S23-SUIVI.md`) et y consigner pour AUD-DEP-09, AUD-TST-07, AUD-TST-08, AUD-TST-13 : statut, commit, commande de preuve, résultat. AUD-DEP-09 reste « en attente de 6.1/6.2 » jusqu'à leur exécution. Y noter la correction de la preuve de DEP-09 (3 checks sur 5 déjà exigés) et le périmètre ajouté à TST-07 (auto-test du garde de jalons).
+- [x] 7.2 `openspec validate --all --strict` ; résumer le résultat et lister les `docs/` à mettre à jour (`docs/STATUS.md`, `docs/ROADMAP.md`) avant archivage.

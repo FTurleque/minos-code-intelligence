@@ -21,8 +21,9 @@ WHAT IT DOES NOT DETECT (it is a heuristic, not a proof):
     outside this repository (NEXUS, users' own scripts);
   * a command that starts exiting 3 without being listed: that is PartialResultCommandsContractTest's job, not this one.
 
-STATUS: advisory. The job that runs it (`Static invariants (single run)` in pr-ci.yml) is not a check required by the
-repository ruleset, so a failure here does not block a merge until the ruleset requires that job (audit finding G6).
+STATUS: heuristic, and blocking. The job that runs it (`Static invariants (single run)` in pr-ci.yml) is a check
+required by the repository ruleset (.github/required-checks.json, audit finding G6 / AUD-DEP-09), so a failure here
+blocks a merge. If its false positives ever outweigh its value, remove its step from that job: the ruleset is not touched.
 
 KNOWN_GAPS may only shrink: an entry whose file no longer needs it, or no longer exists, fails the gate, and an entry
 that is not in GAP_CEILING fails it too. Growing the ceiling is a visible change to this file, to be refused in review.

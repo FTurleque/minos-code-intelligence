@@ -102,9 +102,15 @@ def main() -> int:
         for token in ("runs-on: ubuntu-24.04", "check-current-docs.py", "check-post228-hardening.py"):
             if token.casefold() not in invariants_job.casefold():
                 raise RuntimeError(f".github/workflows/pr-ci.yml (invariants job): missing audit-v2 invariant: {token}")
-        for stale in ("mvnw", "check-jacoco.py", "windows-2022", "matrix:"):
+        for stale in ("mvnw", "windows-2022", "matrix:"):
             if stale.casefold() in invariants_job.casefold():
                 raise RuntimeError(f"pr-ci.yml invariants job duplicated the Maven verify job's responsibility: {stale}")
+        # What the verify jobs own is running the JaCoCo gate on a coverage report. Its --self-test needs no report
+        # and runs here (AUD-TST-07), so only an invocation without --self-test duplicates that responsibility.
+        for line in invariants_job.splitlines():
+            if "check-jacoco.py" in line and "--self-test" not in line:
+                raise RuntimeError(
+                    "pr-ci.yml invariants job duplicated the Maven verify job's responsibility: check-jacoco.py")
 
         require(
             ".github/workflows/pr-ci.yml",

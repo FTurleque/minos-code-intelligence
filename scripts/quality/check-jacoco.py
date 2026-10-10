@@ -152,7 +152,9 @@ SCOPES = {
             "com/minos/app/McpBackend", "com/minos/app/McpBackendConfiguration", "com/minos/app/McpBackendConfigurationStore",
             "com/minos/app/McpBackendRouter",
         ),
-        "report": "target/site/jacoco/jacoco.xml",
+        # minos-app's own tests are not carried by the aggregate report (0 of 10 lines there), so the scope reads
+        # the report of the module that owns the classes, wherever its POM writes it.
+        "report_of": "minos-app",
         "line": 0.55, "branch": 0.30,
     },
     # A3 / ADR 0044: DockerRuntimeBootstrap moved from minos-app to minos-cli (same FQN) with its tests. minos-app's
@@ -228,6 +230,30 @@ def current_platform() -> str:
     if sys.platform.startswith("linux"):
         return "linux"
     return "other"
+
+
+ROOT = Path(__file__).resolve().parents[2]
+ROOT_TARGET = "${maven.multiModuleProjectDirectory}/target"
+MODULE_REPORT = Path("site/jacoco/jacoco.xml")
+POM_NAMESPACE = {"m": "http://maven.apache.org/POM/4.0.0"}
+
+
+def module_report(module: str, root: Path = ROOT) -> Path:
+    """Where `module` writes its own JaCoCo report, read from its POM instead of assumed (AUD-TST-08).
+
+    minos-app redirects its build directory to the root target/ (the shaded jar and the distribution scripts
+    expect it there), so its report is the root one; a module without <directory> writes under its own target/.
+    Any other value is refused: reading some other report would measure something else.
+    """
+    pom = root / module / "pom.xml"
+    if not pom.is_file():
+        raise ValueError(f"{module}: pom.xml not found, cannot tell where its JaCoCo report is written")
+    directory = ET.parse(pom).getroot().findtext("m:build/m:directory", default="", namespaces=POM_NAMESPACE).strip()
+    if not directory:
+        return Path(module) / "target" / MODULE_REPORT
+    if directory == ROOT_TARGET:
+        return Path("target") / MODULE_REPORT
+    raise ValueError(f"{module}: unrecognised build directory {directory!r}, cannot tell where its JaCoCo report is written")
 
 
 def self_test() -> int:
@@ -348,12 +374,34 @@ def self_test() -> int:
     expect("weak live prefix: exit", code, 1)
     expect("weak live prefix: failures", failed, ["prefix-floor"])
 
+    # 9-11. a scope that names a module reads the report where that module's POM writes it (AUD-TST-08).
+    pom_template = ('<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>'
+                    '<artifactId>{name}</artifactId>{build}</project>')
+
+    def resolve(build: str) -> Path | str:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "minos-x").mkdir()
+            (root / "minos-x" / "pom.xml").write_text(pom_template.format(name="minos-x", build=build), encoding="utf-8")
+            try:
+                return module_report("minos-x", root)
+            except ValueError as error:
+                return str(error)
+
+    redirected = ("<build><directory>${maven.multiModuleProjectDirectory}/target</directory></build>")
+    expect("module redirected to the root target", resolve(redirected), Path("target/site/jacoco/jacoco.xml"))
+    expect("module with its own target", resolve("<build><plugins/></build>"),
+           Path("minos-x/target/site/jacoco/jacoco.xml"))
+    unknown = resolve("<build><directory>/somewhere/else</directory></build>")
+    expect("unrecognised build directory is refused", isinstance(unknown, str) and "minos-x" in unknown
+           and "/somewhere/else" in unknown, True)
+
     if failures:
         print("MINOS JACOCO GATE SELF-TEST FAILED", file=sys.stderr)
         for failure in failures:
             print(f" - {failure}", file=sys.stderr)
         return 1
-    print("MINOS JACOCO GATE SELF-TEST SUCCESS (8 scenarios)")
+    print("MINOS JACOCO GATE SELF-TEST SUCCESS (11 scenarios)")
     return 0
 
 
@@ -393,7 +441,15 @@ def main() -> int:
             print(f"JaCoCo {name}: SKIPPED ({reason})")
             continue
 
-        report = Path(str(config.get("report", default_report)))
+        if "report_of" in config:
+            try:
+                report = module_report(config["report_of"])
+            except ValueError as error:
+                failures.append(f"{name}: {error}")
+                results["scopes"][name] = {"classes": 0, "status": "FAIL"}
+                continue
+        else:
+            report = Path(str(config.get("report", default_report)))
         try:
             all_classes = load_classes(report, cache)
         except FileNotFoundError:

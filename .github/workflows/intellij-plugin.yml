@@ -1,24 +1,13 @@
 name: IntelliJ Plugin Validation
 
 on:
+  # No `paths:` filter here on purpose (AUD-DEP-09): a required check of a path-filtered workflow stays pending on
+  # every pull request that does not touch those paths. The `changes` job computes the plugin scope instead
+  # (scripts/ci/plugin-gate.py) and the `gate` job always reports a verdict.
   pull_request:
     branches: [main, develop]
-    paths:
-      - 'minos-intellij/**'
-      - 'minos-cli/**'
-      - 'minos-integration-git/**'
-      - 'docs/user/intellij-plugin.md'
-      - 'docs/roadmap/M18_EXECUTION.md'
-      - '.github/workflows/intellij-plugin.yml'
   push:
     branches: [main, develop]
-    paths:
-      - 'minos-intellij/**'
-      - 'minos-cli/**'
-      - 'minos-integration-git/**'
-      - 'docs/user/intellij-plugin.md'
-      - 'docs/roadmap/M18_EXECUTION.md'
-      - '.github/workflows/intellij-plugin.yml'
   workflow_dispatch:
 
 permissions:
@@ -30,7 +19,37 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Plugin scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      plugin: ${{ steps.scope.outputs.plugin }}
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      # Is the plugin concerned by this change? Any doubt answers "true" (the plugin is then tested).
+      - name: Compute the plugin scope
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/ci/plugin-gate.py scope --event "$EVENT" --base "$BASE" --head "$HEAD" --output "$GITHUB_OUTPUT"
+
   plugin:
+    needs: changes
+    if: ${{ needs.changes.outputs.plugin == 'true' }}
     name: IntelliJ 2026.1 / Java 21
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -84,6 +103,8 @@ jobs:
             minos-intellij/build/test-results/**
 
   windows-ownership:
+    needs: changes
+    if: ${{ needs.changes.outputs.plugin == 'true' }}
     name: Windows process ownership / Java 21
     runs-on: windows-2022
     timeout-minutes: 45
@@ -123,3 +144,33 @@ jobs:
           path: |
             minos-intellij/build/reports/**
             minos-intellij/build/test-results/**
+
+  # Always runs and is the only plugin check meant to be required: it passes when the plugin is out of scope
+  # (jobs skipped) and fails when a job it waited for failed, was cancelled, or was skipped although it was needed.
+  gate:
+    name: IntelliJ plugin (gate)
+    if: ${{ always() }}
+    needs: [changes, plugin, windows-ownership]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Decide the plugin gate
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SCOPE: ${{ needs.changes.outputs.plugin }}
+          PLUGIN_RESULT: ${{ needs.plugin.result }}
+          WINDOWS_RESULT: ${{ needs.windows-ownership.result }}
+        run: >-
+          python scripts/ci/plugin-gate.py verdict --changes "$CHANGES_RESULT" --scope "$SCOPE"
+          --plugin "$PLUGIN_RESULT" --windows-ownership "$WINDOWS_RESULT"

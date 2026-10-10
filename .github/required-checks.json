@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "comment": "Status checks that each branch ruleset must require. Declares what is expected; configures nothing. Verified offline by scripts/quality/check-ci-wiring.py (every entry resolves to a job that can report on a pull request) and against GitHub by hand with scripts/quality/verify-ruleset.py.",
+  "rulesets": {
+    "Protect main & develop": {
+      "branches": ["main", "develop"],
+      "checks": [
+        { "context": "Verify (ubuntu-24.04)", "source": "workflow", "workflow": "pr-ci.yml" },
+        { "context": "Verify (windows-2022)", "source": "workflow", "workflow": "pr-ci.yml" },
+        { "context": "Dependency vulnerability gate / osv-scan", "source": "reusable", "workflow": "pr-ci.yml" },
+        { "context": "Static invariants (single run)", "source": "workflow", "workflow": "pr-ci.yml" },
+        { "context": "Gitleaks", "source": "workflow", "workflow": "secret-scan.yml" },
+        { "context": "IntelliJ plugin (gate)", "source": "workflow", "workflow": "intellij-plugin.yml" },
+        { "context": "SonarCloud Code Analysis", "source": "application" }
+      ]
+    },
+    "Release promotion gate (main only)": {
+      "branches": ["main"],
+      "checks": [
+        { "context": "Docker upgrade evidence gate", "source": "workflow", "workflow": "release-promotion-gate.yml" }
+      ]
+    }
+  }
+}
