@@ -135,12 +135,11 @@ def check(root: Path) -> tuple[list[str], int, int]:
 
 
 def main() -> int:
-    failures, total, automatic = check(gate_cli.parse_root(__doc__, DEFAULT_ROOT))
-    if gate_cli.report_failures("SINGLE EXECUTION GATE", failures):
-        return 1
-    print(f"SINGLE EXECUTION GATE SUCCESS (workflows={total}, started on pull_request or push={automatic}, "
-          f"controls=4, each run once per OS in {PR_CI})")
-    return 0
+    return gate_cli.run(
+        __doc__, DEFAULT_ROOT, check, "SINGLE EXECUTION GATE",
+        lambda total, automatic: (
+            f"SINGLE EXECUTION GATE SUCCESS (workflows={total}, started on pull_request or push={automatic}, "
+            f"controls=4, each run once per OS in {PR_CI})"))
 
 
 if __name__ == "__main__":

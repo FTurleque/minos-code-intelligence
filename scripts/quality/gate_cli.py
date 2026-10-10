@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -27,3 +28,16 @@ def report_failures(label: str, failures: list[str]) -> bool:
     for failure in failures:
         print(f"{label} FAILED: {failure}", file=sys.stderr)
     return bool(failures)
+
+
+def run(doc: str, default_root: Path, check: Callable[[Path], tuple], label: str,
+        success: Callable[..., str]) -> int:
+    """Exécute un gate : `check(root)` rend `(échecs, *compteurs)`, `success(*compteurs)` compose le message final.
+
+    Code de sortie 1 avec les échecs sur stderr, sinon 0 avec le message de succès sur stdout.
+    """
+    failures, *counters = check(parse_root(doc, default_root))
+    if report_failures(label, failures):
+        return 1
+    print(success(*counters))
+    return 0

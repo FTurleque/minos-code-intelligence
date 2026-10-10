@@ -298,12 +298,11 @@ def check(root: Path) -> tuple[list[str], int, int]:
 
 
 def main() -> int:
-    failures, resolved, wired = check(gate_cli.parse_root(__doc__, DEFAULT_ROOT))
-    if gate_cli.report_failures("CI WIRING GATE", failures):
-        return 1
-    print(f"CI WIRING GATE SUCCESS (required checks resolved={resolved}, gate self-tests wired in "
-          f"'{INVARIANTS_JOB}'={wired})")
-    return 0
+    return gate_cli.run(
+        __doc__, DEFAULT_ROOT, check, "CI WIRING GATE",
+        lambda resolved, wired: (
+            f"CI WIRING GATE SUCCESS (required checks resolved={resolved}, gate self-tests wired in "
+            f"'{INVARIANTS_JOB}'={wired})"))
 
 
 if __name__ == "__main__":
