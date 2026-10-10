@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-État produit revérifié le **7 octobre 2026** ; planification additionnelle du **4 au 5 octobre 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1, 1.1.0 et 1.2.0 publiées ; hardening #113–#260, remédiation d'audit `develop` (PR #259, PR #272) et rafraîchissement Dependabot intégrés dans `main` (PR #284) ; 1.3.0-SNAPSHOT ouverte.**
+État produit revérifié le **7 octobre 2026**, mis à jour le **10 octobre 2026** (sprint 1 de l'audit du 10 octobre) ; planification additionnelle du **4 au 5 octobre 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1, 1.1.0 et 1.2.0 publiées ; hardening #113–#260, remédiation d'audit `develop` (PR #259, PR #272) et rafraîchissement Dependabot intégrés dans `main` (PR #284) ; 1.3.0-SNAPSHOT ouverte.**
 
 Les versions historiques détaillées restent archivées sous [`history/reconciliations/`](history/reconciliations/). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
 
@@ -11,6 +11,18 @@ Décisions acceptées, code non encore migré : consolidation dans `minos-storag
 ## Audit 2026-10 — remédiation préparée (2026-10-06)
 
 L'[audit d'octobre 2026](audit/README.md) (101 constats : 7 P1, 39 P2, 55 P3, aucun P0) a donné lieu à huit changements OpenSpec **préparés** (huit implémentés, voir plus bas), validés en mode strict : `fiabiliser-chaine-audit-tenant` (premier recommandé), `diagnostiquer-statut-mcp-et-erreurs`, `declarer-limites-impact-scip`, `isoler-recuperation-appcontainer-par-proprietaire`, `corriger-lancement-plugin-intellij-windows`, `durcir-configuration-postgresql-et-secrets`, `tolerer-repertoires-illisibles-a-la-decouverte` et `reconcilier-documentation-courante`. Ordre, dépendances et décisions à clarifier : [plan de remédiation](audit/plan-de-remediation.md) ; dossiers archivés le 2026-10-07 sous [`openspec/changes/archive/`](../openspec/changes/archive/) (tâches de vérification de CI cochées sur la preuve de la CI de #352 ; tâches conditionnelles laissées ouvertes), spécifications principales sous [`openspec/specs/`](../openspec/specs/). Deux sont **implémentés en local, PR ouverte, CI de la PR à observer** : `fiabiliser-chaine-audit-tenant` (MINOS-AUD-B01 à B04) et `diagnostiquer-statut-mcp-et-erreurs` (MINOS-AUD-C01, C02, C03, C05, C06, C16), voir [constats § 6](audit/constats.md#6-suivi-des-corrections). Le troisième, `declarer-limites-impact-scip` (MINOS-AUD-F01 lot 1, F02, F04), est **implémenté en local, non commité** ; la dérivation occurrence→relation reste une décision ouverte. Le quatrième, `isoler-recuperation-appcontainer-par-proprietaire` (MINOS-AUD-A01, A02), est **implémenté en local** ; A01 est prouvé sur le vrai lanceur Windows, la CI Linux et le job `windows-2022` restent à observer. Le cinquième, `corriger-lancement-plugin-intellij-windows` (MINOS-AUD-C04), est **implémenté en local** : prouvé par un vrai `.cmd` sous Windows via un harnais local, sans le build Gradle du plugin ni sa CI. Le sixième, `durcir-configuration-postgresql-et-secrets` (MINOS-AUD-B07, B08, B09, B13), est **implémenté en local** ; la CI Linux reste à observer. Le septième, `tolerer-repertoires-illisibles-a-la-decouverte` (MINOS-AUD-D01, D06, D10), est **implémenté en local** ; les tests d'illisibilité par permissions POSIX n'ont pas encore tourné sous Linux. Le huitième, `reconcilier-documentation-courante` (MINOS-AUD-G01, G09 à G19), est **implémenté en local** : documentation seule, sans fichier ADR modifié. Les auto-tests du garde de frontières (MINOS-AUD-E02) sont à traiter avant SH-02.
+
+## Audit 2026-10-10 — sprint 1 intégré (2026-10-10)
+
+Le sprint 1 de l'audit du 10 octobre 2026 (« remettre les dispositifs de mesure en marche », 9 constats) est **corrigé, fusionné dans `develop` et archivé** (PR #392 à #394 et #396 à #399) :
+
+- **Checks exigés par le ruleset** : `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `Static invariants (single run)`, `Gitleaks`, `IntelliJ plugin (gate)` et `SonarCloud Code Analysis` (ruleset « Protect main & develop ») ; `Docker upgrade evidence gate` pour `main` seul. La liste attendue est versionnée dans `.github/required-checks.json` ; `scripts/quality/check-ci-wiring.py` (job `invariants`) vérifie que chaque check résout un job qui peut rendre un verdict sur une PR, et `scripts/quality/verify-ruleset.py` (à la main) mesure l'écart avec le ruleset réel (code 0 constaté le 2026-10-10).
+- **Auto-tests de gates** : `check-jacoco.py --self-test` et l'auto-test du garde de jalons sont rejoués dans `invariants` ; `check-ci-wiring.py` refuse tout auto-test qui n'y serait pas câblé.
+- **Confinement** : `-Dminos.sandbox.tests.required=true` sur les deux jobs `verify` ; un bubblewrap, un cgroup v2 ou un AppContainer indisponible fait échouer le job de son système au lieu d'être sauté en silence. Les tests propres à une plateforme sont comptés comme sautés ailleurs.
+- **Plugin IntelliJ** : workflow exécuté sur toute PR, portée calculée (`scripts/ci/plugin-gate.py`) et gate agrégatrice toujours rendue ; la portée inclut les rendus JSON de `minos-application`, le domaine et les goldens de caractérisation.
+- **Architecture** : garde de frontières testée règle par règle (90 cas), groupId interne lu dans le POM racine, **aucun cycle de packages** (règle A8, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris), listes de dépendances d'`arc42/05` confrontées aux POM (règle A9). Les quatre cycles existants ont été levés par le déplacement de 13 classes de production (et de leurs tests) dans leur module.
+
+Capacités OpenSpec créées ou étendues : `controles-de-fusion`, `frontieres-de-modules`, `confinement-code-non-fiable`. Les sprints 2 à 11 de l'audit (sécurité et observabilité, socle JDK, chemin de requête, chaîne de release, couverture réelle, sorties publiques, confinement et E/S privées, orchestration d'indexation, frontières d'architecture, hygiène) restent à traiter.
 
 ## Principes durables
 
@@ -78,7 +90,8 @@ Le workflow **PR Validation** porte :
 - PostgreSQL obligatoire Linux ;
 - tests sandbox réels applicables ;
 - JaCoCo ciblé Linux + Windows ;
-- invariants architecture/supply-chain/docs ;
+- invariants architecture/supply-chain/docs, y compris le câblage des checks exigés (`check-ci-wiring.py`) et l'absence de cycle de packages ;
+- qualification de confinement OS exigée (`minos.sandbox.tests.required`) ;
 - contrôle que `origin/main` est ancêtre du HEAD candidat.
 
 ### Post-228 — invariants statiques ciblés
@@ -93,7 +106,7 @@ Les replays M15/M28 sont disponibles par `workflow_dispatch` dans `historical-qu
 
 ### IntelliJ
 
-Le plugin reste qualifié séparément sous **Java 21 / Gradle 9.6.1 / IntelliJ Platform 2026.1**, avec `buildPlugin`, `verifyPluginProjectConfiguration`, `verifyPluginStructure`, **Plugin Verifier** et les tests Windows ownership. Dependabot couvre désormais `/minos-intellij` en plus de Maven et GitHub Actions.
+Le plugin reste qualifié séparément sous **Java 21 / Gradle 9.6.1 / IntelliJ Platform 2026.1**, avec `buildPlugin`, `verifyPluginProjectConfiguration`, `verifyPluginStructure`, **Plugin Verifier** et les tests Windows ownership. Dependabot couvre désormais `/minos-intellij` en plus de Maven et GitHub Actions. Le workflow s'exécute sur toute PR avec une portée calculée et une gate agrégatrice `IntelliJ plugin (gate)`, check exigé par le ruleset.
 
 ### Docker release et upgrade réel
 
@@ -135,6 +148,23 @@ La **Release 1.0.1 est publiée** et reste immuable :
 Les releases 1.1.0 et 1.2.0 ont été publiées depuis (voir [`STATUS.md`](STATUS.md)) ; la ligne de développement courante est la `<revision>` du `pom.xml` (**1.3.0-SNAPSHOT**).
 
 ## Suite
+
+### Audit du 10 octobre 2026 — sprints à traiter
+
+| Sprint | Titre |
+|---|---|
+| 2 | Failles de sécurité et observabilité |
+| 3 | Socle d'exécution supporté (JDK LTS, Node) |
+| 4 | Chemin de requête : ne plus relire le snapshot |
+| 5 | Chaîne de release et d'approvisionnement |
+| 6 | Couverture réelle et plugin IntelliJ |
+| 7 | Sorties publiques : messages, MCP, rendus |
+| 8 | Confinement et E/S privées |
+| 9 | Une seule orchestration d'indexation |
+| 10 | Frontières d'architecture |
+| 11 | Hygiène de fond |
+
+Le sprint 1 est terminé. Le sprint 3 était conditionné par la qualification du confinement réel (AUD-TST-03), désormais exigée en CI.
 
 ### Travaux ouverts en conception
 
