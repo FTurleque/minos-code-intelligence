@@ -19,7 +19,7 @@ SCOPES = {
             "com/minos/store/InMemoryCodeKnowledgeStore", "com/minos/store/SnapshotQueryView",
         ), "line": 0.50, "branch": 0.35,
     },
-    "project-resolution": {"prefixes": ("com/minos/application/ProjectResolver",), "line": 0.70, "branch": 0.50},
+    "project-resolution": {"prefixes": ("com/minos/application/resolution/ProjectResolver",), "line": 0.70, "branch": 0.50},
     "public-api": {"prefixes": ("com/minos/api/",), "line": 0.60, "branch": 0.35},
     "mcp-mapping": {"prefixes": ("com/minos/mcp/",), "line": 0.55, "branch": 0.40},
     "program-graph-analysis": {

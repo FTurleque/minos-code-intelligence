@@ -1,8 +1,14 @@
-package com.minos.incremental;
+package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
-import com.minos.orchestration.ProjectIndexState;
+import com.minos.incremental.ProjectFingerprint;
+import com.minos.incremental.ProjectFingerprintService;
+import com.minos.incremental.ProjectFingerprintSnapshot;
+import com.minos.incremental.ProjectInvalidationAssessment;
+import com.minos.incremental.ProjectInvalidationReason;
+import com.minos.incremental.ProjectInvalidationScope;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

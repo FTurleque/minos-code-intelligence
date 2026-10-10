@@ -59,7 +59,7 @@ function Assert-FinalShape {
     $application = Read-RepoText 'minos-application\src\main\java\com\minos\application\MinosApplication.java'
     Assert-Contains $application 'public final class MinosApplication' 'MinosApplication'
 
-    $resolver = Read-RepoText 'minos-application\src\main\java\com\minos\application\ProjectResolver.java'
+    $resolver = Read-RepoText 'minos-application\src\main\java\com\minos\application\resolution\ProjectResolver.java'
     foreach ($value in @('PROJECT_NOT_FOUND','PROJECT_REFERENCE_AMBIGUOUS','INVALID_PROJECT_REFERENCE')) {
         Assert-Contains $resolver $value 'ProjectResolver'
     }

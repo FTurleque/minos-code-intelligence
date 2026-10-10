@@ -1,6 +1,6 @@
 package com.minos.mcp;
 
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 
 /**
  * Centralized semantic maximum lengths for MCP tool string arguments.

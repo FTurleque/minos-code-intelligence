@@ -1,7 +1,6 @@
-package com.minos.discovery.spi;
+package com.minos.discovery;
 
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
-import com.minos.discovery.ProjectIgnorePolicy;
 
 import java.nio.file.Path;
 import java.util.Optional;

@@ -1,8 +1,6 @@
-package com.minos.incremental;
+package com.minos.orchestration;
 
 import com.minos.diagnostics.PublicErrorMessages;
-import com.minos.orchestration.IndexerNegotiationResult;
-import com.minos.orchestration.IndexingRun;
 
 import java.util.Objects;
 import java.util.Optional;

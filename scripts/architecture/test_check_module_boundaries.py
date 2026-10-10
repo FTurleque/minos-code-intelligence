@@ -708,11 +708,11 @@ class PackageCycleRuleTest(unittest.TestCase):
         self.java("minos-a", "com.example.a", "Other")
         self.assertEqual((0, 1), self.run_rule())
 
-    def test_the_real_repository_has_exactly_the_four_known_cycles(self):
+    def test_the_real_repository_has_no_package_cycle_and_no_excuse_for_one(self):
+        self.assertEqual({}, _MODULE.KNOWN_PACKAGE_CYCLES)
         with contextlib.redirect_stdout(io.StringIO()):
             cycles, packages = _MODULE.check_package_cycles()
-        self.assertEqual(4, cycles)
-        self.assertEqual(15, sum(len(packages_) for packages_, _ in _MODULE.KNOWN_PACKAGE_CYCLES.values()))
+        self.assertEqual(0, cycles)
         self.assertGreater(packages, 45)
 
 

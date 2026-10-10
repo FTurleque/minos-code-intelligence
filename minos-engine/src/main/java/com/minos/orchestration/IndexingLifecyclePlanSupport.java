@@ -1,7 +1,6 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery;
-import com.minos.incremental.IncrementalIndexingPlan;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 
 import java.nio.file.Path;

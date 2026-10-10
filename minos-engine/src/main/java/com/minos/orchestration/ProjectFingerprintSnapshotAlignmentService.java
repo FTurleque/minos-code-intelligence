@@ -1,6 +1,7 @@
-package com.minos.incremental;
+package com.minos.orchestration;
 
-import com.minos.orchestration.ProjectIndexState;
+import com.minos.incremental.ProjectFingerprintSnapshot;
+import com.minos.incremental.ProjectFingerprintSnapshotStore;
 
 import java.io.IOException;
 import java.util.Objects;

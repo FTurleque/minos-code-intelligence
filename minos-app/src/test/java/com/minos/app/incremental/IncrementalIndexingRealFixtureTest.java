@@ -2,9 +2,9 @@ package com.minos.app.incremental;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.discovery.ProjectDiscovery.Language;
-import com.minos.incremental.IncrementalIndexingCoordinator;
-import com.minos.incremental.IncrementalIndexingResult;
 import com.minos.orchestration.InMemoryIndexStateStore;
+import com.minos.orchestration.IncrementalIndexingCoordinator;
+import com.minos.orchestration.IncrementalIndexingResult;
 import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingLifecycleService;
 import com.minos.orchestration.IndexingMode;

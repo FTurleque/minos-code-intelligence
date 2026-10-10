@@ -1,6 +1,8 @@
-package com.minos.incremental;
+package com.minos.orchestration;
 
-import com.minos.orchestration.IndexingMode;
+import com.minos.incremental.IncrementalIndexingPlanReason;
+import com.minos.incremental.ProjectInvalidationAssessment;
+import com.minos.incremental.ProjectInvalidationScope;
 
 import java.util.List;
 import java.util.Objects;

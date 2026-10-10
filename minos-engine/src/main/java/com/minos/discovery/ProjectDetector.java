@@ -1,6 +1,5 @@
-package com.minos.discovery.spi;
+package com.minos.discovery;
 
-import com.minos.discovery.ProjectIgnorePolicy;
 
 import java.nio.file.Path;
 

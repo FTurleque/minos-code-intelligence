@@ -1,11 +1,13 @@
-package com.minos.output;
+package com.minos.output.json;
 
 import com.minos.domain.InformationNature;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
+import com.minos.output.AdvancedAnalysisResultRenderer;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphNode;
 import com.minos.program.ProgramNodeKind;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;

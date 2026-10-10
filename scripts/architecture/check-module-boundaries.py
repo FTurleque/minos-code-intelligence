@@ -507,35 +507,13 @@ def check_package_ownership(root: Path = ROOT, modules: tuple[str, ...] = MODULE
 # no com.minos:* artifact) are read as one graph package -> package, from imports and fully qualified names of the
 # production sources (comments and string literals ignored). A strongly connected component of more than one package
 # is a cycle. A cycle may exist only if it is listed below; a listed cycle must still be exactly a component, so the
-# table can only shrink, by a visible edit, when a cycle is broken. Lifting them is the change
-# `casser-les-cycles-de-packages`. What this does not see: references through reflection, ServiceLoader, or a type
+# table can only shrink, by a visible edit, when a cycle is broken. The table is EMPTY since the change
+# `casser-les-cycles-de-packages` lifted the last four cycles (15 packages): the mechanism stays, so a cycle that
+# comes back is refused, and an entry added to excuse one is a visible change to review. What this does not see: references through reflection, ServiceLoader, or a type
 # only named through a generic parameter without import (no bytecode is read). An edge added inside a listed cycle is
 # not seen either: the packages of the component do not change.
 EXTERNAL_SOURCE_ROOTS = ("minos-intellij",)
-KNOWN_PACKAGE_CYCLES: dict[str, tuple[frozenset[str], str]] = {
-    "engine-discovery": (
-        frozenset({"com.minos.discovery", "com.minos.discovery.spi"}),
-        "minos-engine: the SPI detectors import ProjectDiscovery and ProjectIgnorePolicy, which use the SPI back",
-    ),
-    "engine-incremental-orchestration": (
-        frozenset({"com.minos.incremental", "com.minos.orchestration"}),
-        "minos-engine: IncrementalIndexingPlan and ProjectFingerprintService are used by the lifecycle, "
-        "which the planner and the coordinator use back",
-    ),
-    "application-resolution-and-output": (
-        frozenset({
-            "com.minos.application", "com.minos.application.dynamic", "com.minos.application.semantic",
-            "com.minos.architecture", "com.minos.impact", "com.minos.output", "com.minos.program.analysis",
-            "com.minos.workspace",
-        }),
-        "minos-application: ProjectResolver is imported by six packages that MinosApplication imports back, "
-        "and application.semantic imports output.DeterministicJson while output imports the query packages",
-    ),
-    "intellij-plugin": (
-        frozenset({"com.minos.intellij.protocol", "com.minos.intellij.service", "com.minos.intellij.ui"}),
-        "minos-intellij (outside the reactor): MinosCliClient reaches ui.MinosRegistryNotice",
-    ),
-}
+KNOWN_PACKAGE_CYCLES: dict[str, tuple[frozenset[str], str]] = {}
 
 
 def declared_classes(root: Path, owners: tuple[str, ...]) -> tuple[dict[str, str], list[tuple[str, str, str]]]:

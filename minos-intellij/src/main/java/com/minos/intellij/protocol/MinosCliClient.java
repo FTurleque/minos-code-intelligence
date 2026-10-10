@@ -6,7 +6,6 @@ import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.minos.intellij.settings.MinosSettingsState;
-import com.minos.intellij.ui.MinosRegistryNotice;
 
 import java.io.IOException;
 import java.nio.file.Files;

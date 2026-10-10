@@ -1,4 +1,4 @@
-package com.minos.intellij.ui;
+package com.minos.intellij.protocol;
 
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;

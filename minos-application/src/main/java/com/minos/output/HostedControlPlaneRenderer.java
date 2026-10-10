@@ -8,6 +8,7 @@ import com.minos.hosted.HostedRetentionPlan;
 import com.minos.hosted.HostedRetentionPolicy;
 import com.minos.hosted.HostedTenantState;
 import com.minos.hosted.SharedWorkspace;
+import com.minos.output.json.DeterministicJson;
 
 import java.util.LinkedHashMap;
 import java.util.List;

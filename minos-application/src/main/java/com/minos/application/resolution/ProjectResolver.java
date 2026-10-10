@@ -1,4 +1,4 @@
-package com.minos.application;
+package com.minos.application.resolution;
 
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.registry.DegradedEntry;

@@ -1,13 +1,14 @@
-package com.minos.incremental;
+package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
-import com.minos.orchestration.IndexerNegotiationResult;
-import com.minos.orchestration.IndexerRegistry;
-import com.minos.orchestration.IndexingLifecycleService;
-import com.minos.orchestration.IndexingRequirements;
-import com.minos.orchestration.IndexingRun;
-import com.minos.orchestration.ProjectIndexState;
+import com.minos.incremental.ProjectFingerprint;
+import com.minos.incremental.ProjectFingerprintService;
+import com.minos.incremental.ProjectFingerprintSnapshot;
+import com.minos.incremental.ProjectFingerprintSnapshotStore;
+import com.minos.incremental.ProjectInvalidationAssessment;
+import com.minos.incremental.ProjectInvalidationReason;
+import com.minos.incremental.ProjectInvalidationScope;
 
 import java.io.IOException;
 import java.nio.file.Path;

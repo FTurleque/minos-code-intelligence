@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.context.CodeSearchResponse;
 import com.minos.context.CodeSearchService;

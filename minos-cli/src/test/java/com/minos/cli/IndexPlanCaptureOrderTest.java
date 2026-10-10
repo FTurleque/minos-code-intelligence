@@ -4,7 +4,7 @@ import com.minos.application.MinosApplication;
 import com.minos.discovery.DefaultDiscoveryPlugins;
 import com.minos.discovery.ProjectDiscovery.SourceRoot;
 import com.minos.discovery.ProjectDiscoveryService;
-import com.minos.discovery.spi.SourceRootDetector;
+import com.minos.discovery.SourceRootDetector;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.ProjectIndexState;

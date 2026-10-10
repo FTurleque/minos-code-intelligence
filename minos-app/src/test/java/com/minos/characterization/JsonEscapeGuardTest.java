@@ -38,7 +38,7 @@ class JsonEscapeGuardTest {
             "minos-cli", "minos-api", "minos-mcp", "minos-app");
 
     private static final String OUTPUT_DIRECTORY = "minos-application/src/main/java/com/minos/output";
-    private static final String ENCODER = OUTPUT_DIRECTORY + "/DeterministicJson.java";
+    private static final String ENCODER = OUTPUT_DIRECTORY + "/json/DeterministicJson.java";
 
     /**
      * Signatures d'un échappement JSON écrit à la main. Elles sont volontairement étroites : elles

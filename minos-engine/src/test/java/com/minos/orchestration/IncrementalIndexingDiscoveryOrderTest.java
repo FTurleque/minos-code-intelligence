@@ -1,19 +1,17 @@
-package com.minos.incremental;
+package com.minos.orchestration;
 
 import com.minos.discovery.DefaultDiscoveryPlugins;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.discovery.ProjectDiscoveryService;
-import com.minos.discovery.spi.SourceRootDetector;
-import com.minos.orchestration.InMemoryIndexStateStore;
-import com.minos.orchestration.IndexerCapability;
-import com.minos.orchestration.IndexerDescriptor;
-import com.minos.orchestration.IndexerQualification;
-import com.minos.orchestration.IndexerRegistry;
-import com.minos.orchestration.IndexingLifecycleService;
-import com.minos.orchestration.IndexingRequirements;
+import com.minos.discovery.SourceRootDetector;
+import com.minos.incremental.ProjectFingerprint;
+import com.minos.incremental.ProjectFingerprintService;
+import com.minos.incremental.ProjectFingerprintSnapshot;
+import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

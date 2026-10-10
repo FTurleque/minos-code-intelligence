@@ -1,9 +1,9 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
-import com.minos.output.DeterministicJson;
+import com.minos.output.json.DeterministicJson;
 import com.minos.registry.UnreadableRegistryException;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;

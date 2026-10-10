@@ -1,6 +1,6 @@
 package com.minos.application.dynamic;
 
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.domain.Symbol;
 import com.minos.dynamic.CorrelatedRuntimeObservation;
 import com.minos.dynamic.CorrelatedRuntimeSession;

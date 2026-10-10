@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.io.BoundedProperties;

@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.minos.output.DeterministicJson.object;
+import static com.minos.output.json.DeterministicJson.object;
 
 /** CLI adapter exposing the existing factual Git intelligence to external IDE clients. */
 public final class GitActivityCommand {

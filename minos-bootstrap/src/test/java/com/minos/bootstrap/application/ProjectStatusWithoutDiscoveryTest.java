@@ -2,8 +2,8 @@ package com.minos.bootstrap.application;
 
 import com.minos.application.ProjectInspectionService;
 import com.minos.discovery.DefaultDiscoveryPlugins;
+import com.minos.discovery.ProjectDetector;
 import com.minos.discovery.ProjectDiscoveryService;
-import com.minos.discovery.spi.ProjectDetector;
 import com.minos.registry.RegisteredProject;
 import com.minos.source.SourceBudgetPolicy;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
