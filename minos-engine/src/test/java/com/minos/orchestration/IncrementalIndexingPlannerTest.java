@@ -1,12 +1,13 @@
-package com.minos.incremental;
+package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
-import com.minos.orchestration.IndexerCapability;
-import com.minos.orchestration.IndexerDescriptor;
-import com.minos.orchestration.IndexerNegotiationResult;
+import com.minos.incremental.IncrementalIndexingPlanReason;
+import com.minos.incremental.ProjectChangeSet;
+import com.minos.incremental.ProjectInvalidationAssessment;
+import com.minos.incremental.ProjectInvalidationReason;
+import com.minos.incremental.ProjectInvalidationScope;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
-import com.minos.orchestration.IndexerQualification;
-import com.minos.orchestration.IndexingMode;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;

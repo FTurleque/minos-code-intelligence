@@ -4,10 +4,6 @@ import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.DiscoveredModule;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.discovery.ProjectDiscovery.SourceRoot;
-import com.minos.discovery.spi.BuildSystemDetector;
-import com.minos.discovery.spi.LanguageDetector;
-import com.minos.discovery.spi.ProjectDetector;
-import com.minos.discovery.spi.SourceRootDetector;
 import com.minos.io.FileTreeOperations;
 import com.minos.source.SourceBudgetPolicy;
 

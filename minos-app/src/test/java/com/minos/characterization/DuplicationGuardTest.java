@@ -131,7 +131,7 @@ class DuplicationGuardTest {
     private static final Map<String, String> JSON_EXCEPTIONS = new LinkedHashMap<>();
 
     static {
-        JSON_EXCEPTIONS.put("minos-application/src/main/java/com/minos/output/DeterministicJson.java",
+        JSON_EXCEPTIONS.put("minos-application/src/main/java/com/minos/output/json/DeterministicJson.java",
                 "l'encodeur lui-meme");
         JSON_EXCEPTIONS.put("minos-mcp/src/main/java/com/minos/mcp/McpToolSchemas.java",
                 "gabarits de schemas d'outils : constantes, aucune donnee externe (declare depuis le lot 1)");

@@ -1,8 +1,6 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
-import com.minos.incremental.IncrementalIndexingPlan;
-import com.minos.incremental.IncrementalIndexingPlanner;
 import com.minos.incremental.ProjectChangeSet;
 import com.minos.incremental.ProjectInvalidationAssessment;
 import com.minos.incremental.ProjectInvalidationReason;

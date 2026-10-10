@@ -4,11 +4,11 @@ import com.minos.domain.Symbol;
 import com.minos.impact.ImpactAnalysisReport;
 import com.minos.impact.ImpactPathStep;
 import com.minos.impact.ImpactedSymbol;
+import com.minos.output.json.DeterministicJson;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import com.minos.output.json.DeterministicJson;
 
 /** Deterministic transport-neutral rendering of M8 impact analysis. */
 public final class ImpactResultRenderer {

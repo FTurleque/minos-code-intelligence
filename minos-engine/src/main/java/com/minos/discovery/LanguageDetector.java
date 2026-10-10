@@ -1,4 +1,4 @@
-package com.minos.discovery.spi;
+package com.minos.discovery;
 
 import com.minos.discovery.ProjectDiscovery.Language;
 

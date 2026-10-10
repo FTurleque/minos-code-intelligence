@@ -81,3 +81,7 @@ Les preuves de M17 sont enregistrées dans la PR et l'issue M17. La gate de livr
 ```text
 M17 FINAL PROVIDER PLATFORM VALIDATION SUCCESS
 ```
+
+## Suivi (2026-10-10, audit AUD-ARC-06)
+
+Les quatre interfaces SPI de découverte (`ProjectDetector`, `BuildSystemDetector`, `SourceRootDetector`, `LanguageDetector`) résidaient dans le package `com.minos.discovery.spi`, qui importait le modèle de `com.minos.discovery` tandis que `ProjectDiscoveryService` importait l'SPI : un cycle de packages. Elles vivent désormais dans `com.minos.discovery`, avec le modèle et le service ; le package `spi` n'existe plus. La décision de cet ADR (découverte par extensions composables, conventions intégrées dans `DefaultDiscoveryPlugins`) est inchangée ; aucun implémenteur ne vit hors de `minos-engine`.

@@ -2,7 +2,7 @@ package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
 import com.minos.discovery.DefaultDiscoveryPlugins;
-import com.minos.discovery.spi.ProjectDetector;
+import com.minos.discovery.ProjectDetector;
 import com.minos.discovery.ProjectDiscoveryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

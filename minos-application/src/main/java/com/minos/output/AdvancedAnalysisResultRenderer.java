@@ -1,5 +1,6 @@
 package com.minos.output;
 
+import com.minos.output.json.DeterministicJson;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphEdge;
 import com.minos.program.ProgramGraphNode;
@@ -10,7 +11,6 @@ import java.util.LinkedHashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Function;
-import com.minos.output.json.DeterministicJson;
 
 /** Deterministic JSON renderer for additive M19 public surfaces. */
 public final class AdvancedAnalysisResultRenderer {

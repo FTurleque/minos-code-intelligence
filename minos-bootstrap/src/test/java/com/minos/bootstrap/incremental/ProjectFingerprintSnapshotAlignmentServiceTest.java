@@ -3,7 +3,7 @@ package com.minos.bootstrap.incremental;
 import com.minos.incremental.ProjectFingerprint;
 import com.minos.incremental.ProjectFingerprintService;
 import com.minos.incremental.ProjectFingerprintSnapshot;
-import com.minos.incremental.ProjectFingerprintSnapshotAlignmentService;
+import com.minos.orchestration.ProjectFingerprintSnapshotAlignmentService;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
 import org.junit.jupiter.api.Test;

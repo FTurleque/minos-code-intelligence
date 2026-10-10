@@ -1,7 +1,6 @@
-package com.minos.discovery.spi;
+package com.minos.discovery;
 
 import com.minos.discovery.ProjectDiscovery.SourceRoot;
-import com.minos.discovery.ProjectIgnorePolicy;
 
 import java.io.IOException;
 import java.nio.file.Path;

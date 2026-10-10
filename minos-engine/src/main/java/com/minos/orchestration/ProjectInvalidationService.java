@@ -1,9 +1,16 @@
-package com.minos.incremental;
+package com.minos.orchestration;
 
-import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.discovery.ProjectDiscovery.SourceRootKind;
-import com.minos.orchestration.ProjectIndexState;
+import com.minos.discovery.ProjectDiscovery;
+import com.minos.incremental.BuildDescriptorPolicy;
+import com.minos.incremental.ProjectChangeSet;
+import com.minos.incremental.ProjectFingerprint;
+import com.minos.incremental.ProjectFingerprintService;
+import com.minos.incremental.ProjectFingerprintSnapshot;
+import com.minos.incremental.ProjectInvalidationAssessment;
+import com.minos.incremental.ProjectInvalidationReason;
+import com.minos.incremental.ProjectInvalidationScope;
 
 import java.nio.file.Path;
 import java.util.ArrayList;

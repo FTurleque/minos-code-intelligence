@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.io.BoundedProperties;
@@ -29,7 +30,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static com.minos.domain.Preconditions.requireText;
-import com.minos.application.resolution.ProjectResolver;
 
 /** Shared read-only project/index view used by transport adapters. */
 public final class ProjectInspectionService {

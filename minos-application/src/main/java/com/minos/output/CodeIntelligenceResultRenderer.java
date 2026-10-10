@@ -4,6 +4,7 @@ import com.minos.domain.CodeEntityRef;
 import com.minos.domain.Evidence;
 import com.minos.domain.Origin;
 import com.minos.domain.SymbolLocation;
+import com.minos.output.json.DeterministicJson;
 import com.minos.query.RelationshipResult;
 import com.minos.query.UsageResult;
 
@@ -14,7 +15,6 @@ import java.util.StringJoiner;
 
 import static com.minos.output.json.DeterministicJson.object;
 import static com.minos.output.json.DeterministicJson.quote;
-import com.minos.output.json.DeterministicJson;
 
 /**
  * Rendu déterministe TEXT/JSON des résultats d'occurrences et de relations M3.

@@ -3,8 +3,8 @@ package com.minos.cli;
 import com.minos.hosted.HostedControlPlaneService;
 import com.minos.hosted.HostedRetentionPolicy;
 import com.minos.hosted.HostedRole;
-import com.minos.output.json.DeterministicJson;
 import com.minos.output.HostedControlPlaneRenderer;
+import com.minos.output.json.DeterministicJson;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -82,7 +82,6 @@ final class TeamCommand {
         this.service = Objects.requireNonNull(service, "service");
         this.bearerToken = Objects.requireNonNull(bearerToken, "bearerToken");
     }
-
 
     int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         Objects.requireNonNull(arguments, "arguments");

@@ -4,6 +4,7 @@ import com.minos.application.ProjectInspectionService;
 import com.minos.application.ProjectOperations;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ResumableRunSummary;
+import com.minos.output.json.DeterministicJson;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -13,7 +14,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import com.minos.output.json.DeterministicJson;
 
 class ProjectJsonTest {
 

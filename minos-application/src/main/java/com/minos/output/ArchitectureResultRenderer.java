@@ -5,6 +5,7 @@ import com.minos.architecture.ArchitectureModule;
 import com.minos.architecture.ArchitectureModuleContext;
 import com.minos.architecture.ArchitectureModuleDependency;
 import com.minos.domain.Evidence;
+import com.minos.output.json.DeterministicJson;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -14,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import com.minos.output.json.DeterministicJson;
 
 /** Deterministic transport-neutral rendering of M6 architecture intelligence. */
 public final class ArchitectureResultRenderer {

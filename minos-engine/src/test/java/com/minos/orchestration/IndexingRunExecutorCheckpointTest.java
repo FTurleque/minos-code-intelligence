@@ -6,8 +6,6 @@ import com.minos.discovery.ProjectDiscovery.DiscoveredModule;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.discovery.ProjectDiscovery.SourceRoot;
 import com.minos.discovery.ProjectDiscovery.SourceRootKind;
-import com.minos.incremental.IncrementalIndexingPlan;
-import com.minos.incremental.IncrementalIndexingPlanner;
 import com.minos.incremental.ProjectChangeSet;
 import com.minos.incremental.ProjectFingerprintService;
 import com.minos.incremental.ProjectInvalidationAssessment;
