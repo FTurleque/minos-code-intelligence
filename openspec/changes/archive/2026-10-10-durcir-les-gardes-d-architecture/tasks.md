@@ -34,7 +34,7 @@ Ordre dans chaque section : d'abord le test ou le gate qui échoue (rouge attend
 
 ## 6. Suite à ouvrir (non exécutée ici)
 
-- [ ] 6.1 **(manuelle)** [AUD-ARC-06] Décider d'ouvrir le changement `casser-les-cycles-de-packages` (analyse en D7 de `design.md` : `ProjectResolver` + `DeterministicJson` pour la composante de `minos-application`) ; il retirera des lignes de `KNOWN_PACKAGE_CYCLES` et devra rejouer `check-jacoco.py` (scope `project-resolution`), `check-post-mne.py`, `check-mnd.py`, `check-polyglot-provider-consistency.py`, `ModuleArchitectureTest` et vérifier l'identité des goldens à l'octet.
+- [x] 6.1 **(manuelle)** [AUD-ARC-06] Décider d'ouvrir le changement `casser-les-cycles-de-packages` (analyse en D7 de `design.md` : `ProjectResolver` + `DeterministicJson` pour la composante de `minos-application`) ; il retirera des lignes de `KNOWN_PACKAGE_CYCLES` et devra rejouer `check-jacoco.py` (scope `project-resolution`), `check-post-mne.py`, `check-mnd.py`, `check-polyglot-provider-consistency.py`, `ModuleArchitectureTest` et vérifier l'identité des goldens à l'octet. — 2026-10-10 : décision prise ; changement `casser-les-cycles-de-packages` ouvert (PR #397), implémenté et fusionné (PR #398) : `KNOWN_PACKAGE_CYCLES` est vide.
 
 ## 7. Clôture
 
