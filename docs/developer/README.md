@@ -115,6 +115,7 @@ flowchart TB
 17. [Supply-chain et provenance de release](supply-chain.md)
 18. [Tests et contribution](testing.md)
 19. [Audit de code : SpotBugs et PIT](../quality/code-audit.md)
+20. [Configuration des assistants IA](ai-configuration.md)
 
 ## Build développeur
 

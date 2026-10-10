@@ -1,0 +1,96 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git rev-parse*)",
+      "Bash(git branch --show-current*)",
+      "Bash(git ls-files*)",
+      "Bash(git grep*)",
+      "Bash(openspec list*)",
+      "Bash(openspec status*)",
+      "Bash(openspec show*)",
+      "Bash(openspec validate*)",
+      "Bash(openspec instructions*)",
+      "Bash(python scripts/*)",
+      "Bash(python .claude/scripts/*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh pr diff*)",
+      "Bash(gh run view*)",
+      "Bash(gh run list*)",
+      "Bash(./mvnw*)",
+      "Bash(./mvnw.cmd*)",
+      "Bash(mvnw.cmd*)"
+    ],
+    "ask": [
+      "Bash(openspec archive*)",
+      "Bash(gh release*)",
+      "Bash(git tag*)",
+      "Bash(./mvnw*deploy*)",
+      "Bash(./mvnw*release:*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push*--no-verify*)",
+      "Bash(gh pr merge*--admin*)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.p12)",
+      "Read(**/*.pfx)",
+      "Read(**/secrets/**)",
+      "Edit(target/**)",
+      "Write(target/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start.py\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_bash.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_bash.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_paths.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_paths.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_edit.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_edit.py\""
+          }
+        ]
+      }
+    ]
+  }
+}
