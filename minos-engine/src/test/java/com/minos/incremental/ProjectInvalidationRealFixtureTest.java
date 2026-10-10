@@ -3,6 +3,7 @@ package com.minos.incremental;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.orchestration.ProjectIndexState;
+import com.minos.orchestration.ProjectInvalidationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

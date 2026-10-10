@@ -2,7 +2,7 @@
 
 Status: Accepted.
 
-Complète l'audit [`AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md) (constat G3) et le chantier suivi dans [`CI-HYGIENE-SUIVI.md`](../audit/CI-HYGIENE-SUIVI.md).
+Complète l'audit [`AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md) (constat G3) et le chantier suivi dans [`CI-HYGIENE-SUIVI.md`](../audit/archive/2026-09/CI-HYGIENE-SUIVI.md).
 
 ## Contexte
 

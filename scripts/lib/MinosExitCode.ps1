@@ -1,6 +1,6 @@
 # A library: it sets no StrictMode, a dot-sourced Set-StrictMode would lower the caller's.
 #
-# The one PowerShell reader of scripts/lib/partial-result-commands.json (docs/audit/Q25-Q26-SUIVI.md, section 2.3).
+# The one PowerShell reader of scripts/lib/partial-result-commands.json (docs/audit/archive/2026-09/Q25-Q26-SUIVI.md, section 2.3).
 # A script that runs a MINOS command by name and compares its exit code to 0 is wrong for the commands listed there:
 # they exit 3 (a valid, partial answer) when some registry entries are unreadable. Every other non-zero code, and 3
 # from any other command, stays a failure.

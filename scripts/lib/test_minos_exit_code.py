@@ -4,7 +4,7 @@
 The scripts under test cannot be dot-sourced (they run a whole qualification at load time), so each test
 extracts the *real* function definitions from the script with the PowerShell parser and runs them against a
 fake MINOS executable that exits with a chosen code. Nothing here re-implements a script's logic.
-Docs: docs/audit/Q25-Q26-SUIVI.md, section 2.
+Docs: docs/audit/archive/2026-09/Q25-Q26-SUIVI.md, section 2.
 """
 from __future__ import annotations
 

@@ -4,7 +4,7 @@
 Audit finding C2: three workflows (pr-ci, M19, M20) each ran a complete ``./mvnw clean verify``,
 ``product-facts.py``, ``check-jacoco.py`` and the Linux sandbox toolchain installation on the same
 PR. The M19 and M20 workflows were retired because ``pr-ci.yml`` already carried every one of their
-assertions (see docs/audit/S23-SUIVI.md, "Lot 3"). This gate keeps it that way.
+assertions (see docs/audit/archive/2026-09/S23-SUIVI.md, "Lot 3"). This gate keeps it that way.
 
 The four controls it owns are the expensive ones that a duplicated workflow would copy:
 
@@ -13,7 +13,8 @@ The four controls it owns are the expensive ones that a duplicated workflow woul
 * ``scripts/quality/check-jacoco.py``;
 * ``scripts/ci/install-linux-sandbox-toolchain.sh``.
 
-Rules (line-based, comments and quoted ``paths:`` filter entries ignored):
+Rules (line-based, comments, quoted ``paths:`` filter entries and ``--self-test`` lines ignored: a gate's own
+self-test, such as ``check-jacoco.py --self-test``, is not an execution of the control):
 
 1. Among the workflows that start on ``pull_request`` or ``push``, only ``pr-ci.yml`` may run them.
    A second PR workflow that needs one of them must extend ``pr-ci.yml`` instead.
@@ -32,10 +33,12 @@ Self-test: scripts/quality/test_check_single_execution.py.
 """
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gate_cli  # noqa: E402 - après l'ajout du dossier du script au chemin
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ".github/workflows"
@@ -45,7 +48,8 @@ MAVEN_VERIFY = re.compile(r"(?:^|[\s/\\])mvnw(?P<cmd>\.cmd)?(?=\s).*\bverify\b")
 PRODUCT_FACTS = re.compile(r"scripts/docs/product-facts\.py")
 JACOCO = re.compile(r"scripts/quality/check-jacoco\.py")
 SANDBOX_TOOLCHAIN = re.compile(r"scripts/ci/install-linux-sandbox-toolchain\.sh")
-AUTOMATIC_EVENTS = re.compile(r"^  (?:pull_request|pull_request_target|push)\s*:")
+SELF_TEST = re.compile(r"(?:^|\s)--self-test\b")
+AUTOMATIC_EVENTS =re.compile(r"^  (?:pull_request|pull_request_target|push)\s*:")
 
 
 def command_lines(text: str) -> list[tuple[int, str]]:
@@ -85,6 +89,8 @@ def controls_of(text: str) -> dict[str, list[int]]:
         "jacoco-linux": [], "jacoco-windows": [], "sandbox-toolchain": [],
     }
     for number, line in command_lines(text):
+        if SELF_TEST.search(line):
+            continue  # a gate's own self-test is not an execution of the control it guards
         match = MAVEN_VERIFY.search(line)
         if match:
             found["maven-verify-windows" if match.group("cmd") else "maven-verify-unix"].append(number)
@@ -129,17 +135,11 @@ def check(root: Path) -> tuple[list[str], int, int]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
-    arguments = parser.parse_args()
-    failures, total, automatic = check(arguments.root)
-    if failures:
-        for failure in failures:
-            print(f"SINGLE EXECUTION GATE FAILED: {failure}", file=sys.stderr)
-        return 1
-    print(f"SINGLE EXECUTION GATE SUCCESS (workflows={total}, started on pull_request or push={automatic}, "
-          f"controls=4, each run once per OS in {PR_CI})")
-    return 0
+    return gate_cli.run(
+        __doc__, DEFAULT_ROOT, check, "SINGLE EXECUTION GATE",
+        lambda total, automatic: (
+            f"SINGLE EXECUTION GATE SUCCESS (workflows={total}, started on pull_request or push={automatic}, "
+            f"controls=4, each run once per OS in {PR_CI})"))
 
 
 if __name__ == "__main__":

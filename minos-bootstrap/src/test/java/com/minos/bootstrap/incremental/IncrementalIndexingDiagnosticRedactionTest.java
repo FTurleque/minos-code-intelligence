@@ -1,12 +1,12 @@
 package com.minos.bootstrap.incremental;
 
 import com.minos.discovery.ProjectDiscovery.Language;
-import com.minos.incremental.IncrementalIndexingCoordinator;
-import com.minos.incremental.IncrementalIndexingResult;
 import com.minos.incremental.ProjectFingerprint;
 import com.minos.incremental.ProjectFingerprintSnapshot;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.orchestration.InMemoryIndexStateStore;
+import com.minos.orchestration.IncrementalIndexingCoordinator;
+import com.minos.orchestration.IncrementalIndexingResult;
 import com.minos.orchestration.IndexerCapability;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerQualification;

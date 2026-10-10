@@ -5,6 +5,7 @@ import com.minos.context.CodeSearchResponse;
 import com.minos.context.ContextRelationshipResult;
 import com.minos.context.SourceExcerpt;
 import com.minos.domain.Evidence;
+import com.minos.output.json.DeterministicJson;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
 
@@ -13,8 +14,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.StringJoiner;
 
-import static com.minos.output.DeterministicJson.object;
-import static com.minos.output.DeterministicJson.quote;
+import static com.minos.output.json.DeterministicJson.object;
+import static com.minos.output.json.DeterministicJson.quote;
 
 /**
  * Rendu compact TEXT/JSON des recherches et sources M4.

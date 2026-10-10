@@ -36,3 +36,12 @@ glean-db/
 *.log
 __pycache__/
 *.pyc
+
+# Réglages personnels et fichiers d'exécution de Claude Code (le reste de .claude/ est versionné)
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.*
+.claude/checkpoints/
+
+# Filtres RTK locaux (propres au poste)
+.rtk/

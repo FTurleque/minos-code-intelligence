@@ -2,9 +2,10 @@ package com.minos.output;
 
 import com.minos.application.semantic.HybridContextBuilder;
 import com.minos.application.semantic.HybridSearchService;
-import com.minos.semantic.SemanticDocument;
 import com.minos.application.semantic.SemanticIndexService;
 import com.minos.application.semantic.SemanticSearchService;
+import com.minos.output.json.DeterministicJson;
+import com.minos.semantic.SemanticDocument;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

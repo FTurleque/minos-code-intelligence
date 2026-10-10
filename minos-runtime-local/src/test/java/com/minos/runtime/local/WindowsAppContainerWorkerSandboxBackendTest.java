@@ -12,6 +12,8 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.nio.charset.StandardCharsets;
@@ -40,7 +42,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         Path home = Files.createTempDirectory("minos-appcontainer-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
         if (WorkerSandboxQualification.currentPlatform() == WorkerSandboxQualification.Platform.WINDOWS) {
-            assumeTrue(discovered.isPresent(), "real Windows AppContainer/Job Object qualification is required");
+            SandboxTestSupport.requireBackend(discovered, "real Windows AppContainer/Job Object qualification is required");
             WorkerSandboxQualification qualification = discovered.orElseThrow().qualification();
             assertTrue(discovered.orElseThrow().enforcesNetworkDeny());
             assertTrue(qualification.containment().aggregateJobBoundaryEnforced());
@@ -67,13 +69,12 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void realWindowsSandboxUsesAppContainerJobLimitsAndBlocksNetworkHostWriteAndPrivateRegistryWrite()
             throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
-
         Path home = Files.createTempDirectory("minos-appcontainer-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path childPowerShell = CommandLocator.windowsPowerShell()
                 .orElseThrow(() -> new AssertionError("PowerShell child executable is unavailable"));
@@ -158,11 +159,11 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void allowPolicyKeepsAppContainerAndGrantsOnlyInternetClientCapability() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-appcontainer-allow-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
         Path working = Files.createTempDirectory("minos-appcontainer-allow-working-");
@@ -189,11 +190,11 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void realWindowsSandboxRunsAManagedBatchFileProviderWithoutDoubleQuoting() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-appcontainer-batch-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path tools = Files.createDirectories(home.resolve("tools").resolve("fixture-batch-provider").resolve("1.0.0"));
         Path working = Files.createTempDirectory("minos-appcontainer-batch-working-");
@@ -234,11 +235,11 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void qualifiedBackendLaunchesRealProcessIndexerExecutor() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-windows-process-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "qualified Windows sandbox backend is required for process-path qualification");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows sandbox backend is required for process-path qualification");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path project = Files.createTempDirectory("minos-windows-process-project-");
         Path childPowerShell = CommandLocator.windowsPowerShell()
@@ -282,11 +283,11 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void toolchainHomeEnvironmentGrantsItsRootButNeverAProfileWideLocation() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-appcontainer-toolchain-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
         Path projectJdk = Files.createDirectories(
@@ -307,11 +308,11 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void hostJvmJavaHomeIsNeverGrantedAsAProviderReadRoot() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-appcontainer-javahome-host-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
 
@@ -331,8 +332,8 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void ungrantableReadRootFailsClosedInsteadOfReachingIcacls() {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         // %SystemRoot% itself (not a MINOS-owned path) is used directly to exercise the ACL
         // grantability primitive in isolation; addReadRoot never reaches it for a real plan because
         // isWindowsSystemRoot already excludes it earlier.
@@ -345,8 +346,8 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void aclGrantabilityProbeSurvivesConcurrentGrantRevokeWithoutWipingTheAcl() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path target = Files.createTempFile("minos-acl-race-", ".ps1");
         String currentUser = System.getProperty("user.name");
         assertEquals(0, runIcacls(target, "/grant:r", currentUser + ":(W)"), "marker grant must succeed");
@@ -383,8 +384,8 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void requireInheritableOwnerAccessLetsFilesWrittenInsideTheRootInheritTheUsersAccess() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path writeRoot = Files.createTempDirectory("minos-write-root-");
         String currentUser = System.getProperty("user.name");
 
@@ -409,8 +410,8 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void aclGrantabilityProbeNeverStripsTheCallingUsersOwnPreExistingAccess() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path target = Files.createTempDirectory("minos-acl-self-access-");
         String currentUser = System.getProperty("user.name");
         assertEquals(0, runIcacls(target, "/grant:r", currentUser + ":(F)"),
@@ -432,8 +433,8 @@ class WindowsAppContainerWorkerSandboxBackendTest {
      * access on the files themselves.
      */
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void aProtectedDirectoryBelowTheManagedRootStaysReadableByTheSandboxIdentity() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-appcontainer-protected-home-");
         assertProtectedRuntimeReachable(home, home);
     }
@@ -445,8 +446,8 @@ class WindowsAppContainerWorkerSandboxBackendTest {
      * recognized as their ancestor, or the runner falls back to a lone file grant.
      */
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void aHomeSpelledWithAShortNameOrALinkStillGrantsTheProtectedRuntimeDirectory() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-appcontainer-aliased-home-");
         Path alias = aliasOf(home);
         assertNotEquals(alias, home.toRealPath(), "the alias must differ from the real path of the home");
@@ -459,7 +460,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
      */
     private static void assertProtectedRuntimeReachable(Path home, Path viaHome) throws Exception {
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(viaHome);
-        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
         Path root = Files.createDirectories(
@@ -501,11 +502,11 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void aFileDirectlyInTheManagedRootAddsNoGrantBeyondTheRoot() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-appcontainer-rootfile-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
         Path root = Files.createDirectories(home.resolve("tools").resolve("fixture-flat-provider").resolve("1.0.0"));
@@ -522,11 +523,11 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void aLinkLeavingTheManagedRootGrantsTheFileAloneNeverItsDirectory() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-appcontainer-link-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        SandboxTestSupport.requireBackend(discovered, "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
         Path outside = Files.createTempDirectory("minos-appcontainer-link-outside-");

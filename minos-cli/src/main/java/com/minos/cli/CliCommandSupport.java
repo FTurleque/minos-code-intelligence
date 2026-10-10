@@ -1,7 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.ProjectOperations;
-import com.minos.application.ProjectResolver;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.domain.SymbolKind;
 import com.minos.registry.DegradedEntry;

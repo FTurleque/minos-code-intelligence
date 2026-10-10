@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.output.DeterministicJson;
+import com.minos.output.json.DeterministicJson;
 
 /** CLI compatibility facade over the shared deterministic JSON renderer. */
 final class CliJson {

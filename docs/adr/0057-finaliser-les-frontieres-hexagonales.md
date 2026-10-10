@@ -30,6 +30,8 @@ La fermeture de `remote index` non fiable (ADR 0041), MCP read-only, les limites
 
 [Backlog SH-05 à SH-12](../roadmap/storage-hexagonal-2026-10/README.md). Ne pas rouvrir A2/A3/A4 comme travaux non faits ; les utiliser comme régressions à protéger. Les résidus A5 et le chargeur SPI signalé dans l'ADR 0042 sont suivis explicitement.
 
+Cycles de packages (point 7, mis en œuvre le 2026-10-10, audit AUD-ARC-06) : le garde `scripts/architecture/check-module-boundaries.py` (règle A8) refuse tout cycle de packages absent de la table `KNOWN_PACKAGE_CYCLES` et toute entrée de cette table qui ne décrit plus exactement un cycle, de sorte qu'elle ne puisse que rétrécir. Les quatre cycles existants (quinze packages, dont trois dans le plugin IntelliJ, hors reactor) y ont d'abord été gelés, puis **levés** par le changement `casser-les-cycles-de-packages` (13 classes déplacées dans leur module, sans nouvel ADR : ADR 0044 respecté) ; la table est vide et le garde refuse tout cycle futur.
+
 ## Références
 
 - [Cockburn — Ports and Adapters](https://alistair.cockburn.us/hexagonal-architecture)

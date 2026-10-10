@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Q25 : la liste des commandes qui peuvent rendre 3, lue par les scripts, est épinglée au comportement réel de la CLI.
  *
- * <p>{@code scripts/lib/partial-result-commands.json} est la seule liste (docs/audit/Q25-Q26-SUIVI.md § 2.3). Un script
+ * <p>{@code scripts/lib/partial-result-commands.json} est la seule liste (docs/audit/archive/2026-09/Q25-Q26-SUIVI.md § 2.3). Un script
  * qui la lit n'est juste que si la liste l'est : chaque commande listée rend bien 3 devant un registre abîmé, et les
  * autres commandes par nom ne le rendent jamais. Ajouter un 3 à une commande sans la lister, ou lister une commande qui
  * ne le rend pas, fait échouer cette garde.</p>

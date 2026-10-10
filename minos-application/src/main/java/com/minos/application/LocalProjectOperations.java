@@ -1,16 +1,17 @@
 package com.minos.application;
 
-import com.minos.io.PrivateLocalStorage;
-import com.minos.orchestration.ScipSymbolSnapshotReport;
-import com.minos.orchestration.ScipArtifactImporter;
-import com.minos.orchestration.ScipSymbolSnapshotRequest;
+import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.io.BoundedFileDigest;
 import com.minos.io.DurableAtomicFile;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.orchestration.ProviderId;
+import com.minos.orchestration.ScipArtifactImporter;
+import com.minos.orchestration.ScipSymbolSnapshotReport;
+import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.registry.UnreadableRegistryException;

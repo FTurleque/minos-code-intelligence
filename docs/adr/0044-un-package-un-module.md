@@ -1,8 +1,8 @@
 # 0044 — Un package, un module
 
-Status: Accepted (2026-09-29) — mis en œuvre ; historique et preuves dans [`ARCHI-SUIVI.md`](../audit/ARCHI-SUIVI.md).
+Status: Accepted (2026-09-29) — mis en œuvre ; historique et preuves dans [`ARCHI-SUIVI.md`](../audit/archive/2026-09/ARCHI-SUIVI.md).
 
-Complète l'audit [`AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md) (constats A3 et A7). Amende l'[ADR 0022](0022-maven-reactor-and-module-boundaries.md) sur l'emplacement de `discovery`, `incremental`, `orchestration` et `MinosVersion`. Prolonge l'[ADR 0042](0042-racine-de-composition.md), dont il garde toutes les frontières.
+Complète l'audit [`AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md) (constats A3 et A7). Amende l'[ADR 0022](0022-maven-reactor-and-module-boundaries.md) sur l'emplacement de `discovery`, `incremental`, `orchestration` et `MinosVersion`. Prolonge l'[ADR 0042](0042-racine-de-composition.md), dont il garde toutes les frontières.
 
 ## Contexte
 

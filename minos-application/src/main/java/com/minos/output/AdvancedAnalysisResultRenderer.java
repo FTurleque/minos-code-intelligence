@@ -1,5 +1,6 @@
 package com.minos.output;
 
+import com.minos.output.json.DeterministicJson;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphEdge;
 import com.minos.program.ProgramGraphNode;

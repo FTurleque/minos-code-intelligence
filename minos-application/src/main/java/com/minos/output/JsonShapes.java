@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static com.minos.output.DeterministicJson.object;
+import static com.minos.output.json.DeterministicJson.object;
 
 /**
  * Formes JSON des petits objets que se partagent les renderers de résultats (emplacement, origine, entité,

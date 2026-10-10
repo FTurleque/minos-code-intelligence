@@ -5,6 +5,7 @@ import com.minos.architecture.ArchitectureModule;
 import com.minos.architecture.ArchitectureModuleContext;
 import com.minos.architecture.ArchitectureModuleDependency;
 import com.minos.domain.Evidence;
+import com.minos.output.json.DeterministicJson;
 
 import java.util.ArrayList;
 import java.util.Comparator;

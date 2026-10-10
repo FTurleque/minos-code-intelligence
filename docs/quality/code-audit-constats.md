@@ -93,7 +93,7 @@ Avant d'imposer `spotbugs:check` ou un seuil PIT en CI, chiffrer une base après
 
 ## 5. Audit outillé du 8 octobre 2026 : constats qualifiés
 
-Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité des familles A à G de l'[audit d'octobre](../audit/constats.md). Qualifications : **défaut confirmé**, **risque**, **faiblesse de test**, **faux positif**, **décision ouverte**. Niveau de preuve : **E** exécuté pendant l'audit, **L** lu dans le code par l'auteur, **A** relu par une analyse déléguée et non réexécuté. Priorités : P1 (avant la prochaine release), P2 (prochain lot), P3 (à planifier). Les alertes d'une même cause sont regroupées en une fiche.
+Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité des familles A à G de l'[audit d'octobre](../audit/archive/2026-10-06/constats.md). Qualifications : **défaut confirmé**, **risque**, **faiblesse de test**, **faux positif**, **décision ouverte**. Niveau de preuve : **E** exécuté pendant l'audit, **L** lu dans le code par l'auteur, **A** relu par une analyse déléguée et non réexécuté. Priorités : P1 (avant la prochaine release), P2 (prochain lot), P3 (à planifier). Les alertes d'une même cause sont regroupées en une fiche.
 
 ### Registre
 
@@ -206,7 +206,7 @@ PIT a analysé 7 modules sur 14 (`minos-runtime-local` partiellement) : voir § 
 
 #### MINOS-AUD-H11 — Suivi de l'audit d'octobre périmé
 
-- **Preuve (L)** : `docs/audit/constats.md` § 2 et § 6 et `docs/audit/README.md` § 9 décrivent B01–B04, C01–C06, C16, A01, A02, C04, B07–B09, B13, D01, D06, D10 comme « corrigés en local », « PR ouverte » ou « CI à observer », alors que les commits correspondants (`82dc354b`, `f87f2250`, `9bc1129d`, `9f3e2911`, `14596db2`, `93e10c3a`, `67872cc8`) sont dans `develop`. **Correction faite** : ligne de suivi datée dans `docs/audit/README.md` § 10 et état daté en tête du § 6 de `constats.md` (commit fusionné et statut revérifié de chaque changement).
+- **Preuve (L)** : `docs/audit/archive/2026-10-06/constats.md` § 2 et § 6 et `docs/audit/archive/2026-10-06/README.md` § 9 décrivent B01–B04, C01–C06, C16, A01, A02, C04, B07–B09, B13, D01, D06, D10 comme « corrigés en local », « PR ouverte » ou « CI à observer », alors que les commits correspondants (`82dc354b`, `f87f2250`, `9bc1129d`, `9f3e2911`, `14596db2`, `93e10c3a`, `67872cc8`) sont dans `develop`. **Correction faite** : ligne de suivi datée dans `docs/audit/archive/2026-10-06/README.md` § 10 et état daté en tête du § 6 de `constats.md` (commit fusionné et statut revérifié de chaque changement).
 
 #### MINOS-AUD-H12 et H13 — Reprise après interruption du stockage
 
@@ -282,7 +282,7 @@ Points vérifiés par l'auteur pendant l'audit :
 - **Lanceurs** : H10 vérifié ; scripts `.sh` et `.ps1` analysés syntaxiquement (§ 6 de la couverture).
 - **Limites des résultats d'analyse (F01)** : partiel, trois sorties sans déclaration (lecture déléguée, non réexécutée).
 
-Le détail ligne par ligne des familles A à F est conservé hors dépôt (§ 4 de la couverture) ; il alimentera la mise à jour du § 6 de [`docs/audit/constats.md`](../audit/constats.md).
+Le détail ligne par ligne des familles A à F est conservé hors dépôt (§ 4 de la couverture) ; il alimentera la mise à jour du § 6 de [`docs/audit/archive/2026-10-06/constats.md`](../audit/archive/2026-10-06/constats.md).
 
 ## 7. Plan de correction priorisé
 

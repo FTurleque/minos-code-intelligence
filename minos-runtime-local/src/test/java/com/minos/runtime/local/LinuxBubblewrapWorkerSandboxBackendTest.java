@@ -11,6 +11,8 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -27,13 +29,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+@EnabledOnOs(OS.LINUX)
 class LinuxBubblewrapWorkerSandboxBackendTest {
 
     @Test
     void denyPlanUsesNetworkNamespaceReadOnlyRootAndResourceLimits() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) return;
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent(), "bubblewrap/prlimit runtime is required for Linux sandbox isolation");
+        SandboxTestSupport.requireBackend(discovered, "bubblewrap/prlimit runtime is required for Linux sandbox isolation");
 
         Path working = Files.createTempDirectory("minos-bwrap-working-");
         Path run = Files.createTempDirectory("minos-bwrap-run-");
@@ -66,9 +68,8 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
 
     @Test
     void realLinuxSandboxBlocksHostWriteAndNetworkAndAppliesRlimits() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) return;
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent(), "bubblewrap/prlimit runtime is required for Linux sandbox isolation");
+        SandboxTestSupport.requireBackend(discovered, "bubblewrap/prlimit runtime is required for Linux sandbox isolation");
         assumeTrue(CommandLocator.find("python3").isPresent(), "python3 is required for the negative network/resource test");
 
         Path working = Files.createTempDirectory("minos-bwrap-live-working-");
@@ -126,9 +127,8 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
 
     @Test
     void qualifiedBackendLaunchesRealProcessIndexerExecutor() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) return;
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent(), "Linux sandbox backend is required for process-path isolation test");
+        SandboxTestSupport.requireBackend(discovered, "Linux sandbox backend is required for process-path isolation test");
         LinuxBubblewrapWorkerSandboxBackend backend = discovered.orElseThrow();
         Path home = Files.createTempDirectory("minos-linux-process-home-");
         Path project = Files.createTempDirectory("minos-linux-process-project-");
@@ -155,9 +155,8 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
 
     @Test
     void allowPlanSharesHostNetworkAndDropsCapabilities() throws Exception {
-        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) return;
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent(), "bubblewrap/prlimit runtime is required");
+        SandboxTestSupport.requireBackend(discovered, "bubblewrap/prlimit runtime is required");
         Path working = Files.createTempDirectory("minos-bwrap-allow-working-");
         Path run = Files.createTempDirectory("minos-bwrap-allow-run-");
         Path artifact = run.resolve("index.scip");

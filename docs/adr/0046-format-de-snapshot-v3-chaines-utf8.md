@@ -1,8 +1,8 @@
 # 0046 — Format de snapshot V3 : chaînes UTF-8, lecture de tous les formats antérieurs
 
-Status: Accepted (2026-09-29) — mis en œuvre ; mesures, preuves et journal dans [`ARCHI-SUIVI.md`](../audit/ARCHI-SUIVI.md) (lot 3, A6, § A6.10 et § A6.11).
+Status: Accepted (2026-09-29) — mis en œuvre ; mesures, preuves et journal dans [`ARCHI-SUIVI.md`](../audit/archive/2026-09/ARCHI-SUIVI.md) (lot 3, A6, § A6.10 et § A6.11).
 
-Complète l'audit [`AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md) (constat A6) et l'[ADR 0023](0023-decomposed-local-snapshot-persistence.md) (persistance locale décomposée, codecs versionnés, pointeur actif). Ne change ni l'[ADR 0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) (vue de requête et cache) ni le plafond de 256 Mio.
+Complète l'audit [`AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md) (constat A6) et l'[ADR 0023](0023-decomposed-local-snapshot-persistence.md) (persistance locale décomposée, codecs versionnés, pointeur actif). Ne change ni l'[ADR 0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) (vue de requête et cache) ni le plafond de 256 Mio.
 
 ## Contexte
 

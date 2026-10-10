@@ -2,7 +2,6 @@ package com.minos.orchestration;
 
 import com.minos.discovery.ModuleAssignmentRule;
 import com.minos.discovery.ProjectDiscovery;
-import com.minos.incremental.IncrementalIndexingPlan;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;

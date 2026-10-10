@@ -34,7 +34,7 @@ jobs:
   # (Python-only, no Java/Maven setup) instead of once per OS or once per now-retired
   # remediation workflow. Formerly split across pr-ci's own OS matrix plus
   # mnd-remediation.yml, mne-remediation.yml, post-mne-remediation.yml and
-  # post-228-hardening.yml (see docs/audit/CI-HYGIENE-SUIVI.md for the inventory that
+  # post-228-hardening.yml (see docs/audit/archive/2026-09/CI-HYGIENE-SUIVI.md for the inventory that
   # justified each merge).
   invariants:
     name: Static invariants (single run)
@@ -110,7 +110,22 @@ jobs:
       - name: Milestone artifact reference guard
         run: python scripts/quality/check-milestone-artifact-references.py
 
-      - name: Partial-result consumer gate (advisory heuristic; this job is not a required check, audit G6)
+      - name: CI wiring gate (required checks resolve to jobs that can report; every gate self-test runs here)
+        run: python scripts/quality/check-ci-wiring.py
+
+      - name: CI wiring, ruleset comparison and plugin gate self-tests
+        run: |
+          python scripts/quality/test_check_ci_wiring.py -v
+          python scripts/quality/test_verify_ruleset.py -v
+          python scripts/ci/test_plugin_gate.py -v
+
+      - name: JaCoCo gate self-test (decision logic on synthetic reports; the gate itself runs in the verify jobs)
+        run: python scripts/quality/check-jacoco.py --self-test
+
+      - name: Milestone artifact reference guard self-test
+        run: python scripts/quality/check-milestone-artifact-references.py --self-test
+
+      - name: Partial-result consumer gate (heuristic, see its docstring for what it cannot see)
         run: python scripts/quality/check-partial-result-consumers.py
 
       - name: Partial-result consumer gate self-test, shared-list and script-function tests
@@ -149,7 +164,7 @@ jobs:
   # The ONLY Maven build of a pull request, and so the only executor of the JaCoCo gate, the
   # Linux sandbox toolchain and the delegated cgroup. The path-filtered
   # M19 and M20 workflows used to repeat this exact job on a subset of paths (audit C2); they were
-  # retired because nothing they asserted was missing here (docs/audit/S23-SUIVI.md, "Lot 3").
+  # retired because nothing they asserted was missing here (docs/audit/archive/2026-09/S23-SUIVI.md, "Lot 3").
   # scripts/quality/check-single-execution.py keeps a second copy from coming back.
   verify:
     name: Verify (${{ matrix.os }})
@@ -245,12 +260,12 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$
-          ./mvnw -B -ntp -Dminos.postgresql.tests.required=true clean verify
+          ./mvnw -B -ntp -Dminos.postgresql.tests.required=true -Dminos.sandbox.tests.required=true clean verify
 
       - name: Maven clean verify (Windows)
         if: runner.os == 'Windows'
         shell: powershell
-        run: .\mvnw.cmd -B -ntp clean verify
+        run: .\mvnw.cmd -B -ntp "-Dminos.sandbox.tests.required=true" clean verify
 
       - name: Targeted JaCoCo gate (full)
         if: runner.os != 'Windows'

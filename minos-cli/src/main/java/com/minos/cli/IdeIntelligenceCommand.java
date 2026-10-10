@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
 
-import static com.minos.output.DeterministicJson.object;
+import static com.minos.output.json.DeterministicJson.object;
 
 /**
  * Additive M21-S6 transport for IntelliJ M19/M20 parity.
