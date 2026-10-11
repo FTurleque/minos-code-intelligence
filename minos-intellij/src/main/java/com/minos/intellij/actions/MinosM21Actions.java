@@ -6,7 +6,6 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -16,11 +15,14 @@ import com.intellij.psi.PsiFile;
 import com.minos.intellij.protocol.MinosM21Client;
 import com.minos.intellij.service.MinosProjectService;
 import com.minos.intellij.settings.MinosSettingsState;
+import com.minos.intellij.task.MinosBackgroundTask;
 import com.minos.intellij.ui.MinosUiController;
 import org.jetbrains.annotations.NotNull;
 
 /** Native IntelliJ entry points for M21-S6 surface parity. */
 public final class MinosM21Actions {
+
+    private static final MinosBackgroundTask TASKS = MinosBackgroundTask.withIdeLog();
 
     private MinosM21Actions() {
     }
@@ -197,13 +199,9 @@ public final class MinosM21Actions {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
-                try {
-                    result = operation.execute();
-                } catch (ProcessCanceledException canceled) {
-                    throw canceled;
-                } catch (Throwable throwable) {
-                    failure = throwable;
-                }
+                MinosBackgroundTask.Outcome<JsonObject> outcome = TASKS.run(title, operation::execute);
+                result = outcome.result();
+                failure = outcome.failure();
             }
 
             @Override

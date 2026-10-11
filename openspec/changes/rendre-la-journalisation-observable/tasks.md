@@ -13,11 +13,11 @@ Ordre dans chaque section : d'abord le test ou le gate qui échoue (rouge attend
 
 ## 2. Tâche d'arrière-plan du plugin (AUD-QUA-04)
 
-- [ ] 2.1 [AUD-QUA-04] **Décision à obtenir avant d'écrire** : D2-a (message de l'exception dans `idea.log`, option A recommandée ou B). Consigner la réponse dans `design.md`.
-- [ ] 2.2 [AUD-QUA-04] Rouge : tests JUnit simples dans `minos-intellij/src/test/java/com/minos/intellij/task/` (`MinosBackgroundTaskTest`) : exception sans message (journal reçu avec pile, texte nomme le type), avec message, `Error` relancée, `ProcessCanceledException` relancée sans journal. Les tests ne compilent pas encore (classe absente) : c'est le rouge.
-- [ ] 2.3 [AUD-QUA-04] Créer `com.minos.intellij.task.MinosBackgroundTask` (package feuille) et `describe(Throwable)` ; remplacer les quatre `catch (Throwable)` de `MinosEditorActions` (`:69`, `:83`), `MinosM21Actions` (`:204`) et `MinosToolWindowPanel` (`:280`) ; `showError` appelle `describe`. Preuve : `grep -rn "catch (Throwable" minos-intellij/src/main/java` → 0 ligne ; `grep -rn "Unknown failure" minos-intellij/src/main/java` → uniquement dans `describe`.
+- [x] 2.1 [AUD-QUA-04] **Décision à obtenir avant d'écrire** : D2-a (message de l'exception dans `idea.log`, option A recommandée ou B). Consigner la réponse dans `design.md`.
+- [x] 2.2 [AUD-QUA-04] Rouge : tests JUnit simples dans `minos-intellij/src/test/java/com/minos/intellij/task/` (`MinosBackgroundTaskTest`) : exception sans message (journal reçu avec pile, texte nomme le type), avec message, `Error` relancée, `ProcessCanceledException` relancée sans journal. Les tests ne compilent pas encore (classe absente) : c'est le rouge.
+- [x] 2.3 [AUD-QUA-04] Créer `com.minos.intellij.task.MinosBackgroundTask` (package feuille) et `describe(Throwable)` ; remplacer les quatre `catch (Throwable)` de `MinosEditorActions` (`:69`, `:83`), `MinosM21Actions` (`:204`) et `MinosToolWindowPanel` (`:280`) ; `showError` appelle `describe`. Preuve : `grep -rn "catch (Throwable" minos-intellij/src/main/java` → 0 ligne ; `grep -rn "Unknown failure" minos-intellij/src/main/java` → uniquement dans `describe`.
 - [ ] 2.4 [AUD-QUA-04] Preuve : build et tests Gradle du plugin (`gradle -p minos-intellij test` ou la commande de `intellij-plugin.yml`), `python scripts/architecture/check-module-boundaries.py` (règle A8 : 0 cycle, plugin compris), `IntelliJ plugin (gate)` vert à la PR (Linux : build, structure, Plugin Verifier ; Windows : tests de propriété de processus).
-- [ ] 2.5 [AUD-QUA-04] Documenter dans `docs/user/intellij-plugin.md` où trouver la trace d'une erreur (`idea.log`, recherche « MINOS task failed »). Rejouer `check-current-docs.py`.
+- [x] 2.5 [AUD-QUA-04] Documenter dans `docs/user/intellij-plugin.md` où trouver la trace d'une erreur (`idea.log`, recherche « MINOS task failed »). Rejouer `check-current-docs.py`.
 
 ## 3. Journaux de récupération et garde (AUD-QUA-06)
 

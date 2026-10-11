@@ -99,3 +99,10 @@ Ordre d'implémentation proposé : `ouvrir-le-depot-git-sans-executer-ses-filtre
 - **Mesures (tâche 1.3)** : un échange MCP `initialize` écrit **une** ligne `INFO` sur stderr (SDK MCP, informations du client) ; `git-activity --help` : 0 octet. Pas de `logging.properties` embarqué. Clone en échec d'une URL `https://utilisateur:secretdetest@hote-inexistant.invalid/…` : `TransportException`, **0 octet** sur stderr, le secret n'apparaît pas.
 - **jpackage (tâche 1.5)** : `jdeps` liste `java.sql`, qui requiert `java.logging` en transitif ; `java.logging` est donc dans le runtime sans changement du script.
 - Reste du changement : lot 2 (AUD-QUA-04) et lot 3 (AUD-QUA-06) ; décisions D2-a et D3-a prises avec la recommandation (A et extension de `check-private-io.py`), à confirmer.
+
+### Implémentation — AUD-QUA-04, lot 2 de `rendre-la-journalisation-observable` (2026-10-11, branche `sec/journaliser-les-echecs-du-plugin-intellij`)
+
+- **Rouge** : `MinosBackgroundTaskTest` écrit avant la classe (elle n'existait pas : échec de compilation, comme prévu par la tâche 2.2) ; **vert** ensuite, 6 tests (`gradlew.bat test`, 2 min, plateforme IntelliJ 2026.1 en cache ; `--offline` ne suffit pas : dépendances de buildscript absentes du cache).
+- Nouveau package feuille `com.minos.intellij.task` (`MinosBackgroundTask` : `ProcessCanceledException` et `Error` relancées, autre exception journalisée avec sa pile puis rendue ; `describe` nomme le type quand le message manque). Les quatre `catch (Throwable)` (`MinosEditorActions` ×2, `MinosM21Actions`, `MinosToolWindowPanel`) sont remplacés : `grep "catch (Throwable" minos-intellij/src/main/java` → 0 ; `Unknown failure` n'existe plus que dans `describe`.
+- Décision D2-a : option A (pile et message dans `idea.log`), à confirmer. `check-module-boundaries.py` vert (A8, 0 cycle).
+- Reste : tâche 2.4 (`IntelliJ plugin (gate)` vert à la PR), puis lot 3 (AUD-QUA-06).

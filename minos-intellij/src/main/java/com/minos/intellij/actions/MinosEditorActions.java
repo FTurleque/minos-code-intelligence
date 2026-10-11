@@ -8,7 +8,6 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.ide.CopyPasteManager;
-import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -18,12 +17,15 @@ import com.minos.intellij.navigation.MinosLocation;
 import com.minos.intellij.navigation.MinosNavigation;
 import com.minos.intellij.protocol.MinosCliClient;
 import com.minos.intellij.service.MinosProjectService;
+import com.minos.intellij.task.MinosBackgroundTask;
 import com.minos.intellij.ui.MinosUiController;
 import org.jetbrains.annotations.NotNull;
 
 import java.awt.datatransfer.StringSelection;
 
 public final class MinosEditorActions {
+
+    private static final MinosBackgroundTask TASKS = MinosBackgroundTask.withIdeLog();
 
     private MinosEditorActions() {
     }
@@ -59,16 +61,13 @@ public final class MinosEditorActions {
                 @Override
                 public void run(@NotNull ProgressIndicator indicator) {
                     indicator.setIndeterminate(true);
-                    try {
+                    failure = TASKS.run(title(), () -> {
                         MinosProjectService service = MinosProjectService.getInstance(project);
                         context = service.context();
                         symbol = service.resolveSymbol(editor, file);
                         result = execute(project, context, symbol);
-                    } catch (ProcessCanceledException canceled) {
-                        throw canceled;
-                    } catch (Throwable throwable) {
-                        failure = throwable;
-                    }
+                        return null;
+                    }).failure();
                 }
 
                 @Override
@@ -76,12 +75,12 @@ public final class MinosEditorActions {
                     if (failure != null) {
                         MinosUiController.getInstance(project).showError(title(), failure);
                     } else {
-                        try {
+                        Throwable presentFailure = TASKS.run(title(), () -> {
                             present(project, context, symbol, result);
-                        } catch (ProcessCanceledException canceled) {
-                            throw canceled;
-                        } catch (Throwable throwable) {
-                            MinosUiController.getInstance(project).showError(title(), throwable);
+                            return null;
+                        }).failure();
+                        if (presentFailure != null) {
+                            MinosUiController.getInstance(project).showError(title(), presentFailure);
                         }
                     }
                 }
