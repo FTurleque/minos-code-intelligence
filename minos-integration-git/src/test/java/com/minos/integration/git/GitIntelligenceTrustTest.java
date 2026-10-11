@@ -164,7 +164,7 @@ class GitIntelligenceTrustTest {
                 GitIntelligenceService.ActivityBudget.DEFAULT, () -> principal("autre-compte")).inspect(root));
 
         assertTrue(unreadable.getMessage().contains("cannot be read"), unreadable.getMessage());
-        assertTrue(!unreadable.getMessage().equals(different.getMessage()));
+        org.junit.jupiter.api.Assertions.assertNotEquals(different.getMessage(), unreadable.getMessage());
     }
 
     @Test

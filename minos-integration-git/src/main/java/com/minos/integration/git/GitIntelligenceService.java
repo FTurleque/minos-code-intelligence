@@ -57,6 +57,8 @@ public final class GitIntelligenceService implements GitIntelligence {
     /** Consecutive commits older than {@code since} after which the rest of the history is taken as older too. */
     static final int OLDER_COMMIT_RUN_LIMIT = 1_000;
 
+    private static final String FILTER_SECTION = "filter";
+
     private final ActivityBudget budget;
     private final Supplier<UserPrincipal> expectedOwner;
 
@@ -234,7 +236,7 @@ public final class GitIntelligenceService implements GitIntelligence {
             if (expectedOwner != null) {
                 expected = expectedOwner.get();
             }
-        } catch (IOException | UncheckedIOException | UnsupportedOperationException failure) {
+        } catch (IOException | UncheckedIOException | UnsupportedOperationException _) {
             throw new IOException(
                     "The owner of the Git repository cannot be read; the analysis is refused (fail-closed)");
         }
@@ -272,17 +274,17 @@ public final class GitIntelligenceService implements GitIntelligence {
                 new File(repository.getDirectory(), "config"), repository.getFS());
         try {
             declared.load();
-        } catch (ConfigInvalidException invalid) {
+        } catch (ConfigInvalidException _) {
             throw new IOException("The Git repository configuration is invalid");
         }
-        Set<String> drivers = declared.getSubsections("filter");
+        Set<String> drivers = declared.getSubsections(FILTER_SECTION);
         if (drivers.isEmpty()) {
             return false;
         }
         PassThroughFilter.register();
         for (String driver : drivers) {
-            repository.getConfig().setString("filter", driver, "clean", PassThroughFilter.COMMAND);
-            repository.getConfig().setString("filter", driver, "smudge", PassThroughFilter.COMMAND);
+            repository.getConfig().setString(FILTER_SECTION, driver, "clean", PassThroughFilter.COMMAND);
+            repository.getConfig().setString(FILTER_SECTION, driver, "smudge", PassThroughFilter.COMMAND);
         }
         return true;
     }
