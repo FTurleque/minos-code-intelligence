@@ -85,9 +85,9 @@ class ClasspathLockTest {
     @Test
     void aMissingJarFails() throws Exception {
         ClasspathLock lock = twoJarLock();
+        List<Path> resolved = List.of(jar("alpha.jar", "alpha"));
 
-        IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> lock.verify(List.of(jar("alpha.jar", "alpha"))));
+        IllegalStateException failure = assertThrows(IllegalStateException.class, () -> lock.verify(resolved));
 
         assertTrue(failure.getMessage().contains("missing jar beta.jar"), failure.getMessage());
     }
@@ -146,10 +146,11 @@ class ClasspathLockTest {
         Path alpha = jar("alpha.jar", "alpha");
         Path beta = jar("beta.jar", "TAMPERED");
         Path coursier = fakeCoursier(alpha + java.io.File.pathSeparator + beta);
+        Path log = temp.resolve("logs").resolve("install.log");
+        ClasspathLock lock = twoJarLock();
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> ManagedScipProviderRuntimeManager.fetchVerifiedClasspath(
-                        coursier, temp, temp.resolve("logs").resolve("install.log"), twoJarLock()));
+                () -> ManagedScipProviderRuntimeManager.fetchVerifiedClasspath(coursier, temp, log, lock));
 
         assertTrue(failure.getMessage().contains("beta.jar"), failure.getMessage());
         assertFalse(failure.getMessage().contains(temp.toString()), failure.getMessage());
@@ -158,9 +159,11 @@ class ClasspathLockTest {
     @Test
     void aFetchOutputWithoutAnyJarListIsRefused() throws Exception {
         Path coursier = fakeCoursier("nothing to see here");
+        Path log = temp.resolve("logs").resolve("install.log");
+        ClasspathLock lock = twoJarLock();
 
-        assertThrows(IllegalStateException.class, () -> ManagedScipProviderRuntimeManager.fetchVerifiedClasspath(
-                coursier, temp, temp.resolve("logs").resolve("install.log"), twoJarLock()));
+        assertThrows(IllegalStateException.class,
+                () -> ManagedScipProviderRuntimeManager.fetchVerifiedClasspath(coursier, temp, log, lock));
     }
 
     @Test

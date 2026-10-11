@@ -320,7 +320,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
      * anything is kept. A mismatch (a jar replaced upstream or by a mirror, added, or missing) fails the installation.
      */
     static List<Path> fetchVerifiedClasspath(Path coursier, Path workingDirectory, Path log, ClasspathLock lock)
-            throws Exception {
+            throws IOException, InterruptedException {
         run(scipJavaFetchCommand(coursier), workingDirectory, log, Duration.ofMinutes(10));
         List<Path> jars = resolvedJars(log);
         lock.verify(jars);
@@ -356,7 +356,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             Path jar;
             try {
                 jar = Path.of(entry);
-            } catch (java.nio.file.InvalidPathException notAPath) {
+            } catch (java.nio.file.InvalidPathException _) {
                 return List.of(); // a progress line such as "Downloaded https://.../x.jar" is not a classpath
             }
             if (!jar.isAbsolute()) return List.of();
