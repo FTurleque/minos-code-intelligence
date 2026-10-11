@@ -31,18 +31,15 @@ class ManagedScipProviderRuntimeManagerTest {
     Path temporaryDirectory;
 
     @Test
-    void probesPinnedScipJavaWithSystemJdkAndPropagatesKotlinToTheWindowsRuntime() throws IOException {
+    void fetchesPinnedScipJavaWithoutLaunchingItAndPropagatesKotlinToTheWindowsRuntime() throws IOException {
         Path coursier = temporaryDirectory.resolve("cs.exe");
 
-        List<String> command = ManagedScipProviderRuntimeManager.scipJavaInstallationProbe(coursier);
+        List<String> command = ManagedScipProviderRuntimeManager.scipJavaFetchCommand(coursier);
 
-        assertEquals(List.of(
-                coursier.toString(),
-                "launch", "org.scip-code:scip-java:0.13.1",
-                "--jvm", "system",
-                "--main", "org.scip_code.scip_java.ScipJava",
-                "--", "--version"
-        ), command);
+        // Resolution only: scip-java is never launched, and nothing runs before the jars are verified.
+        assertEquals(List.of(coursier.toString(), "fetch", "--classpath", "org.scip-code:scip-java:0.13.1"), command);
+        assertFalse(command.contains("launch"));
+        assertFalse(command.contains("--main"));
 
         if (CommandLocator.isWindows()) {
             Path project = temporaryDirectory.resolve("kotlin-project");
@@ -120,24 +117,6 @@ class ManagedScipProviderRuntimeManagerTest {
                 "staging must not mutate the original project tree");
         assertTrue(Files.isRegularFile(project.resolve("mvnw")),
                 "staging policy must not mutate the host checkout Maven wrapper");
-    }
-
-    @Test
-    void requiresThePinnedVersionInTheInstallationProbeLog() throws IOException {
-        Path validLog = temporaryDirectory.resolve("valid.log");
-        Path invalidLog = temporaryDirectory.resolve("invalid.log");
-        Path oversizedLineLog = temporaryDirectory.resolve("oversized-line.log");
-        Files.writeString(validLog, "scip-java version 0.13.1\n");
-        Files.writeString(invalidLog, "scip-java version 0.12.3\n");
-        Files.writeString(oversizedLineLog, "x".repeat(64 * 1024 + 1));
-
-        assertDoesNotThrow(() -> ManagedScipProviderRuntimeManager.requireExpectedScipJavaVersion(validLog));
-        IllegalStateException failure = assertThrows(
-                IllegalStateException.class,
-                () -> ManagedScipProviderRuntimeManager.requireExpectedScipJavaVersion(invalidLog));
-        assertTrue(failure.getMessage().contains("scip-java version 0.13.1"));
-        assertThrows(IOException.class,
-                () -> ManagedScipProviderRuntimeManager.requireExpectedScipJavaVersion(oversizedLineLog));
     }
 
     @Test

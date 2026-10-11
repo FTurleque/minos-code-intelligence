@@ -38,10 +38,18 @@ def catalog(sha: str = TOOL_SHA) -> dict:
         ],
         "assembled": [
             {"id": "classpath", "platform": "windows-x64", "provider": "scip-java", "version": "1.0.0",
-             "recipe": "coursier-fetch", "license": "Apache-2.0", "embedded": True,
+             "recipe": "coursier-fetch", "coordinate": "org.example:classpath:1.0.0",
+             "lock": "classpath.lock.json", "license": "Apache-2.0", "embedded": True,
              "payload": "assembled/classpath-1.0.0-windows-x64.zip"},
         ],
     }
+
+
+def lock(version: str = "1.0.0", coordinate: str = "org.example:classpath:1.0.0", jars=None) -> dict:
+    if jars is None:
+        jars = [{"name": f"classpath-{version}.jar", "size": 10, "sha256": TOOL_SHA},
+                {"name": "dependency-2.jar", "size": 20, "sha256": OTHER_SHA}]
+    return {"coordinate": coordinate, "version": version, "jars": jars}
 
 
 def dockerfile(sha: str = TOOL_SHA, maven: str = "3.9.16", java: str = "1.0.0", extra: str = "") -> str:
@@ -73,6 +81,8 @@ class CheckToolsManifestTest(unittest.TestCase):
             str(gate.PAYLOAD_BUILDER): "reads embedded-tools.json",
             str(gate.SYNC_SCRIPT): "reads embedded-tools.json",
         }
+        if overrides.get("lock", True) is not None:
+            files[str(gate.CATALOG.parent / "classpath.lock.json")] = json.dumps(overrides.get("lock", lock()))
         for name, content in files.items():
             path = directory / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,6 +141,35 @@ class CheckToolsManifestTest(unittest.TestCase):
         provider_catalog = PROVIDER_CATALOG.replace('"scip-java", "1.0.0"', '"scip-java", "1.1.0"')
         failures = self.run_gate(provider_catalog=provider_catalog)
         self.assertTrue(any("scip-java" in failure and "ScipIndexerCatalog" in failure for failure in failures), failures)
+
+    def test_a_coursier_fetch_component_without_a_lock_file_is_refused(self):
+        failures = self.run_gate(lock=None)
+        self.assertTrue(any("missing or unreadable" in f for f in failures), failures)
+
+    def test_a_lock_that_does_not_match_the_catalogue_version_is_refused(self):
+        failures = self.run_gate(lock=lock(version="0.9.0"))
+        self.assertTrue(any("coordinate and version" in f for f in failures), failures)
+
+    def test_a_lock_for_another_coordinate_is_refused(self):
+        failures = self.run_gate(lock=lock(coordinate="org.other:classpath:1.0.0"))
+        self.assertTrue(any("coordinate and version" in f for f in failures), failures)
+
+    def test_a_lock_that_does_not_pin_the_artifact_itself_is_refused(self):
+        failures = self.run_gate(lock=lock(jars=[{"name": "dependency-2.jar", "size": 20, "sha256": OTHER_SHA}]))
+        self.assertTrue(any("does not pin" in f for f in failures), failures)
+
+    def test_a_lock_with_a_malformed_or_duplicated_jar_is_refused(self):
+        for jars in ([{"name": "classpath-1.0.0.jar", "size": 10, "sha256": "not-a-hash"}],
+                     [{"name": "classpath-1.0.0.jar", "size": 10, "sha256": TOOL_SHA},
+                      {"name": "classpath-1.0.0.jar", "size": 10, "sha256": TOOL_SHA}],
+                     [{"name": "classpath-1.0.0.jar", "size": 0, "sha256": TOOL_SHA}]):
+            with self.subTest(jars=jars):
+                failures = self.run_gate(lock=lock(jars=jars))
+                self.assertTrue(any("malformed or duplicated" in f for f in failures), failures)
+
+    def test_an_empty_lock_is_refused(self):
+        failures = self.run_gate(lock=lock(jars=[]))
+        self.assertTrue(any("lists no jar" in f for f in failures), failures)
 
     def test_an_embedded_artifact_without_a_payload_is_refused(self):
         broken = self.minimal_catalog()

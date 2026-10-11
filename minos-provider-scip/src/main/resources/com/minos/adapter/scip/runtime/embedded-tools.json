@@ -234,6 +234,7 @@
       "version": "0.13.1",
       "recipe": "coursier-fetch",
       "coordinate": "org.scip-code:scip-java:0.13.1",
+      "lock": "scip-java-classpath.lock.json",
       "license": "Apache-2.0",
       "embedded": true,
       "payload": "assembled/scip-java-classpath-0.13.1-windows-x64.zip"
