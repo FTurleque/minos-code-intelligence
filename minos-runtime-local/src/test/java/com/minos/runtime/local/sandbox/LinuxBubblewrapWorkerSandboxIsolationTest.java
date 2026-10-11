@@ -1,7 +1,6 @@
 package com.minos.runtime.local.sandbox;
 
 import com.minos.runtime.local.process.IndexerProcessPlan;
-import com.minos.runtime.local.sandbox.LinuxBubblewrapWorkerSandboxBackend;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;

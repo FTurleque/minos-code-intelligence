@@ -1,6 +1,5 @@
 package com.minos.runtime.local.sandbox;
 
-import com.minos.runtime.local.sandbox.LinuxCgroupJob;
 import org.opentest4j.AssertionFailedError;
 import org.opentest4j.TestAbortedException;
 

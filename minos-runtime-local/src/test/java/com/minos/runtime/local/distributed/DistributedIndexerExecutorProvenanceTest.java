@@ -138,7 +138,7 @@ class DistributedIndexerExecutorProvenanceTest {
     }
 
     @Test
-    void aDenyManifestIsRejectedWhenTheWorkerDoesNotEnforceTheDenial() throws Exception {
+    void aDenyManifestIsRejectedWhenTheWorkerDoesNotEnforceTheDenial() {
         // A DENY manifest necessarily claims an enforced boundary; this worker declares it enforces none.
         FixtureWorker worker = new FixtureWorker(false, draft -> draft.networkDenyEnforced = true);
         DistributedIndexerExecutor executor = executor(registeredRoot, WorkerNetworkPolicy.DENY, worker);
@@ -152,7 +152,7 @@ class DistributedIndexerExecutorProvenanceTest {
     }
 
     @Test
-    void anArtifactProducedUnderAllowIsRejectedUnderADenyPolicy() throws Exception {
+    void anArtifactProducedUnderAllowIsRejectedUnderADenyPolicy() {
         // The worker claims to enforce DENY, so the request expects an enforced boundary; the manifest it
         // transports was produced under ALLOW.
         FixtureWorker worker = new FixtureWorker(true, draft -> {
@@ -169,7 +169,7 @@ class DistributedIndexerExecutorProvenanceTest {
     }
 
     @Test
-    void aManifestWithoutScopeProvenanceIsRejectedEvenForTheRootScope() throws Exception {
+    void aManifestWithoutScopeProvenanceIsRejectedEvenForTheRootScope() {
         FixtureWorker worker = new FixtureWorker(false, draft -> draft.format = DistributedArtifactManifest.FORMAT_V1);
         DistributedIndexerExecutor executor = executor(registeredRoot, WorkerNetworkPolicy.ALLOW, worker);
         IndexingExecutionRequest request = execution(PROVIDER, registeredRoot, registeredRoot, "");
@@ -183,7 +183,7 @@ class DistributedIndexerExecutorProvenanceTest {
     }
 
     @Test
-    void aResponseManifestThatDiffersFromTheTransportedOneIsRejected() throws Exception {
+    void aResponseManifestThatDiffersFromTheTransportedOneIsRejected() {
         FixtureWorker worker = new FixtureWorker(false, draft -> { });
         worker.announced = draft -> draft.providerVersion = "9.9.9";
         DistributedIndexerExecutor executor = executor(registeredRoot, WorkerNetworkPolicy.ALLOW, worker);
@@ -198,7 +198,7 @@ class DistributedIndexerExecutorProvenanceTest {
     }
 
     @Test
-    void aRequestForAnotherProviderIsRefusedBeforeTheWorkerRuns() throws Exception {
+    void aRequestForAnotherProviderIsRefusedBeforeTheWorkerRuns() {
         FixtureWorker worker = new FixtureWorker(false, draft -> { });
         DistributedIndexerExecutor executor = executor(registeredRoot, WorkerNetworkPolicy.ALLOW, worker);
         IndexingExecutionRequest request = execution("other-provider", registeredRoot, module, "module-a");

@@ -269,6 +269,8 @@ class BoundedProcessOutputFailureTest {
         @Override public InputStream getErrorStream() { return stderr; }
         @Override public int waitFor() { return 0; }
         @Override public int exitValue() { return 0; }
-        @Override public void destroy() { }
+        @Override public void destroy() {
+            // The fake process has nothing to terminate.
+        }
     }
 }

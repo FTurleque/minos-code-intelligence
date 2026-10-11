@@ -1,6 +1,5 @@
 package com.minos.runtime.local.sandbox;
 
-import com.minos.runtime.local.sandbox.SandboxTestSupport;
 import com.minos.runtime.local.sandbox.CgroupJobOwnership.Mark;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;

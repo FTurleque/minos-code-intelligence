@@ -1,7 +1,6 @@
 package com.minos.runtime.local.workspace;
 
 import com.minos.runtime.local.sandbox.WindowsContainmentScript;
-import com.minos.runtime.local.workspace.ProviderResidueReclamation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

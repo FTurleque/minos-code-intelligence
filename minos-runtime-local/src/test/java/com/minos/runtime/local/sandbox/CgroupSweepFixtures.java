@@ -1,6 +1,5 @@
 package com.minos.runtime.local.sandbox;
 
-import com.minos.runtime.local.sandbox.LinuxCgroupJob;
 import com.minos.runtime.local.sandbox.CgroupJobOwnership.Mark;
 import com.minos.runtime.local.sandbox.CgroupJobOwnership.Namespaces;
 import com.minos.runtime.local.sandbox.CgroupJobOwnership.OwnerLookup;

@@ -1,7 +1,5 @@
 package com.minos.runtime.local.workspace;
 
-import com.minos.runtime.local.workspace.ProviderResidueReclamation;
-import com.minos.runtime.local.workspace.RunDirectoryRetention;
 import com.minos.testsupport.LogCapture;
 import com.minos.testsupport.UnreadableDirectory;
 import org.junit.jupiter.api.Assumptions;

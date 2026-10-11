@@ -1,8 +1,5 @@
 package com.minos.runtime.local.distributed;
 
-import com.minos.runtime.local.distributed.DistributedArtifactBundleStore;
-import com.minos.runtime.local.distributed.DistributedArtifactCachePolicy;
-import com.minos.runtime.local.distributed.DistributedIndexerExecutor;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerCapability;

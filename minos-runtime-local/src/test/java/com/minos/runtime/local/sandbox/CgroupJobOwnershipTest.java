@@ -1,6 +1,5 @@
 package com.minos.runtime.local.sandbox;
 
-import com.minos.runtime.local.sandbox.CgroupSweepFixtures;
 import com.minos.runtime.local.sandbox.CgroupJobOwnership.Decision;
 import com.minos.runtime.local.sandbox.CgroupJobOwnership.Mark;
 import com.minos.runtime.local.sandbox.CgroupJobOwnership.Namespaces;
