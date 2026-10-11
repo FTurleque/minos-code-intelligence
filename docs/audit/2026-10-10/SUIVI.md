@@ -68,3 +68,12 @@ Quatre changements OpenSpec, branche locale `docs/sprint2-openspec` (HEAD de dé
 Preuve de la spécification : `openspec validate --all --strict` → 18 passés, 0 échec.
 
 Ordre d'implémentation proposé : `ouvrir-le-depot-git-sans-executer-ses-filtres` (gravité élevée) puis `epingler-et-isoler-l-installation-des-providers` (lot 1 d'abord), puis `rendre-la-journalisation-observable` (lots 1 à 3 séparables), enfin `durcir-secret-postgres-et-lanceur-de-developpement`.
+
+### Implémentation — AUD-SEC-01 (2026-10-11, branche `sec/ouvrir-le-depot-git-sans-executer-ses-filtres`)
+
+- **Rouge** (`mvnw.cmd -pl minos-integration-git -am test -Dtest=GitIntelligenceTrustTest`) : 8 échecs sur 10 ; le témoin est créé pour `.git/config`, fichier inclus, `info/attributes`, dépôt parent et dépôt livré avec le projet.
+- **Vert** : 10/10, module 43 tests, `minos-api` 84 tests, gates rapides 19/19.
+- **Décisions retenues** : D1-A (remontée gardée, limitation `REPOSITORY_ABOVE_PROJECT_ROOT`), D3-A (filtres du dépôt seulement).
+- **Écart avec le design** : `unsetSection` ne retire pas les lignes venant d'un fichier inclus (`Config.java:1167`) et une sous-classe de `FS` ferait échouer le statut. Mécanisme retenu : chaque pilote `filter.*` déclaré par le dépôt est redirigé en mémoire vers un filtre intégré transparent (`PassThroughFilter`), `clean` reste calculé sur le contenu brut. `.git/config` est inchangé (assertion).
+- **Propriétaire** : `PrivateLocalStorage.verifyOwnedByCurrentUser` (primitive existante) ; seam de test `Supplier<UserPrincipal>`.
+- Reste : tâche 4.1 (manuelle) après ouverture de la PR.
