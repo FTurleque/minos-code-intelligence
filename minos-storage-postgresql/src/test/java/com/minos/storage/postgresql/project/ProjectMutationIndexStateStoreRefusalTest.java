@@ -1,7 +1,6 @@
 package com.minos.storage.postgresql.project;
 
 import com.minos.orchestration.InMemoryIndexStateStore;
-import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.postgresql.PostgresTestSupport;
