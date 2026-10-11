@@ -27,7 +27,7 @@ def forbid(relative: str, text: str, token: str) -> None:
 
 
 def validate_runtime_contracts() -> None:
-    supervisor_path = "minos-runtime-local/src/main/java/com/minos/runtime/local/ProviderWriteQuotaSupervisor.java"
+    supervisor_path = "minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/ProviderWriteQuotaSupervisor.java"
     supervisor = read(supervisor_path)
     for token in (
         "provider write quota visibility lost",

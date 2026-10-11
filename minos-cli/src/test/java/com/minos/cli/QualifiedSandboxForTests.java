@@ -5,11 +5,11 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
-import com.minos.runtime.local.WorkerResourceContainment;
-import com.minos.runtime.local.WorkerResourceContainment.Disposition;
-import com.minos.runtime.local.WorkerSandboxBackend;
-import com.minos.runtime.local.WorkerSandboxQualification;
-import com.minos.runtime.local.WorkerSandboxSelection;
+import com.minos.runtime.local.sandbox.WorkerResourceContainment;
+import com.minos.runtime.local.sandbox.WorkerResourceContainment.Disposition;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
+import com.minos.runtime.local.sandbox.WorkerSandboxQualification;
+import com.minos.runtime.local.sandbox.WorkerSandboxSelection;
 
 import java.util.List;
 import java.util.Map;

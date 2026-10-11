@@ -2,11 +2,11 @@ package com.minos.adapter.scip.runtime.install;
 
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
-import com.minos.runtime.local.IndexerProcessPlanFactory;
-import com.minos.runtime.local.ProcessIndexerExecutor;
+import com.minos.runtime.local.process.IndexerProcessPlanFactory;
+import com.minos.runtime.local.process.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeStatus;
 import com.minos.runtime.local.StrongProcessOwnershipIndexerExecutor;
-import com.minos.runtime.local.WorkerSandboxBackend;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
 import com.minos.runtime.local.WorkerSandboxBackends;
 
 import java.nio.file.Path;

@@ -24,7 +24,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ResumableArtifactPolicy;
 import com.minos.orchestration.ResumableRunMarkers;
-import com.minos.runtime.local.FileResumableRunMarkers;
+import com.minos.runtime.local.workspace.FileResumableRunMarkers;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 
 import java.io.IOException;

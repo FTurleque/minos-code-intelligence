@@ -77,13 +77,13 @@ def run_active_milestone_gates() -> None:
 
 def main() -> int:
     try:
-        linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java")
+        linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend.java")
         windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java")
         windows_launcher = read(
             "minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1")
         worker = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java")
-        workspace_files = read("minos-runtime-local/src/main/java/com/minos/runtime/local/ProviderWorkspaceFiles.java")
-        worker_contract = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxBackend.java")
+        workspace_files = read("minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/ProviderWorkspaceFiles.java")
+        worker_contract = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WorkerSandboxBackend.java")
         clone_policy = read("minos-integration-git/src/main/java/com/minos/integration/git/RemoteRepositoryCachePolicy.java")
         clone = read("minos-integration-git/src/main/java/com/minos/integration/git/JGitRemoteRepositoryMaterializer.java")
         clone_budget = read("minos-integration-git/src/main/java/com/minos/integration/git/RemoteCloneBudget.java")
@@ -106,7 +106,7 @@ def main() -> int:
             "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresStorageBackend.java")
         retention_policy = read("minos-engine/src/main/java/com/minos/storage/PersistentRetentionPolicy.java")
         indexing = read("minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java")
-        distributed = read("minos-runtime-local/src/main/java/com/minos/runtime/local/DistributedArtifactBundleStore.java")
+        distributed = read("minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java")
         shared_cache_leases = read("minos-engine/src/main/java/com/minos/io/SharedCacheLeaseRegistry.java")
         file_tree = read("minos-engine/src/main/java/com/minos/io/FileTreeOperations.java")
         managed_java = read(
@@ -117,8 +117,8 @@ def main() -> int:
             "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java")
         locked_npm = read(
             "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/LockedNpmPackage.java")
-        run_retention = read("minos-runtime-local/src/main/java/com/minos/runtime/local/RunDirectoryRetention.java")
-        executor = read("minos-runtime-local/src/main/java/com/minos/runtime/local/ProcessIndexerExecutor.java")
+        run_retention = read("minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/RunDirectoryRetention.java")
+        executor = read("minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java")
         lifecycle = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java")
         installer = read("scripts/install/configure-runtime-settings.ps1")
         docker_services = read("docker/scripts/configure-m30-docker-services.ps1")

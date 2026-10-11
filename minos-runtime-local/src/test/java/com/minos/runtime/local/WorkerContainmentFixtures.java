@@ -1,5 +1,6 @@
 package com.minos.runtime.local;
 
+import com.minos.runtime.local.sandbox.WorkerResourceContainment;
 import java.util.List;
 
 /** Containment dispositions used by worker fixtures that stand in for a qualified OS sandbox. */

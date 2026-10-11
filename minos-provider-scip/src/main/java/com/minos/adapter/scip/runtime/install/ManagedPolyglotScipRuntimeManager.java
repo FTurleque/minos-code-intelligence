@@ -11,9 +11,9 @@ import com.minos.io.BoundedInputStream;
 import com.minos.io.FileTreeOperations;
 import com.minos.io.Sha256;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.runtime.local.InstallationProcessEnvironment;
-import com.minos.runtime.local.BoundedProcessOutput;
-import com.minos.runtime.local.CommandLocator;
+import com.minos.runtime.local.process.InstallationProcessEnvironment;
+import com.minos.runtime.local.process.BoundedProcessOutput;
+import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 

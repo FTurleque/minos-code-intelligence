@@ -6,7 +6,7 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 import com.minos.orchestration.IndexerQualification;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
-import com.minos.runtime.local.CommandLocator;
+import com.minos.runtime.local.process.CommandLocator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

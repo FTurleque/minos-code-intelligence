@@ -8,7 +8,7 @@ import com.minos.orchestration.IndexerQualification;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
-import com.minos.runtime.local.IndexerProcessPlan;
+import com.minos.runtime.local.process.IndexerProcessPlan;
 
 import java.nio.file.Path;
 import java.util.Arrays;

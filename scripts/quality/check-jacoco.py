@@ -80,10 +80,10 @@ SCOPES = {
     "m25-remote-distributed-indexing": {
         "prefixes": (
             "com/minos/remote/", "com/minos/integration/git/JGitRemoteRepositoryMaterializer", "com/minos/integration/git/JGitCloneDeadline",
-            "com/minos/integration/git/RemoteRepositoryCachePolicy", "com/minos/runtime/local/DistributedArtifactBundleStore",
-            "com/minos/runtime/local/DistributedArtifactCachePolicy", "com/minos/runtime/local/DistributedIndexerExecutor",
-            "com/minos/runtime/local/LocalIsolatedIndexWorker", "com/minos/runtime/local/WorkerSandboxBackend",
-            "com/minos/runtime/local/WorkerSandboxQualification", "com/minos/cli/operations/LocalRemoteIndexOperations",
+            "com/minos/integration/git/RemoteRepositoryCachePolicy", "com/minos/runtime/local/distributed/DistributedArtifactBundleStore",
+            "com/minos/runtime/local/distributed/DistributedArtifactCachePolicy", "com/minos/runtime/local/distributed/DistributedIndexerExecutor",
+            "com/minos/runtime/local/LocalIsolatedIndexWorker", "com/minos/runtime/local/sandbox/WorkerSandboxBackend",
+            "com/minos/runtime/local/sandbox/WorkerSandboxQualification", "com/minos/cli/operations/LocalRemoteIndexOperations",
             # A2 / ADR 0042: the M25 wiring LocalRemoteIndexOperations used to build moved here verbatim.
             "com/minos/bootstrap/LocalRemoteIndexingRuntime",
             "com/minos/cli/command/RemoteIndexCommand",
@@ -100,29 +100,29 @@ SCOPES = {
     },
     "provider-execution-trust-boundary": {
         "prefixes": (
-            "com/minos/runtime/local/ProcessIndexerExecutor", "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor",
-            "com/minos/runtime/local/LocalProviderWorkspace", "com/minos/runtime/local/ProviderWorkspaceFiles",
-            "com/minos/runtime/local/WorkerSandboxBackend", "com/minos/runtime/local/WorkerSandboxQualification",
-            "com/minos/runtime/local/WorkerSandboxBackends", "com/minos/runtime/local/WorkerResourceContainment",
-            "com/minos/runtime/local/CommandLocator", "com/minos/runtime/local/ProviderProcessEnvironment",
-            "com/minos/runtime/local/ProcessTreeTermination", "com/minos/runtime/local/ProviderResidueReclamation",
+            "com/minos/runtime/local/process/ProcessIndexerExecutor", "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor",
+            "com/minos/runtime/local/workspace/LocalProviderWorkspace", "com/minos/runtime/local/workspace/ProviderWorkspaceFiles",
+            "com/minos/runtime/local/sandbox/WorkerSandboxBackend", "com/minos/runtime/local/sandbox/WorkerSandboxQualification",
+            "com/minos/runtime/local/WorkerSandboxBackends", "com/minos/runtime/local/sandbox/WorkerResourceContainment",
+            "com/minos/runtime/local/process/CommandLocator", "com/minos/runtime/local/process/ProviderProcessEnvironment",
+            "com/minos/runtime/local/process/ProcessTreeTermination", "com/minos/runtime/local/workspace/ProviderResidueReclamation",
         ),
         "line": 0.68,
         "branch": 0.48,
         "prefixMinimums": {
             "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor": {"line": 0.35, "branch": 0.18},
-            "com/minos/runtime/local/ProviderProcessEnvironment": {"line": 0.70, "branch": 0.20},
+            "com/minos/runtime/local/process/ProviderProcessEnvironment": {"line": 0.70, "branch": 0.20},
         },
     },
     "provider-write-quota-supervisor": {
-        "prefixes": ("com/minos/runtime/local/ProviderWriteQuotaSupervisor",),
+        "prefixes": ("com/minos/runtime/local/workspace/ProviderWriteQuotaSupervisor",),
         "line": 0.55,
         "branch": 0.35,
     },
     "provider-sandbox-linux": {
         "prefixes": (
-            "com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend",
-            "com/minos/runtime/local/LinuxCgroupJob",
+            "com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend",
+            "com/minos/runtime/local/sandbox/LinuxCgroupJob",
         ),
         "platform": "linux",
         "line": 0.55,
@@ -131,7 +131,7 @@ SCOPES = {
     "provider-sandbox-windows": {
         "prefixes": (
             "com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend",
-            "com/minos/runtime/local/WindowsContainmentScript",
+            "com/minos/runtime/local/sandbox/WindowsContainmentScript",
         ),
         "platform": "windows",
         "line": 0.55,
