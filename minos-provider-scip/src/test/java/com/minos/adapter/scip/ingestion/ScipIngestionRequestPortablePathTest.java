@@ -35,6 +35,16 @@ class ScipIngestionRequestPortablePathTest {
     }
 
     @Test
+    void aDriveLetterRevealedOnlyByNormalisationIsRefusedToo() {
+        ScipIngestionRequest rooted = request("services/api");
+
+        for (String path : List.of("./C:/x", "x/../C:/x", ".\\C:\\x", "./c:x")) {
+            assertThrows(IllegalArgumentException.class, () -> request(path), path);
+            assertEquals(path, rooted.projectRelativePath(path), "never prefixed by the root");
+        }
+    }
+
+    @Test
     void aProviderPathThatIsRootedOnAnyPlatformIsNeverPrefixedByTheRoot() {
         ScipIngestionRequest rooted = request("services/api");
         ScipIngestionRequest atProjectRoot = request("");

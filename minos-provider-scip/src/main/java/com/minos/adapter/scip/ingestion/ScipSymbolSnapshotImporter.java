@@ -209,7 +209,7 @@ public final class ScipSymbolSnapshotImporter {
         Map<String, String> fileIds = new LinkedHashMap<>(explicitFileIds);
         index.getDocumentsList().forEach(document -> {
             String relativePath = document.getRelativePath();
-            String normalized = safeRelativePath(relativePath);
+            String normalized = ScipIngestionRequest.normalizeProviderRelativePath(relativePath);
             if (normalized != null) {
                 String projectRelative = projectRelativeRoot == null || projectRelativeRoot.isBlank()
                         ? normalized : projectRelativeRoot + "/" + normalized;
@@ -217,15 +217,6 @@ public final class ScipSymbolSnapshotImporter {
             }
         });
         return Map.copyOf(fileIds);
-    }
-
-    private static String safeRelativePath(String value) {
-        if (value == null || value.isBlank()) return null;
-        try {
-            Path path = Path.of(value.replace('\\', '/')).normalize();
-            if (path.isAbsolute() || path.getNameCount() == 0 || path.startsWith("..")) return null;
-            return path.toString().replace('\\', '/');
-        } catch (RuntimeException exception) { return null; }
     }
 
     private static String safeMessage(Throwable failure) {

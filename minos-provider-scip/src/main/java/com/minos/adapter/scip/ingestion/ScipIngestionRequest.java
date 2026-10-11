@@ -58,24 +58,31 @@ record ScipIngestionRequest(
         }
         String candidate = value.replace('\\', '/');
         Path path = Path.of(candidate).normalize();
-        if (isRootedOnAnyPlatform(candidate) || path.isAbsolute() || path.startsWith("..")) {
+        String portable = path.toString().replace('\\', '/');
+        if (isRootedOnAnyPlatform(candidate) || isRootedOnAnyPlatform(portable)
+                || path.isAbsolute() || path.startsWith("..")) {
             throw new IllegalArgumentException("projectRelativeRoot must stay inside the registered project");
         }
-        String portable = path.toString().replace('\\', '/');
         return ".".equals(portable) ? "" : portable;
     }
 
-    private static String normalizeProviderRelativePath(String value) {
+    /**
+     * Forme portable d'un chemin écrit par un provider, ou {@code null} s'il ne peut pas être placé sous le
+     * projet (vide, enraciné sur une plateforme, sortant, ou illisible pour l'hôte).
+     */
+    static String normalizeProviderRelativePath(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         try {
             String candidate = value.replace('\\', '/');
             Path path = Path.of(candidate).normalize();
-            if (isRootedOnAnyPlatform(candidate) || path.isAbsolute() || path.startsWith("..")) {
+            String portable = path.toString().replace('\\', '/');
+            if (isRootedOnAnyPlatform(candidate) || isRootedOnAnyPlatform(portable)
+                    || path.isAbsolute() || path.startsWith("..")) {
                 return null;
             }
-            return path.toString().replace('\\', '/');
+            return portable;
         } catch (RuntimeException exception) {
             return null;
         }
