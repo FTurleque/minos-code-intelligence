@@ -1,6 +1,7 @@
 package com.minos.adapter.scip;
 
-import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
+import com.minos.adapter.scip.runtime.install.EmbeddedToolsCatalog;
+import com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.discovery.ProjectDiscovery.Language;
@@ -44,8 +45,8 @@ class ScipIndexerCatalogTest {
 
     @Test
     void packagesQualifiedWindowsRuntimeResources() {
-        assertNotNull(ManagedScipProviderRuntimeManager.class.getResource("scip-java-windows-runner.ps1"));
-        assertNotNull(ManagedScipProviderRuntimeManager.class.getResource("ScipWriter.java"));
+        assertNotNull(ManagedScipProviderRuntimeManager.class.getResource(EmbeddedToolsCatalog.RESOURCE_ROOT + "scip-java-windows-runner.ps1"));
+        assertNotNull(ManagedScipProviderRuntimeManager.class.getResource(EmbeddedToolsCatalog.RESOURCE_ROOT + "ScipWriter.java"));
     }
 
     @Test

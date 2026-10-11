@@ -124,7 +124,7 @@ def require_contained_cgroup_delegation() -> None:
 def require_post226_trust_boundaries() -> None:
     """Regression barriers for the complete audit performed after PR #226."""
     strong_owned = read(
-        "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/StrongOwnedProcessExecutors.java"
+        "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/StrongOwnedProcessExecutors.java"
     )
     command_locator = read("minos-runtime-local/src/main/java/com/minos/runtime/local/CommandLocator.java")
     private_storage = read("minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java")
@@ -207,10 +207,10 @@ def main() -> int:
             "minos-intellij/src/main/java/com/minos/intellij/protocol/MinosStrongProcessLauncher.java"
         )
         provider_probe = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java"
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe.java"
         )
         scip_java = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java"
         )
         jacoco_gate = read("scripts/quality/check-jacoco.py")
 
@@ -336,9 +336,9 @@ def main() -> int:
         require("ScipJavaProcessPlanFactory.java", scip_java,
                 "FileTreeOperations.deleteRecursively(workspace)")
         require("check-jacoco.py", jacoco_gate,
-                '"com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15}')
+                '"com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15}')
         require("check-jacoco.py", jacoco_gate,
-                '"com/minos/adapter/scip/runtime/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35}')
+                '"com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35}')
 
         print("P0-P2 AUDIT REMEDIATION CONSISTENCY SUCCESS")
         return 0

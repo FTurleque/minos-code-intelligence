@@ -63,18 +63,18 @@ SCOPES = {
     "m24-polyglot-provider-platform": {
         "prefixes": (
             "com/minos/orchestration/ProviderConformanceKit", "com/minos/orchestration/ProviderOperationalProfile",
-            "com/minos/adapter/scip/ScipIndexerCatalog", "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager",
-            "com/minos/adapter/scip/runtime/BoundedProviderSourceProbe", "com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory",
-            "com/minos/adapter/scip/runtime/ScipClangProcessPlanFactory", "com/minos/adapter/scip/runtime/ScipDotnetProcessPlanFactory",
-            "com/minos/adapter/scip/runtime/ScipGoProcessPlanFactory", "com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory",
-            "com/minos/adapter/scip/runtime/StrongOwnedProcessExecutors",
+            "com/minos/adapter/scip/ScipIndexerCatalog", "com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager",
+            "com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe", "com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory",
+            "com/minos/adapter/scip/runtime/plan/ScipClangProcessPlanFactory", "com/minos/adapter/scip/runtime/plan/ScipDotnetProcessPlanFactory",
+            "com/minos/adapter/scip/runtime/plan/ScipGoProcessPlanFactory", "com/minos/adapter/scip/runtime/plan/RustAnalyzerScipProcessPlanFactory",
+            "com/minos/adapter/scip/runtime/install/StrongOwnedProcessExecutors",
         ),
         "line": 0.50,
         "branch": 0.28,
         "prefixMinimums": {
-            "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager": {"line": 0.28, "branch": 0.20},
-            "com/minos/adapter/scip/runtime/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35},
-            "com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15},
+            "com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager": {"line": 0.28, "branch": 0.20},
+            "com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35},
+            "com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15},
         },
     },
     "m25-remote-distributed-indexing": {

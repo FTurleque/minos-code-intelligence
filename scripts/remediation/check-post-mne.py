@@ -87,8 +87,8 @@ def main() -> int:
         clone_policy = read("minos-integration-git/src/main/java/com/minos/integration/git/RemoteRepositoryCachePolicy.java")
         clone = read("minos-integration-git/src/main/java/com/minos/integration/git/JGitRemoteRepositoryMaterializer.java")
         clone_budget = read("minos-integration-git/src/main/java/com/minos/integration/git/RemoteCloneBudget.java")
-        java_plan = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java")
-        source_probe = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java")
+        java_plan = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java")
+        source_probe = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe.java")
         ignore_rules = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
         runtime_settings = read("minos-engine/src/main/java/com/minos/storage/MinosRuntimeSettings.java")
         backend_store = read("minos-app/src/main/java/com/minos/app/McpBackendConfigurationStore.java")
@@ -110,13 +110,13 @@ def main() -> int:
         shared_cache_leases = read("minos-engine/src/main/java/com/minos/io/SharedCacheLeaseRegistry.java")
         file_tree = read("minos-engine/src/main/java/com/minos/io/FileTreeOperations.java")
         managed_java = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java")
         managed_python = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java")
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipPythonRuntimeManager.java")
         managed_polyglot = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java")
         locked_npm = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/LockedNpmPackage.java")
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/LockedNpmPackage.java")
         run_retention = read("minos-runtime-local/src/main/java/com/minos/runtime/local/RunDirectoryRetention.java")
         executor = read("minos-runtime-local/src/main/java/com/minos/runtime/local/ProcessIndexerExecutor.java")
         lifecycle = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java")

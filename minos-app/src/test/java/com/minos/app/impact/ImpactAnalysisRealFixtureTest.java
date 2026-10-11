@@ -1,6 +1,6 @@
 package com.minos.app.impact;
 
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
+import com.minos.adapter.scip.ingestion.ScipSymbolSnapshotImporter;
 import com.minos.impact.ImpactAnalysisReport;
 import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.ImpactAnalysisService;

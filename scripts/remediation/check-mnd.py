@@ -53,12 +53,12 @@ def main() -> int:
         graph_service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
         fingerprints = read("minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java")
         hybrid = read("minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java")
-        polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
+        polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java")
         discovery = read("minos-engine/src/main/java/com/minos/discovery/ProjectIgnorePolicy.java")
         plugins = read("minos-engine/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java")
         registry = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java")
-        coursier = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
-        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/PinnedArtifactSource.java")
+        coursier = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java")
+        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/PinnedArtifactSource.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
 
         require("LocalRemoteIndexOperations.java", remote,

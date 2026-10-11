@@ -98,7 +98,7 @@ def main() -> int:
         discovery_plugins_path = "minos-engine/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java"
         discovery_service_path = "minos-engine/src/main/java/com/minos/discovery/ProjectDiscoveryService.java"
         catalog_path = "minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIndexerCatalog.java"
-        runtime_path = "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java"
+        runtime_path = "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java"
         conformance_path = "minos-engine/src/main/java/com/minos/orchestration/ProviderConformanceKit.java"
         operational_path = "minos-engine/src/main/java/com/minos/orchestration/ProviderOperationalProfile.java"
         indexing_path = "minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java"
@@ -258,9 +258,9 @@ def main() -> int:
         for test in (
             "minos-engine/src/test/java/com/minos/discovery/M24PolyglotDiscoveryTest.java",
             "minos-app/src/test/java/com/minos/app/adapter/scip/M24PolyglotProviderTest.java",
-            "minos-provider-scip/src/test/java/com/minos/adapter/scip/M24PolyglotIdentityProvenanceTest.java",
-            "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/M24PolyglotProcessPlanFactoryTest.java",
-            "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManagerTest.java",
+            "minos-provider-scip/src/test/java/com/minos/adapter/scip/ingestion/M24PolyglotIdentityProvenanceTest.java",
+            "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/plan/M24PolyglotProcessPlanFactoryTest.java",
+            "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManagerTest.java",
         ):
             read(test)
 

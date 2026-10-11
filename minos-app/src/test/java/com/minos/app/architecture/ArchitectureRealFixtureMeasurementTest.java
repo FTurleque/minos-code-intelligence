@@ -1,6 +1,6 @@
 package com.minos.app.architecture;
 
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
+import com.minos.adapter.scip.ingestion.ScipSymbolSnapshotImporter;
 import com.minos.architecture.ArchitectureCentralityReport;
 import com.minos.architecture.ArchitectureCentralityService;
 import com.minos.architecture.ArchitectureConcentrationReport;
