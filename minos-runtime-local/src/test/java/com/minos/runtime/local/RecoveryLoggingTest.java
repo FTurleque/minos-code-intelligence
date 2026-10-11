@@ -36,7 +36,7 @@ class RecoveryLoggingTest {
         Path run = Files.createDirectories(runsRoot.resolve("run-1"));
         Files.writeString(run.resolve("residue.txt"), "x");
 
-        try (UnreadableDirectory ignored = UnreadableDirectory.denyOrSkip(run);
+        try (UnreadableDirectory _ = UnreadableDirectory.denyOrSkip(run);
              LogCapture logs = new LogCapture(ProviderResidueReclamation.class)) {
             ProviderResidueReclamation.reclaim(runsRoot, run, Set.of());
 
@@ -51,7 +51,7 @@ class RecoveryLoggingTest {
         Path residue = Files.createDirectories(run.resolve("pgdata"));
         Files.writeString(residue.resolve("PG_VERSION"), "16");
 
-        try (UnreadableDirectory ignored = UnreadableDirectory.denyOrSkip(residue);
+        try (UnreadableDirectory _ = UnreadableDirectory.denyOrSkip(residue);
              LogCapture logs = new LogCapture(ProviderResidueReclamation.class)) {
             ProviderResidueReclamation.reclaim(runsRoot, run, Set.of());
 
@@ -64,7 +64,7 @@ class RecoveryLoggingTest {
         Path runsRoot = Files.createDirectories(home.resolve("runs"));
         Path quarantine = Files.createDirectories(runsRoot.resolve(RunDirectoryRetention.QUARANTINE_DIRECTORY));
 
-        try (UnreadableDirectory ignored = UnreadableDirectory.denyOrSkip(quarantine);
+        try (UnreadableDirectory _ = UnreadableDirectory.denyOrSkip(quarantine);
              LogCapture logs = new LogCapture(RunDirectoryRetention.class)) {
             RunDirectoryRetention.prune(runsRoot, null);
 
@@ -102,7 +102,7 @@ class RecoveryLoggingTest {
         Path run = Files.createDirectories(runsRoot.resolve("run-1"));
         Files.writeString(run.resolve("file"), "x");
 
-        try (UnreadableDirectory ignored = UnreadableDirectory.denyOrSkip(run);
+        try (UnreadableDirectory _ = UnreadableDirectory.denyOrSkip(run);
              LogCapture logs = new LogCapture(RunDirectoryRetention.class)) {
             RunDirectoryRetention.prune(runsRoot, null);
 
