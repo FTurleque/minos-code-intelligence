@@ -1,7 +1,6 @@
 package com.minos.integration.git;
 
 import com.minos.git.GitIntelligence;
-import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
@@ -73,7 +72,7 @@ public final class GitIntelligenceService implements GitIntelligence {
 
     /**
      * Test seam: the owner a repository must have. {@code null} means the owner the system gives a file
-     * this process creates, as checked by {@link PrivateLocalStorage#verifyOwnedByCurrentUser}.
+     * this process creates.
      */
     GitIntelligenceService(ActivityBudget budget, Supplier<UserPrincipal> expectedOwner) {
         this.budget = Objects.requireNonNull(budget, "budget");
@@ -213,9 +212,12 @@ public final class GitIntelligenceService implements GitIntelligence {
         if (builder.getGitDir() == null) {
             throw new IllegalArgumentException("projectRoot is not inside a Git repository: " + root);
         }
-        requireExpectedOwner(builder.getGitDir().toPath());
         Repository repository = builder.build();
         try {
+            // A linked worktree keeps its own git dir but shares configuration, objects and hooks with the
+            // main repository (the common directory): both are written by whoever owns them.
+            requireExpectedOwner(repository.getDirectory().toPath());
+            requireExpectedOwner(repository.getCommonDirectory().toPath());
             return new OpenedRepository(repository, root, redirectRepositoryFiltersToPassThrough(repository));
         } catch (IOException | RuntimeException failure) {
             repository.close();
@@ -224,39 +226,51 @@ public final class GitIntelligenceService implements GitIntelligence {
     }
 
     /**
-     * A repository found on disk is not trusted: the directory the analysis opens, directly or by
+     * A repository found on disk is not trusted: the directories the analysis opens, directly or by
      * walking up from the project root, must belong to the account this process runs as, otherwise
-     * its configuration and attributes were written by someone else.
+     * their configuration and attributes were written by someone else. The path is resolved first, so a
+     * link owned by the user cannot stand for a directory owned by another account.
      */
     private void requireExpectedOwner(Path gitDirectory) throws IOException {
         UserPrincipal found;
-        UserPrincipal expected = null;
+        UserPrincipal expected;
         try {
-            found = Files.getOwner(gitDirectory);
-            if (expectedOwner != null) {
-                expected = expectedOwner.get();
-            }
+            found = Files.getOwner(gitDirectory.toRealPath());
+            expected = expectedOwner != null ? expectedOwner.get() : processOwner();
         } catch (IOException | UncheckedIOException | UnsupportedOperationException _) {
             throw new IOException(
                     "The owner of the Git repository cannot be read; the analysis is refused (fail-closed)");
         }
-        if (expected != null ? !found.equals(expected) : !ownedByCurrentUser(gitDirectory)) {
+        if (!found.equals(expected)) {
             throw new IOException("The Git repository is owned by '" + found.getName()
-                    + "', not by the account running this process"
-                    + (expected != null ? " ('" + expected.getName() + "')" : "")
-                    + "; change the repository owner before analysing it");
+                    + "', not by the account running this process ('" + expected.getName()
+                    + "'); change the repository owner before analysing it");
         }
     }
 
-    private static boolean ownedByCurrentUser(Path gitDirectory) throws IOException {
+    private static volatile UserPrincipal processOwner;
+
+    /**
+     * The owner the system gives a file this process creates, read once from a throw-away file in the
+     * system temporary directory. The probe is never created inside the analysed repository (an analysis
+     * writes nothing there and may not be allowed to), and the owner of a new file does not depend on the
+     * directory that holds it.
+     */
+    private static UserPrincipal processOwner() {
+        UserPrincipal known = processOwner;
+        if (known != null) {
+            return known;
+        }
         try {
-            PrivateLocalStorage.verifyOwnedByCurrentUser(gitDirectory);
-            return true;
-        } catch (IOException mismatchOrUnreadable) {
-            if (Files.exists(gitDirectory)) {
-                return false;
+            Path probe = Files.createTempFile("minos-owner-", ".probe");
+            try {
+                processOwner = Files.getOwner(probe);
+                return processOwner;
+            } finally {
+                Files.deleteIfExists(probe);
             }
-            throw mismatchOrUnreadable;
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
         }
     }
 
@@ -271,7 +285,7 @@ public final class GitIntelligenceService implements GitIntelligence {
      */
     private static boolean redirectRepositoryFiltersToPassThrough(Repository repository) throws IOException {
         FileBasedConfig declared = new FileBasedConfig(
-                new File(repository.getDirectory(), "config"), repository.getFS());
+                new File(repository.getCommonDirectory(), "config"), repository.getFS());
         try {
             declared.load();
         } catch (ConfigInvalidException _) {

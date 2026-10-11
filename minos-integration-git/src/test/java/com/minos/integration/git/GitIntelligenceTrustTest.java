@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.UserPrincipal;
 import java.time.Instant;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -86,6 +87,46 @@ class GitIntelligenceTrustTest {
         new GitIntelligenceService().inspect(project);
 
         assertFalse(Files.exists(witness), "le filtre du dépôt parent a été exécuté");
+    }
+
+    @Test
+    void aTrapOfTheMainRepositoryIsNotExecutedFromALinkedWorktree(@TempDir Path temp) throws Exception {
+        Path main = repositoryWithSmudgedFile(temp.resolve("main"));
+        Path witness = temp.resolve("witness-worktree");
+        declareFilter(main, witness);
+        // A linked worktree keeps its own git dir under .git/worktrees/<name> and shares the main config
+        // through `commondir`: the filter is declared in the main repository's .git/config.
+        Path linkedGitDir = Files.createDirectories(main.resolve(".git/worktrees/wt"));
+        Files.writeString(linkedGitDir.resolve("commondir"), "../..\n");
+        Files.writeString(linkedGitDir.resolve("HEAD"), Files.readString(main.resolve(".git/HEAD")));
+        Path linked = Files.createDirectories(temp.resolve("linked"));
+        Files.writeString(linkedGitDir.resolve("gitdir"), linked.resolve(".git") + "\n");
+        Files.writeString(linked.resolve(".git"), "gitdir: " + linkedGitDir.toString().replace('\\', '/') + "\n");
+        Files.copy(main.resolve(".git/index"), linkedGitDir.resolve("index"));
+        Files.copy(main.resolve(TRACKED), linked.resolve(TRACKED));
+        Files.setLastModifiedTime(linked.resolve(TRACKED), FileTime.fromMillis(System.currentTimeMillis() + 60_000));
+        Files.writeString(linked.resolve(".gitattributes"), ATTRIBUTE_LINE);
+
+        GitIntelligenceService.RepositoryView view = new GitIntelligenceService().inspect(linked);
+
+        assertFalse(Files.exists(witness), "le filtre du dépôt principal a été exécuté depuis un worktree lié");
+        assertTrue(view.limitations().contains("REPOSITORY_FILTERS_NOT_APPLIED"), view.limitations().toString());
+    }
+
+    @Test
+    void theOwnerProbeNeverWritesIntoTheAnalysedRepository(@TempDir Path temp) throws Exception {
+        Path root = repositoryWithSmudgedFile(temp.resolve("repo"));
+        List<String> before;
+        try (var listing = Files.list(root)) {
+            before = listing.map(path -> path.getFileName().toString()).sorted().toList();
+        }
+
+        new GitIntelligenceService().inspect(root);
+
+        try (var listing = Files.list(root)) {
+            assertEquals(before, listing.map(path -> path.getFileName().toString()).sorted().toList(),
+                    "le contrôle de propriétaire a écrit dans le dépôt analysé");
+        }
     }
 
     @Test
