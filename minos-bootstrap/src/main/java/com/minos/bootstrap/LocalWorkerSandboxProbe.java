@@ -1,9 +1,9 @@
 package com.minos.bootstrap;
 
-import com.minos.runtime.local.WorkerSandboxBackend;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
 import com.minos.runtime.local.WorkerSandboxBackends;
 import com.minos.runtime.WorkerSandboxProbe;
-import com.minos.runtime.local.WorkerSandboxSelection;
+import com.minos.runtime.local.sandbox.WorkerSandboxSelection;
 
 import java.nio.file.Path;
 

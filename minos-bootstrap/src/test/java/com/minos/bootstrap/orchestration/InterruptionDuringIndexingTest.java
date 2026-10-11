@@ -10,7 +10,7 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.orchestration.ResumableArtifactPolicy;
-import com.minos.runtime.local.FileResumableRunMarkers;
+import com.minos.runtime.local.workspace.FileResumableRunMarkers;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

@@ -3,9 +3,9 @@ package com.minos.adapter.scip.runtime.plan;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
-import com.minos.runtime.local.CommandLocator;
-import com.minos.runtime.local.IndexerProcessPlan;
-import com.minos.runtime.local.IndexerProcessPlanFactory;
+import com.minos.runtime.local.process.CommandLocator;
+import com.minos.runtime.local.process.IndexerProcessPlan;
+import com.minos.runtime.local.process.IndexerProcessPlanFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;

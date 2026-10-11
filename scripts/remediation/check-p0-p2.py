@@ -126,7 +126,7 @@ def require_post226_trust_boundaries() -> None:
     strong_owned = read(
         "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/StrongOwnedProcessExecutors.java"
     )
-    command_locator = read("minos-runtime-local/src/main/java/com/minos/runtime/local/CommandLocator.java")
+    command_locator = read("minos-runtime-local/src/main/java/com/minos/runtime/local/process/CommandLocator.java")
     private_storage = read("minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java")
     confined_opener = read("minos-engine/src/main/java/com/minos/io/ConfinedFileOpener.java")
 
@@ -163,7 +163,7 @@ def main() -> int:
         architecture = read("scripts/architecture/check-module-boundaries.py")
         public_surfaces = read("docs/developer/public-surfaces.md")
         worker = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java")
-        sandbox = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxBackend.java")
+        sandbox = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WorkerSandboxBackend.java")
         worker_test = read(
             "minos-runtime-local/src/test/java/com/minos/runtime/local/LocalIsolatedIndexWorkerTest.java"
         )
@@ -287,7 +287,7 @@ def main() -> int:
         # production implementation, wired by minos-bootstrap, is still CommandLocator itself.
         require("DockerMcpTransport.java", docker_transport, "hostCommandLocator().find(\"docker\")")
         require("DockerMcpTransport.java", docker_transport, "hostCommandLocator().invocation(")
-        forbid("DockerMcpTransport.java", docker_transport, "import com.minos.runtime.local.CommandLocator;")
+        forbid("DockerMcpTransport.java", docker_transport, "import com.minos.runtime.local.process.CommandLocator;")
         host_commands = read("minos-bootstrap/src/main/java/com/minos/bootstrap/LocalHostCommandLocator.java")
         require("LocalHostCommandLocator.java", host_commands, "CommandLocator.find(command)")
         require("LocalHostCommandLocator.java", host_commands, "CommandLocator.invocation(executable, arguments)")

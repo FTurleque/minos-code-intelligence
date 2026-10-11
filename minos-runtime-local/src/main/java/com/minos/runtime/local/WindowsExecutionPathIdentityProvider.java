@@ -1,5 +1,7 @@
 package com.minos.runtime.local;
 
+import com.minos.runtime.local.process.CommandLocator;
+import com.minos.runtime.local.sandbox.WorkerSandboxQualification;
 import com.minos.orchestration.ExecutionPathIdentityProvider;
 
 import java.io.ByteArrayOutputStream;

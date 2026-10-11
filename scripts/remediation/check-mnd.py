@@ -39,7 +39,7 @@ def main() -> int:
         remote = read("minos-cli/src/main/java/com/minos/cli/operations/LocalRemoteIndexOperations.java")
         remote_lease = read("minos-cli/src/main/java/com/minos/cli/operations/RemoteIndexLease.java")
         bounded_file_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
-        linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java")
+        linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend.java")
         windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java")
         windows_script = read("minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1")
         snapshots = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")

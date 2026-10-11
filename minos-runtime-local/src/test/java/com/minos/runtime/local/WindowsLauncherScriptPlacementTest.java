@@ -1,5 +1,8 @@
 package com.minos.runtime.local;
 
+import com.minos.runtime.local.process.CommandLocator;
+import com.minos.runtime.local.process.IndexerProcessPlan;
+import com.minos.runtime.local.sandbox.WindowsContainmentScript;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;

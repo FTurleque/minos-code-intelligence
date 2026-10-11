@@ -21,7 +21,7 @@ RUNTIME_TESTS = "minos-runtime-local/src/test/java/com/minos/runtime/local"
 WINDOWS_LAUNCHER = "minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1"
 
 ADVERSARIAL_TESTS = {
-    f"{RUNTIME_TESTS}/LinuxCgroupJobContainmentTest.java": (
+    f"{RUNTIME_TESTS}/sandbox/LinuxCgroupJobContainmentTest.java": (
         "@EnabledOnOs(OS.LINUX)",
         "theDelegatedCgroupAppliesAggregateMemoryProcessAndCpuLimits",
         "severalDescendantsCannotExceedTheAggregateMemoryLimitTogether",
@@ -37,16 +37,16 @@ ADVERSARIAL_TESTS = {
         "theSandboxPlanCarriesEveryAggregateJobLimit",
         "theQualifiedBackendDeclaresTheAggregateContainmentItReallyEnforces",
     ),
-    f"{RUNTIME_TESTS}/ProviderWriteContainmentTest.java": (
+    f"{RUNTIME_TESTS}/workspace/ProviderWriteContainmentTest.java": (
         "aHostileProviderIsKilledDuringExecutionAndItsResidueIsReclaimed",
         "theRunThatFollowsAHostileRunStartsNormally",
     ),
-    f"{RUNTIME_TESTS}/ProviderWriteQuotaSupervisorTest.java": (
+    f"{RUNTIME_TESTS}/workspace/ProviderWriteQuotaSupervisorTest.java": (
         "aProviderThatFillsTheDiskIsDetectedAndTheJobIsDestroyed",
         "aProviderThatExhaustsInodesIsDetectedAndTheJobIsDestroyed",
         "aProviderStayingInsideItsBudgetIsNeverKilled",
     ),
-    f"{RUNTIME_TESTS}/RunDirectoryRetentionTest.java": (
+    f"{RUNTIME_TESTS}/workspace/RunDirectoryRetentionTest.java": (
         "anOversizedHostileRunIsReclaimedInsteadOfBlockingEveryFutureIndexation",
         "aRunTooLargeToDeleteInOnePassIsQuarantinedAndDrainedLater",
         "pruneNeverDeletesOutsideTheRunsRoot",
@@ -83,18 +83,18 @@ def forbid(relative: str, text: str, *needles: str) -> None:
 
 def main() -> int:
     try:
-        containment = read(f"{RUNTIME}/WorkerResourceContainment.java")
-        qualification = read(f"{RUNTIME}/WorkerSandboxQualification.java")
-        backend = read(f"{RUNTIME}/WorkerSandboxBackend.java")
-        cgroup = read(f"{RUNTIME}/LinuxCgroupJob.java")
-        linux = read(f"{RUNTIME}/LinuxBubblewrapWorkerSandboxBackend.java")
+        containment = read(f"{RUNTIME}/sandbox/WorkerResourceContainment.java")
+        qualification = read(f"{RUNTIME}/sandbox/WorkerSandboxQualification.java")
+        backend = read(f"{RUNTIME}/sandbox/WorkerSandboxBackend.java")
+        cgroup = read(f"{RUNTIME}/sandbox/LinuxCgroupJob.java")
+        linux = read(f"{RUNTIME}/sandbox/LinuxBubblewrapWorkerSandboxBackend.java")
         windows = read(f"{RUNTIME}/WindowsAppContainerWorkerSandboxBackend.java")
         launcher = read(WINDOWS_LAUNCHER)
-        quota = read(f"{RUNTIME}/ProviderWriteQuota.java")
-        supervisor = read(f"{RUNTIME}/ProviderWriteQuotaSupervisor.java")
-        reclamation = read(f"{RUNTIME}/ProviderResidueReclamation.java")
-        executor = read(f"{RUNTIME}/ProcessIndexerExecutor.java")
-        retention = read(f"{RUNTIME}/RunDirectoryRetention.java")
+        quota = read(f"{RUNTIME}/workspace/ProviderWriteQuota.java")
+        supervisor = read(f"{RUNTIME}/workspace/ProviderWriteQuotaSupervisor.java")
+        reclamation = read(f"{RUNTIME}/workspace/ProviderResidueReclamation.java")
+        executor = read(f"{RUNTIME}/process/ProcessIndexerExecutor.java")
+        retention = read(f"{RUNTIME}/workspace/RunDirectoryRetention.java")
         worker = read(f"{RUNTIME}/LocalIsolatedIndexWorker.java")
 
         # 1. Containment is per dimension, and supervision never substitutes an aggregate OS boundary.

@@ -8,10 +8,10 @@ import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;
-import com.minos.runtime.local.DistributedArtifactBundleStore;
-import com.minos.runtime.local.WorkerSandboxBackend;
+import com.minos.runtime.local.distributed.DistributedArtifactBundleStore;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
 import com.minos.runtime.local.WorkerSandboxBackends;
-import com.minos.runtime.local.WorkerSandboxSelection;
+import com.minos.runtime.local.sandbox.WorkerSandboxSelection;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

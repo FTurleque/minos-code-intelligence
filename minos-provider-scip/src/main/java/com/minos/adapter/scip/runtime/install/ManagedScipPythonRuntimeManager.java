@@ -5,10 +5,10 @@ import com.minos.io.PrivateLocalStorage;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.runtime.local.InstallationProcessEnvironment;
-import com.minos.runtime.local.BoundedProcessOutput;
-import com.minos.runtime.local.CommandLocator;
-import com.minos.runtime.local.IndexerProcessPlan;
+import com.minos.runtime.local.process.InstallationProcessEnvironment;
+import com.minos.runtime.local.process.BoundedProcessOutput;
+import com.minos.runtime.local.process.CommandLocator;
+import com.minos.runtime.local.process.IndexerProcessPlan;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
