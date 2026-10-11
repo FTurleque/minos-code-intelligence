@@ -60,7 +60,7 @@ def forbid_postgres_connection_escape() -> None:
         if "connections.open()" in text:
             raise RuntimeError(f"{source.relative_to(ROOT)}: raw PostgreSQL connection ownership is forbidden")
     factory = read(
-        "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java"
+        "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java"
     )
     if re.search(r"\bConnection\s+open\s*\(", factory):
         raise RuntimeError("PostgresConnectionFactory.java: Connection must not escape the factory lifecycle")
@@ -177,13 +177,13 @@ def main() -> int:
 
         docker_transport = read("minos-app/src/main/java/com/minos/app/DockerMcpTransport.java")
         pg_connections = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java"
+            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java"
         )
         pg_migrator = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresSchemaMigrator.java"
+            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresSchemaMigrator.java"
         )
         pg_registry = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresProjectRegistry.java"
+            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/project/PostgresProjectRegistry.java"
         )
         location = read("minos-domain/src/main/java/com/minos/domain/SymbolLocation.java")
         intellij_location = read(

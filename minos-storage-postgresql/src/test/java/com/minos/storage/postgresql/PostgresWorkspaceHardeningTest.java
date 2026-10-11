@@ -1,5 +1,7 @@
 package com.minos.storage.postgresql;
 
+import com.minos.storage.postgresql.project.PostgresProjectRegistry;
+import com.minos.storage.postgresql.project.ProjectMutationIndexStateStore;
 import com.minos.orchestration.InMemoryIndexStateStore;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.registry.ProjectRegistry;

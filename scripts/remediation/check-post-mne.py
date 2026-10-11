@@ -95,9 +95,9 @@ def main() -> int:
         path_store = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/ProjectPathMappingStore.java")
         registry = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java")
         storage_config = read("minos-engine/src/main/java/com/minos/storage/StorageBackendConfiguration.java")
-        postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java")
+        postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java")
         postgres_policy = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresJdbcUrlPolicy.java")
+            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresJdbcUrlPolicy.java")
         mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
         json = read("minos-application/src/main/java/com/minos/output/json/DeterministicJson.java")
