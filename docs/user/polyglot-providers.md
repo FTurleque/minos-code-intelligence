@@ -64,6 +64,10 @@ Un profil de capability est exhaustif. L'absence d'une capacité ne signifie jam
 
 ## Installation et readiness
 
+### Environnement des commandes d'installation
+
+Les commandes lancées par `minos tools install` et par les sondes de version (`coursier`, `npm`, `dotnet`, `go`) ne reçoivent pas l'environnement de MINOS en entier : seuls `PATH`, les variables de la toolchain, `HOME` (hors Windows), les proxys (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, `ALL_PROXY`, en minuscules aussi), `SSL_CERT_FILE`/`SSL_CERT_DIR` et les caches de paquets sont transmis. Toute variable dont le nom évoque un secret (`MINOS_*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*KEY*`, `*CREDENTIAL*`, `GITHUB_*`, `NPM_*`) est retirée, même si une liste la mentionne. Pour un miroir ou des identifiants de dépôt, utiliser le **fichier** de configuration de l'outil (Coursier, npm, NuGet, Go), pas l'environnement.
+
 ### C / C++
 
 MINOS M24 ne télécharge pas `scip-clang` automatiquement. Le runtime vérifie un binaire `scip-clang` 0.4.0 fourni par l'opérateur sur Linux x86_64.

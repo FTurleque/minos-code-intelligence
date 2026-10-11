@@ -7,6 +7,7 @@ import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedLineReader;
 import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.runtime.local.InstallationProcessEnvironment;
 import com.minos.runtime.local.BoundedProcessOutput;
 import com.minos.runtime.local.CommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -28,6 +29,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -744,10 +746,11 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         return CommandLocator.find("csc").isPresent();
     }
 
-    private static void run(List<String> command, Path workingDirectory, Path log, Duration timeout)
+    static void run(List<String> command, Path workingDirectory, Path log, Duration timeout)
             throws IOException, InterruptedException {
         PrivateLocalStorage.ensurePrivateDirectory(log.toAbsolutePath().normalize().getParent());
         ProcessBuilder builder = new ProcessBuilder(command);
+        InstallationProcessEnvironment.apply(builder, Map.of());
         builder.directory(workingDirectory.toFile());
         builder.redirectErrorStream(true);
         Process process = builder.start();

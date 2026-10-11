@@ -7,6 +7,7 @@ import com.minos.io.BoundedInputStream;
 import com.minos.io.FileTreeOperations;
 import com.minos.io.Sha256;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.runtime.local.InstallationProcessEnvironment;
 import com.minos.runtime.local.BoundedProcessOutput;
 import com.minos.runtime.local.CommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -441,7 +442,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         }
     }
 
-    private static CommandResult run(
+    static CommandResult run(
             List<String> command,
             Path workingDirectory,
             Duration timeout,
@@ -452,7 +453,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             ProcessBuilder builder = new ProcessBuilder(command);
             builder.directory(workingDirectory.toAbsolutePath().normalize().toFile());
             builder.redirectErrorStream(true);
-            builder.environment().putAll(Objects.requireNonNull(environmentOverrides, "environmentOverrides"));
+            InstallationProcessEnvironment.apply(builder, Objects.requireNonNull(environmentOverrides, "environmentOverrides"));
             Process process = builder.start();
             BoundedProcessOutput.Capture capture = BoundedProcessOutput.capture(process, outputFile, null);
             boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -515,5 +516,5 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     }
 
     private record Probe(boolean success, String output) {}
-    private record CommandResult(boolean success, String output) {}
+    record CommandResult(boolean success, String output) {}
 }

@@ -68,3 +68,10 @@ Quatre changements OpenSpec, branche locale `docs/sprint2-openspec` (HEAD de dé
 Preuve de la spécification : `openspec validate --all --strict` → 18 passés, 0 échec.
 
 Ordre d'implémentation proposé : `ouvrir-le-depot-git-sans-executer-ses-filtres` (gravité élevée) puis `epingler-et-isoler-l-installation-des-providers` (lot 1 d'abord), puis `rendre-la-journalisation-observable` (lots 1 à 3 séparables), enfin `durcir-secret-postgres-et-lanceur-de-developpement`.
+
+### Implémentation — AUD-SEC-02, lot 1 « environnement » (2026-10-11, branche `sec/epingler-et-isoler-l-installation-des-providers`)
+
+- **Rouge** : `InstallationEnvironmentIsolationTest` sans la façade → `MINOS_TEAM_KEY_ALPHA` visible dans l'environnement des trois `run` (JVM fille, secrets posés dans son environnement).
+- **Vert** : `minos-runtime-local` 356 tests, `minos-provider-scip` 124 tests, gates `check-module-boundaries`, `check-mnd`, `check-polyglot-provider-consistency`, `check-current-docs` verts.
+- Décision D3 appliquée avec la recommandation : façade publique `InstallationProcessEnvironment` (base `ProviderProcessEnvironment.sanitize`, `HOME` hors Windows, proxys/TLS/caches, motif de refus prioritaire même sur les valeurs déclarées), appelée par les trois `run` (sondes `dotnet`/`go` et `npm ci` comprises).
+- **Non fait, en attente** : D1 (verrou par jar) et D2 — lots 2 et 3, tâches 1.1 (consignation des décisions), 1.4 (JaCoCo, non rejoué), 2.x, 3.x, 4.x. Le changement reste ouvert.
