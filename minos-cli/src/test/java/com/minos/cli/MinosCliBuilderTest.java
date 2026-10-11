@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.git.GitIntelligence;

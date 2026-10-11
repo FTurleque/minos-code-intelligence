@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.cli.command.TeamCommand;
+import com.minos.cli.operations.LocalAutonomousIndexOperations;
 import com.minos.application.LocalProjectOperations;
 import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.application.MinosApplication;

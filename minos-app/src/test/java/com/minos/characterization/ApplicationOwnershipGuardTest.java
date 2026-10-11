@@ -60,7 +60,7 @@ class ApplicationOwnershipGuardTest {
         OWNERS.put("minos-application/src/main/java/com/minos/application/LocalProjectOperations.java",
                 new Owner(1, "constructeur (Path) : possède l'application, close() la ferme",
                         List.of("this(MinosApplication.open(home), true)", "ownedApplication.close()")));
-        OWNERS.put("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java",
+        OWNERS.put("minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java",
                 new Owner(1, "constructeur (Path) : possède l'application, close() la ferme",
                         List.of("this(MinosApplication.open(minosHome), UnaryOperator.identity(), true)",
                                 "ownedApplication.close()")));
@@ -85,7 +85,7 @@ class ApplicationOwnershipGuardTest {
                         List.of("try (LazyApplication application = LazyApplication.opening(home, () -> MinosApplication.open(home)))")));
 
         // La LazyApplication ne crée rien elle-même (l'ouvreur lui est donné) : elle ferme ce qu'elle a ouvert, une fois.
-        CLOSERS.put("minos-cli/src/main/java/com/minos/cli/LazyApplication.java",
+        CLOSERS.put("minos-cli/src/main/java/com/minos/cli/support/LazyApplication.java",
                 List.of("if (owned && application != null) application.close();", "if (closed) return;"));
 
         for (String facade : List.of("LocalMinosApi", "LocalMinosMultiRepositoryApi", "LocalProviderPlatformApi")) {

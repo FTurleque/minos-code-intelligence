@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.command.RetrievalStatusCommand;
 import com.minos.application.semantic.SemanticIndexService;
 import org.junit.jupiter.api.Test;
 

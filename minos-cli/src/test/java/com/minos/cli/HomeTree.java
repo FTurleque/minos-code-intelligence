@@ -11,12 +11,12 @@ import java.util.TreeMap;
 import java.util.stream.Stream;
 
 /** L'arbre d'un {@code MINOS_HOME} comparé octet par octet : chemins, répertoires vides compris, et empreinte de chaque fichier. */
-final class HomeTree {
+public final class HomeTree {
 
     private HomeTree() { }
 
     /** Chaque entrée sous {@code root} : chemin relatif -> « dir » ou SHA-256 du fichier ; vide si {@code root} n'existe pas. */
-    static Map<String, String> of(Path root) throws IOException {
+    public static Map<String, String> of(Path root) throws IOException {
         Map<String, String> entries = new TreeMap<>();
         if (Files.notExists(root)) return entries;
         try (Stream<Path> walk = Files.walk(root)) {
@@ -33,7 +33,7 @@ final class HomeTree {
     }
 
     /** Ce qui diffère entre deux arbres, une ligne par entrée ({@code +} créée, {@code -} disparue, {@code ~} modifiée). */
-    static String difference(Map<String, String> before, Map<String, String> after) {
+    public static String difference(Map<String, String> before, Map<String, String> after) {
         StringBuilder difference = new StringBuilder();
         after.forEach((path, digest) -> {
             if (!before.containsKey(path)) difference.append("\n  + ").append(path);

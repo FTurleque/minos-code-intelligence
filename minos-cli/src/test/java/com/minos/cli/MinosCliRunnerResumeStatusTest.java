@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
 import com.minos.application.MinosApplication;
 import com.minos.bootstrap.ResumableRunFixtures;
 import org.junit.jupiter.api.Test;

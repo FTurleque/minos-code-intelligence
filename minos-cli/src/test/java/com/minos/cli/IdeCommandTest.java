@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.cli.command.IdeCommand;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.cli.command.DoctorCommand;
+import com.minos.cli.command.TeamCommand;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

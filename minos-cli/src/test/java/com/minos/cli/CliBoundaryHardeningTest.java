@@ -1,5 +1,9 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.command.IndexCommand;
+import com.minos.cli.command.ToolsCommand;
+import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.application.ProjectOperations;
 import com.minos.orchestration.IndexingMode;
 import org.junit.jupiter.api.Test;

@@ -1,5 +1,8 @@
 package com.minos.cli;
 
+import com.minos.cli.command.NexusExportCommand;
+import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.operations.RemoteIndexOperations;
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;

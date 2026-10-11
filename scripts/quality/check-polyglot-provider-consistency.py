@@ -101,7 +101,7 @@ def main() -> int:
         runtime_path = "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java"
         conformance_path = "minos-engine/src/main/java/com/minos/orchestration/ProviderConformanceKit.java"
         operational_path = "minos-engine/src/main/java/com/minos/orchestration/ProviderOperationalProfile.java"
-        indexing_path = "minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java"
+        indexing_path = "minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java"
         quality_path = "scripts/quality/check-jacoco.py"
         roadmap_path = "docs/roadmap/M24_EXECUTION.md"
         adr_path = "docs/adr/0032-evidence-gated-polyglot-scip-providers.md"

@@ -1,7 +1,7 @@
 package com.minos.app;
 
 import com.minos.application.MinosApplication;
-import com.minos.cli.FindSymbolCommand;
+import com.minos.cli.command.FindSymbolCommand;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.mcp.MinosMcpServer;
 

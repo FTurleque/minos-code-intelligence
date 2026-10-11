@@ -105,7 +105,7 @@ def main() -> int:
         postgres_storage = read(
             "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresStorageBackend.java")
         retention_policy = read("minos-engine/src/main/java/com/minos/storage/PersistentRetentionPolicy.java")
-        indexing = read("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java")
+        indexing = read("minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java")
         distributed = read("minos-runtime-local/src/main/java/com/minos/runtime/local/DistributedArtifactBundleStore.java")
         shared_cache_leases = read("minos-engine/src/main/java/com/minos/io/SharedCacheLeaseRegistry.java")
         file_tree = read("minos-engine/src/main/java/com/minos/io/FileTreeOperations.java")

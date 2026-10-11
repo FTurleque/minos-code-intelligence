@@ -63,7 +63,7 @@ def main() -> int:
         # A2 / ADR 0042: concrete hosted adapters are wired by the composition root only.
         composer = read(
             "minos-bootstrap/src/main/java/com/minos/bootstrap/DefaultMinosApplicationComposer.java")
-        command = read("minos-cli/src/main/java/com/minos/cli/TeamCommand.java")
+        command = read("minos-cli/src/main/java/com/minos/cli/command/TeamCommand.java")
         api = read("minos-api/src/main/java/com/minos/api/MinosTeamApi.java")
         api_impl = read("minos-api/src/main/java/com/minos/api/LocalMinosTeamApi.java")
         mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")

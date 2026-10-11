@@ -1,5 +1,17 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.command.IdeCommand;
+import com.minos.cli.command.IdeIntelligenceCommand;
+import com.minos.cli.command.NexusExportCommand;
+import com.minos.cli.command.ProjectCommand;
+import com.minos.cli.command.RetrievalStatusCommand;
+import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.operations.LocalAutonomousIndexOperations;
+import com.minos.cli.operations.LocalRemoteIndexOperations;
+import com.minos.cli.operations.RemoteIndexOperations;
+import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.LazyApplication;
 import com.minos.application.LocalProjectOperations;
 import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.application.ProjectOperations;

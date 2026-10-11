@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
 import com.minos.domain.Symbol;
 import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;

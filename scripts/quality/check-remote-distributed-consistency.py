@@ -58,12 +58,12 @@ def main() -> int:
         sandbox_backend = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxBackend.java")
         ignore_rules = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
         coordinator = read("minos-runtime-local/src/main/java/com/minos/runtime/local/DistributedIndexerExecutor.java")
-        autonomous = read("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java")
-        remote_operations = read("minos-cli/src/main/java/com/minos/cli/LocalRemoteIndexOperations.java")
+        autonomous = read("minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java")
+        remote_operations = read("minos-cli/src/main/java/com/minos/cli/operations/LocalRemoteIndexOperations.java")
         # A2 / ADR 0042: the concrete M25 wiring moved verbatim to the composition root (minos-bootstrap).
         remote_runtime = read("minos-bootstrap/src/main/java/com/minos/bootstrap/LocalRemoteIndexingRuntime.java")
         composition_root = read("minos-bootstrap/src/main/java/com/minos/bootstrap/DefaultMinosApplicationComposer.java")
-        remote_command = read("minos-cli/src/main/java/com/minos/cli/RemoteIndexCommand.java")
+        remote_command = read("minos-cli/src/main/java/com/minos/cli/command/RemoteIndexCommand.java")
         cli = read("minos-cli/src/main/java/com/minos/cli/MinosCli.java")
         e2e = read("scripts/m25/run-remote-e2e.py")
         windows_runner = read("scripts/m25/run-final.ps1")
@@ -164,8 +164,8 @@ def main() -> int:
             "DistributedArtifactBundleStoreTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/local/DistributedArtifactBundleStoreTest.java"),
             "LocalIsolatedIndexWorkerTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/local/LocalIsolatedIndexWorkerTest.java"),
             "ScopeSwapRejectionTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/local/ScopeSwapRejectionTest.java"),
-            "RemoteIndexCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RemoteIndexCommandTest.java"),
-            "LocalRemoteIndexOperationsIntegrationTest.java": read("minos-cli/src/test/java/com/minos/cli/LocalRemoteIndexOperationsIntegrationTest.java"),
+            "RemoteIndexCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/command/RemoteIndexCommandTest.java"),
+            "LocalRemoteIndexOperationsIntegrationTest.java": read("minos-cli/src/test/java/com/minos/cli/operations/LocalRemoteIndexOperationsIntegrationTest.java"),
         }
         require_facts("RemoteRepositoryRequestTest.java", tests["RemoteRepositoryRequestTest.java"],
                       "rejectsUnsafeHostsUrlsRefsPinsSubdirectoriesAndCredentialNames",
