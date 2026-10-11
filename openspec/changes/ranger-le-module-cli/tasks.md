@@ -27,5 +27,5 @@ Ordre : mesure, levée du cycle, déplacement, preuve. Commande de référence :
 
 ## 5. Clôture
 
-- [ ] 5.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (rangement des modules : module, PR, types rendus publics, écarts), après la fusion de la PR #413 pour éviter le conflit.
-- [ ] 5.2 `openspec validate --all --strict` ; lister les `docs/` à mettre à jour avant archivage.
+- [x] 5.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (rangement des modules : module, PR, types rendus publics, écarts), après la fusion de la PR #413 pour éviter le conflit.
+- [x] 5.2 `openspec validate --all --strict` ; lister les `docs/` à mettre à jour avant archivage.
