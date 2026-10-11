@@ -90,7 +90,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
         ProjectMutationIndexStateStore store = new ProjectMutationIndexStateStore(
                 connections, new InMemoryIndexStateStore());
 
-        try (IndexStateStore.ProjectLease held = store.acquireProjectLease(first)) {
+        try (IndexStateStore.ProjectLease _ = store.acquireProjectLease(first)) {
             IllegalStateException refusal = assertThrows(IllegalStateException.class,
                     () -> store.acquireProjectLease(second));
 
@@ -101,7 +101,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
         }
 
         assertEquals(0, connections.poolStats().dedicated());
-        try (IndexStateStore.ProjectLease afterwards = store.acquireProjectLease(second)) {
+        try (IndexStateStore.ProjectLease _ = store.acquireProjectLease(second)) {
             assertEquals(1, connections.poolStats().dedicated(), "the second project is free once the first is released");
         }
     }
@@ -146,7 +146,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
 
             assertTrue(advisory(competitor.connection(), "pg_advisory_unlock", projectId),
                     "the competitor must still own the lock the waiter could not take");
-            try (IndexStateStore.ProjectLease lease = store.acquireProjectLease(projectId)) {
+            try (IndexStateStore.ProjectLease _ = store.acquireProjectLease(projectId)) {
                 assertEquals(1, pool.poolStats().dedicated(), "the lease is granted once the other session lets go");
             }
         }
@@ -168,7 +168,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
             assertEquals(1, pool.poolStats().dedicated(), "only the slot held by the test remains");
 
             onlySlot.close();
-            try (IndexStateStore.ProjectLease lease = store.acquireProjectLease(projectId)) {
+            try (IndexStateStore.ProjectLease _ = store.acquireProjectLease(projectId)) {
                 assertEquals(1, pool.poolStats().dedicated());
             }
         }
@@ -201,7 +201,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
             }
         }
 
-        try (IndexStateStore.ProjectLease lease = store.acquireProjectLease(projectId)) {
+        try (IndexStateStore.ProjectLease _ = store.acquireProjectLease(projectId)) {
             assertEquals(1, connections.poolStats().dedicated());
         }
     }
@@ -230,7 +230,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
         assertInstanceOf(InterruptedException.class, refusal.getCause());
         assertTrue(stillInterrupted.get(), "the interrupt flag must be restored for the caller");
         assertEquals(0, connections.poolStats().dedicated(), "no session may be reserved by an interrupted waiter");
-        try (IndexStateStore.ProjectLease lease = store.acquireProjectLease(projectId)) {
+        try (IndexStateStore.ProjectLease _ = store.acquireProjectLease(projectId)) {
             assertEquals(1, connections.poolStats().dedicated(), "the gate must be free for the next caller");
         }
     }
@@ -244,7 +244,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
              ExecutorService executor = Executors.newSingleThreadExecutor()) {
             ProjectMutationIndexStateStore store = new ProjectMutationIndexStateStore(pool, new InMemoryIndexStateStore());
             Future<Void> holder = executor.submit(() -> {
-                try (IndexStateStore.ProjectLease lease = store.acquireProjectLease(projectId)) {
+                try (IndexStateStore.ProjectLease _ = store.acquireProjectLease(projectId)) {
                     held.countDown();
                     if (!release.await(30, TimeUnit.SECONDS)) {
                         throw new IllegalStateException("test timed out while holding the lifecycle lease");
@@ -268,7 +268,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
             }
             holder.get(30, TimeUnit.SECONDS);
 
-            try (IndexStateStore.ProjectLease lease = store.acquireProjectLease(projectId)) {
+            try (IndexStateStore.ProjectLease _ = store.acquireProjectLease(projectId)) {
                 assertEquals(1, pool.poolStats().dedicated(), "the gate is free once the holder released it");
             }
         }

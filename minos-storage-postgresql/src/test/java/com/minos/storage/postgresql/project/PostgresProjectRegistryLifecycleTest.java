@@ -112,12 +112,14 @@ class PostgresProjectRegistryLifecycleTest extends PostgresTestSupport {
         RegisteredProject project = registry.registerProject(Files.createDirectories(temp.resolve("project")), "Service");
         RegisteredWorkspace workspace = registry.createWorkspace("Alpha");
         UUID unknownProject = UUID.randomUUID();
+        UUID knownProject = project.id();
+        UUID knownWorkspace = workspace.id();
         UUID unknownWorkspace = UUID.randomUUID();
 
         IllegalArgumentException assignUnknownProject = assertThrows(IllegalArgumentException.class,
-                () -> registry.assignProjectToWorkspace(unknownProject, workspace.id()));
+                () -> registry.assignProjectToWorkspace(unknownProject, knownWorkspace));
         IllegalArgumentException assignUnknownWorkspace = assertThrows(IllegalArgumentException.class,
-                () -> registry.assignProjectToWorkspace(project.id(), unknownWorkspace));
+                () -> registry.assignProjectToWorkspace(knownProject, unknownWorkspace));
         IllegalArgumentException removeUnknownProject = assertThrows(IllegalArgumentException.class,
                 () -> registry.removeProjectFromWorkspace(unknownProject));
 
