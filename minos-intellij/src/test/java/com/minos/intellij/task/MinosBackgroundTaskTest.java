@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -76,6 +77,18 @@ class MinosBackgroundTaskTest {
         ProcessCanceledException canceled = new ProcessCanceledException();
 
         ProcessCanceledException thrown = assertThrows(ProcessCanceledException.class, () -> task.run("Titre", () -> {
+            throw canceled;
+        }));
+
+        assertSame(canceled, thrown);
+        assertTrue(journal.isEmpty());
+    }
+
+    @Test
+    void aCoroutineOrJavaCancellationIsRethrownWithoutALogEntry() {
+        CancellationException canceled = new CancellationException("annulé");
+
+        CancellationException thrown = assertThrows(CancellationException.class, () -> task.run("Titre", () -> {
             throw canceled;
         }));
 
