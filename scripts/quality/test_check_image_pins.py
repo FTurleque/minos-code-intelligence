@@ -138,6 +138,41 @@ class CheckImagePinsTest(unittest.TestCase):
             "docs/user/docker-runtime.md": "Image pgvector/pgvector:0.8.2-pg17 is managed.\n",
         }))
 
+    # ---- only the files of this repository are examined, not the checkouts nested in it ----
+    PINNED_TREE = {"docker/Dockerfile.mcp": PINNED_DOCKERFILE, "docker/compose-mcp.connected.yaml": PINNED_COMPOSE}
+    SECOND_COPY = "[string] $PostgresImage = 'pgvector/pgvector:0.8.2-pg17',\n"
+
+    def test_a_git_worktree_under_claude_worktrees_is_not_examined(self):
+        # .claude/worktrees/ is git-ignored: a developer worktree there holds a copy of every file, this self-test
+        # included, and the exemption of scripts/quality/test_check_image_pins.py does not reach the copy.
+        self.assertEqual([], self.run_gate({
+            **self.PINNED_TREE,
+            ".claude/worktrees/x/scripts/quality/test_check_image_pins.py": self.SECOND_COPY,
+            ".claude/worktrees/x/docker/scripts/configure.ps1": self.SECOND_COPY,
+        }))
+
+    def test_a_checkout_nested_anywhere_else_is_not_examined(self):
+        for marker in ("elsewhere/wt/.git", "elsewhere/clone/.git/HEAD"):
+            with self.subTest(marker=marker):
+                nested = marker.split("/.git")[0]
+                self.assertEqual([], self.run_gate({
+                    **self.PINNED_TREE,
+                    marker: "gitdir: /somewhere/.git/worktrees/wt\n",
+                    f"{nested}/docker/scripts/configure.ps1": self.SECOND_COPY,
+                }))
+
+    def test_the_exclusion_of_nested_checkouts_does_not_hide_the_repository_itself(self):
+        # The root may itself be a worktree (a `.git` file), and .claude/ holds tracked scripts next to worktrees/.
+        failures = self.run_gate({
+            **self.PINNED_TREE,
+            ".git": "gitdir: /somewhere/.git/worktrees/root\n",
+            ".claude/scripts/launch.ps1": self.SECOND_COPY,
+            "docker/scripts/configure.ps1": self.SECOND_COPY,
+        })
+        self.assertEqual(2, len(failures), failures)
+        self.assertIn(".claude/scripts/launch.ps1:1", failures[0])
+        self.assertIn("docker/scripts/configure.ps1:1", failures[1])
+
     def test_a_gate_that_pr_ci_does_not_run_is_refused(self):
         files = {"docker/Dockerfile.mcp": PINNED_DOCKERFILE}
         self.assertEqual(2, len(self.run_gate(files, pr_ci=NO_STEPS_CI)))

@@ -21,7 +21,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gate_cli  # noqa: E402 - after the script's directory is added to the path
+
+ROOT =Path(__file__).resolve().parents[2]
 
 SCRIPT_SUFFIXES = {".py", ".ps1", ".sh", ".java", ".json"}
 HAYSTACK_GLOBS = ("*.yml", "*.yaml", "*.py", "*.ps1", "*.sh", "*.md")
@@ -48,15 +51,10 @@ HAYSTACK_EXCLUDED_DIR_NAMES = EXCLUDED_DIR_NAMES | {"target", "node_modules", "b
 
 
 def haystack_files(root: Path) -> list[Path]:
-    files: list[Path] = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
-            continue
-        if any(part in HAYSTACK_EXCLUDED_DIR_NAMES for part in path.relative_to(root).parts):
-            continue
-        if path.suffix in HAYSTACK_SUFFIXES:
-            files.append(path)
-    return files
+    # Only the files of this repository: a reference in a worktree under .claude/worktrees/ (git-ignored) or in any
+    # nested checkout is not a live reference.
+    return [path for path in gate_cli.repository_files(root, HAYSTACK_EXCLUDED_DIR_NAMES)
+            if path.is_file() and path.suffix in HAYSTACK_SUFFIXES]
 
 
 def _unique_names(candidates: list[Path]) -> tuple[set[str], set[str]]:
@@ -134,6 +132,14 @@ def self_test() -> int:
             "      - run: python scripts/quality/check-referenced.py\n",
             encoding="utf-8",
         )
+
+        # A developer worktree (.claude/worktrees/, git-ignored) or any nested checkout is another tree: a
+        # reference written there must not make an orphan of this repository look referenced.
+        for nested in (".claude/worktrees/x", "elsewhere/clone"):
+            (root / nested / ".github" / "workflows").mkdir(parents=True)
+            (root / nested / ".github" / "workflows" / "sample.yml").write_text(
+                "      - run: python scripts/quality/check-orphan.py\n", encoding="utf-8")
+        (root / "elsewhere" / "clone" / ".git").write_text("gitdir: /somewhere/.git/worktrees/clone\n", encoding="utf-8")
 
         found = find_orphans(root)
         if found != ["scripts/quality/check-orphan.py"]:

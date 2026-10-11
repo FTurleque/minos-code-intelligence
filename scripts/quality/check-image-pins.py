@@ -33,6 +33,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gate_cli  # noqa: E402 - after the script's directory is added to the path
+
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 
 PINNED = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*"
@@ -59,7 +62,6 @@ SKIPPED_DIRECTORIES = frozenset({".git", "target", "node_modules", "build", ".gr
 SCANNED_SUFFIXES = frozenset({".ps1", ".py", ".sh", ".yml", ".yaml", ".java", ".json", ".properties", ".iss", ".xml"})
 # Tracking files and prose legitimately quote references while discussing them.
 SKIPPED_RELATIVE_PREFIXES = ("docs/", "scripts/quality/check-image-pins.py", "scripts/quality/test_check_image_pins.py")
-
 
 def unquote(value: str) -> str:
     value = value.strip()
@@ -124,12 +126,12 @@ def find_compose_violations(path: Path, root: Path) -> tuple[list[str], set[str]
 
 
 def iter_scanned_files(root: Path):
-    for path in sorted(root.rglob("*")):
+    # Only the files of this repository: a worktree under .claude/worktrees/ (git-ignored) or any nested checkout
+    # holds a copy of every file, and the exemptions below do not reach the copies.
+    for path in gate_cli.repository_files(root, SKIPPED_DIRECTORIES):
         if not path.is_file() or path.suffix.lower() not in SCANNED_SUFFIXES:
             continue
         relative = path.relative_to(root).as_posix()
-        if any(part in SKIPPED_DIRECTORIES for part in path.relative_to(root).parts):
-            continue
         if relative.startswith(SKIPPED_RELATIVE_PREFIXES):
             continue
         if re.fullmatch(r"docker/compose[^/]*\.ya?ml", relative):
