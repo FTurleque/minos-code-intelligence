@@ -59,7 +59,7 @@ python scripts/architecture/check-module-boundaries.py ; python scripts/docs/che
 - État : À faire
 - Priorité : P1
 - Dépendances : SH-02
-- Point d'entrée : `minos-storage-local/src/main/java/com/minos/storage/local/store/KnowledgeSnapshotCodecs.java`, `minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresSnapshotPayloadCodec.java`, `docs/adr/0046-format-de-snapshot-v3-chaines-utf8.md`
+- Point d'entrée : `minos-storage-local/src/main/java/com/minos/storage/local/store/KnowledgeSnapshotCodecs.java`, `minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresSnapshotPayloadCodec.java`, `docs/adr/0046-format-de-snapshot-v3-chaines-utf8.md`
 
 ### Actions
 

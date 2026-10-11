@@ -49,7 +49,7 @@ def main() -> int:
         hosted = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileHostedControlPlaneStore.java")
         local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
         semantic_budget = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java")
-        postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java")
+        postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java")
         graph_service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
         fingerprints = read("minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java")
         hybrid = read("minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java")

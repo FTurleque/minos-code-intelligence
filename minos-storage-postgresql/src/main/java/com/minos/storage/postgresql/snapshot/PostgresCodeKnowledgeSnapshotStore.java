@@ -1,0 +1,488 @@
+package com.minos.storage.postgresql.snapshot;
+
+import com.minos.storage.postgresql.support.PostgresConnectionFactory;
+import com.minos.storage.postgresql.support.PostgresProjectMutationLock;
+import com.minos.storage.postgresql.support.PostgresSnapshotPayloadCodec;
+import com.minos.io.ConfinedFileOpener;
+import com.minos.domain.Relationship;
+import com.minos.domain.Symbol;
+import com.minos.domain.SymbolOccurrence;
+import com.minos.io.PrivateLocalStorage;
+import com.minos.storage.local.store.KnowledgeSnapshotCodecs;
+import com.minos.storage.local.store.SnapshotCodec;
+import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.InMemoryCodeKnowledgeStore;
+import com.minos.store.SnapshotDescriptor;
+import com.minos.store.SnapshotQueryView;
+import com.minos.store.SymbolSnapshot;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
+
+import static com.minos.domain.Preconditions.requireText;
+
+public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotStore {
+    private static final long MAX_PERSISTED_SNAPSHOT_BYTES = SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES;
+    private static final int MAX_ACTIVE_QUERY_RETRIES = 4;
+    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L;
+    private static final int MAX_QUERY_CACHE_ENTRIES = 32;
+    private static final long MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
+    private static final int BUILD_LOCK_STRIPES = 64;
+    private static final int MAX_SCRATCH_NAME_ATTEMPTS = 8;
+    private static final String SCRATCH_DIRECTORY = "postgresql-snapshot-scratch";
+
+    private final PostgresConnectionFactory connections;
+    private final Path scratchRoot;
+    private final PostgresSnapshotPayloadCodec codec = new PostgresSnapshotPayloadCodec();
+    private final Object cacheLock = new Object();
+    private final LinkedHashMap<CacheKey, WeightedQueryView> queryCache =
+            new LinkedHashMap<>(16, 0.75f, true);
+    private final ReentrantLock[] buildLocks = buildLocks();
+    private long cacheWeightBytes;
+    private long cacheHits;
+    private long cacheMisses;
+    private long cacheEvictions;
+
+    public PostgresCodeKnowledgeSnapshotStore(PostgresConnectionFactory connections, Path minosHome) throws IOException {
+        this.connections = Objects.requireNonNull(connections, "connections");
+        Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
+        this.scratchRoot = home.resolve(SCRATCH_DIRECTORY).toAbsolutePath().normalize();
+        if (!scratchRoot.startsWith(home)) {
+            throw new IOException("PostgreSQL snapshot scratch directory escapes MINOS home");
+        }
+        PrivateLocalStorage.ensurePrivateDirectory(scratchRoot);
+        requireSafeScratchRoot();
+    }
+
+    @Override
+    public SymbolSnapshot publish(UUID projectId, String snapshotId, Collection<Symbol> symbols) throws IOException {
+        List<Symbol> ordered = symbols.stream().sorted(Comparator.comparing(Symbol::id)).toList();
+        CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(
+                projectId, requireText(snapshotId, "snapshotId"), ordered, List.of(), List.of());
+        publishSnapshot(snapshot);
+        return new SymbolSnapshot(projectId, snapshotId, ordered);
+    }
+
+    @Override
+    public CodeKnowledgeSnapshot publish(
+            UUID projectId,
+            String snapshotId,
+            Collection<Symbol> symbols,
+            Collection<SymbolOccurrence> occurrences,
+            Collection<Relationship> relationships
+    ) throws IOException {
+        CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(
+                projectId,
+                requireText(snapshotId, "snapshotId"),
+                symbols.stream().sorted(Comparator.comparing(Symbol::id)).toList(),
+                occurrences.stream().sorted(Comparator.comparing(SymbolOccurrence::id)).toList(),
+                relationships.stream().sorted(Comparator.comparing(Relationship::id)).toList());
+        publishSnapshot(snapshot);
+        return snapshot;
+    }
+
+    @Override
+    public Optional<SymbolSnapshot> loadActive(UUID projectId) throws IOException {
+        return loadActiveQueryView(projectId).map(value ->
+                new SymbolSnapshot(value.snapshot().projectId(), value.snapshot().snapshotId(), value.snapshot().symbols()));
+    }
+
+    @Override
+    public Optional<CodeKnowledgeSnapshot> loadActiveKnowledge(UUID projectId) throws IOException {
+        return loadActiveQueryView(projectId).map(SnapshotQueryView::snapshot);
+    }
+
+    @Override
+    public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) throws IOException {
+        Objects.requireNonNull(projectId, "projectId");
+        for (int attempt = 1; attempt <= MAX_ACTIVE_QUERY_RETRIES; attempt++) {
+            Optional<ActiveMetadata> metadataOptional = activeMetadata(projectId);
+            if (metadataOptional.isEmpty()) return Optional.empty();
+            ActiveMetadata metadata = metadataOptional.orElseThrow();
+            CacheKey key = new CacheKey(projectId, metadata.snapshotId(), metadata.sha256());
+            Optional<SnapshotQueryView> cached = cached(key);
+            if (cached.isPresent()) return cached;
+
+            ReentrantLock buildLock = buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
+            boolean retry = false;
+            buildLock.lock();
+            try {
+                cached = cached(key);
+                if (cached.isPresent()) return cached;
+                synchronized (cacheLock) { cacheMisses++; }
+
+                Optional<Row> row = activeRow(projectId);
+                if (row.isEmpty()) return Optional.empty();
+                Row value = row.orElseThrow();
+                if (!metadata.snapshotId().equals(value.snapshotId()) || !metadata.sha256().equals(value.sha256())) {
+                    Files.deleteIfExists(value.payload());
+                    retry = true;
+                } else {
+                    long payloadBytes = Files.size(value.payload());
+                    DecodedPayload decoded = decodeVerified(projectId, value);
+                    CodeKnowledgeSnapshot snapshot = decoded.snapshot();
+                    long started = System.nanoTime();
+                    InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot);
+                    long buildNanos = System.nanoTime() - started;
+                    SnapshotDescriptor descriptor = new SnapshotDescriptor(
+                            decoded.formatVersion(),
+                            snapshot.snapshotId(),
+                            "postgresql:" + snapshot.snapshotId(),
+                            metadata.sha256(),
+                            metadata.symbolCount(),
+                            metadata.occurrenceCount(),
+                            metadata.relationshipCount());
+                    SnapshotQueryView view = new SnapshotQueryView(descriptor, snapshot, queryStore, buildNanos);
+                    cache(projectId, key, view, estimateWeight(metadata, payloadBytes));
+                    return Optional.of(view);
+                }
+            } finally {
+                buildLock.unlock();
+            }
+            if (!retry) throw new IOException("PostgreSQL active snapshot resolution ended without a result");
+        }
+        throw new IOException("PostgreSQL active snapshot changed repeatedly; retry limit exceeded for project "
+                + projectId + " after " + MAX_ACTIVE_QUERY_RETRIES + " attempts");
+    }
+
+    QueryCacheStats queryCacheStats() {
+        synchronized (cacheLock) {
+            return new QueryCacheStats(cacheHits, cacheMisses, cacheEvictions, queryCache.size(),
+                    cacheWeightBytes, MAX_QUERY_CACHE_WEIGHT_BYTES);
+        }
+    }
+
+    private Optional<SnapshotQueryView> cached(CacheKey key) {
+        synchronized (cacheLock) {
+            WeightedQueryView value = queryCache.get(key);
+            if (value == null) return Optional.empty();
+            cacheHits++;
+            return Optional.of(value.view());
+        }
+    }
+
+    private void cache(UUID projectId, CacheKey key, SnapshotQueryView view, long weight) {
+        synchronized (cacheLock) {
+            removeProjectEntries(projectId, key);
+            if (weight > MAX_QUERY_CACHE_WEIGHT_BYTES) return;
+            WeightedQueryView previous = queryCache.put(key, new WeightedQueryView(view, weight));
+            if (previous != null) cacheWeightBytes -= previous.weightBytes();
+            cacheWeightBytes = safeAdd(cacheWeightBytes, weight);
+            Iterator<Map.Entry<CacheKey, WeightedQueryView>> iterator = queryCache.entrySet().iterator();
+            while ((queryCache.size() > MAX_QUERY_CACHE_ENTRIES || cacheWeightBytes > MAX_QUERY_CACHE_WEIGHT_BYTES)
+                    && iterator.hasNext()) {
+                Map.Entry<CacheKey, WeightedQueryView> eldest = iterator.next();
+                cacheWeightBytes -= eldest.getValue().weightBytes();
+                iterator.remove();
+                cacheEvictions++;
+            }
+        }
+    }
+
+    private void invalidateProjectCache(UUID projectId) {
+        synchronized (cacheLock) { removeProjectEntries(projectId, null); }
+    }
+
+    private void removeProjectEntries(UUID projectId, CacheKey except) {
+        Iterator<Map.Entry<CacheKey, WeightedQueryView>> iterator = queryCache.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<CacheKey, WeightedQueryView> entry = iterator.next();
+            if (entry.getKey().projectId().equals(projectId) && !entry.getKey().equals(except)) {
+                cacheWeightBytes -= entry.getValue().weightBytes();
+                iterator.remove();
+            }
+        }
+    }
+
+    private void publishSnapshot(CodeKnowledgeSnapshot snapshot) throws IOException {
+        // Codec and exact size are chosen, and an oversized snapshot refused, before any I/O: no scratch
+        // file, no row, no activation change (A6).
+        KnowledgeSnapshotCodecs.Selection selection = codec.select(snapshot);
+        long encodedBytes = selection.encodedBytes();
+        Path payload = createScratchFile("snapshot-write-");
+        try {
+            String sha = codec.encode(selection, payload, snapshot).sha256();
+            long payloadBytes = Files.size(payload);
+            if (payloadBytes != encodedBytes) {
+                throw new IOException("PostgreSQL knowledge snapshot encoding length differs from its computed size");
+            }
+            if (payloadBytes < 1L || payloadBytes > MAX_PERSISTED_SNAPSHOT_BYTES) {
+                throw new IOException("PostgreSQL knowledge snapshot payload exceeds streaming limit");
+            }
+            try {
+                connections.inTransaction(connection -> {
+                    PostgresProjectMutationLock.acquire(connection, snapshot.projectId());
+                    String existingSha = existingSnapshotSha(connection, snapshot);
+                    if (existingSha != null && !existingSha.equals(sha)) {
+                        requireSameContent(connection, snapshot, payload);
+                    }
+                    if (existingSha == null) insertSnapshot(connection, snapshot, payload, payloadBytes, sha);
+                    activateSnapshot(connection, snapshot);
+                    return null;
+                });
+                invalidateProjectCache(snapshot.projectId());
+            } catch (SQLException exception) {
+                throw new IOException("unable to publish PostgreSQL knowledge snapshot", exception);
+            }
+        } finally {
+            Files.deleteIfExists(payload);
+        }
+    }
+
+    private static String existingSnapshotSha(Connection connection, CodeKnowledgeSnapshot snapshot)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
+            statement.setObject(1, snapshot.projectId());
+            statement.setString(2, snapshot.snapshotId());
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next() ? result.getString(1) : null;
+            }
+        }
+    }
+
+    /**
+     * The same snapshot identity is already stored with other bytes. That is legitimate when only the format
+     * changed (a V2 payload re-imported after V3, ADR 0046): both payloads are decoded in their own format and
+     * compared as content. Any other difference is still an identity conflict.
+     */
+    private void requireSameContent(Connection connection, CodeKnowledgeSnapshot snapshot, Path encodedPayload)
+            throws SQLException, IOException {
+        Path existing = createScratchFile("snapshot-existing-");
+        try {
+            String existingSha;
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT payload, sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
+                statement.setObject(1, snapshot.projectId());
+                statement.setString(2, snapshot.snapshotId());
+                try (ResultSet result = statement.executeQuery()) {
+                    if (!result.next()) throw new IOException("PostgreSQL snapshot identity vanished during publication");
+                    try (InputStream input = result.getBinaryStream(1);
+                         OutputStream output = Files.newOutputStream(existing)) {
+                        copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
+                    }
+                    existingSha = result.getString(2);
+                }
+            }
+            if (!existingSha.equals(new com.minos.storage.local.store.SnapshotIntegrityService().checksum(existing))) {
+                throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
+            }
+            if (!codec.decode(existing).equals(codec.decode(encodedPayload))) {
+                throw new IOException(
+                        "PostgreSQL snapshot identity already exists with different content: "
+                                + snapshot.snapshotId());
+            }
+        } finally {
+            Files.deleteIfExists(existing);
+        }
+    }
+
+    private static void insertSnapshot(
+            Connection connection,
+            CodeKnowledgeSnapshot snapshot,
+            Path payload,
+            long payloadBytes,
+            String sha
+    ) throws SQLException, IOException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO knowledge_snapshots(project_id,snapshot_id,payload,sha256,symbol_count,"
+                        + "occurrence_count,relationship_count) VALUES (?,?,?,?,?,?,?)");
+             InputStream input = ConfinedFileOpener.openRegularFileNoFollow(payload)) {
+            statement.setObject(1, snapshot.projectId());
+            statement.setString(2, snapshot.snapshotId());
+            statement.setBinaryStream(3, input, payloadBytes);
+            statement.setString(4, sha);
+            statement.setInt(5, snapshot.symbols().size());
+            statement.setInt(6, snapshot.occurrences().size());
+            statement.setInt(7, snapshot.relationships().size());
+            statement.executeUpdate();
+        }
+    }
+
+    private static void activateSnapshot(Connection connection, CodeKnowledgeSnapshot snapshot) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO knowledge_active(project_id,snapshot_id) VALUES (?,?) "
+                        + "ON CONFLICT(project_id) DO UPDATE SET snapshot_id=EXCLUDED.snapshot_id")) {
+            statement.setObject(1, snapshot.projectId());
+            statement.setString(2, snapshot.snapshotId());
+            statement.executeUpdate();
+        }
+    }
+
+    private Optional<ActiveMetadata> activeMetadata(UUID projectId) throws IOException {
+        try {
+            return connections.withConnection(connection -> {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT s.snapshot_id,s.sha256,s.symbol_count,s.occurrence_count,s.relationship_count "
+                                + "FROM knowledge_active a JOIN knowledge_snapshots s "
+                                + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id "
+                                + "WHERE a.project_id=?")) {
+                    statement.setObject(1, projectId);
+                    try (ResultSet result = statement.executeQuery()) {
+                        if (!result.next()) return Optional.empty();
+                        return Optional.of(new ActiveMetadata(
+                                result.getString(1), result.getString(2),
+                                result.getInt(3), result.getInt(4), result.getInt(5)));
+                    }
+                }
+            });
+        } catch (SQLException exception) {
+            throw new IOException("unable to read PostgreSQL active snapshot metadata", exception);
+        }
+    }
+
+    private Optional<Row> activeRow(UUID projectId) throws IOException {
+        Objects.requireNonNull(projectId, "projectId");
+        try {
+            return connections.withConnection(connection -> {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT s.snapshot_id,s.payload,s.sha256 FROM knowledge_active a "
+                                + "JOIN knowledge_snapshots s "
+                                + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id "
+                                + "WHERE a.project_id=?")) {
+                    statement.setObject(1, projectId);
+                    try (ResultSet result = statement.executeQuery()) {
+                        if (!result.next()) return Optional.empty();
+                        Path payload = createScratchFile("snapshot-read-");
+                        try (InputStream input = result.getBinaryStream(2);
+                             OutputStream output = Files.newOutputStream(payload)) {
+                            copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
+                        } catch (Exception exception) {
+                            Files.deleteIfExists(payload);
+                            throw exception;
+                        }
+                        return Optional.of(new Row(result.getString(1), payload, result.getString(3)));
+                    }
+                }
+            });
+        } catch (SQLException exception) {
+            throw new IOException("unable to load PostgreSQL knowledge snapshot", exception);
+        }
+    }
+
+    private Path createScratchFile(String prefix) throws IOException {
+        requireSafeScratchRoot();
+        for (int attempt = 0; attempt < MAX_SCRATCH_NAME_ATTEMPTS; attempt++) {
+            Path candidate = scratchRoot.resolve(prefix + UUID.randomUUID() + ".knowledge").normalize();
+            if (!scratchRoot.equals(candidate.getParent())) {
+                throw new IOException("PostgreSQL snapshot scratch file escapes its private directory");
+            }
+            try {
+                return PrivateLocalStorage.createPrivateFile(candidate);
+            } catch (FileAlreadyExistsException collision) {
+                // UUID collisions are not expected, but CREATE_NEW semantics remain fail-closed.
+            }
+        }
+        throw new IOException("unable to allocate a unique PostgreSQL snapshot scratch file");
+    }
+
+    /**
+     * A decoded snapshot is as confidential as the code it describes, so the scratch root is
+     * re-validated on every allocation: it must still be a real owner-only directory, never a
+     * symlink swapped in after construction.
+     */
+    private void requireSafeScratchRoot() throws IOException {
+        if (Files.isSymbolicLink(scratchRoot)
+                || !Files.isDirectory(scratchRoot, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("PostgreSQL snapshot scratch path must be a real directory under MINOS home");
+        }
+        PrivateLocalStorage.verifyPrivateDirectory(scratchRoot);
+    }
+
+    private DecodedPayload decodeVerified(UUID projectId, Row row) throws IOException {
+        try {
+            String actualSha = new com.minos.storage.local.store.SnapshotIntegrityService().checksum(row.payload());
+            if (!row.sha256().equals(actualSha)) {
+                throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
+            }
+            int formatVersion = codec.formatVersion(row.payload());
+            CodeKnowledgeSnapshot snapshot = codec.decode(row.payload());
+            if (!projectId.equals(snapshot.projectId()) || !row.snapshotId().equals(snapshot.snapshotId())) {
+                throw new IOException("PostgreSQL knowledge snapshot identity mismatch");
+            }
+            return new DecodedPayload(snapshot, formatVersion);
+        } finally {
+            Files.deleteIfExists(row.payload());
+        }
+    }
+
+    private record DecodedPayload(CodeKnowledgeSnapshot snapshot, int formatVersion) { }
+
+    private static void copyBounded(InputStream input, OutputStream output, long maximum) throws IOException {
+        byte[] buffer = new byte[8192];
+        long total = 0L;
+        int read;
+        while ((read = input.read(buffer)) >= 0) {
+            if (read == 0) continue;
+            try {
+                total = Math.addExact(total, read);
+            } catch (ArithmeticException exception) {
+                throw new IOException("PostgreSQL knowledge snapshot payload size overflow", exception);
+            }
+            if (total > maximum) throw new IOException("PostgreSQL knowledge snapshot payload exceeds streaming limit");
+            output.write(buffer, 0, read);
+        }
+    }
+
+    private static long estimateWeight(ActiveMetadata metadata, long persistedBytes) {
+        long countWeight = 64L * 1024L;
+        countWeight = safeAdd(countWeight, metadata.symbolCount() * 1024L);
+        countWeight = safeAdd(countWeight, metadata.occurrenceCount() * 640L);
+        countWeight = safeAdd(countWeight, metadata.relationshipCount() * 1024L);
+        long persistedWeight = safeMultiply(Math.max(0L, persistedBytes), QUERY_VIEW_PERSISTED_AMPLIFICATION);
+        return Math.max(countWeight, persistedWeight);
+    }
+
+    private static long safeAdd(long left, long right) {
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+    }
+
+    private static long safeMultiply(long left, long right) {
+        try {
+            return Math.multiplyExact(left, right);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private static ReentrantLock[] buildLocks() {
+        ReentrantLock[] locks = new ReentrantLock[BUILD_LOCK_STRIPES];
+        for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
+        return locks;
+    }
+
+    private record Row(String snapshotId, Path payload, String sha256) {
+        private Row {
+            Objects.requireNonNull(snapshotId, "snapshotId");
+            Objects.requireNonNull(payload, "payload");
+            Objects.requireNonNull(sha256, "sha256");
+        }
+    }
+
+    private record ActiveMetadata(String snapshotId, String sha256, int symbolCount,
+                                  int occurrenceCount, int relationshipCount) { }
+    private record CacheKey(UUID projectId, String snapshotId, String sha256) { }
+    private record WeightedQueryView(SnapshotQueryView view, long weightBytes) { }
+    record QueryCacheStats(long hits, long misses, long evictions, int entries,
+                           long weightBytes, long maximumWeightBytes) { }
+}

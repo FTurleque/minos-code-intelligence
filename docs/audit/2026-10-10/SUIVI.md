@@ -114,3 +114,16 @@ Ordre d'implémentation proposé : `ouvrir-le-depot-git-sans-executer-ses-filtre
 - Correction : `RecoveryLogMessages` (chemin relatif à la racine gérée + classe de l'exception, sans cause) appliqué aux 5 sites ; `RecoveryLogMessagesTest` (4 tests, dont `AccessDeniedException` portant le chemin absolu).
 - Liste nominative : 6 fichiers, 9 occurrences de `LOGGER.log(cause)` (bac à sable, refus de reprise MINOS, journal du plan de contrôle hébergé). Décision D3-a prise avec la recommandation (extension de `check-private-io.py`), à confirmer.
 - **Non fait** : tâche 3.4 (JaCoCo `provider-execution-trust-boundary` rejoué localement) ; tâches 4.1 (manuelle) et 5.x.
+
+## Rangement des modules en sous-packages (demande du propriétaire, 2026-10-11)
+
+Hors audit : rangement de quatre modules à package plat, un changement et une PR par module. Coût assumé par le propriétaire après mesure : des classes package-private deviennent publiques, et SonarCloud compte tout fichier déplacé comme code neuf (80 %).
+
+| Module | PR | Sous-packages | Visibilité élargie | Écarts |
+|---|---|---|---|---|
+| `minos-provider-scip` | #411 (fusionnée) | `ingestion`, `runtime.install`, `runtime.plan` | un constructeur | cycle `install ↔ plan` cassé ; ressources chargées par chemin absolu ; 200 tests ajoutés pour la couverture (62,6 % → 81,1 %) ; `Dockerfile.mcp.release` corrigé |
+| `minos-storage-postgresql` | en cours | `support`, `snapshot`, `project`, `semantic` | 17 types (classes imbriquées comprises) et 30 membres ; aides de test en `protected` | 4 alertes SpotBugs `EI_EXPOSE_REP(2)` apparues avec le passage en `public`, consignées au baseline (8 au lieu de 4) |
+
+Preuves `minos-storage-postgresql` : 80 tests avant et après, 0 sauté (PostgreSQL réel local) ; `check-module-boundaries.py` vert (A3, A8) ; changement OpenSpec `ranger-le-module-storage-postgresql`.
+
+Note d'outillage : le premier outil d'analyse des dépendances supprimait le fichier à partir du premier `//` ; les chiffres présentés avant la première décision étaient sous-estimés. L'outil corrigé a servi pour la décision finale.
