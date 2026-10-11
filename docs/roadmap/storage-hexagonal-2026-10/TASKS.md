@@ -105,7 +105,7 @@ Tests query/context/architecture/impact, tests de cohérence snapshot concurrent
 - État : À faire
 - Priorité : P1
 - Dépendances : SH-01
-- Point d'entrée : `minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java`, `minos-application/src/main/java/com/minos/application`, `minos-bootstrap/src/main/java/com/minos/bootstrap`
+- Point d'entrée : `minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java`, `minos-application/src/main/java/com/minos/application`, `minos-bootstrap/src/main/java/com/minos/bootstrap`
 
 ### Actions
 

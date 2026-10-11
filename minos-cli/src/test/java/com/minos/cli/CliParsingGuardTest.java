@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.cli.command.RelationshipCommand;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -52,7 +53,7 @@ class CliParsingGuardTest {
     }
 
     private static List<Path> mainSources() throws IOException {
-        try (Stream<Path> files = Files.list(MAIN)) {
+        try (Stream<Path> files = Files.walk(MAIN)) {
             return files.filter(path -> path.toString().endsWith(".java")).sorted().toList();
         }
     }
@@ -125,7 +126,7 @@ class CliParsingGuardTest {
     private static Set<String> commandsUnderRulesTests() throws IOException {
         Set<String> covered = new java.util.TreeSet<>();
         Pattern base = Pattern.compile("command\\(\\s*\"[^\"]*\"\\s*,\\s*\"([a-z][a-z-]*)[ \"]");
-        try (Stream<Path> files = Files.list(TEST)) {
+        try (Stream<Path> files = Files.walk(TEST)) {
             for (Path file : files.filter(path -> path.toString().endsWith("ArgumentRulesTest.java")
                     || path.toString().endsWith("IdeIntelligenceCommandTest.java")).toList()) {
                 String text = Files.readString(file, StandardCharsets.UTF_8);

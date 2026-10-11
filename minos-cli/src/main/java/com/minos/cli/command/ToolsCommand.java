@@ -1,0 +1,126 @@
+package com.minos.cli.command;
+
+import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliJson;
+import com.minos.cli.support.CliOptions;
+import com.minos.output.SymbolOutputFormat;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+/** Administration des providers gérés par MINOS. */
+public final class ToolsCommand {
+
+    public static final String NAME = "tools";
+    private static final String USAGE = """
+            Usage: minos tools <list|install|verify> [provider] [--all] [--format <text|json>]
+
+              list                  List managed providers and runtime state
+              verify                Verify baseline-required provider runtimes
+              verify --all          Verify every provider runtime advertised by MINOS
+              install <provider>    Install or bootstrap a managed provider
+            """.stripTrailing();
+
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec().text("--format").flag("--all");
+
+    public static String usage() {
+        return USAGE;
+    }
+
+    private final AutonomousIndexOperations operations;
+
+    public ToolsCommand(AutonomousIndexOperations operations) {
+        this.operations = Objects.requireNonNull(operations, "operations");
+    }
+
+    public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
+        return CliCommandSupport.run(arguments, output, error, USAGE, Parsed::parse, NAME, parsed -> {
+            if ("install".equals(parsed.action())) {
+                AutonomousIndexOperations.ProviderView installed = operations.installProvider(parsed.provider());
+                output.append(render(List.of(installed), parsed.format())).append('\n');
+                return FindSymbolCommand.SUCCESS;
+            }
+            List<AutonomousIndexOperations.ProviderView> providers = operations.providers();
+            output.append(render(providers, parsed.format())).append('\n');
+            if ("verify".equals(parsed.action())
+                    && providers.stream()
+                            .filter(provider -> parsed.all() || provider.requiredByDefault())
+                            .anyMatch(ToolsCommand::blocksReadiness)) {
+                return FindSymbolCommand.EXECUTION_ERROR;
+            }
+            return FindSymbolCommand.SUCCESS;
+        });
+    }
+
+    /**
+     * Le verdict de disponibilité unique de {@code tools verify} et de {@code doctor} : un provider bloque
+     * sauf s'il est {@code READY} ou {@code UNSUPPORTED_BY_BACKEND}. Ce dernier état dit que le backend
+     * sélectionné (par exemple le plan Docker MCP admin/indexation) ne revendique jamais le palier de
+     * sandbox plus fort dont ce provider aurait sinon besoin -- pas que le provider est cassé. Il est
+     * rapporté tel quel (jamais comme {@code READY}) mais ne doit jamais bloquer une vérification ou une
+     * installation qui ne dépend pas de ce palier (docs/developer/remote-worker-sandbox-disposition.md,
+     * « Invariant »). Tout autre état non prêt bloque.
+     */
+    static boolean blocksReadiness(AutonomousIndexOperations.ProviderView provider) {
+        return !"READY".equals(provider.state()) && !"UNSUPPORTED_BY_BACKEND".equals(provider.state());
+    }
+
+    static String render(List<AutonomousIndexOperations.ProviderView> providers, SymbolOutputFormat format) {
+        if (format == SymbolOutputFormat.JSON) {
+            List<Map<String, Object>> values = new ArrayList<>();
+            for (var provider : providers) {
+                Map<String, Object> value = new LinkedHashMap<>();
+                value.put("id", provider.id());
+                value.put("version", provider.version());
+                value.put("state", provider.state());
+                value.put("requiredByDefault", provider.requiredByDefault());
+                value.put("executable", provider.executable());
+                value.put("diagnostics", CliCommandSupport.publicDiagnostics(provider.diagnostics()));
+                values.add(value);
+            }
+            return CliJson.render(Map.of("providers", values));
+        }
+        List<String> lines = new ArrayList<>();
+        for (var provider : providers) {
+            lines.add(provider.id() + " " + provider.version() + " — " + provider.state()
+                    + (provider.requiredByDefault() ? " [required]" : " [optional]"));
+            if (provider.executable() != null) {
+                lines.add("  executable: " + provider.executable());
+            }
+            CliCommandSupport.publicDiagnostics(provider.diagnostics())
+                    .forEach(diagnostic -> lines.add("  diagnostic: " + diagnostic));
+        }
+        return String.join("\n", lines);
+    }
+
+    private record Parsed(String action, String provider, boolean all, SymbolOutputFormat format) {
+        private static Parsed parse(String[] arguments) {
+            if (arguments.length == 0) {
+                throw new IllegalArgumentException("tools action is required");
+            }
+            String action = arguments[0];
+            if (!List.of("list", "verify", "install").contains(action)) {
+                throw new IllegalArgumentException("unknown tools action: " + action);
+            }
+            String provider = null;
+            int optionsFrom = 1;
+            if ("install".equals(action)) {
+                if (arguments.length < 2) {
+                    throw new IllegalArgumentException("tools install requires <provider>");
+                }
+                provider = CliCommandSupport.operand(arguments[1], "provider");
+                optionsFrom = 2;
+            }
+            CliOptions options = OPTIONS.parse(arguments, optionsFrom);
+            if (options.has("--all") && !"verify".equals(action)) {
+                throw new IllegalArgumentException("--all is only valid with tools verify");
+            }
+            return new Parsed(action, provider, options.has("--all"), options.format());
+        }
+    }
+}

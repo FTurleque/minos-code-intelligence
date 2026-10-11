@@ -81,7 +81,7 @@ flowchart TB
 | `com.minos.architecture` | topologie, dépendances, centralité, technologies |
 | `com.minos.impact` | propagation d’impact potentielle |
 | `com.minos.api` | contrats Java publics versionnés |
-| `com.minos.cli` | exposition CLI stable, points d'entrée `MinosLauncher` et `DockerRuntimeBootstrap` |
+| `com.minos.cli` | exposition CLI stable, points d'entrée `MinosLauncher` et `DockerRuntimeBootstrap` ; sous-packages `command`, `operations`, `support` |
 | `com.minos.app` | route `minos mcp` de l'assemblage final : router backend natif/Docker (`minos-app`) |
 | `com.minos.mcp` | exposition MCP STDIO read-only |
 | `com.minos.git` | port Git du moteur (`GitIntelligence`) |

@@ -122,8 +122,11 @@ Hors audit : rangement de quatre modules à package plat, un changement et une P
 | Module | PR | Sous-packages | Visibilité élargie | Écarts |
 |---|---|---|---|---|
 | `minos-provider-scip` | #411 (fusionnée) | `ingestion`, `runtime.install`, `runtime.plan` | un constructeur | cycle `install ↔ plan` cassé ; ressources chargées par chemin absolu ; 200 tests ajoutés pour la couverture (62,6 % → 81,1 %) ; `Dockerfile.mcp.release` corrigé |
-| `minos-storage-postgresql` | en cours | `support`, `snapshot`, `project`, `semantic` | 17 types (classes imbriquées comprises) et 30 membres ; aides de test en `protected` | 4 alertes SpotBugs `EI_EXPOSE_REP(2)` apparues avec le passage en `public`, consignées au baseline (8 au lieu de 4) |
+| `minos-storage-postgresql` | #413 (fusionnée) | `support`, `snapshot`, `project`, `semantic` | 17 types (classes imbriquées comprises) et 30 membres ; aides de test en `protected` | 4 alertes SpotBugs `EI_EXPOSE_REP(2)` apparues avec le passage en `public`, consignées au baseline (8 au lieu de 4) ; 126 tests ajoutés pour la couverture (68,7 % → 90,4 %) |
+| `minos-cli` | #415 | `command`, `operations`, `support` ; points d'entrée et SPI `McpLaunchRoute` inchangés à la racine | 21 types (classes imbriquées comprises) et 60 membres ; quatre aides de test publiques | cycle `command → operations → support → command` levé par `support.CliExitCodes` ; 3 alertes SpotBugs consignées (8 au lieu de 5) ; `CliParsingGuardTest` parcourt les sous-packages ; couverture inchangée (82,7 %) |
 
 Preuves `minos-storage-postgresql` : 80 tests avant et après, 0 sauté (PostgreSQL réel local) ; `check-module-boundaries.py` vert (A3, A8) ; changement OpenSpec `ranger-le-module-storage-postgresql`.
+
+Preuves `minos-cli` : 289 tests (287 avant, 2 pour `CliExitCodes`), 0 sauté ; tests de `minos-app` compilés ; gates rapides 19/19 ; changement OpenSpec `ranger-le-module-cli`.
 
 Note d'outillage : le premier outil d'analyse des dépendances supprimait le fichier à partir du premier `//` ; les chiffres présentés avant la première décision étaient sous-estimés. L'outil corrigé a servi pour la décision finale.

@@ -102,7 +102,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Responsabilité** : surface CLI stable — dispatcher `MinosCli`, toutes les commandes (project, index, search, find-symbol, architecture, impact, runtime, team…).
 - **Types clés** : `MinosCli`, `MinosCliRunner`, `MinosLauncher` et `DockerRuntimeBootstrap` (points d'entrée de processus, noms stables), SPI `McpLaunchRoute` (route `minos mcp`, fournie par `minos-app`).
 - **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap`, `minos-nexus`. Aucun adaptateur : la CLI ouvre l'application par `MinosApplication.open` et n'atteint la racine de composition qu'à l'exécution (ADR 0042).
-- **Sources** : `minos-cli/src/main/java/com/minos/cli/`.
+- **Sources** : `minos-cli/src/main/java/com/minos/cli/` (racine : les points d'entrée et le SPI ci-dessus, dont les noms qualifiés sont stables ; sous-packages `command` pour les commandes, `operations` pour les opérations d'indexation autonomes et distantes, `support` pour l'analyse d'options, le rendu JSON, l'exécution commune, l'ouverture différée de l'application et les codes de sortie `CliExitCodes` ; les dépendances vont de la racine vers `command`, de `command` vers `operations` et `support`, d'`operations` vers `support`, jamais l'inverse).
 
 ### minos-api
 - **Responsabilité** : API Java publique versionnée exposant les contrats stables.

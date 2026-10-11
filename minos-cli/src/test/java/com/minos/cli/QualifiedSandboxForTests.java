@@ -21,16 +21,16 @@ import java.util.function.Supplier;
  * by {@link WorkerSandboxQualification}. It never executes anything. No production code can build
  * it, since no integrated backend has such a containment (ADR 0041).
  */
-final class QualifiedSandboxForTests {
+public final class QualifiedSandboxForTests {
 
     private QualifiedSandboxForTests() {
     }
 
-    static Supplier<WorkerSandboxSelection> selection() {
+    public static Supplier<WorkerSandboxSelection> selection() {
         return () -> WorkerSandboxSelection.of(backend());
     }
 
-    static WorkerSandboxBackend backend() {
+    public static WorkerSandboxBackend backend() {
         return new WorkerSandboxBackend() {
             @Override public String id() { return "fake-hard-backend"; }
             @Override public WorkerIsolation isolation() { return WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE; }

@@ -83,10 +83,10 @@ SCOPES = {
             "com/minos/integration/git/RemoteRepositoryCachePolicy", "com/minos/runtime/local/DistributedArtifactBundleStore",
             "com/minos/runtime/local/DistributedArtifactCachePolicy", "com/minos/runtime/local/DistributedIndexerExecutor",
             "com/minos/runtime/local/LocalIsolatedIndexWorker", "com/minos/runtime/local/WorkerSandboxBackend",
-            "com/minos/runtime/local/WorkerSandboxQualification", "com/minos/cli/LocalRemoteIndexOperations",
+            "com/minos/runtime/local/WorkerSandboxQualification", "com/minos/cli/operations/LocalRemoteIndexOperations",
             # A2 / ADR 0042: the M25 wiring LocalRemoteIndexOperations used to build moved here verbatim.
             "com/minos/bootstrap/LocalRemoteIndexingRuntime",
-            "com/minos/cli/RemoteIndexCommand",
+            "com/minos/cli/command/RemoteIndexCommand",
         ),
         "line": 0.70,
         "branch": 0.50,
@@ -95,7 +95,7 @@ SCOPES = {
             # LocalRemoteIndexOperations owns the RemoteMaterialization release lifecycle (AUDIT-01):
             # a per-class floor stops that specific coverage from being able to hide behind the
             # rest of this scope's well-covered siblings while quietly regressing itself.
-            "com/minos/cli/LocalRemoteIndexOperations": {"line": 0.65, "branch": 0.35},
+            "com/minos/cli/operations/LocalRemoteIndexOperations": {"line": 0.65, "branch": 0.35},
         },
     },
     "provider-execution-trust-boundary": {
@@ -138,13 +138,13 @@ SCOPES = {
         "branch": 0.35,
     },
     "m26-runtime-dynamic-intelligence": {
-        "prefixes": ("com/minos/dynamic/", "com/minos/application/dynamic/", "com/minos/storage/local/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
+        "prefixes": ("com/minos/dynamic/", "com/minos/application/dynamic/", "com/minos/storage/local/store/FileRuntimeObservationStore", "com/minos/cli/command/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
         "line": 0.55, "branch": 0.35,
     },
     "m27-team-hosted-control-plane": {
         "prefixes": (
             "com/minos/hosted/", "com/minos/storage/local/store/FileHostedControlPlaneStore", "com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider",
-            "com/minos/cli/TeamCommand", "com/minos/api/LocalMinosTeamApi", "com/minos/output/HostedControlPlaneRenderer",
+            "com/minos/cli/command/TeamCommand", "com/minos/api/LocalMinosTeamApi", "com/minos/output/HostedControlPlaneRenderer",
         ), "line": 0.45, "branch": 0.25,
     },
     "m29-backend-routing": {

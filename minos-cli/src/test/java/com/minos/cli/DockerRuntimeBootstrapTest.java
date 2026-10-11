@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
 import com.minos.registry.ProjectPathMapping;
 import com.minos.storage.local.registry.ProjectPathMappingStore;
 import org.junit.jupiter.api.Test;

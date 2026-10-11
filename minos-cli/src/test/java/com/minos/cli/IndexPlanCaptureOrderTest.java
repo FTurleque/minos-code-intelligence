@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.operations.LocalAutonomousIndexOperations;
 import com.minos.application.MinosApplication;
 import com.minos.discovery.DefaultDiscoveryPlugins;
 import com.minos.discovery.ProjectDiscovery.SourceRoot;
