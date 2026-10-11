@@ -33,7 +33,7 @@ def main() -> int:
     try:
         compaction = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotCompactionService.java")
         retention = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java")
-        postgres_snapshot = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java")
+        postgres_snapshot = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java")
         snapshot_codec = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotBinaryCodecSupport.java")
         file_snapshot = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")
         semantic_budget = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java")
@@ -45,7 +45,7 @@ def main() -> int:
         runtime_port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
         runtime_service = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java")
         local_runtime = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
-        postgres_runtime = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresRuntimeObservationStore.java")
+        postgres_runtime = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore.java")
         provider_api = read("minos-api/src/main/java/com/minos/api/LocalProviderPlatformApi.java")
         multi_api = read("minos-api/src/main/java/com/minos/api/LocalMinosMultiRepositoryApi.java")
         nexus = read("minos-nexus/src/main/java/com/minos/nexus/NexusExportService.java")

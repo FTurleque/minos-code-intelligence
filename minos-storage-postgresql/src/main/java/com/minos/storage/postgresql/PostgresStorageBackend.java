@@ -1,5 +1,16 @@
 package com.minos.storage.postgresql;
 
+import com.minos.storage.postgresql.project.PostgresIndexStateStore;
+import com.minos.storage.postgresql.project.PostgresProjectRegistry;
+import com.minos.storage.postgresql.project.PostgresStorageRetentionService;
+import com.minos.storage.postgresql.project.ProjectMutationIndexStateStore;
+import com.minos.storage.postgresql.semantic.PostgresSemanticVectorStore;
+import com.minos.storage.postgresql.snapshot.PostgresCodeKnowledgeSnapshotStore;
+import com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore;
+import com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore;
+import com.minos.storage.postgresql.support.PostgresConnectionFactory;
+import com.minos.storage.postgresql.support.PostgresJsonCodec;
+import com.minos.storage.postgresql.support.PostgresSchemaMigrator;
 import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.orchestration.IndexStateStore;
