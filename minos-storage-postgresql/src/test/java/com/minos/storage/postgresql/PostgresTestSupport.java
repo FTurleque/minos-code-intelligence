@@ -1,5 +1,7 @@
 package com.minos.storage.postgresql;
 
+import com.minos.storage.postgresql.support.PostgresConnectionFactory;
+import com.minos.storage.postgresql.support.PostgresSchemaMigrator;
 import com.minos.storage.StorageBackendConfiguration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -27,16 +29,16 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * turns an unavailable Docker/PostgreSQL runtime into a hard failure so the storage
  * gate can never disappear silently.</p>
  */
-abstract class PostgresTestSupport {
+public abstract class PostgresTestSupport {
 
-    static final String REQUIRED_PROPERTY = "minos.postgresql.tests.required";
+    protected static final String REQUIRED_PROPERTY = "minos.postgresql.tests.required";
 
     private static PostgreSQLContainer POSTGRES;
     private static boolean dockerAvailable = false;
     private static Throwable dockerFailure;
 
     @BeforeAll
-    static void startPostgres() throws IOException {
+    protected static void startPostgres() throws IOException {
         // Outside the try: a missing or malformed pin is a repository defect, never a skipped suite.
         DockerImageName image = DockerImageName.parse(pinnedPostgresImage()).asCompatibleSubstituteFor("postgres");
         try {
@@ -64,7 +66,7 @@ abstract class PostgresTestSupport {
      * of {@code MINOS_POSTGRES_IMAGE} in {@code docker/compose-mcp.connected.yaml}. The tests then
      * exercise the exact tag-and-digest reference users run, and no second copy of it exists.
      */
-    static String pinnedPostgresImage() throws IOException {
+    protected static String pinnedPostgresImage() throws IOException {
         Path directory = Path.of("").toAbsolutePath();
         while (directory != null) {
             Path compose = directory.resolve("docker").resolve("compose-mcp.connected.yaml");
@@ -82,16 +84,16 @@ abstract class PostgresTestSupport {
     }
 
     @AfterAll
-    static void stopPostgres() {
+    protected static void stopPostgres() {
         if (POSTGRES != null && POSTGRES.isRunning()) {
             POSTGRES.stop();
         }
     }
 
-    PostgresConnectionFactory connections;
+    protected PostgresConnectionFactory connections;
 
     @BeforeEach
-    void setUpSchema() throws Exception {
+    protected void setUpSchema() throws Exception {
         String reason = "Docker not accessible from JVM — skipping PostgreSQL integration tests";
         if (dockerFailure != null && dockerFailure.getMessage() != null) {
             reason += ": " + dockerFailure.getMessage();
@@ -102,12 +104,12 @@ abstract class PostgresTestSupport {
         truncateData();
     }
 
-    PostgresConnectionFactory createFactory(String schema) throws IOException {
+    protected PostgresConnectionFactory createFactory(String schema) throws IOException {
         return createFactory(schema, canonicalJdbcUrl());
     }
 
     /** Factory bound to {@code database} on the shared container instead of the default test database. */
-    PostgresConnectionFactory createFactoryForDatabase(String database, String schema) throws IOException {
+    protected PostgresConnectionFactory createFactoryForDatabase(String database, String schema) throws IOException {
         return createFactory(schema, jdbcUrlForDatabase(database));
     }
 
@@ -140,7 +142,7 @@ abstract class PostgresTestSupport {
      * that state genuinely does not exist yet; the default test database has already been migrated
      * by {@link #setUpSchema()}, so {@code IF NOT EXISTS} would short-circuit the very step under test.
      */
-    void createFreshDatabase(String database) throws SQLException {
+    protected void createFreshDatabase(String database) throws SQLException {
         try (Connection admin = DriverManager.getConnection(
                      canonicalJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
              Statement statement = admin.createStatement()) {

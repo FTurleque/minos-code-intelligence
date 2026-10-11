@@ -4,13 +4,13 @@
     <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
     <LongMessage>La méthode com.minos.storage.postgresql.PostgresStorageBackend.projectRegistry() risque d'exposer sa représentation interne en renvoyant com.minos.storage.postgresql.PostgresStorageBackend.projectRegistry</LongMessage>
     <Class classname="com.minos.storage.postgresql.PostgresStorageBackend" primary="true">
-      <SourceLine classname="com.minos.storage.postgresql.PostgresStorageBackend" start="25" end="51" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java">
-        <Message>At PostgresStorageBackend.java:[lines 25-51]</Message>
+      <SourceLine classname="com.minos.storage.postgresql.PostgresStorageBackend" start="36" end="62" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java">
+        <Message>At PostgresStorageBackend.java:[lines 36-62]</Message>
       </SourceLine>
       <Message>In class com.minos.storage.postgresql.PostgresStorageBackend</Message>
     </Class>
     <Method isStatic="false" classname="com.minos.storage.postgresql.PostgresStorageBackend" signature="()Lcom/minos/registry/ProjectRegistry;" name="projectRegistry" primary="true">
-      <SourceLine endBytecode="46" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="40" end="40" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="0" />
+      <SourceLine endBytecode="46" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="51" end="51" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="0" />
       <Message>In method com.minos.storage.postgresql.PostgresStorageBackend.projectRegistry()</Message>
     </Method>
     <Field isStatic="false" classname="com.minos.storage.postgresql.PostgresStorageBackend" signature="Lcom/minos/registry/ProjectRegistry;" name="projectRegistry" primary="true">
@@ -19,21 +19,21 @@
       </SourceLine>
       <Message>Field com.minos.storage.postgresql.PostgresStorageBackend.projectRegistry</Message>
     </Field>
-    <SourceLine endBytecode="4" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="40" end="40" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="4" primary="true">
-      <Message>At PostgresStorageBackend.java:[line 40]</Message>
+    <SourceLine endBytecode="4" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="51" end="51" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="4" primary="true">
+      <Message>At PostgresStorageBackend.java:[line 51]</Message>
     </SourceLine>
   </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="feaaeb9208a71316fbc6cf047228c27f" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
     <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
     <LongMessage>La méthode com.minos.storage.postgresql.PostgresStorageBackend.runtimeObservationStore() risque d'exposer sa représentation interne en renvoyant com.minos.storage.postgresql.PostgresStorageBackend.runtimeObservationStore</LongMessage>
     <Class classname="com.minos.storage.postgresql.PostgresStorageBackend" primary="true">
-      <SourceLine classname="com.minos.storage.postgresql.PostgresStorageBackend" start="25" end="51" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java">
-        <Message>At PostgresStorageBackend.java:[lines 25-51]</Message>
+      <SourceLine classname="com.minos.storage.postgresql.PostgresStorageBackend" start="36" end="62" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java">
+        <Message>At PostgresStorageBackend.java:[lines 36-62]</Message>
       </SourceLine>
       <Message>In class com.minos.storage.postgresql.PostgresStorageBackend</Message>
     </Class>
     <Method isStatic="false" classname="com.minos.storage.postgresql.PostgresStorageBackend" signature="()Lcom/minos/dynamic/RuntimeObservationStore;" name="runtimeObservationStore" primary="true">
-      <SourceLine endBytecode="46" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="45" end="45" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="0" />
+      <SourceLine endBytecode="46" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="56" end="56" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="0" />
       <Message>In method com.minos.storage.postgresql.PostgresStorageBackend.runtimeObservationStore()</Message>
     </Method>
     <Field isStatic="false" classname="com.minos.storage.postgresql.PostgresStorageBackend" signature="Lcom/minos/dynamic/RuntimeObservationStore;" name="runtimeObservationStore" primary="true">
@@ -42,21 +42,21 @@
       </SourceLine>
       <Message>Field com.minos.storage.postgresql.PostgresStorageBackend.runtimeObservationStore</Message>
     </Field>
-    <SourceLine endBytecode="4" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="45" end="45" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="4" primary="true">
-      <Message>At PostgresStorageBackend.java:[line 45]</Message>
+    <SourceLine endBytecode="4" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="56" end="56" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="4" primary="true">
+      <Message>At PostgresStorageBackend.java:[line 56]</Message>
     </SourceLine>
   </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="b59515967a1e165a44f020652f3bdffa" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
     <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
     <LongMessage>La méthode com.minos.storage.postgresql.PostgresStorageBackend.semanticVectorStore() risque d'exposer sa représentation interne en renvoyant com.minos.storage.postgresql.PostgresStorageBackend.semanticVectorStore</LongMessage>
     <Class classname="com.minos.storage.postgresql.PostgresStorageBackend" primary="true">
-      <SourceLine classname="com.minos.storage.postgresql.PostgresStorageBackend" start="25" end="51" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java">
-        <Message>At PostgresStorageBackend.java:[lines 25-51]</Message>
+      <SourceLine classname="com.minos.storage.postgresql.PostgresStorageBackend" start="36" end="62" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java">
+        <Message>At PostgresStorageBackend.java:[lines 36-62]</Message>
       </SourceLine>
       <Message>In class com.minos.storage.postgresql.PostgresStorageBackend</Message>
     </Class>
     <Method isStatic="false" classname="com.minos.storage.postgresql.PostgresStorageBackend" signature="()Lcom/minos/semantic/SemanticVectorStore;" name="semanticVectorStore" primary="true">
-      <SourceLine endBytecode="46" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="44" end="44" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="0" />
+      <SourceLine endBytecode="46" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="55" end="55" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="0" />
       <Message>In method com.minos.storage.postgresql.PostgresStorageBackend.semanticVectorStore()</Message>
     </Method>
     <Field isStatic="false" classname="com.minos.storage.postgresql.PostgresStorageBackend" signature="Lcom/minos/semantic/SemanticVectorStore;" name="semanticVectorStore" primary="true">
@@ -65,21 +65,21 @@
       </SourceLine>
       <Message>Field com.minos.storage.postgresql.PostgresStorageBackend.semanticVectorStore</Message>
     </Field>
-    <SourceLine endBytecode="4" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="44" end="44" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="4" primary="true">
-      <Message>At PostgresStorageBackend.java:[line 44]</Message>
+    <SourceLine endBytecode="4" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="55" end="55" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="4" primary="true">
+      <Message>At PostgresStorageBackend.java:[line 55]</Message>
     </SourceLine>
   </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="d21d37b8d23c50198f0f139f5131a941" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
     <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
     <LongMessage>La méthode com.minos.storage.postgresql.PostgresStorageBackend.snapshotStore() risque d'exposer sa représentation interne en renvoyant com.minos.storage.postgresql.PostgresStorageBackend.snapshotStore</LongMessage>
     <Class classname="com.minos.storage.postgresql.PostgresStorageBackend" primary="true">
-      <SourceLine classname="com.minos.storage.postgresql.PostgresStorageBackend" start="25" end="51" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java">
-        <Message>At PostgresStorageBackend.java:[lines 25-51]</Message>
+      <SourceLine classname="com.minos.storage.postgresql.PostgresStorageBackend" start="36" end="62" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java">
+        <Message>At PostgresStorageBackend.java:[lines 36-62]</Message>
       </SourceLine>
       <Message>In class com.minos.storage.postgresql.PostgresStorageBackend</Message>
     </Class>
     <Method isStatic="false" classname="com.minos.storage.postgresql.PostgresStorageBackend" signature="()Lcom/minos/store/CodeKnowledgeSnapshotStore;" name="snapshotStore" primary="true">
-      <SourceLine endBytecode="46" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="41" end="41" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="0" />
+      <SourceLine endBytecode="46" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="52" end="52" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="0" />
       <Message>In method com.minos.storage.postgresql.PostgresStorageBackend.snapshotStore()</Message>
     </Method>
     <Field isStatic="false" classname="com.minos.storage.postgresql.PostgresStorageBackend" signature="Lcom/minos/store/CodeKnowledgeSnapshotStore;" name="snapshotStore" primary="true">
@@ -88,8 +88,109 @@
       </SourceLine>
       <Message>Field com.minos.storage.postgresql.PostgresStorageBackend.snapshotStore</Message>
     </Field>
-    <SourceLine endBytecode="4" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="41" end="41" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="4" primary="true">
-      <Message>At PostgresStorageBackend.java:[line 41]</Message>
+    <SourceLine endBytecode="4" classname="com.minos.storage.postgresql.PostgresStorageBackend" start="52" end="52" sourcepath="com/minos/storage/postgresql/PostgresStorageBackend.java" sourcefile="PostgresStorageBackend.java" startBytecode="4" primary="true">
+      <Message>At PostgresStorageBackend.java:[line 52]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="b53fbbe32529a96a9433cf04748ca856" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode expose sa représentation interne en incorporant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode new com.minos.storage.postgresql.project.PostgresIndexStateStore(PostgresConnectionFactory, PostgresJsonCodec) risque d'exposer sa représentation interne en stockant un objet externe modifiable dans com.minos.storage.postgresql.project.PostgresIndexStateStore.json</LongMessage>
+    <Class classname="com.minos.storage.postgresql.project.PostgresIndexStateStore" primary="true">
+      <SourceLine classname="com.minos.storage.postgresql.project.PostgresIndexStateStore" start="24" end="110" sourcepath="com/minos/storage/postgresql/project/PostgresIndexStateStore.java" sourcefile="PostgresIndexStateStore.java">
+        <Message>At PostgresIndexStateStore.java:[lines 24-110]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.postgresql.project.PostgresIndexStateStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.postgresql.project.PostgresIndexStateStore" signature="(Lcom/minos/storage/postgresql/support/PostgresConnectionFactory;Lcom/minos/storage/postgresql/support/PostgresJsonCodec;)V" name="&lt;init&gt;" primary="true">
+      <SourceLine endBytecode="84" classname="com.minos.storage.postgresql.project.PostgresIndexStateStore" start="24" end="26" sourcepath="com/minos/storage/postgresql/project/PostgresIndexStateStore.java" sourcefile="PostgresIndexStateStore.java" startBytecode="0" />
+      <Message>In method new com.minos.storage.postgresql.project.PostgresIndexStateStore(PostgresConnectionFactory, PostgresJsonCodec)</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.postgresql.project.PostgresIndexStateStore" signature="Lcom/minos/storage/postgresql/support/PostgresJsonCodec;" name="json" primary="true">
+      <SourceLine classname="com.minos.storage.postgresql.project.PostgresIndexStateStore" sourcepath="com/minos/storage/postgresql/project/PostgresIndexStateStore.java" sourcefile="PostgresIndexStateStore.java">
+        <Message>In PostgresIndexStateStore.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.postgresql.project.PostgresIndexStateStore.json</Message>
+    </Field>
+    <LocalVariable role="LOCAL_VARIABLE_NAMED" pc="11" name="json" register="2">
+      <Message>Local variable named json</Message>
+    </LocalVariable>
+    <SourceLine endBytecode="11" classname="com.minos.storage.postgresql.project.PostgresIndexStateStore" start="25" end="25" sourcepath="com/minos/storage/postgresql/project/PostgresIndexStateStore.java" sourcefile="PostgresIndexStateStore.java" startBytecode="11" primary="true">
+      <Message>At PostgresIndexStateStore.java:[line 25]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="57788b1c1d4dc2582e1a90a175a93382" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode expose sa représentation interne en incorporant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode new com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore(PostgresConnectionFactory, PostgresJsonCodec) risque d'exposer sa représentation interne en stockant un objet externe modifiable dans com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore.json</LongMessage>
+    <Class classname="com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore" primary="true">
+      <SourceLine classname="com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore" start="24" end="157" sourcepath="com/minos/storage/postgresql/snapshot/PostgresFingerprintSnapshotStore.java" sourcefile="PostgresFingerprintSnapshotStore.java">
+        <Message>At PostgresFingerprintSnapshotStore.java:[lines 24-157]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore" signature="(Lcom/minos/storage/postgresql/support/PostgresConnectionFactory;Lcom/minos/storage/postgresql/support/PostgresJsonCodec;)V" name="&lt;init&gt;" primary="true">
+      <SourceLine endBytecode="88" classname="com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore" start="24" end="27" sourcepath="com/minos/storage/postgresql/snapshot/PostgresFingerprintSnapshotStore.java" sourcefile="PostgresFingerprintSnapshotStore.java" startBytecode="0" />
+      <Message>In method new com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore(PostgresConnectionFactory, PostgresJsonCodec)</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore" signature="Lcom/minos/storage/postgresql/support/PostgresJsonCodec;" name="json" primary="true">
+      <SourceLine classname="com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore" sourcepath="com/minos/storage/postgresql/snapshot/PostgresFingerprintSnapshotStore.java" sourcefile="PostgresFingerprintSnapshotStore.java">
+        <Message>In PostgresFingerprintSnapshotStore.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore.json</Message>
+    </Field>
+    <LocalVariable role="LOCAL_VARIABLE_NAMED" pc="11" name="json" register="2">
+      <Message>Local variable named json</Message>
+    </LocalVariable>
+    <SourceLine endBytecode="11" classname="com.minos.storage.postgresql.snapshot.PostgresFingerprintSnapshotStore" start="26" end="26" sourcepath="com/minos/storage/postgresql/snapshot/PostgresFingerprintSnapshotStore.java" sourcefile="PostgresFingerprintSnapshotStore.java" startBytecode="11" primary="true">
+      <Message>At PostgresFingerprintSnapshotStore.java:[line 26]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="9ae8e3c1b1f3c89e58005a6ff30a20b" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode expose sa représentation interne en incorporant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode new com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore(PostgresConnectionFactory, PostgresJsonCodec) risque d'exposer sa représentation interne en stockant un objet externe modifiable dans com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore.json</LongMessage>
+    <Class classname="com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore" primary="true">
+      <SourceLine classname="com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore" start="24" end="142" sourcepath="com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore.java" sourcefile="PostgresRuntimeObservationStore.java">
+        <Message>At PostgresRuntimeObservationStore.java:[lines 24-142]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore" signature="(Lcom/minos/storage/postgresql/support/PostgresConnectionFactory;Lcom/minos/storage/postgresql/support/PostgresJsonCodec;)V" name="&lt;init&gt;" primary="true">
+      <SourceLine endBytecode="88" classname="com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore" start="24" end="27" sourcepath="com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore.java" sourcefile="PostgresRuntimeObservationStore.java" startBytecode="0" />
+      <Message>In method new com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore(PostgresConnectionFactory, PostgresJsonCodec)</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore" signature="Lcom/minos/storage/postgresql/support/PostgresJsonCodec;" name="json" primary="true">
+      <SourceLine classname="com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore" sourcepath="com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore.java" sourcefile="PostgresRuntimeObservationStore.java">
+        <Message>In PostgresRuntimeObservationStore.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore.json</Message>
+    </Field>
+    <LocalVariable role="LOCAL_VARIABLE_NAMED" pc="11" name="json" register="2">
+      <Message>Local variable named json</Message>
+    </LocalVariable>
+    <SourceLine endBytecode="11" classname="com.minos.storage.postgresql.snapshot.PostgresRuntimeObservationStore" start="26" end="26" sourcepath="com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore.java" sourcefile="PostgresRuntimeObservationStore.java" startBytecode="11" primary="true">
+      <Message>At PostgresRuntimeObservationStore.java:[line 26]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="811db98ea51cc20de2e74a17d2d1e570" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease.connection() risque d'exposer sa représentation interne en renvoyant com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease.connection</LongMessage>
+    <Class classname="com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease" primary="true">
+      <SourceLine classname="com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease" start="315" end="354" sourcepath="com/minos/storage/postgresql/support/PostgresConnectionFactory.java" sourcefile="PostgresConnectionFactory.java">
+        <Message>At PostgresConnectionFactory.java:[lines 315-354]</Message>
+      </SourceLine>
+      <Message>In class com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease" signature="()Ljava/sql/Connection;" name="connection" primary="true">
+      <SourceLine endBytecode="84" classname="com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease" start="324" end="326" sourcepath="com/minos/storage/postgresql/support/PostgresConnectionFactory.java" sourcefile="PostgresConnectionFactory.java" startBytecode="0" />
+      <Message>In method com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease.connection()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease" signature="Ljava/sql/Connection;" name="connection" primary="true">
+      <SourceLine classname="com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease" sourcepath="com/minos/storage/postgresql/support/PostgresConnectionFactory.java" sourcefile="PostgresConnectionFactory.java">
+        <Message>In PostgresConnectionFactory.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease.connection</Message>
+    </Field>
+    <SourceLine endBytecode="25" classname="com.minos.storage.postgresql.support.PostgresConnectionFactory$DedicatedConnectionLease" start="326" end="326" sourcepath="com/minos/storage/postgresql/support/PostgresConnectionFactory.java" sourcefile="PostgresConnectionFactory.java" startBytecode="25" primary="true">
+      <Message>At PostgresConnectionFactory.java:[line 326]</Message>
     </SourceLine>
   </BugInstance>
 </BugCollection>

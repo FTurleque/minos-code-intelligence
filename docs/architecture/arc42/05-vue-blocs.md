@@ -130,7 +130,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Responsabilité** : backend de stockage PostgreSQL/pgvector — implémente `StorageBackend`, `ProjectRegistry`, `ProjectFingerprintSnapshotStore`, `SemanticVectorStore`, `RuntimeObservationStore`, `IndexStateStore`.
 - **Note architecturale** : ce module ne dépend pas de `minos-application` (un adaptateur n'en dépend jamais, ADR 0042). Les interfaces `StorageBackend` (`com.minos.storage`), `ProjectRegistry` (`com.minos.registry`) et `ProjectFingerprintSnapshotStore` (`com.minos.incremental`) sont définies dans `minos-engine` ; le backend PostgreSQL remplace l'ensemble de la couche locale, pas seulement le port de snapshot (voir ADR-0025).
 - **Dépendances** : `minos-domain`, `minos-engine`, `minos-storage-local`, `postgresql 42.7.13`, `jackson 2.22`.
-- **Sources** : `minos-storage-postgresql/src/main/java/`.
+- **Sources** : `minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/` (racine : le backend et son fournisseur `ServiceLoader` ; sous-packages `support` pour la connexion, la politique d'URL JDBC, les migrations, les codecs et le verrou de mutation, `snapshot` pour les stores de snapshots et d'observations, `project` pour le registre, les états d'index et la rétention, `semantic` pour les requêtes et le store vectoriel ; les dépendances vont vers `support`, jamais l'inverse). Ces classes sont publiques pour se voir entre sous-packages ; aucun autre module ne les importe.
 
 ---
 

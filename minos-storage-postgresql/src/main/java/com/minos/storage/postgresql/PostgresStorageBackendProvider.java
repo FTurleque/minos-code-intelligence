@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql;
 
+import com.minos.storage.postgresql.support.PostgresConnectionFactory;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
 import com.minos.storage.StorageBackendProvider;
