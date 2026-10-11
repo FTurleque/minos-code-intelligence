@@ -107,6 +107,14 @@ clean
 limitations
 ```
 
+### Dépôt trouvé : remontée, propriétaire, filtres
+
+Un dépôt Git analysé n'est pas de confiance (cf. `.claude/rules/securite.md`, point 5).
+
+- **Remontée.** Depuis la racine du projet, JGit remonte jusqu'au premier `.git` (monorepo, worktree, sous-module). `GIT_DIR`, `GIT_WORK_TREE` et `GIT_CEILING_DIRECTORIES` restent ignorés. Si la racine du dépôt n'est pas celle du projet, la limitation `REPOSITORY_ABOVE_PROJECT_ROOT` le dit.
+- **Propriétaire.** Le propriétaire du répertoire Git trouvé doit être celui que le système attribue aux fichiers créés par le processus MINOS (comparé à une sonde, pas à `user.name`). Sinon l'appel échoue avant toute lecture de l'index, avec un message actionnable ; un propriétaire illisible échoue aussi (fail-closed), par un message distinct. Limite : sous Windows, un dépôt créé par un compte élevé puis analysé par un processus non élevé (ou l'inverse) est refusé, comme le fait git (« dubious ownership »). Aucun contournement n'est proposé.
+- **Filtres.** Aucune commande déclarée par le dépôt ne s'exécute : les pilotes `filter.*` de sa configuration (fichiers inclus compris) sont redirigés en mémoire vers un filtre intégré transparent ; `.git/config` n'est jamais modifié. Les filtres de la configuration de l'utilisateur et du système restent appliqués. Un dépôt qui déclare lui-même un filtre (`git lfs install --local`) porte `REPOSITORY_FILTERS_NOT_APPLIED` : `clean` est alors calculé sur le contenu brut et peut être `false` à tort.
+
 ## Historique borné
 
 Bornes de la **requête publique** (`ActivityQuery`) — elles décrivent la forme du résultat demandé :
@@ -183,6 +191,8 @@ UNBORN_HEAD
 HISTORY_TRUNCATED
 HISTORY_SCAN_LIMIT
 FILES_TRUNCATED
+REPOSITORY_ABOVE_PROJECT_ROOT
+REPOSITORY_FILTERS_NOT_APPLIED
 ```
 
 Exemples workspace :

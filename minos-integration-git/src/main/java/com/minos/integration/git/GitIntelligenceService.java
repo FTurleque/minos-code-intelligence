@@ -1,6 +1,7 @@
 package com.minos.integration.git;
 
 import com.minos.git.GitIntelligence;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
@@ -8,22 +9,27 @@ import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.NoHeadException;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
+import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.storage.file.FileBasedConfig;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.EmptyTreeIterator;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.TreeFilter;
 import org.eclipse.jgit.util.io.DisabledOutputStream;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.UserPrincipal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -36,6 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 
 /**
  * M12 factual Git intelligence over a local repository.
@@ -51,6 +58,7 @@ public final class GitIntelligenceService implements GitIntelligence {
     static final int OLDER_COMMIT_RUN_LIMIT = 1_000;
 
     private final ActivityBudget budget;
+    private final Supplier<UserPrincipal> expectedOwner;
 
     public GitIntelligenceService() {
         this(ActivityBudget.DEFAULT);
@@ -58,7 +66,16 @@ public final class GitIntelligenceService implements GitIntelligence {
 
     /** Explicit budget, so a caller (and an adversarial test) can bound the analysis frontier itself. */
     public GitIntelligenceService(ActivityBudget budget) {
+        this(budget, null);
+    }
+
+    /**
+     * Test seam: the owner a repository must have. {@code null} means the owner the system gives a file
+     * this process creates, as checked by {@link PrivateLocalStorage#verifyOwnedByCurrentUser}.
+     */
+    GitIntelligenceService(ActivityBudget budget, Supplier<UserPrincipal> expectedOwner) {
         this.budget = Objects.requireNonNull(budget, "budget");
+        this.expectedOwner = expectedOwner;
     }
 
     /** The resource frontier this service enforces while it walks history. */
@@ -68,16 +85,18 @@ public final class GitIntelligenceService implements GitIntelligence {
 
     @Override
     public RepositoryView inspect(Path projectRoot) throws IOException, GitAPIException {
-        try (Repository repository = open(projectRoot); Git git = new Git(repository)) {
-            return repositoryView(repository, git);
+        OpenedRepository opened = open(projectRoot);
+        try (Repository repository = opened.repository(); Git git = new Git(repository)) {
+            return repositoryView(repository, git, opened);
         }
     }
 
     @Override
     public ActivityReport analyze(Path projectRoot, ActivityQuery query) throws IOException, GitAPIException {
         Objects.requireNonNull(query, "query");
-        try (Repository repository = open(projectRoot); Git git = new Git(repository)) {
-            RepositoryView repositoryView = repositoryView(repository, git);
+        OpenedRepository opened = open(projectRoot);
+        try (Repository repository = opened.repository(); Git git = new Git(repository)) {
+            RepositoryView repositoryView = repositoryView(repository, git, opened);
             Set<String> limitations = new LinkedHashSet<>(repositoryView.limitations());
             List<CommitActivity> commits = new ArrayList<>();
             Map<String, MutableFileActivity> files = new HashMap<>();
@@ -175,7 +194,11 @@ public final class GitIntelligenceService implements GitIntelligence {
         }
     }
 
-    private static Repository open(Path projectRoot) throws IOException {
+    /** The repository found for a project root, and what had to be set aside to open it safely. */
+    private record OpenedRepository(Repository repository, Path projectRoot, boolean filtersNotApplied) {
+    }
+
+    private OpenedRepository open(Path projectRoot) throws IOException {
         Objects.requireNonNull(projectRoot, "projectRoot");
         Path root = projectRoot.toRealPath();
         if (!Files.isDirectory(root)) {
@@ -188,10 +211,83 @@ public final class GitIntelligenceService implements GitIntelligence {
         if (builder.getGitDir() == null) {
             throw new IllegalArgumentException("projectRoot is not inside a Git repository: " + root);
         }
-        return builder.build();
+        requireExpectedOwner(builder.getGitDir().toPath());
+        Repository repository = builder.build();
+        try {
+            return new OpenedRepository(repository, root, redirectRepositoryFiltersToPassThrough(repository));
+        } catch (IOException | RuntimeException failure) {
+            repository.close();
+            throw failure;
+        }
     }
 
-    private static RepositoryView repositoryView(Repository repository, Git git)
+    /**
+     * A repository found on disk is not trusted: the directory the analysis opens, directly or by
+     * walking up from the project root, must belong to the account this process runs as, otherwise
+     * its configuration and attributes were written by someone else.
+     */
+    private void requireExpectedOwner(Path gitDirectory) throws IOException {
+        UserPrincipal found;
+        UserPrincipal expected = null;
+        try {
+            found = Files.getOwner(gitDirectory);
+            if (expectedOwner != null) {
+                expected = expectedOwner.get();
+            }
+        } catch (IOException | UncheckedIOException | UnsupportedOperationException failure) {
+            throw new IOException(
+                    "The owner of the Git repository cannot be read; the analysis is refused (fail-closed)");
+        }
+        if (expected != null ? !found.equals(expected) : !ownedByCurrentUser(gitDirectory)) {
+            throw new IOException("The Git repository is owned by '" + found.getName()
+                    + "', not by the account running this process"
+                    + (expected != null ? " ('" + expected.getName() + "')" : "")
+                    + "; change the repository owner before analysing it");
+        }
+    }
+
+    private static boolean ownedByCurrentUser(Path gitDirectory) throws IOException {
+        try {
+            PrivateLocalStorage.verifyOwnedByCurrentUser(gitDirectory);
+            return true;
+        } catch (IOException mismatchOrUnreadable) {
+            if (Files.exists(gitDirectory)) {
+                return false;
+            }
+            throw mismatchOrUnreadable;
+        }
+    }
+
+    /**
+     * Neutralises, in memory only, every {@code filter.*} driver declared by the repository's own
+     * configuration (included files comprised): a {@code clean} filter is a shell command, and the
+     * repository is not trusted to run one. Each such driver is pointed at a built-in pass-through, so
+     * the working-tree comparison is still computed, on the raw content. {@code JGit} does not drop
+     * lines that come from an included file, so overriding the value is what covers them. The
+     * configuration file is never written, and drivers known only to the user or system configuration
+     * are left alone. Answers whether anything was set aside.
+     */
+    private static boolean redirectRepositoryFiltersToPassThrough(Repository repository) throws IOException {
+        FileBasedConfig declared = new FileBasedConfig(
+                new File(repository.getDirectory(), "config"), repository.getFS());
+        try {
+            declared.load();
+        } catch (ConfigInvalidException invalid) {
+            throw new IOException("The Git repository configuration is invalid");
+        }
+        Set<String> drivers = declared.getSubsections("filter");
+        if (drivers.isEmpty()) {
+            return false;
+        }
+        PassThroughFilter.register();
+        for (String driver : drivers) {
+            repository.getConfig().setString("filter", driver, "clean", PassThroughFilter.COMMAND);
+            repository.getConfig().setString("filter", driver, "smudge", PassThroughFilter.COMMAND);
+        }
+        return true;
+    }
+
+    private static RepositoryView repositoryView(Repository repository, Git git, OpenedRepository opened)
             throws IOException, GitAPIException {
         Path workTree = repository.isBare()
                 ? repository.getDirectory().toPath().toAbsolutePath().normalize()
@@ -219,6 +315,12 @@ public final class GitIntelligenceService implements GitIntelligence {
         }
         if (head == null) {
             limitations.add("UNBORN_HEAD");
+        }
+        if (!workTree.equals(opened.projectRoot())) {
+            limitations.add("REPOSITORY_ABOVE_PROJECT_ROOT");
+        }
+        if (opened.filtersNotApplied()) {
+            limitations.add("REPOSITORY_FILTERS_NOT_APPLIED");
         }
 
         String identityBasis = remote == null ? "path:" + workTree : "remote:" + remote;
