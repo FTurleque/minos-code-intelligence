@@ -29,14 +29,20 @@ def is_nested_checkout(directory: Path) -> bool:
 
 
 def repository_files(root: Path, skipped_directories: Collection[str]) -> list[Path]:
-    """Les fichiers du dépôt sous `root`, triés ; ni les dossiers exclus ni les checkouts imbriqués ne sont parcourus."""
+    """Les fichiers du dépôt sous `root`, triés ; ni les dossiers exclus ni les checkouts imbriqués ne sont parcourus.
+
+    Un dossier qui ne peut pas être listé lève son `OSError` : le sauter rendrait un succès sur un arbre partiel.
+    """
+    def refuse(error: OSError) -> None:
+        raise error
+
     def belongs(directory: Path) -> bool:
         return (directory.name not in skipped_directories
                 and directory.relative_to(root).as_posix() not in NESTED_CHECKOUT_DIRECTORIES
                 and not is_nested_checkout(directory))
 
     found: list[Path] = []
-    for current, directories, names in os.walk(root):
+    for current, directories, names in os.walk(root, onerror=refuse):
         here = Path(current)
         directories[:] = [name for name in directories if belongs(here / name)]
         found.extend(here / name for name in names)

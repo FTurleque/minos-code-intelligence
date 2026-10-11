@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gate_cli  # noqa: E402 - after the script's directory is added to the path
 
-ROOT =Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2]
 
 SCRIPT_SUFFIXES = {".py", ".ps1", ".sh", ".java", ".json"}
 HAYSTACK_GLOBS = ("*.yml", "*.yaml", "*.py", "*.ps1", "*.sh", "*.md")
@@ -132,6 +132,14 @@ def self_test() -> int:
             "      - run: python scripts/quality/check-referenced.py\n",
             encoding="utf-8",
         )
+
+        # The root may itself be a worktree (a `.git` file), and .claude/ holds tracked scripts next to worktrees/:
+        # a reference written there is a live one.
+        (root / ".git").write_text("gitdir: /somewhere/.git/worktrees/root\n", encoding="utf-8")
+        (root / "scripts" / "quality" / "check-referenced-from-claude.py").write_text("print('referenced')\n", encoding="utf-8")
+        (root / ".claude" / "scripts").mkdir(parents=True)
+        (root / ".claude" / "scripts" / "run.py").write_text(
+            "GATES = ['scripts/quality/check-referenced-from-claude.py']\n", encoding="utf-8")
 
         # A developer worktree (.claude/worktrees/, git-ignored) or any nested checkout is another tree: a
         # reference written there must not make an orphan of this repository look referenced.

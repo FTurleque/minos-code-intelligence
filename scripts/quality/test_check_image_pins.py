@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _MODULE_PATH = Path(__file__).parent / "check-image-pins.py"
 _SPEC = importlib.util.spec_from_file_location("check_image_pins", _MODULE_PATH)
@@ -172,6 +174,21 @@ class CheckImagePinsTest(unittest.TestCase):
         self.assertEqual(2, len(failures), failures)
         self.assertIn(".claude/scripts/launch.ps1:1", failures[0])
         self.assertIn("docker/scripts/configure.ps1:1", failures[1])
+
+    def test_a_directory_that_cannot_be_listed_fails_instead_of_being_skipped(self):
+        # Fail-closed: a walk that silently drops an unreadable directory would report success on a partial tree.
+        real_scandir = os.scandir
+
+        def scandir(path):
+            if Path(path).name == "scripts":
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_scandir(path)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docker" / "scripts").mkdir(parents=True)
+            with mock.patch("os.scandir", scandir), self.assertRaises(PermissionError):
+                gate.gate_cli.repository_files(root, frozenset())
 
     def test_a_gate_that_pr_ci_does_not_run_is_refused(self):
         files = {"docker/Dockerfile.mcp": PINNED_DOCKERFILE}

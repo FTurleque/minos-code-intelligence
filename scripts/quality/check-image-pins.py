@@ -63,6 +63,7 @@ SCANNED_SUFFIXES = frozenset({".ps1", ".py", ".sh", ".yml", ".yaml", ".java", ".
 # Tracking files and prose legitimately quote references while discussing them.
 SKIPPED_RELATIVE_PREFIXES = ("docs/", "scripts/quality/check-image-pins.py", "scripts/quality/test_check_image_pins.py")
 
+
 def unquote(value: str) -> str:
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
