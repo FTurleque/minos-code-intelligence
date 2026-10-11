@@ -25,7 +25,7 @@ public final class InstallationProcessEnvironment {
     private static final Set<String> NETWORK_AND_CACHE_KEYS = Set.of(
             "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
             "http_proxy", "https_proxy", "no_proxy", "all_proxy",
-            "SSL_CERT_FILE", "SSL_CERT_DIR",
+            "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
             "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
             "npm_config_cache", "NUGET_PACKAGES", "DOTNET_CLI_HOME");
 

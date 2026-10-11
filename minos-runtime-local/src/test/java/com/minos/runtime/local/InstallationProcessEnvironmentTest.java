@@ -60,6 +60,8 @@ class InstallationProcessEnvironmentTest {
                 "https_proxy", "http://proxy:3128",
                 "NO_PROXY", "localhost",
                 "SSL_CERT_FILE", "/etc/ssl/ca.pem",
+                "NODE_EXTRA_CA_CERTS", "/etc/ssl/corporate.pem",
+                "REQUESTS_CA_BUNDLE", "/etc/ssl/bundle.pem",
                 "npm_config_cache", "/cache/npm",
                 "NUGET_PACKAGES", "/cache/nuget",
                 "COURSIER_CACHE", "/cache/cs"));
@@ -71,6 +73,8 @@ class InstallationProcessEnvironmentTest {
         assertEquals("http://proxy:3128", environment.get("https_proxy"));
         assertEquals("localhost", environment.get("NO_PROXY"));
         assertEquals("/etc/ssl/ca.pem", environment.get("SSL_CERT_FILE"));
+        assertEquals("/etc/ssl/corporate.pem", environment.get("NODE_EXTRA_CA_CERTS"));
+        assertEquals("/etc/ssl/bundle.pem", environment.get("REQUESTS_CA_BUNDLE"));
         assertEquals("/cache/npm", environment.get("npm_config_cache"));
         assertEquals("/cache/nuget", environment.get("NUGET_PACKAGES"));
         assertEquals("/cache/cs", environment.get("COURSIER_CACHE"));
