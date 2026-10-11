@@ -157,6 +157,25 @@ class ScipSymbolSnapshotImporterBehaviorTest {
     }
 
     @Test
+    void aDocumentPathRootedOnAnyPlatformNeverBecomesAFileIdentifierOnAnyHost() throws Exception {
+        List<String> rootedPaths = List.of(
+                "/abs/Rooted.java", "\\abs\\Rooted.java", "C:/abs/Rooted.java", "./C:/abs/Rooted.java");
+        for (int i = 0; i < rootedPaths.size(); i++) {
+            String rootedPath = rootedPaths.get(i);
+            UUID projectId = UUID.randomUUID();
+            FileSymbolSnapshotStore store = new FileSymbolSnapshotStore(temp.resolve("snapshots-" + i));
+
+            importer().importSnapshot(artifact(document(rootedPath)),
+                    request(projectId, "snapshot-1", "services/api", Map.of()), store);
+
+            List<String> fileIds = occurrenceFileIds(store.loadActiveKnowledge(projectId).orElseThrow());
+            assertEquals(1, fileIds.size(), rootedPath);
+            assertTrue(fileIds.get(0).startsWith("file:"),
+                    "a rooted path falls back to an opaque hash: " + rootedPath + " -> " + fileIds);
+        }
+    }
+
+    @Test
     void aSnapshotIdDerivedFromTheArtifactHashIsAcceptedWhenItMatches() throws Exception {
         UUID projectId = UUID.randomUUID();
         FileSymbolSnapshotStore store = new FileSymbolSnapshotStore(temp.resolve("snapshots"));

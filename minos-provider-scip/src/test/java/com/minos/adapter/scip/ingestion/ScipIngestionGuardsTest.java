@@ -211,7 +211,10 @@ class ScipIngestionGuardsTest {
         assertEquals("services/api", request("services\\api").projectRelativeRoot());
         assertEquals("services/api", request("services/./api/../api").projectRelativeRoot());
         assertThrows(IllegalArgumentException.class, () -> request("../outside"));
-        // A path the platform itself calls absolute (a drive letter is needed on Windows, a leading slash elsewhere).
+        // Rooted forms are refused whatever the host calls absolute (ScipIngestionRequestPortablePathTest), and so
+        // is the absolute path of the host itself.
+        assertThrows(IllegalArgumentException.class, () -> request("/absolute"));
+        assertThrows(IllegalArgumentException.class, () -> request("C:\\absolute"));
         String absolute = java.nio.file.Path.of("").toAbsolutePath().toString();
         assertThrows(IllegalArgumentException.class, () -> request(absolute));
     }
