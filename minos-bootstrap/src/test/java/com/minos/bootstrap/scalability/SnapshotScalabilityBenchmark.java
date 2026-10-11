@@ -1,7 +1,7 @@
 package com.minos.bootstrap.scalability;
 
-import com.minos.adapter.scip.ScipIndexReader;
-import com.minos.adapter.scip.ScipIngestionLimits;
+import com.minos.adapter.scip.ingestion.ScipIndexReader;
+import com.minos.adapter.scip.ingestion.ScipIngestionLimits;
 import com.minos.application.MinosApplication;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.HybridSearchService;

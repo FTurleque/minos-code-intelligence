@@ -1,6 +1,6 @@
 package com.minos.app.adapter.scip;
 
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
+import com.minos.adapter.scip.ingestion.ScipSymbolSnapshotImporter;
 import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.domain.CodeEntityRef;

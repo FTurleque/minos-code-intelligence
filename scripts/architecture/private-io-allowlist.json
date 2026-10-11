@@ -24,19 +24,19 @@
     "justification": "Sonde de poignée de main : crée MINOS_HOME lui-même, avant qu'un MINOS existe, à un chemin explicite donné en argument."
   },
   {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java",
+    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java",
     "method": "Files.createDirectories",
     "max": 2,
     "justification": "Sous-répertoires d'extraction d'une archive d'outil vérifiée, sous une racine d'installation déjà rendue privée (ensurePrivateDirectory) ; durcir chaque entrée coûterait des milliers d'ACL, à migrer si besoin."
   },
   {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory.java",
+    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/RustAnalyzerScipProcessPlanFactory.java",
     "method": "Files.createDirectories",
     "max": 1,
     "justification": "Répertoire de travail cargo du provider, sous le répertoire de run privé ; sur Windows le conteneur du sandbox y écrit par héritage d'ACL, un ACL propriétaire seul casserait cet accès."
   },
   {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java",
+    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java",
     "method": "Files.createDirectories",
     "max": 4,
     "justification": "Sortie du provider et arbre de travail (copie du projet) sous le répertoire de run privé : écrits par le provider sandboxé qui y accède par héritage d'ACL, un ACL propriétaire seul casserait cet accès."

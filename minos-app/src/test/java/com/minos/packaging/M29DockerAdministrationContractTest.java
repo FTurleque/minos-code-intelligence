@@ -1,6 +1,6 @@
 package com.minos.packaging;
 
-import com.minos.adapter.scip.runtime.EmbeddedToolsCatalog;
+import com.minos.adapter.scip.runtime.install.EmbeddedToolsCatalog;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -119,9 +119,9 @@ class M29DockerAdministrationContractTest {
         String workflow = normalizedText(root.resolve("docker/scripts/mcp-lifecycle.ps1"));
         String dockerfile = normalizedText(root.resolve("docker/Dockerfile.mcp.release"));
         String javaPlan = normalizedText(root.resolve(
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"));
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java"));
         String polyglotRuntime = normalizedText(root.resolve(
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java"));
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java"));
 
         assertTrue(workflow.contains("'minos-tools-bootstrap'"));
         assertTrue(workflow.contains("'minos-provider-probe'"));
@@ -230,7 +230,7 @@ class M29DockerAdministrationContractTest {
     @Test
     void providerProcessPlansKeepGeneratedIndexesOutOfProjectRoots() throws Exception {
         Path root = repoRoot();
-        Path runtime = root.resolve("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime");
+        Path runtime = root.resolve("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan");
 
         // Executable-backed plans now inherit run-directory resolution from a single skeleton, so the
         // invariant is enforced there once instead of being restated in every provider factory.
@@ -260,12 +260,12 @@ class M29DockerAdministrationContractTest {
                     factory + " must never emit index.scip into the project root");
         }
         String javaPlan = normalizedText(root.resolve(
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"));
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java"));
         assertTrue(javaPlan.contains("prepareWritableWorkspace"));
         assertTrue(javaPlan.contains("STAGING_EXCLUDED_DIRECTORIES"));
         assertTrue(javaPlan.contains("STAGING_EXCLUDED_ROOT_FILES"));
         String rust = normalizedText(root.resolve(
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory.java"));
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/RustAnalyzerScipProcessPlanFactory.java"));
         assertTrue(rust.contains("CARGO_TARGET_DIR"));
     }
 

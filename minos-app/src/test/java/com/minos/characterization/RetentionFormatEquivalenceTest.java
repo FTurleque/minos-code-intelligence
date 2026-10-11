@@ -1,6 +1,6 @@
 package com.minos.characterization;
 
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
+import com.minos.adapter.scip.ingestion.ScipSymbolSnapshotImporter;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import com.minos.storage.local.store.KnowledgeSnapshotCodecs;

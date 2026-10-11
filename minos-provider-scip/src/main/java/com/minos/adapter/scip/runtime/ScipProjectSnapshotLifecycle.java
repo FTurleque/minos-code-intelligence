@@ -3,7 +3,7 @@ package com.minos.adapter.scip.runtime;
 import com.minos.discovery.ModuleAssignmentRule;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.adapter.scip.ScipIndexerCatalog;
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
+import com.minos.adapter.scip.ingestion.ScipSymbolSnapshotImporter;
 import com.minos.io.Sha256;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.io.FileTreeOperations;

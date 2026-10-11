@@ -1,10 +1,10 @@
 package com.minos.bootstrap;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
-import com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager;
-import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
-import com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager;
+import com.minos.adapter.scip.ingestion.ScipSymbolSnapshotImporter;
+import com.minos.adapter.scip.runtime.install.ManagedPolyglotScipRuntimeManager;
+import com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager;
+import com.minos.adapter.scip.runtime.install.ManagedScipPythonRuntimeManager;
 import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.application.MinosApplicationComposer;
 import com.minos.git.GitIntelligence;

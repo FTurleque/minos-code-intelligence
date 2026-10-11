@@ -81,7 +81,7 @@ def validate_runtime_contracts() -> None:
         require(storage_path, storage, token)
 
     composition_path = (
-        "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/StrongOwnedProcessExecutors.java"
+        "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/StrongOwnedProcessExecutors.java"
     )
     composition = read(composition_path)
     require(composition_path, composition, "return qualifySandbox(status, sandbox, isDockerRuntimeLocation());")

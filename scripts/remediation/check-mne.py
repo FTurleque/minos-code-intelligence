@@ -39,7 +39,7 @@ def main() -> int:
         semantic_budget = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java")
         semantic_service = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexService.java")
         semantic_store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java")
-        scip = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIngestionLimits.java")
+        scip = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/ingestion/ScipIngestionLimits.java")
         discovery = read("minos-engine/src/main/java/com/minos/discovery/ProjectDiscoveryService.java")
         fingerprint = read("minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java")
         runtime_port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
@@ -51,7 +51,7 @@ def main() -> int:
         nexus = read("minos-nexus/src/main/java/com/minos/nexus/NexusExportService.java")
         hybrid = read("minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java")
         token = read("minos-application/src/main/java/com/minos/context/TokenEstimator.java")
-        polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
+        polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java")
         windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java")
 
         # MNE-01: read active pointer under the same project lease as retention deletion.
@@ -133,7 +133,7 @@ def main() -> int:
                 "DOTNET_PACKAGE_ID", "downloadPinnedDotnetPackage", "pinned-nuget-source",
                 "MAX_DOTNET_PACKAGE_BYTES", "PinnedArtifactSource.forHost().acquire(",
                 "MAX_MANAGED_TRAVERSAL_ENTRIES", "MAX_MANAGED_FILES", "MAX_MANAGED_BYTES")
-        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/PinnedArtifactSource.java")
+        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/PinnedArtifactSource.java")
         require("PinnedArtifactSource.java", pinned, "artifact.sha256().equals(actual)")
         catalogue = json.loads(read("minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/embedded-tools.json"))
         nupkg = [a for a in catalogue["artifacts"] if a["id"] == "scip-dotnet-nupkg"]

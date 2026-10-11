@@ -76,7 +76,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Types clés** : `ScipIngestionAdapter`, `ScipSymbolNormalizer`, `ScipIndexerCatalog`, `ScipJavaProcessPlanFactory`, `ScipTypeScriptProcessPlanFactory`, `ManagedPolyglotScipRuntimeManager`.
 - **Interfaces** : implémente `IndexerProvider`.
 - **Dépendances** : `minos-domain`, `minos-engine`, `minos-storage-local`, `minos-runtime-local`, `scip-java-bindings 0.9.0`.
-- **Sources** : `minos-provider-scip/src/main/java/com/minos/adapter/scip/`.
+- **Sources** : `minos-provider-scip/src/main/java/com/minos/adapter/scip/` (racine : `ScipIndexerCatalog` ; sous-packages `ingestion` pour la lecture et la normalisation des artefacts `.scip`, `runtime` pour le cycle de vie du snapshot, `runtime.install` pour l'installation des outils, `runtime.plan` pour les plans d'indexation ; les dépendances vont de `install` vers `plan`, jamais l'inverse). Les ressources empaquetées restent dans `com/minos/adapter/scip/runtime/` et se chargent par chemin absolu.
 
 ### minos-integration-git
 - **Responsabilité** : adapter Git local via JGit — historique, activité, faits Git.
