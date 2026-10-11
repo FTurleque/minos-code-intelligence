@@ -30,13 +30,15 @@ def is_nested_checkout(directory: Path) -> bool:
 
 def repository_files(root: Path, skipped_directories: Collection[str]) -> list[Path]:
     """Les fichiers du dépôt sous `root`, triés ; ni les dossiers exclus ni les checkouts imbriqués ne sont parcourus."""
+    def belongs(directory: Path) -> bool:
+        return (directory.name not in skipped_directories
+                and directory.relative_to(root).as_posix() not in NESTED_CHECKOUT_DIRECTORIES
+                and not is_nested_checkout(directory))
+
     found: list[Path] = []
     for current, directories, names in os.walk(root):
         here = Path(current)
-        directories[:] = [name for name in directories
-                          if name not in skipped_directories
-                          and (here / name).relative_to(root).as_posix() not in NESTED_CHECKOUT_DIRECTORIES
-                          and not is_nested_checkout(here / name)]
+        directories[:] = [name for name in directories if belongs(here / name)]
         found.extend(here / name for name in names)
     return sorted(found)
 
