@@ -59,6 +59,7 @@ public final class GitIntelligenceService implements GitIntelligence {
     static final int OLDER_COMMIT_RUN_LIMIT = 1_000;
 
     private static final String FILTER_SECTION = "filter";
+    private static final String OWNER_PROBE_DIRECTORY = "owner-probe";
 
     private final ActivityBudget budget;
     private final Supplier<UserPrincipal> expectedOwner;
@@ -281,13 +282,13 @@ public final class GitIntelligenceService implements GitIntelligence {
     private static Path probeDirectory() {
         String property = System.getProperty("minos.home");
         if (property != null && !property.isBlank()) {
-            return Path.of(property).resolve("owner-probe");
+            return Path.of(property).resolve(OWNER_PROBE_DIRECTORY);
         }
         String environment = System.getenv("MINOS_HOME");
         if (environment != null && !environment.isBlank()) {
-            return Path.of(environment).resolve("owner-probe");
+            return Path.of(environment).resolve(OWNER_PROBE_DIRECTORY);
         }
-        return Path.of(System.getProperty("user.home")).resolve(".minos").resolve("owner-probe");
+        return Path.of(System.getProperty("user.home")).resolve(".minos").resolve(OWNER_PROBE_DIRECTORY);
     }
 
     /**
