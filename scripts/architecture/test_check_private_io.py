@@ -333,6 +333,37 @@ class PrivateIoGateTest(unittest.TestCase):
         self.assertEqual(1, len(violations))
         self.assertIn("ratchet", violations[0])
 
+    def test_a_throwable_rendered_into_the_text_is_a_cause(self):
+        for body in ('LOGGER.log(Level.WARNING, "x: " + failure);',
+                     'LOGGER.log(Level.WARNING, failure + " while reclaiming");',
+                     'LOGGER.log(Level.WARNING, "x " + failure.toString());',
+                     'LOGGER.log(Level.WARNING, "x " + String.valueOf(failure));'):
+            with self.subTest(body=body):
+                source = java("try { run(); } catch (IOException failure) { " + body + " }")
+                violations = self.violations(source)
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("LOGGER.log(cause)", violations[0])
+
+    def test_the_class_of_a_throwable_is_not_a_cause(self):
+        source = java('try { run(); } catch (IOException failure) { LOGGER.log(Level.WARNING, '
+                      '"x " + failure.getClass().getSimpleName()); }')
+        self.assertEqual([], self.violations(source))
+
+    def test_another_logger_name_or_an_inline_logger_is_not_a_way_around_the_rules(self):
+        for body in ('LOG.log(Level.WARNING, "x", failure);',
+                     'logger.log(Level.WARNING, "x", failure);',
+                     'System.getLogger(Store.class.getName()).log(Level.WARNING, "x", failure);'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("LOGGER.log(cause)", violations[0])
+        path = java('Path target = root; System.getLogger(C.class.getName()).log(Level.WARNING, "x " + target);')
+        self.assertIn("LOGGER.log(Path)", self.violations(path)[0])
+
+    def test_a_path_named_relative_is_understood_as_confined(self):
+        self.assertEqual([], self.violations(java(
+            'Path relativePath = root; LOGGER.log(Level.WARNING, "x \'" + relativePath + "\'");')))
+
     def test_logging_inside_comments_and_literals_is_ignored(self):
         self.assertEqual([], self.violations(java(
             '// LOGGER.log(Level.WARNING, "x", failure);\n        String s = "LOGGER.log(a, b, failure)";')))

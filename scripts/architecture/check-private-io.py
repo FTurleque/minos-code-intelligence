@@ -64,15 +64,21 @@ FORBIDDEN = (
     "LOGGER.log(cause)",
 )
 
-# The two logging rules read the arguments of every LOGGER.log(...) call. A Path concatenated into a message
+# The two logging rules read the arguments of every log call (LOGGER, LOG, logger or an inline
+# System.getLogger(...)). A Path concatenated into a message
 # has no exception: a log line carries a path relative to the managed root, never the absolute one. A cause
 # (a Throwable as last argument, or getMessage()) is what an AccessDeniedException turns into a path, so it
 # is allowed only where it is deliberate, by nominative entry (the sandbox diagnostics).
 LOG_PATH_RULE = "LOGGER.log(Path)"
 LOG_CAUSE_RULE = "LOGGER.log(cause)"
 RULES_WITHOUT_EXCEPTION = frozenset({LOG_PATH_RULE})
-_LOG_CALL = re.compile(r"\bLOGGER\s*\.\s*log\s*\(")
+# The log call is recognised through the constant names the code base uses and through an inline
+# System.getLogger(...).log(...), so a logger that is not called LOGGER is not a way around the rules.
+_LOG_CALL = re.compile(
+    r"\b(?:LOGGER|LOG|logger)\s*\.\s*log\s*\("
+    r"|\bSystem\s*\.\s*getLogger\s*\((?:[^()]|\([^()]*\))*\)\s*\.\s*log\s*\(")
 _PATH_DECLARATION = re.compile(r"\bPath\s+(\w+)\b")
+_THROWABLE_DECLARATION = re.compile(r"\b(?:\w*Exception|Throwable|\w*Error)\s+(\w+)\b")
 _BARE_IDENTIFIER = re.compile(r"\s*\w+\s*")
 _GET_MESSAGE = re.compile(r"\.\s*getMessage\s*\(")
 
@@ -182,34 +188,41 @@ def _split_top_level(arguments: str) -> list[str]:
     return parts
 
 
-def _concatenates_path(arguments: str, path_names: set[str]) -> bool:
-    """A declared Path used as an operand of + or through toString(); a method call on it (relativize) is not."""
-    for name in path_names:
+def _renders(arguments: str, names: set[str]) -> bool:
+    """A declared name rendered as text: operand of +, toString() or String.valueOf; a method call on it is not."""
+    for name in names:
         n = re.escape(name)
         if (re.search(rf"\b{n}\s*\.\s*toString\s*\(", arguments)
+                or re.search(rf"\bString\s*\.\s*valueOf\s*\(\s*{n}\s*\)", arguments)
                 or re.search(rf"\b{n}\s*\+(?!\+)", arguments)
                 or re.search(rf"\+\s*{n}\b(?!\s*[.(\w])", arguments)):
             return True
     return False
 
 
-def _passes_a_cause(arguments: str) -> bool:
+def _passes_a_cause(arguments: str, throwable_names: set[str]) -> bool:
+    """A Throwable as last argument, getMessage(), or a Throwable rendered into the text (its message with it)."""
     parts = _split_top_level(arguments)
     return (len(parts) >= 3 and _BARE_IDENTIFIER.fullmatch(parts[-1]) is not None) \
-        or _GET_MESSAGE.search(arguments) is not None
+        or _GET_MESSAGE.search(arguments) is not None \
+        or _renders(arguments, throwable_names)
 
 
 def count_log_findings(code: str) -> dict[str, int]:
-    """Calls of LOGGER.log that concatenate a Path, and calls that pass a cause or getMessage().
+    """Log calls that render a Path into the text, and calls that pass or render a cause (or getMessage()).
 
-    The gate does not know types: a Path is a name the file declares as `Path name` (parameter, local or loop
-    variable), so a Path reached through another call is not seen. Documented limit, fixed by the self-test.
+    The gate does not know types: a Path (or a Throwable) is a name the file declares as `Path name` /
+    `...Exception name` (parameter, local, loop or catch variable), so one reached through another call is not
+    seen. Documented limit, fixed by the self-test.
     """
-    path_names = set(_PATH_DECLARATION.findall(code))
+    # A Path whose name says it is relative (relative, relativePath, ...) is a path under a root the code already
+    # confined: the message the rule asks for. The name is the only thing the gate can read.
+    path_names = {name for name in _PATH_DECLARATION.findall(code) if "relative" not in name.lower()}
+    throwable_names = set(_THROWABLE_DECLARATION.findall(code))
     arguments = _log_call_arguments(code)
     return {
-        LOG_PATH_RULE: sum(1 for call in arguments if _concatenates_path(call, path_names)),
-        LOG_CAUSE_RULE: sum(1 for call in arguments if _passes_a_cause(call)),
+        LOG_PATH_RULE: sum(1 for call in arguments if _renders(call, path_names)),
+        LOG_CAUSE_RULE: sum(1 for call in arguments if _passes_a_cause(call, throwable_names)),
     }
 
 

@@ -73,9 +73,8 @@ public final class ProjectIgnorePolicy {
         if (reportedUnreadable.size() > MAX_REPORTED_UNREADABLE || !reportedUnreadable.add(relative)) return;
         int reported = reportedUnreadable.size();
         if (reported <= MAX_REPORTED_UNREADABLE) {
-            String shown = relative.toString();
             LOGGER.log(System.Logger.Level.WARNING,
-                    "MINOS discovery could not read the project file '" + shown
+                    "MINOS discovery could not read the project file '" + relative
                             + "' and treats it as absent: " + failure.getClass().getSimpleName());
         } else if (reported == MAX_REPORTED_UNREADABLE + 1) {
             LOGGER.log(System.Logger.Level.WARNING,
