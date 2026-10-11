@@ -218,6 +218,10 @@ renderer JSON déterministe
 
 Catalogue courant : **31 tools**.
 
+### Journalisation du serveur MCP
+
+stdout est réservé au protocole ; tout journal part sur **stderr**. MINOS journalise par `System.Logger` ; le SDK MCP et JGit journalisent par SLF4J, dont le seul fournisseur du jar ombré est `slf4j-jdk14` (`org.slf4j.jul.JULServiceProvider`). Les deux passent donc par `java.util.logging` et sa console (stderr, niveau `INFO` par défaut). Le réglage est celui du JDK : `-Djava.util.logging.config.file=<fichier>` ou `JAVA_TOOL_OPTIONS`. Limite : MINOS ne fournit pas de commande de réglage du niveau ; sans configuration, le niveau est celui par défaut de `java.util.logging`.
+
 ### M19 — intelligence avancée
 
 ```text

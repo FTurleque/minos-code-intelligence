@@ -68,3 +68,11 @@ Quatre changements OpenSpec, branche locale `docs/sprint2-openspec` (HEAD de dé
 Preuve de la spécification : `openspec validate --all --strict` → 18 passés, 0 échec.
 
 Ordre d'implémentation proposé : `ouvrir-le-depot-git-sans-executer-ses-filtres` (gravité élevée) puis `epingler-et-isoler-l-installation-des-providers` (lot 1 d'abord), puis `rendre-la-journalisation-observable` (lots 1 à 3 séparables), enfin `durcir-secret-postgres-et-lanceur-de-developpement`.
+
+### Implémentation — AUD-DEP-08, lot 1 de `rendre-la-journalisation-observable` (2026-10-11, branche `sec/rendre-la-journalisation-observable`)
+
+- **Sens des artefacts (tâche 1.1), lu dans les jars 2.0.20** : `slf4j-jdk-platform-logging` fournit `META-INF/services/java.lang.System$LoggerFinder` (`SLF4JSystemLoggerFinder`) : il redirige `System.Logger` **vers** SLF4J ; `slf4j-jdk14` fournit `META-INF/services/org.slf4j.spi.SLF4JServiceProvider` (`org.slf4j.jul.JULServiceProvider`). L'action de l'audit est donc inversée ; `slf4j-jdk14` retenu (design D1).
+- **Rouge** (`verify -pl minos-app -am -Dit.test=ShadedJarLoggingIT`) : 2 échecs sur 2 — fournisseur du jar = `org.slf4j.nop.NOPServiceProvider`, erreur journalisée absente de stderr. **Vert** après `slf4j-nop` → `slf4j-jdk14` (`pom.xml` géré, `minos-app/pom.xml:30`) : `ShadedJarLoggingIT` (2), `ShadedJarSmokeIT`, `ShadedJarMcpEntryPointIT` (2), `ShadedJarCompositionRootIT` (3), `ShadedJarVersionIT` verts. Le point (c) de la tâche 1.2 (poignée de main MCP en JSON-RPC pur sur stdout) reste porté par `ShadedJarMcpEntryPointIT`, non dupliqué.
+- **Mesures (tâche 1.3)** : un échange MCP `initialize` écrit **une** ligne `INFO` sur stderr (SDK MCP, informations du client) ; `git-activity --help` : 0 octet. Pas de `logging.properties` embarqué. Clone en échec d'une URL `https://utilisateur:secretdetest@hote-inexistant.invalid/…` : `TransportException`, **0 octet** sur stderr, le secret n'apparaît pas.
+- **jpackage (tâche 1.5)** : `jdeps` liste `java.sql`, qui requiert `java.logging` en transitif ; `java.logging` est donc dans le runtime sans changement du script.
+- Reste du changement : lot 2 (AUD-QUA-04) et lot 3 (AUD-QUA-06) ; décisions D2-a et D3-a prises avec la recommandation (A et extension de `check-private-io.py`), à confirmer.
