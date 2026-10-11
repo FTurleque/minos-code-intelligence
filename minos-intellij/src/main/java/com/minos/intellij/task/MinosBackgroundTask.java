@@ -1,7 +1,6 @@
 package com.minos.intellij.task;
 
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.progress.ProcessCanceledException;
 
 import java.util.Objects;
 import java.util.concurrent.Callable;
@@ -10,7 +9,7 @@ import java.util.concurrent.CancellationException;
 /**
  * Exécute l'opération d'une tâche d'arrière-plan du plugin sans jamais avaler une exception.
  *
- * <p>L'annulation ({@link ProcessCanceledException}, {@link CancellationException}) et les {@link Error} sont relancées : la plateforme
+ * <p>L'annulation ({@link CancellationException}, dont hérite {@code ProcessCanceledException}) et les {@link Error} sont relancées : la plateforme
  * les traite. Toute autre exception est journalisée avec sa pile (fichier {@code idea.log} de
  * l'utilisateur) puis rendue à l'appelant, qui l'affiche. Le package est une feuille : il ne dépend ni
  * de {@code ui} ni de {@code actions}.</p>
@@ -42,7 +41,7 @@ public final class MinosBackgroundTask {
     public <T> Outcome<T> run(String title, Callable<T> operation) {
         try {
             return new Outcome<>(operation.call(), null);
-        } catch (ProcessCanceledException | CancellationException canceled) {
+        } catch (CancellationException canceled) {
             throw canceled;
         } catch (Exception failure) {
             log.warn("MINOS task failed: " + title + " (" + failure.getClass().getSimpleName() + ")", failure);
