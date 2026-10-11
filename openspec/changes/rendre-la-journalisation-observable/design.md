@@ -95,3 +95,7 @@ JUL/stderr identique ; le test du jar ombré s'exécute sur les deux jobs `Verif
 ## Qualification de la capacité
 
 `journalisation` : **qualifiée** quand les trois lots sont verts sur `Verify` ×2 et `IntelliJ plugin (gate)` ; le contrôle de niveau par l'utilisateur est **non supporté** (documenté).
+
+## Écart d'inventaire constaté à l'implémentation du lot 3 (2026-10-11)
+
+Le garde étendu, rejoué sur le dépôt avant correction, a relevé trois fichiers que le tableau d'AUD-QUA-06 ne citait pas : `HostedAuditDelivery.java` (2 appels qui passent la cause), `HostedAuthorizationService.java` (1) — journal serveur du plan de contrôle hébergé, ajoutés à la liste nominative avec justification (« à revoir avec le lot hébergé ») — et `ProjectIgnorePolicy.java` (1 appel de règle `Path` : faux positif, le `Path` y est relatif au projet ; la conversion est sortie du log dans une variable `String`, message inchangé). La liste nominative compte donc 6 fichiers et 9 occurrences (et non 4 fichiers et 6 occurrences), et les 5 sites de récupération sont exactement ceux du tableau.

@@ -106,3 +106,11 @@ Ordre d'implémentation proposé : `ouvrir-le-depot-git-sans-executer-ses-filtre
 - Nouveau package feuille `com.minos.intellij.task` (`MinosBackgroundTask` : `ProcessCanceledException` et `Error` relancées, autre exception journalisée avec sa pile puis rendue ; `describe` nomme le type quand le message manque). Les quatre `catch (Throwable)` (`MinosEditorActions` ×2, `MinosM21Actions`, `MinosToolWindowPanel`) sont remplacés : `grep "catch (Throwable" minos-intellij/src/main/java` → 0 ; `Unknown failure` n'existe plus que dans `describe`.
 - Décision D2-a : option A (pile et message dans `idea.log`), à confirmer. `check-module-boundaries.py` vert (A8, 0 cycle).
 - Reste : tâche 2.4 (`IntelliJ plugin (gate)` vert à la PR), puis lot 3 (AUD-QUA-06).
+
+### Implémentation — AUD-QUA-06, lot 3 de `rendre-la-journalisation-observable` (2026-10-11, branche `sec/journaux-de-recuperation-sans-chemin-ni-cause`)
+
+- **Rouge** : `test_check_private_io.py` avec les cas des deux règles, 10 échecs et 2 erreurs avant le garde ; puis le garde étendu **sur le dépôt réel** échouait sur exactement les 5 sites de récupération (`RunDirectoryRetention` : 2 `Path` + 3 cause ; `ProviderResidueReclamation` : 2 + 2) plus trois fichiers hors inventaire (voir `design.md`, « Écart d'inventaire » : `HostedAuditDelivery`, `HostedAuthorizationService`, faux positif `ProjectIgnorePolicy`).
+- **Vert** : auto-test 35 tests ; `check-private-io.py` SUCCESS (`forbidden=10`, 46 occurrences listées) ; `minos-engine` 687 et `minos-runtime-local` 355 tests ; gates rapides 19/19 ; `check-minos-01`, `check-post-mne`, `check-mnd`, `check-ci-wiring` verts.
+- Correction : `RecoveryLogMessages` (chemin relatif à la racine gérée + classe de l'exception, sans cause) appliqué aux 5 sites ; `RecoveryLogMessagesTest` (4 tests, dont `AccessDeniedException` portant le chemin absolu).
+- Liste nominative : 6 fichiers, 9 occurrences de `LOGGER.log(cause)` (bac à sable, refus de reprise MINOS, journal du plan de contrôle hébergé). Décision D3-a prise avec la recommandation (extension de `check-private-io.py`), à confirmer.
+- **Non fait** : tâche 3.4 (JaCoCo `provider-execution-trust-boundary` rejoué localement) ; tâches 4.1 (manuelle) et 5.x.

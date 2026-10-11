@@ -177,7 +177,8 @@ final class RunDirectoryRetention {
         try {
             quarantine(runsRoot, target);
         } catch (IOException failure) {
-            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not reclaim run directory " + target, failure);
+            LOGGER.log(System.Logger.Level.WARNING,
+                    RecoveryLogMessages.of("reclaim run directory", runsRoot, target, failure));
         }
     }
 
@@ -198,12 +199,13 @@ final class RunDirectoryRetention {
                 try {
                     deleteTree(runsRoot, child.toAbsolutePath().normalize(), budget);
                 } catch (IOException exception) {
-                    LOGGER.log(System.Logger.Level.WARNING, "MINOS could not drain quarantined run " + child,
-                            exception);
+                    LOGGER.log(System.Logger.Level.WARNING,
+                            RecoveryLogMessages.of("drain quarantined run", runsRoot, child, exception));
                 }
             }
         } catch (IOException exception) {
-            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not enumerate the run quarantine", exception);
+            LOGGER.log(System.Logger.Level.WARNING,
+                    RecoveryLogMessages.of("enumerate the run quarantine", exception));
         }
     }
 

@@ -70,5 +70,41 @@
     "method": "Files.createDirectories",
     "max": 1,
     "justification": "Parent de l'artefact dans l'arbre de travail du provider sandboxé : ses droits sont ceux du sandbox (AppContainer), pas une donnée privée MINOS_HOME ; à revoir, hors S5 nommé."
+  },
+  {
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java",
+    "method": "LOGGER.log(cause)",
+    "max": 2,
+    "justification": "Diagnostics de la sonde bubblewrap (chemin de liaison non résolu, démarrage impossible) : la cause est voulue, la dégradation vers un bac à sable plus faible doit être observable."
+  },
+  {
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsJobObjectProcessOwnership.java",
+    "method": "LOGGER.log(cause)",
+    "max": 1,
+    "justification": "Diagnostic d'indisponibilité du Job Object : la vraie cause (lanceur non installable en privé) doit rester observable, le commentaire du site l'exige."
+  },
+  {
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java",
+    "method": "LOGGER.log(cause)",
+    "max": 2,
+    "justification": "Diagnostics de l'AppContainer (indisponible, sonde incomplète) : la cause explique la bascule vers un niveau de confinement plus faible et doit rester observable."
+  },
+  {
+    "file": "minos-engine/src/main/java/com/minos/orchestration/IndexingResumePlanner.java",
+    "method": "LOGGER.log(cause)",
+    "max": 1,
+    "justification": "Journalise le message d'un refus de reprise composé par MINOS lui-même (Refusal), pas une exception d'E/S : aucun chemin système n'y entre."
+  },
+  {
+    "file": "minos-engine/src/main/java/com/minos/hosted/HostedAuditDelivery.java",
+    "method": "LOGGER.log(cause)",
+    "max": 2,
+    "justification": "Journal serveur du plan de contrôle hébergé : l'échec d'export d'audit garde sa cause pour l'opérateur (il ne s'exécute pas chez l'utilisateur du poste) ; à revoir avec le lot hébergé."
+  },
+  {
+    "file": "minos-engine/src/main/java/com/minos/hosted/HostedAuthorizationService.java",
+    "method": "LOGGER.log(cause)",
+    "max": 1,
+    "justification": "Journal serveur du plan de contrôle hébergé : l'échec de chaînage d'un refus garde sa cause pour l'opérateur ; à revoir avec le lot hébergé."
   }
 ]

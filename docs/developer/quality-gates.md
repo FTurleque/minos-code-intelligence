@@ -63,6 +63,15 @@ Le gate `python scripts/quality/check-single-execution.py` (auto-test `test_chec
 - **A9, documentation courante** : pour chaque titre `### minos-…` de `docs/architecture/arc42/05-vue-blocs.md`, la ligne à puce « Dépendances » doit citer exactement les dépendances internes directes du POM (toutes portées ; « tous les modules » n'est admis que pour `minos-app`). Une section ou une ligne absente est un échec. Les diagrammes de couches (`c4-container.md`) se déclarent simplifiés et ne sont pas gardés ; le fichier généré `diagrams/module-dependencies.md` fait foi et reste contrôlé à l'identique (`--write-doc` pour le régénérer).
 - L'auto-test échoue si une fonction `check_*` du script n'est référencée par aucun test, et rejoue des mutations sur une copie des vrais POM.
 
+## Garde des E/S privées et des journaux (`check-private-io.py`)
+
+`python scripts/architecture/check-private-io.py` (job `invariants`, auto-test `test_check_private_io.py`) interdit les appels bruts de création, d'écriture, de lecture et de verrouillage de fichiers hors des primitives (liste de tolérance nominative en cliquet : `private-io-allowlist.json`). Il garde aussi les appels de journalisation (`LOGGER.log(...)`, `LOG.log(...)`, `logger.log(...)` ou un `System.getLogger(...).log(...)` en ligne) de toutes les sources de production sauf `minos-intellij`, par deux règles :
+
+- **`LOGGER.log(Path)`, sans exception** : un `Path` déclaré dans le fichier (`Path nom`) ne se concatène pas (`+`, `.toString()`, `String.valueOf`) dans le message. Un `Path` dont le nom contient `relative` est compris comme confiné sous une racine déjà contrôlée : c'est le seul texte que le garde peut lire. Un journal porte le chemin **relatif** à la racine gérée et la classe de l'exception (`RecoveryLogMessages` en fournit le texte pour les récupérations de fichiers) ; une entrée de liste pour cette règle est refusée.
+- **`LOGGER.log(cause)`, par liste nominative** : passer une cause (dernier argument identifiant d'un appel à trois arguments ou plus), `getMessage()`, ou rendre une exception dans le texte (`"x" + exception`, `exception.toString()`) n'est admis que par entrée (fichier, maximum, justification) : les diagnostics de bac à sable, le refus de reprise composé par MINOS et le journal du plan de contrôle hébergé. Une cause d'E/S porte souvent le chemin absolu dans son message (`AccessDeniedException`).
+
+Limite : le garde ne connaît pas les types ; un `Path` obtenu par un appel imbriqué, ou une variable qui change de type d'une méthode à l'autre du même fichier, n'est pas distingué. L'auto-test fixe ce qu'il voit et ne voit pas.
+
 ## Supply-chain des workflows
 
 Le gate reproductible est :
