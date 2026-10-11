@@ -4,6 +4,7 @@ import com.minos.io.PrivateLocalStorage;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.runtime.local.InstallationProcessEnvironment;
 import com.minos.runtime.local.BoundedProcessOutput;
 import com.minos.runtime.local.CommandLocator;
 import com.minos.runtime.local.IndexerProcessPlan;
@@ -248,10 +249,11 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         if (!PROVIDER_ID.equals(providerId)) throw new IllegalArgumentException("unknown managed provider: " + providerId);
     }
 
-    private static void run(List<String> command, Path workingDirectory, Path log, Duration timeout)
+    static void run(List<String> command, Path workingDirectory, Path log, Duration timeout)
             throws IOException, InterruptedException {
         PrivateLocalStorage.ensurePrivateDirectory(log.toAbsolutePath().normalize().getParent());
         ProcessBuilder builder = new ProcessBuilder(command);
+        InstallationProcessEnvironment.apply(builder, Map.of());
         builder.directory(workingDirectory.toFile());
         builder.redirectErrorStream(true);
         Process process = builder.start();

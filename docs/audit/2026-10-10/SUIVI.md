@@ -69,6 +69,44 @@ Preuve de la spécification : `openspec validate --all --strict` → 18 passés,
 
 Ordre d'implémentation proposé : `ouvrir-le-depot-git-sans-executer-ses-filtres` (gravité élevée) puis `epingler-et-isoler-l-installation-des-providers` (lot 1 d'abord), puis `rendre-la-journalisation-observable` (lots 1 à 3 séparables), enfin `durcir-secret-postgres-et-lanceur-de-developpement`.
 
+### Implémentation — AUD-SEC-01 (2026-10-11, branche `sec/ouvrir-le-depot-git-sans-executer-ses-filtres`)
+
+- **Rouge** (`mvnw.cmd -pl minos-integration-git -am test -Dtest=GitIntelligenceTrustTest`) : 8 échecs sur 10 ; le témoin est créé pour `.git/config`, fichier inclus, `info/attributes`, dépôt parent et dépôt livré avec le projet.
+- **Vert** : 10/10, module 43 tests, `minos-api` 84 tests, gates rapides 19/19.
+- **Décisions retenues** : D1-A (remontée gardée, limitation `REPOSITORY_ABOVE_PROJECT_ROOT`), D3-A (filtres du dépôt seulement).
+- **Écart avec le design** : `unsetSection` ne retire pas les lignes venant d'un fichier inclus (`Config.java:1167`) et une sous-classe de `FS` ferait échouer le statut. Mécanisme retenu : chaque pilote `filter.*` déclaré par le dépôt est redirigé en mémoire vers un filtre intégré transparent (`PassThroughFilter`), `clean` reste calculé sur le contenu brut. `.git/config` est inchangé (assertion).
+- **Propriétaire** : `PrivateLocalStorage.verifyOwnedByCurrentUser` (primitive existante) ; seam de test `Supplier<UserPrincipal>`.
+- Reste : tâche 4.1 (manuelle) après ouverture de la PR.
+
+### Implémentation — AUD-SEC-02, lot 1 « environnement » (2026-10-11, branche `sec/epingler-et-isoler-l-installation-des-providers`)
+
+- **Rouge** : `InstallationEnvironmentIsolationTest` sans la façade → `MINOS_TEAM_KEY_ALPHA` visible dans l'environnement des trois `run` (JVM fille, secrets posés dans son environnement).
+- **Vert** : `minos-runtime-local` 356 tests, `minos-provider-scip` 124 tests, gates `check-module-boundaries`, `check-mnd`, `check-polyglot-provider-consistency`, `check-current-docs` verts.
+- Décision D3 appliquée avec la recommandation : façade publique `InstallationProcessEnvironment` (base `ProviderProcessEnvironment.sanitize`, `HOME` hors Windows, proxys/TLS/caches, motif de refus prioritaire même sur les valeurs déclarées), appelée par les trois `run` (sondes `dotnet`/`go` et `npm ci` comprises).
+- **Non fait, en attente** : D1 (verrou par jar) et D2 — lots 2 et 3, tâches 1.1 (consignation des décisions), 1.4 (JaCoCo, non rejoué), 2.x, 3.x, 4.x. Le changement reste ouvert.
+
+### Implémentation — AUD-SEC-02, lot 2 « verrou du classpath » (2026-10-11, branche `sec/epingler-et-isoler-l-installation-des-providers`)
+
+- **Décisions** : D1 option A, D2 hors changement (confirmées par le propriétaire). **Mesure 2.1** : 74 jars identiques sous Linux (Coursier `linux-x64` épinglé, conteneur `ubuntu:24.04`) et Windows (Coursier `windows-x64` épinglé) : un verrou unique `scip-java-classpath.lock.json`.
+- **Livré** : `ClasspathLock` (comparaison ensemble à ensemble, messages sans chemin absolu), `installJava` hors paquet Windows = `coursier fetch --classpath` puis vérification puis `classpath.txt` ; `scipJavaInstallationProbe` et `requireExpectedScipJavaVersion` supprimés ; `build-embedded-tools.py` compare le paquet Windows au même verrou ; `check-tools-manifest.py` refuse un verrou dont la version ou la coordonnée diffère du catalogue.
+- **Preuves** : `ClasspathLockTest` 11 tests (jar remplacé, de même taille, en trop, manquant, verrou illisible, `fetch` sans `launch`, ligne de progression), `test_check_tools_manifest.py` 28, `test_build_embedded_tools.py` 13 ; `minos-provider-scip` 134 tests, `minos-runtime-local` 356 ; gates rapides 19/19 ; `check-mnd`, `check-mne`, `check-polyglot-provider-consistency`, `sync-tools-manifest` verts.
+- **Non fait** : 1.4 (JaCoCo `provider-execution-trust-boundary`), 3.2 (`verify -pl minos-app -am`, goldens et `ShadedJar*IT`), 4.1 **(manuelle, hôte Linux avec réseau)**, 5.x ; amender l'ADR 0040 est fait (4.2). Suite à ouvrir : changement de confinement « plan d'indexation Linux sur classpath vérifié » (D2).
+
+### Implémentation — AUD-DEP-08, lot 1 de `rendre-la-journalisation-observable` (2026-10-11, branche `sec/rendre-la-journalisation-observable`)
+
+- **Sens des artefacts (tâche 1.1), lu dans les jars 2.0.20** : `slf4j-jdk-platform-logging` fournit `META-INF/services/java.lang.System$LoggerFinder` (`SLF4JSystemLoggerFinder`) : il redirige `System.Logger` **vers** SLF4J ; `slf4j-jdk14` fournit `META-INF/services/org.slf4j.spi.SLF4JServiceProvider` (`org.slf4j.jul.JULServiceProvider`). L'action de l'audit est donc inversée ; `slf4j-jdk14` retenu (design D1).
+- **Rouge** (`verify -pl minos-app -am -Dit.test=ShadedJarLoggingIT`) : 2 échecs sur 2 — fournisseur du jar = `org.slf4j.nop.NOPServiceProvider`, erreur journalisée absente de stderr. **Vert** après `slf4j-nop` → `slf4j-jdk14` (`pom.xml` géré, `minos-app/pom.xml:30`) : `ShadedJarLoggingIT` (2), `ShadedJarSmokeIT`, `ShadedJarMcpEntryPointIT` (2), `ShadedJarCompositionRootIT` (3), `ShadedJarVersionIT` verts. Le point (c) de la tâche 1.2 (poignée de main MCP en JSON-RPC pur sur stdout) reste porté par `ShadedJarMcpEntryPointIT`, non dupliqué.
+- **Mesures (tâche 1.3)** : un échange MCP `initialize` écrit **une** ligne `INFO` sur stderr (SDK MCP, informations du client) ; `git-activity --help` : 0 octet. Pas de `logging.properties` embarqué. Clone en échec d'une URL `https://utilisateur:secretdetest@hote-inexistant.invalid/…` : `TransportException`, **0 octet** sur stderr, le secret n'apparaît pas.
+- **jpackage (tâche 1.5)** : `jdeps` liste `java.sql`, qui requiert `java.logging` en transitif ; `java.logging` est donc dans le runtime sans changement du script.
+- Reste du changement : lot 2 (AUD-QUA-04) et lot 3 (AUD-QUA-06) ; décisions D2-a et D3-a prises avec la recommandation (A et extension de `check-private-io.py`), à confirmer.
+
+### Implémentation — AUD-QUA-04, lot 2 de `rendre-la-journalisation-observable` (2026-10-11, branche `sec/journaliser-les-echecs-du-plugin-intellij`)
+
+- **Rouge** : `MinosBackgroundTaskTest` écrit avant la classe (elle n'existait pas : échec de compilation, comme prévu par la tâche 2.2) ; **vert** ensuite, 6 tests (`gradlew.bat test`, 2 min, plateforme IntelliJ 2026.1 en cache ; `--offline` ne suffit pas : dépendances de buildscript absentes du cache).
+- Nouveau package feuille `com.minos.intellij.task` (`MinosBackgroundTask` : `ProcessCanceledException` et `Error` relancées, autre exception journalisée avec sa pile puis rendue ; `describe` nomme le type quand le message manque). Les quatre `catch (Throwable)` (`MinosEditorActions` ×2, `MinosM21Actions`, `MinosToolWindowPanel`) sont remplacés : `grep "catch (Throwable" minos-intellij/src/main/java` → 0 ; `Unknown failure` n'existe plus que dans `describe`.
+- Décision D2-a : option A (pile et message dans `idea.log`), à confirmer. `check-module-boundaries.py` vert (A8, 0 cycle).
+- Reste : tâche 2.4 (`IntelliJ plugin (gate)` vert à la PR), puis lot 3 (AUD-QUA-06).
+
 ### Implémentation — AUD-QUA-06, lot 3 de `rendre-la-journalisation-observable` (2026-10-11, branche `sec/journaux-de-recuperation-sans-chemin-ni-cause`)
 
 - **Rouge** : `test_check_private_io.py` avec les cas des deux règles, 10 échecs et 2 erreurs avant le garde ; puis le garde étendu **sur le dépôt réel** échouait sur exactement les 5 sites de récupération (`RunDirectoryRetention` : 2 `Path` + 3 cause ; `ProviderResidueReclamation` : 2 + 2) plus trois fichiers hors inventaire (voir `design.md`, « Écart d'inventaire » : `HostedAuditDelivery`, `HostedAuthorizationService`, faux positif `ProjectIgnorePolicy`).

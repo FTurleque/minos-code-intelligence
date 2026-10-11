@@ -180,6 +180,29 @@ def npm_components(lock: Path) -> list[dict]:
 
 # ---------------------------------------------------------------- coursier-fetch (scip-java)
 
+def verify_classpath_lock(tree: Path, lock: dict) -> None:
+    """The resolved jars must be exactly the pinned ones: same names, sizes and SHA-256 (the lock is the single
+    description the installation on a user's machine checks against, so the shipped payload cannot differ)."""
+    expected = {jar["name"]: (jar["size"], jar["sha256"]) for jar in lock["jars"]}
+    found = {jar.name: (jar.stat().st_size, sha256_of(jar)) for jar in tree.glob("*.jar")}
+    for name in sorted(set(found) - set(expected)):
+        raise BuildError(f"the resolved classpath has a jar the lock does not pin: {name}")
+    for name in sorted(set(expected) - set(found)):
+        raise BuildError(f"the resolved classpath lacks the pinned jar {name}")
+    for name in sorted(expected):
+        if expected[name] != found[name]:
+            raise BuildError(f"the resolved jar {name} does not match its pinned size and SHA-256; "
+                             f"regenerate the lock with --update-classpath-lock after reviewing the change")
+
+
+def load_classpath_lock(component: dict, lock_dir: Path | None = None) -> dict:
+    base = lock_dir if lock_dir is not None else CATALOG.parent
+    name = component.get("lock")
+    if not name:
+        raise BuildError(f"{component['id']}: a coursier-fetch component must name its lock file")
+    return json.loads((base / name).read_text(encoding="utf-8"))
+
+
 def build_classpath_tree(component: dict, coursier_zip: Path, work: Path) -> tuple[Path, list[dict]]:
     cs_home = work / "cs"
     extract(coursier_zip, cs_home)
@@ -207,6 +230,7 @@ def build_classpath_tree(component: dict, coursier_zip: Path, work: Path) -> tup
         shutil.copyfile(jar, tree / jar.name)
         names.append(jar.name)
         components.append(maven_component(jar, cache))
+    verify_classpath_lock(tree, load_classpath_lock(component))
     (tree / "classpath.txt").write_text("\n".join(names) + "\n", encoding="utf-8", newline="\n")
     return tree, components
 

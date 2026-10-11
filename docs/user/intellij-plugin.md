@@ -346,6 +346,7 @@ Le client :
 - applique le timeout configuré ;
 - tue un processus dépassant ce délai ;
 - affiche les erreurs dans la Tool Window sans modifier le snapshot actif.
+- journalise l'échec d'une tâche d'arrière-plan avec sa pile dans `idea.log` (menu `Help > Show Log in Explorer`, recherche « MINOS task failed ») ; quand l'exception n'a pas de message, la Tool Window affiche `Unknown failure (<type>)`. L'annulation par l'utilisateur n'est pas journalisée.
 
 ## Dépannage
 
