@@ -63,3 +63,9 @@ Aucun comportement propre à une plateforme. Les tests du module exigent Postgre
 ## Migration
 
 Aucune donnée, aucun schéma. Retour arrière : revert du commit.
+
+## Écart constaté à l'implémentation (2026-10-11)
+
+- **Visibilité** : 17 types (les 13 annoncés, plus `PostgresJdbcUrlPolicy` et trois types imbriqués de `PostgresConnectionFactory`) et 30 membres deviennent publics. Les aides de `PostgresTestSupport` passent en `protected`, pas en `public`.
+- **SpotBugs** : la tâche 2.3 prévoyait « aucune alerte nouvelle ». Le passage en `public` en fait apparaître 4 (`EI_EXPOSE_REP` sur `PostgresConnectionFactory.DedicatedConnectionLease.connection()`, `EI_EXPOSE_REP2` sur les constructeurs de `PostgresIndexStateStore`, `PostgresFingerprintSnapshotStore` et `PostgresRuntimeObservationStore`) : ce motif ne s'applique qu'aux membres publics. Elles ne se corrigent pas sans changer la conception (un store garde à dessein une référence à la fabrique de connexions partagée ; un bail rend la connexion qu'il détient). Elles sont **consignées** au baseline du module (4 → 8), comme les 104 alertes de même motif déjà figées dans le dépôt. C'est un coût du rangement, à connaître.
+- **Garde d'images** : `check-image-pins.py` échoue sur le poste quand un arbre de travail Git existe sous `.claude/worktrees/` (il parcourt le disque, pas l'index Git). Sans lien avec ce changement ; à corriger à part.

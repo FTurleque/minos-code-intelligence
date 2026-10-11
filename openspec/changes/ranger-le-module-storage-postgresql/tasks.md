@@ -12,7 +12,7 @@ Ordre : mesure, déplacement, preuve. Commande de référence : `./mvnw.cmd -B -
 
 - [x] 2.1 `./mvnw.cmd -B -ntp -pl minos-storage-postgresql -am test` : même nombre de tests exécutés et sautés qu'avant le déplacement.
 - [x] 2.2 Rejouer `python .claude/scripts/run_gates.py --fast` (dont `check-module-boundaries.py` A3 et A8, `check-private-io.py`), mettre à jour les chemins littéraux et les scopes JaCoCo qui citent le module.
-- [x] 2.3 Régénérer le baseline SpotBugs du module (`-Paudit-spotbugs`), sans alerte nouvelle ; une alerte réellement nouvelle se corrige, elle ne se fige pas.
+- [x] 2.3 Régénérer le baseline SpotBugs du module (`-Paudit-spotbugs`). Constat : 4 alertes réellement nouvelles (`EI_EXPOSE_REP` ×1, `EI_EXPOSE_REP2` ×3), conséquence directe du passage en `public` (ce motif ne vise que les membres publics) ; consignées au baseline, qui passe de 4 à 8 alertes, selon la règle de `quality/spotbugs-exclude.xml` (« une alerte réelle se corrige ou se consigne »). Voir `design.md`, « Écart constaté à l'implémentation ».
 - [x] 2.4 Mettre à jour `docs/architecture/arc42/05-vue-blocs.md` (sous-packages du module) ; rejouer `python scripts/docs/check-current-docs.py`.
 
 ## 3. Preuve sur les deux plateformes
