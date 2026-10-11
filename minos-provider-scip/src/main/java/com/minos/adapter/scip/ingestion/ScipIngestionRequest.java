@@ -56,8 +56,9 @@ record ScipIngestionRequest(
         if (value == null || value.isBlank()) {
             return "";
         }
-        Path path = Path.of(value.replace('\\', '/')).normalize();
-        if (path.isAbsolute() || path.startsWith("..")) {
+        String candidate = value.replace('\\', '/');
+        Path path = Path.of(candidate).normalize();
+        if (isRootedOnAnyPlatform(candidate) || path.isAbsolute() || path.startsWith("..")) {
             throw new IllegalArgumentException("projectRelativeRoot must stay inside the registered project");
         }
         String portable = path.toString().replace('\\', '/');
@@ -69,14 +70,31 @@ record ScipIngestionRequest(
             return null;
         }
         try {
-            Path path = Path.of(value.replace('\\', '/')).normalize();
-            if (path.isAbsolute() || path.startsWith("..")) {
+            String candidate = value.replace('\\', '/');
+            Path path = Path.of(candidate).normalize();
+            if (isRootedOnAnyPlatform(candidate) || path.isAbsolute() || path.startsWith("..")) {
                 return null;
             }
             return path.toString().replace('\\', '/');
         } catch (RuntimeException exception) {
             return null;
         }
+    }
+
+    /**
+     * Vrai pour un chemin enraciné sur au moins une plateforme : séparateur initial (racine POSIX, chemin
+     * Windows relatif au lecteur courant, UNC) ou lettre de lecteur. {@link Path#isAbsolute()} ne répond que
+     * pour l'hôte : {@code /absolute} n'est pas absolu sous Windows, {@code C:/x} ne l'est pas sous Linux.
+     */
+    private static boolean isRootedOnAnyPlatform(String portable) {
+        if (portable.startsWith("/")) {
+            return true;
+        }
+        if (portable.length() < 2 || portable.charAt(1) != ':') {
+            return false;
+        }
+        char drive = portable.charAt(0);
+        return (drive >= 'a' && drive <= 'z') || (drive >= 'A' && drive <= 'Z');
     }
 
     private static String blankToNull(String value) {
