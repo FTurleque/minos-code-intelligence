@@ -131,6 +131,46 @@ def check_catalog_shape(catalog: dict, failures: list[str]) -> None:
                 failures.append(f"{CATALOG}: provider {provider.get('id')} needs the undescribed component {component}")
 
 
+def check_classpath_locks(root: Path, catalog: dict, failures: list[str]) -> None:
+    """A coursier-fetch component names its lock; the lock pins the same coordinate and version, every jar of the
+    resolved classpath by name, size and SHA-256, and the artifact itself. A version changed without a regenerated
+    lock is the drift this guards (the installation on a user's machine verifies against this file)."""
+    for component in catalog.get("assembled", []):
+        if component.get("recipe") != "coursier-fetch":
+            continue
+        name = f"assembled {component.get('id')}@{component.get('platform')}"
+        lock_name = component.get("lock")
+        if not isinstance(lock_name, str) or not lock_name.strip():
+            failures.append(f"{CATALOG}: {name} must name its lock file")
+            continue
+        path = root / CATALOG.parent / lock_name
+        try:
+            lock = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            failures.append(f"{CATALOG.parent / lock_name}: the lock of {name} is missing or unreadable")
+            continue
+        coordinate = str(component.get("coordinate", ""))
+        if lock.get("coordinate") != coordinate or lock.get("version") != component.get("version"):
+            failures.append(f"{CATALOG.parent / lock_name}: coordinate and version must be those of {name} "
+                            f"({coordinate}); regenerate the lock")
+        jars = lock.get("jars")
+        if not isinstance(jars, list) or not jars:
+            failures.append(f"{CATALOG.parent / lock_name}: the lock lists no jar")
+            continue
+        names: set[str] = set()
+        for jar in jars:
+            jar_name = jar.get("name") if isinstance(jar, dict) else None
+            if (not isinstance(jar_name, str) or not jar_name.endswith(".jar") or jar_name in names
+                    or not re.fullmatch(r"[0-9a-f]{64}", str(jar.get("sha256", "")))
+                    or not isinstance(jar.get("size"), int) or jar["size"] <= 0):
+                failures.append(f"{CATALOG.parent / lock_name}: malformed or duplicated jar entry {jar_name!r}")
+                continue
+            names.add(jar_name)
+        artifact = coordinate.split(":")[1] if coordinate.count(":") == 2 else ""
+        if f"{artifact}-{component.get('version')}.jar" not in names:
+            failures.append(f"{CATALOG.parent / lock_name}: the lock does not pin the {coordinate} jar itself")
+
+
 def java_constant(source: str, name: str) -> str | None:
     match = re.search(rf'\b{re.escape(name)}\s*=\s*"([^"]+)"', source)
     return match.group(1) if match else None
@@ -368,6 +408,7 @@ def check(root: Path, distribution: Path | None = None, variant: str = "full") -
     if catalog is None:
         return failures, 0
     check_catalog_shape(catalog, failures)
+    check_classpath_locks(root, catalog, failures)
     check_provider_versions(root, catalog, failures)
     check_dockerfile(root, catalog, failures)
     check_java_sources(root, failures)

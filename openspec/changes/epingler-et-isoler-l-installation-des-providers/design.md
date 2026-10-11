@@ -89,3 +89,12 @@ Sous Windows, le classpath est livré par le paquet (`windows-x64`) et `installJ
 ## Qualification de la capacité
 
 `installation-des-providers` : **qualifiée** pour l'environnement (tests sur les deux plateformes) ; **partielle** pour l'intégrité Linux tant que D2 n'est pas traité (installation vérifiée, indexation non) ; l'installation réelle sous Linux reste à prouver à la main (4.1).
+
+## Décisions du propriétaire et écarts constatés à l'implémentation du lot 2 (2026-10-11)
+
+- **D1 : option A** (verrou par jar), **D2 : hors changement** (le plan d'indexation Linux reste sur `coursier launch`), D3 : façade publique, comme recommandé.
+- **Mesure 2.1** : `coursier fetch --classpath org.scip-code:scip-java:0.13.1` avec le Coursier épinglé du catalogue de chaque plateforme (`linux-x64` dans un conteneur `ubuntu:24.04`, `windows-x64` sur le poste) donne **les mêmes 74 jars** (noms, tailles, SHA-256 identiques) : un verrou **unique**, pas de verrou par plateforme.
+- **Écart 1** : le fetch d'installation écrit dans le cache Coursier **par défaut** de l'utilisateur, pas dans un cache isolé de MINOS : le plan d'indexation Linux (`coursier launch` sans réseau, hors changement par D2) relit ce cache ; un cache isolé le casserait. La conséquence est écrite dans l'ADR 0040 : un jar invalide ne peut pas être « supprimé » du cache partagé, mais `classpath.txt` n'est pas écrit et l'installation échoue.
+- **Écart 2** : `classpath.txt` écrit hors Windows liste les chemins absolus des jars vérifiés (le fichier Windows liste des noms relatifs à un arbre livré) ; il ne sert ici que de marqueur « classpath vérifié ».
+- **Écart 3** : en plus du chemin d'installation, `build-embedded-tools.py` compare le classpath du **paquet Windows** au même verrou (sinon deux descriptions pourraient diverger).
+- **Défaut trouvé par un test** : une ligne de progression de Coursier terminée par `.jar` (« Downloaded https://…/x.jar ») faisait lever `InvalidPathException` sous Windows lors de la lecture du classpath ; elle est ignorée.

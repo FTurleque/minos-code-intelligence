@@ -301,26 +301,38 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         }
         if (!Files.isRegularFile(scipJavaClasspathFile(), LinkOption.NOFOLLOW_LINKS)) {
             run(List.of(coursier.toString(), "--help"), home, toolsRoot.resolve("coursier-verify.log"), Duration.ofMinutes(1));
-            Path scipJavaLog = toolsRoot.resolve("scip-java-install.log");
-            run(scipJavaInstallationProbe(coursier), home, scipJavaLog, Duration.ofMinutes(10));
-            requireExpectedScipJavaVersion(scipJavaLog);
+            List<Path> jars = fetchVerifiedClasspath(
+                    coursier, home, toolsRoot.resolve("scip-java-install.log"), ClasspathLock.packaged());
+            writeClasspathFile(jars);
         }
         ProviderRuntimeStatus status = inspectJava();
         if (!status.ready()) throw new IllegalStateException("scip-java installation is incomplete: " + String.join("; ", status.diagnostics()));
         return status;
     }
 
-    static List<String> scipJavaInstallationProbe(Path coursier) {
-        return List.of(coursier.toString(), "launch", SCIP_JAVA_COORDINATE, "--jvm", "system",
-                "--main", SCIP_JAVA_MAIN_CLASS, "--", "--version");
+    /** Resolution only: scip-java is never launched, so nothing from the network runs before it is verified. */
+    static List<String> scipJavaFetchCommand(Path coursier) {
+        return List.of(coursier.toString(), "fetch", "--classpath", SCIP_JAVA_COORDINATE);
     }
 
-    static void requireExpectedScipJavaVersion(Path log) throws IOException {
-        String expected = "scip-java version " + SCIP_JAVA_VERSION;
+    /**
+     * Resolves the scip-java classpath with {@code coursier fetch} and compares every jar with the pinned lock before
+     * anything is kept. A mismatch (a jar replaced upstream or by a mirror, added, or missing) fails the installation.
+     */
+    static List<Path> fetchVerifiedClasspath(Path coursier, Path workingDirectory, Path log, ClasspathLock lock)
+            throws Exception {
+        run(scipJavaFetchCommand(coursier), workingDirectory, log, Duration.ofMinutes(10));
+        List<Path> jars = resolvedJars(log);
+        lock.verify(jars);
+        return jars;
+    }
+
+    /** The classpath is the last line of the fetch output that names only absolute jar files. */
+    static List<Path> resolvedJars(Path log) throws IOException {
         if (!Files.isRegularFile(log, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(log)) {
-            throw new IOException("scip-java version log must be a regular non-symbolic file: " + log);
+            throw new IOException("scip-java installation log must be a regular non-symbolic file");
         }
-        boolean found = false;
+        List<Path> classpath = List.of();
         try (BoundedInputStream input = new BoundedInputStream(
                      ConfinedFileOpener.openRegularFileNoFollow(log), BoundedProcessOutput.DEFAULT_MAX_BYTES_PER_STREAM,
                      "scip-java installation log");
@@ -328,13 +340,41 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                      new InputStreamReader(input, StandardCharsets.UTF_8), MAX_INSTALL_LOG_LINE_CHARS)) {
             String line;
             while ((line = reader.readLine()) != null) {
-                if (expected.equals(line.trim())) {
-                    found = true;
-                    break;
-                }
+                List<Path> candidate = jarList(line.trim());
+                if (!candidate.isEmpty()) classpath = candidate;
             }
         }
-        if (!found) throw new IllegalStateException("scip-java version verification failed; expected `" + expected + "`; see " + log);
+        if (classpath.isEmpty()) throw new IllegalStateException("scip-java classpath resolution returned no jar");
+        return classpath;
+    }
+
+    private static List<Path> jarList(String line) {
+        if (line.isEmpty()) return List.of();
+        List<Path> jars = new ArrayList<>();
+        for (String entry : line.split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))) {
+            if (!entry.endsWith(".jar")) return List.of();
+            Path jar;
+            try {
+                jar = Path.of(entry);
+            } catch (java.nio.file.InvalidPathException notAPath) {
+                return List.of(); // a progress line such as "Downloaded https://.../x.jar" is not a classpath
+            }
+            if (!jar.isAbsolute()) return List.of();
+            jars.add(jar);
+        }
+        return jars;
+    }
+
+    /** The verified jars, one absolute path per line, written last: its presence means the classpath was verified. */
+    private void writeClasspathFile(List<Path> jars) throws IOException {
+        PrivateLocalStorage.ensurePrivateDirectory(scipJavaClasspathRoot());
+        Path destination = scipJavaClasspathFile();
+        Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
+        Files.deleteIfExists(partial);
+        StringBuilder text = new StringBuilder();
+        for (Path jar : jars) text.append(jar).append('\n');
+        PrivateLocalStorage.writePrivateFile(partial, text.toString().getBytes(StandardCharsets.UTF_8));
+        move(partial, destination);
     }
 
     private void installJavaWindowsRuntime() throws IOException {
