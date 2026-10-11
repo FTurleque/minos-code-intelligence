@@ -60,7 +60,7 @@ final class ProviderResidueReclamation {
             }
         } catch (IOException exception) {
             LOGGER.log(System.Logger.Level.WARNING,
-                    "MINOS could not enumerate provider residue in " + directory, exception);
+                    RecoveryLogMessages.of("enumerate provider residue in", root, directory, exception));
         }
     }
 
@@ -78,7 +78,7 @@ final class ProviderResidueReclamation {
             }
         } catch (IOException exception) {
             LOGGER.log(System.Logger.Level.WARNING,
-                    "MINOS could not reclaim provider residue " + normalized, exception);
+                    RecoveryLogMessages.of("reclaim provider residue", directory, normalized, exception));
         }
     }
 }

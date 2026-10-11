@@ -43,6 +43,8 @@ WITNESSES = {
     "FileChannel.open": ("", "var c = FileChannel.open(file, StandardOpenOption.WRITE);"),
     "AsynchronousFileChannel.open": ("", "var c = AsynchronousFileChannel.open(file);"),
     "FileChannel.lock": ("", "lockChannel.tryLock();"),
+    "LOGGER.log(Path)": ("", 'Path target = root; LOGGER.log(Level.WARNING, "could not reclaim " + target);'),
+    "LOGGER.log(cause)": ("", 'LOGGER.log(Level.WARNING, "could not reclaim a run", failure);'),
 }
 
 
@@ -283,6 +285,57 @@ class PrivateIoGateTest(unittest.TestCase):
                 self.repo.allow(*bad)
                 with self.assertRaises(ValueError):
                     self.repo.check()
+
+    # ------------------------------------------------------------------------- the logging rules
+
+    def test_a_path_concatenated_into_a_log_message_fails_and_has_no_exception(self):
+        for body in ('Path target = root; LOGGER.log(Level.WARNING, "x " + target);',
+                     'Path target = root; LOGGER.log(Level.WARNING, target + " failed");',
+                     'Path child = root; LOGGER.log(Level.WARNING, "x " + child.toString());',
+                     'for (Path child : kids) { LOGGER.log(Level.WARNING, "x " + child); }'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("LOGGER.log(Path)", violations[0])
+        self.repo.put(SOURCE, java('Path target = root; LOGGER.log(Level.WARNING, "x " + target);'))
+        self.repo.allow(entry(method="LOGGER.log(Path)"))
+        with self.assertRaises(ValueError):
+            self.repo.check()
+
+    def test_a_relative_path_or_a_class_name_in_a_log_message_passes(self):
+        for body in ('Path target = root; LOGGER.log(Level.WARNING, "x " + relative(root, target));',
+                     'Path target = root; LOGGER.log(Level.WARNING, "x " + root.relativize(target));',
+                     'Path target = root; String shown = shown(target); LOGGER.log(Level.WARNING, "x " + shown);',
+                     'Path target = root; LOGGER.log(Level.WARNING, "x " + failure.getClass().getSimpleName());'):
+            with self.subTest(body=body):
+                self.assertEqual([], self.violations(java(body)))
+
+    def test_a_cause_or_get_message_in_a_log_call_needs_a_nominative_entry(self):
+        for body in ('LOGGER.log(Level.WARNING, "x", failure);',
+                     'LOGGER.log(Level.WARNING, "x " + failure.getMessage());',
+                     'LOGGER.log(Level.WARNING,\n            "x",\n            exception);'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("LOGGER.log(cause)", violations[0])
+        self.repo.put(SOURCE, java('LOGGER.log(Level.WARNING, "x", failure);'))
+        self.repo.allow(entry(method="LOGGER.log(cause)", why="Diagnostic de bac à sable : la cause est voulue."))
+        self.assertEqual([], self.repo.check()[0])
+
+    def test_a_log_call_without_a_cause_passes_and_a_stale_entry_fails(self):
+        for body in ('LOGGER.log(Level.WARNING, "x");', 'LOGGER.log(Level.WARNING, "x " + count);',
+                     'LOGGER.log(Level.WARNING, "x {0}", "n");'):
+            with self.subTest(body=body):
+                self.assertEqual([], self.violations(java(body)))
+        self.repo.put(SOURCE, java('LOGGER.log(Level.WARNING, "x");'))
+        self.repo.allow(entry(method="LOGGER.log(cause)", why="Diagnostic de bac à sable : la cause est voulue."))
+        violations = self.repo.check()[0]
+        self.assertEqual(1, len(violations))
+        self.assertIn("ratchet", violations[0])
+
+    def test_logging_inside_comments_and_literals_is_ignored(self):
+        self.assertEqual([], self.violations(java(
+            '// LOGGER.log(Level.WARNING, "x", failure);\n        String s = "LOGGER.log(a, b, failure)";')))
 
     # ------------------------------------------------------------------------------------- the CLI
 

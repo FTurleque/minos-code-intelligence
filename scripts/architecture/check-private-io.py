@@ -60,7 +60,21 @@ FORBIDDEN = (
     "FileChannel.open",
     "AsynchronousFileChannel.open",
     "FileChannel.lock",
+    "LOGGER.log(Path)",
+    "LOGGER.log(cause)",
 )
+
+# The two logging rules read the arguments of every LOGGER.log(...) call. A Path concatenated into a message
+# has no exception: a log line carries a path relative to the managed root, never the absolute one. A cause
+# (a Throwable as last argument, or getMessage()) is what an AccessDeniedException turns into a path, so it
+# is allowed only where it is deliberate, by nominative entry (the sandbox diagnostics).
+LOG_PATH_RULE = "LOGGER.log(Path)"
+LOG_CAUSE_RULE = "LOGGER.log(cause)"
+RULES_WITHOUT_EXCEPTION = frozenset({LOG_PATH_RULE})
+_LOG_CALL = re.compile(r"\bLOGGER\s*\.\s*log\s*\(")
+_PATH_DECLARATION = re.compile(r"\bPath\s+(\w+)\b")
+_BARE_IDENTIFIER = re.compile(r"\s*\w+\s*")
+_GET_MESSAGE = re.compile(r"\.\s*getMessage\s*\(")
 
 _FILES_METHODS = ("createDirectories", "write", "writeString", "newInputStream")
 _STATIC_IMPORT = re.compile(r"\bimport\s+static\s+java\s*\.\s*nio\s*\.\s*file\s*\.\s*Files\s*\.\s*(\*|\w+)\s*;")
@@ -86,6 +100,11 @@ _PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
         re.compile(r"\bFileChannel\b" + _NOT_OPEN),
         re.compile(r"\bAsynchronousFileChannel\b" + _NOT_OPEN),
     ),
+}
+_ADVICE = {
+    LOG_PATH_RULE: "log the path relative to the managed root and the exception class, never the absolute path",
+    LOG_CAUSE_RULE: "log the exception class only; a cause can carry a path (add a nominative entry only for a "
+                    "diagnostic where the cause is deliberate)",
 }
 _UNICODE_ESCAPE = re.compile(r"(?<!\\)((?:\\\\)*)\\u+([0-9a-fA-F]{4})")
 
@@ -136,10 +155,69 @@ def strip_comments_and_literals(source: str) -> str:
     return "".join(out)
 
 
+def _log_call_arguments(code: str) -> list[str]:
+    """The argument text of each LOGGER.log( ... ) call, found by balancing the parentheses."""
+    calls: list[str] = []
+    for match in _LOG_CALL.finditer(code):
+        depth, i = 1, match.end()
+        while i < len(code) and depth:
+            depth += {"(": 1, ")": -1}.get(code[i], 0)
+            i += 1
+        calls.append(code[match.end():i - 1])
+    return calls
+
+
+def _split_top_level(arguments: str) -> list[str]:
+    parts: list[str] = []
+    depth, start = 0, 0
+    for i, char in enumerate(arguments):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(arguments[start:i])
+            start = i + 1
+    parts.append(arguments[start:])
+    return parts
+
+
+def _concatenates_path(arguments: str, path_names: set[str]) -> bool:
+    """A declared Path used as an operand of + or through toString(); a method call on it (relativize) is not."""
+    for name in path_names:
+        n = re.escape(name)
+        if (re.search(rf"\b{n}\s*\.\s*toString\s*\(", arguments)
+                or re.search(rf"\b{n}\s*\+(?!\+)", arguments)
+                or re.search(rf"\+\s*{n}\b(?!\s*[.(\w])", arguments)):
+            return True
+    return False
+
+
+def _passes_a_cause(arguments: str) -> bool:
+    parts = _split_top_level(arguments)
+    return (len(parts) >= 3 and _BARE_IDENTIFIER.fullmatch(parts[-1]) is not None) \
+        or _GET_MESSAGE.search(arguments) is not None
+
+
+def count_log_findings(code: str) -> dict[str, int]:
+    """Calls of LOGGER.log that concatenate a Path, and calls that pass a cause or getMessage().
+
+    The gate does not know types: a Path is a name the file declares as `Path name` (parameter, local or loop
+    variable), so a Path reached through another call is not seen. Documented limit, fixed by the self-test.
+    """
+    path_names = set(_PATH_DECLARATION.findall(code))
+    arguments = _log_call_arguments(code)
+    return {
+        LOG_PATH_RULE: sum(1 for call in arguments if _concatenates_path(call, path_names)),
+        LOG_CAUSE_RULE: sum(1 for call in arguments if _passes_a_cause(call)),
+    }
+
+
 def count_occurrences(source: str) -> dict[str, int]:
     """Occurrences of each forbidden call in one Java source, comments and literals ignored."""
     code = strip_comments_and_literals(decode_unicode_escapes(source))
     counts = {name: 0 for name in FORBIDDEN}
+    counts.update(count_log_findings(code))
     for match in _STATIC_IMPORT.finditer(code):
         key = "Files.*" if match.group(1) == "*" else f"Files.{match.group(1)}"
         if key in counts:
@@ -184,6 +262,8 @@ def load_allowlist(path: Path, root: Path) -> dict[tuple[str, str], tuple[int, s
             raise ValueError(f"{where}: a primitive needs no entry: {file}")
         if method not in FORBIDDEN:
             raise ValueError(f"{where}: unknown forbidden method {method!r}")
+        if method in RULES_WITHOUT_EXCEPTION:
+            raise ValueError(f"{where}: {method} admits no exception, fix the log call instead")
         if not isinstance(maximum, int) or isinstance(maximum, bool) or maximum < 1:
             raise ValueError(f"{where}: max must be a positive integer")
         if not isinstance(why, str) or len(why.strip()) < _MIN_JUSTIFICATION_CHARS:
@@ -210,9 +290,9 @@ def check(root: Path, allowlist: Path) -> tuple[list[str], int, int]:
             maximum = allowed.get((relative, method), (0, ""))[0]
             if count > maximum:
                 what = "not in the allowlist" if maximum == 0 else f"allowlist maximum is {maximum}"
-                violations.append(
-                    f"{relative}: {count} x {method} ({what}); use PrivateLocalStorage / ConfinedFileOpener / "
-                    f"DurableAtomicFile / BoundedFileLease instead")
+                advice = _ADVICE.get(method, "use PrivateLocalStorage / ConfinedFileOpener / "
+                                             "DurableAtomicFile / BoundedFileLease instead")
+                violations.append(f"{relative}: {count} x {method} ({what}); {advice}")
     for (file, method), (maximum, _why) in sorted(allowed.items()):
         actual = found.get((file, method), 0)
         if actual < maximum:

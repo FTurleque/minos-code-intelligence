@@ -68,3 +68,11 @@ Quatre changements OpenSpec, branche locale `docs/sprint2-openspec` (HEAD de dé
 Preuve de la spécification : `openspec validate --all --strict` → 18 passés, 0 échec.
 
 Ordre d'implémentation proposé : `ouvrir-le-depot-git-sans-executer-ses-filtres` (gravité élevée) puis `epingler-et-isoler-l-installation-des-providers` (lot 1 d'abord), puis `rendre-la-journalisation-observable` (lots 1 à 3 séparables), enfin `durcir-secret-postgres-et-lanceur-de-developpement`.
+
+### Implémentation — AUD-QUA-06, lot 3 de `rendre-la-journalisation-observable` (2026-10-11, branche `sec/journaux-de-recuperation-sans-chemin-ni-cause`)
+
+- **Rouge** : `test_check_private_io.py` avec les cas des deux règles, 10 échecs et 2 erreurs avant le garde ; puis le garde étendu **sur le dépôt réel** échouait sur exactement les 5 sites de récupération (`RunDirectoryRetention` : 2 `Path` + 3 cause ; `ProviderResidueReclamation` : 2 + 2) plus trois fichiers hors inventaire (voir `design.md`, « Écart d'inventaire » : `HostedAuditDelivery`, `HostedAuthorizationService`, faux positif `ProjectIgnorePolicy`).
+- **Vert** : auto-test 35 tests ; `check-private-io.py` SUCCESS (`forbidden=10`, 46 occurrences listées) ; `minos-engine` 687 et `minos-runtime-local` 355 tests ; gates rapides 19/19 ; `check-minos-01`, `check-post-mne`, `check-mnd`, `check-ci-wiring` verts.
+- Correction : `RecoveryLogMessages` (chemin relatif à la racine gérée + classe de l'exception, sans cause) appliqué aux 5 sites ; `RecoveryLogMessagesTest` (4 tests, dont `AccessDeniedException` portant le chemin absolu).
+- Liste nominative : 6 fichiers, 9 occurrences de `LOGGER.log(cause)` (bac à sable, refus de reprise MINOS, journal du plan de contrôle hébergé). Décision D3-a prise avec la recommandation (extension de `check-private-io.py`), à confirmer.
+- **Non fait** : tâche 3.4 (JaCoCo `provider-execution-trust-boundary` rejoué localement) ; tâches 4.1 (manuelle) et 5.x.
