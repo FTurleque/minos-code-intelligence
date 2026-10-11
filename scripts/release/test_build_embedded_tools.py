@@ -99,6 +99,49 @@ class BuildEmbeddedToolsTest(unittest.TestCase):
                 builder.zip_tree(tree, root / f"{name}.zip")
             self.assertEqual(builder.sha256_of(root / "one.zip"), builder.sha256_of(root / "two.zip"))
 
+    # ------------------------------------------------------------------ the classpath lock
+
+    @staticmethod
+    def _classpath(directory: Path, jars: dict[str, bytes]) -> tuple[Path, dict]:
+        tree = directory / "tree"
+        tree.mkdir()
+        for name, content in jars.items():
+            (tree / name).write_bytes(content)
+        lock = {"jars": [{"name": name, "size": len(content), "sha256": hashlib.sha256(content).hexdigest()}
+                         for name, content in jars.items()]}
+        return tree, lock
+
+    def test_a_classpath_equal_to_the_lock_is_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree, lock = self._classpath(Path(directory), {"a-1.jar": b"a", "b-2.jar": b"bb"})
+            builder.verify_classpath_lock(tree, lock)
+
+    def test_a_replaced_extra_or_missing_jar_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree, lock = self._classpath(Path(directory), {"a-1.jar": b"a", "b-2.jar": b"bb"})
+            (tree / "b-2.jar").write_bytes(b"BB")
+            with self.assertRaisesRegex(builder.BuildError, "b-2.jar"):
+                builder.verify_classpath_lock(tree, lock)
+            (tree / "b-2.jar").write_bytes(b"bb")
+            (tree / "c-3.jar").write_bytes(b"c")
+            with self.assertRaisesRegex(builder.BuildError, "does not pin: c-3.jar"):
+                builder.verify_classpath_lock(tree, lock)
+            (tree / "c-3.jar").unlink()
+            (tree / "a-1.jar").unlink()
+            with self.assertRaisesRegex(builder.BuildError, "lacks the pinned jar a-1.jar"):
+                builder.verify_classpath_lock(tree, lock)
+
+    def test_a_coursier_fetch_component_without_a_lock_name_is_refused(self):
+        with self.assertRaisesRegex(builder.BuildError, "must name its lock file"):
+            builder.load_classpath_lock({"id": "classpath"})
+
+    def test_the_real_catalogue_lock_pins_every_resolved_jar_it_lists(self):
+        entry = next(c for c in json.loads(builder.CATALOG.read_text(encoding="utf-8"))["assembled"]
+                     if c["recipe"] == "coursier-fetch")
+        lock = builder.load_classpath_lock(entry)
+        self.assertEqual(entry["coordinate"], lock["coordinate"])
+        self.assertEqual(len({jar["name"] for jar in lock["jars"]}), len(lock["jars"]))
+
     def test_an_unknown_recipe_is_refused(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
