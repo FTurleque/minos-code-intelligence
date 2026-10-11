@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -22,6 +21,7 @@ import com.minos.intellij.protocol.MinosCliClient;
 import com.minos.intellij.protocol.MinosProjectNotRegisteredException;
 import com.minos.intellij.service.MinosProjectService;
 import com.minos.intellij.settings.MinosSettingsState;
+import com.minos.intellij.task.MinosBackgroundTask;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.DefaultListModel;
@@ -42,6 +42,7 @@ import java.util.concurrent.Callable;
 public final class MinosToolWindowPanel {
 
     private static final Gson PRETTY = new GsonBuilder().setPrettyPrinting().create();
+    private static final MinosBackgroundTask TASKS = MinosBackgroundTask.withIdeLog();
 
     private final Project project;
     private final MinosCliClient client;
@@ -138,7 +139,7 @@ public final class MinosToolWindowPanel {
     }
 
     public void showError(String title, Throwable failure) {
-        String message = failure == null || failure.getMessage() == null ? "Unknown failure" : failure.getMessage();
+        String message = MinosBackgroundTask.describe(failure);
         resultLocations.clear();
         resultArea.setText(title + "\n\nERROR: " + message);
         resultArea.setCaretPosition(0);
@@ -273,13 +274,9 @@ public final class MinosToolWindowPanel {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
-                try {
-                    result = operation.call();
-                } catch (ProcessCanceledException canceled) {
-                    throw canceled;
-                } catch (Throwable throwable) {
-                    failure = throwable;
-                }
+                MinosBackgroundTask.Outcome<JsonObject> outcome = TASKS.run(title, operation);
+                result = outcome.result();
+                failure = outcome.failure();
             }
 
             @Override

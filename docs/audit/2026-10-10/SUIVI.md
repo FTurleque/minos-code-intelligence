@@ -68,3 +68,10 @@ Quatre changements OpenSpec, branche locale `docs/sprint2-openspec` (HEAD de dé
 Preuve de la spécification : `openspec validate --all --strict` → 18 passés, 0 échec.
 
 Ordre d'implémentation proposé : `ouvrir-le-depot-git-sans-executer-ses-filtres` (gravité élevée) puis `epingler-et-isoler-l-installation-des-providers` (lot 1 d'abord), puis `rendre-la-journalisation-observable` (lots 1 à 3 séparables), enfin `durcir-secret-postgres-et-lanceur-de-developpement`.
+
+### Implémentation — AUD-QUA-04, lot 2 de `rendre-la-journalisation-observable` (2026-10-11, branche `sec/journaliser-les-echecs-du-plugin-intellij`)
+
+- **Rouge** : `MinosBackgroundTaskTest` écrit avant la classe (elle n'existait pas : échec de compilation, comme prévu par la tâche 2.2) ; **vert** ensuite, 6 tests (`gradlew.bat test`, 2 min, plateforme IntelliJ 2026.1 en cache ; `--offline` ne suffit pas : dépendances de buildscript absentes du cache).
+- Nouveau package feuille `com.minos.intellij.task` (`MinosBackgroundTask` : `ProcessCanceledException` et `Error` relancées, autre exception journalisée avec sa pile puis rendue ; `describe` nomme le type quand le message manque). Les quatre `catch (Throwable)` (`MinosEditorActions` ×2, `MinosM21Actions`, `MinosToolWindowPanel`) sont remplacés : `grep "catch (Throwable" minos-intellij/src/main/java` → 0 ; `Unknown failure` n'existe plus que dans `describe`.
+- Décision D2-a : option A (pile et message dans `idea.log`), à confirmer. `check-module-boundaries.py` vert (A8, 0 cycle).
+- Reste : tâche 2.4 (`IntelliJ plugin (gate)` vert à la PR), puis lot 3 (AUD-QUA-06).
