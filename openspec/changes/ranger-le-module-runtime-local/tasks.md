@@ -24,5 +24,5 @@ Ordre : mesure, déplacement, preuve. Commande de référence : `./mvnw.cmd -B -
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (rangement des modules : module, PR, types rendus publics, écarts).
-- [ ] 4.2 `openspec validate --all --strict` ; lister les `docs/` à mettre à jour avant archivage.
+- [x] 4.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (rangement des modules : module, PR, types rendus publics, écarts).
+- [x] 4.2 `openspec validate --all --strict` ; lister les `docs/` à mettre à jour avant archivage.
