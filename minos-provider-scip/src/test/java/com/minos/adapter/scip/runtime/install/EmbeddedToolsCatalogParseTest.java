@@ -73,7 +73,8 @@ class EmbeddedToolsCatalogParseTest {
 
     @Test
     void anotherFormatVersionIsRefused() {
-        assertThrows(IllegalArgumentException.class, () -> parse("{\"formatVersion\":2,\"providers\":[],\"artifacts\":[],\"assembled\":[]}"));
+        String otherVersion = "{\"formatVersion\":2,\"providers\":[],\"artifacts\":[],\"assembled\":[]}";
+        assertThrows(IllegalArgumentException.class, () -> parse(otherVersion));
         assertThrows(IllegalArgumentException.class, () -> parse("{\"providers\":[],\"artifacts\":[],\"assembled\":[]}"));
     }
 
@@ -100,7 +101,8 @@ class EmbeddedToolsCatalogParseTest {
                 artifact(",\"embedded\":true"),
                 artifact(",\"embedded\":true,\"payload\":\" \""),
                 artifact("").replace("\"license\":\"Apache-2.0\"", "\"license\":\" \""))) {
-            assertThrows(RuntimeException.class, () -> parse(catalog("[]", "[" + weakened + "]", "[]")), weakened);
+            String catalogue = catalog("[]", "[" + weakened + "]", "[]");
+            assertThrows(RuntimeException.class, () -> parse(catalogue), weakened);
         }
     }
 
@@ -109,9 +111,11 @@ class EmbeddedToolsCatalogParseTest {
         String component = "{\"id\":\"classpath\",\"platform\":\"windows-x64\",\"provider\":\"scip-java\",\"version\":\"1\","
                 + "\"recipe\":\"coursier-fetch\",\"license\":\"MIT\",\"embedded\":true}";
 
-        assertThrows(IllegalArgumentException.class, () -> parse(catalog("[]", "[]", "[" + component + "]")));
-        assertThrows(RuntimeException.class,
-                () -> parse(catalog("[]", "[]", "[" + component.replace("\"recipe\":\"coursier-fetch\",", "") + "]")));
+        String withoutPayload = catalog("[]", "[]", "[" + component + "]");
+        String withoutRecipe = catalog("[]", "[]", "[" + component.replace("\"recipe\":\"coursier-fetch\",", "") + "]");
+
+        assertThrows(IllegalArgumentException.class, () -> parse(withoutPayload));
+        assertThrows(RuntimeException.class, () -> parse(withoutRecipe));
     }
 
     @Test

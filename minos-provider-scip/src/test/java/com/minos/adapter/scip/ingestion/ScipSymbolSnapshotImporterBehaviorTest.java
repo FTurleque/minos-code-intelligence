@@ -253,7 +253,8 @@ class ScipSymbolSnapshotImporterBehaviorTest {
         ScipSymbolSnapshotRequest request = request(UUID.randomUUID(), "snapshot-1", "", Map.of());
         ScipSymbolSnapshotImporter importer = importer();
 
-        assertThrows(NullPointerException.class, () -> new ScipSymbolSnapshotImporter(null, scratch()));
+        var scratchDirectory = scratch();
+        assertThrows(NullPointerException.class, () -> new ScipSymbolSnapshotImporter(null, scratchDirectory));
         assertThrows(NullPointerException.class, () -> new ScipSymbolSnapshotImporter(ScipIngestionLimits.DEFAULT, null));
         assertThrows(NullPointerException.class, () -> importer.importSnapshot(null, request, store));
         assertThrows(NullPointerException.class, () -> importer.importSnapshot(file, null, store));

@@ -97,8 +97,10 @@ class PinnedArtifactSourceAssembledTest {
         PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payload(altered, true, true));
         Path partial = directory.resolve("tree.partial");
 
+        EmbeddedToolsCatalog.Assembled component = assembled(true);
+
         EmbeddedToolIntegrityException refusal = assertThrows(EmbeddedToolIntegrityException.class,
-                () -> source.copyAssembled(assembled(true), partial, 1024));
+                () -> source.copyAssembled(component, partial, 1024));
 
         assertTrue(refusal.getMessage().contains("does not match its pinned SHA-256"), refusal.getMessage());
         assertFalse(Files.exists(partial), "a refused component must not be left on disk");
@@ -109,7 +111,9 @@ class PinnedArtifactSourceAssembledTest {
         PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payload(TREE, true, true));
         Path partial = directory.resolve("tree.partial");
 
-        assertThrows(EmbeddedToolIntegrityException.class, () -> source.copyAssembled(assembled(true), partial, 8));
+        EmbeddedToolsCatalog.Assembled component = assembled(true);
+
+        assertThrows(EmbeddedToolIntegrityException.class, () -> source.copyAssembled(component, partial, 8));
         assertFalse(Files.exists(partial));
     }
 
@@ -117,8 +121,11 @@ class PinnedArtifactSourceAssembledTest {
     void anAssembledComponentTheManifestListedButTheDistributionLostIsARepairableRefusal() throws IOException {
         PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payload(TREE, false, true));
 
+        EmbeddedToolsCatalog.Assembled component = assembled(true);
+        Path partial = directory.resolve("tree.partial");
+
         EmbeddedToolIntegrityException refusal = assertThrows(EmbeddedToolIntegrityException.class,
-                () -> source.copyAssembled(assembled(true), directory.resolve("tree.partial"), 1024));
+                () -> source.copyAssembled(component, partial, 1024));
 
         assertTrue(refusal.getMessage().contains("reinstall the MINOS package"), refusal.getMessage());
     }
@@ -127,8 +134,11 @@ class PinnedArtifactSourceAssembledTest {
     void aComponentTheManifestDoesNotListIsRefusedWithoutFallingBackToAnything() {
         PinnedArtifactSource source = PinnedArtifactSource.networkOnly();
 
+        EmbeddedToolsCatalog.Assembled component = assembled(true);
+        Path partial = directory.resolve("tree.partial");
+
         EmbeddedToolIntegrityException refusal = assertThrows(EmbeddedToolIntegrityException.class,
-                () -> source.copyAssembled(assembled(true), directory.resolve("tree.partial"), 1024));
+                () -> source.copyAssembled(component, partial, 1024));
 
         assertTrue(refusal.getMessage().contains("does not list the embedded component sample-tree"), refusal.getMessage());
         assertFalse(Files.exists(directory.resolve("tree.partial")));
@@ -140,8 +150,11 @@ class PinnedArtifactSourceAssembledTest {
         Files.writeString(payload.resolve(EmbeddedToolsPayload.MANIFEST_FILE), "{ not json");
         PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payload);
 
+        EmbeddedToolsCatalog.Assembled component = assembled(true);
+        Path partial = directory.resolve("tree.partial");
+
         EmbeddedToolIntegrityException refusal = assertThrows(EmbeddedToolIntegrityException.class,
-                () -> source.copyAssembled(assembled(true), directory.resolve("tree.partial"), 1024));
+                () -> source.copyAssembled(component, partial, 1024));
 
         assertTrue(refusal.getMessage().contains("unreadable or malformed"), refusal.getMessage());
     }

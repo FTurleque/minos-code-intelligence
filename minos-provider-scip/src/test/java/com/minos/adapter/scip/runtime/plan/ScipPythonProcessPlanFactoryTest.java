@@ -107,8 +107,10 @@ class ScipPythonProcessPlanFactoryTest {
     void theLauncherMustBeAFullyNamedCommand() {
         assertThrows(NullPointerException.class, () -> new ScipPythonProcessPlanFactory((List<String>) null));
         assertThrows(NullPointerException.class, () -> new ScipPythonProcessPlanFactory((Path) null));
-        assertThrows(IllegalArgumentException.class, () -> new ScipPythonProcessPlanFactory(List.of()));
-        assertThrows(IllegalArgumentException.class, () -> new ScipPythonProcessPlanFactory(List.of("node", " ")));
+        List<String> empty = List.of();
+        List<String> blankElement = List.of("node", " ");
+        assertThrows(IllegalArgumentException.class, () -> new ScipPythonProcessPlanFactory(empty));
+        assertThrows(IllegalArgumentException.class, () -> new ScipPythonProcessPlanFactory(blankElement));
         assertThrows(IllegalArgumentException.class,
                 () -> new ScipPythonProcessPlanFactory(Arrays.asList("node", null)));
     }

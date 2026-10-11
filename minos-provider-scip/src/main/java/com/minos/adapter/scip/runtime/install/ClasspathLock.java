@@ -87,17 +87,7 @@ final class ClasspathLock {
      */
     void verify(List<Path> resolved) throws IOException {
         Objects.requireNonNull(resolved, "resolved");
-        Map<String, Path> byName = new LinkedHashMap<>();
-        for (Path jar : resolved) {
-            Path fileName = jar.getFileName();
-            if (fileName == null) {
-                throw new IllegalStateException("scip-java classpath verification failed: an entry has no file name");
-            }
-            String name = fileName.toString();
-            if (byName.put(name, jar) != null) {
-                throw new IllegalStateException("scip-java classpath verification failed: two jars are named " + name);
-            }
-        }
+        Map<String, Path> byName = indexByFileName(resolved);
         for (String name : new TreeSet<>(byName.keySet())) {
             if (!jars.containsKey(name)) {
                 throw new IllegalStateException("scip-java classpath verification failed: unexpected jar " + name);
@@ -116,6 +106,21 @@ final class ClasspathLock {
                 throw new IllegalStateException("scip-java classpath verification failed: " + name + " does not match its pinned SHA-256");
             }
         }
+    }
+
+    private static Map<String, Path> indexByFileName(List<Path> resolved) {
+        Map<String, Path> byName = new LinkedHashMap<>();
+        for (Path jar : resolved) {
+            Path fileName = jar.getFileName();
+            if (fileName == null) {
+                throw new IllegalStateException("scip-java classpath verification failed: an entry has no file name");
+            }
+            String name = fileName.toString();
+            if (byName.put(name, jar) != null) {
+                throw new IllegalStateException("scip-java classpath verification failed: two jars are named " + name);
+            }
+        }
+        return byName;
     }
 
     private static String sha256Of(Path file) throws IOException {

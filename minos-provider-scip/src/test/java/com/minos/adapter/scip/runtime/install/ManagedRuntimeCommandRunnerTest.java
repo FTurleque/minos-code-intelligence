@@ -82,8 +82,11 @@ class ManagedRuntimeCommandRunnerTest {
     void aCommandThatExitsNonZeroFailsWithItsExitCode(LoggingRunner runner) {
         Path log = directory.resolve("logs").resolve("tool.log");
 
+        List<String> command = List.of(java(), "--no-such-option");
+        Duration timeout = Duration.ofMinutes(2);
+
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> runner.run(List.of(java(), "--no-such-option"), directory, log, Duration.ofMinutes(2)));
+                () -> runner.run(command, directory, log, timeout));
 
         assertTrue(failure.getMessage().startsWith("tool command failed with code 1; see "), failure.getMessage());
         assertTrue(Files.isRegularFile(log), "the log of the failed command remains readable");
@@ -95,8 +98,11 @@ class ManagedRuntimeCommandRunnerTest {
         Path source = blockingProgram();
         Path log = directory.resolve("logs").resolve("tool.log");
 
+        List<String> command = List.of(java(), source.toString());
+        Duration timeout = Duration.ofSeconds(1);
+
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> runner.run(List.of(java(), source.toString()), directory, log, Duration.ofSeconds(1)));
+                () -> runner.run(command, directory, log, timeout));
 
         assertTrue(failure.getMessage().startsWith("tool command timed out; see "), failure.getMessage());
     }
@@ -158,8 +164,11 @@ class ManagedRuntimeCommandRunnerTest {
 
     @Test
     void thePolyglotRunnerRefusesMissingOverrides() {
-        assertThrows(NullPointerException.class, () -> ManagedPolyglotScipRuntimeManager.run(
-                List.of(java(), "-version"), directory, Duration.ofMinutes(2), null));
+        List<String> command = List.of(java(), "-version");
+        Duration timeout = Duration.ofMinutes(2);
+
+        assertThrows(NullPointerException.class,
+                () -> ManagedPolyglotScipRuntimeManager.run(command, directory, timeout, null));
         try (Stream<Path> remaining = Files.list(directory)) {
             assertEquals(List.of(), remaining.toList(), "a refused call must not leave its capture file");
         } catch (IOException unreadable) {
