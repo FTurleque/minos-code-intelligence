@@ -1,6 +1,7 @@
 package com.minos.integration.git;
 
 import com.minos.git.GitIntelligence;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
@@ -41,6 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -248,30 +250,44 @@ public final class GitIntelligenceService implements GitIntelligence {
         }
     }
 
-    private static volatile UserPrincipal processOwner;
+    private static final AtomicReference<UserPrincipal> PROCESS_OWNER = new AtomicReference<>();
 
     /**
      * The owner the system gives a file this process creates, read once from a throw-away file in the
-     * system temporary directory. The probe is never created inside the analysed repository (an analysis
-     * writes nothing there and may not be allowed to), and the owner of a new file does not depend on the
-     * directory that holds it.
+     * private MINOS directory (never in the shared system temporary directory, and never inside the
+     * analysed repository: an analysis writes nothing there and may not be allowed to). The owner of a new
+     * file does not depend on the directory that holds it. The directory follows the rule of
+     * {@code MinosHome} ({@code minos.home}, {@code MINOS_HOME}, then {@code ~/.minos}), which an adapter
+     * cannot import from the application layer.
      */
     private static UserPrincipal processOwner() {
-        UserPrincipal known = processOwner;
+        UserPrincipal known = PROCESS_OWNER.get();
         if (known != null) {
             return known;
         }
         try {
-            Path probe = Files.createTempFile("minos-owner-", ".probe");
+            Path probe = PrivateLocalStorage.createPrivateTempFile(probeDirectory(), "minos-owner-", ".probe");
             try {
-                processOwner = Files.getOwner(probe);
-                return processOwner;
+                PROCESS_OWNER.compareAndSet(null, Files.getOwner(probe));
+                return PROCESS_OWNER.get();
             } finally {
                 Files.deleteIfExists(probe);
             }
         } catch (IOException failure) {
             throw new UncheckedIOException(failure);
         }
+    }
+
+    private static Path probeDirectory() {
+        String property = System.getProperty("minos.home");
+        if (property != null && !property.isBlank()) {
+            return Path.of(property).resolve("owner-probe");
+        }
+        String environment = System.getenv("MINOS_HOME");
+        if (environment != null && !environment.isBlank()) {
+            return Path.of(environment).resolve("owner-probe");
+        }
+        return Path.of(System.getProperty("user.home")).resolve(".minos").resolve("owner-probe");
     }
 
     /**
