@@ -1,5 +1,8 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.LazyApplication;
 import com.minos.application.MinosApplication;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.runtime.MinosVersion;

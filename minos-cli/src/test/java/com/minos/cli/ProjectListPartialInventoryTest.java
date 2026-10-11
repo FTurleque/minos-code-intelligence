@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.command.ProjectCommand;
 import com.minos.application.ProjectOperations;
 import com.minos.registry.DegradedEntry;
 import org.junit.jupiter.api.Test;

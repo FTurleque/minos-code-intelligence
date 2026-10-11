@@ -1,0 +1,125 @@
+package com.minos.cli.command;
+
+import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliJson;
+import com.minos.cli.support.CliOptions;
+import com.minos.application.ProjectOperations;
+import com.minos.output.SymbolOutputFormat;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.Objects;
+
+/** Import manuel explicite d'un artefact SCIP. */
+public final class ImportScipCommand {
+
+    public static final String NAME = "import-scip";
+    private static final CliOptions.Spec OPTIONS = CliOptions.spec()
+            .text("--file", "--provider", "--provider-version", "--module", "--snapshot", "--format");
+    private static final String USAGE = """
+            Usage: minos import-scip <project> --file <index.scip> --provider <id> [options]
+
+              --provider-version <version>
+              --module <module>
+              --snapshot <id>
+              --format <text|json>
+            """.stripTrailing();
+
+    public static String usage() {
+        return USAGE;
+    }
+
+    private final ProjectOperations operations;
+
+    public ImportScipCommand(ProjectOperations operations) {
+        this.operations = Objects.requireNonNull(operations, "operations");
+    }
+
+    public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
+            ProjectOperations.IndexImportResult result = operations.importScip(
+                    options.project, options.file, options.provider, options.providerVersion,
+                    options.module, options.snapshot);
+            String diagnostic = CliCommandSupport.publicDiagnostic(result.diagnostic());
+            output.append(render(result, options.format, diagnostic)).append('\n');
+            String warning = warning(result.commitStatus());
+            if (warning != null) {
+                error.append("warning: ").append(warning)
+                        .append(diagnostic == null ? "" : ": " + diagnostic)
+                        .append('\n');
+            }
+            return FindSymbolCommand.SUCCESS;
+        });
+    }
+
+    private static String warning(ProjectOperations.IndexImportCommitStatus status) {
+        return switch (status) {
+            case COMMITTED -> null;
+            case COMMITTED_DURABILITY_PENDING ->
+                    "snapshot committed and authoritative but durability acknowledgement is pending";
+            case COMMITTED_METADATA_PENDING ->
+                    "snapshot committed but project metadata recovery is pending";
+            case COMMITTED_DURABILITY_AND_METADATA_PENDING ->
+                    "snapshot committed and authoritative but durability acknowledgement and metadata recovery are pending";
+        };
+    }
+
+    private static String render(
+            ProjectOperations.IndexImportResult result,
+            SymbolOutputFormat format,
+            String diagnostic
+    ) {
+        Map<String, Object> map = CliCommandSupport.importResultMap(result, diagnostic);
+        if (format == SymbolOutputFormat.JSON) {
+            return CliJson.render(map);
+        }
+        return "projectId: " + result.projectId() + "\n"
+                + "snapshotId: " + result.snapshotId() + "\n"
+                + "providerId: " + result.providerId() + "\n"
+                + "normalizedSymbols: " + result.normalizedSymbolCount() + "\n"
+                + "occurrences: " + result.occurrenceCount() + "\n"
+                + "relationships: " + result.relationshipCount() + "\n"
+                + "commitStatus: " + result.commitStatus().name()
+                + (diagnostic == null ? "" : "\ndiagnostic: " + diagnostic);
+    }
+
+    private static final class Options {
+        private final String project;
+        private final Path file;
+        private final String provider;
+        private final String providerVersion;
+        private final String module;
+        private final String snapshot;
+        private final SymbolOutputFormat format;
+
+        private Options(String project, Path file, String provider, String providerVersion,
+                        String module, String snapshot, SymbolOutputFormat format) {
+            this.project = project;
+            this.file = file;
+            this.provider = provider;
+            this.providerVersion = providerVersion;
+            this.module = module;
+            this.snapshot = snapshot;
+            this.format = format;
+        }
+
+        private static Options parse(String[] arguments) {
+            if (arguments.length < 1) {
+                throw new IllegalArgumentException("expected <project>");
+            }
+            String project = CliCommandSupport.operand(arguments[0], "project");
+            CliOptions options = OPTIONS.parse(arguments, 1);
+            String file = options.text("--file");
+            if (file == null) {
+                throw new IllegalArgumentException("--file is required");
+            }
+            String provider = options.text("--provider");
+            if (provider == null || provider.isBlank()) {
+                throw new IllegalArgumentException("--provider is required");
+            }
+            return new Options(project, Path.of(file), provider, options.text("--provider-version"),
+                    options.text("--module"), options.text("--snapshot"), options.format());
+        }
+    }
+}

@@ -47,7 +47,7 @@ def main() -> int:
         service = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java")
         store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
         bounded_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
-        command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
+        command = read("minos-cli/src/main/java/com/minos/cli/command/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         app_assembler = read("minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
         local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
@@ -124,7 +124,7 @@ def main() -> int:
             "RuntimeIntelligenceServiceTest.java": read("minos-application/src/test/java/com/minos/application/dynamic/RuntimeIntelligenceServiceTest.java"),
             # A3 / ADR 0044: the file-adapter half of the split runtime service test (real local stores).
             "RuntimeIntelligenceFileAdaptersTest.java": read("minos-bootstrap/src/test/java/com/minos/bootstrap/RuntimeIntelligenceFileAdaptersTest.java"),
-            "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RuntimeCommandTest.java"),
+            "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/command/RuntimeCommandTest.java"),
             "MinosMcpToolsTest.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosMcpToolsTest.java"),
         }
         require_facts("RuntimeObservationModelTest.java", tests["RuntimeObservationModelTest.java"],

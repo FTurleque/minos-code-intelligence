@@ -265,7 +265,7 @@ def render() -> str:
     mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
     cli = read("minos-cli/src/main/java/com/minos/cli/MinosCli.java")
     symbol_formats_source = read("minos-application/src/main/java/com/minos/output/SymbolOutputFormat.java")
-    architecture_formats_source = read("minos-cli/src/main/java/com/minos/cli/ArchitectureOutputFormat.java")
+    architecture_formats_source = read("minos-cli/src/main/java/com/minos/cli/command/ArchitectureOutputFormat.java")
     providers = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIndexerCatalog.java")
 
     version = require(r"<revision>([^<]+)</revision>", pom, "product version")

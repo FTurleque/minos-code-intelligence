@@ -36,8 +36,8 @@ def forbid(relative: str, text: str, *needles: str) -> None:
 
 def main() -> int:
     try:
-        remote = read("minos-cli/src/main/java/com/minos/cli/LocalRemoteIndexOperations.java")
-        remote_lease = read("minos-cli/src/main/java/com/minos/cli/RemoteIndexLease.java")
+        remote = read("minos-cli/src/main/java/com/minos/cli/operations/LocalRemoteIndexOperations.java")
+        remote_lease = read("minos-cli/src/main/java/com/minos/cli/operations/RemoteIndexLease.java")
         bounded_file_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
         linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java")
         windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java")
