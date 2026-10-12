@@ -176,4 +176,22 @@ class SddlReplaceRightsTest {
         assertEquals("LA", SddlReplaceRights.firstForeignReplaceGrant(sddl, SandboxLauncherScript.trustedSids(ordinary)),
                 "LA is another principal for any other account");
     }
+
+    @Test
+    void aProcessRunningAsSystemIsTrustedOnceNotRefusedAsADuplicate() {
+        assertEquals(Set.of("S-1-5-18", "S-1-5-32-544"), SandboxLauncherScript.trustedSids("S-1-5-18"));
+    }
+
+    @Test
+    void aProcessSidEqualToAdministratorsIsTrustedOnceNotRefusedAsADuplicate() {
+        assertEquals(Set.of("S-1-5-18", "S-1-5-32-544"), SandboxLauncherScript.trustedSids("S-1-5-32-544"));
+    }
+
+    @Test
+    void anOrdinaryProcessSidIsTrustedWithSystemAndAdministrators() {
+        Set<String> trusted = SandboxLauncherScript.trustedSids(USER);
+
+        assertEquals(TRUSTED, trusted);
+        assertThrows(UnsupportedOperationException.class, () -> trusted.add("S-1-1-0"));
+    }
 }
