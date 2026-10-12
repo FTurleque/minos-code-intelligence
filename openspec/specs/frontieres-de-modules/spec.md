@@ -167,3 +167,57 @@ Aucun script ne SHALL citer l'ancien emplacement d'une classe déplacée, et cha
 #### Scenario: Gates littéraux
 - **WHEN** `check-post-mne.py`, `check-mnd.py`, `check-mne.py`, `check-polyglot-provider-consistency.py` et `check-current-docs.py` s'exécutent
 - **THEN** tous se terminent avec le code 0
+
+### Requirement: Le module PostgreSQL est rangé en sous-packages sans cycle
+`minos-storage-postgresql` SHALL répartir ses classes entre `support`, `snapshot`, `project` et `semantic`, sa racine ne gardant que le backend et son fournisseur. Les dépendances SHALL aller vers `support` et de la racine vers les autres, sans cycle. Le nom du fournisseur déclaré dans `META-INF/services` SHALL rester inchangé.
+
+#### Scenario: Aucun cycle entre les sous-packages
+- **GIVEN** le module rangé
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il réussit, la table des cycles connus restant vide
+
+#### Scenario: Le fournisseur reste découvert par son nom
+- **GIVEN** le jar ombré construit
+- **WHEN** `ShadedJarCompositionRootIT` est exécuté
+- **THEN** il trouve `com.minos.storage.postgresql.PostgresStorageBackendProvider`
+
+#### Scenario: Une classe de support ne dépend pas d'un store
+- **GIVEN** une classe de `support` qui importerait une classe de `snapshot`, `project` ou `semantic`
+- **WHEN** `check-module-boundaries.py` est exécuté
+- **THEN** il échoue en nommant le cycle de packages
+
+### Requirement: Le module CLI est rangé en sous-packages sans cycle
+`minos-cli` SHALL répartir ses classes entre `command`, `operations` et `support`, sa racine ne gardant que les points d'entrée et le SPI `McpLaunchRoute`, dont les noms qualifiés SHALL rester inchangés. Les dépendances SHALL aller de la racine vers les autres, de `command` vers `operations` et `support`, et d'`operations` vers `support`, sans cycle.
+
+#### Scenario: Aucun cycle entre les sous-packages
+- **GIVEN** le module rangé
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il réussit, la table des cycles connus restant vide
+
+#### Scenario: Le point d'entrée garde son nom
+- **GIVEN** le jar ombré construit
+- **WHEN** `ShadedJarMcpEntryPointIT` est exécuté
+- **THEN** il trouve `com.minos.cli.MinosLauncher` et le SPI `com.minos.cli.McpLaunchRoute`
+
+#### Scenario: Une classe de support ne dépend pas d'une commande
+- **GIVEN** une classe de `support` qui importerait une classe de `command`
+- **WHEN** `check-module-boundaries.py` est exécuté
+- **THEN** il échoue en nommant le cycle de packages
+
+### Requirement: Les types de confinement de l'exécution locale ne sont nommés que par liste fermée
+Hors de `minos-runtime-local`, les sources de production et de test SHALL ne nommer, parmi les types de ses packages `process`, `sandbox` et `workspace`, que ceux d'une liste fermée tenue par `check-module-boundaries.py`. L'import par joker d'un de ces packages et l'usage des membres réservés SHALL être refusés. La liste SHALL être un cliquet : une entrée sans fichier ou sans utilisateur échoue.
+
+#### Scenario: Un type exporté est accepté
+- **GIVEN** un module qui importe `com.minos.runtime.local.process.CommandLocator`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il réussit
+
+#### Scenario: Une primitive non exportée est refusée
+- **GIVEN** un module, ou l'un de ses tests, qui importe `com.minos.runtime.local.process.ProviderProcessEnvironment`
+- **WHEN** `check-module-boundaries.py` est exécuté
+- **THEN** il échoue en nommant le fichier et le type
+
+#### Scenario: Une entrée devenue inutile est refusée
+- **GIVEN** un type de la liste qu'aucun autre module ne nomme plus
+- **WHEN** `check-module-boundaries.py` est exécuté
+- **THEN** il échoue en demandant de retirer l'entrée
