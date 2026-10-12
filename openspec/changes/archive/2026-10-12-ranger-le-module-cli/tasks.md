@@ -23,7 +23,7 @@ Ordre : mesure, levée du cycle, déplacement, preuve. Commande de référence :
 
 ## 4. Preuve sur les deux plateformes
 
-- [ ] 4.1 **(manuelle)** Relever sur `Verify (ubuntu-24.04)` et `Verify (windows-2022)` que les tests du module et les IT du jar ombré passent, et que `SonarCloud Code Analysis` passe.
+- [x] 4.1 **(manuelle)** Relever sur `Verify (ubuntu-24.04)` et `Verify (windows-2022)` que les tests du module et les IT du jar ombré passent, et que `SonarCloud Code Analysis` passe. Relevé le 2026-10-12 sur la PR #415, fusionnée tous checks verts : Quality Gate passé à 82,7 % sur le nouveau code, sans test ajouté.
 
 ## 5. Clôture
 
