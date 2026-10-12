@@ -351,6 +351,11 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${SONAR_TOKEN:-}" ]; then
+            echo "SONAR_TOKEN is not available to this run. GitHub does not give the repository secrets to Dependabot" >&2
+            echo "pull requests or to forks: for Dependabot, add SONAR_TOKEN to the Dependabot secrets of the repository." >&2
+            exit 1
+          fi
           linux_report="coverage-reports/linux/jacoco.xml"
           windows_report="coverage-reports/windows/jacoco.xml"
           if [ ! -s "$linux_report" ]; then
