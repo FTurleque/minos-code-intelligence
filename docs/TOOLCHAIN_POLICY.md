@@ -16,7 +16,7 @@ Local core development should use the Maven Wrapper so plugin and reactor behavi
 ### IntelliJ plugin
 
 - Java: **21**.
-- Gradle: **9.6.1**, through the wrapper `minos-intellij/gradlew` (distribution SHA-256 pinned in `gradle/wrapper/gradle-wrapper.properties`), locally and in CI.
+- Gradle: **9.8.1**, through the wrapper `minos-intellij/gradlew` (distribution SHA-256 pinned in `gradle/wrapper/gradle-wrapper.properties`), locally and in CI. The wrapper is the reference: `scripts/quality/check-toolchain-baseline.py` fails when this line, `AGENTS.md` or a `gradle-version:` of a workflow states another version. A Dependabot raise of the wrapper therefore stays red until the same pull request moves them all: the baseline changes in the open, in one place (9.6.1 until two wrapper raises left the policy and the release workflows behind; realigned on 2026-10-12).
 - IntelliJ Platform: **2026.1**.
 - IntelliJ Platform Gradle Plugin: version pinned in `minos-intellij/build.gradle.kts`.
 - Qualification: Linux plugin build/structure/verifier plus Windows unit/process-ownership tests.
