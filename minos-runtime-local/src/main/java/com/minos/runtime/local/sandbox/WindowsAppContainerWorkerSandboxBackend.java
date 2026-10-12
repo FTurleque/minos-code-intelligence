@@ -1,4 +1,4 @@
-package com.minos.runtime.local;
+package com.minos.runtime.local.sandbox;
 
 import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.local.process.IndexerProcessPlan;
@@ -7,9 +7,6 @@ import com.minos.runtime.local.process.ProcessIndexerExecutor;
 import com.minos.runtime.local.process.ProcessSandboxCapableIndexerExecutor;
 import com.minos.runtime.local.process.ProcessTreeTermination;
 import com.minos.runtime.local.process.ProviderProcessEnvironment;
-import com.minos.runtime.local.sandbox.WorkerResourceContainment;
-import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
-import com.minos.runtime.local.sandbox.WorkerSandboxQualification;
 import com.minos.runtime.local.workspace.ProviderWriteQuota;
 import com.minos.io.ConfinedFileOpener;
 import com.minos.io.FileTreeOperations;

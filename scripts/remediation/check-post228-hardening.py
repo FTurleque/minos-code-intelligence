@@ -39,7 +39,7 @@ def validate_runtime_contracts() -> None:
         require(supervisor_path, supervisor, token)
     forbid(supervisor_path, supervisor, "catch (IOException | RuntimeException ignored)")
 
-    windows_path = "minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java"
+    windows_path = "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java"
     windows = read(windows_path)
     for token in (
         "PRIVATE_STORAGE_MAX_BYTES",

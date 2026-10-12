@@ -66,7 +66,7 @@
     "justification": "Copie du projet dans l'arbre de travail du provider sandboxé : le conteneur y accède par héritage d'ACL, un ACL propriétaire seul sur chaque répertoire casserait cet accès."
   },
   {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java",
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java",
     "method": "Files.createDirectories",
     "max": 1,
     "justification": "Parent de l'artefact dans l'arbre de travail du provider sandboxé : ses droits sont ceux du sandbox (AppContainer), pas une donnée privée MINOS_HOME ; à revoir, hors S5 nommé."
@@ -78,13 +78,13 @@
     "justification": "Diagnostics de la sonde bubblewrap (chemin de liaison non résolu, démarrage impossible) : la cause est voulue, la dégradation vers un bac à sable plus faible doit être observable."
   },
   {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsJobObjectProcessOwnership.java",
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsJobObjectProcessOwnership.java",
     "method": "LOGGER.log(cause)",
     "max": 1,
     "justification": "Diagnostic d'indisponibilité du Job Object : la vraie cause (lanceur non installable en privé) doit rester observable, le commentaire du site l'exige."
   },
   {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java",
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java",
     "method": "LOGGER.log(cause)",
     "max": 2,
     "justification": "Diagnostics de l'AppContainer (indisponible, sonde incomplète) : la cause explique la bascule vers un niveau de confinement plus faible et doit rester observable."

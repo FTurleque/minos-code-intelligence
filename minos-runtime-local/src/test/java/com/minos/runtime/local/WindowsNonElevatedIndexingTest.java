@@ -1,5 +1,6 @@
 package com.minos.runtime.local;
 
+import com.minos.runtime.local.sandbox.WindowsAppContainerWorkerSandboxBackend;
 import com.minos.runtime.local.sandbox.SandboxTestSupport;
 import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.local.process.IndexerProcessPlan;

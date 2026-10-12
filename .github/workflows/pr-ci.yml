@@ -87,6 +87,12 @@ jobs:
       - name: Toolchain baseline gate self-test
         run: python scripts/quality/test_check_toolchain_baseline.py -v
 
+      - name: Installation secret file tests (declared skipped here, executed on Windows in the verify job)
+        run: python scripts/install/test_secret_file_acl.py -v
+
+      - name: Development launcher tests (declared skipped here, executed on Windows in the verify job)
+        run: python scripts/install/test_dev_launcher.py -v
+
       - name: Shipped tools gate (one description shared by Java, the Docker image and the Windows distribution)
         run: python scripts/quality/check-tools-manifest.py
 
@@ -277,23 +283,37 @@ jobs:
         if: runner.os != 'Windows'
         run: python scripts/quality/check-jacoco.py
 
+      # AUD-SEC-12, AUD-SEC-13: the installation scripts and the development launcher are Windows code that no
+      # Maven module runs. Their tests are skipped in the invariants job (Ubuntu) and really run here.
+      - name: Installation secret file and development launcher tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python scripts/install/test_secret_file_acl.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/install/test_dev_launcher.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Targeted JaCoCo gate (Windows, PostgreSQL scope qualified on Linux)
         if: runner.os == 'Windows'
         run: python scripts/quality/check-jacoco.py --skip-scope m30-postgresql-pgvector
 
-      # The aggregate JaCoCo report of this operating system, for the SonarCloud job below. Linux cannot run
-      # the AppContainer and Job Object code, Windows cannot run bubblewrap and cgroup: each report covers what
-      # the other one cannot. The XML names packages and source files, never a path of the runner.
-      - name: Upload the aggregate JaCoCo report
+      # The JaCoCo report of every module on this operating system, for the SonarCloud job below. Linux cannot
+      # run the AppContainer and Job Object code, Windows cannot run bubblewrap and cgroup: each side covers
+      # what the other cannot. The scanner reads coverage module by module, from a path relative to the module:
+      # the aggregate report of the reactor root is not attached to any source file (regression of 2026-10-12,
+      # when only that aggregate was published and every new line counted as uncovered). The XML names packages
+      # and source files, never a path of the runner.
+      - name: Upload the JaCoCo report of every module
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: jacoco-aggregate-${{ runner.os }}
-          # A re-run of this job replaces the report of the previous attempt: the analysis reads the latest.
+          name: jacoco-modules-${{ runner.os }}
+          # A re-run of this job replaces the reports of the previous attempt: the analysis reads the latest.
           overwrite: true
           if-no-files-found: ignore
           retention-days: 3
-          path: target/site/jacoco-aggregate/jacoco.xml
+          path: '**/target/site/jacoco/jacoco.xml'
 
       - name: Upload verification diagnostics
         if: always()
@@ -310,11 +330,14 @@ jobs:
 
   # CI-based SonarCloud analysis (Automatic Analysis is off in the SonarCloud project: the two modes are
   # mutually exclusive). It runs after both Verify jobs and imports the coverage of both operating systems;
-  # until 2026-10-12 it ran inside the Ubuntu Verify job with the Linux report alone, so code that only
+  # until 2026-10-12 it ran inside the Ubuntu Verify job with the Linux reports alone, so code that only
   # Windows can execute counted as uncovered. It compiles the candidate again (no test is run: the tests ran
   # in Verify) because the scanner needs the class files. No effect while the repository variable is unset.
-  # When a Verify job failed and left no report, the analysis still runs with the report that exists, so that
-  # issues are reported; the Linux report is required.
+  # Each module receives its Linux report at target/site/jacoco/jacoco.xml and its Windows report at
+  # target/site/jacoco-windows/jacoco.xml: the scanner resolves both paths from the module directory.
+  # When a Verify job failed and left no report, the analysis still runs with the reports that exist, so that
+  # issues are reported; the Linux reports are required, and the job fails if the scanner imported fewer
+  # reports than there are modules with one (a silent zero-coverage analysis is refused).
   sonar:
     name: SonarCloud analysis (Linux and Windows coverage)
     needs: verify
@@ -335,20 +358,20 @@ jobs:
           java-version: '24'
           cache: maven
 
-      # One step per report, each in its own directory. A report is absent when its Verify job failed before
-      # the tests ended: the download then fails and the analysis step decides what to do without it.
-      - name: Download the Linux aggregate JaCoCo report
+      # One step per operating system, each in its own directory. Reports are absent when a Verify job failed
+      # before its tests ended: the download then fails and the analysis step decides what to do without them.
+      - name: Download the Linux JaCoCo reports
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: jacoco-aggregate-Linux
+          name: jacoco-modules-Linux
           path: coverage-reports/linux
 
-      - name: Download the Windows aggregate JaCoCo report
+      - name: Download the Windows JaCoCo reports
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: jacoco-aggregate-Windows
+          name: jacoco-modules-Windows
           path: coverage-reports/windows
 
       - name: SonarCloud CI-based analysis
@@ -362,23 +385,44 @@ jobs:
             echo "pull requests or to forks: for Dependabot, add SONAR_TOKEN to the Dependabot secrets of the repository." >&2
             exit 1
           fi
-          linux_report="coverage-reports/linux/jacoco.xml"
-          windows_report="coverage-reports/windows/jacoco.xml"
-          if [ ! -s "$linux_report" ]; then
-            echo "The Linux JaCoCo report is missing: Verify (ubuntu-24.04) did not produce it." >&2
+          # Puts every downloaded report inside its module, where the scanner looks for it.
+          place_reports() {
+            local source="$1" directory="$2" count=0 report module
+            if [ -d "$source" ]; then
+              while IFS= read -r report; do
+                module="${report#"$source"/}"
+                module="${module%%/*}"
+                if [ -f "$module/pom.xml" ]; then
+                  mkdir -p "$module/target/site/$directory"
+                  cp "$report" "$module/target/site/$directory/jacoco.xml"
+                  count=$((count + 1))
+                fi
+              done < <(find "$source" -type f -path '*/target/site/jacoco/jacoco.xml' | sort)
+            fi
+            echo "$count"
+          }
+          linux_modules="$(place_reports coverage-reports/linux jacoco)"
+          windows_modules="$(place_reports coverage-reports/windows jacoco-windows)"
+          echo "JaCoCo reports placed in their module: linux=$linux_modules windows=$windows_modules"
+          if [ "$linux_modules" -eq 0 ]; then
+            echo "No Linux JaCoCo report: Verify (ubuntu-24.04) did not produce any." >&2
             exit 1
           fi
-          reports="$linux_report"
-          if [ -s "$windows_report" ]; then
-            reports="$reports,$windows_report"
-          else
-            echo "::warning::The Windows JaCoCo report is missing: Windows-only code will count as uncovered."
+          if [ "$windows_modules" -eq 0 ]; then
+            echo "::warning::No Windows JaCoCo report: Windows-only code will count as uncovered."
           fi
-          echo "JaCoCo reports imported: $reports"
           chmod +x mvnw
           ./mvnw -B -ntp -DskipTests -Djacoco.skip=true test-compile \
             org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
             -Dsonar.projectKey=FTurleque_atlas \
             -Dsonar.organization=fturleque \
             -Dsonar.host.url=https://sonarcloud.io \
-            "-Dsonar.coverage.jacoco.xmlReportPaths=$reports"
+            "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml,target/site/jacoco-windows/jacoco.xml" \
+            | tee sonar-scanner.log
+          # The scanner does not fail when it finds no report: it reports zero coverage. Count what it imported.
+          importing_modules="$(grep -c 'Importing [0-9][0-9]* report(s)' sonar-scanner.log || true)"
+          echo "Modules for which the scanner imported coverage: $importing_modules (expected at least $linux_modules)"
+          if [ "$importing_modules" -lt "$linux_modules" ]; then
+            echo "The scanner imported coverage for $importing_modules module(s), fewer than the $linux_modules with a report." >&2
+            exit 1
+          fi

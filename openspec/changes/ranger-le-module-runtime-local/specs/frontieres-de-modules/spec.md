@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Le module d'exécution locale est rangé en sous-packages sans cycle
-`minos-runtime-local` SHALL répartir ses classes entre `process`, `sandbox`, `workspace` et `distributed`, sa racine ne gardant que l'orchestration et les classes propres à Windows. Les dépendances SHALL aller de la racine vers les autres, de `sandbox` vers `process` et `workspace`, et de `process` vers `workspace`, sans cycle. Les ressources empaquetées SHALL rester chargées par chemin absolu.
+`minos-runtime-local` SHALL répartir ses classes entre `process`, `sandbox`, `workspace` et `distributed`, sa racine ne gardant que l'orchestration. Les dépendances SHALL aller de la racine vers les autres, de `sandbox` vers `process` et `workspace`, et de `process` vers `workspace`, sans cycle. Les ressources empaquetées SHALL rester chargées par chemin absolu.
 
 #### Scenario: Aucun cycle entre les sous-packages
 - **GIVEN** le module rangé
