@@ -51,7 +51,7 @@ Remarque d'outillage : sur le poste, `mvnw.cmd` lancé depuis PowerShell 7 exige
 
 Les quatre changements du sprint 1 sont archivés (`openspec/changes/archive/2026-10-10-*`) et leurs exigences fusionnées dans `openspec/specs/` : `controles-de-fusion` (8 exigences, nouvelle), `frontieres-de-modules` (13, nouvelle), `confinement-code-non-fiable` (+4). Les « Purpose » provisoires des deux capacités créées ont été remplacés. Restent actifs, hors sprint : `etendre-audit-outille-a-tout-le-perimetre` (12/13) et `aligner-dependances-de-test-testcontainers` (7/8).
 
-## Sprint 2 — Failles de sécurité et observabilité (spécifié le 2026-10-10, non implémenté)
+## Sprint 2 — Failles de sécurité et observabilité (spécifié le 2026-10-10 ; quatre changements implémentés au 2026-10-12)
 
 Quatre changements OpenSpec, branche locale `docs/sprint2-openspec` (HEAD de départ `465e970d`) ; aucun code, aucun test, aucun workflow modifié. Chaque changement est fusionnable seul.
 
@@ -62,8 +62,8 @@ Quatre changements OpenSpec, branche locale `docs/sprint2-openspec` (HEAD de dé
 | AUD-QUA-04 | idem | **Spécifié** | Quatre `catch (Throwable)` et non trois (`MinosEditorActions:69` et `:83`, `MinosM21Actions:204`, `MinosToolWindowPanel:280`). Décision en attente D2-a : message de l'exception dans `idea.log` (le critère de sortie du sprint dit « sans chemin absolu »). |
 | AUD-QUA-06 | idem | **Spécifié** | Relevé du HEAD : 5 sites de récupération (dont `ProviderResidueReclamation:80-81`, non cité) + 4 diagnostics de bac à sable qui passent la cause **à dessein** + 2 `getMessage()`. Une interdiction générale de la cause contredirait cette décision : garde à deux règles (`Path` concaténé sans exception ; cause/`getMessage()` par liste nominative de 6 entrées). Décision en attente D3-a (étendre `check-private-io.py` ou script dédié). |
 | AUD-SEC-02 | `epingler-et-isoler-l-installation-des-providers` | **Spécifié** | Défaut d'environnement plus large : `npm ci` (×2), `dotnet tool install`, `go install` et les sondes `dotnet`/`go` héritent aussi de l'environnement complet. `applyForTrustedLauncher` est une liste **Windows**, package-private, sans `HOME` : remplacée par une façade publique fondée sur la liste des providers. Le plan d'indexation Linux relance encore `coursier launch` (hors changement, D2). Décisions en attente : D1 (verrou par jar, recommandé, ou zip assemblé), D2, D3. Amende l'ADR 0040. |
-| AUD-SEC-12 | `durcir-secret-postgres-et-lanceur-de-developpement` | **Spécifié** | Confirmé dans les deux scripts. Observation hors périmètre : l'installateur Inno écrit le mot de passe source dans `{tmp}` (privé à l'utilisateur) puis le supprime. Décision en attente D2 (corriger en place, recommandé, ou fichier partagé). |
-| AUD-SEC-13 | idem | **Spécifié** | « Plausible » devient **reproduit** : `java.bat` du répertoire courant exécuté par `cmd.exe` quand `NoDefaultCurrentDirectoryInExePath` est absente. **Piège** : cette variable vaut déjà `1` dans l'environnement du poste, ce qui masque le défaut ; le test doit la retirer. Correctif mesuré : `set NoDefaultCurrentDirectoryInExePath=1` dans le lanceur. `where` n'est pas retenu (il cherche aussi dans le répertoire courant). |
+| AUD-SEC-12 | `durcir-secret-postgres-et-lanceur-de-developpement` | **Implémenté** (2026-10-12) | Confirmé dans les deux scripts. Observation hors périmètre : l'installateur Inno écrit le mot de passe source dans `{tmp}` (privé à l'utilisateur) puis le supprime. Décision en attente D2 (corriger en place, recommandé, ou fichier partagé). |
+| AUD-SEC-13 | idem | **Implémenté** (2026-10-12) | « Plausible » devient **reproduit** : `java.bat` du répertoire courant exécuté par `cmd.exe` quand `NoDefaultCurrentDirectoryInExePath` est absente. **Piège** : cette variable vaut déjà `1` dans l'environnement du poste, ce qui masque le défaut ; le test doit la retirer. Correctif mesuré : `set NoDefaultCurrentDirectoryInExePath=1` dans le lanceur. `where` n'est pas retenu (il cherche aussi dans le répertoire courant). |
 
 Preuve de la spécification : `openspec validate --all --strict` → 18 passés, 0 échec.
 
@@ -114,6 +114,12 @@ Ordre d'implémentation proposé : `ouvrir-le-depot-git-sans-executer-ses-filtre
 - Correction : `RecoveryLogMessages` (chemin relatif à la racine gérée + classe de l'exception, sans cause) appliqué aux 5 sites ; `RecoveryLogMessagesTest` (4 tests, dont `AccessDeniedException` portant le chemin absolu).
 - Liste nominative : 6 fichiers, 9 occurrences de `LOGGER.log(cause)` (bac à sable, refus de reprise MINOS, journal du plan de contrôle hébergé). Décision D3-a prise avec la recommandation (extension de `check-private-io.py`), à confirmer.
 - **Non fait** : tâche 3.4 (JaCoCo `provider-execution-trust-boundary` rejoué localement) ; tâches 4.1 (manuelle) et 5.x.
+
+### AUD-SEC-12 et AUD-SEC-13 — implémentation (2026-10-12)
+
+- **AUD-SEC-12** : dans `configure-runtime-settings.ps1` et `configure-m30-docker-services.ps1`, le mot de passe PostgreSQL est écrit par `Write-PrivateSecretFile` : fichier créé vide, restreint à l'utilisateur courant, **vérifié** par lecture de la SDDL, puis écrit ; tout échec supprime le fichier. Un fichier existant est restreint de nouveau et vérifié avant d'être lu ; s'il ne peut pas l'être, le script échoue en signalant l'exposition possible, sans modifier le contenu. Décision D2 : correction en place. Mode de vérification retenu après mesure dans les deux PowerShell : lecture .NET de la SDDL (`D:PAI(A;;FA;;;<SID>)`), sans `Get-Acl`. Observation inchangée : l'installateur Inno dépose d'abord le mot de passe dans son dossier temporaire privé, hors périmètre.
+- **AUD-SEC-13** : `minos.cmd` de la racine appelle `%JAVA_HOME%\bin\java.exe` quand il existe, sinon fixe `NoDefaultCurrentDirectoryInExePath=1` avant `java`. Piège de reproduction confirmé : cette variable est déjà définie sur le poste de développement, les tests la retirent de l'environnement transmis.
+- **Preuves** : `python scripts/install/test_secret_file_acl.py` (8 cas, chacun sous Windows PowerShell 5.1 et `pwsh`) et `python scripts/install/test_dev_launcher.py` (6 cas) ; rouge mesuré sur le code d'origine pour les deux constats (détail dans `design.md` du changement). Les deux tests sont déclarés sautés dans `invariants` (Ubuntu) et exécutés dans `Verify (windows-2022)`.
 
 ## Rangement des modules en sous-packages (demande du propriétaire, 2026-10-11)
 

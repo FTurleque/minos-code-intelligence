@@ -81,6 +81,12 @@ jobs:
       - name: Compose resource limits gate self-test
         run: python scripts/quality/test_check_compose_limits.py -v
 
+      - name: Installation secret file tests (declared skipped here, executed on Windows in the verify job)
+        run: python scripts/install/test_secret_file_acl.py -v
+
+      - name: Development launcher tests (declared skipped here, executed on Windows in the verify job)
+        run: python scripts/install/test_dev_launcher.py -v
+
       - name: Shipped tools gate (one description shared by Java, the Docker image and the Windows distribution)
         run: python scripts/quality/check-tools-manifest.py
 
@@ -270,6 +276,17 @@ jobs:
       - name: Targeted JaCoCo gate (full)
         if: runner.os != 'Windows'
         run: python scripts/quality/check-jacoco.py
+
+      # AUD-SEC-12, AUD-SEC-13: the installation scripts and the development launcher are Windows code that no
+      # Maven module runs. Their tests are skipped in the invariants job (Ubuntu) and really run here.
+      - name: Installation secret file and development launcher tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python scripts/install/test_secret_file_acl.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/install/test_dev_launcher.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Targeted JaCoCo gate (Windows, PostgreSQL scope qualified on Linux)
         if: runner.os == 'Windows'

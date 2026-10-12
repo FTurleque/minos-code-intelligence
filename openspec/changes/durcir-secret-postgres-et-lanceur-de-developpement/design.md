@@ -48,7 +48,7 @@ Alternative écartée : restreindre le dossier `secrets\` en plus (défense en p
 
 Le mode de vérification (étape 3) est mesuré dans les **deux** runtimes avant d'être figé : `Get-Acl` dépend du module `Microsoft.PowerShell.Security` (le test de `PrivateLocalStorageWindowsAclTest` a déjà échoué quand le `PSModulePath` de `pwsh` polluait Windows PowerShell) ; l'analyse de la sortie d'`icacls` (SID d'identité courante) ou `FileInfo.GetAccessControl()` sont les repli. Le critère d'acceptation, lui, est fixe : héritage coupé, une seule entrée, le SID courant.
 
-### D2. Corriger en place, sans fichier partagé — **décision en attente du propriétaire**
+### D2. Corriger en place, sans fichier partagé — **retenu par le propriétaire le 2026-10-12**
 
 La séquence D1 est écrite deux fois (`configure-runtime-settings.ps1`, `configure-m30-docker-services.ps1`) comme elle l'est déjà, et testée sur les deux. Recommandation : **en place**. Mutualiser exigerait d'ajouter un fichier aux listes de livraison (`build-windows-distribution.ps1`, `update-installation.ps1:265`, `verify-windows-upgrade-transaction.ps1`) et de prouver la mise à jour transactionnelle : un risque disproportionné pour un constat « faible ». Si le propriétaire préfère mutualiser, la tâche 1.2 devient « créer `scripts/install/PrivateSecretFile.ps1` et l'ajouter aux trois listes ».
 
@@ -85,3 +85,13 @@ Windows seulement. Les tests se déclarent sautés sous Linux (étape `invariant
 ## Qualification de la capacité
 
 Écriture protégée du secret : **qualifiée** après la tâche 3 (preuve sur Windows PowerShell 5.1 et `pwsh`). Lanceur de développement : **qualifié** pour `cmd.exe` Windows ; hors Windows non applicable (le plugin utilise `minos`, non `minos.cmd`, `MinosSettingsState.java:83`).
+
+## Écarts et mesures constatés à l'implémentation (2026-10-12)
+
+- **D2** : corriger en place. Les quatre fonctions (`Restrict-FileToCurrentUser`, `Get-FileAccessSddl`, `Assert-FileRestrictedToCurrentUser`, `Write-PrivateSecretFile`) portent le même nom et le même texte dans les deux scripts ; aucune liste de livraison ne change.
+- **Mesure du mode de vérification (tâche 1.3)**, sous Windows PowerShell 5.1.19041 et `pwsh` 7.6.6 : `FileInfo.GetAccessControl` est une méthode d'instance sous .NET Framework et une méthode d'extension (`System.IO.FileSystemAclExtensions`) sous .NET ; les deux rendent la même SDDL, identique à celle de `Get-Acl`. Après `icacls /inheritance:r /grant:r *SID:F`, la SDDL d'accès vaut exactement `D:PAI(A;;FA;;;<SID>)` dans les deux runtimes, et `WriteAllText` sur le fichier existant la conserve. **Retenu : lecture .NET de la SDDL**, sans `Get-Acl` (module masquable par un `PSModulePath` étranger) ni analyse de la sortie d'`icacls` (noms traduits). Critère : `^D:P(AI)?\(A;;FA;;;<SID>\)$`.
+- **Rouge mesuré sur le code d'origine** (`New-ManagedPassword`, les deux runtimes) : le fichier contient déjà les 50 octets du mot de passe quand `icacls` est appelé ; un échec injecté d'`icacls` laisse le fichier en place avec l'ACL héritée (`(A;ID;FR;;;BU)`, lecture pour le groupe Utilisateurs) ; un fichier existant d'ACL héritée est accepté tel quel. Pour le script d'installation, l'écriture était en ligne dans le corps du script : le rouge y est l'absence de la fonction `Write-PrivateSecretFile`.
+- **Injection sans seam de production** : les tests masquent `icacls.exe` par une fonction PowerShell du même nom (résolue avant l'exécutable), qui observe le fichier au moment de la restriction, échoue, ou réussit sans effet. Ce dernier cas prouve que la vérification ne se fie pas au code de sortie d'`icacls`.
+- **Cas ajouté** : une restriction qui « réussit » sans effet est refusée par la vérification, et le fichier est supprimé.
+- **AUD-SEC-13** : rouge reproduit par `test_dev_launcher.py` sur le lanceur d'origine (le marqueur du `java.bat` piégé est écrit dans quatre cas sur six). Le faux `java.exe` de `JAVA_HOME` est compilé par `Add-Type -OutputType ConsoleApplication` sous Windows PowerShell 5.1 : il fallait un vrai exécutable. Cas ajoutés : `JAVA_HOME` sans `java.exe` (repli sur le `PATH`, jamais sur le répertoire courant), code de sortie de Java rendu, JAR ombré absent toujours signalé.
+- **Défaut d'outillage rencontré** : un heredoc Bash a transformé `\bin` en caractère de retour arrière dans `minos.cmd` ; le test `JAVA_HOME` l'a détecté avant tout commit. Le fichier est vérifié ASCII, CRLF, sans caractère de contrôle.

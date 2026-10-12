@@ -75,6 +75,43 @@ function Restrict-FileToCurrentUser([string] $Path) {
     if ($LASTEXITCODE -ne 0) { throw "Unable to restrict file ACL: $Path" }
 }
 
+function Get-FileAccessSddl([string] $Path) {
+    # FileInfo.GetAccessControl is an instance method under Windows PowerShell 5.1 (.NET Framework) and an
+    # extension method under pwsh (.NET); both return the same SDDL. Get-Acl is not used: it depends on a
+    # module that a foreign PSModulePath can hide.
+    $Info = New-Object System.IO.FileInfo $Path
+    $Sections = [System.Security.AccessControl.AccessControlSections]::Access
+    if ($Info | Get-Member -Name GetAccessControl -MemberType Method) {
+        return $Info.GetAccessControl($Sections).GetSecurityDescriptorSddlForm($Sections)
+    }
+    return [System.IO.FileSystemAclExtensions]::GetAccessControl($Info, $Sections).GetSecurityDescriptorSddlForm($Sections)
+}
+
+function Assert-FileRestrictedToCurrentUser([string] $Path) {
+    # Inheritance cut (P) and exactly one entry: full access for the current user. icacls.exe reporting
+    # success is not the proof; the ACL that is really on the file is.
+    $Sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $Sddl = Get-FileAccessSddl $Path
+    if ($Sddl -notmatch ('^D:P(AI)?\(A;;FA;;;' + [regex]::Escape($Sid) + '\)$')) {
+        throw "File ACL is not restricted to the current user: $Path"
+    }
+}
+
+function Write-PrivateSecretFile([string] $Path, [string] $Content) {
+    # The secret never exists on disk with an inherited ACL: the file is created empty, restricted, verified,
+    # and only then written. An existing file is removed first: its ACL is unknown. Any failure removes the file.
+    if (Test-Path -LiteralPath $Path) { Remove-Item -LiteralPath $Path -Force }
+    New-Item -ItemType File -Path $Path | Out-Null
+    try {
+        Restrict-FileToCurrentUser $Path
+        Assert-FileRestrictedToCurrentUser $Path
+        [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($false))
+    } catch {
+        Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+        throw
+    }
+}
+
 function Write-Json([string] $Path, [object] $Value) {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
     $Json = $Value | ConvertTo-Json -Depth 8
@@ -234,8 +271,7 @@ if ($StorageBackend -eq 'postgresql') {
         if ([string]::IsNullOrWhiteSpace($Secret)) { throw 'PostgreSQL password must not be blank.' }
         $SecretPath = Join-Path $DataRoot 'secrets\postgres.password'
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $SecretPath) | Out-Null
-        [System.IO.File]::WriteAllText($SecretPath, $Secret + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
-        Restrict-FileToCurrentUser $SecretPath
+        Write-PrivateSecretFile $SecretPath ($Secret + [Environment]::NewLine)
         $Configuration['minos.postgres.managed'] = 'false'
         $Configuration['minos.postgres.url'] = $PostgresUrl
         $Configuration['minos.postgres.user'] = $PostgresUser
