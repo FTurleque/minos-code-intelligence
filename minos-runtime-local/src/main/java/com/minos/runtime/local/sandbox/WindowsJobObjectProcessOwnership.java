@@ -1,10 +1,9 @@
-package com.minos.runtime.local;
+package com.minos.runtime.local.sandbox;
 
 import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.local.process.IndexerProcessPlan;
 import com.minos.runtime.local.process.ProcessIndexerExecutor;
 import com.minos.runtime.local.process.ProviderProcessEnvironment;
-import com.minos.runtime.local.sandbox.WorkerSandboxQualification;
 import com.minos.io.PrivateLocalStorage;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -19,7 +18,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /** Ownership-only Windows launcher. It does not impose AppContainer ACL/network restrictions. */
-final class WindowsJobObjectProcessOwnership {
+public final class WindowsJobObjectProcessOwnership {
 
     private static final System.Logger LOGGER =
             System.getLogger(WindowsJobObjectProcessOwnership.class.getName());
@@ -34,7 +33,7 @@ final class WindowsJobObjectProcessOwnership {
         this.launcher = launcher;
     }
 
-    static Optional<WindowsJobObjectProcessOwnership> discover(Path minosHome) {
+    public static Optional<WindowsJobObjectProcessOwnership> discover(Path minosHome) {
         Objects.requireNonNull(minosHome, "minosHome");
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) {
             return Optional.empty();
@@ -58,7 +57,7 @@ final class WindowsJobObjectProcessOwnership {
         }
     }
 
-    ProcessIndexerExecutor.ProcessPlanTransformer transformer() {
+    public ProcessIndexerExecutor.ProcessPlanTransformer transformer() {
         return new ProcessIndexerExecutor.ProcessPlanTransformer() {
             @Override
             public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception {

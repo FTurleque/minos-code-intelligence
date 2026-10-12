@@ -103,7 +103,7 @@ SCOPES = {
             "com/minos/runtime/local/process/ProcessIndexerExecutor", "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor",
             "com/minos/runtime/local/workspace/LocalProviderWorkspace", "com/minos/runtime/local/workspace/ProviderWorkspaceFiles",
             "com/minos/runtime/local/sandbox/WorkerSandboxBackend", "com/minos/runtime/local/sandbox/WorkerSandboxQualification",
-            "com/minos/runtime/local/WorkerSandboxBackends", "com/minos/runtime/local/sandbox/WorkerResourceContainment",
+            "com/minos/runtime/local/sandbox/WorkerSandboxBackends", "com/minos/runtime/local/sandbox/WorkerResourceContainment",
             "com/minos/runtime/local/process/CommandLocator", "com/minos/runtime/local/process/ProviderProcessEnvironment",
             "com/minos/runtime/local/process/ProcessTreeTermination", "com/minos/runtime/local/workspace/ProviderResidueReclamation",
         ),
@@ -130,7 +130,7 @@ SCOPES = {
     },
     "provider-sandbox-windows": {
         "prefixes": (
-            "com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend",
+            "com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend",
             "com/minos/runtime/local/sandbox/WindowsContainmentScript",
         ),
         "platform": "windows",

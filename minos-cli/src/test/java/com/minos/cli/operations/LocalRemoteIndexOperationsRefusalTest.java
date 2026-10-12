@@ -10,7 +10,7 @@ import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;
 import com.minos.runtime.local.distributed.DistributedArtifactBundleStore;
 import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
-import com.minos.runtime.local.WorkerSandboxBackends;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackends;
 import com.minos.runtime.local.sandbox.WorkerSandboxSelection;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

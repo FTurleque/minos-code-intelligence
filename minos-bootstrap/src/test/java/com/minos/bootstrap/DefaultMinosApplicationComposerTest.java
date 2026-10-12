@@ -72,9 +72,9 @@ class DefaultMinosApplicationComposerTest {
         DefaultMinosApplicationComposer composer = new DefaultMinosApplicationComposer();
         com.minos.runtime.WorkerSandboxProbe probe = composer.workerSandboxProbe();
         com.minos.runtime.local.sandbox.WorkerSandboxBackend managedLocal =
-                com.minos.runtime.local.WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(home);
+                com.minos.runtime.local.sandbox.WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(home);
         com.minos.runtime.local.sandbox.WorkerSandboxSelection untrusted =
-                com.minos.runtime.local.WorkerSandboxBackends.selectForUntrustedCode(home);
+                com.minos.runtime.local.sandbox.WorkerSandboxBackends.selectForUntrustedCode(home);
 
         assertEquals(new com.minos.runtime.WorkerSandboxProbe.ManagedLocalSandbox(
                 managedLocal.id(), managedLocal.supportsManagedLocalProvider()), probe.managedLocalProvider(home));

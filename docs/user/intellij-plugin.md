@@ -71,6 +71,8 @@ C:\Users\<user>\AppData\Local\Programs\MINOS\minos.cmd
 
 Un nom simple comme `minos.cmd` ou `minos` est résolu **avant** l'application du working directory projet et uniquement à partir d'entrées `PATH` absolues. Les éléments `PATH` vides ou relatifs et les chemins de launcher relatifs tels que `tools\minos.cmd` sont refusés : la racine du projet ne participe jamais à la résolution de l'exécutable.
 
+**Lanceur de développement.** Le `minos.cmd` de la racine du dépôt MINOS n'est pas le lanceur distribué : il lance le JAR ombré de `target\` avec Java et ne sert qu'à développer MINOS. Comme le plugin exécute sa commande depuis le projet ouvert, et que `cmd.exe` cherche une commande sans chemin dans le répertoire courant avant le `PATH`, ce lanceur appelle `%JAVA_HOME%\bin\java.exe` quand il existe, et sinon fixe `NoDefaultCurrentDirectoryInExePath=1` avant d'appeler `java` : un `java.bat` ou `java.exe` déposé dans un projet n'est jamais exécuté. La variable est héritée par Java et par les processus qu'il lance ; elle ne subsiste pas dans l'interpréteur appelant. Le lanceur installé (`...\Programs\MINOS\minos.cmd`) appelle `app\minos.exe` par chemin absolu et n'est pas concerné.
+
 ## Protocole IDE
 
 Le plugin commence par :

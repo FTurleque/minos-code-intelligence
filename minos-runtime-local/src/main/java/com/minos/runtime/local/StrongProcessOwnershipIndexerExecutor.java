@@ -1,5 +1,7 @@
 package com.minos.runtime.local;
 
+import com.minos.runtime.local.sandbox.WindowsJobObjectProcessOwnership;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackends;
 import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.local.process.IndexerProcessPlan;
 import com.minos.runtime.local.process.ProcessIndexerExecutor;

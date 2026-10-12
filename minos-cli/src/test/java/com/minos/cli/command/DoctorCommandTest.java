@@ -36,9 +36,9 @@ class DoctorCommandTest {
 
         String json = output.toString();
         com.minos.runtime.local.sandbox.WorkerSandboxBackend managedLocal =
-                com.minos.runtime.local.WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(home);
+                com.minos.runtime.local.sandbox.WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(home);
         com.minos.runtime.local.sandbox.WorkerSandboxSelection untrusted =
-                com.minos.runtime.local.WorkerSandboxBackends.selectForUntrustedCode(home);
+                com.minos.runtime.local.sandbox.WorkerSandboxBackends.selectForUntrustedCode(home);
         assertTrue(json.contains("\"managedLocalProvider\":{\"backend\":\"" + managedLocal.id()
                 + "\",\"available\":" + managedLocal.supportsManagedLocalProvider() + "}"), json);
         assertTrue(json.contains("\"untrustedCode\":{\"backend\":\"" + untrusted.backend().id()

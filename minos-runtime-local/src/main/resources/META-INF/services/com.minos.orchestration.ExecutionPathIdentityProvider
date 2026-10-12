@@ -1,1 +1,1 @@
-com.minos.runtime.local.WindowsExecutionPathIdentityProvider
+com.minos.runtime.local.sandbox.WindowsExecutionPathIdentityProvider
