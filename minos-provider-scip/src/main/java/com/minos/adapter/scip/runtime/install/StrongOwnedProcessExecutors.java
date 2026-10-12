@@ -7,7 +7,7 @@ import com.minos.runtime.local.process.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeStatus;
 import com.minos.runtime.local.StrongProcessOwnershipIndexerExecutor;
 import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
-import com.minos.runtime.local.WorkerSandboxBackends;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackends;
 
 import java.nio.file.Path;
 import java.util.ArrayList;

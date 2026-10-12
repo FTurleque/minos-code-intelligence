@@ -24,7 +24,7 @@ import java.util.Set;
  * <p>Inherit-only entries do not apply to the object itself and are skipped. A DENY can only narrow, and
  * ignoring it errs on the side of refusing.</p>
  */
-public final class SddlReplaceRights {
+final class SddlReplaceRights {
 
     /** The verdict for text that cannot be read: a refusal, like any other offender. */
     static final String UNREADABLE = "unreadable";
@@ -57,7 +57,7 @@ public final class SddlReplaceRights {
      * The SID of the first ALLOW entry that lets a principal outside {@code trustedSids} replace what is
      * under the object, or {@link #UNREADABLE} when the DACL cannot be understood, or {@code null}.
      */
-    public static String firstForeignReplaceGrant(String sddl, Set<String> trustedSids) {
+    static String firstForeignReplaceGrant(String sddl, Set<String> trustedSids) {
         Objects.requireNonNull(trustedSids, "trustedSids");
         List<Ace> aces = parse(sddl);
         if (aces == null) return UNREADABLE;
@@ -79,7 +79,7 @@ public final class SddlReplaceRights {
      * entry of the SDDL (both list the same ALLOW and DENY entries in the same order). An owner that has
      * no entry, or an ACL that does not line up with its SDDL, cannot be identified and is not trusted.
      */
-    public static boolean ownerTrusted(UserPrincipal owner, boolean ownerIsCurrentUser,
+    static boolean ownerTrusted(UserPrincipal owner, boolean ownerIsCurrentUser,
                                 List<AclEntry> javaAcl, String sddl, Set<String> trustedSids) {
         if (ownerIsCurrentUser) return true;
         List<Ace> aces = parse(sddl);

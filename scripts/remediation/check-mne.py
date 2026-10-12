@@ -52,7 +52,7 @@ def main() -> int:
         hybrid = read("minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java")
         token = read("minos-application/src/main/java/com/minos/context/TokenEstimator.java")
         polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java")
-        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java")
+        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java")
 
         # MNE-01: read active pointer under the same project lease as retention deletion.
         require("SnapshotCompactionService.java", compaction,

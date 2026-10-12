@@ -26,3 +26,12 @@ Ordre : mesure, déplacement, preuve. Commande de référence : `./mvnw.cmd -B -
 
 - [x] 4.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (rangement des modules : module, PR, types rendus publics, écarts).
 - [x] 4.2 `openspec validate --all --strict` ; lister les `docs/` à mettre à jour avant archivage.
+
+## 5. Complément du 2026-10-12 : classes propres à Windows
+
+Rendu possible par la PR #421 (SonarCloud importe aussi la couverture du job Windows) ; demandé par le propriétaire le 2026-10-12.
+
+- [x] 5.1 Vérifier que le déplacement de `WindowsAppContainerWorkerSandboxBackend`, `SandboxLauncherScript`, `WindowsJobObjectProcessOwnership`, `WindowsExecutionPathIdentityProvider` et `WorkerSandboxBackends` dans `sandbox` ne crée aucun cycle, puis les déplacer avec leurs tests (`git mv`), réécrire `META-INF/services` et les chemins littéraux.
+- [x] 5.2 Élargir la visibilité au strict nécessaire et **refermer** ce que le rangement partiel avait ouvert pour ces classes ; ajouter `sandbox.WorkerSandboxBackends` à `RUNTIME_LOCAL_EXPORTED_TYPES` (règle A10), les autres modules le nommaient déjà.
+- [x] 5.3 Preuve : `./mvnw.cmd -B -ntp -pl minos-runtime-local -am test` (mêmes nombres qu'avant), `./mvnw.cmd -B -ntp -pl minos-app -am test-compile`, `python .claude/scripts/run_gates.py`, baseline SpotBugs régénéré.
+- [ ] 5.4 **(manuelle)** Relever sur la PR que `SonarCloud Code Analysis` mesure la couverture de ces classes à partir des deux rapports (preuve de la fusion fichier par fichier laissée ouverte par la PR #421).

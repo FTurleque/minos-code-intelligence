@@ -1,4 +1,4 @@
-package com.minos.runtime.local;
+package com.minos.runtime.local.sandbox;
 
 import com.minos.io.PrivateLocalStorage;
 import org.junit.jupiter.api.Test;
