@@ -1,7 +1,6 @@
 package com.minos.runtime.local.process;
 
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -13,8 +12,9 @@ import java.util.Set;
  * <p>These commands run outside the sandbox and fetch code from the network, so they must not inherit
  * MINOS control-plane secrets. The base is the provider allowlist ({@link ProviderProcessEnvironment},
  * the single source of truth for what an external tool may receive); this class adds what an installer
- * needs on top of it (home directory on Linux, proxy and TLS trust, package caches) and then applies a
- * deny pattern that wins over every list, including values the caller declares.</p>
+ * needs on top of it (home directory on Linux, proxy and TLS trust, package caches) and then applies the
+ * deny pattern of {@link ProviderProcessEnvironment}, which wins over every list, including values the
+ * caller declares.</p>
  */
 public final class InstallationProcessEnvironment {
 
@@ -28,15 +28,6 @@ public final class InstallationProcessEnvironment {
             "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
             "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
             "npm_config_cache", "NUGET_PACKAGES", "DOTNET_CLI_HOME");
-
-    /** Lower-case fragments of a name that mark a secret; compared case-insensitively. */
-    private static final Set<String> SECRET_FRAGMENTS = Set.of("token", "secret", "password", "key", "credential");
-
-    /** Name prefixes that are never forwarded, except the explicit exceptions below. */
-    private static final Set<String> DENIED_PREFIXES = Set.of("minos_", "github_", "npm_");
-
-    /** Not secrets, although they match a denied prefix. */
-    private static final Set<String> DENIED_PREFIX_EXCEPTIONS = Set.of("npm_config_cache");
 
     private InstallationProcessEnvironment() {
     }
@@ -73,11 +64,6 @@ public final class InstallationProcessEnvironment {
 
     /** True for a name that looks like a secret or a MINOS/CI credential, whatever list it came from. */
     static boolean isDenied(String name) {
-        String lower = name.toLowerCase(Locale.ROOT);
-        if (DENIED_PREFIX_EXCEPTIONS.contains(lower)) {
-            return false;
-        }
-        return DENIED_PREFIXES.stream().anyMatch(lower::startsWith)
-                || SECRET_FRAGMENTS.stream().anyMatch(lower::contains);
+        return ProviderProcessEnvironment.isDeniedName(name);
     }
 }
