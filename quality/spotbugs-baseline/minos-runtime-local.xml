@@ -4,96 +4,26 @@
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
     <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.LocalIsolatedIndexWorker.execute(DistributedIndexing$WorkerRequest)</LongMessage>
     <Class classname="com.minos.runtime.local.LocalIsolatedIndexWorker" primary="true">
-      <SourceLine classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="66" end="270" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java">
-        <Message>At LocalIsolatedIndexWorker.java:[lines 66-270]</Message>
+      <SourceLine classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="67" end="271" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java">
+        <Message>At LocalIsolatedIndexWorker.java:[lines 67-271]</Message>
       </SourceLine>
       <Message>In class com.minos.runtime.local.LocalIsolatedIndexWorker</Message>
     </Class>
     <Method isStatic="false" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" signature="(Lcom/minos/remote/DistributedIndexing$WorkerRequest;)Lcom/minos/remote/DistributedIndexing$WorkerResponse;" name="execute" primary="true">
-      <SourceLine endBytecode="1718" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="153" end="257" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java" startBytecode="0" />
+      <SourceLine endBytecode="1718" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="154" end="258" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java" startBytecode="0" />
       <Message>In method com.minos.runtime.local.LocalIsolatedIndexWorker.execute(DistributedIndexing$WorkerRequest)</Message>
     </Method>
     <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
       <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
       <Message>Called method java.nio.file.Path.getParent()</Message>
     </Method>
-    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="745" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="253" end="253" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java" startBytecode="745" primary="true">
-      <Message>Method invoked at LocalIsolatedIndexWorker.java:[line 253]</Message>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="745" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="254" end="254" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java" startBytecode="745" primary="true">
+      <Message>Method invoked at LocalIsolatedIndexWorker.java:[line 254]</Message>
     </SourceLine>
-    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="740" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="253" end="253" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java" startBytecode="740">
-      <Message>Known null at LocalIsolatedIndexWorker.java:[line 253]</Message>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="740" classname="com.minos.runtime.local.LocalIsolatedIndexWorker" start="254" end="254" sourcepath="com/minos/runtime/local/LocalIsolatedIndexWorker.java" sourcefile="LocalIsolatedIndexWorker.java" startBytecode="740">
+      <Message>Known null at LocalIsolatedIndexWorker.java:[line 254]</Message>
     </SourceLine>
     <Property name="edu.umd.cs.findbugs.detect.NullDerefProperty.DEREFS_ARE_CLONED" value="true" />
-  </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="a56171c5206f0d91ce99668a7936d81f" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
-    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
-    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.SandboxLauncherScript.verify()</LongMessage>
-    <Class classname="com.minos.runtime.local.SandboxLauncherScript" primary="true">
-      <SourceLine classname="com.minos.runtime.local.SandboxLauncherScript" start="58" end="326" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java">
-        <Message>At SandboxLauncherScript.java:[lines 58-326]</Message>
-      </SourceLine>
-      <Message>In class com.minos.runtime.local.SandboxLauncherScript</Message>
-    </Class>
-    <Method isStatic="false" classname="com.minos.runtime.local.SandboxLauncherScript" signature="()V" name="verify" primary="true">
-      <SourceLine endBytecode="329" classname="com.minos.runtime.local.SandboxLauncherScript" start="139" end="156" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="0" />
-      <Message>In method com.minos.runtime.local.SandboxLauncherScript.verify()</Message>
-    </Method>
-    <LocalVariable role="LOCAL_VARIABLE_VALUE_OF" pc="10" name="directory" register="1">
-      <Message>Value loaded from directory</Message>
-    </LocalVariable>
-    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="11" classname="com.minos.runtime.local.SandboxLauncherScript" start="140" end="140" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="11" primary="true">
-      <Message>Dereferenced at SandboxLauncherScript.java:[line 140]</Message>
-    </SourceLine>
-    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="4" classname="com.minos.runtime.local.SandboxLauncherScript" start="139" end="139" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="4">
-      <Message>Known null at SandboxLauncherScript.java:[line 139]</Message>
-    </SourceLine>
-  </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="d5aeb8f1d71b1bdd165999597b94f712" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
-    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
-    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.SandboxLauncherScript.verify()</LongMessage>
-    <Class classname="com.minos.runtime.local.SandboxLauncherScript" primary="true">
-      <SourceLine classname="com.minos.runtime.local.SandboxLauncherScript" start="58" end="326" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java">
-        <Message>At SandboxLauncherScript.java:[lines 58-326]</Message>
-      </SourceLine>
-      <Message>In class com.minos.runtime.local.SandboxLauncherScript</Message>
-    </Class>
-    <Method isStatic="false" classname="com.minos.runtime.local.SandboxLauncherScript" signature="()V" name="verify" primary="true">
-      <SourceLine endBytecode="329" classname="com.minos.runtime.local.SandboxLauncherScript" start="139" end="156" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="0" />
-      <Message>In method com.minos.runtime.local.SandboxLauncherScript.verify()</Message>
-    </Method>
-    <LocalVariable role="LOCAL_VARIABLE_VALUE_OF" pc="40" name="root" register="2">
-      <Message>Value loaded from root</Message>
-    </LocalVariable>
-    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="41" classname="com.minos.runtime.local.SandboxLauncherScript" start="146" end="146" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="41" primary="true">
-      <Message>Dereferenced at SandboxLauncherScript.java:[line 146]</Message>
-    </SourceLine>
-    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="11" classname="com.minos.runtime.local.SandboxLauncherScript" start="140" end="140" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="11">
-      <Message>Known null at SandboxLauncherScript.java:[line 140]</Message>
-    </SourceLine>
-  </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="f564f631adf7972720d3d778f1da04db" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
-    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
-    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.SandboxLauncherScript.verify()</LongMessage>
-    <Class classname="com.minos.runtime.local.SandboxLauncherScript" primary="true">
-      <SourceLine classname="com.minos.runtime.local.SandboxLauncherScript" start="58" end="326" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java">
-        <Message>At SandboxLauncherScript.java:[lines 58-326]</Message>
-      </SourceLine>
-      <Message>In class com.minos.runtime.local.SandboxLauncherScript</Message>
-    </Class>
-    <Method isStatic="false" classname="com.minos.runtime.local.SandboxLauncherScript" signature="()V" name="verify" primary="true">
-      <SourceLine endBytecode="329" classname="com.minos.runtime.local.SandboxLauncherScript" start="139" end="156" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="0" />
-      <Message>In method com.minos.runtime.local.SandboxLauncherScript.verify()</Message>
-    </Method>
-    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
-      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
-      <Message>Called method java.nio.file.Path.getParent()</Message>
-    </Method>
-    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="58" classname="com.minos.runtime.local.SandboxLauncherScript" start="145" end="145" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="58" primary="true">
-      <Message>Method invoked at SandboxLauncherScript.java:[line 145]</Message>
-    </SourceLine>
-    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="41" classname="com.minos.runtime.local.SandboxLauncherScript" start="146" end="146" sourcepath="com/minos/runtime/local/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="41">
-      <Message>Known null at SandboxLauncherScript.java:[line 146]</Message>
-    </SourceLine>
   </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="76403f8e2998e2b9cc3b5ec8aade585" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="1">
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
@@ -316,32 +246,32 @@
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
     <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.process.ProcessIndexerExecutor.move(Path, Path)</LongMessage>
     <Class classname="com.minos.runtime.local.process.ProcessIndexerExecutor" primary="true">
-      <SourceLine classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="45" end="626" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java">
-        <Message>At ProcessIndexerExecutor.java:[lines 45-626]</Message>
+      <SourceLine classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="45" end="630" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java">
+        <Message>At ProcessIndexerExecutor.java:[lines 45-630]</Message>
       </SourceLine>
       <Message>In class com.minos.runtime.local.process.ProcessIndexerExecutor</Message>
     </Class>
     <Method isStatic="true" classname="com.minos.runtime.local.process.ProcessIndexerExecutor" signature="(Ljava/nio/file/Path;Ljava/nio/file/Path;)V" name="move" primary="true">
-      <SourceLine endBytecode="323" classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="605" end="626" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="0" />
+      <SourceLine endBytecode="323" classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="609" end="630" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="0" />
       <Message>In method com.minos.runtime.local.process.ProcessIndexerExecutor.move(Path, Path)</Message>
     </Method>
     <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
       <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
       <Message>Called method java.nio.file.Path.getParent()</Message>
     </Method>
-    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="62" classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="617" end="617" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="62" primary="true">
-      <Message>Method invoked at ProcessIndexerExecutor.java:[line 617]</Message>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="62" classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="621" end="621" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="62" primary="true">
+      <Message>Method invoked at ProcessIndexerExecutor.java:[line 621]</Message>
     </SourceLine>
-    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="47" classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="617" end="617" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="47">
-      <Message>Known null at ProcessIndexerExecutor.java:[line 617]</Message>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="47" classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="621" end="621" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="47">
+      <Message>Known null at ProcessIndexerExecutor.java:[line 621]</Message>
     </SourceLine>
   </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="8c514ba9502820b2f9c3677a6de8753c" cweid="396" rank="17" abbrev="REC" category="STYLE" priority="2" type="REC_CATCH_EXCEPTION" instanceOccurrenceMax="0">
     <ShortMessage>java.lang.Exception est intercepté alors qu'Exception n'est jamais lancé</ShortMessage>
     <LongMessage>La méthode com.minos.runtime.local.process.ProcessIndexerExecutor.executePrepared(IndexingRuntimePorts$IndexingExecutionRequest, ProcessIndexerExecutor$ProcessPlanTransformer, Path) intercepte Exception, mais Exception n'est pas lancé dans le bloc try/catch et RuntimeException n'est pas appelé</LongMessage>
     <Class classname="com.minos.runtime.local.process.ProcessIndexerExecutor" primary="true">
-      <SourceLine classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="45" end="626" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java">
-        <Message>At ProcessIndexerExecutor.java:[lines 45-626]</Message>
+      <SourceLine classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="45" end="630" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java">
+        <Message>At ProcessIndexerExecutor.java:[lines 45-630]</Message>
       </SourceLine>
       <Message>In class com.minos.runtime.local.process.ProcessIndexerExecutor</Message>
     </Class>
@@ -411,6 +341,76 @@
     </String>
     <SourceLine synthetic="true" endBytecode="145" classname="com.minos.runtime.local.sandbox.LinuxCgroupJob" start="764" end="772" sourcepath="com/minos/runtime/local/sandbox/LinuxCgroupJob.java" sourcefile="LinuxCgroupJob.java" startBytecode="0">
       <Message>At LinuxCgroupJob.java:[lines 764-772]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="dd6f77c64cd8b6731d10b92e89ba4715" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.sandbox.SandboxLauncherScript.verify()</LongMessage>
+    <Class classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" primary="true">
+      <SourceLine classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="56" end="324" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java">
+        <Message>At SandboxLauncherScript.java:[lines 56-324]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.sandbox.SandboxLauncherScript</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" signature="()V" name="verify" primary="true">
+      <SourceLine endBytecode="329" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="137" end="154" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.sandbox.SandboxLauncherScript.verify()</Message>
+    </Method>
+    <LocalVariable role="LOCAL_VARIABLE_VALUE_OF" pc="10" name="directory" register="1">
+      <Message>Value loaded from directory</Message>
+    </LocalVariable>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="11" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="138" end="138" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="11" primary="true">
+      <Message>Dereferenced at SandboxLauncherScript.java:[line 138]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="4" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="137" end="137" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="4">
+      <Message>Known null at SandboxLauncherScript.java:[line 137]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="8777203a146f046563a20943db18e47" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.sandbox.SandboxLauncherScript.verify()</LongMessage>
+    <Class classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" primary="true">
+      <SourceLine classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="56" end="324" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java">
+        <Message>At SandboxLauncherScript.java:[lines 56-324]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.sandbox.SandboxLauncherScript</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" signature="()V" name="verify" primary="true">
+      <SourceLine endBytecode="329" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="137" end="154" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.sandbox.SandboxLauncherScript.verify()</Message>
+    </Method>
+    <LocalVariable role="LOCAL_VARIABLE_VALUE_OF" pc="40" name="root" register="2">
+      <Message>Value loaded from root</Message>
+    </LocalVariable>
+    <SourceLine role="SOURCE_LINE_DEREF" endBytecode="41" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="144" end="144" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="41" primary="true">
+      <Message>Dereferenced at SandboxLauncherScript.java:[line 144]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="11" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="138" end="138" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="11">
+      <Message>Known null at SandboxLauncherScript.java:[line 138]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="a7c26bb6435fca5e2c179426794ee2fa" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.runtime.local.sandbox.SandboxLauncherScript.verify()</LongMessage>
+    <Class classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" primary="true">
+      <SourceLine classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="56" end="324" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java">
+        <Message>At SandboxLauncherScript.java:[lines 56-324]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.sandbox.SandboxLauncherScript</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" signature="()V" name="verify" primary="true">
+      <SourceLine endBytecode="329" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="137" end="154" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.sandbox.SandboxLauncherScript.verify()</Message>
+    </Method>
+    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
+      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
+      <Message>Called method java.nio.file.Path.getParent()</Message>
+    </Method>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="58" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="143" end="143" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="58" primary="true">
+      <Message>Method invoked at SandboxLauncherScript.java:[line 143]</Message>
+    </SourceLine>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="41" classname="com.minos.runtime.local.sandbox.SandboxLauncherScript" start="144" end="144" sourcepath="com/minos/runtime/local/sandbox/SandboxLauncherScript.java" sourcefile="SandboxLauncherScript.java" startBytecode="41">
+      <Message>Known null at SandboxLauncherScript.java:[line 144]</Message>
     </SourceLine>
   </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="4d0ec556fcc7f8a3ad6b58d659bab6f4" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">

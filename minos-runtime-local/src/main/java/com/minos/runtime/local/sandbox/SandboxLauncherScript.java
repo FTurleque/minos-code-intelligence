@@ -1,8 +1,6 @@
-package com.minos.runtime.local;
+package com.minos.runtime.local.sandbox;
 
 import com.minos.runtime.local.process.ProcessIdentity;
-import com.minos.runtime.local.sandbox.SddlReplaceRights;
-import com.minos.runtime.local.sandbox.WindowsContainmentScript;
 import com.minos.io.ConfinedFileOpener;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;

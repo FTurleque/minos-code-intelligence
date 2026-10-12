@@ -1,6 +1,5 @@
-package com.minos.runtime.local;
+package com.minos.runtime.local.sandbox;
 
-import com.minos.runtime.local.sandbox.SddlReplaceRights;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

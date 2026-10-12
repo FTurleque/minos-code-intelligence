@@ -10,7 +10,7 @@ import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.runtime.local.distributed.DistributedArtifactBundleStore;
 import com.minos.runtime.local.distributed.DistributedIndexerExecutor;
 import com.minos.runtime.local.LocalIsolatedIndexWorker;
-import com.minos.runtime.local.WorkerSandboxBackends;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackends;
 import com.minos.runtime.WorkerSandboxProbe;
 import com.minos.runtime.local.sandbox.WorkerSandboxSelection;
 

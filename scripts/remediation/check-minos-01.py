@@ -31,7 +31,7 @@ ADVERSARIAL_TESTS = {
         "aJobDirectoryCanNeverEscapeTheDelegatedRoot",
         "theSandboxJoinsTheJobBeforeItExecutesAnyProviderCode",
     ),
-    f"{RUNTIME_TESTS}/WindowsJobObjectContainmentTest.java": (
+    f"{RUNTIME_TESTS}/sandbox/WindowsJobObjectContainmentTest.java": (
         "@EnabledOnOs(OS.WINDOWS)",
         "neitherChildNorGrandchildSurvivesTheJobObject",
         "theSandboxPlanCarriesEveryAggregateJobLimit",
@@ -51,7 +51,7 @@ ADVERSARIAL_TESTS = {
         "aRunTooLargeToDeleteInOnePassIsQuarantinedAndDrainedLater",
         "pruneNeverDeletesOutsideTheRunsRoot",
     ),
-    f"{RUNTIME_TESTS}/WorkerResourceContainmentTest.java": (
+    f"{RUNTIME_TESTS}/sandbox/WorkerResourceContainmentTest.java": (
         "aBackendWithoutAnAggregateJobBoundaryIsNeverQualifiedForUntrustedCode",
         "supervisionIsNeverAcceptedAsASubstituteForAnAggregateOsJobBoundary",
         "aMeasurementAfterExecutionIsNeverContainment",
@@ -88,7 +88,7 @@ def main() -> int:
         backend = read(f"{RUNTIME}/sandbox/WorkerSandboxBackend.java")
         cgroup = read(f"{RUNTIME}/sandbox/LinuxCgroupJob.java")
         linux = read(f"{RUNTIME}/sandbox/LinuxBubblewrapWorkerSandboxBackend.java")
-        windows = read(f"{RUNTIME}/WindowsAppContainerWorkerSandboxBackend.java")
+        windows = read(f"{RUNTIME}/sandbox/WindowsAppContainerWorkerSandboxBackend.java")
         launcher = read(WINDOWS_LAUNCHER)
         quota = read(f"{RUNTIME}/workspace/ProviderWriteQuota.java")
         supervisor = read(f"{RUNTIME}/workspace/ProviderWriteQuotaSupervisor.java")
