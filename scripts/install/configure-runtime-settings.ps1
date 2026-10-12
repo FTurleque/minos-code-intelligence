@@ -75,25 +75,38 @@ function Restrict-FileToCurrentUser([string] $Path) {
     if ($LASTEXITCODE -ne 0) { throw "Unable to restrict file ACL: $Path" }
 }
 
-function Get-FileAccessSddl([string] $Path) {
+function Get-FileAccessSecurity([string] $Path) {
     # FileInfo.GetAccessControl is an instance method under Windows PowerShell 5.1 (.NET Framework) and an
-    # extension method under pwsh (.NET); both return the same SDDL. Get-Acl is not used: it depends on a
-    # module that a foreign PSModulePath can hide.
+    # extension method under pwsh (.NET); both return the same FileSecurity. Get-Acl is not used: it depends
+    # on a module that a foreign PSModulePath can hide.
     $Info = New-Object System.IO.FileInfo $Path
     $Sections = [System.Security.AccessControl.AccessControlSections]::Access
     if ($Info | Get-Member -Name GetAccessControl -MemberType Method) {
-        return $Info.GetAccessControl($Sections).GetSecurityDescriptorSddlForm($Sections)
+        return $Info.GetAccessControl($Sections)
     }
-    return [System.IO.FileSystemAclExtensions]::GetAccessControl($Info, $Sections).GetSecurityDescriptorSddlForm($Sections)
+    return [System.IO.FileSystemAclExtensions]::GetAccessControl($Info, $Sections)
 }
 
 function Assert-FileRestrictedToCurrentUser([string] $Path) {
-    # Inheritance cut (P) and exactly one entry: full access for the current user. icacls.exe reporting
-    # success is not the proof; the ACL that is really on the file is.
-    $Sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    $Sddl = Get-FileAccessSddl $Path
-    if ($Sddl -notmatch ('^D:P(AI)?\(A;;FA;;;' + [regex]::Escape($Sid) + '\)$')) {
-        throw "File ACL is not restricted to the current user: $Path"
+    # Inheritance cut and exactly one rule: full control allowed to the current user. icacls.exe reporting
+    # success is not the proof; the ACL that is really on the file is. The rules are compared as security
+    # identifiers, not as SDDL text: SDDL abbreviates some accounts (the built-in administrator is "LA").
+    $Sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $Security = Get-FileAccessSecurity $Path
+    $Rules = @($Security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+    $Restricted = $Security.AreAccessRulesProtected -and $Rules.Count -eq 1
+    if ($Restricted) {
+        $Rule = $Rules[0]
+        $Restricted = (-not $Rule.IsInherited) -and
+            $Rule.IdentityReference -eq $Sid -and
+            $Rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+            $Rule.FileSystemRights -eq [System.Security.AccessControl.FileSystemRights]::FullControl
+    }
+    if (-not $Restricted) {
+        # The access list found is named in the message (security identifiers, no secret): it tells an operator
+        # who else could read the file.
+        $Found = $Security.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::Access)
+        throw "File ACL is not restricted to the current user: $Path (found $Found)"
     }
 }
 

@@ -25,7 +25,7 @@ INSTALL_SCRIPT = ROOT / "scripts" / "install" / "configure-runtime-settings.ps1"
 DOCKER_SCRIPT = ROOT / "docker" / "scripts" / "configure-m30-docker-services.ps1"
 WINDOWS = os.name == "nt"
 SKIP_REASON = "Windows ACLs and icacls.exe: runs on Verify (windows-2022)"
-ACL_HELPERS = ("Restrict-FileToCurrentUser", "Get-FileAccessSddl", "Assert-FileRestrictedToCurrentUser",
+ACL_HELPERS = ("Restrict-FileToCurrentUser", "Get-FileAccessSecurity", "Assert-FileRestrictedToCurrentUser",
                "Write-PrivateSecretFile")
 
 
@@ -52,16 +52,19 @@ function Get-ScriptFunctionText([string] $Path, [string[]] $Names) {
     if ($missing.Count -gt 0) { throw "missing function(s) in ${Path}: $($missing -join ', ')" }
     return (($found | ForEach-Object { $_.Extent.Text }) -join [Environment]::NewLine)
 }
-function Read-TestSddl([string] $Path) {
+# The ACL of a file as "protected=<bool>;<SID>:<rights>:<type>:<inherited>;...": read by the test itself, with
+# security identifiers and not SDDL text (SDDL abbreviates some accounts, such as the built-in administrator).
+function Read-TestAcl([string] $Path) {
     $info = New-Object System.IO.FileInfo $Path
     $sections = [System.Security.AccessControl.AccessControlSections]::Access
-    if ($info | Get-Member -Name GetAccessControl -MemberType Method) {
-        return $info.GetAccessControl($sections).GetSecurityDescriptorSddlForm($sections)
-    }
-    return [System.IO.FileSystemAclExtensions]::GetAccessControl($info, $sections).GetSecurityDescriptorSddlForm($sections)
+    if ($info | Get-Member -Name GetAccessControl -MemberType Method) { $security = $info.GetAccessControl($sections) }
+    else { $security = [System.IO.FileSystemAclExtensions]::GetAccessControl($info, $sections) }
+    $rules = @($security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object {
+        "$($_.IdentityReference.Value):$($_.FileSystemRights):$($_.AccessControlType):inherited=$($_.IsInherited)" } | Sort-Object)
+    return "protected=$($security.AreAccessRulesProtected);" + ($rules -join ';')
 }
 $Sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-$Expected = "D:PAI(A;;FA;;;$Sid)"
+$Expected = "protected=True;${Sid}:FullControl:Allow:inherited=False"
 $RealIcacls = (Get-Command icacls.exe -CommandType Application | Select-Object -First 1).Source
 
 # A data folder every local user can read: what a DataRoot on a shared volume looks like.
@@ -97,7 +100,7 @@ try {
 }
 $result.exists = (Test-Path -LiteralPath $Target)
 $result.content = if ($result.exists) { [System.IO.File]::ReadAllText($Target) } else { '' }
-$result.sddl = if ($result.exists) { Read-TestSddl $Target } else { '' }
+$result.acl = if ($result.exists) { Read-TestAcl $Target } else { '' }
 $result.expected = $Expected
 $result.lengthAtRestriction = $script:LengthAtRestriction
 $result.contentAtRestriction = $script:ContentAtRestriction
@@ -144,7 +147,7 @@ class SecretFileAclTest(unittest.TestCase):
 
     def assert_restricted(self, result: dict) -> None:
         self.assertTrue(result["exists"], result)
-        self.assertEqual(result["expected"], result["sddl"], "inheritance cut and one entry, the current SID")
+        self.assertEqual(result["expected"], result["acl"], "inheritance cut and one rule, the current user")
 
 
 class InstallScriptSecretTest(SecretFileAclTest):
