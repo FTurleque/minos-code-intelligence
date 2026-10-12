@@ -30,6 +30,19 @@ Un nom de variable correspondant à `MINOS_*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD
 - **WHEN** la façade construit l'environnement
 - **THEN** ces deux variables sont présentes
 
+### Requirement: Une variable déclarée par un plan d'indexation n'échappe pas au motif de secret
+L'environnement d'un provider d'indexation, et celui du lanceur de confiance qui le contient, SHALL appliquer aux variables déclarées par le plan le même motif de refus que les commandes d'installation : un nom à motif de secret déclaré par un plan SHALL être retiré. Le motif SHALL être défini une seule fois.
+
+#### Scenario: Plan qui déclare un nom à motif de secret
+- **GIVEN** un plan d'indexation qui déclare `GITHUB_TOKEN` et `CARGO_TARGET_DIR`
+- **WHEN** `./mvnw.cmd -pl minos-runtime-local -am test "-Dtest=ProviderProcessEnvironmentDeclaredSecretsTest"` est exécuté
+- **THEN** seul `CARGO_TARGET_DIR` atteint le provider et le lanceur
+
+#### Scenario: Variable ordinaire déclarée par un plan
+- **GIVEN** un plan qui déclare `PATH` pour remplacer la valeur héritée
+- **WHEN** l'environnement du provider est construit
+- **THEN** la valeur déclarée est transmise
+
 ### Requirement: Le classpath de scip-java est vérifié jar par jar avant tout usage
 Après résolution par `coursier fetch --classpath`, l'installation de scip-java SHALL comparer l'ensemble des jars obtenus au verrou du catalogue (noms et SHA-256), SHALL refuser tout jar absent, en trop ou d'empreinte différente, et SHALL supprimer le résultat partiel avant de signaler l'échec. Elle SHALL NOT écrire `classpath.txt` avant la fin de la vérification.
 

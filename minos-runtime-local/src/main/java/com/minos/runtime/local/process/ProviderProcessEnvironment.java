@@ -1,6 +1,7 @@
 package com.minos.runtime.local.process;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -11,7 +12,9 @@ import java.util.Set;
  * <p>Provider code is treated as untrusted. The parent MINOS process may carry database passwords,
  * hosted tokens, CI credentials or operator secrets, so provider processes must never inherit the
  * parent environment wholesale. Only the runtime/OS allowlists below are inherited implicitly;
- * provider-specific values must be declared explicitly by {@link IndexerProcessPlan#environment()}.</p>
+ * provider-specific values must be declared explicitly by {@link IndexerProcessPlan#environment()}.
+ * A declared variable whose name looks like a secret or a MINOS/CI credential is not forwarded either:
+ * see {@link #isDeniedName(String)}.</p>
  */
 public final class ProviderProcessEnvironment {
 
@@ -111,7 +114,29 @@ public final class ProviderProcessEnvironment {
             "PSModuleAnalysisCachePath"
     );
 
+    /** Lower-case fragments of a name that mark a secret; compared case-insensitively. */
+    private static final Set<String> SECRET_FRAGMENTS = Set.of("token", "secret", "password", "key", "credential");
+
+    /** Name prefixes that are never forwarded, except the explicit exceptions below. */
+    private static final Set<String> DENIED_PREFIXES = Set.of("minos_", "github_", "npm_");
+
+    /** Not secrets, although they match a denied prefix. */
+    private static final Set<String> DENIED_PREFIX_EXCEPTIONS = Set.of("npm_config_cache");
+
     private ProviderProcessEnvironment() {
+    }
+
+    /**
+     * True for a name that looks like a secret or a MINOS/CI credential. The pattern wins over every list:
+     * the inherited allowlists never contain such a name, and a declared variable that matches is dropped.
+     */
+    static boolean isDeniedName(String name) {
+        String lower = name.toLowerCase(Locale.ROOT);
+        if (DENIED_PREFIX_EXCEPTIONS.contains(lower)) {
+            return false;
+        }
+        return DENIED_PREFIXES.stream().anyMatch(lower::startsWith)
+                || SECRET_FRAGMENTS.stream().anyMatch(lower::contains);
     }
 
     /** Replaces the environment of {@code builder} with the minimum a trusted launcher needs, plus {@code declared}. */
@@ -128,7 +153,7 @@ public final class ProviderProcessEnvironment {
         });
         environment.clear();
         environment.putAll(kept);
-        environment.putAll(declared);
+        putDeclared(environment, declared);
     }
 
     static void apply(ProcessBuilder builder, Map<String, String> declared) {
@@ -151,8 +176,17 @@ public final class ProviderProcessEnvironment {
                 result.put(key, value);
             }
         });
-        result.putAll(declared);
+        putDeclared(result, declared);
         return Map.copyOf(result);
+    }
+
+    /** Adds the declared variables, except those whose name matches the deny pattern. */
+    private static void putDeclared(Map<String, String> target, Map<String, String> declared) {
+        declared.forEach((key, value) -> {
+            if (!isDeniedName(key)) {
+                target.put(key, value);
+            }
+        });
     }
 
     private static boolean isSafeInheritedKey(String candidate) {

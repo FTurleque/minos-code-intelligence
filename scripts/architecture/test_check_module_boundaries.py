@@ -801,6 +801,109 @@ class ArchitectureDocumentationRuleTest(unittest.TestCase):
         self.assertEqual(len(MODULES), _MODULE.check_architecture_documentation(graph))
 
 
+class RuntimeLocalExportRuleTest(unittest.TestCase):
+    """A10 — outside minos-runtime-local, only the exported types of its guarded packages may be named."""
+
+    PREFIX = "com.minos.runtime.local"
+    EXPORTED = frozenset({"process.CommandLocator", "sandbox.WorkerResourceContainment"})
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        write_root_pom(self.root)
+        self.write("minos-runtime-local", f"{self.PREFIX}.process", "CommandLocator", "public final class CommandLocator { }")
+        self.write("minos-runtime-local", f"{self.PREFIX}.process", "ProviderProcessEnvironment",
+                   "public final class ProviderProcessEnvironment { }")
+        self.write("minos-runtime-local", f"{self.PREFIX}.sandbox", "WorkerResourceContainment",
+                   "public record WorkerResourceContainment() { public enum Disposition { NONE } }")
+        self.write("minos-runtime-local", f"{self.PREFIX}.sandbox", "LinuxCgroupJob", "public final class LinuxCgroupJob { }")
+        self.write("minos-runtime-local", f"{self.PREFIX}.distributed", "BundleStore", "public final class BundleStore { }")
+        # Both exported types are named by another module: the ratchet has nothing to remove.
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Wiring", "class Wiring { }",
+                   [f"{self.PREFIX}.process.CommandLocator", f"{self.PREFIX}.sandbox.WorkerResourceContainment"])
+
+    def write(self, module, package, name, body, imports=(), kind="main"):
+        directory = self.root / module / "src" / kind / "java" / Path(*package.split("."))
+        directory.mkdir(parents=True, exist_ok=True)
+        lines = "".join(f"import {line};\n" for line in imports)
+        (directory / f"{name}.java").write_text(f"package {package};\n\n{lines}\n{body}\n", encoding="utf-8")
+
+    def check(self, exported=None):
+        return _MODULE.check_runtime_local_exports(self.root, exported=self.EXPORTED if exported is None else exported)
+
+    def refused(self, *fragments, exported=None):
+        with self.assertRaises(RuntimeError) as raised:
+            self.check(exported)
+        self.assertIn("A10 runtime-local export", str(raised.exception))
+        for fragment in fragments:
+            self.assertIn(fragment, str(raised.exception))
+
+    def test_an_exported_type_and_its_nested_type_are_accepted(self):
+        self.write("minos-cli", "com.minos.cli", "Cmd", "class Cmd { }",
+                   [f"{self.PREFIX}.process.CommandLocator", f"{self.PREFIX}.sandbox.WorkerResourceContainment.Disposition",
+                    f"static {self.PREFIX}.process.CommandLocator.find"])
+        self.assertEqual(2, self.check())
+
+    def test_a_single_import_of_a_type_that_is_not_exported_is_refused(self):
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Leak", "class Leak { }",
+                   [f"{self.PREFIX}.process.ProviderProcessEnvironment"])
+        self.refused("minos-provider-scip/src/main/java/com/minos/adapter/scip/Leak.java",
+                     f"{self.PREFIX}.process.ProviderProcessEnvironment")
+
+    def test_a_static_import_of_a_member_of_a_type_that_is_not_exported_is_refused(self):
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Leak", "class Leak { }",
+                   [f"static {self.PREFIX}.process.ProviderProcessEnvironment.sanitize"])
+        self.refused(f"{self.PREFIX}.process.ProviderProcessEnvironment")
+
+    def test_a_wildcard_import_of_a_guarded_package_is_refused(self):
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Leak", "class Leak { }", [f"{self.PREFIX}.sandbox.*"])
+        self.refused(f"{self.PREFIX}.sandbox.*")
+
+    def test_a_fully_qualified_name_of_a_type_that_is_not_exported_is_refused(self):
+        self.write("minos-cli", "com.minos.cli", "Leak",
+                   f"class Leak {{ Object job = {self.PREFIX}.sandbox.LinuxCgroupJob.class; }}")
+        self.refused(f"{self.PREFIX}.sandbox.LinuxCgroupJob")
+
+    def test_a_test_source_is_held_to_the_same_list(self):
+        self.write("minos-cli", "com.minos.cli", "LeakTest", "class LeakTest { }",
+                   [f"{self.PREFIX}.sandbox.LinuxCgroupJob"], kind="test")
+        self.refused("minos-cli/src/test/java/com/minos/cli/LeakTest.java", f"{self.PREFIX}.sandbox.LinuxCgroupJob")
+
+    def test_a_reserved_member_is_refused_in_a_source_that_uses_the_module(self):
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Leak",
+                   "class Leak { void run(Object executor) { executor.executeSandboxed(null, null); } }",
+                   [f"{self.PREFIX}.process.CommandLocator"])
+        self.refused("reserved member executeSandboxed")
+
+    def test_a_reserved_word_in_a_source_that_does_not_use_the_module_is_accepted(self):
+        self.write("minos-cli", "com.minos.cli", "Unrelated", "class Unrelated { void executeSandboxed() { } }")
+        self.assertEqual(2, self.check())
+
+    def test_a_mention_in_a_comment_or_a_string_literal_is_accepted(self):
+        self.write("minos-cli", "com.minos.cli", "Cmd",
+                   f'class Cmd {{ // {self.PREFIX}.sandbox.LinuxCgroupJob\n'
+                   f' String s = "{self.PREFIX}.process.ProviderProcessEnvironment"; }}')
+        self.assertEqual(2, self.check())
+
+    def test_the_module_itself_and_its_unguarded_packages_are_not_restricted(self):
+        self.write("minos-runtime-local", self.PREFIX, "Worker", "class Worker { }",
+                   [f"{self.PREFIX}.sandbox.LinuxCgroupJob", f"{self.PREFIX}.process.ProviderProcessEnvironment"])
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Remote", "class Remote { }",
+                   [f"{self.PREFIX}.distributed.BundleStore"])
+        self.assertEqual(2, self.check())
+
+    def test_an_export_entry_that_names_no_existing_type_is_refused(self):
+        self.refused("does not exist", "process.Gone", exported=self.EXPORTED | {"process.Gone"})
+
+    def test_an_export_entry_no_other_module_names_any_more_is_refused(self):
+        self.write("minos-runtime-local", f"{self.PREFIX}.workspace", "Markers", "public final class Markers { }")
+        self.refused("ratchet", "workspace.Markers", exported=self.EXPORTED | {"workspace.Markers"})
+
+    def test_the_real_tree_names_only_exported_types(self):
+        self.assertEqual(len(_MODULE.RUNTIME_LOCAL_EXPORTED_TYPES), _MODULE.check_runtime_local_exports())
+
+
 class EveryRuleHasATest(unittest.TestCase):
 
     def test_every_check_function_of_the_script_is_referenced_by_a_test(self):
@@ -854,6 +957,13 @@ class MainWiringTest(unittest.TestCase):
         self.assertEqual(calls, ["reactor", "ownership"])
         self.assertIn("spy ownership failed", error)
 
+
+    def test_main_runs_the_runtime_local_export_rule(self):
+        calls: list[str] = []
+        code, error = self.run_main_with(check_runtime_local_exports=self.spy(calls, "exports"))
+        self.assertEqual(code, 1)
+        self.assertEqual(calls, ["exports"])
+        self.assertIn("spy exports failed", error)
 
 if __name__ == "__main__":
     unittest.main()
