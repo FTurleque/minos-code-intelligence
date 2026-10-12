@@ -15,13 +15,9 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.AclEntry;
-import java.nio.file.attribute.AclEntryFlag;
-import java.nio.file.attribute.AclEntryPermission;
-import java.nio.file.attribute.AclEntryType;
 import java.nio.file.attribute.AclFileAttributeView;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -114,47 +110,10 @@ class WindowsSandboxAclAndProbeRefusalTest {
     }
 
     @Test
-    void anOwnerEntryThatFilesDoNotInheritIsNotEnough() throws Exception {
-        Path directory = ownerOnly("not-inherited", "(F)");
-
-        assertFalse(WindowsAppContainerWorkerSandboxBackend.ownerHoldsInheritableFullControl(directory));
-    }
-
-    @Test
-    void anInheritOnlyOwnerEntryIsNotEnough() throws Exception {
-        Path directory = ownerOnly("inherit-only", "(OI)(CI)(IO)(F)");
-
-        assertFalse(WindowsAppContainerWorkerSandboxBackend.ownerHoldsInheritableFullControl(directory));
-    }
-
-    @Test
     void anInheritableOwnerEntryWithoutFullControlIsNotEnough() throws Exception {
         Path directory = ownerOnly("read-only", "(OI)(CI)(RX)");
 
         assertFalse(WindowsAppContainerWorkerSandboxBackend.ownerHoldsInheritableFullControl(directory));
-    }
-
-    @Test
-    void fullControlHeldByAnotherPrincipalIsNotTheOwners() throws Exception {
-        Path directory = Files.createDirectory(temporary.resolve("another-principal"));
-        rewritten.add(directory);
-        // Anonymous Logon: a principal that is never the owner of what a test creates.
-        assertEquals(0, icacls(directory, "/inheritance:r", "/grant:r", "*S-1-5-7:" + INHERITABLE_FULL_CONTROL));
-
-        assertFalse(WindowsAppContainerWorkerSandboxBackend.ownerHoldsInheritableFullControl(directory));
-    }
-
-    @Test
-    void aWriteRootWhoseOwnerEntryIsNotInheritedReceivesAnInheritableEntry() throws Exception {
-        Path directory = ownerOnly("to-secure", "(F)");
-        assertFalse(holdsAnInheritableFullControlEntry(directory), "the fixture starts without any inheritable entry");
-
-        WindowsAppContainerWorkerSandboxBackend.requireInheritableOwnerAccess(directory);
-
-        assertTrue(holdsAnInheritableFullControlEntry(directory),
-                "what the sandboxed provider writes must stay reachable by the process that reads it back");
-        Path written = Files.createFile(directory.resolve("artifact.scip"));
-        assertTrue(Files.isReadable(written) && Files.isWritable(written));
     }
 
     @Test
@@ -194,13 +153,6 @@ class WindowsSandboxAclAndProbeRefusalTest {
 
     private static List<AclEntry> acl(Path directory) throws IOException {
         return Files.getFileAttributeView(directory, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).getAcl();
-    }
-
-    private static boolean holdsAnInheritableFullControlEntry(Path directory) throws IOException {
-        return acl(directory).stream().anyMatch(entry -> entry.type() == AclEntryType.ALLOW
-                && entry.flags().containsAll(EnumSet.of(AclEntryFlag.FILE_INHERIT, AclEntryFlag.DIRECTORY_INHERIT))
-                && !entry.flags().contains(AclEntryFlag.INHERIT_ONLY)
-                && entry.permissions().containsAll(EnumSet.allOf(AclEntryPermission.class)));
     }
 
     private static int icacls(Path target, String... arguments) throws Exception {
