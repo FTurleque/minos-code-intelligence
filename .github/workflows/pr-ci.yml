@@ -81,6 +81,12 @@ jobs:
       - name: Compose resource limits gate self-test
         run: python scripts/quality/test_check_compose_limits.py -v
 
+      - name: Toolchain baseline gate (the Gradle wrapper, the policy and the release workflows state one version)
+        run: python scripts/quality/check-toolchain-baseline.py
+
+      - name: Toolchain baseline gate self-test
+        run: python scripts/quality/test_check_toolchain_baseline.py -v
+
       - name: Shipped tools gate (one description shared by Java, the Docker image and the Windows distribution)
         run: python scripts/quality/check-tools-manifest.py
 
