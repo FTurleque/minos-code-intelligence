@@ -133,13 +133,14 @@ DOCKER_FUNCTIONS = ACL_HELPERS + ("Read-BoundedUtf8", "New-ManagedPassword")
 @unittest.skipUnless(WINDOWS, SKIP_REASON)
 class SecretFileAclTest(unittest.TestCase):
 
-    def each_runtime(self):
+    def for_each_runtime(self, check) -> None:
+        """Runs `check(executable)` under each runtime, one sub-test each: a failure under one does not hide the other."""
         available = runtimes()
         self.assertEqual(["Windows PowerShell 5.1", "pwsh"], [label for label, _ in available],
                          "both PowerShell runtimes are required: the installer runs under 5.1, development under pwsh")
         for label, executable in available:
             with self.subTest(runtime=label):
-                yield executable
+                check(executable)
 
     def assert_restricted(self, result: dict) -> None:
         self.assertTrue(result["exists"], result)
@@ -150,70 +151,86 @@ class InstallScriptSecretTest(SecretFileAclTest):
     """configure-runtime-settings.ps1: the installer overwrites the password file."""
 
     def test_the_secret_is_written_into_a_file_that_is_already_restricted(self):
-        for executable in self.each_runtime():
+        def check(executable):
             result = run_case(executable, INSTALL_SCRIPT, ACL_HELPERS, WRITE_SECRET)
             self.assertEqual("RETURNED", result["outcome"], result)
             self.assert_restricted(result)
             self.assertEqual("fixture-password", result["content"].strip())
             self.assertEqual(0, result["lengthAtRestriction"], "the file was restricted while still empty")
 
+        self.for_each_runtime(check)
+
     def test_a_restriction_that_fails_leaves_no_file_and_never_writes_the_secret(self):
-        for executable in self.each_runtime():
+        def check(executable):
             result = run_case(executable, INSTALL_SCRIPT, ACL_HELPERS, WRITE_SECRET, mode="fail")
             self.assertEqual("THREW", result["outcome"], result)
             self.assertFalse(result["exists"], "the file is removed when it cannot be restricted")
             self.assertEqual("", result["contentAtRestriction"], "the secret was never on disk")
 
+        self.for_each_runtime(check)
+
     def test_a_restriction_that_reports_success_without_effect_is_caught_by_the_verification(self):
-        for executable in self.each_runtime():
+        def check(executable):
             result = run_case(executable, INSTALL_SCRIPT, ACL_HELPERS, WRITE_SECRET, mode="noop")
             self.assertEqual("THREW", result["outcome"], result)
             self.assertIn("not restricted to the current user", result["message"])
             self.assertFalse(result["exists"])
 
+        self.for_each_runtime(check)
+
     def test_an_existing_file_of_inherited_acl_is_replaced_never_written_into(self):
-        for executable in self.each_runtime():
+        def check(executable):
             result = run_case(executable, INSTALL_SCRIPT, ACL_HELPERS, WRITE_SECRET, setup=EXISTING_INHERITED)
             self.assertEqual("RETURNED", result["outcome"], result)
             self.assert_restricted(result)
             self.assertEqual("fixture-password", result["content"].strip())
             self.assertEqual(0, result["lengthAtRestriction"], "the old file was removed before the restriction")
 
+        self.for_each_runtime(check)
+
 
 class DockerScriptSecretTest(SecretFileAclTest):
     """configure-m30-docker-services.ps1: New-ManagedPassword creates the password once and keeps it."""
 
     def test_a_new_password_is_written_into_a_file_that_is_already_restricted(self):
-        for executable in self.each_runtime():
+        def check(executable):
             result = run_case(executable, DOCKER_SCRIPT, DOCKER_FUNCTIONS, "New-ManagedPassword $Target")
             self.assertEqual("RETURNED", result["outcome"], result)
             self.assert_restricted(result)
             self.assertGreaterEqual(len(result["content"].strip()), 40, "a generated password")
             self.assertEqual(0, result["lengthAtRestriction"], "the file was restricted while still empty")
 
+        self.for_each_runtime(check)
+
     def test_a_restriction_that_fails_leaves_no_new_password_file(self):
-        for executable in self.each_runtime():
+        def check(executable):
             result = run_case(executable, DOCKER_SCRIPT, DOCKER_FUNCTIONS, "New-ManagedPassword $Target", mode="fail")
             self.assertEqual("THREW", result["outcome"], result)
             self.assertFalse(result["exists"], "the file is removed when it cannot be restricted")
             self.assertEqual("", result["contentAtRestriction"], "the password was never on disk")
 
+        self.for_each_runtime(check)
+
     def test_an_existing_file_of_inherited_acl_is_restricted_before_it_is_kept(self):
-        for executable in self.each_runtime():
+        def check(executable):
             result = run_case(executable, DOCKER_SCRIPT, DOCKER_FUNCTIONS, "New-ManagedPassword $Target",
                               setup=EXISTING_INHERITED)
             self.assertEqual("RETURNED", result["outcome"], result)
             self.assert_restricted(result)
             self.assertEqual("old-password", result["content"].strip(), "an existing password is kept")
 
+        self.for_each_runtime(check)
+
     def test_an_existing_file_that_cannot_be_restricted_is_refused_and_left_unchanged(self):
-        for executable in self.each_runtime():
+        def check(executable):
             result = run_case(executable, DOCKER_SCRIPT, DOCKER_FUNCTIONS, "New-ManagedPassword $Target",
                               mode="fail", setup=EXISTING_INHERITED)
             self.assertEqual("THREW", result["outcome"], result)
             self.assertIn("may have been exposed", result["message"])
             self.assertTrue(result["exists"])
             self.assertEqual("old-password", result["content"].strip(), "the content is not modified")
+
+        self.for_each_runtime(check)
 
 
 if __name__ == "__main__":
