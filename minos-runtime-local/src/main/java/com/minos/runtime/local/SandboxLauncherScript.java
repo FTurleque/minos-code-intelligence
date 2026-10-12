@@ -262,7 +262,8 @@ record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl,
      * process itself (this is the account of a CI runner and of a default Windows install).
      */
     static Set<String> trustedSids(String processSid) {
-        Set<String> trusted = new java.util.HashSet<>(Set.of(processSid, "S-1-5-18", "S-1-5-32-544"));
+        // Not Set.of: a process that runs as SYSTEM is one of the well-known SIDs, and Set.of refuses a duplicate.
+        Set<String> trusted = new java.util.HashSet<>(List.of(processSid, "S-1-5-18", "S-1-5-32-544"));
         if (processSid.startsWith("S-1-5-21-") && processSid.endsWith("-500")) trusted.add("LA");
         return Set.copyOf(trusted);
     }
