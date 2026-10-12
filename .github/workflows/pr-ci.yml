@@ -271,25 +271,23 @@ jobs:
         if: runner.os != 'Windows'
         run: python scripts/quality/check-jacoco.py
 
-      # Off by default: SonarCloud currently runs as Automatic Analysis (GitHub App), which cannot
-      # import coverage. This step gives an operator an explicit, opt-in path to CI-based analysis
-      # with real JaCoCo coverage once SONAR_TOKEN is provisioned and Automatic Analysis is turned
-      # off in the SonarCloud project settings (the two modes are mutually exclusive). See
-      # docs/STATUS.md "SonarCloud" for the activation steps. No effect while the variable is unset.
-      - name: SonarCloud CI-based analysis (opt-in)
-        if: runner.os != 'Windows' && vars.SONAR_CI_ANALYSIS_ENABLED == 'true'
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          ./mvnw -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
-            -Dsonar.projectKey=FTurleque_atlas \
-            -Dsonar.organization=fturleque \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco-aggregate/jacoco.xml
-
       - name: Targeted JaCoCo gate (Windows, PostgreSQL scope qualified on Linux)
         if: runner.os == 'Windows'
         run: python scripts/quality/check-jacoco.py --skip-scope m30-postgresql-pgvector
+
+      # The aggregate JaCoCo report of this operating system, for the SonarCloud job below. Linux cannot run
+      # the AppContainer and Job Object code, Windows cannot run bubblewrap and cgroup: each report covers what
+      # the other one cannot. The XML names packages and source files, never a path of the runner.
+      - name: Upload the aggregate JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jacoco-aggregate-${{ runner.os }}
+          # A re-run of this job replaces the report of the previous attempt: the analysis reads the latest.
+          overwrite: true
+          if-no-files-found: ignore
+          retention-days: 3
+          path: target/site/jacoco-aggregate/jacoco.xml
 
       - name: Upload verification diagnostics
         if: always()
@@ -303,3 +301,73 @@ jobs:
             **/target/failsafe-reports/**
             target/site/jacoco-aggregate/**
             target/m15-quality/**
+
+  # CI-based SonarCloud analysis (Automatic Analysis is off in the SonarCloud project: the two modes are
+  # mutually exclusive). It runs after both Verify jobs and imports the coverage of both operating systems;
+  # until 2026-10-12 it ran inside the Ubuntu Verify job with the Linux report alone, so code that only
+  # Windows can execute counted as uncovered. It compiles the candidate again (no test is run: the tests ran
+  # in Verify) because the scanner needs the class files. No effect while the repository variable is unset.
+  # When a Verify job failed and left no report, the analysis still runs with the report that exists, so that
+  # issues are reported; the Linux report is required.
+  sonar:
+    name: SonarCloud analysis (Linux and Windows coverage)
+    needs: verify
+    if: ${{ !cancelled() && vars.SONAR_CI_ANALYSIS_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Java 24
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      # One step per report, each in its own directory. A report is absent when its Verify job failed before
+      # the tests ended: the download then fails and the analysis step decides what to do without it.
+      - name: Download the Linux aggregate JaCoCo report
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: jacoco-aggregate-Linux
+          path: coverage-reports/linux
+
+      - name: Download the Windows aggregate JaCoCo report
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: jacoco-aggregate-Windows
+          path: coverage-reports/windows
+
+      - name: SonarCloud CI-based analysis
+        shell: bash
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          set -euo pipefail
+          linux_report="coverage-reports/linux/jacoco.xml"
+          windows_report="coverage-reports/windows/jacoco.xml"
+          if [ ! -s "$linux_report" ]; then
+            echo "The Linux JaCoCo report is missing: Verify (ubuntu-24.04) did not produce it." >&2
+            exit 1
+          fi
+          reports="$linux_report"
+          if [ -s "$windows_report" ]; then
+            reports="$reports,$windows_report"
+          else
+            echo "::warning::The Windows JaCoCo report is missing: Windows-only code will count as uncovered."
+          fi
+          echo "JaCoCo reports imported: $reports"
+          chmod +x mvnw
+          ./mvnw -B -ntp -DskipTests -Djacoco.skip=true test-compile \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
+            -Dsonar.projectKey=FTurleque_atlas \
+            -Dsonar.organization=fturleque \
+            -Dsonar.host.url=https://sonarcloud.io \
+            "-Dsonar.coverage.jacoco.xmlReportPaths=$reports"
