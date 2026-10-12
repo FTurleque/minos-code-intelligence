@@ -1,4 +1,4 @@
-package com.minos.runtime.local;
+package com.minos.runtime.local.sandbox;
 
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
