@@ -1,7 +1,7 @@
 package com.minos.bootstrap;
 
 import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
-import com.minos.runtime.local.WorkerSandboxBackends;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackends;
 import com.minos.runtime.WorkerSandboxProbe;
 import com.minos.runtime.local.sandbox.WorkerSandboxSelection;
 

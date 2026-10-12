@@ -1,5 +1,6 @@
 package com.minos.runtime.local;
 
+import com.minos.runtime.local.sandbox.WorkerSandboxBackends;
 import com.minos.runtime.local.distributed.DistributedArtifactBundleStore;
 import com.minos.runtime.local.distributed.DistributedIndexerExecutor;
 import com.minos.runtime.local.sandbox.WorkerSandboxBackend;

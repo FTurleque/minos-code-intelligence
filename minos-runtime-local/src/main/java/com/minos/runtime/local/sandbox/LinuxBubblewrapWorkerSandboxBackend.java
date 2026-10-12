@@ -156,7 +156,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     }
 
     /** Aggregate containment this backend really enforces once the cgroup boundary exists. */
-    public static WorkerResourceContainment containment() {
+    static WorkerResourceContainment containment() {
         return new WorkerResourceContainment(
                 "linux-cgroup2-bubblewrap",
                 WorkerResourceContainment.Disposition.OS_ENFORCED,

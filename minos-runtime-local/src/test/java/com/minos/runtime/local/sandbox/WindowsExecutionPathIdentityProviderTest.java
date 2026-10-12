@@ -1,4 +1,4 @@
-package com.minos.runtime.local;
+package com.minos.runtime.local.sandbox;
 
 import com.minos.orchestration.IndexingRuntimePorts.ExecutionPathAuthorization;
 import org.junit.jupiter.api.Test;

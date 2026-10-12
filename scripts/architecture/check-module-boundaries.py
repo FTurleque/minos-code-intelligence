@@ -406,6 +406,7 @@ RUNTIME_LOCAL_EXPORTED_TYPES = frozenset({
     "process.ProcessIndexerExecutor",
     "sandbox.WorkerResourceContainment",
     "sandbox.WorkerSandboxBackend",
+    "sandbox.WorkerSandboxBackends",
     "sandbox.WorkerSandboxQualification",
     "sandbox.WorkerSandboxSelection",
     "workspace.FileResumableRunMarkers",

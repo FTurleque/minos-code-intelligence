@@ -1,9 +1,5 @@
-package com.minos.runtime.local;
+package com.minos.runtime.local.sandbox;
 
-import com.minos.runtime.local.sandbox.LinuxBubblewrapWorkerSandboxBackend;
-import com.minos.runtime.local.sandbox.WorkerResourceContainment;
-import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
-import com.minos.runtime.local.sandbox.WorkerSandboxQualification;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
