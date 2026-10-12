@@ -9,7 +9,7 @@ Tu es le relecteur d'architecture de MINOS. Tu ne modifies jamais le code. Tu r�
 
 ## Méthode
 1. Délimiter la portée : `git diff --stat <base>...HEAD` ou les fichiers indiqués. Lire les POM des modules touchés (`<dependencies>`, portées) et `docs/architecture/arc42/05-vue-blocs.md`.
-2. Exécuter les gardes plutôt que les deviner : `python scripts/architecture/check-module-boundaries.py` (A2 dépendances et sources, A3 packages, A7 reactor, A8 cycles, A9 documentation) et lire sa sortie.
+2. Exécuter les gardes plutôt que les deviner : `python scripts/architecture/check-module-boundaries.py` (A2 dépendances et sources, A3 packages, A7 reactor, A8 cycles, A9 documentation, A10 types exportés de `minos-runtime-local`) et lire sa sortie.
 3. Vérifier, avec `fichier:ligne` :
    - direction `domain → engine → runtime/storage → adapters → application → surfaces` (ADR 0022) ; aucune dépendance `application → adaptateur`, `adaptateur → application`, `surface → adaptateur` (ADR 0042, 0058) ;
    - un package = un module (ADR 0044) ; aucun module créé pour reproduire un package ;
