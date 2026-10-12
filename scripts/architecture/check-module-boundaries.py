@@ -391,6 +391,111 @@ def check_source_boundaries(root: Path = ROOT, group_id: str | None = None) -> N
              "adapter class; reach it through a port wired by minos-bootstrap): " + "; ".join(violations))
 
 
+RUNTIME_LOCAL_MODULE = "minos-runtime-local"
+RUNTIME_LOCAL_PACKAGE = "runtime.local"
+RUNTIME_LOCAL_GUARDED_PACKAGES = ("process", "sandbox", "workspace")
+# The only types of the guarded packages another module may name. The list only grows by a visible edit:
+# every other public type there (process environment, sandbox plan transformer, workspace deletion, cgroup
+# and Job Object ownership) is public for the sub-packages of the module, not for its callers.
+RUNTIME_LOCAL_EXPORTED_TYPES = frozenset({
+    "process.BoundedProcessOutput",
+    "process.CommandLocator",
+    "process.IndexerProcessPlan",
+    "process.IndexerProcessPlanFactory",
+    "process.InstallationProcessEnvironment",
+    "process.ProcessIndexerExecutor",
+    "sandbox.WorkerResourceContainment",
+    "sandbox.WorkerSandboxBackend",
+    "sandbox.WorkerSandboxQualification",
+    "sandbox.WorkerSandboxSelection",
+    "workspace.FileResumableRunMarkers",
+})
+# Members of an exported type that replace the ownership boundary of a run: reserved to the module.
+RUNTIME_LOCAL_RESERVED_MEMBERS = frozenset({"ProcessPlanTransformer", "executeSandboxed"})
+ANY_WORD = re.compile(r"\b[A-Za-z_]\w*\b")
+
+
+def guarded_runtime_local_type(name: str, prefix: str) -> tuple[str, str] | None:
+    """(guarded package, 'package.Type') named by a qualified name under the guarded packages, if any."""
+    if not name.startswith(prefix + "."):
+        return None
+    parts = name[len(prefix) + 1:].split(".")
+    if parts[0] not in RUNTIME_LOCAL_GUARDED_PACKAGES:
+        return None
+    if len(parts) < 2 or not parts[1][:1].isupper():
+        return parts[0], parts[0]
+    return parts[0], parts[0] + "." + parts[1]
+
+
+def check_runtime_local_exports(root: Path = ROOT, group_id: str | None = None,
+                                exported: frozenset[str] = RUNTIME_LOCAL_EXPORTED_TYPES) -> int:
+    """A10 — the sandbox, process and workspace primitives of minos-runtime-local are not a public API.
+
+    Java has no module visibility without JPMS: a type shared by two sub-packages of the module is public for
+    every module that depends on it. Outside minos-runtime-local, production and test sources may name only
+    the exported types of its guarded packages (single or static import, fully qualified name); a wildcard
+    import of a guarded package is refused, and so is any use of a reserved member. The list is a ratchet:
+    every exported type must exist and must still be named by another module. Comments and string literals
+    are ignored.
+    """
+    group = group_id or repository_group_id(root)
+    prefix = group + "." + RUNTIME_LOCAL_PACKAGE
+    qualified_name = qualified_name_pattern(group)
+    base = root / RUNTIME_LOCAL_MODULE / "src" / "main" / "java" / Path(*prefix.split("."))
+    missing = sorted(name for name in exported if not (base / Path(*name.split("."))).with_suffix(".java").is_file())
+    if missing:
+        fail("A10 runtime-local export list names a type that does not exist: " + ", ".join(missing))
+    violations: list[str] = []
+    used: set[str] = set()
+    for module in MODULES:
+        if module == RUNTIME_LOCAL_MODULE:
+            continue
+        for kind in ("main", "test"):
+            source_root = root / module / "src" / kind / "java"
+            if not source_root.is_dir():
+                continue
+            for source in sorted(source_root.rglob("*.java")):
+                code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+                found: set[str] = set()
+                uses_runtime_local = False
+                for _static, name, wildcard in SOURCE_IMPORT.findall(code):
+                    uses_runtime_local = uses_runtime_local or name.startswith(prefix)
+                    guarded = guarded_runtime_local_type(name, prefix)
+                    if guarded is None:
+                        continue
+                    package, type_name = guarded
+                    if type_name == package:
+                        found.add(f"{prefix}.{package}.*" if wildcard else f"{prefix}.{package}")
+                    elif type_name not in exported:
+                        found.add(f"{prefix}.{type_name}")
+                    else:
+                        used.add(type_name)
+                body = SOURCE_IMPORT.sub(" ", code)
+                for qualified in qualified_name.findall(body):
+                    uses_runtime_local = uses_runtime_local or qualified.startswith(prefix)
+                    guarded = guarded_runtime_local_type(qualified, prefix)
+                    if guarded is None:
+                        continue
+                    if guarded[1] in exported:
+                        used.add(guarded[1])
+                    else:
+                        found.add(f"{prefix}.{guarded[1]}")
+                if uses_runtime_local:
+                    for member in sorted(RUNTIME_LOCAL_RESERVED_MEMBERS & set(ANY_WORD.findall(body))):
+                        found.add(f"reserved member {member}")
+                relative = source.relative_to(root).as_posix()
+                violations.extend(f"{relative} -> {name}" for name in sorted(found))
+    if violations:
+        fail("A10 runtime-local export boundary violated (a module names a sandbox, process or workspace type of "
+             "minos-runtime-local that is not in RUNTIME_LOCAL_EXPORTED_TYPES, or a reserved member; these types "
+             "are public for the sub-packages of the module only): " + "; ".join(violations))
+    obsolete = sorted(exported - used)
+    if obsolete:
+        fail("A10 runtime-local export list is a ratchet: no other module names " + ", ".join(obsolete)
+             + " any more; remove the entry")
+    return len(exported)
+
+
 def check_java_layout(root: Path = ROOT) -> tuple[int, dict[str, int]]:
     owners: dict[str, str] = {}
     counts: dict[str, int] = {}
@@ -800,6 +905,7 @@ def main() -> int:
         graph = {module: frozenset(dependencies) for module, dependencies in scoped.items()}
         total, counts = check_java_layout()
         check_source_boundaries()
+        exported = check_runtime_local_exports()
         packages = check_package_ownership()
         cycles, cycle_packages = check_package_cycles()
         documented = check_architecture_documentation(graph)
@@ -812,6 +918,8 @@ def main() -> int:
               f"{sum(len(members) for members, _ in KNOWN_PACKAGE_CYCLES.values())} packages, none new "
               f"({cycle_packages} packages analysed, plugin included)")
         print(f"A9 architecture document: {documented} module sections match the POM dependencies")
+        print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
+              f"modules, none other is")
         print(
             f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "
             f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042, "

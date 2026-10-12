@@ -27,7 +27,7 @@ Les scripts `scripts/remediation/check-*.py`, `scripts/quality/check-*.py`, `scr
 | Gate | Lit | Piège connu |
 |---|---|---|
 | `check-post-mne.py`, `check-minos-01.py`, `check-mnd.py`, `check-mne.py` | classes de `minos-runtime-local`, `minos-integration-git`, `minos-provider-scip`, scripts `.ps1` d'installation | noms de méthodes ; `Read-BoundedUtf8`, `'minos.postgres.managed'] = …` |
-| `check-module-boundaries.py` (A2, A3, A7, A8, A9) | POM, sources, `arc42/05-vue-blocs.md` | liste de dépendances d'`arc42/05` comparée aux POM ; table `KNOWN_PACKAGE_CYCLES` en cliquet |
+| `check-module-boundaries.py` (A2, A3, A7, A8, A9, A10) | POM, sources, `arc42/05-vue-blocs.md` | liste de dépendances d'`arc42/05` comparée aux POM ; table `KNOWN_PACKAGE_CYCLES` en cliquet |
 | `check-private-io.py` | sources de production | `Files.write`, `createDirectories`, `newInputStream`, canaux : primitives seulement, liste nominative en cliquet |
 | `check-single-execution.py`, `check-audit-remediation-v2.py` | `pr-ci.yml` | un `--self-test` ajouté à `invariants` les casse s'ils ne sont pas adaptés |
 | `check-ci-wiring.py` | `pr-ci.yml`, `required-checks.json` | tout `test_*.py` et tout `--self-test` doit être exécuté par `invariants` |
