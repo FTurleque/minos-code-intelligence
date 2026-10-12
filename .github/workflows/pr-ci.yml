@@ -81,6 +81,12 @@ jobs:
       - name: Compose resource limits gate self-test
         run: python scripts/quality/test_check_compose_limits.py -v
 
+      - name: Toolchain baseline gate (the Gradle wrapper, the policy and the release workflows state one version)
+        run: python scripts/quality/check-toolchain-baseline.py
+
+      - name: Toolchain baseline gate self-test
+        run: python scripts/quality/test_check_toolchain_baseline.py -v
+
       - name: Installation secret file tests (declared skipped here, executed on Windows in the verify job)
         run: python scripts/install/test_secret_file_acl.py -v
 
