@@ -43,7 +43,7 @@ class ShadedJarNoticesIT {
     private static final String LICENCES_DIRECTORY = "META-INF/licenses/";
     private static final String META_INF = "META-INF/";
     private static final Pattern LEGAL_FILE_NAME =
-            Pattern.compile("(?i).*(notice|licen[sc]e|copying).*|about\\.html");
+            Pattern.compile("notice|licen[sc]e|copying|^about\\.html$", Pattern.CASE_INSENSITIVE);
 
     private static Path shadedJar;
     private static Map<String, byte[]> shadedLegalEntries;
@@ -198,7 +198,7 @@ class ShadedJarNoticesIT {
         Map<String, byte[]> legalFiles = new TreeMap<>();
         for (JarEntry entry : Collections.list(jar.entries())) {
             String name = entry.getName();
-            if (entry.isDirectory() || name.endsWith(".class") || !LEGAL_FILE_NAME.matcher(fileName(name)).matches()) {
+            if (entry.isDirectory() || name.endsWith(".class") || !LEGAL_FILE_NAME.matcher(fileName(name)).find()) {
                 continue;
             }
             if (!isTopLevel(name) && !name.startsWith(LICENCES_DIRECTORY)) {
