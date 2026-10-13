@@ -194,4 +194,4 @@ Cinq changements OpenSpec, même branche. Trois décomptes de l'audit sont péri
 
 Ordre d'implémentation proposé : `durcir-les-workflows-github` → `publier-le-plugin-avec-la-release` → `attester-et-signer-la-release-windows` (même fichier `release-windows.yml`) ; indépendants : `verrouiller-les-dependances-gradle-du-plugin`, `rendre-le-build-maven-reproductible` (à ordonner avec `migrer-le-socle-vers-java-25`).
 
-Capacités nouvelles créées à l'archivage : `socle-d-execution`, `distribution-docker`, `chaine-de-livraison`, `recherche-semantique`. Preuve de la spécification des trois sprints : `openspec validate --all --strict` → 40 passés, 0 échec.
+Capacités nouvelles créées à l'archivage : `socle-d-execution`, `distribution-docker`, `chaine-de-livraison`, `recherche-semantique`. Preuve de la spécification des trois sprints : `openspec validate --all --strict` → 37 passés, 0 échec (40 avant la fusion de la PR #428, qui archive trois changements du rangement des modules).
