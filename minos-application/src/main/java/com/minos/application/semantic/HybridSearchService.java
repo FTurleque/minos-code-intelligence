@@ -58,19 +58,16 @@ public final class HybridSearchService {
         RegisteredProject project = projects.resolve(projectReference);
         CodeKnowledgeSnapshot snapshot = snapshots.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active knowledge snapshot: " + project.displayName()));
-        SemanticIndexService.Status semanticStatus = semanticIndex.status(projectReference);
+        SemanticIndexService.Status semanticStatus = semanticIndex.statusWithoutSize(projectReference);
         boolean semanticAvailable = semanticStatus.state() == SemanticIndexService.State.READY;
-        SemanticVectorStore.IndexSnapshot activeSemanticIndex = semanticAvailable
-                ? semanticIndex.activeIndex(projectReference).orElseThrow() : null;
-        List<SemanticDocument> indexedDocuments = activeSemanticIndex == null
-                ? null
-                : activeSemanticIndex.documents().stream().map(SemanticVectorStore.IndexedDocument::document).toList();
+        // The corpus is identified by the index metadata alone: no vector is loaded on the query path, and
+        // the documents are read (without their vectors) only when no corpus of that identity is cached.
+        SemanticVectorStore.IndexMetadata activeSemanticIndex = semanticAvailable
+                ? semanticIndex.vectorStore().metadata(project.id().toString()).orElseThrow() : null;
         String corpusIdentity = activeSemanticIndex == null
                 ? snapshot.snapshotId() + ":structured"
-                : snapshot.snapshotId() + ":semantic:" + activeSemanticIndex.providerId() + ":"
-                    + activeSemanticIndex.modelId() + ":" + activeSemanticIndex.dimensions() + ":"
-                    + activeSemanticIndex.builtAtEpochMilli();
-        CachedCorpus corpus = corpus(project, snapshot, indexedDocuments, corpusIdentity);
+                : semanticCorpusIdentity(snapshot, activeSemanticIndex);
+        CachedCorpus corpus = corpus(project, snapshot, semanticAvailable, corpusIdentity);
         Map<String, Double> semanticScores = semanticScores(projectReference, request, corpus.documents().size(), semanticAvailable);
         LexicalQuery lexicalQuery = LexicalQuery.compile(request.query());
 
@@ -106,7 +103,7 @@ public final class HybridSearchService {
         RegisteredProject project = projects.resolve(projectReference);
         CodeKnowledgeSnapshot snapshot = snapshots.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active knowledge snapshot: " + project.displayName()));
-        CachedCorpus corpus = corpus(project, snapshot, null, snapshot.snapshotId() + ":structured");
+        CachedCorpus corpus = corpus(project, snapshot, false, snapshot.snapshotId() + ":structured");
         LexicalQuery lexicalQuery = LexicalQuery.compile(query);
         List<HybridHit> hits = new ArrayList<>();
         for (int index = 0; index < corpus.documents().size(); index++) {
@@ -127,13 +124,31 @@ public final class HybridSearchService {
         }
     }
 
+    private static String semanticCorpusIdentity(CodeKnowledgeSnapshot snapshot,
+                                                 SemanticVectorStore.IndexMetadata activeSemanticIndex) {
+        return snapshot.snapshotId() + ":semantic:" + activeSemanticIndex.providerId() + ":"
+                + activeSemanticIndex.modelId() + ":" + activeSemanticIndex.dimensions() + ":"
+                + activeSemanticIndex.builtAtEpochMilli();
+    }
+
     private CachedCorpus corpus(RegisteredProject project, CodeKnowledgeSnapshot snapshot,
-                                List<SemanticDocument> indexedDocuments, String corpusIdentity) throws IOException {
+                                boolean semantic, String requestedIdentity) throws IOException {
         synchronized (corpusCache) {
             WeightedCorpus cached = corpusCache.get(project.id());
-            if (cached != null && cached.corpus().identity().equals(corpusIdentity)) return cached.corpus();
+            if (cached != null && cached.corpus().identity().equals(requestedIdentity)) return cached.corpus();
         }
-        List<SemanticDocument> documents = indexedDocuments != null ? List.copyOf(indexedDocuments) : documentFactory.build(project, snapshot);
+        List<SemanticDocument> documents;
+        String corpusIdentity = requestedIdentity;
+        if (semantic) {
+            // Documents and metadata come from one read: the corpus carries the identity of the index its
+            // documents belong to, even if the index was replaced since the metadata was read.
+            SemanticVectorStore.IndexDocuments indexed =
+                    semanticIndex.vectorStore().documents(project.id().toString()).orElseThrow();
+            documents = indexed.documents();
+            corpusIdentity = semanticCorpusIdentity(snapshot, indexed.metadata());
+        } else {
+            documents = documentFactory.build(project, snapshot);
+        }
         Map<String, Integer> graphDegree = Map.copyOf(symbolGraphDegree(snapshot.relationships()));
         int maxDegree = graphDegree.values().stream().mapToInt(Integer::intValue).max().orElse(0);
         // Each document is normalized once, when its corpus is built, with the very function the scoring used

@@ -49,6 +49,15 @@ public interface SemanticVectorStore {
         return load(projectId).map(IndexMetadata::from);
     }
 
+    /**
+     * Documents of the index without their vectors, with the metadata of the index they were read from.
+     * The default derives both from the full snapshot; a backend that stores vectors apart from the
+     * documents reads the documents only.
+     */
+    default Optional<IndexDocuments> documents(String projectId) throws IOException {
+        return load(projectId).map(IndexDocuments::from);
+    }
+
     /** Stable diagnostic identifier for the vector ranking engine. */
     default String searchEngine() { return "exact-linear"; }
 
@@ -125,6 +134,19 @@ public interface SemanticVectorStore {
             return new IndexMetadata(
                     snapshot.projectId(), snapshot.snapshotId(), snapshot.providerId(), snapshot.modelId(),
                     snapshot.dimensions(), snapshot.builtAtEpochMilli(), snapshot.documents().size());
+        }
+    }
+
+    /** The documents of one index, in stable-key order, and the metadata of that same index. */
+    record IndexDocuments(IndexMetadata metadata, List<SemanticDocument> documents) {
+        public IndexDocuments {
+            Objects.requireNonNull(metadata, "metadata");
+            documents = List.copyOf(Objects.requireNonNull(documents, "documents"));
+        }
+
+        static IndexDocuments from(IndexSnapshot snapshot) {
+            return new IndexDocuments(IndexMetadata.from(snapshot),
+                    snapshot.documents().stream().map(IndexedDocument::document).toList());
         }
     }
 
