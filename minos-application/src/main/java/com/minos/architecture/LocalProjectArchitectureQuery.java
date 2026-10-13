@@ -63,6 +63,13 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
         ProjectContext context = loadContext(projectIdentifier); return intelligenceService.moduleContext(intelligence(context), moduleIdentifier);
     }
 
+    /** Un seul chargement du contexte ; le module est résolu par la règle de {@link #getModuleContext}. */
+    @Override public ArchitectureModuleSelection getArchitectureIntelligenceForModule(
+            String projectIdentifier, String moduleIdentifier) throws IOException {
+        ArchitectureIntelligenceView view = intelligence(loadContext(projectIdentifier));
+        return new ArchitectureModuleSelection(view, intelligenceService.moduleContext(view, moduleIdentifier).module().id());
+    }
+
     private ArchitectureIntelligenceView intelligence(ProjectContext context) {
         ArchitectureOverview overview = topologyService.build(context.discovery(), context.snapshot());
         ArchitectureDependencyGraph dependencies = dependencyService.build(context.discovery(), context.snapshot());

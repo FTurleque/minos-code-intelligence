@@ -8,6 +8,7 @@ import com.minos.application.semantic.HybridContextBuilder;
 import com.minos.application.semantic.HybridSearchService;
 import com.minos.application.semantic.SemanticSearchService;
 import com.minos.architecture.ArchitectureIntelligenceView;
+import com.minos.architecture.ArchitectureModuleSelection;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
@@ -173,9 +174,13 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         if ("json".equals(format)) {
             return request.module() == null ? architecture(request.project()) : moduleContext(request.project(), request.module());
         }
-        ArchitectureIntelligenceView view = application.architectureQuery().getArchitectureIntelligence(request.project());
-        String moduleId = request.module() == null ? null : application.architectureQuery()
-                .getModuleContext(request.project(), request.module()).module().id();
+        // One project context load per graph, with or without a module (AUD-PERF-05).
+        ArchitectureModuleSelection selection = request.module() == null ? null : application.architectureQuery()
+                .getArchitectureIntelligenceForModule(request.project(), request.module());
+        ArchitectureIntelligenceView view = selection == null
+                ? application.architectureQuery().getArchitectureIntelligence(request.project())
+                : selection.view();
+        String moduleId = selection == null ? null : selection.moduleId();
         ArchitectureResultRenderer.GraphFormat graphFormat = switch (format) {
             case "mermaid" -> ArchitectureResultRenderer.GraphFormat.MERMAID;
             case "dot" -> ArchitectureResultRenderer.GraphFormat.DOT;

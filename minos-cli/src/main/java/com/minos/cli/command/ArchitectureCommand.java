@@ -3,6 +3,7 @@ package com.minos.cli.command;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.CliOptions;
 import com.minos.architecture.ArchitectureIntelligenceView;
+import com.minos.architecture.ArchitectureModuleSelection;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.output.ArchitectureResultRenderer;
 import com.minos.output.SymbolOutputFormat;
@@ -37,10 +38,14 @@ public final class ArchitectureCommand {
         return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             String rendered;
             if (options.format().isGraph()) {
-                ArchitectureIntelligenceView view = query.getArchitectureIntelligence(options.project());
-                String moduleId = options.module() == null
+                // One project context load per graph, with or without a module (AUD-PERF-05).
+                ArchitectureModuleSelection selection = options.module() == null
                         ? null
-                        : query.getModuleContext(options.project(), options.module()).module().id();
+                        : query.getArchitectureIntelligenceForModule(options.project(), options.module());
+                ArchitectureIntelligenceView view = selection == null
+                        ? query.getArchitectureIntelligence(options.project())
+                        : selection.view();
+                String moduleId = selection == null ? null : selection.moduleId();
                 ArchitectureResultRenderer.GraphFormat graphFormat = switch (options.format()) {
                     case MERMAID -> ArchitectureResultRenderer.GraphFormat.MERMAID;
                     case DOT -> ArchitectureResultRenderer.GraphFormat.DOT;
