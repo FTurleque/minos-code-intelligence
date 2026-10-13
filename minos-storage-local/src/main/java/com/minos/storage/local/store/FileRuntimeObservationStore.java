@@ -137,7 +137,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         rejectUnsafeProjectEntry(project);
         if (!Files.exists(project, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
         requireProjectDirectory(project);
-        try (LockedProject ignored = lock(project)) {
+        try (LockedProject ignored = lockForReading(project)) {
             return findUnlocked(project, projectId, sessionId);
         }
     }
@@ -155,7 +155,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         rejectUnsafeProjectEntry(project);
         if (!Files.exists(project, LinkOption.NOFOLLOW_LINKS)) return List.of();
         requireProjectDirectory(project);
-        try (LockedProject ignored = lock(project)) {
+        try (LockedProject ignored = lockForReading(project)) {
             List<SessionMetadata> metadata = new ArrayList<>();
             for (Path file : sessionFiles(project)) {
                 SessionMetadata candidate = readMetadata(file, projectId);
@@ -455,6 +455,14 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         Path lockFile = project.resolve(".lock").toAbsolutePath().normalize();
         ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(lockFile.hashCode(), JVM_LOCKS.length)];
         return new LockedProject(BoundedFileLease.acquire(
+                lockFile, jvmLock, LOCK_TIMEOUT, "runtime observation project lease"));
+    }
+
+    /** A read: shared with the other readers, excluded by a save, and nothing is written (ADR 0017). */
+    private static LockedProject lockForReading(Path project) throws IOException {
+        Path lockFile = project.resolve(".lock").toAbsolutePath().normalize();
+        ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(lockFile.hashCode(), JVM_LOCKS.length)];
+        return new LockedProject(BoundedFileLease.acquireShared(
                 lockFile, jvmLock, LOCK_TIMEOUT, "runtime observation project lease"));
     }
 

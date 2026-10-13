@@ -9,6 +9,7 @@ import com.minos.dynamic.RuntimeObservationType;
 import com.minos.dynamic.RuntimeResolutionStatus;
 import com.minos.dynamic.RuntimeSymbolReference;
 import com.minos.dynamic.RuntimeSymbolResolution;
+import com.minos.testsupport.WriteProtectedTree;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -18,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,6 +43,25 @@ class FileRuntimeObservationStoreTest {
         assertEquals(session, loaded);
         assertEquals(List.of("run-1"), store.list(projectId).stream()
                 .map(value -> value.session().sessionId()).toList());
+    }
+
+    /** Le plan de requête lit les sessions sur un support qu'il ne peut pas écrire : une lecture n'écrit rien. */
+    @Test
+    void readsAnswerOnAWriteProtectedStoreAndLeaveItUntouched(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        CorrelatedRuntimeSession session = session(projectId, "run-1", "a".repeat(64));
+        FileRuntimeObservationStore store = new FileRuntimeObservationStore(root);
+        store.save(session);
+
+        try (WriteProtectedTree protectedStore = WriteProtectedTree.protect(root)) {
+            Map<String, String> before = protectedStore.state();
+
+            assertEquals(session, store.find(projectId, "run-1").orElseThrow());
+            assertEquals(1, store.list(projectId).size());
+            assertEquals(1, store.list(projectId, null, 10).size());
+
+            assertEquals(before, protectedStore.state(), "a read must not open, harden or create anything");
+        }
     }
 
     @Test

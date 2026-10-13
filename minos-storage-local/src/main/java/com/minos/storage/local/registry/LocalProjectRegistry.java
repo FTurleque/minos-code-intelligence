@@ -48,6 +48,8 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     private final Path workspacesDirectory;
     private final Optional<ProjectPathMapping> pathMapping;
     private final ProjectPathMapping.RuntimeLocation runtimeLocation;
+    /** Guarded by this instance's monitor; false only inside {@link #readingWithoutMigration}. */
+    private boolean migrateLegacyEntriesOnRead = true;
 
     public LocalProjectRegistry(Path storageRoot) throws IOException {
         this(
@@ -233,6 +235,27 @@ public final class LocalProjectRegistry implements ProjectRegistry {
                 metadata.id(), metadata.name(), projectIds, metadata.createdAt(), metadata.updatedAt());
     }
 
+    /**
+     * Runs {@code reads} without writing anything: a legacy entry is resolved in memory and returned as
+     * usual, and is left on disk for a later call made outside this method (a mutation, which holds the
+     * exclusive registry lease) to migrate. For callers that only hold a reader's lease, or whose storage
+     * cannot be written.
+     */
+    synchronized <T> T readingWithoutMigration(RegistryReads<T> reads) throws IOException {
+        boolean previous = migrateLegacyEntriesOnRead;
+        migrateLegacyEntriesOnRead = false;
+        try {
+            return reads.run();
+        } finally {
+            migrateLegacyEntriesOnRead = previous;
+        }
+    }
+
+    @FunctionalInterface
+    interface RegistryReads<T> {
+        T run() throws IOException;
+    }
+
     public Path storageRoot() {
         return storageRoot;
     }
@@ -321,7 +344,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         Instant updatedAt = Instant.parse(required(properties, "updatedAt", file));
         RegisteredProject project = new RegisteredProject(
                 id, rootPath, displayName, workspaceId, createdAt, updatedAt);
-        if (migrateLegacy) migrateLegacyProject(file, project, relativeRoot);
+        if (migrateLegacy && migrateLegacyEntriesOnRead) migrateLegacyProject(file, project, relativeRoot);
         return project;
     }
 

@@ -91,32 +91,32 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
 
     @Override
     public Optional<RegisteredProject> findProject(UUID projectId) throws IOException {
-        return withLock(() -> delegate.findProject(projectId));
+        return withSharedLock(() -> delegate.findProject(projectId));
     }
 
     @Override
     public Optional<RegisteredWorkspace> findWorkspace(UUID workspaceId) throws IOException {
-        return withLock(() -> delegate.findWorkspace(workspaceId));
+        return withSharedLock(() -> delegate.findWorkspace(workspaceId));
     }
 
     @Override
     public List<RegisteredProject> listProjects() throws IOException {
-        return withLock(delegate::listProjects);
+        return withSharedLock(delegate::listProjects);
     }
 
     @Override
     public Inventory inventory() throws IOException {
-        return withLock(delegate::inventory);
+        return withSharedLock(delegate::inventory);
     }
 
     @Override
     public List<RegisteredWorkspace> listWorkspaces() throws IOException {
-        return withLock(delegate::listWorkspaces);
+        return withSharedLock(delegate::listWorkspaces);
     }
 
     @Override
     public WorkspaceInventory workspaceInventory() throws IOException {
-        return withLock(delegate::workspaceInventory);
+        return withSharedLock(delegate::workspaceInventory);
     }
 
     @Override
@@ -140,6 +140,20 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
                 lockFile, jvmLock, LOCK_TIMEOUT, "local project registry lease")) {
             validateRegistryStorage();
             return operation.run();
+        }
+    }
+
+    /**
+     * A read: shared with the readers of other processes, excluded by a writer, and nothing is written
+     * (ADR 0017) -- no lock file created or hardened, no legacy entry migrated. The query plane reads the
+     * registry through this on a data root it cannot write.
+     */
+    private <T> T withSharedLock(IoOperation<T> operation) throws IOException {
+        Objects.requireNonNull(operation, "operation");
+        try (BoundedFileLease ignored = BoundedFileLease.acquireShared(
+                lockFile, jvmLock, LOCK_TIMEOUT, "local project registry lease")) {
+            validateRegistryStorage();
+            return delegate.readingWithoutMigration(operation::run);
         }
     }
 
