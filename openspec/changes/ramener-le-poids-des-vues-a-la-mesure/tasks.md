@@ -4,13 +4,14 @@ Ordre dans chaque section : rouge, correction, preuve. Tout `-pl` s'accompagne d
 
 ## 1. Relevé (AUD-PERF-03)
 
-- [ ] 1.1 [AUD-PERF-03] Relever les tests existants du cache des deux stores et ceux qui encodent l'ordre « empreinte avant décodage » (message d'erreur d'un fichier corrompu) ; relire `check-mne.py:85-88` et `check-mnd.py:82-83,99-100` pour savoir s'ils figent la **valeur** du facteur. Consigner dans `design.md`.
+- [x] 1.1 [AUD-PERF-03] Relever les tests existants du cache des deux stores et ceux qui encodent l'ordre « empreinte avant décodage » (message d'erreur d'un fichier corrompu) ; relire `check-mne.py:85-88` et `check-mnd.py:82-83,99-100` pour savoir s'ils figent la **valeur** du facteur. Consigner dans `design.md`. **Fait (2026-10-13)** : les deux gates exigent des noms, pas la valeur du facteur ; mesure et écart consignés dans `design.md`.
+- [x] 1.2 [AUD-PERF-03] **Décision obtenue (2026-10-13)** : dédoublonner d'abord les chaînes au décodage (ADR 0047, option A), puis fixer le facteur sur la nouvelle mesure. Rouge : `SnapshotDecodeStringSharingTest` (2 échecs sur 3). Correction : table de chaînes locale à la passe de décodage dans `SnapshotBinaryCodecSupport`. Preuve : test vert (3/3), tas retenu divisé par deux dans `QueryViewWeightTest`.
 
 ## 2. Poids fondé sur la mesure (AUD-PERF-03)
 
-- [ ] 2.1 [AUD-PERF-03] Rouge : dans `minos-storage-local`, test de cache — snapshot V3 de plus de 64 Mio persistés (généré), deux `loadActiveQueryView`, attendu `fullSnapshotLoads == 1`. **Preuve du rouge : 2 au HEAD.** Test de poids par format (méthode de `HybridCorpusWeightTest`) : estimation ≥ tas retenu.
-- [ ] 2.2 [AUD-PERF-03] `FileSymbolSnapshotStore` : facteur rationnel mesuré pour V3, facteur d'origine pour un format non mesuré (D1) ; conserver les chaînes exigées par `check-mne.py`. Preuve : tests verts ; `./mvnw -B -ntp -pl minos-storage-local -am verify` ; `python scripts/remediation/check-mne.py` et `check-mnd.py` (mis à jour dans cette tâche s'ils figent la valeur) ; scope JaCoCo `persistence-cache-indexes`.
-- [ ] 2.3 [AUD-PERF-03] `PostgresCodeKnowledgeSnapshotStore` : même rouge puis même correction ; scope `m30-postgresql-pgvector`. Tests PostgreSQL réels : dire s'ils ont été exécutés localement ou seulement en CI.
+- [x] 2.1 [AUD-PERF-03] Rouge : dans `minos-storage-local`, test de cache (plafond réglé à trois fois la taille persistée plutôt qu'un snapshot de 64 Mio généré, même condition d'admission), deux `loadActiveQueryView`, attendu `fullSnapshotLoads == 1`. **Preuve du rouge : 2 au HEAD.** Test de poids par format (méthode de `HybridCorpusWeightTest`) : estimation ≥ tas retenu.
+- [x] 2.2 [AUD-PERF-03] `FileSymbolSnapshotStore` : facteur 2, entier, pour tous les formats (après dédoublonnage le rapport mesuré est 1,41 à 1,46 en V3 ; V1 et V2, en UTF-16, ont un fichier plus gros pour le même tas : écart avec D1, voir `design.md`) ; conserver les chaînes exigées par `check-mne.py`. Preuve : tests verts ; `./mvnw -B -ntp -pl minos-storage-local -am verify` ; `python scripts/remediation/check-mne.py` et `check-mnd.py` (mis à jour dans cette tâche s'ils figent la valeur) ; scope JaCoCo `persistence-cache-indexes`.
+- [x] 2.3 [AUD-PERF-03] `PostgresCodeKnowledgeSnapshotStore` : même facteur (pas de test rouge propre : le store réutilise le codec et la même formule). `verify -pl minos-storage-postgresql -am` exécuté sur le poste : 283 tests, 0 échec, 0 sauté. Scope `m30-postgresql-pgvector` non rejoué par `check-jacoco.py`.
 - [ ] 2.4 [AUD-PERF-03] Mesure avant/après sur ce dépôt : `minos index` puis deux requêtes MCP identiques, relever `fullSnapshotLoads` et la durée de la seconde. Consigner dans `SUIVI.md`.
 
 ## 3. Parcours unique et intégrité (AUD-PERF-03)

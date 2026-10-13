@@ -34,7 +34,7 @@ Conséquences :
 - Le facteur sûr pour V3 est de l'ordre de 3,5 à 4. Le seuil d'admission passe alors de 64 Mio à 128–146 Mio persistés : un gain réel, mais **le snapshot de ce dépôt (185,5 Mio persistés, environ 472 Mio de tas) reste hors cache** sous le plafond de 512 Mio. L'exigence « Un snapshot de la taille de ce dépôt est admis au cache » n'est pas atteignable par le seul facteur.
 - Ce qui la rendrait atteignable est l'option A de l'ADR 0047 (dédoublonnage des chaînes au décodage, tas attendu environ 2,5 fois moindre) : l'ordre annoncé par l'ADR (« d'abord le poids, ensuite l'option A ») ne produit donc pas l'effet promis pour les gros projets.
 
-Décision à faire trancher par le propriétaire avant de poursuivre (voir `SUIVI.md`) ; le test de poids est écrit et vert sur le code actuel (facteur 8 : estimation 2,4 à 2,6 fois le tas retenu).
+**Décision du propriétaire (2026-10-13)** : dédoublonner d'abord (option A de l'ADR 0047), puis fixer le facteur. Résultat mesuré par `QueryViewWeightTest` après dédoublonnage : tas retenu de 21,0 à 21,6 Mo pour 14,8 à 15,0 Mo persistés, soit 1,41 à 1,46. Le facteur retenu est **2**, entier et commun à tous les formats : il laisse une marge sur la mesure et borne aussi une chaîne de caractères à deux octets, qui occupe au plus le double de sa taille UTF-8. Écart avec D1 : pas de facteur rationnel ni de facteur par format (V1 et V2, en UTF-16, ont un fichier plus gros pour le même tas : le facteur 2 y est plus prudent encore). Non mesuré : le corpus réel, le temps de décodage et le pic de tas pendant le décodage.
 
 ### Écarts avec l'action proposée par l'audit
 

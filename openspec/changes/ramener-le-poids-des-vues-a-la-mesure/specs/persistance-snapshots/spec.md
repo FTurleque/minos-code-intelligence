@@ -43,3 +43,16 @@ Quel que soit le nombre de parcours du fichier, une vue SHALL NOT être rendue �
 - **GIVEN** une lecture qui vient d'échouer sur un contenu altéré
 - **WHEN** la vue active est lue de nouveau
 - **THEN** elle échoue de la même façon
+
+### Requirement: Un snapshot décodé partage une instance par chaîne distincte
+Le décodage d'un snapshot SHALL rendre une seule instance par chaîne distincte lue dans une même passe, pour chaque format lisible. Le modèle décodé SHALL rester égal au modèle écrit. La table de partage SHALL NOT survivre à la passe de décodage.
+
+#### Scenario: Chaînes répétées sur plusieurs entités
+- **GIVEN** un snapshot écrit dont deux symboles, une occurrence et une relation portent le même identifiant de projet
+- **WHEN** il est décodé au format courant puis au format précédent
+- **THEN** ces champs désignent la même instance et le modèle décodé est égal au modèle écrit
+
+#### Scenario: Deux décodages successifs
+- **GIVEN** un même fichier décodé deux fois
+- **WHEN** les deux modèles sont comparés
+- **THEN** ils sont égaux et ne partagent pas leurs instances de chaînes
