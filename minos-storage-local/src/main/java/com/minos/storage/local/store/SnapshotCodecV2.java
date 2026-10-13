@@ -38,6 +38,12 @@ public final class SnapshotCodecV2 implements SnapshotCodec {
     }
 
     @Override
+    public CodeKnowledgeSnapshot readVerified(Path file, String expectedSha256) throws IOException {
+        Objects.requireNonNull(file, "file");
+        return SnapshotBinaryCodecSupport.readVerifiedKnowledgeSnapshotV2(file, expectedSha256);
+    }
+
+    @Override
     public long encodedSize(CodeKnowledgeSnapshot snapshot) throws IOException {
         Objects.requireNonNull(snapshot, "snapshot");
         return SnapshotBinaryCodecSupport.encodedKnowledgeSnapshotV2Size(snapshot);

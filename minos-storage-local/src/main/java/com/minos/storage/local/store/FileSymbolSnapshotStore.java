@@ -278,8 +278,9 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         if (!Files.isRegularFile(snapshotFile)) {
             throw new IOException("active symbol snapshot file is missing: " + snapshotFile);
         }
-        integrityService.verifyChecksum(snapshotFile, descriptor.sha256());
-        CodeKnowledgeSnapshot snapshot = codecFor(descriptor.formatVersion()).read(snapshotFile);
+        // One pass: the codec hashes what it decodes and returns nothing unless the SHA-256 is the pointer's.
+        CodeKnowledgeSnapshot snapshot =
+                codecFor(descriptor.formatVersion()).readVerified(snapshotFile, descriptor.sha256());
         recordFullSnapshotLoad();
         integrityService.verifyMetadata(snapshot, projectId, descriptor);
         long buildStarted = System.nanoTime();
