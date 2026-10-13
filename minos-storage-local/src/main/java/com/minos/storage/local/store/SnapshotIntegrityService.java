@@ -47,8 +47,13 @@ public final class SnapshotIntegrityService {
     }
 
     public void verifyChecksum(Path file, String expectedChecksum) throws IOException {
+        requireChecksum(checksum(file), expectedChecksum);
+    }
+
+    /** The one refusal of content whose SHA-256 is not the expected one, however the hash was computed. */
+    static void requireChecksum(String actualChecksum, String expectedChecksum) throws IOException {
         Objects.requireNonNull(expectedChecksum, "expectedChecksum");
-        if (!checksum(file).equals(expectedChecksum)) {
+        if (!expectedChecksum.equals(actualChecksum)) {
             throw new IOException("active symbol snapshot checksum mismatch");
         }
     }

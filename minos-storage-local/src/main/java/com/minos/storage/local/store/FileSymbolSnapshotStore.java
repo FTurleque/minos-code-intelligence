@@ -41,7 +41,14 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     public static final long DEFAULT_MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
     public static final int DEFAULT_MAX_ACTIVE_QUERY_RETRIES = 2;
     private static final int BUILD_LOCK_STRIPES = 64;
-    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L;
+    /**
+     * Heap retained by a query view, as a multiple of its persisted size. With one instance per distinct
+     * string (ADR 0047, option A) a repository-shaped snapshot retains 1.41 to 1.46 times its V3 file
+     * (QueryViewWeightTest); 2 leaves a margin and also bounds a string of two-byte characters, which
+     * takes at most twice its UTF-8 size. It was 8 before the strings were shared, when a reread view
+     * retained 2.5 to 3.3 times its file.
+     */
+    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 2L;
 
     private final Path storageRoot;
     private final SnapshotRepository snapshotRepository;
@@ -271,8 +278,9 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         if (!Files.isRegularFile(snapshotFile)) {
             throw new IOException("active symbol snapshot file is missing: " + snapshotFile);
         }
-        integrityService.verifyChecksum(snapshotFile, descriptor.sha256());
-        CodeKnowledgeSnapshot snapshot = codecFor(descriptor.formatVersion()).read(snapshotFile);
+        // One pass: the codec hashes what it decodes and returns nothing unless the SHA-256 is the pointer's.
+        CodeKnowledgeSnapshot snapshot =
+                codecFor(descriptor.formatVersion()).readVerified(snapshotFile, descriptor.sha256());
         recordFullSnapshotLoad();
         integrityService.verifyMetadata(snapshot, projectId, descriptor);
         long buildStarted = System.nanoTime();
