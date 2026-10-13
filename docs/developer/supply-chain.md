@@ -131,6 +131,54 @@ Dependabot réécrit **ensemble** le tag et le digest, ou seulement le digest qu
 
 **Ce qui a été vérifié, et ce qui ne l'a pas été.** Rejoué hors ligne sur les fichiers réels (S23-SUIVI, « Renommage des compose ») : le nom est apparié ; les `FROM` des Dockerfile ne le sont pas ; l'analyse lit deux dépendances (`pgvector/pgvector` `0.8.2-pg17`, `ollama/ollama` `0.32.0`) avec leur digest ; la réécriture du défaut interpolé ne change que la ligne visée (digest seul, ou tag et digest). **Non rejoué** : l'interrogation du registre Docker Hub et le choix du tag candidat (lus dans `docker/update_checker.rb`, non exécutés) : la première PR de Dependabot sur ces fichiers est la preuve de bout en bout, à surveiller le lundi suivant la fusion.
 
+## Veille des vulnérabilités : ce qui est livré, et par quoi c'est suivi
+
+Constat AUD-DEP-03 (audit du 10 octobre 2026). Le tableau dit, pour chaque famille de composants livrés, quel outil signale une vulnérabilité et à quel moment. Une ligne « non couvert » est une limite déclarée, pas un oubli.
+
+| Composant livré | Montées proposées par | Vulnérabilités signalées par | Moment |
+|---|---|---|---|
+| Dépendances Maven du reactor | Dependabot (`maven`, `/`) | OSV-Scanner, job `Dependency vulnerability gate` de `pr-ci.yml` (check exigé) ; OWASP Dependency-Check à la demande (`code-audit.yml`) | chaque PR |
+| Dépendances Gradle du plugin IntelliJ | Dependabot (`gradle`, `/minos-intellij`) | non couvert par le gate de PR (AUD-DEP-04, sprint 5) | — |
+| Actions GitHub | Dependabot (`github-actions`) | épinglage par SHA (`check-workflow-pins.py`) ; pas de veille d'avis | chaque PR |
+| Images de conteneur | Dependabot (`docker`, `docker-compose`, `/docker`) | épinglage par digest (`check-image-pins.py`) ; pas de veille d'avis sur le contenu des images | chaque PR |
+| Verrous npm de scip-typescript et de scip-python (66 paquets) | personne : une montée est un changement de catalogue qualifié (ADR 0040) | OSV-Scanner, même job, par `--lockfile=package-lock.json:<chemin>` | chaque PR |
+| Catalogue `embedded-tools.json` (7 providers, 9 artefacts, 2 composants assemblés) et les 74 jars de `scip-java-classpath.lock.json` | personne : changement de catalogue qualifié | `scripts/quality/check-embedded-tools-advisories.py` (API OSV, calendrier de support de Node.js), workflow `embedded-tools-advisories.yml` | chaque lundi, et à la demande |
+
+### Verrous npm
+
+OSV-Scanner reconnaît un verrou npm à son nom de fichier, `package-lock.json`. Les deux verrous livrés portent le nom de leur outil en préfixe (`scip-typescript-package-lock.json`, `scip-python-package-lock.json`) et restent à leur place : ils sont lus par chemin par les gestionnaires Java, le catalogue, l'image Docker et un lanceur. Ils sont donc passés un par un au scan (`scan-args` de `pr-ci.yml`). `scripts/quality/check-ci-wiring.py` calcule la liste des `*package-lock.json` rangés sous un `src/main/resources` et échoue si l'un d'eux manque aux arguments, ou si un argument nomme un fichier absent.
+
+Dependabot n'a pas d'écosystème `npm`, volontairement : ces verrous **sont** l'arbre installé chez l'utilisateur, et une PR automatique en changerait le contenu sans la qualification du catalogue.
+
+### Catalogue des outils embarqués
+
+Le script lit le catalogue et une table qu'il porte (`WATCHES`) : pour chaque identifiant, les paquets à interroger (écosystème OSV, nom), un calendrier de support, ou la raison pour laquelle il n'est pas suivi. Un composant du catalogue absent de la table fait échouer le script, comme une entrée de table que le catalogue n'a plus : aucun composant n'est oublié en silence. L'auto-test (`--self-test`, réponses simulées, sans réseau) tourne dans le job `invariants` et le prouve sur le catalogue réel à chaque PR.
+
+Le verrou du classpath de scip-java contient des noms de jars, pas des coordonnées : la table `CLASSPATH_GROUPS` du script donne le groupe Maven de chaque artefact (établie sur un cache Coursier dont les 74 jars avaient l'empreinte SHA-256 du verrou). Elle se met à jour avec le verrou, à chaque montée de scip-java ; un jar sans groupe fait échouer le script.
+
+Sa sortie a toujours quatre sections : composants touchés par un avis, composants hors support, constats sous dérogation, composants **non couverts**. Codes de sortie : `0` rien à signaler ; `1` un composant est touché ou hors support, ou la table ou une dérogation est fausse ; `2` le service d'avis ou le calendrier n'a pas pu être lu. Un échec réseau n'est jamais lu comme « aucun avis ».
+
+Non couverts, par construction (la sortie du script fait foi) :
+
+| Composant | Ce qui n'est pas suivi | Raison |
+|---|---|---|
+| Coursier | tout | lanceur natif épinglé par un commit de `coursier/launchers` : le catalogue n'a pas de version publiée à comparer |
+| scip-clang, rust-analyzer | tout | binaires téléchargés d'une page de releases : aucune base d'avis ne les décrit par un nom de paquet et une version |
+| Node.js | les avis du runtime | OSV n'a pas d'écosystème pour un binaire de runtime ; seule la fin de support de la ligne de version est contrôlée |
+| Apache Maven | les bibliothèques tierces de la distribution | seuls `maven-core`, `maven-compat` et `maven-embedder` sont interrogés |
+| scip-dotnet, scip-go | les bibliothèques incluses dans le paquet ou le binaire | seul le paquet publié (NuGet, module Go) est interrogé |
+
+Le workflow est planifié et n'est pas un check exigé : un avis publié en semaine ne doit pas rendre rouges les PR sans rapport. GitHub n'exécute un workflow planifié que depuis la branche par défaut ; avant la promotion vers `main`, il se lance à la main (`workflow_dispatch`).
+
+### Traiter une alerte
+
+La veille ne modifie rien. Quand le workflow est rouge :
+
+1. Lire la sortie : la section dit le composant, l'avis (lien OSV) ou la date de fin de support. Un code `2` n'est pas une alerte : relancer le workflow.
+2. Évaluer si l'avis touche l'usage que MINOS fait du composant (l'outil s'exécute dans le bac à sable, sans réseau, sur du code non fiable).
+3. Corriger par une **montée du catalogue qualifiée** (skill `minos-dependency-update`, ADR 0040) : version, empreintes, verrou, `sync-tools-manifest.py`, qualification Windows et Docker. Un avis sur un jar du classpath de scip-java se corrige en montant scip-java, pas en remplaçant un jar.
+4. Si aucun correctif n'existe ou si l'avis ne s'applique pas : inscrire une **dérogation datée** dans `scripts/quality/embedded-tools-advisory-waivers.json` (`component`, `finding` : identifiant de l'avis ou `end-of-support`, `reason`, `expires`) et le risque au registre (`docs/architecture/risks/register.md`). Une dérogation échue redevient un échec ; une dérogation qui ne correspond plus à aucun constat échoue aussi, pour être retirée.
+
 ## Téléchargements Docker Hub authentifiés
 
 Docker Hub limite les téléchargements anonymes par adresse de runner. Le 9 octobre 2026, la limite (« 429 toomanyrequests ») a fait échouer les images de base (`golang`, `rust`, `eclipse-temurin`), `pgvector` des tests PostgreSQL et les qualifications Docker, contrôles obligatoires compris.
