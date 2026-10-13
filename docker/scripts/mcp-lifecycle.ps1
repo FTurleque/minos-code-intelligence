@@ -53,12 +53,9 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$DockerCommand = Get-Command docker -ErrorAction SilentlyContinue
-if (-not $DockerCommand) { throw 'Docker is required.' }
-& docker version --format '{{.Server.Version}}' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Docker does not respond.' }
-
-$RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+# Docker itself is probed further down, just before the action runs: the checks that only read the
+# runtime files (Assert-QueryImageConfigured) must be able to refuse before any call to Docker.
+$RepoRoot =[System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 if ([string]::IsNullOrWhiteSpace($SourceRoot)) { $SourceRoot = $RepoRoot }
 else { $SourceRoot = [System.IO.Path]::GetFullPath($SourceRoot) }
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
@@ -76,6 +73,8 @@ $EnvironmentFile = Join-Path $RuntimeRoot '.env'
 $MetadataFile = Join-Path $RuntimeRoot 'installation.json'
 $ProviderInventoryFile = Join-Path $RuntimeRoot 'provider-inventory.json'
 $ProviderChecksumsFile = Join-Path $RuntimeRoot 'provider-binary-sha256.txt'
+# Set by Set-QueryImagePlaceholder (Stop, Uninstall) and read by Compose; '' for every other action.
+$script:QueryImagePlaceholder = ''
 
 function ConvertTo-DockerPath([string] $Path) {
     return ([System.IO.Path]::GetFullPath($Path)).Replace('\', '/')
@@ -122,8 +121,23 @@ function Compose([string[]] $Arguments, [int[]] $AcceptedExitCodes = @(0)) {
     # isatty() without any human able to answer it. Compose only prompts interactively
     # ("... Recreate (data will be lost)?") when it believes stdin is a real terminal;
     # forcing it through a PowerShell pipe guarantees non-interactive, fail-fast behavior.
-    $null | & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile @Arguments
-    if ($LASTEXITCODE -notin $AcceptedExitCodes) { throw "docker compose failed (exit $LASTEXITCODE): $($Arguments -join ' ')" }
+    #
+    # AUD-DEP-15: the runtime .env is the ONLY source of the query image. For Compose the process environment
+    # wins over --env-file, so an ambient MINOS_QUERY_IMAGE (a leftover of the calling shell) would silently
+    # put the query plane on another image than the one the guards checked: it is hidden for the duration of
+    # the call and restored afterwards. The only value ever injected is the placeholder of
+    # Set-QueryImagePlaceholder, for `stop` and `down`, which use no image.
+    $AmbientQueryImage = $env:MINOS_QUERY_IMAGE
+    try {
+        if ($script:QueryImagePlaceholder -ne '') { $env:MINOS_QUERY_IMAGE = $script:QueryImagePlaceholder }
+        else { Remove-Item -LiteralPath Env:MINOS_QUERY_IMAGE -ErrorAction SilentlyContinue }
+        $null | & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile @Arguments
+        if ($LASTEXITCODE -notin $AcceptedExitCodes) { throw "docker compose failed (exit $LASTEXITCODE): $($Arguments -join ' ')" }
+    }
+    finally {
+        if ($null -eq $AmbientQueryImage) { Remove-Item -LiteralPath Env:MINOS_QUERY_IMAGE -ErrorAction SilentlyContinue }
+        else { $env:MINOS_QUERY_IMAGE = $AmbientQueryImage }
+    }
 }
 
 # Resource ceilings (docker/compose-mcp.*.yaml, x-limits-<role>; defaults in docker/.env.example). Hitting
@@ -320,7 +334,109 @@ function Resolve-Image([string] $RequestedTag, [string] $RequestedVersion, [stri
     return "minos-code-intelligence:$RequestedTag"
 }
 
-function Test-ExactImage([string] $Image, [string] $ExpectedVersion, [string] $ExpectedCommit) {
+# AUD-DEP-15: a release builds TWO images from docker/Dockerfile.mcp.release. The administration image
+# (target `admin`, MINOS_IMAGE: indexing, provider tools, provider probe) is the provider-complete image; the
+# query image (target `query`, MINOS_QUERY_IMAGE: the persistent minos-mcp plane and the jobs that only need
+# java or sh) is a JRE and the MINOS jar, with no compiler and no provider tool.
+#
+# The targets are read from the Dockerfile that is about to be built, not assumed: the Docker A -> B upgrade
+# qualification installs the PREVIOUS release with its own recipe (-SourceRoot), and that recipe may predate
+# the split. Such a recipe has neither target and builds one image, as it always did. A recipe that names only
+# one of the two targets is refused: guessing which image it meant could put the query plane on the wrong one.
+function Get-ReleaseImageTargets([string] $DockerfilePath) {
+    $Stages = @(Get-Content -LiteralPath $DockerfilePath | ForEach-Object {
+            if ($_ -match '^\s*FROM\s+(?:--platform=\S+\s+)?\S+\s+AS\s+([\w.-]+)\s*$') { $Matches[1].ToLowerInvariant() }
+        })
+    $HasAdmin = $Stages -contains 'admin'
+    $HasQuery = $Stages -contains 'query'
+    if ($HasAdmin -and $HasQuery) { return @('admin', 'query') }
+    if ($HasAdmin -or $HasQuery) {
+        throw 'The MINOS Docker release recipe is inconsistent: Dockerfile.mcp.release must define both the admin and the query targets, or neither (a release with a single image).'
+    }
+    return @()
+}
+
+# The query image is named after the administration image: same repository, tag suffixed with -query.
+function Resolve-QueryImage([string] $AdministrationImage) {
+    return "$AdministrationImage-query"
+}
+
+# The value of a variable of the runtime .env, '' when the file or the variable is absent. The last
+# definition wins, as for Compose; surrounding quotes are not part of the value.
+function Read-EnvironmentValue([string] $Path, [string] $Name) {
+    $Value = ''
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $Value }
+    $Pattern = '^\s*' + [regex]::Escape($Name) + '\s*=(.*)$'
+    foreach ($Line in @(Get-Content -LiteralPath $Path)) {
+        if ($Line -match $Pattern) { $Value = $Matches[1].Trim().Trim('"').Trim("'").Trim() }
+    }
+    return $Value
+}
+
+# Whether a compose file gives a service the query image. The runtime copy of a release that had a single
+# image does not: that installation keeps running as that release left it until the next Install.
+function Test-ComposeUsesQueryImage([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    foreach ($Line in @(Get-Content -LiteralPath $Path)) {
+        if ($Line -match '^\s*image:\s*["'']?\$\{MINOS_QUERY_IMAGE\b') { return $true }
+    }
+    return $false
+}
+
+# Fail-closed guard of the two-image contract. It reads two files and calls nothing: when the runtime compose
+# file asks for the query image and the runtime .env does not define it (program files updated, or the
+# connected profile copied, over a runtime that was installed with a single image), the action is refused
+# before any call to Docker. The query plane NEVER falls back to the administration image. The message names
+# the repair and carries no path.
+function Assert-QueryImageConfigured {
+    if (-not (Test-ComposeUsesQueryImage $ComposeFile)) { return }
+    if (-not [string]::IsNullOrWhiteSpace((Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_QUERY_IMAGE'))) { return }
+    throw ('This MINOS Docker installation is not migrated to the separate query image: MINOS_QUERY_IMAGE is missing or empty ' +
+        'in the runtime .env, and the MCP query plane never falls back to the administration image. No container was started ' +
+        'and nothing was changed. Repair: run the MINOS installer again, or prod-mcp-release.ps1 -Action Install -Jar <minos.jar> ' +
+        '-Version <version>; both build the two images and keep the MINOS data.')
+}
+
+# Stop and Uninstall start nothing, so a runtime that is not migrated stays stoppable and removable: Compose
+# refuses to interpolate a file whose required variable is unset, even for `stop` and `down`, which never use
+# the image. A placeholder that names no image satisfies the interpolation for those two actions only.
+function Set-QueryImagePlaceholder {
+    if (-not (Test-ComposeUsesQueryImage $ComposeFile)) { return }
+    if (-not [string]::IsNullOrWhiteSpace((Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_QUERY_IMAGE'))) { return }
+    # Handed to Compose by the Compose function only, for the duration of its call: it never reaches the
+    # environment of the caller (this script is also called in-process, several actions in a row).
+    $script:QueryImagePlaceholder = 'minos-query-image-not-configured'
+}
+
+# Second half of the same contract, for the actions that (re)create the query plane: the image the runtime
+# .env names for it must BE a query image (label io.minos.image.plane=query, written by the `query` target).
+# A MINOS_QUERY_IMAGE pointed by hand at the administration image, or at an image that no longer exists, is
+# refused here: one read-only `docker image inspect`, nothing started.
+function Assert-QueryImagePlane {
+    if (-not (Test-ComposeUsesQueryImage $ComposeFile)) { return }
+    $QueryImageName = Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_QUERY_IMAGE'
+    if ((Get-ImagePlane $QueryImageName) -eq 'query') { return }
+    throw ('The image named by MINOS_QUERY_IMAGE in the runtime .env is missing or is not a MINOS query image ' +
+        '(label io.minos.image.plane=query); the MCP query plane never runs on the administration image. No container was ' +
+        'started. Repair: run the MINOS installer again, or prod-mcp-release.ps1 -Action Install -Jar <minos.jar> -Version <version>.')
+}
+
+# The io.minos.image.plane label of a local image, '' when the image or the label is absent.
+function Get-ImagePlane([string] $Image) {
+    if ([string]::IsNullOrWhiteSpace($Image)) { return '' }
+    $Inspect = Invoke-DockerAllowFailure -Arguments @('image', 'inspect', $Image)
+    if ($Inspect.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace([string]$Inspect.Output)) { return '' }
+    try { $Images = @(([string]$Inspect.Output) | ConvertFrom-Json) }
+    catch { return '' }
+    if ($Images.Count -eq 0 -or $null -eq $Images[0].Config -or $null -eq $Images[0].Config.Labels) { return '' }
+    $PlaneLabel = $Images[0].Config.Labels.PSObject.Properties['io.minos.image.plane']
+    if ($null -eq $PlaneLabel) { return '' }
+    return [string]$PlaneLabel.Value
+}
+
+# $ExpectedPlane: 'admin' or 'query' for the two images of a current release; '' for the single image of a
+# release that predates the split (no plane label, provider-complete by definition).
+function Test-ExactImage([string] $Image, [string] $ExpectedVersion, [string] $ExpectedCommit, [string] $ExpectedPlane = '') {
     # Read the inspect document as JSON instead of embedding quoted label keys in
     # a Docker Go template. Windows PowerShell 5.1 rewrites those native argument
     # quotes and can make Docker interpret "org" as a template function.
@@ -335,15 +451,28 @@ function Test-ExactImage([string] $Image, [string] $ExpectedVersion, [string] $E
     $VersionLabel = $Labels.PSObject.Properties['org.opencontainers.image.version']
     $RevisionLabel = $Labels.PSObject.Properties['org.opencontainers.image.revision']
     $PreparedLabel = $Labels.PSObject.Properties['io.minos.providers.prepared']
-    return $null -ne $VersionLabel -and
-        $null -ne $RevisionLabel -and
-        $null -ne $PreparedLabel -and
-        [string]$VersionLabel.Value -eq $ExpectedVersion -and
-        [string]$RevisionLabel.Value -eq $ExpectedCommit -and
-        [string]$PreparedLabel.Value -eq 'true'
+    $PlaneLabel = $Labels.PSObject.Properties['io.minos.image.plane']
+    if ($null -eq $VersionLabel -or $null -eq $RevisionLabel -or
+        [string]$VersionLabel.Value -ne $ExpectedVersion -or
+        [string]$RevisionLabel.Value -ne $ExpectedCommit) { return $false }
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedPlane)) {
+        # An image of the other plane under the expected name is not "the exact image": it is rebuilt.
+        if ($null -eq $PlaneLabel -or [string]$PlaneLabel.Value -ne $ExpectedPlane) { return $false }
+        if ($ExpectedPlane -eq 'query') { return $true }
+    }
+    return $null -ne $PreparedLabel -and [string]$PreparedLabel.Value -eq 'true'
 }
 
 Move-LegacyRuntimeCompose
+
+# Before any call to Docker (see Assert-QueryImageConfigured). Stop, Status, Attach and Uninstall are not
+# guarded: they start nothing, and a runtime that is not migrated must remain stoppable and removable.
+if ($Action -in @('Start', 'Validate', 'Admin')) { Assert-QueryImageConfigured }
+
+$DockerCommand = Get-Command docker -ErrorAction SilentlyContinue
+if (-not $DockerCommand) { throw 'Docker is required.' }
+& docker version --format '{{.Server.Version}}' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Docker does not respond.' }
 
 switch ($Action) {
     'Install' {
@@ -362,8 +491,35 @@ switch ($Action) {
 
         $Timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
         $Image = Resolve-Image -RequestedTag $ImageTag -RequestedVersion $Version -RequestedCommit $Commit
-        if (Test-ExactImage -Image $Image -ExpectedVersion $Version -ExpectedCommit $Commit) {
+        $Dockerfile = Join-Path $SourceRoot 'docker\Dockerfile.mcp.release'
+        # AUD-DEP-15: the images this recipe builds (see Get-ReleaseImageTargets). $QueryImage stays '' for the
+        # recipe of a release that had a single image; MINOS_QUERY_IMAGE is then not written, and that
+        # release's compose file does not ask for it.
+        $ImageTargets = @(Get-ReleaseImageTargets $Dockerfile)
+        $QueryImage = ''
+        $Builds = @()
+        if ($ImageTargets.Count -eq 0) {
+            if (-not (Test-ExactImage -Image $Image -ExpectedVersion $Version -ExpectedCommit $Commit)) {
+                $Builds += [pscustomobject]@{ Target = ''; Image = $Image }
+            }
+        }
+        else {
+            $QueryImage = Resolve-QueryImage $Image
+            if (-not (Test-ExactImage -Image $Image -ExpectedVersion $Version -ExpectedCommit $Commit -ExpectedPlane 'admin')) {
+                $Builds += [pscustomobject]@{ Target = 'admin'; Image = $Image }
+            }
+            if (-not (Test-ExactImage -Image $QueryImage -ExpectedVersion $Version -ExpectedCommit $Commit -ExpectedPlane 'query')) {
+                $Builds += [pscustomobject]@{ Target = 'query'; Image = $QueryImage }
+            }
+        }
+        # The Dockerfile and the compose file of one release agree on the number of images; a recipe where
+        # they do not is refused before anything is built or written.
+        if ((Test-ComposeUsesQueryImage (Resolve-ComposeSource $SourceRoot)) -ne ($QueryImage -ne '')) {
+            throw 'The MINOS Docker release recipe is inconsistent: its compose file and its Dockerfile.mcp.release do not agree on the separate query image. Nothing was built or changed.'
+        }
+        if ($Builds.Count -eq 0) {
             Write-Host "MINOS exact Docker image already exists; skipping provider-complete rebuild: $Image" -ForegroundColor Cyan
+            if ($QueryImage -ne '') { Write-Host "MINOS exact Docker query image already exists: $QueryImage" -ForegroundColor Cyan }
         }
         else {
             $BuildContext = Join-Path $RuntimeRoot 'build'
@@ -372,17 +528,24 @@ switch ($Action) {
             Copy-Item -LiteralPath $Jar -Destination (Join-Path $BuildContext 'minos.jar')
             Copy-JarResourceEntry -JarPath $Jar -EntryName 'com/minos/adapter/scip/runtime/scip-typescript-package-lock.json' -Destination (Join-Path $BuildContext 'scip-typescript-package-lock.json')
             Copy-JarResourceEntry -JarPath $Jar -EntryName 'com/minos/adapter/scip/runtime/scip-python-package-lock.json' -Destination (Join-Path $BuildContext 'scip-python-package-lock.json')
-            $Dockerfile = Join-Path $SourceRoot 'docker\Dockerfile.mcp.release'
-            # --network=host: BuildKit's default isolated build network has shown
-            # reproducible indefinite hangs against certain external hosts (observed
-            # against github.com release-asset redirects) with no timeout to recover.
-            # The host network stack reaches the same URLs reliably; this only affects
-            # the build-time RUN steps, not the resulting image's own network config.
-            & docker build --network=host --file $Dockerfile --tag $Image `
-                --build-arg "MINOS_VERSION=$Version" `
-                --build-arg "MINOS_GIT_COMMIT=$Commit" `
-                --build-arg "MINOS_BUILD_TIMESTAMP=$Timestamp" $BuildContext
-            if ($LASTEXITCODE -ne 0) { throw 'MINOS Docker image build failed.' }
+            # Every image is built BEFORE the runtime compose file and .env are replaced below: a candidate
+            # that cannot be built leaves the installed runtime exactly as it was.
+            foreach ($Build in $Builds) {
+                # --network=host: BuildKit's default isolated build network has shown
+                # reproducible indefinite hangs against certain external hosts (observed
+                # against github.com release-asset redirects) with no timeout to recover.
+                # The host network stack reaches the same URLs reliably; this only affects
+                # the build-time RUN steps, not the resulting image's own network config.
+                $BuildArguments = @('--network=host', '--file', $Dockerfile, '--tag', $Build.Image)
+                if ($Build.Target -ne '') { $BuildArguments += @('--target', $Build.Target) }
+                $BuildArguments += @(
+                    '--build-arg', "MINOS_VERSION=$Version",
+                    '--build-arg', "MINOS_GIT_COMMIT=$Commit",
+                    '--build-arg', "MINOS_BUILD_TIMESTAMP=$Timestamp",
+                    $BuildContext)
+                & docker build @BuildArguments
+                if ($LASTEXITCODE -ne 0) { throw "MINOS Docker image build failed: $($Build.Image)" }
+            }
             Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
         }
 
@@ -400,10 +563,16 @@ MINOS_VERSION=$Version
 MINOS_GIT_COMMIT=$Commit
 MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
 "@ | Set-Content -LiteralPath $EnvironmentFile -Encoding ascii
+        # Written only by a recipe that has the query target: an installation made with a single image
+        # receives the variable here, at the Install that follows the update of its program files.
+        if ($QueryImage -ne '') { Add-Content -LiteralPath $EnvironmentFile -Value "MINOS_QUERY_IMAGE=$QueryImage" -Encoding ascii }
         if ($PreservedOverrides.Count -gt 0) { Add-Content -LiteralPath $EnvironmentFile -Value $PreservedOverrides -Encoding ascii }
 
         Compose @('config', '--quiet')
         Assert-DockerJavaRuntime -Image $Image -Failure 'The MINOS Docker image does not expose a valid Java runtime.'
+        if ($QueryImage -ne '') {
+            Assert-DockerJavaRuntime -Image $QueryImage -Failure 'The MINOS Docker query image does not expose a valid Java runtime.'
+        }
         Read-ImageFile -Image $Image -Path '/opt/minos/provider-evidence/provider-inventory.json' | Set-Content -LiteralPath $ProviderInventoryFile -Encoding utf8
         Read-ImageFile -Image $Image -Path '/opt/minos/provider-evidence/binary-sha256.txt' | Set-Content -LiteralPath $ProviderChecksumsFile -Encoding ascii
 
@@ -416,6 +585,9 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
             formatVersion = 5
             installedAt = $Timestamp
             image = $Image
+            # Additive (AUD-DEP-15): '' when the recipe has a single image. Read with PSObject.Properties:
+            # the metadata of an installation made before the split has no such field.
+            queryImage = $QueryImage
             version = $Version
             gitCommit = $Commit
             dataRoot = $DataRoot
@@ -434,6 +606,7 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
 
         Write-Host 'MINOS packaged Docker installation SUCCESS' -ForegroundColor Green
         Write-Host "Image     : $Image"
+        if ($QueryImage -ne '') { Write-Host "Query img : $QueryImage (JRE and MINOS jar only)" }
         Write-Host "Data      : $DataRoot -> /var/lib/minos"
         Write-Host "Projects  : $ProjectsRoot -> /workspace/projects (read-only)"
         Write-Host "Semantic  : $ResolvedSemanticProvider"
@@ -444,6 +617,10 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
     }
     'Start' {
         Require-Installed
+        Assert-QueryImagePlane
+        if (-not (Test-ComposeUsesQueryImage $ComposeFile)) {
+            Write-Warning 'This MINOS Docker runtime was installed by a release with a single image: the MCP query plane still runs on the provider-complete image. Run the MINOS installer again (or prod-mcp-release.ps1 -Action Install) to give it the separate query image.'
+        }
         Compose @('up', '-d', '--force-recreate', 'minos-mcp')
         Write-Host 'MINOS Docker MCP query plane started.' -ForegroundColor Green
     }
@@ -480,6 +657,10 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Compose @('config', '--quiet')
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
         Assert-DockerJavaRuntime -Image $Metadata.image -Failure 'MINOS Docker validation failed.'
+        if (Test-ComposeUsesQueryImage $ComposeFile) {
+            Assert-QueryImagePlane
+            Assert-DockerJavaRuntime -Image (Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_QUERY_IMAGE') -Failure 'MINOS Docker query image validation failed.'
+        }
         Compose @('run', '--rm', '--no-deps', 'minos-data-bootstrap')
         Initialize-And-VerifyProviderTools
         Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
@@ -488,15 +669,20 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
     }
     'Stop' {
         Require-Installed
+        Set-QueryImagePlaceholder
         Compose @('stop', '--timeout', '10', 'minos-mcp')
         Write-Host 'MINOS Docker MCP query plane stopped.' -ForegroundColor Green
     }
     'Uninstall' {
         Require-Installed
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
-        $ManagedImage = [string] $Metadata.image
+        $ManagedImages = @([string] $Metadata.image)
+        $QueryImageProperty = $Metadata.PSObject.Properties['queryImage']
+        if ($null -ne $QueryImageProperty) { $ManagedImages += [string] $QueryImageProperty.Value }
+        Set-QueryImagePlaceholder
         Compose @('down', '--timeout', '10', '--remove-orphans', '--volumes')
-        if (-not [string]::IsNullOrWhiteSpace($ManagedImage)) {
+        foreach ($ManagedImage in $ManagedImages) {
+            if ([string]::IsNullOrWhiteSpace($ManagedImage)) { continue }
             $ImageRemoval = Invoke-DockerAllowFailure -Arguments @('image', 'rm', $ManagedImage)
             if ($ImageRemoval.ExitCode -ne 0) { Write-Warning "MINOS Docker containers/provider volume were removed, but image '$ManagedImage' could not be removed: $($ImageRemoval.Output)" }
         }

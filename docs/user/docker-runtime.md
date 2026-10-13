@@ -28,6 +28,25 @@ Le serveur MCP persistant, les bootstraps et le probe provider gardent `network_
 
 Le plan admin n'obtient jamais le droit de modifier le code source. Il écrit état métier, caches et staging uniquement sous `/var/lib/minos`.
 
+## Deux images : requête et administration
+
+`docker/Dockerfile.mcp.release` construit **deux images** par release, une par cible (`docker build --target …`) ; le fichier `.env` du runtime les nomme par deux variables.
+
+| Image | Cible | Variable | Contenu | Services |
+|---|---|---|---|---|
+| Requête | `query` | `MINOS_QUERY_IMAGE` | JRE 25, `minos.jar`, notices ; **aucun** JDK, compilateur C, Rust, Go, .NET, Node, `pip`/`npm`, ni outil de provider | `minos-mcp` (persistant), `minos-bootstrap`, `minos-data-bootstrap`, `minos-ollama-bootstrap` |
+| Administration | `admin` | `MINOS_IMAGE` | l'image provider-complete décrite plus bas | `minos-admin`, `minos-tools-bootstrap`, `minos-provider-probe` |
+
+Règle de classement : un service qui lance un provider, copie les outils embarqués ou sonde les toolchains utilise l'image d'administration ; tout autre utilise l'image de requête. Chaque service des fichiers compose porte, au-dessus de sa ligne `image:`, la raison de son classement ; un test de contrat (`M29DockerQueryImageContractTest`) refuse un service non classé ou mal classé, et une cible `query` qui copierait une toolchain ou installerait un paquet.
+
+L'image de requête porte le nom de l'image d'administration suivi de `-query` (`minos-code-intelligence:<tag>` et `minos-code-intelligence:<tag>-query`). Les deux portent l'étiquette `io.minos.image.plane` (`admin` ou `query`) et la même révision. Tailles mesurées le 2026-10-13 (Docker Desktop, `linux/amd64`) : 5,83 Go pour l'image d'administration, 511 Mo pour l'image de requête, que la cible `query` construit en quelques secondes une fois le JRE de base présent.
+
+Le conteneur persistant `minos-mcp` **n'utilise jamais l'image d'administration**. Si le fichier compose du runtime demande l'image de requête alors que `MINOS_QUERY_IMAGE` est absente ou vide du `.env`, `Start`, `Validate` et `Admin` échouent avant tout appel à Docker, avec la commande de réparation ; `Start` et `Validate` refusent aussi une `MINOS_QUERY_IMAGE` qui ne désigne pas une image de requête. `Stop` et `Uninstall` restent possibles.
+
+La qualification de release (`scripts/ci/qualify-docker-release.sh`) construit les deux cibles et prouve le **contenu** de l'image de requête : `gcc`, `cc`, `cargo`, `rustc`, `go`, `dotnet`, `pip3`, `npm`, `node` et `javac` y sont cherchés et doivent être absents (les mêmes commandes doivent être trouvées dans l'image d'administration), puis le serveur MCP de cette image répond à la poignée de main et à une requête de symboles sur un index importé.
+
+Le lanceur de développement (`docker/scripts/prod-mcp.ps1`) construit une seule image, celle de `docker/Dockerfile.mcp` (JRE et jar) : c'est déjà une image de requête, qu'il déclare sous les deux variables.
+
 ## Mapping des projets
 
 Configuration runtime versionnée :
@@ -41,7 +60,7 @@ Le registre persiste `rootRelativePath`, pas le chemin physique host/container. 
 
 ## Image provider-complete
 
-L'image prépare au BUILD :
+C'est l'image d'**administration** (`MINOS_IMAGE`, cible `admin`). Elle prépare au BUILD :
 
 ```text
 scip-java            0.13.1
@@ -238,6 +257,23 @@ Quand un provider s'exécute (hôte natif), ses sorties Java, TypeScript, C/C++,
 ### Mise à jour d'une installation existante : nom du fichier compose
 
 Les fichiers compose livrés s'appellent `compose-mcp.prod.yaml` et `compose-mcp.connected.yaml` (ils s'appelaient `compose.mcp.prod.yaml` et `compose.mcp.connected.yaml`). La copie active du runtime (`%LOCALAPPDATA%\MINOS\docker\runtime`) est **renommée automatiquement**, contenu intact (profil connecté compris), par la première action qui suit la mise à jour (`Start`, `Status`, `Install`...) : les conteneurs, volumes et le projet Compose (`MINOS_COMPOSE_PROJECT`) ne changent pas, rien n'est recréé du seul fait du renommage. Si l'ancien et le nouveau fichier coexistent, le nouveau est utilisé, l'ancien n'est ni supprimé ni écrasé et un avertissement le signale : le supprimer à la main après vérification. Un `Install` retire l'ancien fichier.
+
+### Mise à jour d'une installation existante : image de requête
+
+Une installation faite par une version antérieure n'a qu'**une** image, qui sert tous ses services. La mise à jour des fichiers du programme ne touche pas au runtime (`%LOCALAPPDATA%\MINOS\docker\runtime`) : c'est l'action `Install`, que l'installateur rejoue après la mise à jour, qui construit l'image de requête (l'image d'administration est réutilisée si elle existe déjà pour cette version), remplace le fichier compose et écrit `MINOS_QUERY_IMAGE` dans le `.env`. Aucune intervention manuelle ; les données (`docker-data`), les projets enregistrés, les volumes et le projet Compose sont conservés.
+
+Entre la mise à jour des fichiers et cet `Install` :
+
+- le runtime laissé par l'ancienne version reste cohérent (son fichier compose ne demande qu'une image) : `Start` fonctionne et avertit que le plan de requête tourne encore sur l'image complète ;
+- un runtime à moitié migré (nouveau fichier compose, ancien `.env`) est refusé avant tout appel à Docker, sans rien modifier.
+
+Réparation, dans tous les cas : relancer l'installateur MINOS, ou
+
+```powershell
+.\docker\scripts\prod-mcp-release.ps1 -Action Install -Jar <minos.jar> -Version <version>
+```
+
+Si la construction d'une des deux images échoue, le runtime installé n'est pas modifié. La qualification de mise à niveau (`scripts/ci/qualify-docker-upgrade.ps1`) rejoue ce passage d'une image à deux et vérifie que le plan de requête mis à niveau tourne sur l'image de requête.
 
 ## Limites de ressources
 

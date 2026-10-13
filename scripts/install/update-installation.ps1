@@ -71,6 +71,15 @@ $OwnershipMarkerPath = Join-Path $InstallRoot '.minos-installation.json'
 # and rolled back like every other directory, so an upgrade never leaves tools of two versions mixed. It is the
 # one OPTIONAL directory: the "lite" package ships without it, and installing a lite package over a full
 # installation removes the previous tools\ transactionally (backed up, restored on rollback).
+#
+# docker\ is the RECIPE (Dockerfile.mcp.release, the compose files, the lifecycle scripts), not the Docker runtime:
+# the runtime directory (compose copy, .env, installation.json) lives outside the install root and is never touched
+# here. A release that changes what the runtime needs - AUD-DEP-15: a second image, MINOS_QUERY_IMAGE, for the MCP
+# query plane - delivers the new recipe through this transaction; the runtime itself is migrated by the Install
+# action the installer replays afterwards (docker\scripts\configure-docker-mcp.ps1 -> mcp-lifecycle.ps1), which
+# builds the missing image and writes the variable. Until then mcp-lifecycle.ps1 keeps a single-image runtime
+# working and refuses a half-migrated one before any call to Docker (scenario 12 of
+# verify-windows-upgrade-transaction.ps1).
 $StagedDirectoryRelativePaths = @('app', 'lib', 'docker', 'integration', 'supply-chain', 'tools')
 # install.ps1 is the portable/ZIP distribution's own bootstrapper; it has no
 # function once already Inno-installed, but the pre-transactional-engine

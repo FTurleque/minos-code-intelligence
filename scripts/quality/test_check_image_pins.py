@@ -115,6 +115,13 @@ class CheckImagePinsTest(unittest.TestCase):
     def test_the_minos_image_variable_is_the_only_unpinned_reference_allowed(self):
         self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml": 'services:\n  s:\n    image: "${MINOS_IMAGE}"\n'}))
 
+    def test_the_query_image_variable_is_the_other_minos_image(self):
+        # AUD-DEP-15: the query plane has its own MINOS image, built locally like the administration one.
+        self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml":
+                                            'services:\n  s:\n    image: "${MINOS_QUERY_IMAGE:?MINOS_QUERY_IMAGE is required}"\n'}))
+        failures = self.run_gate({"docker/compose-mcp.prod.yaml": 'services:\n  s:\n    image: "${MINOS_QUERY_IMAGES}"\n'})
+        self.assertEqual(1, len(failures), failures)
+
     def test_a_required_variable_guard_keeps_the_same_rule(self):
         # MINOS-AUD-H20: ${VAR:?message} is still the launcher-provided variable, nothing more.
         self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml":

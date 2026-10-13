@@ -5,8 +5,9 @@ Scope (the whole container supply chain of this repository):
 
 * every ``FROM`` of ``docker/Dockerfile*`` (stage references and ``scratch`` excepted);
 * every ``image:`` of ``docker/compose*.y*ml``: a literal, or the default of ``${VAR:-default}``,
-  must be pinned; ``${MINOS_IMAGE}`` (the MINOS image itself, built or loaded by the release
-  workflow, never pulled from a registry) is the only reference allowed without a pin;
+  must be pinned; ``${MINOS_IMAGE}`` and ``${MINOS_QUERY_IMAGE}`` (the two MINOS images themselves,
+  administration and query, built or loaded by the release workflow, never pulled from a registry)
+  are the only references allowed without a pin;
 * a managed-service image named by a compose pin (pgvector, ollama, ...) must not be written a
   second time, with a tag, anywhere else in scripts, workflows or sources: the compose file is
   its single source.
@@ -47,7 +48,7 @@ IMAGE_KEY = re.compile(r"^\s*image:\s*(?P<value>.+?)\s*(?:#.*)?$")
 VARIABLE_WITH_DEFAULT = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:-(?P<default>[^}]+)\}$")
 # ${VAR} or ${VAR:?message} (a required variable, MINOS-AUD-H20): the value comes from the launcher.
 VARIABLE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?::\?[^}]*)?\}$")
-UNPINNED_ALLOWED_VARIABLES = frozenset({"MINOS_IMAGE"})
+UNPINNED_ALLOWED_VARIABLES = frozenset({"MINOS_IMAGE", "MINOS_QUERY_IMAGE"})
 
 # dependabot-core, docker/lib/dependabot/docker_compose/file_fetcher.rb (read 2026-10-02): the fetcher keeps a file of the
 # configured directory when ``f.name.match?(FILENAME_REGEX)`` (a search, not a full match). Python >= 3.11 for the

@@ -359,7 +359,22 @@ try {
     Assert-True ($Definitions.Count -eq 2) "mcp-lifecycle.ps1 must define $($Wanted -join ' and ')."
     foreach ($Definition in $Definitions) { . ([scriptblock]::Create($Definition.Extent.Text)) }
     $LifecycleText = Get-Content -LiteralPath $LifecyclePath -Raw
-    Assert-True ($LifecycleText -match '(?s)Move-LegacyRuntimeCompose\s+switch \(\$Action\)') 'The migration must run before every action (just before the switch).'
+    # Order of the top-level statements, read on the AST: the compose migration, then the query-image guard
+    # (AUD-DEP-15, files only), then the first call to Docker, then the action.
+    $TopLevel = @($LifecycleAst.EndBlock.Statements)
+    function Get-StatementIndex([scriptblock] $Predicate) {
+        for ($Index = 0; $Index -lt $TopLevel.Count; $Index++) { if (& $Predicate $TopLevel[$Index]) { return $Index } }
+        return -1
+    }
+    $MigrationIndex = Get-StatementIndex { param($Statement) $Statement.Extent.Text.Trim() -eq 'Move-LegacyRuntimeCompose' }
+    $GuardIndex = Get-StatementIndex { param($Statement) $Statement -is [System.Management.Automation.Language.IfStatementAst] -and $Statement.Extent.Text.Contains('Assert-QueryImageConfigured') }
+    $DockerIndex = Get-StatementIndex { param($Statement) $Statement.Extent.Text -match '^\$DockerCommand\s*=\s*Get-Command docker' }
+    $SwitchIndex = Get-StatementIndex { param($Statement) $Statement -is [System.Management.Automation.Language.SwitchStatementAst] }
+    Assert-True ($MigrationIndex -ge 0 -and $MigrationIndex -lt $SwitchIndex) 'The migration must run before every action (before the switch).'
+    Assert-True ($GuardIndex -gt $MigrationIndex -and $GuardIndex -lt $DockerIndex -and $DockerIndex -lt $SwitchIndex) 'The query-image guard must run after the compose migration and before the first call to Docker.'
+    $DockerCallsBeforeGuard = @($TopLevel[0..$GuardIndex] | Where-Object {
+            $_ -isnot [System.Management.Automation.Language.FunctionDefinitionAst] -and $_.Extent.Text -match '(?m)^\s*&\s*docker\b|Get-Command docker' })
+    Assert-True ($DockerCallsBeforeGuard.Count -eq 0) 'No top-level statement may call Docker before the query-image guard.'
     Assert-True ($LifecycleText.Contains('Resolve-ComposeSource $SourceRoot')) 'Install must read the recipe through Resolve-ComposeSource (previous releases keep the old name).'
 
     $RuntimeRoot = Join-Path $Sandbox 'scenario11-runtime'
@@ -415,6 +430,52 @@ try {
     Assert-True ((-not (Test-Path -LiteralPath $LegacyComposeFile)) -and ((Get-Content -LiteralPath $ComposeFile -Raw).Trim() -eq '# dev runtime, pre-rename')) 'prod-mcp.ps1: the pre-rename runtime compose file was not migrated with its content.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp.ps1') -Raw) -match '(?s)Move-LegacyMinosComposeFile\s+switch \(\$Action\)') 'prod-mcp.ps1: the migration must run before every action.'
     Write-Host 'Scenario 11 (pre-rename runtime compose file migrated on the first action; old-name source trees still readable) PASS' -ForegroundColor Green
+
+    # --- Scenario 12 (AUD-DEP-15): an installation made with ONE Docker image is updated to a release with TWO (the
+    # MCP query plane has its own image, MINOS_QUERY_IMAGE). The transaction above replaces the program files only: the
+    # runtime directory keeps the compose copy and the .env of the previous release, which name a single image. The
+    # second image is given by the Install action the installer replays after the update (configure-docker-mcp.ps1).
+    # Proved here with the real functions of the real script (AST), against the compose file the update delivers:
+    #   - the package delivers a recipe with both targets, and Install writes the second variable;
+    #   - the runtime left by the previous release is not refused (it is coherent: its compose asks for one image);
+    #   - the new compose file over that old .env IS refused, before any call to Docker, with the repair command;
+    #   - the same runtime with the variable Install writes is accepted.
+    $Wanted12 = @('Get-ReleaseImageTargets', 'Resolve-QueryImage', 'Read-EnvironmentValue', 'Test-ComposeUsesQueryImage', 'Assert-QueryImageConfigured')
+    $Definitions12 = @($LifecycleAst.FindAll({ param($Node) $Node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $Node.Name -in $Wanted12 }, $true))
+    Assert-True ($Definitions12.Count -eq $Wanted12.Count) "mcp-lifecycle.ps1 must define $($Wanted12 -join ', ')."
+    foreach ($Definition in $Definitions12) { . ([scriptblock]::Create($Definition.Extent.Text)) }
+    $script:DockerCalls12 = 0
+    function docker { $script:DockerCalls12++ }
+
+    $DeliveredDockerfile = Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'
+    $DeliveredCompose = Join-Path $RepoRoot 'docker\compose-mcp.prod.yaml'
+    Assert-True ((@(Get-ReleaseImageTargets $DeliveredDockerfile) -join ',') -eq 'admin,query') 'The delivered Dockerfile must build the administration image and the query image.'
+    Assert-True (Test-ComposeUsesQueryImage $DeliveredCompose) 'The delivered compose file must give the query plane its own image.'
+    Assert-True ($LifecycleText.Contains('"MINOS_QUERY_IMAGE=$QueryImage"')) 'Install must write MINOS_QUERY_IMAGE in the runtime .env.'
+    Assert-True ((Resolve-QueryImage 'minos-code-intelligence:1.1.0-abc') -eq 'minos-code-intelligence:1.1.0-abc-query') 'The query image must be named after the administration image.'
+
+    Reset-Runtime
+    $EnvironmentFile = Join-Path $RuntimeRoot '.env'
+    $SingleImageEnvironment = @('MINOS_COMPOSE_PROJECT=minos-mcp-prod', 'MINOS_CONTAINER_NAME=minos-mcp-prod', 'MINOS_IMAGE=minos-code-intelligence:1.0.0-abc', 'MINOS_VERSION=1.0.0', 'MINOS_GIT_COMMIT=abc')
+    $SingleImageEnvironment | Set-Content -LiteralPath $EnvironmentFile -Encoding ascii
+    # The compose copy of the previous release: every service on the single image.
+    (Get-Content -LiteralPath $DeliveredCompose -Raw).Replace('${MINOS_QUERY_IMAGE:?MINOS_QUERY_IMAGE is required}', '${MINOS_IMAGE:?MINOS_IMAGE is required}') |
+        Set-Content -LiteralPath $ComposeFile -Encoding utf8
+    Assert-True (-not (Test-ComposeUsesQueryImage $ComposeFile)) 'The reconstructed single-image compose file still names the query image.'
+    Assert-QueryImageConfigured   # must not throw: the update of the program files alone breaks nothing
+
+    Copy-Item -LiteralPath $DeliveredCompose -Destination $ComposeFile -Force
+    $Refusal12 = ''
+    try { Assert-QueryImageConfigured } catch { $Refusal12 = $_.Exception.Message }
+    Assert-True ($Refusal12.Contains('MINOS_QUERY_IMAGE') -and $Refusal12.Contains('-Action Install')) 'A runtime whose compose asks for the query image without defining it must be refused with the repair command.'
+    Assert-True (-not $Refusal12.Contains($RuntimeRoot)) 'The refusal must not carry an absolute path.'
+    Assert-True ((Get-Content -LiteralPath $EnvironmentFile) -join '|' -eq ($SingleImageEnvironment -join '|')) 'The refusal must not modify the runtime .env.'
+
+    Add-Content -LiteralPath $EnvironmentFile -Value 'MINOS_QUERY_IMAGE=minos-code-intelligence:1.1.0-abc-query' -Encoding ascii
+    Assert-QueryImageConfigured   # must not throw once Install has written the second variable
+    Assert-True ($script:DockerCalls12 -eq 0) 'The query-image guard must not call Docker.'
+    Remove-Item -LiteralPath Function:\docker -ErrorAction SilentlyContinue
+    Write-Host 'Scenario 12 (single-image installation updated: untouched runtime accepted, half-migrated runtime refused before Docker, migrated runtime accepted) PASS' -ForegroundColor Green
 
     Write-Host 'WINDOWS_UPGRADE_TRANSACTION_VALID' -ForegroundColor Green
 }

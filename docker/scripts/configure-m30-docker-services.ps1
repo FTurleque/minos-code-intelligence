@@ -330,6 +330,18 @@ if (-not $NeedsConnectedRuntime) {
     return
 }
 
+# AUD-DEP-15: the connected profile copied below runs the MCP query plane on its own image, MINOS_QUERY_IMAGE.
+# A runtime .env without it was installed by a release that had a single image and has not been reinstalled since:
+# copying the profile over it would produce a runtime no action can start. Refused here, before anything is
+# written or started; the query plane never falls back to the administration image (same rule and same repair as
+# Assert-QueryImageConfigured in mcp-lifecycle.ps1).
+if ([string]::IsNullOrWhiteSpace([string]$Environment['MINOS_QUERY_IMAGE'])) {
+    throw ('This MINOS Docker installation is not migrated to the separate query image: MINOS_QUERY_IMAGE is missing or empty ' +
+        'in the runtime .env, and the MCP query plane never falls back to the administration image. Nothing was changed. ' +
+        'Repair: run the MINOS installer again, or prod-mcp-release.ps1 -Action Install -Jar <minos.jar> -Version <version>, ' +
+        'then configure the managed services again.')
+}
+
 # This script commits three pieces of durable state (the connected compose file, the runtime
 # .env, and MINOS's own minos.properties) BEFORE the managed services are proven healthy. A
 # failure after those writes used to leave them behind: minos.properties would still declare

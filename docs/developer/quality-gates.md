@@ -110,7 +110,7 @@ python scripts/quality/check-image-pins.py
 python scripts/quality/test_check_image_pins.py
 ```
 
-Toute image référencée par `docker/Dockerfile*` (`FROM`) et `docker/compose*.yaml` (`image:`, y compris le défaut d'un `${VAR:-défaut}`) doit s'écrire `<image>:<tag>@sha256:<digest d'index>`. Le digest est l'épinglage immuable ; le tag est ce que Dependabot suit pour proposer un nouveau digest (une référence avec digest sans tag est ramenée à `latest`). Seule `${MINOS_IMAGE}`, l'image MINOS elle-même (construite ou chargée par le workflow de release), échappe à la règle.
+Toute image référencée par `docker/Dockerfile*` (`FROM`) et `docker/compose*.yaml` (`image:`, y compris le défaut d'un `${VAR:-défaut}`) doit s'écrire `<image>:<tag>@sha256:<digest d'index>`. Le digest est l'épinglage immuable ; le tag est ce que Dependabot suit pour proposer un nouveau digest (une référence avec digest sans tag est ramenée à `latest`). Seules `${MINOS_IMAGE}` et `${MINOS_QUERY_IMAGE}`, les deux images MINOS elles-mêmes (administration et requête, construites ou chargées par le workflow de release), échappent à la règle.
 
 Une image de service managé (pgvector, ollama) n'a **qu'une** source : le défaut de `MINOS_POSTGRES_IMAGE` / `MINOS_OLLAMA_IMAGE` dans `docker/compose-mcp.connected.yaml`. Le configurateur `configure-m30-docker-services.ps1` ne la réécrit que sur `-PostgresImage` / `-OllamaImage` explicites, et les tests PostgreSQL (`PostgresTestSupport`) la lisent dans ce fichier ; le gate refuse toute seconde copie dans les scripts, workflows ou sources.
 
