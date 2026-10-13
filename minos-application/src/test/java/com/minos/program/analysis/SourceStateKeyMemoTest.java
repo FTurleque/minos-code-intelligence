@@ -82,8 +82,9 @@ class SourceStateKeyMemoTest {
 
     @Test
     void delayMustBePositive() {
+        Duration negative = Duration.ofSeconds(-1);
         assertThrows(IllegalArgumentException.class, () -> new SourceStateKeyMemo(Duration.ZERO, clock));
-        assertThrows(IllegalArgumentException.class, () -> new SourceStateKeyMemo(Duration.ofSeconds(-1), clock));
+        assertThrows(IllegalArgumentException.class, () -> new SourceStateKeyMemo(negative, clock));
         assertThrows(NullPointerException.class, () -> new SourceStateKeyMemo(DELAY, null));
         assertThrows(NullPointerException.class, () -> memo.resolve(PROJECT, "snapshot-a", () -> null));
     }

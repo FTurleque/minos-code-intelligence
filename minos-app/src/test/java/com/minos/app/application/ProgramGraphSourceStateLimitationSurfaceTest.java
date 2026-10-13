@@ -32,6 +32,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * AUD-PERF-07, D3 : sans empreinte exacte du snapshot, le graphe de programme, l'impact avancé et les chemins de
@@ -132,7 +133,7 @@ class ProgramGraphSourceStateLimitationSurfaceTest {
                 .orElseThrow();
         CallToolResult result = specification.callHandler()
                 .apply(null, CallToolRequest.builder(tool).arguments(arguments).build());
-        assertFalse(Boolean.TRUE.equals(result.isError()), tool);
+        assertNotEquals(Boolean.TRUE, result.isError(), tool);
         StringBuilder content = new StringBuilder();
         for (var item : result.content()) {
             content.append(item instanceof TextContent text ? text.text() : item.toString());
