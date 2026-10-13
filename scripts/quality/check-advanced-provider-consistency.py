@@ -93,7 +93,8 @@ def main() -> int:
             require(provider, token, "FileProgramGraphProvider")
 
         require(spi, "default String cacheKey", "ProgramGraphProvider")
-        require(service, "provider.cacheKey(project, snapshot)", "ProgramGraphService")
+        require(spi, "default CacheKeyResolution resolveCacheKey", "ProgramGraphProvider")
+        require(service, "provider.resolveCacheKey(project, snapshot)", "ProgramGraphService")
         require(service, "new FileProgramGraphProvider()", "ProgramGraphService")
         forbid(service, "capabilities.add(ProgramGraphCapability.INTERPROCEDURAL_DATA_FLOW)", "ProgramGraphService")
         require(ignore, '".minos"', "ProjectIgnoreRules")

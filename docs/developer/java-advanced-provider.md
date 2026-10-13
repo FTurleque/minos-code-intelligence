@@ -168,6 +168,15 @@ La clé de cache du provider inclut :
 
 Modifier source ou taxonomy invalide donc le fragment Java sans demander de redémarrage du service.
 
+En production, ce provider est enveloppé par `FingerprintConstrainedJavaProgramGraphProvider`, qui choisit la clé selon le snapshot :
+
+| Snapshot | Clé de cache | Sources lues pour la clé | Limitation |
+|---|---|---|---|
+| Avec empreinte exacte de l'arbre source | empreinte du snapshot et empreinte du fichier de règles | aucune | aucune ; une source qui diffère de l'état indexé est refusée à la construction (`JAVA_ADVANCED_PROVIDER_SOURCE_DIFFERS_FROM_SNAPSHOT_FINGERPRINT`) |
+| Sans empreinte exacte (un fichier a changé pendant l'indexation) | la clé par contenu ci-dessus, **réutilisée pendant 5 secondes** | toutes, au plus une fois par délai | `PROGRAM_GRAPH_REFLECTS_DISK_AS_OF_AT_MOST_5_SECONDS_AGO_NOT_INDEXED_STATE` |
+
+Le délai est la constante `ProgramGraphService.SOURCE_STATE_REUSE_SECONDS` ; il n'est pas réglable, et l'identifiant de la limitation porte sa valeur. Il est mesuré sur une horloge monotone injectable (constructeur à deux arguments du provider), et la mémorisation (`SourceStateKeyMemo`) est bornée à 64 projets. Sans empreinte exacte, une modification est donc vue au premier appel qui suit l'expiration du délai. La limitation est émise par `ProgramGraphService` : un provider la déclenche en rendant, par `ProgramGraphProvider.resolveCacheKey`, une clé marquée `sourceStateReused`.
+
 ## Limitations v1 importantes
 
 Les limitations suivantes sont contractuelles :
