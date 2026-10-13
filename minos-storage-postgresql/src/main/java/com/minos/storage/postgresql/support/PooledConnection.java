@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * One physical connection of the query pool, the instant it was put back to rest, and the handle callers
@@ -25,7 +26,9 @@ final class PooledConnection {
 
     private final Connection raw;
     private final Connection handle;
-    private volatile LeaseActivity activity = new LeaseActivity();
+    // The borrower may hand the connection to another thread inside its call: the reference is atomic and
+    // LeaseActivity guards its own state.
+    private final AtomicReference<LeaseActivity> activity = new AtomicReference<>(new LeaseActivity());
     private volatile long idleSinceNanos;
     private volatile boolean leasedWithoutValidation;
 
@@ -41,7 +44,7 @@ final class PooledConnection {
 
     /** Starts a lease: later calls on the handle are recorded in {@code leaseActivity}. */
     Connection lease(LeaseActivity leaseActivity) {
-        activity = leaseActivity;
+        activity.set(leaseActivity);
         return handle;
     }
 
@@ -75,15 +78,15 @@ final class PooledConnection {
         private boolean transactional;
 
         /** A pool-managed transaction is open: nothing the call writes is durable before its commit. */
-        void transactional(boolean open) {
+        synchronized void transactional(boolean open) {
             transactional = open;
         }
 
-        void forbidReplay() {
+        synchronized void forbidReplay() {
             replayForbidden = true;
         }
 
-        private void executionStarted(boolean read) {
+        private synchronized void executionStarted(boolean read) {
             executionsStarted++;
             // A write sent in autocommit may have been applied even though its acknowledgement was lost.
             if (!read && !transactional) replayForbidden = true;
@@ -93,7 +96,7 @@ final class PooledConnection {
          * True while the call has completed no statement, has started at most one, and did nothing whose
          * effect the pool cannot account for.
          */
-        boolean replayAllowed() {
+        synchronized boolean replayAllowed() {
             return !replayForbidden && executionsStarted <= 1;
         }
     }
@@ -121,7 +124,7 @@ final class PooledConnection {
             if (STATEMENT_FACTORIES.contains(name)) {
                 return proxy(method.getReturnType(), new Tracker(method.invoke(raw, arguments)));
             }
-            if (!NEUTRAL_CONNECTION_CALLS.contains(name)) activity.forbidReplay();
+            if (!NEUTRAL_CONNECTION_CALLS.contains(name)) activity.get().forbidReplay();
             return method.invoke(raw, arguments);
         }
 
@@ -130,10 +133,10 @@ final class PooledConnection {
             if ("getConnection".equals(name)) return handle;
             if (!name.startsWith(EXECUTE_PREFIX)) {
                 // An unwrapped statement executes behind the handle: the lease can no longer be accounted for.
-                if ("unwrap".equals(name)) activity.forbidReplay();
+                if ("unwrap".equals(name)) activity.get().forbidReplay();
                 return method.invoke(statement, arguments);
             }
-            LeaseActivity current = activity;
+            LeaseActivity current = activity.get();
             current.executionStarted(READ_EXECUTION.equals(name));
             Object result = method.invoke(statement, arguments);
             current.forbidReplay();

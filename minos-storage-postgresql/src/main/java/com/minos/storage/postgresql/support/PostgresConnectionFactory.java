@@ -513,7 +513,7 @@ public final class PostgresConnectionFactory implements AutoCloseable {
             if (validate && !connection.isValid(Math.min(connectTimeoutSeconds, VALIDATION_TIMEOUT_SECONDS))) {
                 return false;
             }
-        } catch (SQLException | RuntimeException exception) {
+        } catch (SQLException | RuntimeException _) {
             return false;
         }
         pooled.leasedWithoutValidation(!validate);
