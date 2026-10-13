@@ -125,16 +125,16 @@ $Problems = [System.Collections.Generic.List[string]]::new()
 
 $Java = Find-Command 'java.exe'
 if (-not $Java) {
-    $Problems.Add('Java 24: java.exe is missing from PATH')
+    $Problems.Add('Java 25: java.exe is missing from PATH')
 }
 else {
     $JavaVersion = Try-VersionProbe 'Java' $Java @('-version') $Problems
     if ($JavaVersion) {
-        if ($JavaVersion -notmatch 'version\s+"24(?:\.|"|\s)') {
-            $Problems.Add("Java 24 required; java -version returned: $($JavaVersion -replace "`r?`n", ' | ')")
+        if ($JavaVersion -notmatch 'version\s+"25(?:\.|"|\s)') {
+            $Problems.Add("Java 25 required; java -version returned: $($JavaVersion -replace "`r?`n", ' | ')")
         }
         else {
-            Write-Host "PASS Java 24: $($JavaVersion.Split("`n")[0])"
+            Write-Host "PASS Java 25: $($JavaVersion.Split("`n")[0])"
         }
     }
 }

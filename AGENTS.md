@@ -12,7 +12,7 @@ Artefacts du dépôt (docs, ADR, OpenSpec, messages de commit, PR, commentaires 
 
 | Partie | Baseline |
 |---|---|
-| Noyau, CLI, MCP, stockage, providers | Java **24**, Maven **3.9+** par le **wrapper** `mvnw` / `mvnw.cmd` (il fait foi, pas un Maven local) |
+| Noyau, CLI, MCP, stockage, providers | Java **25**, Maven **3.9+** par le **wrapper** `mvnw` / `mvnw.cmd` (il fait foi, pas un Maven local) |
 | Plugin `minos-intellij` | Java **21**, Gradle **9.8.1** (`minos-intellij/gradlew`), IntelliJ Platform 2026.1, **hors du reactor Maven** |
 | Qualification CI | Ubuntu 24.04 **et** Windows Server 2022 : tout changement tient sur les deux |
 

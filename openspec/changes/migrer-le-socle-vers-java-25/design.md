@@ -30,6 +30,18 @@ Sprint 3 de l'audit du 10 octobre 2026 : **AUD-DEP-01**. HEAD analysé : `2d1cc2
 3. **La règle `ignore` de Dependabot se garde.** L'audit la présente comme un défaut. Elle applique la politique (« un changement de baseline est une décision ») : sans elle, Dependabot proposerait Java 26 dès sa sortie. Seul son commentaire change ; ce qui manquait est le **gate** et le critère de révision.
 4. **L'ADR à remplacer n'est pas le seul touché** : 0005 est remplacé ; 0004, 0021 et 0027 citent Java 24.
 
+## Mesures préalables (tâche 1.1, 2026-10-13)
+
+| Mesure | Valeur | Source |
+|---|---|---|
+| Dernier correctif de Temurin 25 | 25.0.4.1+1 (publié en août 2026) | API Adoptium `v3/assets/latest/25/hotspot` |
+| Fin de correctifs de Temurin 25 (LTS) | septembre 2031 au moins | `adoptium.net/support`, recoupé par `endoflife.date` (2031-09-30) |
+| Fin de correctifs du JDK 24 | dernière mise à jour 24.0.2 de juillet 2025, fin de vie en septembre 2025 | mêmes sources |
+| `eclipse-temurin:25.0.4.1_1-jre` | `sha256:fcd7fd7b387f94bb2ac461478a7436ad8e349924c374ea8313919624dceae636` | `docker buildx imagetools inspect` |
+| `eclipse-temurin:25.0.4.1_1-jdk` | `sha256:8c0a84ea11c8f6ed52600fc19f1040121f2a162998e9f50a5faebbbad9172dcc` | idem |
+
+Lecture du bytecode 25 par l'outillage : mesurée par exécution et non par lecture de notes de version. Le `verify` du reactor sous Temurin 25.0.4.1 exerce JaCoCo 0.8.15, ArchUnit 1.5.1 et maven-shade-plugin sur des classes de version 69 (résultat en tâche 4.1) ; SpotBugs 4.10.4 et PIT 1.30.0 ne tournent que dans `code-audit.yml`, à lancer à la PR (tâche 4.4) ; scip-java 0.13.1 est mesuré en tâche 4.2. Un outil qui ne lit pas ce bytecode se monte dans ce changement, il ne se désactive pas (D6).
+
 ## Goals / Non-Goals
 
 **Goals** : les livrables tournent sur un JDK LTS qui reçoit des correctifs ; la version de Java est énoncée une fois et contrôlée partout ; la qualification est rejouée sur Linux, Windows, Docker et l'installateur ; la politique dit quand réviser.
@@ -38,7 +50,7 @@ Sprint 3 de l'audit du 10 octobre 2026 : **AUD-DEP-01**. HEAD analysé : `2d1cc2
 
 ## Decisions
 
-### D1. Migrer vers Java 25 LTS maintenant — **décision en attente du propriétaire**
+### D1. Migrer vers Java 25 LTS maintenant — **décidé : option A (propriétaire, 2026-10-13)**
 
 Recommandation : **migrer** (option A). Java 25 est la LTS courante ; la migration est un changement de constante plus une qualification, pas une réécriture.
 

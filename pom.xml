@@ -41,7 +41,7 @@
         <!-- CI-friendly version: release scripts override with -Drevision=... -->
         <revision>1.3.0-SNAPSHOT</revision>
 
-        <maven.compiler.release>24</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <!-- Local developer default. CI/release overrides this with -D...=true. -->
@@ -190,7 +190,7 @@
                         <goals><goal>enforce</goal></goals>
                         <configuration>
                             <rules>
-                                <requireJavaVersion><version>[24,25)</version></requireJavaVersion>
+                                <requireJavaVersion><version>[25,26)</version></requireJavaVersion>
                                 <requireMavenVersion><version>[3.9,4.0)</version></requireMavenVersion>
                             </rules>
                         </configuration>

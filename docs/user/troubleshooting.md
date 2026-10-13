@@ -27,7 +27,7 @@ java -version
 .\mvnw.cmd -version
 ```
 
-Le développement de MINOS exige Java 24 et Maven 3.9.x via le wrapper.
+Le développement de MINOS exige Java 25 et Maven 3.9.x via le wrapper.
 
 Une distribution installée embarque son propre runtime et n’exige pas un JDK système pour exécuter la CLI/MCP.
 

@@ -135,12 +135,12 @@ La **gate JaCoCo ciblée** de `PR Validation` (`scripts/quality/check-jacoco.py`
 ## Supply-chain et toolchains
 
 - Maven Wrapper : Maven 3.10.0 avec checksum SHA-256 (`.mvn/wrapper/maven-wrapper.properties`), accepté par la plage `[3.9,4.0)` de l'enforcer ; l'image Docker et les outils embarqués (`embedded-tools.json`) restent en Maven 3.9.16 ;
-- cœur MINOS : Java 24 / Maven 3.9.x ;
+- cœur MINOS : Java 25 / Maven 3.9.x ;
 - plugin IntelliJ : Java 21 / Gradle 9.8.1 / IntelliJ Platform 2026.1 ;
 - Dependabot couvre Maven, GitHub Actions **et le build Gradle `minos-intellij`** ;
 - les actions GitHub sont épinglées sur des SHA immuables ;
 - `docker/Dockerfile.mcp.release` conserve ses images/toolchains/checksums de release reproductibles ;
-- le Dockerfile MCP local utilise lui aussi une base Temurin 24 JRE par digest immuable et n'est plus dépendant d'un tag flottant.
+- le Dockerfile MCP local utilise lui aussi une base Temurin 25 JRE par digest immuable et n'est plus dépendant d'un tag flottant.
 
 ## Garanties structurantes
 

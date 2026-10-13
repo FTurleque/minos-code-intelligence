@@ -1,6 +1,6 @@
 # ADR-0005 — Aligner MINOS sur Java 24 avec l'environnement de développement
 
-- Statut : **Acceptée**
+- Statut : **Superseded** — remplacée par l'[ADR 0059](0059-migrer-le-socle-vers-java-25-lts.md) le 13 octobre 2026
 - Date de décision : **22 juillet 2026**
 - Remplace : **ADR-0004 pour la version Java uniquement**
 

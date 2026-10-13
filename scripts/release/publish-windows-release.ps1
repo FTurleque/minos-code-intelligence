@@ -146,7 +146,7 @@ if (-not $PublishOnly) {
     # build/validate job already produced and verified, so it never needs a JDK or the MCP smoke
     # harness to publish them.
     $JavaHome = $env:JAVA_HOME
-    if ([string]::IsNullOrWhiteSpace($JavaHome)) { throw 'JAVA_HOME must point to JDK 24 for release validation.' }
+    if ([string]::IsNullOrWhiteSpace($JavaHome)) { throw 'JAVA_HOME must point to JDK 25 for release validation.' }
     $script:Java = Join-Path $JavaHome 'bin\java.exe'
     $script:McpSmokeSource = Join-Path $RepoRoot 'scripts\m14\MinosNativeMcpSmoke.java'
     foreach ($Required in @($script:Java, $script:McpSmokeSource)) {

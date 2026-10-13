@@ -174,7 +174,7 @@ try {
         throw "M15-S1 baseline requires a clean worktree. Dirty entries:`n$($dirty -join "`n")"
     }
 
-    $java = Resolve-MinosJava24
+    $java = Resolve-MinosJava
     $env:JAVA_HOME = $java.JavaHome
     $env:Path = "$($java.JavaHome)\bin;$env:Path"
 

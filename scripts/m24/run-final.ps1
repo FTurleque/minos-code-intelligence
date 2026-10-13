@@ -101,7 +101,7 @@ try {
     Write-Host '[2/9] Canonical M23 learned retrieval regression...'
     Invoke-PythonGate $Python 'scripts\m23\evaluate-learned-quality.py' 'M23 learned semantic quality regression failed'
 
-    Write-Host '[3/9] Authoritative local core + Java 24 Maven verify + JaCoCo + module boundaries...'
+    Write-Host '[3/9] Authoritative local core + Java 25 Maven verify + JaCoCo + module boundaries...'
     Invoke-WithSemanticDisabled {
         & (Join-Path $RepoRoot 'scripts\m21\run-local.ps1') -ExpectedHead $Head
         if ($LASTEXITCODE -ne 0) { throw "M21/M20 local qualification failed on M24 head (exit=$LASTEXITCODE)" }

@@ -128,12 +128,12 @@ Le blocage historique `docker compose` interactif de #246 est ainsi couvert par 
 
 ## Supply-chain et toolchains
 
-- cœur : Java 24 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven 3.10.0 avec checksum ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
+- cœur : Java 25 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven 3.10.0 avec checksum ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
 - IntelliJ : Java 21 / Gradle 9.8.1 / IntelliJ Platform 2026.1 ;
 - Dependabot : Maven + Gradle `minos-intellij` + GitHub Actions ;
 - workflows GitHub : actions épinglées par SHA ;
 - Docker release : toolchains/images/checksums immuables lorsque cette garantie est revendiquée ;
-- Docker MCP local : base Temurin 24 JRE désormais épinglée par digest et non plus par tag flottant.
+- Docker MCP local : base Temurin 25 JRE désormais épinglée par digest et non plus par tag flottant.
 
 ## Release 1.0.1 — publiée
 

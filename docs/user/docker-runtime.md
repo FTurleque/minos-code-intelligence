@@ -54,7 +54,7 @@ rust-analyzer-scip   0.3.2989 / 2026-07-27 / 12c3381
 Apache Maven         3.9.16
 ```
 
-Les toolchains nécessaires sont JDK 24, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
+Les toolchains nécessaires sont JDK 25, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
 
 Le bundle provider est initialisé dans le volume Docker nommé :
 

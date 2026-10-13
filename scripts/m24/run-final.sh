@@ -47,7 +47,7 @@ assert_java24() {
   local version
   version="$(java -version 2>&1 | head -n 1)"
   echo "Java: $version"
-  [[ "$version" =~ \"24([\.\"]|$) ]] || fail "Java 24 is required"
+  [[ "$version" =~ \"25([\.\"]|$) ]] || fail "Java 25 is required"
 }
 
 assert_provider_prerequisites() {
@@ -109,7 +109,7 @@ echo '[1/7] M24 static provider/discovery/documentation contract...'
 "$PYTHON" scripts/quality/check-polyglot-provider-consistency.py
 "$PYTHON" scripts/docs/check-current-docs.py
 
-echo '[2/7] Full Java 24 Maven reactor + JaCoCo with semantic opt-in isolated...'
+echo '[2/7] Full Java 25 Maven reactor + JaCoCo with semantic opt-in isolated...'
 run_with_semantic_disabled ./mvnw clean verify
 "$PYTHON" scripts/quality/check-jacoco.py
 

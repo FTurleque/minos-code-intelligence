@@ -111,11 +111,11 @@ jobs:
         shell: pwsh
         run: gradle --no-daemon verifyPlugin
 
-      - name: Set up Java 24 for MINOS release
+      - name: Set up Java 25 for MINOS release
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
-          java-version: '24'
+          java-version: '25'
           cache: maven
 
       - name: Installer Python 3.13
