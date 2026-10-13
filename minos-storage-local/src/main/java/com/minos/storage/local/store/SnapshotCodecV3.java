@@ -43,6 +43,12 @@ public final class SnapshotCodecV3 implements SnapshotCodec {
     }
 
     @Override
+    public CodeKnowledgeSnapshot readVerified(Path file, String expectedSha256) throws IOException {
+        Objects.requireNonNull(file, "file");
+        return SnapshotBinaryCodecSupport.readVerifiedKnowledgeSnapshotV3(file, expectedSha256);
+    }
+
+    @Override
     public long encodedSize(CodeKnowledgeSnapshot snapshot) throws IOException {
         return encodedSizeIfEncodable(snapshot).orElseThrow(() -> new IOException(
                 "knowledge snapshot holds an unpaired surrogate and has no exact UTF-8 form"));

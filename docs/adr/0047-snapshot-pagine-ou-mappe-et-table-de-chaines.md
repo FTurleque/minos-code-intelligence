@@ -1,6 +1,6 @@
 # 0047 — Snapshot en mémoire : dédoublonnage des chaînes, table de chaînes, pagination ou mappage
 
-Status: Proposed (2026-09-29) — aucune implémentation ; mesures dans [`ARCHI-SUIVI.md`](../audit/archive/2026-09/ARCHI-SUIVI.md) (lot 3, A6, § A6.3 et § A6.11).
+Status: Accepted (2026-10-13) pour l'option A, mise en œuvre ; options B et C toujours conditionnelles ; mesures dans [`ARCHI-SUIVI.md`](../audit/archive/2026-09/ARCHI-SUIVI.md) (lot 3, A6, § A6.3 et § A6.11).
 
 Complète l'audit [`AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md) (constat A6, point 5). S'appuie sur l'[ADR 0046](0046-format-de-snapshot-v3-chaines-utf8.md) (format V3) et l'[ADR 0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) (vue de requête en mémoire, index reconstruits, cache borné).
 
@@ -40,6 +40,16 @@ Trois constats en découlent :
 
 ## Conséquences
 
-- Rien ne change tant que cet ADR est `Proposed`.
+- L'option A est décidée et mise en œuvre (voir « Mise en œuvre ») ; B et C ne changent rien tant que leur critère n'est pas atteint.
 - A ne touche aucun format persisté. B et C en créent un, et relèvent de la même discipline que l'ADR 0046.
 - Critère de passage d'une étape à la suivante : une mesure sur le corpus réel (banc `benchmarks/scalability/`), jamais une estimation.
+
+## Mise en œuvre
+
+**Option A, 2026-10-13** (changement OpenSpec `ramener-le-poids-des-vues-a-la-mesure`, constat AUD-PERF-03 de l'audit du 10 octobre 2026).
+
+- Décision du propriétaire : dédoublonner **avant** de ramener le poids estimé, à l'inverse de l'ordre proposé plus haut. La mesure a montré que le rapport « 1,4 » datait du format V2 : en V3 une vue relue retenait 2,5 fois son fichier sur ce dépôt (mesure archivée) et 3,05 à 3,32 fois sur un corpus synthétique. Aucun facteur sûr ne permettait donc de mettre un gros projet en cache sans réduire d'abord le tas.
+- Mécanisme : une table locale à chaque passe de décodage (`SnapshotBinaryCodecSupport`, lecture des chaînes), jetée avec elle ; une instance par chaîne distincte, formats V2 et V3. Aucun format persisté ne change ; le modèle décodé reste égal.
+- Mesure (`QueryViewWeightTest`, corpus synthétique de 3 000 symboles, 21 000 occurrences, 15 000 relations) : tas retenu par la vue de 45,4–49,0 Mo à 21,0–21,6 Mo, soit 1,41 à 1,46 fois le fichier V3 au lieu de 3,05 à 3,32.
+- Conséquence : `QUERY_VIEW_PERSISTED_AMPLIFICATION` passe de 8 à 2 dans les deux stores ; tout snapshot persistable (256 Mio) est admissible au cache de 512 Mio sur ce terme.
+- **Non mesuré** : le corpus réel (le banc `benchmarks/scalability/` n'a pas été rejoué, scip-java ne s'exécutant pas sur le poste de développement), le temps de décodage et le pic de tas pendant le décodage (la table retient une entrée par chaîne distincte jusqu'à la fin de la passe). Le critère « une mesure sur le corpus réel » reste donc à satisfaire avant d'envisager l'option B.
