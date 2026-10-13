@@ -15,6 +15,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -146,7 +147,7 @@ class M29DockerQueryImageContractTest {
             String block = serviceBlocks(compose).get("minos-mcp");
             String onAdministrationImage = block.replace(
                     "${MINOS_QUERY_IMAGE:?MINOS_QUERY_IMAGE is required}", "${MINOS_IMAGE:?MINOS_IMAGE is required}");
-            assertFalse(block.equals(onAdministrationImage), name + ": minos-mcp must name the query image");
+            assertNotEquals(block, onAdministrationImage, name + ": minos-mcp must name the query image");
             List<String> violations = composeImageViolations(compose.replace(block, onAdministrationImage));
             assertTrue(violations.stream().anyMatch(violation ->
                             violation.startsWith("minos-mcp:") && violation.contains(QUERY_IMAGE)),
