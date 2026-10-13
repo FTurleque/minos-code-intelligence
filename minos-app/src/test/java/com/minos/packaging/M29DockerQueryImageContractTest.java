@@ -191,6 +191,27 @@ class M29DockerQueryImageContractTest {
                 "the query image is examined after it has been built");
     }
 
+    /**
+     * ADR 0017 : la requête de la qualification lit un répertoire de données monté en lecture seule, comme le
+     * service {@code minos-mcp} des fichiers Compose. Un montage inscriptible ne prouverait pas ce qui est livré.
+     */
+    @Test
+    void qualificationQueriesTheMcpServerWithTheDataRootMountedReadOnly() throws Exception {
+        String qualification = text("scripts/ci/qualify-docker-release.sh");
+
+        int mcpContainer = qualification.indexOf("--entrypoint sleep \"$QUERY_IMAGE\"");
+        int readOnlyMount = qualification.indexOf(
+                "--mount \"type=volume,source=$DATA_VOLUME,target=/var/lib/minos,readonly\"");
+        int writeProbe = qualification.indexOf("/var/lib/minos/.write-probe");
+        int symbolQuery = qualification.indexOf("minos_find_symbols");
+        assertTrue(readOnlyMount >= 0 && readOnlyMount < mcpContainer,
+                "the MCP container of the qualification must mount the MINOS data root read-only");
+        assertFalse(qualification.contains("--tmpfs /var/lib/minos"),
+                "the MCP container of the qualification must not be given a writable data root");
+        assertTrue(writeProbe > mcpContainer && writeProbe < symbolQuery,
+                "the qualification must first prove the data root refuses a write, or the query proves nothing");
+    }
+
     // --- rules -------------------------------------------------------------------------------------
 
     record Stage(String name, String base, int firstLine, List<String> lines) {

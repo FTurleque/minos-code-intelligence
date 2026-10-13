@@ -28,6 +28,16 @@ Le serveur MCP persistant, les bootstraps et le probe provider gardent `network_
 
 Le plan admin n'obtient jamais le droit de modifier le code source. Il écrit état métier, caches et staging uniquement sous `/var/lib/minos`.
 
+### Le plan de requête lit sans écrire
+
+`minos-mcp` monte `/var/lib/minos` en lecture seule et répond sur ce montage : une requête ne crée, ne durcit ni n'ouvre en écriture aucun fichier, fichiers de verrou compris. Pour rester cohérent avec une commande d'administration lancée en même temps, il prend un verrou **partagé** sur les fichiers de verrou existants (registre des projets, observations runtime), ouverts en lecture ; une écriture de `minos-admin` attend la fin des lectures en cours et réciproquement, dans la limite de dix secondes. La qualification de l'image vérifie ce comportement sur un volume réellement monté en lecture seule (`scripts/ci/qualify-docker-release.sh`).
+
+Limites :
+
+- Le répertoire de données doit avoir été **initialisé par le plan d'administration** : sur un répertoire vide ou incomplet monté en lecture seule, le serveur MCP ne démarre pas, puisqu'il ne peut pas créer l'arborescence. Il en va de même après une mise à niveau qui laisse des fichiers à migrer : lancer une commande `minos-admin` avant la première requête.
+- Une entrée de registre encore à l'ancien format (chemin absolu) est lue telle quelle par le plan de requête ; elle est réécrite au format portable par la prochaine commande d'administration qui modifie le registre.
+- Hors conteneur, sous **Windows**, un volume en lecture seule n'est pas supporté : à l'ouverture, MINOS réécrit les ACL de son répertoire de données.
+
 ## Deux images : requête et administration
 
 `docker/Dockerfile.mcp.release` construit **deux images** par release, une par cible (`docker build --target …`) ; le fichier `.env` du runtime les nomme par deux variables.

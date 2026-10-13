@@ -48,12 +48,30 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     private final Path workspacesDirectory;
     private final Optional<ProjectPathMapping> pathMapping;
     private final ProjectPathMapping.RuntimeLocation runtimeLocation;
+    /** False for an instance that only reads: a legacy entry is then resolved in memory, never rewritten. */
+    private final boolean migrateLegacyEntriesOnRead;
 
     public LocalProjectRegistry(Path storageRoot) throws IOException {
         this(
                 storageRoot,
                 loadPathMapping(storageRoot),
-                ProjectPathMapping.resolveRuntimeLocation(System.getenv(), System.getProperties())
+                ProjectPathMapping.resolveRuntimeLocation(System.getenv(), System.getProperties()),
+                true
+        );
+    }
+
+    /**
+     * A registry for <strong>reads that write nothing</strong>: a legacy entry is resolved in memory and
+     * returned as usual, and is left on disk for an instance that migrates (one used under the exclusive
+     * registry lease) to rewrite. For a caller that only holds a reader's lease, or whose storage cannot be
+     * written. Its mutating methods behave as usual and are not meant to be called.
+     */
+    static LocalProjectRegistry readingWithoutMigration(Path storageRoot) throws IOException {
+        return new LocalProjectRegistry(
+                storageRoot,
+                loadPathMapping(storageRoot),
+                ProjectPathMapping.resolveRuntimeLocation(System.getenv(), System.getProperties()),
+                false
         );
     }
 
@@ -62,14 +80,16 @@ public final class LocalProjectRegistry implements ProjectRegistry {
             ProjectPathMapping pathMapping,
             ProjectPathMapping.RuntimeLocation runtimeLocation
     ) throws IOException {
-        this(storageRoot, Optional.of(Objects.requireNonNull(pathMapping, "pathMapping")), runtimeLocation);
+        this(storageRoot, Optional.of(Objects.requireNonNull(pathMapping, "pathMapping")), runtimeLocation, true);
     }
 
     private LocalProjectRegistry(
             Path storageRoot,
             Optional<ProjectPathMapping> pathMapping,
-            ProjectPathMapping.RuntimeLocation runtimeLocation
+            ProjectPathMapping.RuntimeLocation runtimeLocation,
+            boolean migrateLegacyEntriesOnRead
     ) throws IOException {
+        this.migrateLegacyEntriesOnRead = migrateLegacyEntriesOnRead;
         this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
         DurableAtomicFile.ensureDirectory(this.storageRoot, "local project registry root");
         this.projectsDirectory = this.storageRoot.resolve(PROJECTS_DIRECTORY);
@@ -321,7 +341,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         Instant updatedAt = Instant.parse(required(properties, "updatedAt", file));
         RegisteredProject project = new RegisteredProject(
                 id, rootPath, displayName, workspaceId, createdAt, updatedAt);
-        if (migrateLegacy) migrateLegacyProject(file, project, relativeRoot);
+        if (migrateLegacy && migrateLegacyEntriesOnRead) migrateLegacyProject(file, project, relativeRoot);
         return project;
     }
 

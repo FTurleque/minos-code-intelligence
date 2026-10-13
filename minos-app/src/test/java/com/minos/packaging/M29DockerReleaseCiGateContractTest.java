@@ -51,9 +51,8 @@ class M29DockerReleaseCiGateContractTest {
         assertTrue(qualification.contains("java docker/scripts/MinosDockerMcpSmoke.java"),
                 "Docker release qualification must reuse the production MCP protocol smoke client");
         assertTrue(qualification.contains("--network none --read-only"));
-        assertTrue(qualification.contains(
-                        "--tmpfs /var/lib/minos:rw,nosuid,nodev,noexec,size=64m,mode=700,uid=10001,gid=10001"),
-                "MCP smoke writable state must remain owned by the non-root runtime user");
+        assertTrue(qualification.contains("chown 10001:10001 /var/lib/minos && chmod 700 /var/lib/minos"),
+                "the MINOS data root of the qualification must be owned by the non-root runtime user");
 
         int initializeResponse = mcpSmoke.indexOf("readResponse(outputReader, output, 1");
         int initializedNotification = mcpSmoke.indexOf("notifications/initialized");

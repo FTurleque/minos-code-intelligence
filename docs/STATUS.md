@@ -42,7 +42,9 @@ Les cinq changements du sprint 3 (« socle d'exécution supporté ») sont **fus
 
 - **Image de requête séparée** : le plan de requête MCP et les amorçages tournent sur une image de 355 Mo (JRE et jar, aucun outil de compilation) ; l'indexation et les outils de provider gardent l'image complète. Une installation à une image reçoit la seconde à l'`Install` suivant.
 
-Limites : avec la racine de données en lecture seule, comme le déclarent les compose pour le plan de requête, les outils MCP échouent (défaut antérieur à ce sprint, non corrigé) ; aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés sur le nouveau socle par exécution directe sous Linux, pas sous Windows. Restent à faire dans ce sprint : les CVE de Testcontainers en portée test (AUD-DEP-14, bloqué), une preuve d'indexation par le runtime de l'installateur et le premier passage de la veille planifiée. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
+Le défaut mis au jour par ce sprint — les outils MCP échouaient avec la racine de données en lecture seule, comme la montent les compose pour le plan de requête — est corrigé (changement `lire-le-registre-sans-ecrire`) : une lecture du registre ou des observations runtime prend un verrou partagé sans rien écrire, et la qualification de l'image interroge le serveur sur un volume en lecture seule. Conditions et limites : [`docs/user/docker-runtime.md`](user/docker-runtime.md).
+
+Limites : aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés sur le nouveau socle par exécution directe sous Linux, pas sous Windows. Restent à faire dans ce sprint : les CVE de Testcontainers en portée test (AUD-DEP-14, bloqué), une preuve d'indexation par le runtime de l'installateur et le premier passage de la veille planifiée. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
 
 ## État produit
 

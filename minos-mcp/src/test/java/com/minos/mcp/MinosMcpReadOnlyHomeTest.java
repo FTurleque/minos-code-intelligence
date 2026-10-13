@@ -4,6 +4,7 @@ import com.minos.application.MinosApplication;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
+import com.minos.testsupport.WriteProtectedTree;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -41,15 +42,19 @@ class MinosMcpReadOnlyHomeTest {
         try (MinosApplication application = MinosApplication.builder(home).providerRuntimeManager(runtimes).build()) {
             application.projectRegistry().registerProject(project, "fixture");
             MinosMcpTools tools = new MinosMcpTools(new MinosApplicationMcpBackend(application));
-            Map<String, String> before = snapshot(home);
+            // The home is write-protected for the calls: comparing paths, sizes and dates alone would not see a
+            // lock file that already exists being opened for writing again.
+            try (WriteProtectedTree protectedHome = WriteProtectedTree.protect(home)) {
+                Map<String, String> before = protectedHome.state();
 
-            for (String tool : new String[]{"minos_index_status", "minos_project_structure"}) {
-                var result = McpToolCalls.call(tools, tool, Map.of("project", "fixture"));
-                assertFalse(McpToolCalls.isError(result), tool + " -> " + McpToolCalls.text(result));
+                for (String tool : new String[]{"minos_index_status", "minos_project_structure"}) {
+                    var result = McpToolCalls.call(tools, tool, Map.of("project", "fixture"));
+                    assertFalse(McpToolCalls.isError(result), tool + " -> " + McpToolCalls.text(result));
+                }
+
+                assertEquals(0, runtimes.calls.get(), "no runtime inspection, listing or installation");
+                assertEquals(before, protectedHome.state(), "MINOS_HOME must be identical before and after");
             }
-
-            assertEquals(0, runtimes.calls.get(), "no runtime inspection, listing or installation");
-            assertEquals(before, snapshot(home), "MINOS_HOME must be identical before and after");
         }
     }
 
