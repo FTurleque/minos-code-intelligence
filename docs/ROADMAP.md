@@ -153,7 +153,7 @@ Les releases 1.1.0 et 1.2.0 ont été publiées depuis (voir [`STATUS.md`](STATU
 
 | Sprint | Titre |
 |---|---|
-| 3 | Socle d'exécution supporté (JDK LTS, Node) — **en partie fait** : restent l'image de requête séparée (AUD-DEP-15) et les CVE de Testcontainers (AUD-DEP-14, bloqué) |
+| 3 | Socle d'exécution supporté (JDK LTS, Node) — **fait**, sauf les CVE de Testcontainers (AUD-DEP-14, bloqué) et deux preuves à relever |
 | 4 | Chemin de requête : ne plus relire le snapshot |
 | 5 | Chaîne de release et d'approvisionnement |
 | 6 | Couverture réelle et plugin IntelliJ |
