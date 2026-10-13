@@ -17,9 +17,9 @@ Ordre : mesure, déplacement, preuve. Commande de référence : `./mvnw.cmd -B -
 
 ## 3. Preuve sur les deux plateformes
 
-- [ ] 3.1 **(manuelle)** Relever sur `Verify (ubuntu-24.04)` et `Verify (windows-2022)` que les tests PostgreSQL du module s'exécutent, et que `SonarCloud Code Analysis` passe (80 % sur le code déplacé).
+- [x] 3.1 **(manuelle)** Relever sur `Verify (ubuntu-24.04)` et `Verify (windows-2022)` que les tests PostgreSQL du module s'exécutent, et que `SonarCloud Code Analysis` passe (80 % sur le code déplacé). Relevé le 2026-10-12 sur la PR #413, fusionnée tous checks verts : Quality Gate passé à 90,4 % sur le nouveau code, après l'ajout de 126 tests (68,7 % au premier passage).
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (rangement des modules : module, PR, types rendus publics, écarts).
-- [ ] 4.2 `openspec validate --all --strict` ; lister les `docs/` à mettre à jour avant archivage (`docs/architecture/arc42/05-vue-blocs.md`).
+- [x] 4.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (rangement des modules : module, PR, types rendus publics, écarts). Fait dans les PR #413 et #415.
+- [x] 4.2 `openspec validate --all --strict` ; lister les `docs/` à mettre à jour avant archivage (`docs/architecture/arc42/05-vue-blocs.md`). Document mis à jour dans la PR #413.
