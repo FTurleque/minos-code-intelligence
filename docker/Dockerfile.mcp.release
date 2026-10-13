@@ -290,6 +290,21 @@ RUN java -cp /opt/minos/minos.jar com.minos.adapter.scip.runtime.install.StampMa
       "proxy.golang.org+sum.golang.org" \
     && chmod -R a+rX /opt/minos/provider-tools
 
+# AUD-DEP-16: the image redistributes the Java dependencies shaded into minos.jar, so it ships their
+# notices and licence files where they can be read without running MINOS: the aggregated
+# META-INF/NOTICE, the MINOS licence (META-INF/LICENSE) and META-INF/licenses/<artifact>-<version>/
+# are extracted from the very JAR that was copied, under /opt/minos/licenses (same relative paths as
+# in the JAR). `jar xf` silently extracts nothing for an absent entry: the tests fail the build
+# instead. Tools installed outside Maven (Node, Go, Rust, .NET, indexers) are not covered here, see
+# docs/developer/supply-chain.md.
+RUN mkdir -p /opt/minos/licenses \
+    && cd /opt/minos/licenses \
+    && jar xf /opt/minos/minos.jar META-INF/NOTICE META-INF/LICENSE META-INF/licenses/ \
+    && test -s META-INF/NOTICE \
+    && test -s META-INF/LICENSE \
+    && test -n "$(find META-INF/licenses -type f -size +0c -print -quit)" \
+    && chmod -R a+rX /opt/minos/licenses
+
 RUN chmod 0444 /opt/minos/minos.jar \
     && mkdir -p /var/lib/minos \
     && chown 10001:10001 /var/lib/minos

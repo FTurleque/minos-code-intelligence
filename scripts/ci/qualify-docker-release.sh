@@ -76,6 +76,56 @@ ENTRYPOINT="$(docker image inspect --format '{{json .Config.Entrypoint}}' "$IMAG
 [[ "$RUNTIME_USER" == "10001:10001" ]]
 [[ "$ENTRYPOINT" == '["java","-cp","/opt/minos/minos.jar","com.minos.mcp.MinosMcpServer"]' ]]
 
+# AUD-DEP-16: the image ships the notices and licence files of the JAR it embeds, readable without
+# running MINOS. One "<sha256>  ./<path>" line per file of /opt/minos/licenses, compared below with
+# the entries of the shaded JAR the image was built from: a missing directory, an empty notice or a
+# file that differs from the JAR fails the qualification.
+docker run --rm --network none --read-only --entrypoint sh "$IMAGE" -ec \
+  'cd /opt/minos/licenses && find . -type f -exec sha256sum {} +' \
+  > "$QUALIFICATION_ROOT/image-licenses-sha256.txt"
+python3 - "${SHADED_JARS[0]}" "$QUALIFICATION_ROOT/image-licenses-sha256.txt" <<'PY'
+import hashlib
+import pathlib
+import sys
+import zipfile
+
+jar_path = pathlib.Path(sys.argv[1])
+image_hashes = {}
+for line in pathlib.Path(sys.argv[2]).read_text(encoding="utf-8").splitlines():
+    # "<sha256>  ./<path>" (text mode) or "<sha256> *./<path>" (binary mode).
+    digest, _, name = line.partition(" ")
+    name = name.lstrip(" *")
+    if name:
+        image_hashes[name.removeprefix("./")] = digest
+
+expected = {}
+with zipfile.ZipFile(jar_path) as jar:
+    for info in jar.infolist():
+        if info.is_dir():
+            continue
+        if info.filename in ("META-INF/NOTICE", "META-INF/LICENSE") or info.filename.startswith("META-INF/licenses/"):
+            content = jar.read(info)
+            if not content:
+                raise SystemExit(f"empty notice or licence file in the shaded JAR: {info.filename}")
+            expected[info.filename] = hashlib.sha256(content).hexdigest()
+
+for required in ("META-INF/NOTICE", "META-INF/LICENSE"):
+    if required not in expected:
+        raise SystemExit(f"the shaded JAR has no {required}")
+if not any(name.startswith("META-INF/licenses/") for name in expected):
+    raise SystemExit("the shaded JAR keeps no dependency licence under META-INF/licenses/")
+
+problems = []
+for name, digest in sorted(expected.items()):
+    if name not in image_hashes:
+        problems.append(f"missing from /opt/minos/licenses of the image: {name}")
+    elif image_hashes[name] != digest:
+        problems.append(f"/opt/minos/licenses/{name} of the image differs from the shaded JAR")
+if problems:
+    raise SystemExit("\n".join(problems))
+print(f"image licences: {len(expected)} notice and licence files identical to those of the shaded JAR")
+PY
+
 docker run --rm --network none --read-only --entrypoint cat "$IMAGE" \
   /opt/minos/provider-evidence/provider-inventory.json \
   > "$QUALIFICATION_ROOT/provider-inventory.json"

@@ -31,6 +31,7 @@ maven-compiler-plugin
 maven-surefire-plugin
 maven-failsafe-plugin
 maven-jar-plugin
+maven-dependency-plugin
 maven-shade-plugin
 ```
 

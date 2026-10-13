@@ -70,6 +70,11 @@
         <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
         <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
         <maven.shade.plugin.version>3.6.2</maven.shade.plugin.version>
+        <!--
+          Build-time only (minos-app): copies the licence and notice files of the runtime dependencies into the
+          distributed JAR, one directory per dependency (AUD-DEP-16, docs/developer/supply-chain.md).
+        -->
+        <maven.dependency.plugin.version>3.11.0</maven.dependency.plugin.version>
 
         <!--
           Audit tooling (docs/quality/code-audit.md). Both tools live in opt-in profiles only

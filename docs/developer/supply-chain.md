@@ -51,6 +51,36 @@ En mode release M21, `--strict` impose qu'un composant tiers fournisse au moins 
 
 Le fichier de notices est un index de coordonnées et de métadonnées publiées. Il ne remplace pas le texte de licence autoritatif de chaque projet tiers.
 
+## Notices et licences tierces dans les livrables
+
+Le jar ombré redistribue des dépendances Java ; il garde leurs fichiers de notice et de licence (AUD-DEP-16, changement `conserver-les-notices-tierces`, octobre 2026).
+
+| Entrée du jar | Contenu |
+|---|---|
+| `META-INF/NOTICE` | les notices de toutes les dépendances qui en livrent une (`META-INF/NOTICE`, `NOTICE.txt`, `NOTICE.md`), agrégées par `ApacheNoticeResourceTransformer` ; les paragraphes communs à plusieurs notices n'y figurent qu'une fois. Il commence par le nom de MINOS, son titulaire et une phrase qui dit que MINOS est propriétaire |
+| `META-INF/LICENSE` | la licence de MINOS (`LICENSE` de la racine du dépôt) |
+| `META-INF/licenses/<artefact>-<version>/` | les fichiers de licence et de notice de la dépendance, **copiés sans modification** (un répertoire par jar de dépendance : deux fichiers de même nom ne s'écrasent plus) |
+| `META-INF/licenses/com.ongres.*/…` | les licences que le pilote PostgreSQL range lui-même, à leur chemin d'origine |
+
+Mise en œuvre, dans `minos-app/pom.xml` : une étape `maven-dependency-plugin` (`unpack-dependencies`, phase `prepare-package`) extrait ces fichiers des dépendances d'exécution avant l'empaquetage. C'est un plugin de construction (version épinglée par `maven.dependency.plugin.version`), pas une dépendance : rien n'entre dans le classpath d'exécution ni dans le SBOM. `ApacheLicenseResourceTransformer` n'est **pas** utilisé : il retire les licences du jar. `ApacheNoticeResourceTransformer` écrit par défaut, au nom du projet ombré, un copyright et une attribution à l'Apache Software Foundation, même avec `addHeader=false` : son nom de projet, son organisation et sa phrase d'introduction sont donc renseignés pour MINOS.
+
+Le test d'intégration `ShadedJarNoticesIT` ouvre le jar produit et échoue si la notice d'une dépendance embarquée manque dans `META-INF/NOTICE`, si un de ses fichiers de licence n'est pas gardé à l'identique dans son répertoire, si l'ombrage écrit une ligne qui mentionne Apache au nom de MINOS, ou si `META-INF/LICENSE` n'est pas la licence de MINOS. Les dépendances contrôlées sont calculées depuis le classpath du test : une dépendance ajoutée est contrôlée sans toucher au test.
+
+Par livrable :
+
+| Livrable | Ce qu'il contient |
+|---|---|
+| Jar ombré | les entrées ci-dessus |
+| Distribution Windows | le jar, donc ses entrées, et `supply-chain/THIRD-PARTY-NOTICES.txt` (index de coordonnées issu du SBOM) |
+| Images Docker (`Dockerfile.mcp.release`, `Dockerfile.mcp`) | le jar, et les mêmes fichiers extraits du jar pendant la construction sous `/opt/minos/licenses/` (`META-INF/NOTICE`, `META-INF/LICENSE`, `META-INF/licenses/…`), lisibles sans exécuter MINOS. La construction échoue si l'extraction ne produit rien ; `scripts/ci/qualify-docker-release.sh` compare l'empreinte de chaque fichier de l'image de release à celle de l'entrée du jar |
+
+**Limites.**
+
+- Douze dépendances ne livrent aucun fichier de licence dans leur jar (itu, JavaEWAH, json-schema-validator, jspecify, mcp, mcp-core, mcp-json-jackson3, protobuf-java, reactive-streams, reactor-core, scip-java-bindings, snakeyaml-engine) : il n'y a rien à conserver pour elles, et MINOS ne reconstitue pas un texte de licence. Elles ne sont couvertes que par l'index de coordonnées.
+- Les outils de l'image de release qui ne viennent pas de Maven (Node.js et les paquets npm de scip-typescript et scip-python, Go, Rust, le SDK .NET, les indexeurs, les paquets Ubuntu) sont **hors périmètre** : leurs licences restent là où leur installation les pose (`node_modules`, archives et paquets d'origine), sans inventaire ni contrôle de MINOS. À rouvrir si un inventaire de licences de l'image est demandé.
+- Ce n'est pas un avis juridique sur la compatibilité des licences.
+- `Dockerfile.mcp` n'est construit par aucun workflow : son extraction est gardée par un test de contrat, pas par une image de CI.
+
 ## Intégrité
 
 `scripts/release/check-supply-chain.py` vérifie :
