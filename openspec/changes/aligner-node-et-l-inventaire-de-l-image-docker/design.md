@@ -36,6 +36,44 @@ Sprint 3 de l'audit du 10 octobre 2026 : **AUD-DEP-02** et **AUD-DEP-10**. HEAD 
 4. **AUD-DEP-10 — le contrôle statique ne suffit pas.** `check-tools-manifest.py` peut refuser un littéral ; il ne peut pas prouver que la valeur écrite est celle du binaire. La preuve se place dans `qualify-docker-release.sh`, sur l'image construite.
 5. **Le même bloc porte Node** (`"runtime":"Node ${NODE_VERSION}"`) : il est relu lui aussi, pour que la règle soit une seule.
 
+## Mesures et écarts à l'implémentation (2026-10-13)
+
+### Mesure de la tâche 1.1
+
+| Donnée | Valeur | Source |
+|---|---|---|
+| Version retenue | Node.js **24.20.0** | celle de l'entrée `windows-x64` du catalogue ; l'archive `linux-x64` existe |
+| Archive | `https://nodejs.org/dist/v24.20.0/node-v24.20.0-linux-x64.tar.xz` | nodejs.org |
+| SHA-256 | `2f2c0da162318f0de47665410c7c8c2ed3d36c8f3105de4bbc61176c70a7cbf2` | `SHASUMS256.txt` de nodejs.org pour v24.20.0 ; l'empreinte Windows de ce même fichier est celle du catalogue |
+| Taille | `31838904` octets | en-tête `Content-Length` de l'archive |
+| Fin de support | Node 24 LTS jusqu'au 2028-04-30 ; Node 20 terminé le 2026-04-30 | endoflife.date, calendrier `nodejs/Release` |
+
+### Écart d'ordre : le catalogue est aligné avant la qualification
+
+Docker ne démarre pas sur le poste de développement (`Docker Desktop is unable to start`) : l'image n'a pas pu être construite et `scripts/ci/qualify-docker-release.sh` n'a pas pu être exécuté. La tâche 1.2 (qualifier **avant** de modifier le catalogue) n'est donc pas faite localement ; la qualification de scip-typescript et de scip-python sous Node 24 sera celle du job `Provider-complete image exact-head gate` (`docker-release-validation.yml`) sur la PR (tâche 3.2). Conséquences :
+
+- **D1 reste ouverte.** Aucun des deux providers n'est qualifié sous Node 24 sous Linux à la date de ce texte.
+- **D4 est appliquée sous condition.** La limitation « provider 0.4.0 documents Node 18/20 only » est retirée parce qu'elle devient fausse (l'image n'embarque plus Node 20) ; ce retrait est **conditionné au verdict de CI**. Si un provider échoue, la limitation à écrire est celle qui aura été mesurée, et D1 s'applique.
+
+### Qualification réelle des providers sous Node 24 (2026-10-13, remplace la réserve ci-dessus)
+
+L'hypothèse de la tâche 1.2 était fausse : `qualify-docker-release.sh` ne rejoue aucune fixture. Constat fait en lisant les journaux et les scripts : **aucun contrôle de CI n'exécute un provider géré**. `qualify-docker-release.sh` vérifie l'inventaire, les empreintes, `java -version`, l'aide de la CLI et un échange MCP ; `qualify-docker-upgrade.ps1` attend le refus `UNSUPPORTED_BY_BACKEND` de l'indexation dans le plan d'administration (pas de second bac à sable dans le conteneur, `docs/developer/remote-worker-sandbox-disposition.md`) ; la validation de l'installateur Windows construit et installe sans indexer.
+
+La qualification a donc été faite hors image, sous Linux : Node.js 24.20.0 de l'archive du catalogue, `npm ci` avec les verrous livrés, scip-typescript 0.4.0 sur trois fixtures et scip-python 0.6.6 sur une ; témoin sous Node.js 20.20.2. Les quatre index sont identiques octet pour octet entre les deux versions de Node. D1 est close sans dérogation, et le retrait de la limitation « Node 18/20 » (D4) n'est plus conditionnel. Ce qui reste propre à l'image (lecture des versions sur les binaires, `pip` présent) est prouvé par sa construction en CI.
+
+### Autres écarts
+
+- **Lecture de Rust sans tube** : `rustc --version` est découpé par des expansions de paramètres (`${v#rustc }`, `${v%% *}`), pas par `cut` : le `RUN` est en `set -eux` sans `pipefail`, un échec de `rustc` en tête de tube passerait inaperçu.
+- **Contrôle de forme** : chaque version doit commencer par un chiffre, contenir un point et n'être faite que de `[0-9A-Za-z.+-]` ; sinon la construction échoue avant d'écrire le moindre fichier de preuve.
+- **Règle statique un peu plus stricte que D3** : en plus de « aucun chiffre littéral », la valeur doit contenir une variable de shell (`"toolchain":"stable"` est refusé) ; une expansion à valeur par défaut (`${v:-1.97.1}`) compte comme un littéral ; un Dockerfile sans instruction `RUN` qui écrit `provider-inventory.json` est refusé (la règle ne se désarme pas en silence). La règle ne distingue pas une variable lue sur un binaire d'un `ARG` : c'est la comparaison sur l'image qui le prouve.
+- **Comparaison sur l'image** : `qualify-docker-release.sh` lit Go par `go version` (le Dockerfile lit `go env GOVERSION`), les trois autres par la même commande ; le conteneur de lecture reçoit un `/tmp` en tmpfs et `HOME`/`DOTNET_CLI_HOME` sur `/tmp` (racine en lecture seule, utilisateur 10001).
+- **« Ligne LTS maintenue »** (exigence) : le gate vérifie le **même majeur** entre plateformes, pas la date de fin de support (elle n'est pas dans le catalogue) ; la veille des fins de support relève de `surveiller-les-outils-embarques` (AUD-DEP-03).
+- **`sync-tools-manifest.py --write`** réécrit le Dockerfile en fins de ligne LF sur un poste Windows (`read_text` normalise) ; les fins de ligne de l'arbre de travail ont été rétablies à la main, le contenu commité est identique. Non corrigé ici (hors périmètre).
+
+### Non vérifié sans Docker
+
+La construction de l'image ; l'exécution des deux providers sous Node 24 ; la sortie réelle de `dotnet --version`, `go env GOVERSION`, `go version`, `rustc --version` et `node --version` dans l'image ; le comportement du `RUN` sous `dash`. Exercé hors Docker : le shell de lecture avec des binaires simulés (nominal et six refus, sous le `sh` de Git) et le bloc Python de comparaison avec des entrées fabriquées (nominal et trois refus).
+
 ## Goals / Non-Goals
 
 **Goals** : le runtime Node de l'image reçoit des correctifs ; l'inventaire dit ce qui est installé et le reste après une montée Dependabot ; un écart échoue en CI.
@@ -44,7 +82,7 @@ Sprint 3 de l'audit du 10 octobre 2026 : **AUD-DEP-02** et **AUD-DEP-10**. HEAD 
 
 ## Decisions
 
-### D1. Node 24 LTS si les deux providers passent, sinon dérogation datée — **décision en attente du propriétaire**
+### D1. Node 24 LTS si les deux providers passent, sinon dérogation datée — **sans objet : les deux providers passent (mesure du 2026-10-13)**
 
 Recommandation : qualifier d'abord (tâche 1.2), puis **aligner sur la version de Windows** (même majeur, même version si l'archive Linux existe). Si scip-python échoue sous Node 24 : garder Node 20 pour lui n'est pas souhaitable (deux runtimes dans l'image) ; inscrire la dérogation au registre des risques avec une échéance et le dire dans l'inventaire (`limitation` exacte, mesurée).
 
@@ -62,6 +100,8 @@ Le `RUN` qui écrit `provider-inventory.json` lit `dotnet --version`, `go env GO
 ### D4. La limitation de Node disparaît ou devient exacte
 
 Après qualification sous Node 24, le champ `limitation` de scip-typescript est retiré de l'inventaire et le commentaire `:89-90` réécrit. Une limitation n'est écrite que si elle a été mesurée.
+
+État au 2026-10-13 : retrait fait, **conditionné au verdict du gate d'image sur la PR** (voir « Écart d'ordre »).
 
 ## Direction des dépendances
 

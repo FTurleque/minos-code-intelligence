@@ -83,13 +83,24 @@ docker run --rm --network none --read-only --entrypoint cat "$IMAGE" \
   /opt/minos/provider-evidence/binary-sha256.txt \
   > "$QUALIFICATION_ROOT/provider-binary-sha256.txt"
 
-python3 - "$QUALIFICATION_ROOT/provider-inventory.json" "$ACTUAL_HEAD" <<'PY'
+# What the toolchain binaries of the built image report, one "<binary>=<raw output>" line each: the
+# provider inventory must say the same (it is provenance evidence, written at build time).
+docker run --rm --network none --read-only \
+  --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
+  --env HOME=/tmp --env DOTNET_CLI_HOME=/tmp \
+  --entrypoint sh "$IMAGE" -ec \
+  'printf "dotnet=%s\n" "$(dotnet --version)"; printf "go=%s\n" "$(go version)"; printf "rustc=%s\n" "$(rustc --version)"; printf "node=%s\n" "$(node --version)"' \
+  > "$QUALIFICATION_ROOT/toolchain-versions.txt"
+cat "$QUALIFICATION_ROOT/toolchain-versions.txt"
+
+python3 - "$QUALIFICATION_ROOT/provider-inventory.json" "$ACTUAL_HEAD" "$QUALIFICATION_ROOT/toolchain-versions.txt" <<'PY'
 import json
 import pathlib
 import sys
 
 inventory_path = pathlib.Path(sys.argv[1])
 expected_head = sys.argv[2]
+toolchain_path = pathlib.Path(sys.argv[3])
 data = json.loads(inventory_path.read_text(encoding="utf-8"))
 if data.get("formatVersion") != 1:
     raise SystemExit(f"unexpected provider inventory format: {data.get('formatVersion')!r}")
@@ -111,6 +122,40 @@ expected = {
 actual = {provider.get("id") for provider in data.get("providers", [])}
 if actual != expected:
     raise SystemExit(f"provider inventory mismatch: actual={sorted(actual)} expected={sorted(expected)}")
+
+# Every toolchain version of the inventory equals what the binary of the image reports.
+reported = dict(
+    line.split("=", 1) for line in toolchain_path.read_text(encoding="utf-8").splitlines() if "=" in line
+)
+
+
+def word(binary, index, prefix=""):
+    words = reported.get(binary, "").split()
+    if len(words) <= index or not words[index].startswith(prefix):
+        raise SystemExit(f"cannot read the version of the {binary} binary of the image: {reported.get(binary)!r}")
+    return words[index][len(prefix):]
+
+
+# provider id, inventory field, binary, version the binary reports, value the inventory must carry
+installed = [
+    ("scip-dotnet", "sdk", "dotnet", word("dotnet", 0)),              # 10.0.401
+    ("scip-go", "toolchain", "go", word("go", 2, "go")),              # go version go1.27.0 linux/amd64
+    ("rust-analyzer-scip", "toolchain", "rustc", word("rustc", 1)),   # rustc 1.99.0 (<commit> <date>)
+    ("scip-typescript", "runtime", "node", "Node " + word("node", 0, "v")),  # v24.20.0
+]
+providers = {provider.get("id"): provider for provider in data.get("providers", [])}
+mismatches = []
+for provider_id, field, binary, version in installed:
+    recorded = providers[provider_id].get(field)
+    if recorded != version:
+        mismatches.append(
+            f"provider inventory toolchain mismatch: {provider_id}.{field} is {recorded!r} "
+            f"but the {binary} binary of the image reports {version!r}"
+        )
+    else:
+        print(f"provider inventory {provider_id}.{field}={recorded!r} matches the {binary} binary of the image")
+if mismatches:
+    raise SystemExit("\n".join(mismatches))
 PY
 
 docker run --rm --network none --read-only --entrypoint sh "$IMAGE" -ec \
