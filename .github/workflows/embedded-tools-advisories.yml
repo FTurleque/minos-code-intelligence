@@ -1,0 +1,41 @@
+name: Embedded tools advisory watch
+
+# AUD-DEP-03. The tools of embedded-tools.json (indexers, Node.js, Maven, Coursier, the classpath of scip-java) are
+# installed on the user's machine and followed by neither Dependabot nor Dependency-Check. This workflow asks an
+# advisory database about them once a week and fails when one is affected or out of support.
+# It is deliberately not started by pull_request and is not a required check: an advisory published during the
+# week must not fail an unrelated pull request. An alert is handled by a qualified change of the catalogue or by
+# a dated waiver (docs/developer/supply-chain.md).
+on:
+  schedule:
+    # Monday 05:17 UTC: before the working week, away from the top of the hour.
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: embedded-tools-advisories
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Embedded tools advisory watch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      # Exit code 1: a component is affected or out of support, or a table or a waiver is wrong.
+      # Exit code 2: the advisory service or the support schedule could not be read; there is no verdict.
+      - name: Query the advisories and the support schedules of the catalogue
+        run: python scripts/quality/check-embedded-tools-advisories.py

@@ -55,6 +55,12 @@ Docker ne démarre pas sur le poste de développement (`Docker Desktop is unable
 - **D1 reste ouverte.** Aucun des deux providers n'est qualifié sous Node 24 sous Linux à la date de ce texte.
 - **D4 est appliquée sous condition.** La limitation « provider 0.4.0 documents Node 18/20 only » est retirée parce qu'elle devient fausse (l'image n'embarque plus Node 20) ; ce retrait est **conditionné au verdict de CI**. Si un provider échoue, la limitation à écrire est celle qui aura été mesurée, et D1 s'applique.
 
+### Qualification réelle des providers sous Node 24 (2026-10-13, remplace la réserve ci-dessus)
+
+L'hypothèse de la tâche 1.2 était fausse : `qualify-docker-release.sh` ne rejoue aucune fixture. Constat fait en lisant les journaux et les scripts : **aucun contrôle de CI n'exécute un provider géré**. `qualify-docker-release.sh` vérifie l'inventaire, les empreintes, `java -version`, l'aide de la CLI et un échange MCP ; `qualify-docker-upgrade.ps1` attend le refus `UNSUPPORTED_BY_BACKEND` de l'indexation dans le plan d'administration (pas de second bac à sable dans le conteneur, `docs/developer/remote-worker-sandbox-disposition.md`) ; la validation de l'installateur Windows construit et installe sans indexer.
+
+La qualification a donc été faite hors image, sous Linux : Node.js 24.20.0 de l'archive du catalogue, `npm ci` avec les verrous livrés, scip-typescript 0.4.0 sur trois fixtures et scip-python 0.6.6 sur une ; témoin sous Node.js 20.20.2. Les quatre index sont identiques octet pour octet entre les deux versions de Node. D1 est close sans dérogation, et le retrait de la limitation « Node 18/20 » (D4) n'est plus conditionnel. Ce qui reste propre à l'image (lecture des versions sur les binaires, `pip` présent) est prouvé par sa construction en CI.
+
 ### Autres écarts
 
 - **Lecture de Rust sans tube** : `rustc --version` est découpé par des expansions de paramètres (`${v#rustc }`, `${v%% *}`), pas par `cut` : le `RUN` est en `set -eux` sans `pipefail`, un échec de `rustc` en tête de tube passerait inaperçu.
@@ -76,7 +82,7 @@ La construction de l'image ; l'exécution des deux providers sous Node 24 ; la s
 
 ## Decisions
 
-### D1. Node 24 LTS si les deux providers passent, sinon dérogation datée — **décision en attente du propriétaire**
+### D1. Node 24 LTS si les deux providers passent, sinon dérogation datée — **sans objet : les deux providers passent (mesure du 2026-10-13)**
 
 Recommandation : qualifier d'abord (tâche 1.2), puis **aligner sur la version de Windows** (même majeur, même version si l'archive Linux existe). Si scip-python échoue sous Node 24 : garder Node 20 pour lui n'est pas souhaitable (deux runtimes dans l'image) ; inscrire la dérogation au registre des risques avec une échéance et le dire dans l'inventaire (`limitation` exacte, mesurée).
 
