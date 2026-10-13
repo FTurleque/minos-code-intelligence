@@ -26,7 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * LinkOption#NOFOLLOW_LINKS}.</p>
  *
  * <p>A lease is taken by a <strong>writer</strong> ({@link #acquire}: exclusive, the lock file is created
- * and hardened when needed) or by a <strong>reader</strong> ({@link #acquireShared}: shared with the other
+ * and hardened when needed) or by a <strong>reader</strong> ({@link #readShared}: shared with the other
  * readers, and nothing is created, hardened or opened for writing, so a reader works on a storage it
  * cannot write, such as a read-only mount). A writer and a reader exclude each other.</p>
  */
@@ -63,10 +63,10 @@ public final class BoundedFileLease implements AutoCloseable {
      *
      * <p>When the lock file does not exist, no writer has held this lease yet (a writer creates the file
      * before anything else): the reader takes the JVM lock only and creates nothing. A writer of another
-     * process may then start while such a reader is still reading; {@link #readShared} is the way to read
-     * that closes this window, and callers should prefer it.</p>
+     * process may then start while such a reader is still reading: this is why the method is not public,
+     * and why {@link #readShared}, which closes that window, is the only way to read from outside.</p>
      */
-    public static BoundedFileLease acquireShared(
+    static BoundedFileLease acquireShared(
             Path lockFile,
             ReentrantLock jvmLock,
             Duration timeout,

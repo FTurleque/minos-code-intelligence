@@ -39,6 +39,8 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
     private final Path lockFile;
     private final ReentrantLock jvmLock;
     private final LocalProjectRegistry delegate;
+    /** The same registry for reads made under a reader's lease: it never migrates a legacy entry. */
+    private final LocalProjectRegistry reader;
 
     public InterProcessLocalProjectRegistry(Path storageRoot) throws IOException {
         this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
@@ -48,6 +50,7 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
         this.lockFile = this.storageRoot.resolve(LOCK_FILE);
         this.jvmLock = JVM_LOCKS[Math.floorMod(this.lockFile.hashCode(), JVM_LOCKS.length)];
         this.delegate = new LocalProjectRegistry(this.storageRoot);
+        this.reader = LocalProjectRegistry.readingWithoutMigration(this.storageRoot);
         validateRegistryStorage();
     }
 
@@ -91,32 +94,32 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
 
     @Override
     public Optional<RegisteredProject> findProject(UUID projectId) throws IOException {
-        return withSharedLock(() -> delegate.findProject(projectId));
+        return withSharedLock(() -> reader.findProject(projectId));
     }
 
     @Override
     public Optional<RegisteredWorkspace> findWorkspace(UUID workspaceId) throws IOException {
-        return withSharedLock(() -> delegate.findWorkspace(workspaceId));
+        return withSharedLock(() -> reader.findWorkspace(workspaceId));
     }
 
     @Override
     public List<RegisteredProject> listProjects() throws IOException {
-        return withSharedLock(delegate::listProjects);
+        return withSharedLock(reader::listProjects);
     }
 
     @Override
     public Inventory inventory() throws IOException {
-        return withSharedLock(delegate::inventory);
+        return withSharedLock(reader::inventory);
     }
 
     @Override
     public List<RegisteredWorkspace> listWorkspaces() throws IOException {
-        return withSharedLock(delegate::listWorkspaces);
+        return withSharedLock(reader::listWorkspaces);
     }
 
     @Override
     public WorkspaceInventory workspaceInventory() throws IOException {
-        return withSharedLock(delegate::workspaceInventory);
+        return withSharedLock(reader::workspaceInventory);
     }
 
     @Override
@@ -145,14 +148,15 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
 
     /**
      * A read: shared with the readers of other processes, excluded by a writer, and nothing is written
-     * (ADR 0017) -- no lock file created or hardened, no legacy entry migrated. The query plane reads the
-     * registry through this on a data root it cannot write.
+     * (ADR 0017) -- no lock file created or hardened, no legacy entry migrated ({@link #reader}). The query
+     * plane reads the registry through this on a data root it cannot write. The JVM lock both paths take
+     * keeps a read and a mutation of this process apart, as the file lease does across processes.
      */
     private <T> T withSharedLock(IoOperation<T> operation) throws IOException {
         Objects.requireNonNull(operation, "operation");
         return BoundedFileLease.readShared(lockFile, jvmLock, LOCK_TIMEOUT, "local project registry lease", () -> {
             validateRegistryStorage();
-            return delegate.readingWithoutMigration(operation::run);
+            return operation.run();
         });
     }
 

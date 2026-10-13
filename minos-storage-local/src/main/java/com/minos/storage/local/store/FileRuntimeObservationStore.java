@@ -137,9 +137,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         rejectUnsafeProjectEntry(project);
         if (!Files.exists(project, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
         requireProjectDirectory(project);
-        try (LockedProject ignored = lockForReading(project)) {
-            return findUnlocked(project, projectId, sessionId);
-        }
+        return readShared(project, () -> findUnlocked(project, projectId, sessionId));
     }
 
     @Override
@@ -155,21 +153,24 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         rejectUnsafeProjectEntry(project);
         if (!Files.exists(project, LinkOption.NOFOLLOW_LINKS)) return List.of();
         requireProjectDirectory(project);
-        try (LockedProject ignored = lockForReading(project)) {
-            List<SessionMetadata> metadata = new ArrayList<>();
-            for (Path file : sessionFiles(project)) {
-                SessionMetadata candidate = readMetadata(file, projectId);
-                if (snapshotId == null || snapshotId.equals(candidate.snapshotId())) metadata.add(candidate);
-            }
-            metadata.sort(Comparator.comparing(SessionMetadata::importedAt).reversed()
-                    .thenComparing(SessionMetadata::sessionId));
-            List<CorrelatedRuntimeSession> sessions = new ArrayList<>(Math.min(limit, metadata.size()));
-            for (SessionMetadata candidate : metadata) {
-                if (sessions.size() >= limit) break;
-                sessions.add(readVerified(candidate.file(), projectId));
-            }
-            return List.copyOf(sessions);
+        return readShared(project, () -> listUnlocked(project, projectId, snapshotId, limit));
+    }
+
+    private List<CorrelatedRuntimeSession> listUnlocked(Path project, UUID projectId, String snapshotId, int limit)
+            throws IOException {
+        List<SessionMetadata> metadata = new ArrayList<>();
+        for (Path file : sessionFiles(project)) {
+            SessionMetadata candidate = readMetadata(file, projectId);
+            if (snapshotId == null || snapshotId.equals(candidate.snapshotId())) metadata.add(candidate);
         }
+        metadata.sort(Comparator.comparing(SessionMetadata::importedAt).reversed()
+                .thenComparing(SessionMetadata::sessionId));
+        List<CorrelatedRuntimeSession> sessions = new ArrayList<>(Math.min(limit, metadata.size()));
+        for (SessionMetadata candidate : metadata) {
+            if (sessions.size() >= limit) break;
+            sessions.add(readVerified(candidate.file(), projectId));
+        }
+        return List.copyOf(sessions);
     }
 
     public Path root() {
@@ -459,11 +460,11 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     }
 
     /** A read: shared with the other readers, excluded by a save, and nothing is written (ADR 0017). */
-    private static LockedProject lockForReading(Path project) throws IOException {
+    private static <T> T readShared(Path project, BoundedFileLease.LeasedRead<T> read) throws IOException {
         Path lockFile = project.resolve(".lock").toAbsolutePath().normalize();
         ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(lockFile.hashCode(), JVM_LOCKS.length)];
-        return new LockedProject(BoundedFileLease.acquireShared(
-                lockFile, jvmLock, LOCK_TIMEOUT, "runtime observation project lease"));
+        return BoundedFileLease.readShared(
+                lockFile, jvmLock, LOCK_TIMEOUT, "runtime observation project lease", read);
     }
 
     private static void moveAtomically(Path source, Path target) throws IOException {
