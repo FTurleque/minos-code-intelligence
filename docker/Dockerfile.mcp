@@ -1,7 +1,7 @@
 # <image>:<tag>@sha256:<index digest>: the digest is the immutable pin, the tag is what Dependabot
 # (docker ecosystem) follows to propose digest and version updates. A digest without a tag is not
 # followed by a tag: it would be moved to `latest`. Enforced by scripts/quality/check-image-pins.py.
-FROM eclipse-temurin:25.0.4.1_1-jre@sha256:fcd7fd7b387f94bb2ac461478a7436ad8e349924c374ea8313919624dceae636
+FROM eclipse-temurin:25.0.4.1_1-jre-noble@sha256:d9a39a23634650173f1e2bbc176227af9728587ecf0f4b62d53e9355cd7a19ab
 
 ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown

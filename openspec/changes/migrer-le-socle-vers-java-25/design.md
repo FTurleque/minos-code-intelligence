@@ -37,8 +37,13 @@ Sprint 3 de l'audit du 10 octobre 2026 : **AUD-DEP-01**. HEAD analysé : `2d1cc2
 | Dernier correctif de Temurin 25 | 25.0.4.1+1 (publié en août 2026) | API Adoptium `v3/assets/latest/25/hotspot` |
 | Fin de correctifs de Temurin 25 (LTS) | septembre 2031 au moins | `adoptium.net/support`, recoupé par `endoflife.date` (2031-09-30) |
 | Fin de correctifs du JDK 24 | dernière mise à jour 24.0.2 de juillet 2025, fin de vie en septembre 2025 | mêmes sources |
-| `eclipse-temurin:25.0.4.1_1-jre` | `sha256:fcd7fd7b387f94bb2ac461478a7436ad8e349924c374ea8313919624dceae636` | `docker buildx imagetools inspect` |
-| `eclipse-temurin:25.0.4.1_1-jdk` | `sha256:8c0a84ea11c8f6ed52600fc19f1040121f2a162998e9f50a5faebbbad9172dcc` | idem |
+| `eclipse-temurin:25.0.4.1_1-jre-noble` | `sha256:d9a39a23634650173f1e2bbc176227af9728587ecf0f4b62d53e9355cd7a19ab` | `docker buildx imagetools inspect` |
+| `eclipse-temurin:25.0.4.1_1-jdk-noble` | `sha256:589ff4cc3f71aab462e7048a47a0d10edf57fbccde3fceea2281e610bf5880b4` | idem |
+
+**Correction après le premier passage en CI** (run `docker-release-validation` 38375352909, rouge) : l'étiquette sans suffixe d'`eclipse-temurin:25` repose sur Ubuntu 26.04, alors que celle de la série 24 reposait sur Ubuntu 24.04. L'instantané apt épinglé de l'image de release (`UBUNTU_APT_SNAPSHOT`) ne sert pas cette distribution : `apt-get install` échouait sur des dépendances insatisfaites. Les deux images prennent la variante `-noble` (même système qu'avant) ; les motifs littéraux de `check-audit-remediation-v2.py` et de `verify-run-configurations.ps1` exigent ce suffixe, et un cas « autre Ubuntu que noble » reste rouge dans `test_check_image_pins.py`. Changer de distribution est un autre changement, à qualifier pour lui-même.
+
+| | | |
+|---|---|---|
 
 Lecture du bytecode 25 par l'outillage : mesurée par exécution et non par lecture de notes de version. Le `verify` du reactor sous Temurin 25.0.4.1 exerce JaCoCo 0.8.15, ArchUnit 1.5.1 et maven-shade-plugin sur des classes de version 69 (résultat en tâche 4.1) ; SpotBugs 4.10.4 et PIT 1.30.0 ne tournent que dans `code-audit.yml`, à lancer à la PR (tâche 4.4) ; scip-java 0.13.1 est mesuré en tâche 4.2. Un outil qui ne lit pas ce bytecode se monte dans ce changement, il ne se désactive pas (D6).
 

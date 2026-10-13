@@ -16,7 +16,7 @@ gate = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(gate)
 
 DIGEST = "sha256:" + "a" * 64
-PINNED_DOCKERFILE = f"FROM eclipse-temurin:25.0.4.1_1-jre@{DIGEST}\nUSER 10001\n"
+PINNED_DOCKERFILE = f"FROM eclipse-temurin:25.0.4.1_1-jre-noble@{DIGEST}\nUSER 10001\n"
 PINNED_COMPOSE = f"""services:
   app:
     image: "${{MINOS_IMAGE}}"
@@ -268,7 +268,7 @@ class CheckImagePinsTest(unittest.TestCase):
         return [remediation.TEMURIN_JRE_FROM, re.compile(literal.group(1))]
 
     def test_a_dependabot_bump_to_another_25_jre_with_a_new_digest_stays_green(self):
-        bumped = f"FROM eclipse-temurin:25.0.5_7-jre@{self.DIGEST_B}\nUSER 10001\n"
+        bumped = f"FROM eclipse-temurin:25.0.5_7-jre-noble@{self.DIGEST_B}\nUSER 10001\n"
         self.assertEqual([], self.run_gate({"docker/Dockerfile.mcp": bumped}))
         for pattern in self.temurin_patterns():
             self.assertTrue(pattern.search(bumped), pattern.pattern)
@@ -277,12 +277,13 @@ class CheckImagePinsTest(unittest.TestCase):
     def test_what_a_dependabot_bump_must_never_produce_stays_red(self):
         red = {
             "floating tag": "FROM eclipse-temurin:25-jre@" + DIGEST + "\n",
-            "major 24": f"FROM eclipse-temurin:24.0.2_12-jre@{self.DIGEST_B}\n",
-            "major 26": f"FROM eclipse-temurin:26.0.1_8-jre@{self.DIGEST_B}\n",
-            "tag without digest": "FROM eclipse-temurin:25.0.5_7-jre\n",
+            "major 24": f"FROM eclipse-temurin:24.0.2_12-jre-noble@{self.DIGEST_B}\n",
+            "major 26": f"FROM eclipse-temurin:26.0.1_8-jre-noble@{self.DIGEST_B}\n",
+            "another Ubuntu than noble": f"FROM eclipse-temurin:25.0.5_7-jre@{self.DIGEST_B}\n",
+            "tag without digest": "FROM eclipse-temurin:25.0.5_7-jre-noble\n",
             "digest without tag": f"FROM eclipse-temurin@{self.DIGEST_B}\n",
-            "jdk instead of jre": f"FROM eclipse-temurin:25.0.5_7-jdk@{self.DIGEST_B}\n",
-            "short digest": "FROM eclipse-temurin:25.0.5_7-jre@sha256:abc\n",
+            "jdk instead of jre": f"FROM eclipse-temurin:25.0.5_7-jdk-noble@{self.DIGEST_B}\n",
+            "short digest": "FROM eclipse-temurin:25.0.5_7-jre-noble@sha256:abc\n",
         }
         for label, dockerfile in red.items():
             for pattern in self.temurin_patterns():
