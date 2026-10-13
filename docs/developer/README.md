@@ -123,7 +123,7 @@ flowchart TB
 .\mvnw.cmd clean verify
 ```
 
-La toolchain est contractualisée par Maven Enforcer : Java 24 et Maven 3.9.x.
+La toolchain est contractualisée par Maven Enforcer : Java 25 et Maven 3.9.x.
 
 Le build du module final produit également le SBOM de distribution dans `target/sbom/minos-cyclonedx.json`.
 

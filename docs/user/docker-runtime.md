@@ -54,7 +54,7 @@ rust-analyzer-scip   0.3.2989 / 2026-07-27 / 12c3381
 Apache Maven         3.9.16
 ```
 
-Les toolchains nécessaires sont JDK 24, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
+Les toolchains nécessaires sont JDK 25, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
 
 Le bundle provider est initialisé dans le volume Docker nommé :
 
@@ -75,7 +75,7 @@ minos tools verify --all
 La construction provider-complete applique désormais les invariants suivants :
 
 - images de base Docker épinglées par digest OCI ;
-- paquets Ubuntu résolus depuis l'archive datée `20260814T000000Z`, et non depuis les miroirs mouvants `archive/security` ;
+- paquets Ubuntu résolus depuis l'archive datée `20261003T000000Z`, et non depuis les miroirs mouvants `archive/security` ;
 - Maven 3.9.16 vérifié par le SHA-256 possédé par le dépôt (`MAVEN_ZIP_SHA256` de `docker/Dockerfile.mcp.release`), distinct du checksum du Maven Wrapper, qui pointe sur Maven 3.10.0 ;
 - Node vérifié par une empreinte SHA-256 épinglée dans `embedded-tools.json` (la description unique des outils, voir `docs/developer/quality-gates.md`) ;
 - launcher Coursier, `scip-clang` et `rust-analyzer` vérifiés par SHA-256 attendu ;

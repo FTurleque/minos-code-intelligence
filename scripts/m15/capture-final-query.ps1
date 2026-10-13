@@ -49,7 +49,7 @@ try {
     New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
     Remove-Item -LiteralPath $queryJson, $queryLog -Force -ErrorAction SilentlyContinue
 
-    $java = Resolve-MinosJava24
+    $java = Resolve-MinosJava
     $env:JAVA_HOME = $java.JavaHome
     $env:Path = "$($java.JavaHome)\bin;$env:Path"
 

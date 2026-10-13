@@ -120,14 +120,14 @@ Les mutations restent explicites : une recherche ou une lecture ne déclenche ni
 
 ## IntelliJ — protocole `minos-ide` v1
 
-Le plugin `minos-intellij/` reste un client Java 21 externe du runtime MINOS Java 24. Il n’embarque aucune classe métier `com.minos:*`.
+Le plugin `minos-intellij/` reste un client Java 21 externe du runtime MINOS Java 25. Il n’embarque aucune classe métier `com.minos:*`.
 
 ```text
 IntelliJ plugin Java 21
    ↓ processus local JSON
 minos-ide v1
    ↓
-MinosApplication Java 24
+MinosApplication Java 25
 ```
 
 Le PSI sert uniquement à identifier le contexte sous le caret ; les facts finaux viennent du snapshot et des services MINOS. Les positions suivent le contrat ligne base 1, colonne base 0 et encodage explicite UTF-8/16/32/UNKNOWN.

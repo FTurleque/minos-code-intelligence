@@ -19,7 +19,7 @@ MINOS dispose de cinq outils d'audit. Quatre sont **à la demande**, hors du bui
 
 | Élément | Version | Rôle | Vérifié |
 |---|---|---|---|
-| JDK | 24 (Maven Enforcer `[24,25)`) | compile le bytecode analysé (classes version 68) | exécuté |
+| JDK | 25 (Maven Enforcer `[25,26)`) | compile le bytecode analysé (classes version 69) | exécuté |
 | Maven | wrapper du dépôt (3.10.0, plage Enforcer `[3.9,4.0)`) | `mvnw` / `mvnw.cmd` fait foi | exécuté |
 | `com.github.spotbugs:spotbugs-maven-plugin` | **4.10.4.1** | intégration Maven | exécuté |
 | `com.github.spotbugs:spotbugs` | **4.10.4** | moteur, épinglé dans le plugin ; aussi lancé en ligne de commande (`edu.umd.cs.findbugs.FindBugs2`) | exécuté |

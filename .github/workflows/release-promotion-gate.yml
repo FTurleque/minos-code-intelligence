@@ -68,11 +68,21 @@ jobs:
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$EXPECTED_SHA"
 
-      - name: Set up Java 24
+      # Candidate A (the previous commit, or `main` in a promotion) may still be built for the previous Java
+      # baseline: its own Maven Enforcer refuses Java 25. qualify-docker-upgrade.ps1 builds each candidate with
+      # the JDK its POM names and finds this one through JAVA_HOME_24_X64. The step after it selects Java 25.
+      # Remove this step, and its entry in check-toolchain-baseline.py, once no candidate A is built for Java 24.
+      - name: Set up the previous Java baseline for candidate A
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '24'
+
+      - name: Set up Java 25
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '25'
           cache: maven
 
       - name: Verify Docker Engine and Compose are available

@@ -11,7 +11,7 @@ Git
 Python  3.x pour plusieurs gates/release helpers
 ```
 
-Le `pom.xml` impose Java `[24,25)` et Maven `[3.9,4.0)`.
+Le `pom.xml` impose Java `[25,26)` et Maven `[3.9,4.0)`. Depuis le 13 octobre 2026 la baseline est Java 25 LTS (elle était Java 24) : une installation par jar demande un JDK 25 ; l'installateur Windows et les images Docker embarquent leur runtime.
 
 Pour construire le setup Windows, Inno Setup 6/7 doit également être disponible.
 
@@ -90,7 +90,7 @@ Le script bas niveau est :
 Il :
 
 - construit le reactor avec `-Drevision=1.1.0` ;
-- analyse le fat JAR via le `jdeps.exe` du JDK 24 ;
+- analyse le fat JAR via le `jdeps.exe` du JDK 25 ;
 - génère l'image `jpackage` avec les modules requis ;
 - vérifie les modules du runtime créé ;
 - exige notamment `java.xml` ;

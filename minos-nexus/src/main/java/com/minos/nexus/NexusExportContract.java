@@ -9,7 +9,7 @@ import static com.minos.domain.Preconditions.requireText;
  * Versioned, transport-neutral contract exported by MINOS for NEXUS consumption.
  *
  * <p>The contract deliberately contains only JDK types and MINOS-owned DTOs. It does
- * not depend on NEXUS classes and may therefore cross the Java 24 / Java 21 process
+ * not depend on NEXUS classes and may therefore cross the Java 25 / Java 21 process
  * boundary as JSON.</p>
  */
 public final class NexusExportContract {

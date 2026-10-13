@@ -10,8 +10,8 @@ Dernière réconciliation : **9 août 2026**, campagne post-audit #132 / PR #135
 
 La matrice obligatoire couvre :
 
-- Ubuntu : Java 24, PostgreSQL/pgvector Testcontainers réel et fail-closed, Maven `clean verify`, JaCoCo complet et Product Facts ;
-- Windows : Java 24, Maven `clean verify`, JaCoCo hors scope PostgreSQL déjà qualifié sur Linux et Product Facts ;
+- Ubuntu : Java 25, PostgreSQL/pgvector Testcontainers réel et fail-closed, Maven `clean verify`, JaCoCo complet et Product Facts ;
+- Windows : Java 25, Maven `clean verify`, JaCoCo hors scope PostgreSQL déjà qualifié sur Linux et Product Facts ;
 - OSV Scanner bloquant ;
 - vérification de l'immutabilité des références GitHub Actions ;
 - installation de `bubblewrap`, util-linux et du profil AppArmor officiel `bwrap-userns-restrict` sur Ubuntu afin que la qualification du worker sandbox Linux puisse réellement exercer les namespaces non privilégiés.
@@ -135,7 +135,7 @@ python scripts/release/sync-tools-manifest.py            # --write pour réécri
 
 `qualify-offline-install.ps1 -ObserveNetwork` ajoute, en lecture seule (aucun réglage modifié : `netstat -ano`, table des processus, `Get-DnsClientCache`), l'observation de tout l'arbre de processus lancé par le script : échantillonnage toutes les ~100 à 300 ms des connexions TCP (et des points de terminaison UDP, à titre d'information) des PID descendants, comparaison du cache DNS avant et après. Hors ligne, il n'a pas de témoin positif possible et le sondage hors ligne fait foi ; en ligne, il exige d'abord deux témoins (un `connect()` direct vers github.com tenu ouvert et une résolution DNS d'un nom inédit, tous deux vus par l'échantillonneur), puis ZÉRO connexion hors boucle locale et aucune résolution d'un hôte de téléchargement d'outils causée par la run MINOS. Limite : une connexion TCP ouverte puis fermée entre deux échantillons n'est pas vue ; le proxy canari et `MINOS_TOOLS_OFFLINE=1` restent en place, et la coupure physique du réseau reste l'essai du propriétaire. Auto-test sans Internet : `scripts/release/test-network-observer.ps1` (analyse de `netstat`, connexion directe vers l'adresse non bouclée de la machine, comparaison de caches DNS).
 
-`scripts/release/qualify-seeding-container.ps1 -Distribution <dossier de la distribution complète>` répète la partie « amorçage et refus » dans un conteneur `docker run --network none` (image Java 24 locale, charge Windows montée en lecture seule, `MINOS_TOOLS_OFFLINE=1`) : la charge valide est copiée, vérifiée et extraite (origine `embedded`), la même charge dont une archive Node.js a un octet modifié est refusée (`INVALID`) sans téléchargement. Rien n'y est exécuté (la charge est Windows) ; c'est une preuve d'amorçage, pas d'indexation.
+`scripts/release/qualify-seeding-container.ps1 -Distribution <dossier de la distribution complète>` répète la partie « amorçage et refus » dans un conteneur `docker run --network none` (image Java 25 locale, charge Windows montée en lecture seule, `MINOS_TOOLS_OFFLINE=1`) : la charge valide est copiée, vérifiée et extraite (origine `embedded`), la même charge dont une archive Node.js a un octet modifié est refusée (`INVALID`) sans téléchargement. Rien n'y est exécuté (la charge est Windows) ; c'est une preuve d'amorçage, pas d'indexation.
 
 ## JaCoCo
 

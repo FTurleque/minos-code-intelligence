@@ -66,7 +66,7 @@ updates:
         patterns:
           - "*"
     ignore:
-      # The JRE/JDK major must match `maven.compiler.release` (24): a major bump is a deliberate change.
+      # The JRE/JDK major must match `maven.compiler.release` (25): a major bump is a deliberate change.
       - dependency-name: "eclipse-temurin"
         update-types: ["version-update:semver-major"]
 

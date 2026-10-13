@@ -34,7 +34,7 @@ function Get-MinosJavaVersion {
     }
 }
 
-function Resolve-MinosJava24 {
+function Resolve-MinosJava {
     $candidates = @()
     foreach ($configuredHome in @($env:MINOS_JAVA_HOME, $env:JAVA_HOME)) {
         if (-not [string]::IsNullOrWhiteSpace($configuredHome)) {
@@ -52,7 +52,7 @@ function Resolve-MinosJava24 {
         if (Test-Path -LiteralPath $searchRoot -PathType Container) {
             $candidates += @(
                 Get-ChildItem -LiteralPath $searchRoot -Directory -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -match '^(?:openjdk-|jdk-)?24(?:\.|$)' } |
+                    Where-Object { $_.Name -match '^(?:openjdk-|jdk-|temurin-)?25(?:\.|$)' } |
                     Sort-Object Name -Descending |
                     Select-Object -ExpandProperty FullName
             )
@@ -84,7 +84,7 @@ function Resolve-MinosJava24 {
         }
         $version = Get-MinosJavaVersion -JavaExecutable $javaExecutable
         if ($null -ne $version -and $version.ExitCode -eq 0 -and
-            $version.Output -match '(?m)^(?:openjdk|java) version "24(?:\.|\")') {
+            $version.Output -match '(?m)^(?:openjdk|java) version "25(?:\.|\")') {
             return [pscustomobject]@{
                 JavaHome = $javaHome
                 JavaExecutable = $javaExecutable
@@ -95,7 +95,7 @@ function Resolve-MinosJava24 {
         }
     }
 
-    throw 'JDK 24 introuvable. Configurez MINOS_JAVA_HOME ou installez un JDK 24 sous %USERPROFILE%\.jdks.'
+    throw 'JDK 25 introuvable. Configurez MINOS_JAVA_HOME ou installez un JDK 25 sous %USERPROFILE%\.jdks.'
 }
 
 function Invoke-MinosNative {

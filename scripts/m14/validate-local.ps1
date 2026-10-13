@@ -132,7 +132,7 @@ try {
         throw "M14 validation requires a clean worktree. Dirty entries:`n$($Dirty -join "`n")"
     }
 
-    $Java = Resolve-MinosJava24
+    $Java = Resolve-MinosJava
     $script:JavaExecutable = $Java.JavaExecutable
     $script:PowerShellExecutable = Resolve-PowerShellHost
     $env:JAVA_HOME = $Java.JavaHome

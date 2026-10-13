@@ -11,7 +11,7 @@ Mise à jour partielle le 2026-10-07 : décompte des modules, racine de composit
 ## Ce que le dépôt révèle avec certitude
 
 **MINOS Code Intelligence** est un moteur local-first de Code Intelligence multi-langages,
-distribué en Java 24, structuré en reactor Maven multi-module de 15 projets (14 enfants + parent).
+distribué en Java 25, structuré en reactor Maven multi-module de 15 projets (14 enfants + parent).
 
 Son architecture est **hexagonale, capabilist et fail-closed** :
 

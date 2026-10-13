@@ -76,4 +76,4 @@ Une corruption de fichier échoue avant désérialisation. Un fichier importé n
 
 `scripts/m26/run-runtime-e2e.py` construit un snapshot statique déterministe dans un `MINOS_HOME` temporaire, puis exerce le JAR ombré sur les quatre actions CLI. Le JSON d’évidence vérifie le commit exact, `PARTIAL`, la corrélation, l’autorité du snapshot, l’idempotence et les rejets fail-closed.
 
-Les runners `run-final.ps1` et `run-final.sh` imposent un worktree propre, le même SHA exact, Java 24, Python, `javac`, le reactor complet, JaCoCo, les régressions M24/M25, l’e2e détaillé et l’absence de diff `.github/workflows`. GitHub Actions n’est ni appelée ni utilisée en juillet 2026.
+Les runners `run-final.ps1` et `run-final.sh` imposent un worktree propre, le même SHA exact, Java 25, Python, `javac`, le reactor complet, JaCoCo, les régressions M24/M25, l’e2e détaillé et l’absence de diff `.github/workflows`. GitHub Actions n’est ni appelée ni utilisée en juillet 2026.

@@ -19,7 +19,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0002](0002-scip-preferred-interoperability-protocol.md) | Use SCIP as the preferred semantic indexing interoperability protocol | Accepted | M0 |
 | [0003](0003-glean-behind-code-knowledge-store.md) | Keep Glean optional behind a MINOS-owned CodeKnowledgeStore port | Accepted | M0 |
 | [0004](0004-stack-java-maven-core-sans-framework.md) | Implement the MINOS core with Maven and no server framework | Partially superseded by ADR-0005 | C0/M0 |
-| [0005](0005-aligner-java-24-environnement-developpement.md) | Align MINOS on Java 24 | Accepted | M0 |
+| [0005](0005-aligner-java-24-environnement-developpement.md) | Align MINOS on Java 24 | Superseded by ADR-0059 | M0 |
 | [0006](0006-promouvoir-les-index-de-maniere-atomique.md) | Promouvoir les index de manière atomique | Accepted | M1 |
 | [0007](0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans registre local | Accepted | M1 |
 | [0008](0008-negocier-indexeurs-par-capacites-explicites.md) | Négocier les indexeurs par capacités explicites | Accepted | M1 |
@@ -80,6 +80,7 @@ Les numéros 0048–0054 sont utilisés par l'étude proposée dans la PR #333, 
 | [0056](0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — à implémenter |
 | [0057](0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels |
 | [0058](0058-declarer-les-usages-de-modules.md) | Tout module utilisé est déclaré ; la règle ArchUnit stricte devient obligatoire | Accepted |
+| [0059](0059-migrer-le-socle-vers-java-25-lts.md) | Socle en Java 25 LTS, version énoncée une fois et gardée par un gate ; plugin en Java 21 | Accepted |
 
 [Backlog, tâches et démarrage Claude](../roadmap/storage-hexagonal-2026-10/README.md).
 

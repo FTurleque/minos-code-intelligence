@@ -8,7 +8,7 @@ Set-StrictMode -Version 2.0
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 . (Join-Path $repositoryRoot "scripts\windows\MinosWindows.ps1")
-$java = Resolve-MinosJava24
+$java = Resolve-MinosJava
 
 $env:JAVA_HOME = $java.JavaHome
 $env:Path = "$($java.JavaHome)\bin;$env:Path"
@@ -27,7 +27,7 @@ $jar = Get-ChildItem -LiteralPath (Join-Path $repositoryRoot 'target') -File `
 $minosHome = Join-Path $repositoryRoot "target\minos-dev-home"
 
 if ([string]::IsNullOrWhiteSpace($jar) -or -not (Test-Path -LiteralPath $jar -PathType Leaf)) {
-    throw "JAR shaded MINOS absent. Lancez d'abord le profil DEV ou .\mvnw.cmd package sous Java 24."
+    throw "JAR shaded MINOS absent. Lancez d'abord le profil DEV ou .\mvnw.cmd package sous Java 25."
 }
 
 if ($ValidateOnly) {
