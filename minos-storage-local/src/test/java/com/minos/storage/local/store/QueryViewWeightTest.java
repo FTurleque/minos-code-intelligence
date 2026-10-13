@@ -30,19 +30,19 @@ class QueryViewWeightTest {
     private static final int FILES = 150;
 
     @Test
-    void estimatedWeightIsNotBelowTheHeapRetainedByTheView(@TempDir Path temp) throws Exception {
+    void estimatedWeightIsNotBelowTheHeapRetainedByTheView(@TempDir Path workspace) throws Exception {
         List<String> failures = new ArrayList<>();
-        measure(temp, "ascii", List.<String[]>of(QueryViewWeightFixtures.ASCII), failures);
-        measure(temp, "latin1", List.<String[]>of(QueryViewWeightFixtures.LATIN1), failures);
-        measure(temp, "cjk", List.<String[]>of(QueryViewWeightFixtures.CJK), failures);
-        measure(temp, "mixed", List.of(QueryViewWeightFixtures.ASCII, QueryViewWeightFixtures.LATIN1,
+        measure(workspace, "ascii", List.<String[]>of(QueryViewWeightFixtures.ASCII), failures);
+        measure(workspace, "latin1", List.<String[]>of(QueryViewWeightFixtures.LATIN1), failures);
+        measure(workspace, "cjk", List.<String[]>of(QueryViewWeightFixtures.CJK), failures);
+        measure(workspace, "mixed", List.of(QueryViewWeightFixtures.ASCII, QueryViewWeightFixtures.LATIN1,
                 QueryViewWeightFixtures.CJK), failures);
         assertTrue(failures.isEmpty(), String.join("\n", failures));
     }
 
-    private static void measure(Path temp, String label, List<String[]> vocabularies, List<String> failures)
+    private static void measure(Path workspace, String label, List<String[]> vocabularies, List<String> failures)
             throws Exception {
-        Path root = temp.resolve(label);
+        Path root = workspace.resolve(label);
         UUID projectId = UUID.randomUUID();
         CodeKnowledgeSnapshot snapshot = QueryViewWeightFixtures.repository(projectId, "weight", FILES, vocabularies);
         new FileSymbolSnapshotStore(root).publish(projectId, "weight", snapshot.symbols(), snapshot.occurrences(),
