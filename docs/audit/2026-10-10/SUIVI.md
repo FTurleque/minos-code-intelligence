@@ -224,4 +224,92 @@ Cinq changements OpenSpec, même branche. Trois décomptes de l'audit sont péri
 
 Ordre d'implémentation proposé : `durcir-les-workflows-github` → `publier-le-plugin-avec-la-release` → `attester-et-signer-la-release-windows` (même fichier `release-windows.yml`) ; indépendants : `verrouiller-les-dependances-gradle-du-plugin`, `rendre-le-build-maven-reproductible` (à ordonner avec `migrer-le-socle-vers-java-25`).
 
-Capacités nouvelles créées à l'archivage : `socle-d-execution`, `distribution-docker`, `chaine-de-livraison`, `recherche-semantique`. Preuve de la spécification des trois sprints : `openspec validate --all --strict` → 37 passés, 0 échec (40 avant la fusion de la PR #428, qui archive trois changements du rangement des modules).
+Capacités nouvelles créées à l'archivage : `socle-d-execution`, `distribution-docker`, `chaine-de-livraison`, `recherche-semantique`. Preuve de la spécification des trois sprints : `openspec validate --all --strict` → 35 passés, 0 échec après la clôture du sprint 2 (40 à la rédaction, avant l'archivage de cinq changements par les PR #428 et #432).
+
+## Sprint 6 — Couverture réelle et plugin IntelliJ (spécifié le 2026-10-13)
+
+Six changements OpenSpec, branche `docs/specifier-les-sprints-6-a-11` (HEAD de départ `949e1569`) ; aucun code, aucun test, aucun workflow modifié. Aucun Maven ni Gradle exécuté pendant l'analyse : les couvertures citées par l'audit ne sont pas rejouées.
+
+| Constat | Changement OpenSpec | Statut | Écart avec l'audit constaté à l'analyse |
+|---|---|---|---|
+| AUD-TST-01 | `borner-la-couverture-globale-et-du-coeur` | **Spécifié** | Un plancher `global` unique est inapplicable sur les deux systèmes (classes Linux à 0 sous Windows, PostgreSQL sauté, tests de `minos-app` hors rapport agrégé) : plancher par plateforme dans le gate. Six `check-*-consistency.py` lisent `check-jacoco.py`. |
+| AUD-TST-02 | idem | **Spécifié** | Recalcul : 221 fichiers sur 527, 47,9 % des lignes sous un scope. Un scope `process-ownership` à une seule plateforme est inapplicable (trois rattachements) ; `com/minos/io/` contient 16 classes, pas 4. Planchers fixés après mesure sur les deux systèmes (tâche 1.1). |
+| AUD-TST-04 | idem (reste) | **Test déjà écrit** (`PostgresRuntimeObservationStoreTest`, 9 tests) ; reste spécifié | Reste le plancher de classe dans `m30-postgresql-pgvector` (le préfixe de classe doit être déclaré à côté du préfixe de paquet). |
+| AUD-TST-12 | idem (reste) | **Test déjà écrit** (`WindowsJobObjectProcessOwnershipPlanTest`) ; reste spécifié | Reste le rattachement de la classe au scope `provider-sandbox-windows`. |
+| AUD-TST-09 | `prouver-l-attente-des-verrous-et-l-idempotence` | **Spécifié** | Trois tests sans assertion confirmés (chemins déplacés en sous-packages). |
+| AUD-TST-10 | idem | **Spécifié** | 13 sites « `sleep` puis assertion négative » (6 sur `isDone()`, 6 sur `AtomicBoolean`, 1 sur l'état du pool), plus un site sans aucun délai ; l'audit en citait 11. Observer l'état `WAITING` ne vaut ni pour un verrou PostgreSQL ni pour un verrou de fichier : un signal par nature de verrou. |
+| AUD-TST-18 | `rendre-le-test-scip-java-hermetique` | **Spécifié** | Second site (`ManagedScipProviderRuntimeManager.java:241`). Un quatrième constructeur heurte l'ADR 0045 ; le repli surefire masquerait le défaut. Décisions en attente : D1, D2. Échec non reproduit pendant l'analyse. |
+| AUD-TST-05 | `mesurer-la-couverture-du-plugin-intellij` | **Spécifié** | 25 classes, 10 sans test (1 382 lignes, 38 %). `BasePlatformTestCase` contredit la règle des tests du dépôt : extraction sans fixture de plateforme. `MinosRegistryNotice` n'est pas testable telle quelle. À faire après `verrouiller-les-dependances-gradle-du-plugin`. Décisions en attente : D2, D4. |
+| AUD-QUA-01 | `garantir-la-parite-du-lanceur-job-object` | **Spécifié** | **Impact inversé** : c'est le plugin qui porte le durcissement de la ligne de commande, pas le moteur. Le « 70 lignes » comparait à une base pré-remédiation ; contre le script réellement assemblé : 38 lignes propres au plugin, 42 au moteur. Gate de parité recommandé plutôt que génération au build. Décisions en attente : D1, D3. |
+| AUD-TST-11 | `completer-la-mutation-et-son-document` | **Spécifié** | Le document porte **trois** décomptes incompatibles, pas deux. Les exécutions de `code-audit.yml` sont des tâches manuelles. Décision en attente : D3 (plancher PIT). |
+
+## Sprint 7 — Sorties publiques : messages, MCP, rendus (spécifié le 2026-10-13)
+
+Six changements OpenSpec, même branche. Aucun build ni test exécuté.
+
+| Constat | Changement OpenSpec | Statut | Écart avec l'audit constaté à l'analyse |
+|---|---|---|---|
+| AUD-SEC-05 | `ne-plus-laisser-fuir-de-chemin-absolu-dans-les-erreurs` | **Spécifié** | La règle proposée classerait comme sensible tout chemin relatif à deux barres, alors que `decouverte-et-negociation` exige des chemins relatifs dans les messages : retrait des séquences de contrôle avant analyse et forme lecteur Windows seulement. Limite déclarée : un chemin POSIX accolé à un identifiant sans séquence de contrôle reste non détecté. |
+| AUD-SEC-04 | idem | **Spécifié** | Retirer le pré-test sans absence typée ferait échouer tout MINOS_HOME sans `minos.properties`. **Plus large** : un répertoire ou un lien cassé à la place du fichier est ignoré en silence (fail-open). Cinq sites de message à corriger. |
+| AUD-SEC-07 | `reserver-minos-ollama-au-runtime-docker` | **Spécifié** | Le script d'installation écrit l'endpoint `minos-ollama` dès que le MCP est en Docker : un refus à l'ouverture pourrait casser un lanceur natif sur le même MINOS_HOME (non tracé, tâche 1.1). ADR 0031 à amender. Décision en attente : D1 (refus à l'usage, recommandé). |
+| AUD-SEC-08 | `echapper-les-libelles-mermaid` | **Spécifié** | Site voisin ajouté : les lignes de commentaire reçoivent le nom du projet sans neutraliser `%%{`. Rendu réel de l'entité par Mermaid non vérifié. |
+| AUD-SEC-09 | `prouver-le-refus-des-arguments-mcp-inconnus` | **Spécifié** (test d'abord) | **Probablement non reproductible de bout en bout** : le SDK MCP 2.0.1 valide les entrées par défaut. Aucun test du dépôt ne le prouve : test STDIO d'abord, code seulement s'il est rouge. Décision en attente : D2 (défense en profondeur côté MINOS). |
+| AUD-SEC-10 | `ne-plus-exposer-la-racine-absolue-ni-les-e-mails-d-auteurs` | **Spécifié** | Le plugin IntelliJ lit `rootPath` de la CLI : agir dans le backend MCP seulement. Retirer la clé est une rupture de la surface MCP, sans version de contrat où l'annoncer. Aucun outil MCP n'expose l'e-mail (CLI et API seulement). ADR 0019 à amender. Décisions en attente : D1, D2. |
+| AUD-SEC-11 | `declarer-la-provenance-des-regles-de-securite` | **Spécifié** (limitation seule) | Un assainisseur déclaré ne masque pas le chemin (il est rapporté `sanitized=true`). Refuser les assainisseurs du dépôt casserait une fixture, trois tests et un golden : règles d'opérateur renvoyées à un changement ultérieur. |
+
+## Sprint 8 — Confinement et E/S privées (spécifié le 2026-10-13)
+
+Cinq changements OpenSpec, même branche. Aucun build ni test exécuté ; seul `check-private-io.py` a été rejoué.
+
+| Constat | Changement OpenSpec | Statut | Écart avec l'audit constaté à l'analyse |
+|---|---|---|---|
+| AUD-SEC-03 | `etendre-le-garde-d-e-s-privees-aux-ecritures-brutes` | **Spécifié** (gate seul) | Gate au HEAD : 527 sources, 46 occurrences listées, 10 règles. API manquées par l'audit : `newByteChannel`, `createFile`, redirections de processus vers un fichier. L'auto-test **affirme aujourd'hui** que `newOutputStream` est permis : à inverser. Migration des sites hors périmètre. Décision en attente : D2 (statut de `PrivateLocalStorage`). |
+| AUD-QUA-10 | `retirer-le-crochet-statique-de-l-ouverture-confinee` | **Spécifié** | Trois appels du crochet, pas un ; deux entrées publiques à doubler d'une surcharge package-private. Q15 vit dans une archive figée : la mise à jour va ici. |
+| AUD-ARC-09 | `refuser-l-execution-de-provider-sans-frontiere` | **Spécifié** | `ProcessIndexerExecutor.execute` implémente une interface : il ne peut pas devenir package-private, il **refuse**. Déplacer la classe native casserait un gate littéral. Le constructeur à deux arguments sert deux tests de confinement en mode requis : fabrique de test. Décision en attente : D2. |
+| AUD-PERF-08 | `espacer-le-sondage-de-propriete-des-processus` | **Spécifié** (mesure d'abord) | Factoriser avec le plugin est interdit (aucune dépendance `com.minos:*`) : deux implémentations alignées. Un test exige l'observation d'un enfant détaché en moins d'une seconde, ce qui borne la période. Décision en attente : D2. |
+| AUD-SEC-06 | `conserver-les-refus-conditionnels-windows` | **Spécifié** | « Refuser toute ACE conditionnelle » **contredit un test existant** (une autorisation conditionnelle héritée doit être retirée) : exigence restreinte aux refus conditionnels. Les vrais octrois AppContainer sont dans un gabarit PowerShell non cité. Comportement réel sous Windows non mesuré. Décisions en attente : D2, D3. |
+
+Ordre d'implémentation proposé : `etendre-le-garde-d-e-s-privees-aux-ecritures-brutes` d'abord ; `conserver-les-refus-conditionnels-windows` ensuite, avant le port d'ACL du sprint 10 ; les trois autres indépendants.
+
+## Sprint 9 — Une seule orchestration d'indexation (spécifié le 2026-10-13)
+
+Six changements OpenSpec, même branche. Aucun build, test ni gate exécuté.
+
+| Constat | Changement OpenSpec | Statut | Écart avec l'audit constaté à l'analyse |
+|---|---|---|---|
+| AUD-ARC-02 | `unifier-l-orchestration-d-indexation` | **Spécifié** | Le coordinateur ne peut pas absorber le flux dans `minos-engine` (réconciliateur, sémantique, rétention sont dans `minos-application`) : cas d'usage dans l'application, coordinateur supprimé, ses tests reportés, ses deux diagnostics meilleurs repris. Trois gates littéraux lisent le fichier de la CLI. Débloque AUD-ARC-01. Décisions en attente : D1, D3. |
+| AUD-PERF-04 | `hacher-l-arbre-source-une-fois-par-indexation` | **Spécifié** | « Même politique » n'est vrai que par défaut (service d'empreinte surchargeable). La valeur persistée du scope doit rester identique. Le raccourci taille / date affaiblit la preuve de stabilité : non adopté (D3). |
+| AUD-ARC-04 | `decouvrir-les-fournisseurs-par-chargeur-explicite` | **Spécifié** | L'injection depuis la racine de composition touche un record public nommé par 22 fichiers : reportée (D3). Refuser plus d'un fournisseur d'identité resserre un contrat que la Javadoc laissait ouvert. ADR 0042 à amender. |
+| AUD-QUA-03 | `donner-un-contrat-d-erreur-au-port-d-etat-d-index` | **Spécifié** | Quatre implémentations de production, pas trois ; six méthodes, pas cinq. Le « 43 `catch` » n'est pas reproduit. Une exception vérifiée casserait 43 appels et un SPI. Les messages du store fichier contiennent un chemin absolu. Décisions en attente : D1, D5. |
+| AUD-QUA-02 | `retirer-les-services-sans-appelant-de-production` (et `unifier-l-orchestration-d-indexation` pour le coordinateur) | **Spécifié** | `NexusSemanticSignalService` est une surface publique documentée : à garder. `IndexerProviderRegistry` est nommée par l'ADR 0026. Le gate aura des faux positifs : liste nominative à cliquet. Décision en attente : D1 (sort de chaque classe). |
+| AUD-PERF-09 | `borner-les-preuves-des-tests-lies` | **Spécifié** (mesure d'abord) | Ampleur non mesurée. Les preuves figurent dans trois goldens : un plafond change une sortie publique et doit rester additif. Seuil d'abandon proposé. Décisions en attente : D1, D2. |
+
+Ordre d'implémentation proposé : `unifier-l-orchestration-d-indexation` → `hacher-l-arbre-source-une-fois-par-indexation` ; `donner-un-contrat-d-erreur-au-port-d-etat-d-index` de préférence après le premier ; les trois autres indépendants.
+
+## Sprint 10 — Frontières d'architecture (spécifié le 2026-10-13, en partie)
+
+Deux changements OpenSpec, même branche. Les six constats sont confirmés mais **aucun chantier de fond n'est spécifié** : leurs prérequis (sprints 4, 8 et 9) ne sont pas implémentés et quatre actions de l'audit contredisent un ADR accepté.
+
+| Constat | Changement OpenSpec | Statut | Écart avec l'audit constaté à l'analyse |
+|---|---|---|---|
+| AUD-ARC-01 | `figer-la-dette-de-frontieres-par-des-cliquets` (règle A11) | **Dette figée** ; chantier non spécifié | 102 imports dans 30 fichiers. Cliquet dans le garde Python, pas dans ArchUnit. Chantier (cas d'usage d'indexation) après AUD-ARC-02. |
+| AUD-ARC-05 | idem (règle A12) et `trancher-les-decisions-d-architecture-du-sprint-10` (D2) | **Dette figée** ; chantier non spécifié | Un seul site de lancement de processus dans le moteur. Déplacer `hosted` contredit l'ADR 0044. Chantier après AUD-SEC-06. |
+| AUD-ARC-07 | `trancher-les-decisions-d-architecture-du-sprint-10` (D1) | **Décision à prendre** | « Trancher 0047 avant le port de lecture » est une lecture de l'audit ; l'ordre de l'ADR 0047 commence par AUD-PERF-03. |
+| AUD-ARC-08 | `figer-la-dette-de-frontieres-par-des-cliquets` (règle A13) | **Dette figée** ; chantier non spécifié | Un couplage de plus que l'audit (type utilisé par nom qualifié, sans import). |
+| AUD-ARC-11 | idem (arêtes d'exécution) et décision D3 | **Arête documentée** ; déplacement non retenu | Déplacer le transport créerait une arête interdite ; renommer le pont NEXUS casse un point d'entrée documenté. |
+| AUD-ARC-12 | idem (règle A14) et décision D4 | **Dette figée** | 23 racines, pas 24 ; aucun package partagé entre modules. Renommer contredit l'ADR 0044. |
+
+## Sprint 11 — Hygiène de fond (spécifié le 2026-10-13)
+
+Six changements OpenSpec, même branche. Aucun build, test ni gate exécuté.
+
+| Constat | Changement OpenSpec | Statut | Écart avec l'audit constaté à l'analyse |
+|---|---|---|---|
+| AUD-PERF-10 | `calculer-le-rang-de-symbole-une-fois` | **Spécifié** | Supprimer le rang 6 change une sortie : sorti du lot (D3). Le précalcul des minuscules alourdit la vue : à mesurer (D2). |
+| AUD-QUA-05 | `mutualiser-les-caches-lru-et-nommer-les-additions-bornees` | **Spécifié** (deux lots) | Sept caches pondérés, pas huit ; 21 helpers en comptant les variantes ; `checkedAdd` a lui aussi deux sémantiques. Trois gates littéraux exigent des noms que l'extraction supprime. Le lot « cache » passe après les changements de performance du sprint 4. Décisions en attente : D2, D3. |
+| AUD-QUA-08 | `retirer-les-jalons-des-identifiants` | **Spécifié** | Périmètre plus large : quatre méthodes du catalogue, des variables d'environnement, des chaînes publiques figées par quatre goldens. `product-facts.py` cherche les anciens noms. Les identifiants d'action du plugin sont conservés. Décisions en attente : D2, D3. |
+| AUD-QUA-09 | `garder-les-fonctions-de-scripts-jumelles` | **Spécifié** | La plupart des copies sont dans des scripts gelés par l'ADR 0043. `Require-Identifier` n'est pas identique. Une bibliothèque dot-sourcée casserait les listes de fichiers livrés : garde d'identité recommandé (D1). |
+| AUD-QUA-11 | `fixer-la-langue-des-commentaires` | **Spécifié** | 173 fichiers sur 553, 26 mixtes. `CONTRIBUTING.md` ne dit rien de la langue. Cliquet sur les fichiers mixtes, pas de traduction en masse. Décision en attente : D1 (langue de référence). |
+| AUD-QUA-07 | `decouper-les-methodes-d-analyse-et-d-ingestion` | **Spécifié** (sans exigence nouvelle) | Décompte de l'audit non reproduit (24 méthodes de 80 lignes ou plus par une autre mesure, contre 40). `LocalIsolatedIndexWorker` hors lot (six gates le citent). |
+
+Capacités nouvelles créées à l'archivage des sprints 6 à 11 : aucune (les exigences s'ajoutent aux capacités existantes et à `recherche-semantique`, créée par le sprint 4). Preuve de la spécification : `openspec validate --all --strict` → 66 passés, 0 échec. Les changements des sprints 6, 7, 8, 9 et 11 ont été rédigés à partir d'une contre-vérification des preuves au HEAD ; ils n'ont pas reçu de seconde relecture indépendante après rédaction.
