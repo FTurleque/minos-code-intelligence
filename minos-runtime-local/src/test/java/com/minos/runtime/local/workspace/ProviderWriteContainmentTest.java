@@ -97,9 +97,10 @@ class ProviderWriteContainmentTest {
                         runDirectory.resolve("index.scip"),
                         Duration.ofSeconds(120)));
         IndexingExecutionRequest hostileRequest = executionRequest(UUID.randomUUID(), project);
-        IllegalStateException breach = assertThrows(IllegalStateException.class, () -> hostile.executeSandboxed(
-                hostileRequest,
-                containedTransformer(new ProviderWriteQuota(512L * 1024L, 256L, Duration.ofMillis(100L)), kills)));
+        ProcessIndexerExecutor.ProcessPlanTransformer hostileContainment =
+                containedTransformer(new ProviderWriteQuota(512L * 1024L, 256L, Duration.ofMillis(100L)), kills);
+        IllegalStateException breach = assertThrows(IllegalStateException.class,
+                () -> hostile.executeSandboxed(hostileRequest, hostileContainment));
         // Any other refusal would mean the hostile run never started, and the run below would follow nothing.
         assertTrue(breach.getMessage().contains("write containment breached"), breach.getMessage());
 

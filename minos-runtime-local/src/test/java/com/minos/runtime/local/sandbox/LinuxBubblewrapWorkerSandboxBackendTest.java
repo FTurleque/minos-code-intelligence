@@ -216,13 +216,13 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
                         Path status = process.resolve("status");
                         if (!account.equals(statusField(status, "Uid:"))) continue;
                         tasks += Long.parseLong(statusField(status, "Threads:"));
-                    } catch (IOException | RuntimeException vanished) {
+                    } catch (IOException | RuntimeException _) {
                         // The process exited while it was being read.
                     }
                 }
             }
             return tasks;
-        } catch (IOException | RuntimeException unreadable) {
+        } catch (IOException | RuntimeException _) {
             return -1L;
         }
     }
