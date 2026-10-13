@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-État produit revérifié le : **7 octobre 2026** ; mis à jour le **10 octobre 2026** (sprint 1 de l'audit du 10 octobre). Planification additionnelle : **5 octobre 2026**.
+État produit revérifié le : **7 octobre 2026** ; mis à jour le **13 octobre 2026** (sprints 1 et 2 de l'audit du 10 octobre). Planification additionnelle : **5 octobre 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit courant. Les réconciliations détaillées antérieures restent archivées sous [`history/reconciliations/`](history/reconciliations/). Une capacité présente sur une branche ou une PR n'est dite intégrée dans `develop` qu'après merge ; le présent document décrit néanmoins les garanties du HEAD qui le contient afin qu'il reste exact avant et après promotion.
 
@@ -18,7 +18,18 @@ Le sprint 1 de l'audit du 10 octobre 2026 (« remettre les dispositifs de mesure
 - **Plugin IntelliJ** : workflow exécuté sur toute PR, portée calculée (`scripts/ci/plugin-gate.py`) et gate agrégatrice toujours rendue ; la portée inclut les rendus JSON de `minos-application`, le domaine et les goldens de caractérisation.
 - **Architecture** : garde de frontières testée règle par règle (104 cas), groupId interne lu dans le POM racine, **aucun cycle de packages** (règle A8, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris), listes de dépendances d'`arc42/05` confrontées aux POM (règle A9), liste fermée des types de `minos-runtime-local` nommables par les autres modules (règle A10). Les quatre cycles existants ont été levés par le déplacement de 13 classes de production (et de leurs tests) dans leur module.
 
-Capacités OpenSpec créées ou étendues : `controles-de-fusion`, `frontieres-de-modules`, `confinement-code-non-fiable`. Les sprints 2 à 11 de l'audit (sécurité et observabilité, socle JDK, chemin de requête, chaîne de release, couverture réelle, sorties publiques, confinement et E/S privées, orchestration d'indexation, frontières d'architecture, hygiène) restent à traiter.
+Capacités OpenSpec créées ou étendues : `controles-de-fusion`, `frontieres-de-modules`, `confinement-code-non-fiable`.
+
+## Audit 2026-10-10 — sprint 2 (2026-10-13)
+
+Le sprint 2 (« failles de sécurité et observabilité », 7 constats) est **corrigé, fusionné dans `develop` et archivé** (PR #406 à #410, #420 et #429) :
+
+- **Dépôt Git analysé** : propriétaire contrôlé, aucun filtre `clean`/`smudge` déclaré par le dépôt n'est exécuté ; un dépôt trouvé au-dessus de la racine du projet reste accepté et signalé par la limitation `REPOSITORY_ABOVE_PROJECT_ROOT`.
+- **Installation des providers** : les commandes d'installation et les sondes reçoivent un environnement en liste d'autorisation, sans `MINOS_*` ni jeton ; hors paquet Windows, le classpath de scip-java est résolu par `coursier fetch` puis vérifié jar par jar contre un verrou SHA-256 avant d'être publié. Limite : le plan d'**indexation** Linux relance encore `coursier launch`.
+- **Journalisation** : le jar ombré lie SLF4J à `java.util.logging` (stderr ; stdout reste réservé au protocole MCP) ; les échecs des tâches d'arrière-plan du plugin sont journalisés dans `idea.log` ; les journaux de récupération de MINOS ne portent ni chemin absolu ni cause, sous garde (`check-private-io.py`).
+- **Scripts Windows** : le mot de passe PostgreSQL est écrit dans un fichier déjà restreint et vérifié ; le lanceur de développement `minos.cmd` ne cherche plus `java` dans le répertoire courant.
+
+Preuves, écarts avec le critère de sortie et suite à ouvrir : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md). Capacités OpenSpec créées ou étendues par l'archivage : voir `openspec/specs/`. Les sprints 3 à 11 de l'audit (socle JDK, chemin de requête, chaîne de release, couverture réelle, sorties publiques, confinement et E/S privées, orchestration d'indexation, frontières d'architecture, hygiène) restent à traiter.
 
 ## État produit
 
@@ -30,7 +41,7 @@ Capacités OpenSpec créées ou étendues : `controles-de-fusion`, `frontieres-d
 - **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement **intégrés**.
 - **#224–#248** : campagne de confinement provider/filesystem, provenance, egress, installateur et Windows non-admin intégrée.
 - **#258/#260** : audit du 28 août 2026 — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.
-- **Audit du 10 octobre 2026, sprint 1** : 9 constats corrigés et intégrés dans `develop` (voir la section dédiée ci-dessus).
+- **Audit du 10 octobre 2026, sprints 1 et 2** : 9 puis 7 constats corrigés et intégrés dans `develop` (voir les sections dédiées ci-dessus).
 - Ligne de développement : **1.3.0-SNAPSHOT**.
 
 ## Release 1.0.1
