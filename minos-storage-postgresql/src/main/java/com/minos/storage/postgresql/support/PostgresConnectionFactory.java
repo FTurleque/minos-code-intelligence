@@ -15,6 +15,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 
 /** Small bounded JDBC pool owned by one PostgreSQL storage backend. */
 public final class PostgresConnectionFactory implements AutoCloseable {
@@ -23,6 +24,12 @@ public final class PostgresConnectionFactory implements AutoCloseable {
     private static final int DEFAULT_CONNECT_TIMEOUT_SECONDS = 10;
     private static final int DEFAULT_SOCKET_TIMEOUT_SECONDS = 120;
     private static final int VALIDATION_TIMEOUT_SECONDS = 5;
+    private static final String POOL_CLOSED = "PostgreSQL connection pool is closed";
+    /**
+     * A pooled connection idle for less than this is handed out without a validation round trip; at or beyond
+     * it, the connection is validated once before being handed out.
+     */
+    static final Duration IDLE_VALIDATION_THRESHOLD = Duration.ofSeconds(30);
 
     private final String url;
     private final String user;
@@ -32,9 +39,11 @@ public final class PostgresConnectionFactory implements AutoCloseable {
     private final Duration acquireTimeout;
     private final int connectTimeoutSeconds;
     private final int socketTimeoutSeconds;
+    private final ConnectionSource connectionSource;
+    private final LongSupplier nanoClock;
     private final Semaphore leases;
     private final Semaphore dedicatedLeases;
-    private final ConcurrentLinkedQueue<Connection> idle = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<PooledConnection> idle = new ConcurrentLinkedQueue<>();
     private final AtomicInteger physicalConnections = new AtomicInteger();
     private final AtomicInteger leasedConnections = new AtomicInteger();
     private final AtomicInteger dedicatedConnections = new AtomicInteger();
@@ -54,6 +63,23 @@ public final class PostgresConnectionFactory implements AutoCloseable {
             Duration acquireTimeout,
             int connectTimeoutSeconds,
             int socketTimeoutSeconds
+    ) throws IOException {
+        this(configuration, maxPoolSize, acquireTimeout, connectTimeoutSeconds, socketTimeoutSeconds,
+                DriverManager::getConnection, System::nanoTime);
+    }
+
+    /**
+     * Canonical constructor. {@code connectionSource} and {@code nanoClock} are seams for pool tests that run
+     * without a PostgreSQL server; production always uses the JDBC driver manager and the monotonic JVM clock.
+     */
+    PostgresConnectionFactory(
+            StorageBackendConfiguration configuration,
+            int maxPoolSize,
+            Duration acquireTimeout,
+            int connectTimeoutSeconds,
+            int socketTimeoutSeconds,
+            ConnectionSource connectionSource,
+            LongSupplier nanoClock
     ) throws IOException {
         Objects.requireNonNull(configuration, "configuration");
         if (!configuration.postgresql()) throw new IOException("PostgreSQL configuration required");
@@ -75,25 +101,64 @@ public final class PostgresConnectionFactory implements AutoCloseable {
         this.maxPoolSize = maxPoolSize;
         this.connectTimeoutSeconds = connectTimeoutSeconds;
         this.socketTimeoutSeconds = socketTimeoutSeconds;
+        this.connectionSource = Objects.requireNonNull(connectionSource, "connectionSource");
+        this.nanoClock = Objects.requireNonNull(nanoClock, "nanoClock");
         this.leases = new Semaphore(maxPoolSize, true);
         // Lifecycle advisory locks are long-lived control-plane resources. They deliberately use a
         // separate bounded connection budget so lock waiters cannot starve ordinary query traffic.
         this.dedicatedLeases = new Semaphore(maxPoolSize, true);
     }
 
+    /**
+     * Runs {@code work} on a pooled connection, or on the connection the current thread already leases.
+     *
+     * <p>A connection that rested for less than {@link #IDLE_VALIDATION_THRESHOLD} is handed out without a
+     * validation round trip. If such a connection turns out to be lost (SQLState class {@code 08}) before the
+     * call completed any statement, the call is replayed <strong>once</strong> on a newly opened connection.
+     * It is never replayed after a statement completed, after a write sent outside a pool-managed
+     * transaction, after a commit was attempted, or when the call managed the connection itself;
+     * {@code work} must therefore not depend on being invoked exactly once before its first statement.</p>
+     */
     public <T> T withConnection(ConnectionWork<T> work) throws SQLException, IOException {
         Objects.requireNonNull(work, "work");
         LeaseContext nested = currentLease.get();
         if (nested != null) return executeOnLease(nested, work);
 
-        Connection connection = borrow();
-        LeaseContext context = new LeaseContext(connection);
+        LeaseContext context = LeaseContext.pooled(borrow());
+        try {
+            return executeTopLevel(context, work);
+        } catch (SQLException failure) {
+            if (!context.replayable(failure)) throw failure;
+            return replayOnNewConnection(work, failure);
+        } finally {
+            leases.release();
+        }
+    }
+
+    private <T> T executeTopLevel(LeaseContext context, ConnectionWork<T> work) throws SQLException, IOException {
+        boolean completed = false;
         currentLease.set(context);
         try {
-            return executeOnLease(context, work);
+            T result = executeOnLease(context, work);
+            completed = true;
+            return result;
         } finally {
             currentLease.remove();
-            release(connection, context.reusable);
+            // A call that did not complete leaves a connection in an unknown state: it is never pooled again.
+            if (!completed) context.reusable = false;
+            checkIn(context);
+        }
+    }
+
+    /** Second and last attempt of a call, under the lease of the first one and on a connection opened for it. */
+    private <T> T replayOnNewConnection(ConnectionWork<T> work, SQLException firstFailure)
+            throws SQLException, IOException {
+        try {
+            if (closed) throw new SQLException(POOL_CLOSED);
+            return executeTopLevel(LeaseContext.pooled(openPooledPhysical()), work);
+        } catch (SQLException | IOException | RuntimeException secondFailure) {
+            if (secondFailure != firstFailure) secondFailure.addSuppressed(firstFailure);
+            throw secondFailure;
         }
     }
 
@@ -120,10 +185,9 @@ public final class PostgresConnectionFactory implements AutoCloseable {
         if (currentLease.get() != null) {
             throw new SQLException("cannot open a scoped PostgreSQL connection inside another connection lease");
         }
-        Connection connection = borrow();
-        LeaseContext context = new LeaseContext(connection);
+        LeaseContext context = LeaseContext.pooled(borrow());
         currentLease.set(context);
-        return new ScopedConnectionLease(connection, context, Thread.currentThread());
+        return new ScopedConnectionLease(context, Thread.currentThread());
     }
 
     /**
@@ -131,7 +195,7 @@ public final class PostgresConnectionFactory implements AutoCloseable {
      * lifecycle locks whose lifetime can span provider execution and must not consume query capacity.
      */
     public DedicatedConnectionLease openDedicatedConnection() throws SQLException {
-        if (closed) throw new SQLException("PostgreSQL connection pool is closed");
+        if (closed) throw new SQLException(POOL_CLOSED);
         final boolean acquired;
         try {
             acquired = dedicatedLeases.tryAcquire(acquireTimeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -145,7 +209,7 @@ public final class PostgresConnectionFactory implements AutoCloseable {
         }
         if (closed) {
             dedicatedLeases.release();
-            throw new SQLException("PostgreSQL connection pool is closed");
+            throw new SQLException(POOL_CLOSED);
         }
         try {
             Connection connection = openRawConnection();
@@ -167,24 +231,28 @@ public final class PostgresConnectionFactory implements AutoCloseable {
         if (currentLease.get() != null) {
             throw new IllegalStateException("cannot bind a PostgreSQL dedicated connection inside another lease");
         }
-        LeaseContext context = new LeaseContext(dedicated.connection());
+        LeaseContext context = LeaseContext.dedicated(dedicated.connection());
         currentLease.set(context);
         return new DedicatedConnectionContext(dedicated, context, Thread.currentThread());
     }
 
     private <T> T executeTransaction(LeaseContext context, ConnectionWork<T> work) throws SQLException, IOException {
         if (context == null) throw new SQLException("PostgreSQL transaction has no active connection lease");
-        Connection connection = context.connection;
+        // The pool drives the transaction on the driver connection; only the caller's work goes through the handle.
+        Connection connection = context.raw;
         boolean previousAutoCommit = connection.getAutoCommit();
         Exception primaryFailure = null;
         context.transactionDepth = 1;
         context.rollbackOnly = false;
+        context.activity.transactional(true);
         try {
             if (previousAutoCommit) connection.setAutoCommit(false);
-            T result = work.execute(connection);
+            T result = work.execute(context.connection);
             if (context.rollbackOnly) {
                 throw new SQLException("PostgreSQL transaction was marked rollback-only by nested work");
             }
+            // Past this point the outcome belongs to the server: the call must never be replayed.
+            context.activity.forbidReplay();
             commitTransaction(connection);
             return result;
         } catch (CommitUncertainException uncertain) {
@@ -202,6 +270,7 @@ public final class PostgresConnectionFactory implements AutoCloseable {
         } finally {
             context.transactionDepth = 0;
             context.rollbackOnly = false;
+            context.activity.transactional(false);
             if (previousAutoCommit) {
                 try {
                     if (!connection.getAutoCommit()) connection.setAutoCommit(true);
@@ -256,13 +325,19 @@ public final class PostgresConnectionFactory implements AutoCloseable {
     @Override
     public void close() {
         closed = true;
-        Connection connection;
-        while ((connection = idle.poll()) != null) closePooledPhysical(connection);
+        PooledConnection pooled;
+        while ((pooled = idle.poll()) != null) closePooledPhysical(pooled.raw());
     }
 
     @FunctionalInterface
     public interface ConnectionWork<T> {
         T execute(Connection connection) throws SQLException, IOException;
+    }
+
+    /** Opens one physical JDBC connection from the validated URL and the connection properties. */
+    @FunctionalInterface
+    interface ConnectionSource {
+        Connection connect(String url, Properties properties) throws SQLException;
     }
 
     final class ScopedConnectionLease implements AutoCloseable {
@@ -271,8 +346,8 @@ public final class PostgresConnectionFactory implements AutoCloseable {
         private final Thread owner;
         private boolean closedLease;
 
-        private ScopedConnectionLease(Connection connection, LeaseContext context, Thread owner) {
-            this.connection = connection;
+        private ScopedConnectionLease(LeaseContext context, Thread owner) {
+            this.connection = context.connection;
             this.context = context;
             this.owner = owner;
         }
@@ -299,7 +374,11 @@ public final class PostgresConnectionFactory implements AutoCloseable {
                 throw new IllegalStateException("PostgreSQL scoped connection lease lost thread ownership context");
             }
             currentLease.remove();
-            release(connection, context.reusable);
+            try {
+                checkIn(context);
+            } finally {
+                leases.release();
+            }
         }
 
         private void requireOwner() {
@@ -394,8 +473,9 @@ public final class PostgresConnectionFactory implements AutoCloseable {
         }
     }
 
-    private Connection borrow() throws SQLException {
-        if (closed) throw new SQLException("PostgreSQL connection pool is closed");
+    /** Takes one lease of the query pool and a connection for it; the caller owns both. */
+    private PooledConnection borrow() throws SQLException {
+        if (closed) throw new SQLException(POOL_CLOSED);
         final boolean acquired;
         try {
             acquired = leases.tryAcquire(acquireTimeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -407,56 +487,77 @@ public final class PostgresConnectionFactory implements AutoCloseable {
             acquisitionTimeouts.incrementAndGet();
             throw new SQLException("PostgreSQL connection pool exhausted after " + acquireTimeout);
         }
-        if (closed) {
-            leases.release();
-            throw new SQLException("PostgreSQL connection pool is closed");
-        }
         try {
-            Connection connection;
-            while ((connection = idle.poll()) != null) {
-                if (usable(connection)) {
-                    leasedConnections.incrementAndGet();
-                    return connection;
-                }
-                closePooledPhysical(connection);
+            if (closed) throw new SQLException(POOL_CLOSED);
+            PooledConnection pooled;
+            while ((pooled = idle.poll()) != null) {
+                if (handOutFromRest(pooled)) return pooled;
+                closePooledPhysical(pooled.raw());
             }
-            Connection created = openPooledPhysical();
-            leasedConnections.incrementAndGet();
-            return created;
+            return openPooledPhysical();
         } catch (SQLException | RuntimeException exception) {
             leases.release();
             throw exception;
         }
     }
 
-    private void release(Connection connection, boolean reusable) {
+    /**
+     * Decides whether a connection taken from rest can be handed out. Being closed is read locally; the
+     * validation round trip is paid only at or beyond {@link #IDLE_VALIDATION_THRESHOLD}.
+     */
+    private boolean handOutFromRest(PooledConnection pooled) {
+        boolean validate = pooled.idleNanos(nanoClock.getAsLong()) >= IDLE_VALIDATION_THRESHOLD.toNanos();
         try {
-            if (!reusable || !usable(connection)) {
-                closePooledPhysical(connection);
+            Connection connection = pooled.raw();
+            if (connection.isClosed()) return false;
+            if (validate && !connection.isValid(Math.min(connectTimeoutSeconds, VALIDATION_TIMEOUT_SECONDS))) {
+                return false;
+            }
+        } catch (SQLException | RuntimeException exception) {
+            return false;
+        }
+        pooled.leasedWithoutValidation(!validate);
+        leasedConnections.incrementAndGet();
+        return true;
+    }
+
+    /**
+     * Returns the connection of a finished lease: back to rest when it is provably clean, closed otherwise.
+     * Every check is local to the driver; no statement is sent.
+     */
+    private void checkIn(LeaseContext context) {
+        PooledConnection pooled = context.pooled;
+        try {
+            if (!context.reusable || !cleanForRest(pooled.raw())) {
+                closePooledPhysical(pooled.raw());
                 return;
             }
-            try {
-                if (!connection.getAutoCommit()) {
-                    connection.rollback();
-                    connection.setAutoCommit(true);
-                }
-                connection.clearWarnings();
-            } catch (SQLException exception) {
-                closePooledPhysical(connection);
-                return;
-            }
-            if (closed) closePooledPhysical(connection);
-            else idle.offer(connection);
+            pooled.restingSince(nanoClock.getAsLong());
+            idle.offer(pooled);
+            // close() raises the flag before draining the queue: either it drains this connection, or the
+            // flag is visible here and the connection is taken back and closed. It can never stay idle.
+            if (closed && idle.remove(pooled)) closePooledPhysical(pooled.raw());
         } finally {
             leasedConnections.decrementAndGet();
-            leases.release();
         }
     }
 
-    private Connection openPooledPhysical() throws SQLException {
-        Connection connection = openRawConnection();
+    private static boolean cleanForRest(Connection connection) {
+        try {
+            if (connection.isClosed() || !connection.getAutoCommit()) return false;
+            connection.clearWarnings();
+            return true;
+        } catch (SQLException | RuntimeException exception) {
+            return false;
+        }
+    }
+
+    /** Opens a connection for the lease the caller holds; a new connection needs no validation. */
+    private PooledConnection openPooledPhysical() throws SQLException {
+        PooledConnection pooled = new PooledConnection(openRawConnection());
         physicalConnections.incrementAndGet();
-        return connection;
+        leasedConnections.incrementAndGet();
+        return pooled;
     }
 
     private Connection openRawConnection() throws SQLException {
@@ -468,17 +569,7 @@ public final class PostgresConnectionFactory implements AutoCloseable {
         properties.setProperty("socketTimeout", Integer.toString(socketTimeoutSeconds));
         properties.setProperty("tcpKeepAlive", "true");
         properties.setProperty("ApplicationName", "MINOS");
-        return DriverManager.getConnection(url, properties);
-    }
-
-    private boolean usable(Connection connection) {
-        try {
-            return connection != null
-                    && !connection.isClosed()
-                    && connection.isValid(Math.min(connectTimeoutSeconds, VALIDATION_TIMEOUT_SECONDS));
-        } catch (SQLException | RuntimeException exception) {
-            return false;
-        }
+        return connectionSource.connect(url, properties);
     }
 
     private void closePooledPhysical(Connection connection) {
@@ -525,13 +616,41 @@ public final class PostgresConnectionFactory implements AutoCloseable {
     }
 
     private static final class LeaseContext {
+        /** What the caller's work receives: the tracking handle of a pooled connection, or a dedicated session. */
         private final Connection connection;
+        /** The driver connection the pool itself drives. */
+        private final Connection raw;
+        /** Null when the lease is a bound dedicated session, which the query pool does not own. */
+        private final PooledConnection pooled;
+        private final PooledConnection.LeaseActivity activity;
         private boolean reusable = true;
         private int transactionDepth;
         private boolean rollbackOnly;
 
-        private LeaseContext(Connection connection) {
+        private LeaseContext(
+                Connection connection, Connection raw, PooledConnection pooled, PooledConnection.LeaseActivity activity
+        ) {
             this.connection = connection;
+            this.raw = raw;
+            this.pooled = pooled;
+            this.activity = activity;
+        }
+
+        private static LeaseContext pooled(PooledConnection pooled) {
+            PooledConnection.LeaseActivity activity = new PooledConnection.LeaseActivity();
+            return new LeaseContext(pooled.lease(activity), pooled.raw(), pooled, activity);
+        }
+
+        private static LeaseContext dedicated(Connection session) {
+            return new LeaseContext(session, session, null, new PooledConnection.LeaseActivity());
+        }
+
+        /**
+         * A connection loss may be answered by one replay only when the connection came from rest without
+         * validation and the call did nothing yet that a replay could repeat.
+         */
+        private boolean replayable(SQLException failure) {
+            return pooled.leasedWithoutValidation() && isConnectionFailure(failure) && activity.replayAllowed();
         }
     }
 
