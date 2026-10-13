@@ -83,7 +83,7 @@ Branche locale `proto/lecture-du-registre-sous-verrou-partage` (67 lignes ajout�
 
 ## Decisions
 
-### D1. Tenir la lecture seule, ou cesser de l'annoncer — **décision du propriétaire, en attente**
+### D1. Tenir la lecture seule, ou cesser de l'annoncer — **décidé par le propriétaire le 2026-10-13 : option A**
 
 **Option A (recommandée) — lecture sous bail partagé.**
 
@@ -111,7 +111,7 @@ Un écrivain (`acquire`, exclusif) attend la fin des lecteurs et réciproquement
 
 L'ouverture en lecture reste dans `BoundedFileLease`, seule primitive autorisée à ouvrir un canal de verrou (`check-private-io.py`). Aucun type nouveau n'est exporté : `InterProcessLocalProjectRegistry` choisit `acquireShared` pour ses six lectures et garde `acquire` pour ses cinq mutations.
 
-### D3. Fichier de verrou absent : le lecteur ne le crée pas (option A) — **à confirmer**
+### D3. Fichier de verrou absent : le lecteur ne le crée pas (option A) — **mis en œuvre selon la recommandation, à confirmer en revue**
 
 Un lecteur ne crée jamais le fichier de verrou. S'il est absent, aucun écrivain n'a jamais tenu le bail sur ce registre (toute mutation le crée d'abord) : le lecteur ne prend que le verrou JVM. La seule course possible est avec la **première** mutation du registre, qui publie un fichier unique de façon atomique : le lecteur voit le registre vide ou le projet complet.
 
@@ -119,7 +119,7 @@ Alternative : refuser la lecture tant que le verrou n'existe pas (« registre no
 
 ### D4. Une lecture ne migre pas (LS-03, option A)
 
-Sous un bail partagé, une lecture qui rencontre une entrée héritée la **résout en mémoire** et la rend ; elle ne copie ni ne remplace rien. La migration sur disque est faite par la prochaine opération qui tient le bail exclusif (toute mutation du registre). La sortie des lectures est inchangée. Conséquence acceptée : sur une installation jamais réécrite depuis la migration, l'entrée reste au format hérité jusqu'à la prochaine commande d'administration.
+Sous un bail partagé, une lecture qui rencontre une entrée héritée la **résout en mémoire** et la rend ; elle ne copie ni ne remplace rien (`LocalProjectRegistry.readingWithoutMigration`, appelée par les seules lectures de `InterProcessLocalProjectRegistry` ; le registre utilisé seul garde sa migration à la lecture). La migration sur disque est faite par la prochaine opération qui tient le bail exclusif (toute mutation du registre). La sortie des lectures est inchangée. Conséquence acceptée : sur une installation jamais réécrite depuis la migration, l'entrée reste au format hérité jusqu'à la prochaine commande d'administration.
 
 ### D5. Observations runtime : même bail partagé (LS-02, option A)
 
@@ -128,6 +128,15 @@ Sous un bail partagé, une lecture qui rencontre une entrée héritée la **rés
 ### D6. La qualification prouve le montage, pas seulement l'image (LS-04)
 
 `scripts/ci/qualify-docker-release.sh` : l'index est préparé dans un volume nommé par des conteneurs en écriture (rôle de `minos-admin`), le conteneur MCP monte ce volume `readonly`, une **sonde d'écriture doit échouer** (sinon la requête ne prouverait rien), puis la poignée de main et `minos_find_symbols`. Deux tests de contrat de `minos-app` fixent ces littéraux. Tant que le correctif n'est pas livré, cette qualification est **rouge** : sa modification et le correctif vont dans la même PR. En option B, D6 est remplacée par une qualification qui monte les données comme le compose corrigé.
+
+## Constats à l'implémentation (2026-10-13)
+
+- **Un seul chemin d'acquisition.** `acquire` et `acquireShared` délèguent à une même méthode privée ; seuls diffèrent l'ouverture du canal (`openPrivateLockChannel` ou `openExistingLockChannel`) et le mode du verrou. L'appel exclusif reste `channel.tryLock()`, littéral exigé par `check-mnd.py`.
+- **LS-02 reproduit avant correction** : `FileRuntimeObservationStoreTest.readsAnswerOnAWriteProtectedStoreAndLeaveItUntouched` → `AccessDenied …\.lock` sous Windows.
+- **LS-03 reproduit avant correction** : la lecture d'une entrée héritée tente la copie `.m29-v1.bak` → `AccessDenied` sous Windows.
+- **Runs d'index hérités (`FileIndexStateStore.findRun`) : aucune modification.** L'ouverture du store migre tous les runs hérités (`migrateLegacyRuns`, appelée par le constructeur) et échoue si elle ne le peut pas ; après une ouverture réussie, il ne reste donc aucun fichier hérité lisible que `findRun` aurait à migrer (un fichier corrompu est ignoré avant toute écriture). Sur un montage en lecture seule, soit il n'y a rien à migrer, soit le serveur ne démarre pas — refus de démarrage, hors périmètre, documenté. La ligne correspondante du tableau « Autres écritures » ne décrit donc pas une écriture atteignable par un outil.
+- **Exclusion entre processus prouvée** par `BoundedFileLeaseSharedProcessTest` (seconde JVM pilotée par ses flux, sans attente temporisée) : lecteur exclu par un écrivain, écrivain exclu par un lecteur, deux lecteurs compatibles ; 150 exécutions sur 150 sous Windows et sous Linux (3 tests × 50).
+- **Test AUD-C02 renforcé** : `MinosMcpReadOnlyHomeTest` protège désormais le répertoire en écriture pendant les appels et compare l'état de `WriteProtectedTree`.
 
 ## Direction des dépendances
 
