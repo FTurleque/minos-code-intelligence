@@ -24,7 +24,9 @@
     <build>
         <plugins>
             <plugin>
-                <!-- Q13: test support shared by the tests of the other modules (com.minos.testsupport: LogCapture, WriteProtectedTree, UnreadableDirectory, DerivedTenantKeys), published as a test-jar so the production jar carries none of it -->
+                <!-- Q13: test support shared by the tests of the other modules (com.minos.testsupport:
+                     LogCapture, WriteProtectedTree, UnreadableDirectory, DerivedTenantKeys), published as a
+                     test-jar so the production jar carries none of it -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>${maven.jar.plugin.version}</version>
