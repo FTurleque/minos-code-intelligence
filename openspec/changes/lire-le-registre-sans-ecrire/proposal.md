@@ -30,7 +30,7 @@ Deux options, **à trancher par le propriétaire** (D1 de `design.md`). Les spé
 
 - `surfaces-publiques` : exigence ajoutée — tout outil MCP répond sur un répertoire de données qu'il ne peut pas écrire.
 - `stockage-prive-et-secrets` : exigences ajoutées — une lecture du registre et des observations runtime n'écrit rien ; elle reste exclue par un écrivain ; un fichier de verrou non conforme est refusé à la lecture, jamais réparé.
-- `distribution-docker` (capacité créée par `separer-l-image-de-requete`, non encore archivée) : exigence ajoutée — la qualification interroge le plan de requête sur des données en lecture seule.
+- `distribution-docker` (capacité créée par `separer-l-image-de-requete`, archivé le 2026-10-13) : exigence ajoutée — la qualification interroge le plan de requête sur des données en lecture seule.
 
 ## Hors périmètre
 
@@ -47,4 +47,4 @@ Deux options, **à trancher par le propriétaire** (D1 de `design.md`). Les spé
 - **ADR** : aucun nouvel ADR en option A (elle met en œuvre l'ADR 0017) ; « Mise en œuvre » de l'ADR 0021 complétée. L'option B **amende** l'ADR 0021 (le mode Docker n'est plus « read-only » pour les données).
 - **Gates à rejouer** : `python scripts/remediation/check-private-io.py` (aucune ouverture de fichier hors des primitives ; le nouveau mode d'ouverture reste dans `BoundedFileLease`), gates littéraux qui citent `BoundedFileLease`, `openPrivateLockChannel`, `withLock` ou `InterProcessLocalProjectRegistry` (recherche dans `scripts/` avant modification), tests `M29Docker*`, gate « Provider-complete image exact-head ».
 - **Plateformes** : Linux (cible du montage en lecture seule) et Windows (lecture sans droit d'écriture).
-- **Dépendance** : la modification de `scripts/ci/qualify-docker-release.sh` s'appuie sur la version de la PR #441 ; ce changement se fusionne après elle.
+- **Dépendance** : la modification de `scripts/ci/qualify-docker-release.sh` s'appuie sur la version de la PR #441, fusionnée dans `develop` le 2026-10-13.
