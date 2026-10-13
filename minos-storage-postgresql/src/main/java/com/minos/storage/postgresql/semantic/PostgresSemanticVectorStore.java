@@ -34,6 +34,16 @@ public final class PostgresSemanticVectorStore implements SemanticVectorStore {
     }
 
     @Override
+    public Optional<IndexDocuments> documents(String projectId) throws IOException {
+        UUID id = uuid(projectId);
+        try {
+            return connections.withConnection(connection -> PostgresSemanticReadQueries.documents(connection, projectId, id));
+        } catch (SQLException exception) {
+            throw new IOException("unable to load pgvector semantic documents", exception);
+        }
+    }
+
+    @Override
     public Optional<IndexSnapshot> load(String projectId) throws IOException {
         UUID id = uuid(projectId);
         try {

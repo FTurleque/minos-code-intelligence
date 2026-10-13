@@ -108,6 +108,23 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
     }
 
     @Test
+    void theActiveSnapshotIdIsReadWithoutLoadingTheSnapshot() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
+        CodeKnowledgeSnapshot first = snapshot(projectId, "snap-1", symbol(projectId, "sym-a"));
+        CodeKnowledgeSnapshot second = snapshot(projectId, "snap-2", symbol(projectId, "sym-b"));
+
+        assertTrue(store.activeSnapshotId(projectId).isEmpty());
+        store.publish(projectId, "snap-1", first.symbols(), first.occurrences(), first.relationships());
+        assertEquals(Optional.of("snap-1"), store.activeSnapshotId(projectId));
+        store.publish(projectId, "snap-2", second.symbols(), second.occurrences(), second.relationships());
+
+        assertEquals(Optional.of("snap-2"), store.activeSnapshotId(projectId));
+        assertEquals(store.loadActiveKnowledge(projectId).map(CodeKnowledgeSnapshot::snapshotId),
+                store.activeSnapshotId(projectId));
+    }
+
+    @Test
     void detectsChecksumMismatchBeforeDeserializing() throws Exception {
         UUID projectId = UUID.randomUUID();
         PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);

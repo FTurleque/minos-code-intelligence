@@ -3,6 +3,7 @@ package com.minos.storage.postgresql.semantic;
 import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
+import com.minos.semantic.SemanticVectorStore.IndexDocuments;
 import com.minos.semantic.SemanticVectorStore.IndexMetadata;
 import com.minos.semantic.SemanticVectorStore.IndexSnapshot;
 import com.minos.semantic.SemanticVectorStore.IndexedDocument;
@@ -49,6 +50,38 @@ final class PostgresSemanticReadQueries {
                 }
                 return Optional.of(new IndexMetadata(projectId, result.getString(1), result.getString(2),
                         result.getString(3), result.getInt(4), result.getLong(5), (int) count));
+            }
+        }
+    }
+
+    /**
+     * Metadata and documents of the index in one statement, without the embedding column: the vectors are
+     * neither transferred nor parsed.
+     */
+    static Optional<IndexDocuments> documents(Connection connection, String projectId, UUID id) throws SQLException {
+        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
+                + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
+                + "d.content,d.checksum FROM semantic_index_meta m "
+                + "LEFT JOIN semantic_documents d ON d.project_id=m.project_id AND d.snapshot_id=m.snapshot_id "
+                + "WHERE m.project_id=? ORDER BY d.stable_key";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setObject(1, id);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) return Optional.empty();
+                String snapshotId = result.getString(1);
+                String providerId = result.getString(2);
+                String modelId = result.getString(3);
+                int dimensions = result.getInt(4);
+                long builtAt = result.getLong(5);
+                List<SemanticDocument> documents = new ArrayList<>();
+                do {
+                    if (result.getString(6) == null) continue;
+                    documents.add(document(projectId, result, 6));
+                } while (result.next());
+                return Optional.of(new IndexDocuments(
+                        new IndexMetadata(projectId, snapshotId, providerId, modelId, dimensions, builtAt,
+                                documents.size()),
+                        documents));
             }
         }
     }

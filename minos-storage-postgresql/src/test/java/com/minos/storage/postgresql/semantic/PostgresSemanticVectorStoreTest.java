@@ -37,6 +37,23 @@ class PostgresSemanticVectorStoreTest extends PostgresTestSupport {
     }
 
     @Test
+    void documentsAreReadWithTheMetadataOfTheirIndexAndWithoutVectors() throws Exception {
+        String projectId = UUID.randomUUID().toString();
+        PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);
+        assertTrue(store.documents(projectId).isEmpty());
+        SemanticVectorStore.IndexSnapshot snapshot = indexSnapshot(projectId, "snap-1",
+                indexed("doc-b", 0.0, 1.0, 0.0), indexed("doc-a", 1.0, 0.0, 0.0));
+        store.replace(snapshot);
+
+        SemanticVectorStore.IndexDocuments read = store.documents(projectId).orElseThrow();
+
+        assertEquals(store.metadata(projectId).orElseThrow(), read.metadata());
+        assertEquals(List.of("doc-a", "doc-b"), read.documents().stream().map(SemanticDocument::stableKey).toList());
+        assertEquals(store.load(projectId).orElseThrow().documents().stream()
+                .map(SemanticVectorStore.IndexedDocument::document).toList(), read.documents());
+    }
+
+    @Test
     void searchRanksByCosineSimilarity() throws Exception {
         String projectId = UUID.randomUUID().toString();
         PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);
