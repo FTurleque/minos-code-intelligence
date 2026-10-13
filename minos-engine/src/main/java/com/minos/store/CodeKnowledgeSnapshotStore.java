@@ -27,4 +27,13 @@ public interface CodeKnowledgeSnapshotStore {
     Optional<CodeKnowledgeSnapshot> loadActiveKnowledge(UUID projectId) throws IOException;
 
     Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) throws IOException;
+
+    /**
+     * Identifier of the active snapshot, for callers that need nothing else. The default loads the
+     * snapshot; a store that keeps an active pointer answers from it without reading or decoding the
+     * snapshot.
+     */
+    default Optional<String> activeSnapshotId(UUID projectId) throws IOException {
+        return loadActiveKnowledge(projectId).map(CodeKnowledgeSnapshot::snapshotId);
+    }
 }

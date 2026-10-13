@@ -23,6 +23,9 @@ import java.util.UUID;
 /** Maintains an optional reconstructible semantic index aligned with the active MINOS snapshot. */
 public final class SemanticIndexService {
 
+    /** {@code indexSizeBytes} of a status built for the query path: the size was not computed. */
+    public static final long SIZE_NOT_COMPUTED = -1L;
+
     public static final int MAX_DOCUMENTS = SemanticIndexBudget.DEFAULT.maxDocuments();
     private static final long MAX_SYNCHRONIZE_WORKING_SET_BYTES = 768L * 1024L * 1024L;
     private static final long INDEX_OBJECT_OVERHEAD_BYTES = 512L;
@@ -51,40 +54,50 @@ public final class SemanticIndexService {
     public Optional<EmbeddingProvider> embeddingProvider() { return embeddingProvider; }
     public SemanticVectorStore vectorStore() { return store; }
 
-    public Status status(String projectReference) throws IOException { return status(projects.resolve(projectReference)); }
-    public Status status(UUID projectId) throws IOException { return status(projects.resolveById(projectId)); }
+    public Status status(String projectReference) throws IOException { return status(projects.resolve(projectReference), true); }
+    public Status status(UUID projectId) throws IOException { return status(projects.resolveById(projectId), true); }
+
+    /**
+     * State and identity of the index for the query path: the active snapshot is identified without being
+     * loaded and the index size is not computed: {@code indexSizeBytes} is {@link #SIZE_NOT_COMPUTED},
+     * never a size. Not an index status to surface: {@link #status(String)} reports the size.
+     */
+    public Status statusWithoutSize(String projectReference) throws IOException {
+        return status(projects.resolve(projectReference), false);
+    }
     public UpdateReport synchronize(String projectReference) throws IOException { return synchronize(projects.resolve(projectReference)); }
     public UpdateReport synchronize(UUID projectId) throws IOException { return synchronize(projects.resolveById(projectId)); }
 
     public Optional<SemanticVectorStore.IndexSnapshot> activeIndex(String projectReference) throws IOException {
         RegisteredProject project = projects.resolve(projectReference);
-        Status status = status(project);
+        Status status = status(project, false);
         if (status.state() != State.READY) return Optional.empty();
         return store.load(project.id().toString());
     }
 
-    private Status status(RegisteredProject project) throws IOException {
+    private Status status(RegisteredProject project, boolean withSize) throws IOException {
         String projectId = project.id().toString();
-        Optional<CodeKnowledgeSnapshot> active = snapshots.loadActiveKnowledge(project.id());
+        Optional<String> active = snapshots.activeSnapshotId(project.id());
         Optional<SemanticVectorStore.IndexMetadata> stored = store.metadata(projectId);
         if (embeddingProvider.isEmpty()) {
             return new Status(projectId, project.displayName(), State.DISABLED,
-                    active.map(CodeKnowledgeSnapshot::snapshotId).orElse(null),
+                    active.orElse(null),
                     stored.map(SemanticVectorStore.IndexMetadata::snapshotId).orElse(null),
                     null, null, 0, stored.map(SemanticVectorStore.IndexMetadata::documentCount).orElse(0),
-                    sizeBytes(projectId), List.of("SEMANTIC_EMBEDDING_PROVIDER_UNAVAILABLE"));
+                    sizeBytes(projectId, withSize), List.of("SEMANTIC_EMBEDDING_PROVIDER_UNAVAILABLE"));
         }
         EmbeddingProvider provider = embeddingProvider.orElseThrow();
         if (active.isEmpty()) {
             return new Status(projectId, project.displayName(), State.NO_ACTIVE_SNAPSHOT,
                     null, stored.map(SemanticVectorStore.IndexMetadata::snapshotId).orElse(null),
                     provider.id(), provider.modelId(), provider.dimensions(),
-                    stored.map(SemanticVectorStore.IndexMetadata::documentCount).orElse(0), sizeBytes(projectId),
+                    stored.map(SemanticVectorStore.IndexMetadata::documentCount).orElse(0),
+                    sizeBytes(projectId, withSize),
                     appendProviderLimitations(List.of("ACTIVE_KNOWLEDGE_SNAPSHOT_UNAVAILABLE"), provider));
         }
         if (stored.isEmpty()) {
             return new Status(projectId, project.displayName(), State.MISSING,
-                    active.orElseThrow().snapshotId(), null, provider.id(), provider.modelId(),
+                    active.orElseThrow(), null, provider.id(), provider.modelId(),
                     provider.dimensions(), 0, 0L,
                     appendProviderLimitations(List.of("SEMANTIC_INDEX_MISSING"), provider));
         }
@@ -92,15 +105,15 @@ public final class SemanticIndexService {
         boolean modelAligned = provider.id().equals(index.providerId())
                 && provider.modelId().equals(index.modelId())
                 && provider.dimensions() == index.dimensions();
-        boolean snapshotAligned = active.orElseThrow().snapshotId().equals(index.snapshotId());
+        boolean snapshotAligned = active.orElseThrow().equals(index.snapshotId());
         State state = modelAligned && snapshotAligned ? State.READY : State.STALE;
         List<String> limitations = new ArrayList<>();
         if (!snapshotAligned) limitations.add("SEMANTIC_INDEX_SNAPSHOT_STALE");
         if (!modelAligned) limitations.add("SEMANTIC_INDEX_MODEL_STALE");
         limitations.addAll(providerLimitations(provider));
         return new Status(projectId, project.displayName(), state,
-                active.orElseThrow().snapshotId(), index.snapshotId(), provider.id(), provider.modelId(),
-                provider.dimensions(), index.documentCount(), sizeBytes(projectId), limitations);
+                active.orElseThrow(), index.snapshotId(), provider.id(), provider.modelId(),
+                provider.dimensions(), index.documentCount(), sizeBytes(projectId, withSize), limitations);
     }
 
     private UpdateReport synchronize(RegisteredProject project) throws IOException {
@@ -170,7 +183,7 @@ public final class SemanticIndexService {
                 System.currentTimeMillis(), indexed);
         final String capturedSnapshotId = active.snapshotId();
         store.replaceConditionally(next, capturedSnapshotId,
-                () -> snapshots.loadActiveKnowledge(project.id()).map(CodeKnowledgeSnapshot::snapshotId));
+                () -> snapshots.activeSnapshotId(project.id()));
         long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
         List<String> limitations = new ArrayList<>(providerLimitations(provider));
         if (reusableMetadata && !reuseFitsWorkingSet) {
@@ -182,6 +195,10 @@ public final class SemanticIndexService {
     }
 
     private long sizeBytes(String projectId) throws IOException { return store.sizeBytes(projectId); }
+
+    private long sizeBytes(String projectId, boolean computed) throws IOException {
+        return computed ? sizeBytes(projectId) : SIZE_NOT_COMPUTED;
+    }
 
     private static long estimateWorkingSet(List<SemanticDocument> documents, int dimensions) throws IOException {
         long bytes = 64L * 1024L * 1024L;

@@ -38,7 +38,7 @@ public final class SemanticSearchService {
         SemanticVector queryVector = null;
         SemanticIndexService.Status latest = null;
         for (int attempt = 1; attempt <= MAX_SNAPSHOT_READ_ATTEMPTS; attempt++) {
-            SemanticIndexService.Status before = indexService.status(projectReference);
+            SemanticIndexService.Status before = indexService.statusWithoutSize(projectReference);
             latest = before;
             if (before.state() != SemanticIndexService.State.READY) {
                 return unavailable(before, request, started, "SEMANTIC_SEARCH_REQUIRES_READY_INDEX");
@@ -50,7 +50,7 @@ public final class SemanticSearchService {
                     before.projectId(), queryVector, request.limit(), request.minimumScore());
             boolean hitsAligned = raw.stream().allMatch(hit ->
                     Objects.equals(before.activeSnapshotId(), hit.document().snapshotId()));
-            SemanticIndexService.Status after = indexService.status(projectReference);
+            SemanticIndexService.Status after = indexService.statusWithoutSize(projectReference);
             latest = after;
             boolean statusAligned = after.state() == SemanticIndexService.State.READY
                     && Objects.equals(before.activeSnapshotId(), after.activeSnapshotId())

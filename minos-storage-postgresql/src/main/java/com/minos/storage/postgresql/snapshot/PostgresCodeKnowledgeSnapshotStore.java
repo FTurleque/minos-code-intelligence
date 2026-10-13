@@ -340,6 +340,13 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         }
     }
 
+    /** Read from the active pointer row alone: no payload is fetched or decoded. */
+    @Override
+    public Optional<String> activeSnapshotId(UUID projectId) throws IOException {
+        Objects.requireNonNull(projectId, "projectId");
+        return activeMetadata(projectId).map(ActiveMetadata::snapshotId);
+    }
+
     private Optional<ActiveMetadata> activeMetadata(UUID projectId) throws IOException {
         try {
             return connections.withConnection(connection -> {

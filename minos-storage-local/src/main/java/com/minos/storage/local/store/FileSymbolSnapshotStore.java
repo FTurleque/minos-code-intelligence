@@ -184,6 +184,13 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         }
     }
 
+    /** Read from the active pointer alone: the snapshot file is neither opened nor decoded. */
+    @Override
+    public Optional<String> activeSnapshotId(UUID projectId) throws IOException {
+        Objects.requireNonNull(projectId, "projectId");
+        return activeSnapshotRepository.read(projectId).map(SnapshotDescriptor::snapshotId);
+    }
+
     private QueryResolution resolveActiveQueryView(UUID projectId) throws IOException {
         Optional<SnapshotDescriptor> active = activeSnapshotRepository.read(projectId);
         if (active.isEmpty()) return QueryResolution.complete(Optional.empty());

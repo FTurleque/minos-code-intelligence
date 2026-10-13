@@ -36,6 +36,11 @@ public final class ProjectMutationSemanticVectorStore implements SemanticVectorS
     }
 
     @Override
+    public Optional<IndexDocuments> documents(String projectId) throws IOException {
+        return delegate.documents(projectId);
+    }
+
+    @Override
     public String searchEngine() {
         return delegate.searchEngine();
     }
