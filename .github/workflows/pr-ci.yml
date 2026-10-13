@@ -20,9 +20,15 @@ jobs:
     name: Dependency vulnerability gate
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@8ac9e5ce44cc7178e0e04229a91bdcc003166e57 # v2.3.8
     with:
+      # The scanner recognises an npm lockfile by its file name (package-lock.json). The two lockfiles shipped
+      # with the product are prefixed with the name of their tool, so --recursive does not see them: each is
+      # passed explicitly, parsed as a package-lock.json (AUD-DEP-03). scripts/quality/check-ci-wiring.py fails
+      # when a lockfile under a src/main/resources directory is missing from this list.
       scan-args: |-
         --recursive
         --experimental-exclude=g:**/fixtures/**
+        --lockfile=package-lock.json:minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/scip-python-package-lock.json
+        --lockfile=package-lock.json:minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/scip-typescript-package-lock.json
         ./
       fail-on-vuln: true
     permissions:
@@ -100,6 +106,13 @@ jobs:
         run: |
           python scripts/quality/test_check_tools_manifest.py -v
           python scripts/release/test_build_embedded_tools.py -v
+
+      # The watch itself queries an advisory service and runs on a schedule (embedded-tools-advisories.yml):
+      # an advisory published during the week must not fail an unrelated pull request. Only its self-test,
+      # which uses simulated answers and no network, runs here; it also proves that the tables of the script
+      # know every entry of the catalogue and every jar of the classpath lock.
+      - name: Embedded tools advisory watch self-test (simulated answers, no network)
+        run: python scripts/quality/check-embedded-tools-advisories.py --self-test
 
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
