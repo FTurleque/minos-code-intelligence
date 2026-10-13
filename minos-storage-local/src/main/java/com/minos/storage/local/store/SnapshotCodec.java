@@ -19,6 +19,16 @@ public interface SnapshotCodec {
     CodeKnowledgeSnapshot read(Path file) throws IOException;
 
     /**
+     * Reads {@code file} and refuses it unless its SHA-256 is {@code expectedSha256}. Nothing decoded from
+     * content that fails the check is ever returned. The default hashes the file, then reads it; a codec
+     * may do both in one pass.
+     */
+    default CodeKnowledgeSnapshot readVerified(Path file, String expectedSha256) throws IOException {
+        new SnapshotIntegrityService().verifyChecksum(file, expectedSha256);
+        return read(file);
+    }
+
+    /**
      * Exact number of bytes {@link #write} produces for {@code snapshot}, computed without writing: the
      * writer's own traversal runs against a byte counter.
      */

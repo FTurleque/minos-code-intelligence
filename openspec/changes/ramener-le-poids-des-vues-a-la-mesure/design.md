@@ -15,6 +15,27 @@ Sprint 4 de l'audit du 10 octobre 2026 : **AUD-PERF-03**. HEAD analysé : `2d1cc
 
 **Non mesuré pendant cette analyse** : aucune durée ni aucun tas (aucun build ni benchmark lancé). Le rapport 1,4 est une mesure de septembre, sur le format V3 et sur ce dépôt.
 
+### Mesure faite à l'implémentation (2026-10-13) — le rapport « 1,4 » ne vaut pas pour le format V3
+
+Le rapport 1,4 repris de l'audit a été mesuré **avant** le format V3, sur une tranche du corpus en V2 (`docs/audit/archive/2026-09/ARCHI-SUIVI.md:864` : 76,1 Mo persistés, 106,4 Mo de tas). Le format V3 a réduit le fichier de 45 % sans changer le tas (même document, `:1152`). En V3, le rapport tas retenu / taille persistée est donc bien plus élevé :
+
+| Source | Persisté (V3) | Tas retenu par la vue | Rapport |
+|---|---:|---:|---:|
+| Mesure archivée, ce dépôt entier (`ARCHI-SUIVI.md:1150`) | 194,6 Mo | 494,7 Mo | 2,54 |
+| Mesure archivée, tranche `file-f0.50` (`:1147`) | 93,3 Mo | 237,9 Mo | 2,55 |
+| `QueryViewWeightTest`, corpus synthétique ASCII | 14,98 Mo | 45,69 Mo | 3,05 |
+| idem, Latin-1 | 14,83 Mo | 45,39 Mo | 3,06 |
+| idem, CJK | 14,77 Mo | 48,98 Mo | 3,32 |
+| idem, mixte | 14,86 Mo | 47,07 Mo | 3,17 |
+
+Conséquences :
+
+- Un facteur de 1,5 **sous-pèserait** la vue d'un facteur 2 : le cache retiendrait le double de son plafond. La décision D1 (« un test échoue si l'estimation est inférieure au tas mesuré ») l'interdit, à raison.
+- Le facteur sûr pour V3 est de l'ordre de 3,5 à 4. Le seuil d'admission passe alors de 64 Mio à 128–146 Mio persistés : un gain réel, mais **le snapshot de ce dépôt (185,5 Mio persistés, environ 472 Mio de tas) reste hors cache** sous le plafond de 512 Mio. L'exigence « Un snapshot de la taille de ce dépôt est admis au cache » n'est pas atteignable par le seul facteur.
+- Ce qui la rendrait atteignable est l'option A de l'ADR 0047 (dédoublonnage des chaînes au décodage, tas attendu environ 2,5 fois moindre) : l'ordre annoncé par l'ADR (« d'abord le poids, ensuite l'option A ») ne produit donc pas l'effet promis pour les gros projets.
+
+**Décision du propriétaire (2026-10-13)** : dédoublonner d'abord (option A de l'ADR 0047), puis fixer le facteur. Résultat mesuré par `QueryViewWeightTest` après dédoublonnage : tas retenu de 21,0 à 21,6 Mo pour 14,8 à 15,0 Mo persistés, soit 1,41 à 1,46. Le facteur retenu est **2**, entier et commun à tous les formats : il laisse une marge sur la mesure et borne aussi une chaîne de caractères à deux octets, qui occupe au plus le double de sa taille UTF-8. Écart avec D1 : pas de facteur rationnel ni de facteur par format (V1 et V2, en UTF-16, ont un fichier plus gros pour le même tas : le facteur 2 y est plus prudent encore). Non mesuré : le corpus réel, le temps de décodage et le pic de tas pendant le décodage.
+
 ### Écarts avec l'action proposée par l'audit
 
 1. **« Poids calculé depuis les compteurs seuls » casse un gate.** `check-mne.py:85-88` exige les chaînes `QUERY_VIEW_PERSISTED_AMPLIFICATION`, `Files.size(snapshot)`, `safeMultiply` et `estimateWeight(metadata, payloadBytes)`. La constante est conservée ; seule sa valeur change, et le gate est mis à jour s'il fige la valeur.
@@ -36,7 +57,7 @@ Sprint 4 de l'audit du 10 octobre 2026 : **AUD-PERF-03**. HEAD analysé : `2d1cc
 
 Le facteur devient un couple numérateur/dénominateur. Sa valeur est fixée par un test qui construit une vue depuis un snapshot réel et compare l'estimation au tas retenu (même méthode que `HybridCorpusWeightTest`), avec une marge. Un format sans mesure garde le facteur 8. Le test échoue si l'estimation est **inférieure** au tas mesuré : le cache ne doit jamais sous-peser.
 
-### D2. Parcours unique sous le store fichier — **décision en attente du propriétaire**
+### D2. Parcours unique sous le store fichier — **retenu par le propriétaire le 2026-10-13 (option A)**
 
 Option A (recommandée) : décoder au travers d'un flux qui calcule l'empreinte, vider le flux jusqu'à sa fin, comparer, puis publier. Toute exception de décodage est **requalifiée** après comparaison : si l'empreinte diffère, l'erreur rendue est celle d'intégrité, comme aujourd'hui. Gain : un parcours au lieu de deux sur le chemin le plus fréquent.
 
