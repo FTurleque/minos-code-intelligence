@@ -34,7 +34,7 @@ foreach ($Required in @($BuildDistribution, $BuildInstaller, $McpProbe)) {
 
 $Java = if (-not [string]::IsNullOrWhiteSpace($env:JAVA_HOME)) { Join-Path $env:JAVA_HOME 'bin\java.exe' } else { '' }
 if ([string]::IsNullOrWhiteSpace($Java) -or -not (Test-Path -LiteralPath $Java -PathType Leaf)) {
-    throw 'JAVA_HOME must point to a JDK 24 installation before building the Windows candidate.'
+    throw 'JAVA_HOME must point to a JDK 25 installation before building the Windows candidate.'
 }
 $Python = @('python.exe','python','python3.exe','python3') |
     ForEach-Object { Get-Command $_ -ErrorAction SilentlyContinue } |

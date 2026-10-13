@@ -8,7 +8,7 @@ description: Diagnostiquer un incident d'exploitation ou d'installation de MINOS
 Principe : MINOS dit déjà pourquoi. Lire ses diagnostics, ne pas deviner ; ne rien modifier avant d'avoir un symptôme reproduit ou une preuve.
 
 ## 1. Collecter (lecture seule)
-- Version et plateforme : `minos --version`, OS, JDK (Java 24 requis pour le noyau).
+- Version et plateforme : `minos --version`, OS, JDK (Java 25 requis pour le noyau).
 - `minos doctor --format json` (diagnostics par provider et par sandbox ; un préfixe `machine prerequisite (not shipped by MINOS)` désigne une dépendance externe du poste) et `minos tools verify`.
 - État d'un projet : `minos index-status <projet>`.
 - Journaux : le serveur MCP STDIO écrit sur **stderr** (capturé par le client MCP) ; stdout est réservé au protocole. Plugin IntelliJ : `idea.log`.

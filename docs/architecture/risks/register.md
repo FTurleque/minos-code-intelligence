@@ -39,6 +39,7 @@ Réaudit complémentaire **30 août 2026** : les 17 issues Sonar signalées sur 
 | R-18 | Egress réseau d'un descendant repository-controlled dans un provider | Résolu par **PR #227** : aucun `ALLOW` implicite ; `networkPolicy()` reste `DENY` par défaut. |
 | R-19 | Résolution d'exécutable influencée par le CWD via PATH relatif/vide | Résolu par **PR #227**. |
 | R-21 | Exécutable d'autorité sandbox substituable via PATH absolu | Résolu par **PR #228** : commandes d'autorité Linux root-owned depuis racines système ; PowerShell/cmd ancrés à System32 ; `ComSpec` refusé. |
+| R-26 | Runtime Java hors support : tous les livrables tournaient sur le JDK 24, sans correctif depuis juillet 2025 (AUD-DEP-01) | Résolu par la migration vers Java 25 LTS (ADR 0059) : `maven.compiler.release` 25, enforcer `[25,26)`, images `eclipse-temurin:25`, gate `check-toolchain-baseline.py` ; la politique de toolchain date la fin de support (septembre 2031) et ouvre le changement suivant douze mois avant. |
 | R-22 | Contrat hostile réutilisé par erreur pour le provider local | Résolu par **PR #228** : qualification managed-local distincte et sélecteur distant hostile inchangé. |
 
 ## Dette technique active

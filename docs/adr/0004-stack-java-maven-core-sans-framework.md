@@ -132,3 +132,7 @@ Cette ADR reste l'historique de la décision de stack prise à la clôture de C0
 Pendant M0, la décision explicite d'aligner MINOS sur le JDK déjà utilisé dans l'environnement de développement a conduit à **ADR-0005**, qui remplace uniquement la cible Java 25 par **Java 24**.
 
 La stack courante doit être lue conjointement avec ADR-0005.
+
+## Mise en œuvre — note du 2026-10-13
+
+La baseline du produit est passée de Java 24 à **Java 25 LTS** ([ADR 0059](0059-migrer-le-socle-vers-java-25-lts.md)). La cible Java 25 retenue à l'origine par cette décision, puis remplacée par l'ADR-0005, est donc rétablie ; le reste de la décision (Maven, aucun framework serveur dans le cœur) est inchangé.

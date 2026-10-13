@@ -69,3 +69,7 @@ Rejeté comme cible produit : Java 24 reste la toolchain de développement MINOS
 - architecture d'indexation : [`../developer/indexing-and-storage.md`](../developer/indexing-and-storage.md)
 - MCP : [`../user/mcp.md`](../user/mcp.md)
 - issue : #42
+
+## Mise en œuvre — note du 2026-10-13
+
+La baseline du produit est passée de Java 24 à **Java 25 LTS** ([ADR 0059](0059-migrer-le-socle-vers-java-25-lts.md)). La décision est inchangée : la distribution utilisateur embarque son runtime, désormais produit par le JDK 25.

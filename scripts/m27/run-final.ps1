@@ -65,7 +65,7 @@ try {
         if (-not (Get-Command $CommandName -ErrorAction SilentlyContinue)) { throw "M27 requires $CommandName in PATH." }
     }
     $JavaVersion = (& java -version 2>&1 | Select-Object -First 1 | Out-String).Trim()
-    if ($JavaVersion -notmatch '"24(?:\.|"|$)') { throw "M27 requires Java 24; got: $JavaVersion" }
+    if ($JavaVersion -notmatch '"25(?:\.|"|$)') { throw "M27 requires Java 25; got: $JavaVersion" }
     Write-Host "HEAD: $Head"
     Write-Host "Java: $JavaVersion"
 
@@ -74,7 +74,7 @@ try {
     Invoke-PythonGate $Python 'scripts\docs\check-current-docs.py' 'Current documentation consistency failed'
     Invoke-PythonGate $Python 'scripts\quality\check-runtime-dynamic-consistency.py' 'M26 regression gate failed'
 
-    Write-Host '[2/7] Full Java 24 Maven reactor...'
+    Write-Host '[2/7] Full Java 25 Maven reactor...'
     Invoke-SemanticDisabled {
         & .\mvnw.cmd clean verify
         if ($LASTEXITCODE -ne 0) { throw "M27 Maven reactor failed (exit=$LASTEXITCODE)" }

@@ -52,7 +52,7 @@ java.lang.NoClassDefFoundError: org/w3c/dom/Node
 
 ```text
 fat JAR exact
-→ JDK 24 jdeps --print-module-deps
+→ JDK 25 jdeps --print-module-deps
 → modules racines calculés
 → jpackage --add-modules <liste calculée>
 → runtime/bin/java --list-modules

@@ -9,7 +9,7 @@ context: |
   les PR du dépôt).
 
   Toolchain (docs/TOOLCHAIN_POLICY.md) :
-  - Noyau, CLI, MCP, stockage, providers : Java 24 et Maven 3.9.x, via le wrapper
+  - Noyau, CLI, MCP, stockage, providers : Java 25 et Maven 3.9.x, via le wrapper
     mvnw / mvnw.cmd, qui fait foi (pas un Maven local).
   - minos-intellij : Gradle et Java 21, hors du reactor Maven. C'est un client
     externe du protocole CLI versionné et il ne doit dépendre d'aucun artefact

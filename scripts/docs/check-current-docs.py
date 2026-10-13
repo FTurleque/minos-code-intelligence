@@ -208,7 +208,7 @@ def validate_ci_contracts() -> None:
     forbid(RELEASE_WORKFLOW, release, "pull_request:")
     require_all(RELEASE_WORKFLOW, release, (
         "Preflight exact ref and immutable tag", "git ls-remote --tags", "already exists on origin",
-        "IntelliJ Plugin Verifier", "verifyPlugin", "Set up Java 24 for MINOS release",
+        "IntelliJ Plugin Verifier", "verifyPlugin", "Set up Java 25 for MINOS release",
         "publish-windows-release.ps1", "TargetCommit $env:TARGET_COMMIT",
     ))
 
