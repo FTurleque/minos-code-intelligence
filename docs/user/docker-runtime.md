@@ -62,7 +62,7 @@ Le bundle provider est initialisé dans le volume Docker nommé :
 minos-provider-tools
 ```
 
-monté sous `/var/lib/minos/tools`, read-only dans les plans métier. L'image produit aussi `provider-inventory.json` et `provider-binary-sha256.txt`.
+monté sous `/var/lib/minos/tools`, read-only dans les plans métier. L'image produit aussi `provider-inventory.json` et `provider-binary-sha256.txt`. Les versions de .NET, Go, Rust et Node de cet inventaire sont lues sur les binaires installés pendant la construction de l'image.
 
 Le probe `minos-provider-probe` reste le gate explicite offline. La CLI ajoute le gate capability-honest :
 

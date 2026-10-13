@@ -142,11 +142,11 @@
     {
       "id": "nodejs",
       "platform": "linux-x64",
-      "version": "20.20.2",
+      "version": "24.20.0",
       "format": "tar.xz",
-      "url": "https://nodejs.org/dist/v20.20.2/node-v20.20.2-linux-x64.tar.xz",
-      "sha256": "df770b2a6f130ed8627c9782c988fda9669fa23898329a61a871e32f965e007d",
-      "sizeBytes": 26169540,
+      "url": "https://nodejs.org/dist/v24.20.0/node-v24.20.0-linux-x64.tar.xz",
+      "sha256": "2f2c0da162318f0de47665410c7c8c2ed3d36c8f3105de4bbc61176c70a7cbf2",
+      "sizeBytes": 31838904,
       "license": "MIT",
       "embedded": false,
       "dockerArgs": {
