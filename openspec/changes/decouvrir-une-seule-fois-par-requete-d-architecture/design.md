@@ -54,3 +54,31 @@ Aucune différence.
 
 - Divergence entre la résolution de module de la nouvelle opération et celle de `getModuleContext` : les deux partagent le même code de résolution dans le service, et un test compare les deux chemins.
 - Un adaptateur de port hors dépôt garderait le double coût sans le savoir : acceptable, il reste correct.
+
+## Relevé de la tâche 1.1 (2026-10-13)
+
+Relu dans l'arbre de la branche `fix/decouvrir-une-seule-fois-par-requete-d-architecture`, avant toute modification.
+
+**Littéraux des gates sur `MinosApplicationMcpBackend.java`** (aucun ne porte sur le graphe d'architecture) :
+
+- `scripts/quality/check-hosted-control-plane-consistency.py:130-132` exige `System.getenv("MINOS_TEAM_TOKEN")`, `hosted().tenant(hostedToken())`, `hosted().audit(hostedToken(), limit)` et `MINOS team mode is disabled`.
+- `scripts/quality/check-runtime-dynamic-consistency.py:116-118` exige `runtimeIntelligenceService().listSessions`, `runtimeIntelligenceService().report`, `runtimeIntelligenceService().symbolReport`.
+- `scripts/remediation/check-post-mne.py:252-253` exige `renderProgramGraph` et `MinosMcpTools.MAX_RESULT_BYTES`.
+- `scripts/history/m15/run-s4.ps1:149-157` (historique, hors CI) exige `application.architectureQuery()`, conservé par le correctif.
+
+**`getModuleContext` et `getArchitectureIntelligence` dans `scripts/`** : une seule occurrence, `scripts/history/m16/M16ScaleBenchmark.java:141` (`getArchitectureIntelligence`, banc historique, non compilé par le reactor). Aucun gate ne cite ces deux noms ; ils ne sont ni renommés ni retirés. `ArchitectureCommand` n'est cité par aucun script.
+
+**Implémentations et faux de `ProjectArchitectureQuery`** :
+
+- une seule implémentation : `minos-application/.../architecture/LocalProjectArchitectureQuery.java` ;
+- un seul faux : le proxy enregistreur de `minos-cli/src/test/java/com/minos/cli/CliValidInvocationsTest.java:76`, qui note la **première** méthode du port atteinte par la CLI. Un proxy reçoit aussi les méthodes `default` : les deux lignes « graphe avec module » de ce test attendent désormais la nouvelle opération (attente mise à jour, plus une ligne « graphe sans module ») ;
+- consommateurs sans implémentation : `MinosApplication`, `LocalMinosApi` (`getArchitectureGraph(project)` n'a pas de paramètre de module : **un seul** chargement, API Java hors du constat), `MinosCli`, `MinosCliRunner`, `ArchitectureCommand`, `MinosApplicationMcpBackend`, `SnapshotScalabilityBenchmark` (test de `minos-bootstrap`).
+
+**Scope JaCoCo `mcp-mapping`** : préfixe `com/minos/mcp/` (`scripts/quality/check-jacoco.py:24`), seuils 55 % lignes / 40 % branches ; aucune classe déplacée.
+
+## Mise en œuvre (2026-10-13)
+
+- **Opération du port (D1)** : `ProjectArchitectureQuery.getArchitectureIntelligenceForModule(String projectIdentifier, String moduleIdentifier)`, `default`, rend un `ArchitectureModuleSelection(ArchitectureIntelligenceView view, String moduleId)` (nouveau record public de `com.minos.architecture`, module `minos-application`). `LocalProjectArchitectureQuery` la redéfinit : un `loadContext`, puis `ArchitectureIntelligenceService.moduleContext(view, module).module().id()`, c'est-à-dire le code de résolution de `getModuleContext` lui-même (mêmes refus : inconnu, ambigu, blanc).
+- **Surfaces** : `MinosApplicationMcpBackend.architectureGraph` et `ArchitectureCommand` appellent l'opération quand un module est demandé ; sans module, l'appel reste `getArchitectureIntelligence` (déjà un seul chargement).
+- **Décompte (D2)** : `ProjectDiscoveryService` est `final` ; l'espion est un `ProjectDetector` ajouté en tête de la liste par défaut, qui ne reconnaît aucun module et compte la visite de la racine (une par découverte). Le store espion est un proxy de `CodeKnowledgeSnapshotStore` qui compte `loadActiveKnowledge`.
+- **Écart avec le design** : aucun sur le comportement. Précision : la « comparaison des deux chemins » du § Risques est faite dans `ArchitectureModuleSelectionTest` (module `minos-application`, qui porte le code ajouté) et rejouée par chaque test de surface, qui compare la sortie au rendu obtenu par l'ancien enchaînement.

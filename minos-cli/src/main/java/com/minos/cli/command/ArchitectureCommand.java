@@ -2,7 +2,7 @@ package com.minos.cli.command;
 
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.CliOptions;
-import com.minos.architecture.ArchitectureIntelligenceView;
+import com.minos.architecture.ArchitectureModuleSelection;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.output.ArchitectureResultRenderer;
 import com.minos.output.SymbolOutputFormat;
@@ -35,31 +35,38 @@ public final class ArchitectureCommand {
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
-            String rendered;
-            if (options.format().isGraph()) {
-                ArchitectureIntelligenceView view = query.getArchitectureIntelligence(options.project());
-                String moduleId = options.module() == null
-                        ? null
-                        : query.getModuleContext(options.project(), options.module()).module().id();
-                ArchitectureResultRenderer.GraphFormat graphFormat = switch (options.format()) {
-                    case MERMAID -> ArchitectureResultRenderer.GraphFormat.MERMAID;
-                    case DOT -> ArchitectureResultRenderer.GraphFormat.DOT;
-                    default -> throw new IllegalStateException("non-graph architecture format");
-                };
-                rendered = ArchitectureResultRenderer.renderGraph(view, moduleId, graphFormat);
-            } else {
-                SymbolOutputFormat outputFormat = options.format() == ArchitectureOutputFormat.JSON
-                        ? SymbolOutputFormat.JSON
-                        : SymbolOutputFormat.TEXT;
-                rendered = options.module() == null
-                        ? ArchitectureResultRenderer.render(
-                                query.getArchitectureIntelligence(options.project()), outputFormat)
-                        : ArchitectureResultRenderer.renderModule(
-                                query.getModuleContext(options.project(), options.module()), outputFormat);
-            }
+            String rendered = options.format().isGraph() ? renderGraph(options) : renderReport(options);
             output.append(rendered).append('\n');
             return FindSymbolCommand.SUCCESS;
         });
+    }
+
+    /** One project context load per graph, with or without a module (AUD-PERF-05). */
+    private String renderGraph(Options options) throws IOException {
+        ArchitectureResultRenderer.GraphFormat graphFormat = switch (options.format()) {
+            case MERMAID -> ArchitectureResultRenderer.GraphFormat.MERMAID;
+            case DOT -> ArchitectureResultRenderer.GraphFormat.DOT;
+            default -> throw new IllegalStateException("non-graph architecture format");
+        };
+        if (options.module() == null) {
+            return ArchitectureResultRenderer.renderGraph(
+                    query.getArchitectureIntelligence(options.project()), null, graphFormat);
+        }
+        ArchitectureModuleSelection selection =
+                query.getArchitectureIntelligenceForModule(options.project(), options.module());
+        return ArchitectureResultRenderer.renderGraph(selection.view(), selection.moduleId(), graphFormat);
+    }
+
+    private String renderReport(Options options) throws IOException {
+        SymbolOutputFormat outputFormat = options.format() == ArchitectureOutputFormat.JSON
+                ? SymbolOutputFormat.JSON
+                : SymbolOutputFormat.TEXT;
+        if (options.module() == null) {
+            return ArchitectureResultRenderer.render(
+                    query.getArchitectureIntelligence(options.project()), outputFormat);
+        }
+        return ArchitectureResultRenderer.renderModule(
+                query.getModuleContext(options.project(), options.module()), outputFormat);
     }
 
     public static String usage() {
