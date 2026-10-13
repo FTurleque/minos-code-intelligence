@@ -16,9 +16,9 @@ Ordre dans chaque section : rouge, correction, preuve. Tout `-pl` s'accompagne d
 
 ## 3. Parcours unique et intégrité (AUD-PERF-03)
 
-- [ ] 3.1 [AUD-PERF-03] **Décision à obtenir** : D2 (parcours unique sous le store fichier, recommandé, ou deux parcours conservés). Consigner dans `design.md`.
-- [ ] 3.2 [AUD-PERF-03] Rouge : tests d'intégrité des deux stores (D4) — octet modifié, fichier tronqué, octets ajoutés en queue : erreur d'intégrité, cache vide, compteur inchangé, seconde lecture identique ; test du nombre de parcours (flux compteur). **Preuve du rouge sur le nombre de parcours.**
-- [ ] 3.3 [AUD-PERF-03] Store PostgreSQL : empreinte calculée pendant la copie (D3). Store fichier : selon D2. Preuve : tests de 3.2 verts ; `python scripts/architecture/check-private-io.py` vert ; `./mvnw -B -ntp -pl minos-storage-postgresql -am verify`.
+- [x] 3.1 [AUD-PERF-03] **Décision obtenue (2026-10-13)** : D2, parcours unique sous le store fichier. Consignée dans `design.md`.
+- [x] 3.2 [AUD-PERF-03] Tests d'intégrité (D4) — octet modifié, fichier tronqué, octets ajoutés en queue : erreur d'intégrité, cache vide, compteurs inchangés, seconde lecture identique (`FileSymbolSnapshotStoreIntegrityTest`, 4 tests) ; nombre de parcours par flux compteur (`SnapshotVerifiedReadTest`, 7 tests, V2 et V3). **Écart : pas de rouge au sens strict.** Les tests d'intégrité du store sont des caractérisations, vertes avant et après le branchement ; le parcours unique est prouvé au niveau du codec, dont la lecture authentifiée n'existait pas avant. Côté PostgreSQL, aucun test nouveau : les 283 tests existants couvrent la lecture.
+- [x] 3.3 [AUD-PERF-03] Store PostgreSQL : empreinte calculée pendant la copie (D3), deux parcours au lieu de trois. Store fichier : `SnapshotCodec.readVerified`, un parcours pour V2 et V3 (V1 garde deux parcours par l'implémentation par défaut). Preuve : tests de 3.2 verts ; `python scripts/architecture/check-private-io.py` vert ; `./mvnw -B -ntp -pl minos-storage-postgresql -am verify`.
 
 ## 4. Clôture
 

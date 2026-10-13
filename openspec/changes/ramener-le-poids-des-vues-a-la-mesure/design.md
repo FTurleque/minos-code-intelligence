@@ -57,7 +57,7 @@ Conséquences :
 
 Le facteur devient un couple numérateur/dénominateur. Sa valeur est fixée par un test qui construit une vue depuis un snapshot réel et compare l'estimation au tas retenu (même méthode que `HybridCorpusWeightTest`), avec une marge. Un format sans mesure garde le facteur 8. Le test échoue si l'estimation est **inférieure** au tas mesuré : le cache ne doit jamais sous-peser.
 
-### D2. Parcours unique sous le store fichier — **décision en attente du propriétaire**
+### D2. Parcours unique sous le store fichier — **retenu par le propriétaire le 2026-10-13 (option A)**
 
 Option A (recommandée) : décoder au travers d'un flux qui calcule l'empreinte, vider le flux jusqu'à sa fin, comparer, puis publier. Toute exception de décodage est **requalifiée** après comparaison : si l'empreinte diffère, l'erreur rendue est celle d'intégrité, comme aujourd'hui. Gain : un parcours au lieu de deux sur le chemin le plus fréquent.
 
