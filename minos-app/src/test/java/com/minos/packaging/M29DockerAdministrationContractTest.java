@@ -141,7 +141,7 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.matches("(?s).*FROM rust:[\\w.-]+@sha256:[0-9a-f]{64} AS rust-toolchain.*"));
         assertTrue(dockerfile.matches("(?s).*FROM golang:[\\w.-]+@sha256:[0-9a-f]{64} AS go-toolchain.*"));
         assertTrue(dockerfile.matches("(?s).*FROM mcr\\.microsoft\\.com/dotnet/sdk:[\\w.-]+@sha256:[0-9a-f]{64} AS dotnet-toolchain.*"));
-        assertTrue(dockerfile.contains("UBUNTU_APT_SNAPSHOT=20260814T000000Z"));
+        assertTrue(dockerfile.contains("UBUNTU_APT_SNAPSHOT=20261003T000000Z"));
         assertTrue(dockerfile.contains("snapshot.ubuntu.com/ubuntu/${UBUNTU_APT_SNAPSHOT}"),
                 "OS packages must resolve from one dated Ubuntu archive snapshot");
         assertTrue(dockerfile.contains("COURSIER_LAUNCHERS_COMMIT=15f36c167c30be237105f923151adaf177e7ee61"));
