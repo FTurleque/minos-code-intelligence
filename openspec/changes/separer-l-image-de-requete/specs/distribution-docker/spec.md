@@ -32,12 +32,22 @@ Les fichiers compose SHALL désigner l'image de requête pour tout service qui n
 - **THEN** les deux réussissent et chaque service a une image de l'une des deux variables
 
 ### Requirement: Une installation sans image de requête échoue de façon actionnable
-Quand la variable de l'image de requête est absente ou vide, le lancement SHALL échouer avant de démarrer un conteneur, avec un message qui nomme la commande de mise à jour. Il SHALL NOT utiliser l'image d'administration à la place. La mise à jour d'une installation à une seule image SHALL produire les deux.
+Quand le fichier compose du runtime demande l'image de requête et que sa variable est absente ou vide, le lancement SHALL échouer avant tout appel à Docker, avec un message qui nomme la commande de mise à jour. Il SHALL NOT utiliser l'image d'administration à la place. Le runtime laissé par une version à une seule image SHALL rester utilisable jusqu'à sa mise à jour, qui SHALL produire les deux images.
 
 #### Scenario: Variable absente
-- **GIVEN** une installation dont la configuration ne définit pas l'image de requête
+- **GIVEN** une installation dont le fichier compose demande l'image de requête et dont la configuration ne la définit pas
 - **WHEN** le script de cycle de vie démarre le plan de requête
-- **THEN** il échoue sans démarrer de conteneur et son message nomme la commande de mise à jour
+- **THEN** il échoue sans appeler Docker et son message nomme la commande de mise à jour
+
+#### Scenario: Image de requête qui n'en est pas une
+- **GIVEN** une configuration dont la variable de l'image de requête désigne l'image d'administration
+- **WHEN** le script de cycle de vie démarre le plan de requête
+- **THEN** il échoue sans démarrer de conteneur
+
+#### Scenario: Runtime d'une version à une seule image, pas encore mis à jour
+- **GIVEN** un runtime dont le fichier compose ne demande qu'une image
+- **WHEN** le script de cycle de vie démarre le plan de requête
+- **THEN** le plan démarre et un avertissement nomme la commande de mise à jour
 
 #### Scenario: Mise à niveau d'une installation à une seule image
 - **GIVEN** une installation de la version précédente, avec une seule image

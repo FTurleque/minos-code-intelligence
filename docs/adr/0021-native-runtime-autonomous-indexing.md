@@ -73,3 +73,7 @@ Rejeté comme cible produit : Java 24 reste la toolchain de développement MINOS
 ## Mise en œuvre — note du 2026-10-13
 
 La baseline du produit est passée de Java 24 à **Java 25 LTS** ([ADR 0059](0059-migrer-le-socle-vers-java-25-lts.md)). La décision est inchangée : la distribution utilisateur embarque son runtime, désormais produit par le JDK 25.
+
+## Mise en œuvre — image de requête séparée (2026-10-13, AUD-DEP-15)
+
+Le contexte de cet ADR décrit le conteneur MCP comme une « image JRE minimale ». Depuis l'image provider-complete de M29, ce n'était plus vrai : le conteneur persistant `minos-mcp` et le plan d'administration partageaient une image qui embarque JDK, compilateur C, Rust, Go, .NET et Node. `docker/Dockerfile.mcp.release` construit désormais deux cibles : `query` (JRE et jar), utilisée par `minos-mcp` et par les tâches qui n'exécutent que `java` ou `sh`, et `admin` (l'image complète), utilisée par les services qui lancent ou sondent des providers. La décision est inchangée et mieux tenue : le conteneur MCP redevient une surface de lecture sans chaîne de compilation. Détail d'exploitation et migration d'une installation existante : [`../user/docker-runtime.md`](../user/docker-runtime.md), « Deux images : requête et administration ».

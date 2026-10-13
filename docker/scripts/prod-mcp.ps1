@@ -260,10 +260,16 @@ switch ($Action) {
             -Destination $composeFile -Force
         Remove-Item -LiteralPath $legacyComposeFile -Force -ErrorAction SilentlyContinue
         $preservedOverrides = @(Get-PreservedCeilingOverrides -Path $environmentFile)
+        # AUD-DEP-15: compose-mcp.prod.yaml runs minos-mcp on MINOS_QUERY_IMAGE. The image this development
+        # launcher builds (docker\Dockerfile.mcp) is already a JRE and the MINOS jar, with no compiler and no
+        # provider tool: it IS a query image, and the only service this launcher starts is minos-mcp. The same
+        # image is therefore named by both variables; the provider-complete administration image only exists
+        # in the packaged workflow (prod-mcp-release.ps1).
         $environmentContent = @"
 MINOS_COMPOSE_PROJECT=$composeProject
 MINOS_CONTAINER_NAME=$containerName
 MINOS_IMAGE=$image
+MINOS_QUERY_IMAGE=$image
 MINOS_DATA_DIR=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $dataDirectory))
 MINOS_PROJECTS_DIR=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $ProjectsRoot))
 MINOS_VERSION=$version

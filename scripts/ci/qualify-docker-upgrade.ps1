@@ -204,6 +204,35 @@ function Assert-RunningCandidate([string] $ExpectedImage, [string] $ExpectedComm
     if ($Revision -ne $ExpectedCommit) { throw "Running image revision mismatch: $Revision != $ExpectedCommit" }
 }
 
+# AUD-DEP-15: whether a release recipe builds the separate query image (target `query` of its Dockerfile).
+# The previous release may predate the split: it then has ONE image, which also runs its query plane.
+function Test-RecipeHasQueryImage([string] $Root) {
+    $Dockerfile = Join-Path $Root 'docker\Dockerfile.mcp.release'
+    return [bool](Select-String -LiteralPath $Dockerfile -Pattern '^\s*FROM\s+(?:--platform=\S+\s+)?\S+\s+AS\s+query\s*$' -Quiet)
+}
+
+function Read-RuntimeEnvironmentValue([string] $Name) {
+    $Value = ''
+    foreach ($Line in @(Get-Content -LiteralPath (Join-Path $InstallRoot 'runtime\.env'))) {
+        if ($Line -match ('^\s*' + [regex]::Escape($Name) + '\s*=(.*)$')) { $Value = $Matches[1].Trim().Trim('"') }
+    }
+    return $Value
+}
+
+# The persistent query plane of the upgraded installation runs on the query image: the image says so (label
+# written by the `query` target), and the running container itself holds no compiler, SDK or package manager.
+function Assert-QueryPlaneOnQueryImage {
+    $InspectText = ((& docker inspect $ContainerName) | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($InspectText)) { throw 'The MINOS MCP container cannot be inspected.' }
+    $Inspect = @($InspectText | ConvertFrom-Json)
+    $Plane = [string]$Inspect[0].Config.Labels.'io.minos.image.plane'
+    if ($Plane -ne 'query') { throw "The MCP query plane does not run on a query image (io.minos.image.plane='$Plane')." }
+    $Probe = 'for name in gcc cc cargo rustc go dotnet pip3 npm node javac; do if command -v "$name" >/dev/null 2>&1; then echo "$name"; fi; done'
+    $Found = ((& docker exec $ContainerName sh -c $Probe) | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'The MCP query plane container could not be probed for compilers.' }
+    if (-not [string]::IsNullOrWhiteSpace($Found)) { throw "The MCP query plane container holds build tools: $($Found -replace '\s+', ' ')" }
+}
+
 New-Item -ItemType Directory -Force -Path $TempRoot, $ProjectsRoot | Out-Null
 
 try {
@@ -264,6 +293,16 @@ try {
     $TagB = "upgrade-b-$($CandidateSha.Substring(0, 12))-$Suffix"
     $ImageA = "minos-code-intelligence:$TagA"
     $ImageB = "minos-code-intelligence:$TagB"
+    # AUD-DEP-15: the candidate must build the separate query image, on which its persistent query plane runs
+    # (mcp-lifecycle.ps1 names it after the administration image). The previous release keeps what it has: a
+    # single image when it predates the split - the upgrade below then proves that an installation with ONE
+    # image receives the second one without any manual step - or its own two images.
+    if (-not (Test-RecipeHasQueryImage $RepoRoot)) { throw 'The candidate recipe does not build the separate MCP query image (target query).' }
+    $PreviousHasQueryImage = Test-RecipeHasQueryImage $PreviousWorktree
+    $QueryImageA = if ($PreviousHasQueryImage) { "$ImageA-query" } else { '' }
+    $QueryImageB = "$ImageB-query"
+    $RunningImageA = if ($PreviousHasQueryImage) { $QueryImageA } else { $ImageA }
+    $QueryImageMigration = 'not-applicable'
 
     New-Item -ItemType Directory -Force -Path (Join-Path $FixtureRoot 'src\main\java') | Out-Null
     @'
@@ -284,6 +323,10 @@ public final class UpgradeFixture {
 
     # Candidate A: real provider-complete image, real Compose, real admin plane and real MCP handshake.
     Invoke-DockerWorkflow -SourceRoot $PreviousWorktree -Action Install -Jar $JarA -Version $VersionA -Commit $PreviousSha -ImageTag $TagA
+    if (-not $PreviousHasQueryImage -and (Read-RuntimeEnvironmentValue 'MINOS_QUERY_IMAGE') -ne '') {
+        # The starting point of the upgrade must be the real one: a runtime that names a single image.
+        throw 'The previous release has a single image, but its installed runtime .env already defines MINOS_QUERY_IMAGE.'
+    }
     if ($PreviousPredatesComposeRename) {
         # This repo's driver (the only one that runs, see Invoke-DockerWorkflow) writes the CURRENT runtime file name,
         # whereas the previous release's own driver left runtime\compose.mcp.prod.yaml. Put the on-disk state of a real
@@ -300,7 +343,7 @@ public final class UpgradeFixture {
         }
         $RuntimeComposeMigration = 'verified'
     }
-    Assert-RunningCandidate -ExpectedImage $ImageA -ExpectedCommit $PreviousSha
+    Assert-RunningCandidate -ExpectedImage $RunningImageA -ExpectedCommit $PreviousSha
     Invoke-McpSmoke -SourceRoot $PreviousWorktree -Label 'a'
 
     Invoke-DockerWorkflow -Action Admin -MinosArguments @(
@@ -341,17 +384,28 @@ public final class UpgradeFixture {
     # only in the final cleanup) keeps peak disk usage on a standard GitHub-hosted runner close to
     # a single provider-complete image build instead of two simultaneous ones.
     & docker image rm --force $ImageA *> $null
+    if ($QueryImageA -ne '') { & docker image rm --force $QueryImageA *> $null }
 
-    # Candidate B: different Git commit and JAR, same durable MINOS data root.
+    # Candidate B: different Git commit and JAR, same durable MINOS data root. Nothing is done by hand between
+    # the two installs: when A had a single image, this Install is what gives the installation its second one.
     Invoke-DockerWorkflow -SourceRoot $RepoRoot -Action Install -Jar $JarB -Version $VersionB -Commit $CandidateSha -ImageTag $TagB
+    if ((Read-RuntimeEnvironmentValue 'MINOS_IMAGE') -ne $ImageB -or (Read-RuntimeEnvironmentValue 'MINOS_QUERY_IMAGE') -ne $QueryImageB) {
+        throw 'The upgraded runtime .env does not define both the administration image and the query image of candidate B.'
+    }
     Invoke-DockerWorkflow -Action Start
     Invoke-DockerWorkflow -Action Validate
-    Assert-RunningCandidate -ExpectedImage $ImageB -ExpectedCommit $CandidateSha
+    # The persistent query plane runs on the QUERY image of B, and answers MCP on it.
+    Assert-RunningCandidate -ExpectedImage $QueryImageB -ExpectedCommit $CandidateSha
+    Assert-QueryPlaneOnQueryImage
     Invoke-McpSmoke -SourceRoot $RepoRoot -Label 'b'
+    if (-not $PreviousHasQueryImage) { $QueryImageMigration = 'verified' }
 
     $MetadataB = Read-InstallationMetadata
     if ([string]$MetadataB.version -ne $VersionB -or [string]$MetadataB.gitCommit -ne $CandidateSha) {
         throw 'Candidate B installation metadata does not identify the upgraded candidate.'
+    }
+    if ([string]$MetadataB.image -ne $ImageB -or [string]$MetadataB.queryImage -ne $QueryImageB) {
+        throw 'Candidate B installation metadata does not name its two images.'
     }
     $SentinelAfter = (Invoke-AdminShellCommand 'cat /var/lib/minos/upgrade-qualification.sentinel').Trim()
     if ($SentinelAfter -ne $Sentinel) { throw 'Persistent MINOS data sentinel was not preserved across Docker upgrade.' }
@@ -388,7 +442,10 @@ public final class UpgradeFixture {
     if ([string]$MetadataAfterFailure.version -ne $VersionB -or [string]$MetadataAfterFailure.gitCommit -ne $CandidateSha) {
         throw 'Failed next candidate replaced qualified B installation metadata.'
     }
-    Assert-RunningCandidate -ExpectedImage $ImageB -ExpectedCommit $CandidateSha
+    Assert-RunningCandidate -ExpectedImage $QueryImageB -ExpectedCommit $CandidateSha
+    if ((Read-RuntimeEnvironmentValue 'MINOS_QUERY_IMAGE') -ne $QueryImageB) {
+        throw 'Failed next candidate replaced the query image of the qualified B runtime.'
+    }
     Invoke-McpSmoke -SourceRoot $RepoRoot -Label 'b-after-failed-candidate'
 
     [ordered]@{
@@ -397,6 +454,9 @@ public final class UpgradeFixture {
         candidate = $CandidateSha
         imageA = $ImageA
         imageB = $ImageB
+        queryImageA = $QueryImageA
+        queryImageB = $QueryImageB
+        queryImageMigration = $QueryImageMigration
         persistentDataPreserved = $true
         registeredProjectPreserved = $true
         failedNextCandidatePreservedB = $true
@@ -413,7 +473,8 @@ finally {
         }
     } catch { Write-Warning $_ }
     foreach ($Image in @($ImageA, $ImageB)) {
-        if (-not [string]::IsNullOrWhiteSpace($Image)) { & docker image rm --force $Image *> $null }
+        # Each release image and its query image, when it has one (removing an absent image is a no-op).
+        if (-not [string]::IsNullOrWhiteSpace($Image)) { & docker image rm --force $Image "$Image-query" *> $null }
     }
     if ($WorktreeAdded) { & git -C $RepoRoot worktree remove --force $PreviousWorktree *> $null }
     Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue

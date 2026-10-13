@@ -38,13 +38,17 @@ WORK_ROOT="$(mktemp -d)"
 BUILD_CONTEXT="$WORK_ROOT/build"
 mkdir -p "$BUILD_CONTEXT"
 SHORT_HEAD="${ACTUAL_HEAD:0:12}"
+# AUD-DEP-15: one Dockerfile, two images. $IMAGE is the administration image (provider-complete,
+# target `admin`); $QUERY_IMAGE is the image of the persistent MCP query plane (target `query`),
+# named like docker/scripts/mcp-lifecycle.ps1 names it: the administration image plus "-query".
 IMAGE="minos-code-intelligence:docker-release-ci-$SHORT_HEAD"
+QUERY_IMAGE="$IMAGE-query"
 MCP_CONTAINER=""
 cleanup() {
   if [[ -n "$MCP_CONTAINER" ]]; then
     docker rm --force "$MCP_CONTAINER" >/dev/null 2>&1 || true
   fi
-  docker image rm --force "$IMAGE" >/dev/null 2>&1 || true
+  docker image rm --force "$IMAGE" "$QUERY_IMAGE" >/dev/null 2>&1 || true
   rm -rf "$WORK_ROOT"
 }
 trap cleanup EXIT
@@ -56,34 +60,68 @@ cp minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/scip-py
   "$BUILD_CONTEXT/scip-python-package-lock.json"
 
 BUILD_TIMESTAMP="$(git show -s --format=%cI "$ACTUAL_HEAD")"
-docker build \
-  --file docker/Dockerfile.mcp.release \
-  --tag "$IMAGE" \
-  --build-arg 'MINOS_VERSION=ci' \
-  --build-arg "MINOS_GIT_COMMIT=$ACTUAL_HEAD" \
-  --build-arg "MINOS_BUILD_TIMESTAMP=$BUILD_TIMESTAMP" \
-  "$BUILD_CONTEXT"
+BUILD_ARGUMENTS=(
+  --file docker/Dockerfile.mcp.release
+  --build-arg 'MINOS_VERSION=ci'
+  --build-arg "MINOS_GIT_COMMIT=$ACTUAL_HEAD"
+  --build-arg "MINOS_BUILD_TIMESTAMP=$BUILD_TIMESTAMP"
+)
+# The build durations are kept as evidence: the second target must stay a small fraction of the
+# first (it shares no toolchain layer with it).
+ADMIN_BUILD_STARTED="$(date +%s)"
+docker build "${BUILD_ARGUMENTS[@]}" --target admin --tag "$IMAGE" "$BUILD_CONTEXT"
+ADMIN_BUILD_SECONDS="$(( $(date +%s) - ADMIN_BUILD_STARTED ))"
+QUERY_BUILD_STARTED="$(date +%s)"
+docker build "${BUILD_ARGUMENTS[@]}" --target query --tag "$QUERY_IMAGE" "$BUILD_CONTEXT"
+QUERY_BUILD_SECONDS="$(( $(date +%s) - QUERY_BUILD_STARTED ))"
 
 docker image inspect "$IMAGE" > "$QUALIFICATION_ROOT/image-inspect.json"
+docker image inspect "$QUERY_IMAGE" > "$QUALIFICATION_ROOT/query-image-inspect.json"
 REVISION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE")"
 VERSION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$IMAGE")"
 PREPARED="$(docker image inspect --format '{{ index .Config.Labels "io.minos.providers.prepared" }}' "$IMAGE")"
+PLANE="$(docker image inspect --format '{{ index .Config.Labels "io.minos.image.plane" }}' "$IMAGE")"
 RUNTIME_USER="$(docker image inspect --format '{{.Config.User}}' "$IMAGE")"
 ENTRYPOINT="$(docker image inspect --format '{{json .Config.Entrypoint}}' "$IMAGE")"
 [[ "$REVISION" == "$ACTUAL_HEAD" ]]
 [[ "$VERSION" == "ci" ]]
 [[ "$PREPARED" == "true" ]]
+[[ "$PLANE" == "admin" ]]
 [[ "$RUNTIME_USER" == "10001:10001" ]]
 [[ "$ENTRYPOINT" == '["java","-cp","/opt/minos/minos.jar","com.minos.mcp.MinosMcpServer"]' ]]
 
-# AUD-DEP-16: the image ships the notices and licence files of the JAR it embeds, readable without
+# The two images of one qualification come from the same commit: the same labels are read on the
+# query image, which must say it is the query plane and must not pass for a provider-complete image.
+QUERY_REVISION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$QUERY_IMAGE")"
+QUERY_VERSION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$QUERY_IMAGE")"
+QUERY_PREPARED="$(docker image inspect --format '{{ index .Config.Labels "io.minos.providers.prepared" }}' "$QUERY_IMAGE")"
+QUERY_PLANE="$(docker image inspect --format '{{ index .Config.Labels "io.minos.image.plane" }}' "$QUERY_IMAGE")"
+QUERY_RUNTIME_USER="$(docker image inspect --format '{{.Config.User}}' "$QUERY_IMAGE")"
+QUERY_ENTRYPOINT="$(docker image inspect --format '{{json .Config.Entrypoint}}' "$QUERY_IMAGE")"
+[[ "$QUERY_REVISION" == "$ACTUAL_HEAD" ]]
+[[ "$QUERY_VERSION" == "ci" ]]
+[[ "$QUERY_PREPARED" == "false" ]]
+[[ "$QUERY_PLANE" == "query" ]]
+[[ "$QUERY_RUNTIME_USER" == "10001:10001" ]]
+[[ "$QUERY_ENTRYPOINT" == '["java","-cp","/opt/minos/minos.jar","com.minos.mcp.MinosMcpServer"]' ]]
+
+ADMIN_IMAGE_BYTES="$(docker image inspect --format '{{.Size}}' "$IMAGE")"
+QUERY_IMAGE_BYTES="$(docker image inspect --format '{{.Size}}' "$QUERY_IMAGE")"
+printf 'admin image: %s bytes, built in %s s\nquery image: %s bytes, built in %s s\n' \
+  "$ADMIN_IMAGE_BYTES" "$ADMIN_BUILD_SECONDS" "$QUERY_IMAGE_BYTES" "$QUERY_BUILD_SECONDS" \
+  | tee "$QUALIFICATION_ROOT/image-sizes.txt"
+
+# AUD-DEP-16: each image ships the notices and licence files of the JAR it embeds, readable without
 # running MINOS. One "<sha256>  ./<path>" line per file of /opt/minos/licenses, compared below with
 # the entries of the shaded JAR the image was built from: a missing directory, an empty notice or a
 # file that differs from the JAR fails the qualification.
-docker run --rm --network none --read-only --entrypoint sh "$IMAGE" -ec \
-  'cd /opt/minos/licenses && find . -type f -exec sha256sum {} +' \
-  > "$QUALIFICATION_ROOT/image-licenses-sha256.txt"
-python3 - "${SHADED_JARS[0]}" "$QUALIFICATION_ROOT/image-licenses-sha256.txt" <<'PY'
+verify_image_licences() {
+  local image="$1"
+  local evidence="$2"
+  docker run --rm --network none --read-only --entrypoint sh "$image" -ec \
+    'cd /opt/minos/licenses && find . -type f -exec sha256sum {} +' \
+    > "$evidence"
+  python3 - "${SHADED_JARS[0]}" "$evidence" <<'PY'
 import hashlib
 import pathlib
 import sys
@@ -125,6 +163,9 @@ if problems:
     raise SystemExit("\n".join(problems))
 print(f"image licences: {len(expected)} notice and licence files identical to those of the shaded JAR")
 PY
+}
+verify_image_licences "$IMAGE" "$QUALIFICATION_ROOT/image-licenses-sha256.txt"
+verify_image_licences "$QUERY_IMAGE" "$QUALIFICATION_ROOT/query-image-licenses-sha256.txt"
 
 docker run --rm --network none --read-only --entrypoint cat "$IMAGE" \
   /opt/minos/provider-evidence/provider-inventory.json \
@@ -221,18 +262,51 @@ docker run --rm --network none --read-only \
   > "$QUALIFICATION_ROOT/cli-help.txt"
 grep -F 'MINOS' "$QUALIFICATION_ROOT/cli-help.txt" >/dev/null
 
-# Run the repository's production MCP smoke client against the exact built image. The helper
-# intentionally waits for initialize(id=1) before sending notifications/initialized + tools/list;
-# sending all three JSON-RPC messages up front races the MCP initialization state machine and can
-# drop the post-initialize request even when the server is healthy.
+# AUD-DEP-15: the proof bears on the CONTENT of the query image. None of these commands may exist
+# in it (compilers, SDKs, package managers, Node), nor any provider payload. The same probe is run
+# on the administration image first, where every command must be found: a probe that finds nothing
+# anywhere would prove nothing.
+ABSENT_FROM_QUERY_IMAGE=(gcc cc cargo rustc go dotnet pip3 npm node javac)
+COMMAND_PROBE='for name in "$@"; do if found="$(command -v "$name" 2>/dev/null)"; then printf "%s=%s\n" "$name" "$found"; fi; done'
+PAYLOAD_PROBE='for path in /opt/minos/provider-tools /opt/minos/provider-evidence /usr/local/cargo /usr/local/rustup /usr/local/go /usr/share/dotnet; do if [ -e "$path" ]; then printf "path=%s\n" "$path"; fi; done'
+docker run --rm --network none --read-only --entrypoint sh "$IMAGE" -ec "$COMMAND_PROBE" probe \
+  "${ABSENT_FROM_QUERY_IMAGE[@]}" > "$QUALIFICATION_ROOT/admin-image-commands.txt"
+for name in "${ABSENT_FROM_QUERY_IMAGE[@]}"; do
+  if ! grep -q "^${name}=" "$QUALIFICATION_ROOT/admin-image-commands.txt"; then
+    echo "The command probe does not find '$name' in the administration image: it cannot prove an absence." >&2
+    exit 1
+  fi
+done
+docker run --rm --network none --read-only --entrypoint sh "$QUERY_IMAGE" -ec "$COMMAND_PROBE; $PAYLOAD_PROBE" probe \
+  "${ABSENT_FROM_QUERY_IMAGE[@]}" > "$QUALIFICATION_ROOT/query-image-forbidden-content.txt"
+if [[ -s "$QUALIFICATION_ROOT/query-image-forbidden-content.txt" ]]; then
+  echo "The query image contains a compiler, an SDK, a package manager or a provider payload:" >&2
+  cat "$QUALIFICATION_ROOT/query-image-forbidden-content.txt" >&2
+  exit 1
+fi
+echo "query image: none of ${ABSENT_FROM_QUERY_IMAGE[*]} and no provider payload"
+
+docker run --rm --network none --read-only --entrypoint java "$QUERY_IMAGE" -version
+
+# Run the repository's production MCP smoke client against the exact built QUERY image, in a
+# container hardened like the minos-mcp service. The helper intentionally waits for
+# initialize(id=1) before sending notifications/initialized + tools/list; sending all three
+# JSON-RPC messages up front races the MCP initialization state machine and can drop the
+# post-initialize request even when the server is healthy.
+# The MINOS data root is a writable tmpfs here, not the read-only mount of the Compose files: the
+# symbol query below reads the project registry, and the registry takes its lock file open for
+# writing, which a read-only mount refuses whatever the image (recorded in the design of the
+# OpenSpec change separer-l-image-de-requete). What is proved here is the image, not that mount.
+FIXTURE_ROOT="$(git rev-parse --show-toplevel)/fixtures/typescript/typescript-modules"
 MCP_CONTAINER="minos-docker-release-ci-mcp-${SHORT_HEAD}-$$"
 docker run --rm --detach \
   --name "$MCP_CONTAINER" \
   --network none --read-only \
+  --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /var/lib/minos:rw,nosuid,nodev,noexec,size=64m,mode=700,uid=10001,gid=10001 \
   --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
-  --tmpfs /run/minos-native:rw,nosuid,nodev,exec,size=16m,mode=1777 \
-  --entrypoint sleep "$IMAGE" 600 \
+  --mount "type=bind,source=$FIXTURE_ROOT,target=/workspace/projects/typescript-modules,readonly" \
+  --entrypoint sleep "$QUERY_IMAGE" 600 \
   > "$QUALIFICATION_ROOT/mcp-container-id.txt"
 
 MCP_COMPOSE_SENTINEL="$WORK_ROOT/mcp-compose-sentinel.yaml"
@@ -249,6 +323,74 @@ if grep -E 'NoClassDefFoundError|Exception in thread "main"' "$QUALIFICATION_ROO
   exit 1
 fi
 
+# A real query on an existing index, answered by the query image alone. The index is made without
+# any provider: the versioned SCIP artifact of a fixture is imported by the MINOS jar of the image.
+# HOME is the one the minos-admin service sets: the import writes under it, the MCP server does not.
+docker exec --env HOME=/var/lib/minos/cache/home "$MCP_CONTAINER" java -cp /opt/minos/minos.jar com.minos.cli.MinosLauncher \
+  project add /workspace/projects/typescript-modules --name query-fixture --format json \
+  > "$QUALIFICATION_ROOT/query-project-add.json"
+docker exec --env HOME=/var/lib/minos/cache/home "$MCP_CONTAINER" java -cp /opt/minos/minos.jar com.minos.cli.MinosLauncher \
+  import-scip query-fixture --provider scip-typescript --format json \
+  --file /workspace/projects/typescript-modules/.minos-m0/scip-typescript/index.scip \
+  > "$QUALIFICATION_ROOT/query-import-scip.json"
+python3 - "$MCP_CONTAINER" "$QUALIFICATION_ROOT/mcp-symbol-query.json" "$QUALIFICATION_ROOT/mcp-symbol-query.stderr.log" <<'PY'
+import json
+import subprocess
+import sys
+import threading
+
+container, evidence_path, stderr_path = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(stderr_path, "wb") as stderr_log:
+    server = subprocess.Popen(
+        ["docker", "exec", "-i", container, "java", "-cp", "/opt/minos/minos.jar", "com.minos.mcp.MinosMcpServer"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr_log)
+    watchdog = threading.Timer(120, server.kill)
+    watchdog.start()
+    try:
+        def send(message):
+            server.stdin.write((json.dumps(message) + "\n").encode("utf-8"))
+            server.stdin.flush()
+
+        def request(identifier, method, params):
+            # Each request waits for its own response: see the note on MinosDockerMcpSmoke above.
+            send({"jsonrpc": "2.0", "id": identifier, "method": method, "params": params})
+            while True:
+                line = server.stdout.readline()
+                if not line:
+                    raise SystemExit(f"the MCP server of the query image closed its output before answering {method}")
+                reply = json.loads(line)
+                if reply.get("id") == identifier:
+                    if "error" in reply:
+                        raise SystemExit(f"{method} failed on the query image: {json.dumps(reply['error'])}")
+                    return reply["result"]
+
+        initialize = request(1, "initialize", {
+            "protocolVersion": "2024-11-05", "capabilities": {},
+            "clientInfo": {"name": "minos-docker-release-qualification", "version": "1.0"}})
+        if "serverInfo" not in initialize:
+            raise SystemExit("initialize response of the query image has no serverInfo")
+        send({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
+        answer = request(2, "tools/call", {
+            "name": "minos_find_symbols", "arguments": {"project": "query-fixture", "query": "GreetingService"}})
+        text = "".join(part.get("text", "") for part in answer.get("content", []))
+        if answer.get("isError"):
+            raise SystemExit(f"minos_find_symbols is an error on the query image: {text}")
+        symbols = json.loads(text)
+        names = [symbol.get("qualifiedName") or symbol.get("name") for symbol in symbols.get("symbols", [])]
+        if symbols.get("count", 0) < 1 or not any(name and "GreetingService" in name for name in names):
+            raise SystemExit(f"minos_find_symbols did not find GreetingService on the query image: {text}")
+        server.stdin.close()
+        server.wait(timeout=30)
+    finally:
+        watchdog.cancel()
+        if server.poll() is None:
+            server.kill()
+with open(evidence_path, "w", encoding="utf-8") as evidence:
+    json.dump({"serverInfo": initialize["serverInfo"], "tool": "minos_find_symbols", "count": symbols["count"],
+               "symbols": names}, evidence, indent=2)
+print(f"query image: minos_find_symbols answered {symbols['count']} symbol(s) for GreetingService")
+PY
+
 docker rm --force "$MCP_CONTAINER" >/dev/null
 MCP_CONTAINER=""
 
@@ -257,6 +399,11 @@ cat > "$QUALIFICATION_ROOT/qualification.json" <<EOF
   "formatVersion": 1,
   "head": "$ACTUAL_HEAD",
   "image": "$IMAGE",
+  "queryImage": "$QUERY_IMAGE",
+  "imageBytes": $ADMIN_IMAGE_BYTES,
+  "queryImageBytes": $QUERY_IMAGE_BYTES,
+  "imageBuildSeconds": $ADMIN_BUILD_SECONDS,
+  "queryImageBuildSeconds": $QUERY_BUILD_SECONDS,
   "result": "PASS"
 }
 EOF
