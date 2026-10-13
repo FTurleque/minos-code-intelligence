@@ -68,6 +68,75 @@ class PostgresSemanticVectorStoreContractTest extends PostgresTestSupport {
     }
 
     @Test
+    void theDocumentsOfAnIndexWithoutDocumentsAreAnEmptyListWithItsMetadata() throws Exception {
+        String projectId = UUID.randomUUID().toString();
+        PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);
+        store.replace(snapshot(projectId, "snap-empty", 3L));
+
+        SemanticVectorStore.IndexDocuments read = store.documents(projectId).orElseThrow();
+
+        assertEquals(List.of(), read.documents());
+        assertEquals(new SemanticVectorStore.IndexMetadata(
+                projectId, "snap-empty", "test-provider", "test-model", DIMENSIONS, 3L, 0), read.metadata());
+    }
+
+    @Test
+    void theDocumentsReadAreThoseOfTheProjectAndOfItsCurrentIndexOnly() throws Exception {
+        String projectId = UUID.randomUUID().toString();
+        String otherProjectId = UUID.randomUUID().toString();
+        PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);
+        store.replace(snapshot(otherProjectId, "snap-1", 1L, indexed(otherProjectId, "snap-1", "doc-other", 0.0, 0.0, 1.0)));
+        store.replace(snapshot(projectId, "snap-1", 1L, indexed(projectId, "snap-1", "doc-old", 1.0, 0.0, 0.0)));
+        SemanticVectorStore.IndexedDocument second = indexed(projectId, "snap-2", "doc-b", 0.0, 1.0, 0.0);
+        SemanticVectorStore.IndexedDocument first = indexed(projectId, "snap-2", "doc-a", 1.0, 0.0, 0.0);
+        store.replace(snapshot(projectId, "snap-2", 2L, second, first));
+
+        SemanticVectorStore.IndexDocuments read = store.documents(projectId).orElseThrow();
+
+        assertEquals(List.of(first.document(), second.document()), read.documents());
+        assertEquals(new SemanticVectorStore.IndexMetadata(
+                projectId, "snap-2", "test-provider", "test-model", DIMENSIONS, 2L, 2), read.metadata());
+        store.delete(projectId);
+        assertEquals(Optional.empty(), store.documents(projectId));
+    }
+
+    @Test
+    void theDocumentsAreReadWithoutParsingTheStoredVectors() throws Exception {
+        UUID id = UUID.randomUUID();
+        String projectId = id.toString();
+        PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);
+        SemanticVectorStore.IndexedDocument stored = indexed(projectId, "snap-1", "doc-a", 1.0, 0.0, 0.0);
+        store.replace(snapshot(projectId, "snap-1", 1L, stored));
+        connections.withConnection(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE semantic_index_meta SET dimensions=5 WHERE project_id=?")) {
+                statement.setObject(1, id);
+                return statement.executeUpdate();
+            }
+        });
+
+        SemanticVectorStore.IndexDocuments read = store.documents(projectId).orElseThrow();
+        IOException fullLoad = assertThrows(IOException.class, () -> store.load(projectId));
+
+        assertEquals(List.of(stored.document()), read.documents());
+        assertEquals(5, read.metadata().dimensions());
+        assertEquals("pgvector dimensions mismatch", fullLoad.getMessage());
+    }
+
+    @Test
+    void aFailedReadOfTheDocumentsIsReportedAsAnIoExceptionNamingTheOperation() throws Exception {
+        PostgresSemanticVectorStore closed = new PostgresSemanticVectorStore(closedFactory());
+        String projectId = UUID.randomUUID().toString();
+
+        IOException storage = assertThrows(IOException.class, () -> closed.documents(projectId));
+        IOException invalid = assertThrows(IOException.class, () -> closed.documents("not-a-uuid"));
+
+        assertEquals("unable to load pgvector semantic documents", storage.getMessage());
+        assertInstanceOf(SQLException.class, storage.getCause());
+        assertEquals("semantic project id must be a UUID", invalid.getMessage());
+    }
+
+    @Test
     void aLoadedDocumentAndItsVectorAreTheOnesThatWereStored() throws Exception {
         String projectId = UUID.randomUUID().toString();
         PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);

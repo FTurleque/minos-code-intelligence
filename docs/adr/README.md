@@ -61,7 +61,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0044](0044-un-package-un-module.md) | Un package, un module : replier les packages éclatés par déplacement, renommer le côté interne | Accepted | Audit 2026-09, A3 (et A7) |
 | [0045](0045-constructeur-unique-et-point-d-entree-nomme.md) | Constructeur unique et point d'entrée nommé ; racine de composition regroupée par domaine, sans cache d'architecture | Accepted | Audit 2026-09, A4 |
 | [0046](0046-format-de-snapshot-v3-chaines-utf8.md) | Format de snapshot V3 : chaînes UTF-8, repli V2 pour les surrogates isolés, lecture de tous les formats antérieurs | Accepted | Audit 2026-09, A6 |
-| [0047](0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) | Snapshot en mémoire : dédoublonnage des chaînes au décodage, table de chaînes, pagination ou mappage, dans cet ordre et sous mesure | Proposed | Audit 2026-09, A6 |
+| [0047](0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) | Snapshot en mémoire : dédoublonnage des chaînes au décodage, table de chaînes, pagination ou mappage, dans cet ordre et sous mesure | Accepted (option A mise en œuvre ; B et C conditionnelles) | Audit 2026-09, A6 |
 | [0048](0048-evaluation-comparative-reproductible.md) | Évaluer les changements sur un protocole commun | Proposed | Étude octobre 2026 |
 | [0049](0049-retrieval-hybride-explicable.md) | Faire évoluer le classement hybride par profils mesurés | Proposed | Étude octobre 2026 |
 | [0050](0050-unites-recherche-contexte-budgete.md) | Assembler un contexte cohérent, compact et traçable | Proposed | Étude octobre 2026 |

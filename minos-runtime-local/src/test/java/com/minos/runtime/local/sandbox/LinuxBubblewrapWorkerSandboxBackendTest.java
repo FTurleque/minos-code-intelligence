@@ -17,7 +17,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -34,6 +36,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @EnabledOnOs(OS.LINUX)
 class LinuxBubblewrapWorkerSandboxBackendTest {
+
+    private static final int STDERR_TAIL_BYTES = 4096;
 
     @Test
     void denyPlanUsesNetworkNamespaceReadOnlyRootAndResourceLimits() throws Exception {
@@ -149,7 +153,15 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
                             Duration.ofSeconds(20));
                 });
 
-        IndexingArtifact artifact = backend.execute(executor, request, WorkerNetworkPolicy.DENY);
+        IndexingArtifact artifact;
+        try {
+            artifact = backend.execute(executor, request, WorkerNetworkPolicy.DENY);
+        } catch (IllegalStateException failure) {
+            // The executor only names the stderr file, which is gone with the CI host. Carry what the
+            // sandbox said into the failure itself; the launch still fails.
+            throw new AssertionError(String.valueOf(failure.getMessage()).replace(home.toString(), "<home>")
+                    + System.lineSeparator() + launchFailureDiagnostic(home, project, request), failure);
+        }
 
         assertEquals("fixture-provider", artifact.indexerId());
         assertTrue(Files.isRegularFile(artifact.finalArtifact()));
@@ -169,6 +181,58 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         assertTrue(command.contains("--share-net"));
         assertTrue(command.contains("--cap-drop"));
         assertTrue(command.contains("ALL"));
+    }
+
+    /**
+     * What a failed sandboxed launch left behind: the bounded tail of the provider stderr and the
+     * number of tasks of the host account, which is what {@code prlimit --nproc} is compared with
+     * when bubblewrap creates its user namespace.
+     */
+    private static String launchFailureDiagnostic(Path home, Path project, IndexingExecutionRequest request) {
+        Path stderr = home.resolve("runs").resolve(request.runId().toString())
+                .resolve("fixture-provider").resolve("provider.stderr.log");
+        String tail;
+        try {
+            byte[] bytes = Files.readAllBytes(stderr);
+            int from = Math.max(0, bytes.length - STDERR_TAIL_BYTES);
+            tail = new String(bytes, from, bytes.length - from, StandardCharsets.UTF_8).strip();
+            if (tail.isEmpty()) tail = "<empty>";
+        } catch (IOException unreadable) {
+            tail = "<unreadable: " + unreadable.getClass().getSimpleName() + ">";
+        }
+        return "provider stderr: " + tail.replace(home.toString(), "<home>").replace(project.toString(), "<project>")
+                + System.lineSeparator() + "host account tasks after the failure: " + hostAccountTasks()
+                + " (sandbox prlimit --nproc=" + LinuxBubblewrapWorkerSandboxBackend.MAX_PROCESSES + ")";
+    }
+
+    /** Threads owned by the account running this JVM, as RLIMIT_NPROC counts them; -1 when unreadable. */
+    private static long hostAccountTasks() {
+        try {
+            String account = statusField(Path.of("/proc/self/status"), "Uid:");
+            long tasks = 0L;
+            try (DirectoryStream<Path> processes = Files.newDirectoryStream(Path.of("/proc"), "[0-9]*")) {
+                for (Path process : processes) {
+                    try {
+                        Path status = process.resolve("status");
+                        if (!account.equals(statusField(status, "Uid:"))) continue;
+                        tasks += Long.parseLong(statusField(status, "Threads:"));
+                    } catch (IOException | RuntimeException _) {
+                        // The process exited while it was being read.
+                    }
+                }
+            }
+            return tasks;
+        } catch (IOException | RuntimeException _) {
+            return -1L;
+        }
+    }
+
+    /** First value of a {@code /proc/<pid>/status} field (the real UID for {@code Uid:}). */
+    private static String statusField(Path status, String field) throws IOException {
+        for (String line : Files.readAllLines(status, StandardCharsets.UTF_8)) {
+            if (line.startsWith(field)) return line.substring(field.length()).strip().split("\\s+")[0];
+        }
+        throw new IOException("missing field");
     }
 
     private static IndexingExecutionRequest executionRequest(Path projectRoot) {

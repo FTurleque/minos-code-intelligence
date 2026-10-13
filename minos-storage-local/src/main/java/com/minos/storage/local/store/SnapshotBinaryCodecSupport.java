@@ -36,6 +36,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -45,13 +46,16 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -170,6 +174,65 @@ final class SnapshotBinaryCodecSupport {
             return readKnowledgeSnapshotBody(new SnapshotInput(input, StringEncoding.UTF8), FORMAT_VERSION_V3);
         } catch (EOFException exception) {
             throw new IOException("truncated knowledge snapshot", exception);
+        }
+    }
+
+    /** Decodes and authenticates a V3 knowledge snapshot file in a single pass over its bytes. */
+    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV3(Path file, String expectedSha256) throws IOException {
+        requireSnapshotFileSize(file);
+        try (InputStream source = ConfinedFileOpener.openRegularFileNoFollow(file)) {
+            return readVerifiedKnowledgeSnapshotV3(source, expectedSha256);
+        }
+    }
+
+    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV3(InputStream source, String expectedSha256)
+            throws IOException {
+        return readVerifiedKnowledgeSnapshot(source, expectedSha256, StringEncoding.UTF8, FORMAT_VERSION_V3);
+    }
+
+    /** Decodes and authenticates a V2 knowledge snapshot file in a single pass over its bytes. */
+    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV2(Path file, String expectedSha256) throws IOException {
+        requireSnapshotFileSize(file);
+        try (InputStream source = ConfinedFileOpener.openRegularFileNoFollow(file)) {
+            return readVerifiedKnowledgeSnapshotV2(source, expectedSha256);
+        }
+    }
+
+    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV2(InputStream source, String expectedSha256)
+            throws IOException {
+        return readVerifiedKnowledgeSnapshot(source, expectedSha256, StringEncoding.UTF16_CHARS, FORMAT_VERSION_V2);
+    }
+
+    /**
+     * Decodes {@code source} while hashing it, then reads it to its end and compares the SHA-256 before
+     * anything is returned. The decoder therefore sees bytes that are not authenticated yet, so nothing it
+     * produced leaves this method on a mismatch: altered, truncated or extended content is reported as the
+     * checksum mismatch it is, whatever the decoder made of it. A decoding failure of authentic content is
+     * rethrown unchanged.
+     */
+    private static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshot(
+            InputStream source, String expectedSha256, StringEncoding encoding, int version) throws IOException {
+        MessageDigest digest = Sha256.newDigest();
+        try (BoundedInputStream boundedInput = new BoundedInputStream(
+                     new DigestInputStream(source, digest), MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
+             DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
+            CodeKnowledgeSnapshot decoded = null;
+            IOException invalid = null;
+            RuntimeException defect = null;
+            try {
+                decoded = readKnowledgeSnapshotBody(new SnapshotInput(input, encoding), version);
+            } catch (EOFException exception) {
+                invalid = new IOException("truncated knowledge snapshot", exception);
+            } catch (IOException exception) {
+                invalid = exception;
+            } catch (RuntimeException exception) {
+                defect = exception;
+            }
+            input.transferTo(OutputStream.nullOutputStream());
+            SnapshotIntegrityService.requireChecksum(HEX.formatHex(digest.digest()), expectedSha256);
+            if (invalid != null) throw invalid;
+            if (defect != null) throw defect;
+            return decoded;
         }
     }
 
@@ -931,6 +994,7 @@ final class SnapshotBinaryCodecSupport {
         private final CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT);
+        private final Map<String, String> distinctStrings = new HashMap<>();
 
         SnapshotInput(DataInputStream stream, StringEncoding encoding) {
             this.stream = stream;
@@ -946,6 +1010,22 @@ final class SnapshotBinaryCodecSupport {
         int read() throws IOException { return stream.read(); }
 
         String readString() throws IOException {
+            return shared(readDecodedString());
+        }
+
+        /**
+         * One instance per distinct string of this decoding pass (ADR 0047, option A). The project id, the
+         * origin strings and the file ids are repeated on every entity: decoded as separate instances, they
+         * made a reread snapshot retain about 2.5 times the heap of the ingested one. The table lives and
+         * dies with this pass; the decoded model is equal, only instance identity changes.
+         */
+        private String shared(String value) {
+            if (value == null) return null;
+            String known = distinctStrings.putIfAbsent(value, value);
+            return known == null ? value : known;
+        }
+
+        private String readDecodedString() throws IOException {
             if (encoding == StringEncoding.UTF16_CHARS) return SnapshotBinaryCodecSupport.readString(stream);
             int length = stream.readInt();
             if (length == -1) return null;

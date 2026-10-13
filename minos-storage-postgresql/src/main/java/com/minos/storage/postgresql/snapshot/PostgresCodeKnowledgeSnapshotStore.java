@@ -8,6 +8,7 @@ import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.io.PrivateLocalStorage;
+import com.minos.io.Sha256;
 import com.minos.storage.local.store.KnowledgeSnapshotCodecs;
 import com.minos.storage.local.store.SnapshotCodec;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -24,12 +25,15 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,7 +48,14 @@ import static com.minos.domain.Preconditions.requireText;
 public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotStore {
     private static final long MAX_PERSISTED_SNAPSHOT_BYTES = SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES;
     private static final int MAX_ACTIVE_QUERY_RETRIES = 4;
-    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L;
+    /**
+     * Heap retained by a query view, as a multiple of its persisted size. With one instance per distinct
+     * string (ADR 0047, option A) a repository-shaped snapshot retains 1.41 to 1.46 times its V3 file
+     * (QueryViewWeightTest in minos-storage-local, same codec); 2 leaves a margin and also bounds a string of two-byte characters, which
+     * takes at most twice its UTF-8 size. It was 8 before the strings were shared, when a reread view
+     * retained 2.5 to 3.3 times its file.
+     */
+    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 2L;
     private static final int MAX_QUERY_CACHE_ENTRIES = 32;
     private static final long MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
     private static final int BUILD_LOCK_STRIPES = 64;
@@ -329,6 +340,13 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         }
     }
 
+    /** Read from the active pointer row alone: no payload is fetched or decoded. */
+    @Override
+    public Optional<String> activeSnapshotId(UUID projectId) throws IOException {
+        Objects.requireNonNull(projectId, "projectId");
+        return activeMetadata(projectId).map(ActiveMetadata::snapshotId);
+    }
+
     private Optional<ActiveMetadata> activeMetadata(UUID projectId) throws IOException {
         try {
             return connections.withConnection(connection -> {
@@ -364,14 +382,17 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) return Optional.empty();
                         Path payload = createScratchFile("snapshot-read-");
-                        try (InputStream input = result.getBinaryStream(2);
+                        // Hashed while it is copied: the payload is not read a second time to check it.
+                        MessageDigest digest = Sha256.newDigest();
+                        try (InputStream input = new DigestInputStream(result.getBinaryStream(2), digest);
                              OutputStream output = Files.newOutputStream(payload)) {
                             copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
                         } catch (Exception exception) {
                             Files.deleteIfExists(payload);
                             throw exception;
                         }
-                        return Optional.of(new Row(result.getString(1), payload, result.getString(3)));
+                        return Optional.of(new Row(result.getString(1), payload, result.getString(3),
+                                HexFormat.of().formatHex(digest.digest())));
                     }
                 }
             });
@@ -411,8 +432,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
 
     private DecodedPayload decodeVerified(UUID projectId, Row row) throws IOException {
         try {
-            String actualSha = new com.minos.storage.local.store.SnapshotIntegrityService().checksum(row.payload());
-            if (!row.sha256().equals(actualSha)) {
+            if (!row.sha256().equals(row.copiedSha256())) {
                 throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
             }
             int formatVersion = codec.formatVersion(row.payload());
@@ -471,7 +491,8 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         return locks;
     }
 
-    private record Row(String snapshotId, Path payload, String sha256) {
+    /** {@code copiedSha256} is the SHA-256 of the bytes written to {@code payload}, {@code sha256} the stored one. */
+    private record Row(String snapshotId, Path payload, String sha256, String copiedSha256) {
         private Row {
             Objects.requireNonNull(snapshotId, "snapshotId");
             Objects.requireNonNull(payload, "payload");
