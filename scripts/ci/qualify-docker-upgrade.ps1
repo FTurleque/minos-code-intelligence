@@ -47,7 +47,34 @@ function Resolve-Commit([string] $Ref) {
     return $Value
 }
 
+function Resolve-CandidateJavaHome([string] $Root) {
+    # A candidate is built with the JDK its own POM compiles for: candidate A may predate a change of
+    # Java baseline (Maven Enforcer refuses any other major). setup-java exports JAVA_HOME_<major>_<arch>
+    # for every JDK it installed; '' means the JDK already selected is the right one.
+    $Pom = Get-Content -LiteralPath (Join-Path $Root 'pom.xml') -Raw
+    if ($Pom -notmatch '<maven\.compiler\.release>(\d+)</maven\.compiler\.release>') {
+        throw "Cannot read maven.compiler.release from the POM under $Root"
+    }
+    $Required = $Matches[1]
+    $Selected = ((& java -version 2>&1) | Select-Object -First 1).ToString()
+    if ($Selected -match ('version "' + $Required + '(?:\.|"|-)')) { return '' }
+    foreach ($Name in @("JAVA_HOME_${Required}_X64", "JAVA_HOME_${Required}_ARM64")) {
+        $Candidate = [Environment]::GetEnvironmentVariable($Name)
+        if (-not [string]::IsNullOrWhiteSpace($Candidate) -and (Test-Path -LiteralPath $Candidate -PathType Container)) {
+            return $Candidate
+        }
+    }
+    throw "The candidate under $Root is built for Java $Required, the selected JDK is: $Selected. Install JDK $Required (JAVA_HOME_${Required}_X64) before this qualification."
+}
+
 function Build-ShadedJar([string] $Root) {
+    $CandidateJavaHome = Resolve-CandidateJavaHome $Root
+    $PreviousJavaHome = $env:JAVA_HOME
+    $PreviousPath = $env:PATH
+    if ($CandidateJavaHome -ne '') {
+        $env:JAVA_HOME = $CandidateJavaHome
+        $env:PATH = (Join-Path $CandidateJavaHome 'bin') + [System.IO.Path]::PathSeparator + $env:PATH
+    }
     Push-Location $Root
     try {
         # This function's result is captured by the caller ($JarA = Build-ShadedJar ...): any
@@ -63,7 +90,11 @@ function Build-ShadedJar([string] $Root) {
         }
         if ($LASTEXITCODE -ne 0) { throw "Maven packaging failed under $Root" }
     }
-    finally { Pop-Location }
+    finally {
+        Pop-Location
+        $env:JAVA_HOME = $PreviousJavaHome
+        $env:PATH = $PreviousPath
+    }
 
     $Jars = @(Get-ChildItem -LiteralPath (Join-Path $Root 'target') -Filter 'minos-code-intelligence-*-all.jar' -File)
     if ($Jars.Count -ne 1) { throw "Expected one shaded MINOS JAR under $Root, found $($Jars.Count)." }

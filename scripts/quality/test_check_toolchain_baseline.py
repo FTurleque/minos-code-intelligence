@@ -218,6 +218,25 @@ class JavaBaselineTest(unittest.TestCase):
         self.write(f"{gate.WORKFLOWS}/intellij-plugin.yml", workflow(("plugin", "22")))
         self.assertEqual([f"{gate.WORKFLOWS}/intellij-plugin.yml:7 installs Java 22, the POM compiles for 25"], self.failures())
 
+    def test_an_upgrade_qualification_may_install_the_previous_baseline_once(self):
+        self.assertIn(("docker-upgrade-qualification.yml", "real-docker-upgrade"), gate.PREVIOUS_JAVA_STEPS)
+        both = workflow(("real-docker-upgrade", gate.PREVIOUS_JAVA)) + (
+            "      - uses: actions/setup-java@abc # v5\n        with:\n          java-version: '25'\n")
+        self.write(f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml", both)
+        self.assertEqual([], self.failures())
+
+    def test_the_previous_baseline_twice_in_an_upgrade_qualification_is_refused(self):
+        twice = workflow(("real-docker-upgrade", gate.PREVIOUS_JAVA)) + (
+            f"      - uses: actions/setup-java@abc # v5\n        with:\n          java-version: '{gate.PREVIOUS_JAVA}'\n")
+        self.write(f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml", twice)
+        self.assertEqual([f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml job `real-docker-upgrade` installs Java "
+                          f"{gate.PREVIOUS_JAVA} in 2 steps, the closed list of upgrade qualifications allows 1"], self.failures())
+
+    def test_the_previous_baseline_outside_an_upgrade_qualification_is_refused(self):
+        self.write(f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml", workflow(("another-job", gate.PREVIOUS_JAVA)))
+        self.assertEqual([f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml:7 installs Java {gate.PREVIOUS_JAVA}, "
+                          "the POM compiles for 25"], self.failures())
+
     def test_a_pom_without_a_single_release_is_refused(self):
         self.write(gate.POM, "<project/>\n")
         self.assertEqual([f"{gate.POM} must state exactly one maven.compiler.release, found 0"], self.failures())
