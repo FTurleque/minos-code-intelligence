@@ -20,7 +20,7 @@ Ordre dans chaque section : d'abord le test qui échoue (rouge attendu), puis la
 ## 3. Câblage CI et preuve sur Windows
 
 - [x] 3.1 [AUD-SEC-12, AUD-SEC-13] Câbler les deux `test_*.py` dans le job `invariants` (où ils se déclarent sautés avec leur raison : `python scripts/install/test_secret_file_acl.py` et `python scripts/install/test_dev_launcher.py`), comme l'exige `python scripts/quality/check-ci-wiring.py` ; ajouter un pas `runner.os == 'Windows'` au job `verify` qui les exécute réellement (Windows PowerShell 5.1 pour la fonction d'installation). Valider le YAML des workflows par `yaml.safe_load` avant de pousser ; rejouer `check-ci-wiring.py` et `python scripts/remediation/check-single-execution.py`.
-- [ ] 3.2 **(manuelle)** [AUD-SEC-12, AUD-SEC-13] À la PR, relever sur `Verify (windows-2022)` que les deux tests s'exécutent (0 sauté) et passent, et sur `invariants` qu'ils sont déclarés sautés avec leur raison. Noter les run ids dans `SUIVI.md`.
+- [x] 3.2 **(manuelle)** [AUD-SEC-12, AUD-SEC-13] À la PR, relever sur `Verify (windows-2022)` que les deux tests s'exécutent (0 sauté) et passent, et sur `invariants` qu'ils sont déclarés sautés avec leur raison. Noter les run ids dans `SUIVI.md`. **Preuve (2026-10-13)** : PR #429 fusionnée (`c05312b7`) ; run `pr-ci` 38316438452 (`develop`, `808938e5`) : `Verify (windows-2022)` exécute `test_secret_file_acl.py` (« Ran 8 tests », `OK`, aucun saut) et `test_dev_launcher.py` (« Ran 6 tests », `OK`) ; `Static invariants (single run)` les déclare sautés : `OK (skipped=8)` et `OK (skipped=6)`.
 
 ## 4. Clôture
 

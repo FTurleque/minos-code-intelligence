@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-État produit revérifié le **7 octobre 2026**, mis à jour le **10 octobre 2026** (sprint 1 de l'audit du 10 octobre) ; planification additionnelle du **4 au 5 octobre 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1, 1.1.0 et 1.2.0 publiées ; hardening #113–#260, remédiation d'audit `develop` (PR #259, PR #272) et rafraîchissement Dependabot intégrés dans `main` (PR #284) ; 1.3.0-SNAPSHOT ouverte.**
+État produit revérifié le **7 octobre 2026**, mis à jour le **13 octobre 2026** (sprints 1 et 2 de l'audit du 10 octobre) ; planification additionnelle du **4 au 5 octobre 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1, 1.1.0 et 1.2.0 publiées ; hardening #113–#260, remédiation d'audit `develop` (PR #259, PR #272) et rafraîchissement Dependabot intégrés dans `main` (PR #284) ; 1.3.0-SNAPSHOT ouverte.**
 
 Les versions historiques détaillées restent archivées sous [`history/reconciliations/`](history/reconciliations/). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
 
@@ -22,7 +22,7 @@ Le sprint 1 de l'audit du 10 octobre 2026 (« remettre les dispositifs de mesure
 - **Plugin IntelliJ** : workflow exécuté sur toute PR, portée calculée (`scripts/ci/plugin-gate.py`) et gate agrégatrice toujours rendue ; la portée inclut les rendus JSON de `minos-application`, le domaine et les goldens de caractérisation.
 - **Architecture** : garde de frontières testée règle par règle (104 cas), groupId interne lu dans le POM racine, **aucun cycle de packages** (règle A8, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris), listes de dépendances d'`arc42/05` confrontées aux POM (règle A9), liste fermée des types de `minos-runtime-local` nommables par les autres modules (règle A10). Les quatre cycles existants ont été levés par le déplacement de 13 classes de production (et de leurs tests) dans leur module.
 
-Capacités OpenSpec créées ou étendues : `controles-de-fusion`, `frontieres-de-modules`, `confinement-code-non-fiable`. Les sprints 2 à 11 de l'audit (sécurité et observabilité, socle JDK, chemin de requête, chaîne de release, couverture réelle, sorties publiques, confinement et E/S privées, orchestration d'indexation, frontières d'architecture, hygiène) restent à traiter.
+Capacités OpenSpec créées ou étendues : `controles-de-fusion`, `frontieres-de-modules`, `confinement-code-non-fiable`. Le sprint 2 (sécurité et observabilité, 7 constats) est lui aussi corrigé, fusionné et archivé le 13 octobre 2026 (PR #406 à #410, #420 et #429 ; détail dans [`STATUS.md`](STATUS.md)). Les sprints 3 à 11 de l'audit (socle JDK, chemin de requête, chaîne de release, couverture réelle, sorties publiques, confinement et E/S privées, orchestration d'indexation, frontières d'architecture, hygiène) restent à traiter.
 
 ## Principes durables
 
@@ -153,7 +153,6 @@ Les releases 1.1.0 et 1.2.0 ont été publiées depuis (voir [`STATUS.md`](STATU
 
 | Sprint | Titre |
 |---|---|
-| 2 | Failles de sécurité et observabilité |
 | 3 | Socle d'exécution supporté (JDK LTS, Node) |
 | 4 | Chemin de requête : ne plus relire le snapshot |
 | 5 | Chaîne de release et d'approvisionnement |
@@ -164,7 +163,7 @@ Les releases 1.1.0 et 1.2.0 ont été publiées depuis (voir [`STATUS.md`](STATU
 | 10 | Frontières d'architecture |
 | 11 | Hygiène de fond |
 
-Le sprint 1 est terminé. Le sprint 3 était conditionné par la qualification du confinement réel (AUD-TST-03), désormais exigée en CI.
+Les sprints 1 et 2 sont terminés ; suite ouverte par le sprint 2 : un changement de confinement « plan d'indexation Linux sur classpath vérifié ». Le sprint 3 était conditionné par la qualification du confinement réel (AUD-TST-03), désormais exigée en CI.
 
 ### Travaux ouverts en conception
 

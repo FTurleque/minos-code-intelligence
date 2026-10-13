@@ -22,7 +22,7 @@ Ordre dans chaque section : d'abord le test qui échoue (rouge attendu), puis la
 
 ## 4. Preuve sur les deux plateformes
 
-- [ ] 4.1 **(manuelle)** [AUD-SEC-01] Ouvrir la PR ; relever sur `Verify (ubuntu-24.04)` et `Verify (windows-2022)` que `GitIntelligenceTrustTest` s'exécute (0 sauté) et passe. Noter les run ids dans `SUIVI.md`.
+- [x] 4.1 **(manuelle)** [AUD-SEC-01] Ouvrir la PR ; relever sur `Verify (ubuntu-24.04)` et `Verify (windows-2022)` que `GitIntelligenceTrustTest` s'exécute (0 sauté) et passe. Noter les run ids dans `SUIVI.md`. **Preuve (2026-10-13)** : PR #406 fusionnée (`4ba0f0de`), les deux `Verify` verts ; run `pr-ci` 38316438452 (`develop`, `808938e5`) : `GitIntelligenceTrustTest` 12 tests, 0 sauté, 0 échec sur `Verify (ubuntu-24.04)` et sur `Verify (windows-2022)`.
 
 ## 5. Clôture
 
