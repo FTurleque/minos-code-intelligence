@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -52,9 +53,30 @@ def lock(version: str = "1.0.0", coordinate: str = "org.example:classpath:1.0.0"
     return {"coordinate": coordinate, "version": version, "jars": jars}
 
 
-def dockerfile(sha: str = TOOL_SHA, maven: str = "3.9.16", java: str = "1.0.0", extra: str = "") -> str:
+def inventory(sdk: str = "${dotnet_sdk_version}", toolchain: str = "${go_toolchain_version}",
+              runtime: str = "Node ${node_runtime_version}") -> str:
+    """The RUN instruction that writes the provider inventory, shaped like the one of the release Dockerfile."""
+    return ('RUN set -eux; \\\n'
+            '    go_toolchain_version="$(go env GOVERSION)"; \\\n'
+            "    printf '%s\\n' \\\n"
+            "      '{' \\\n"
+            f'      "    {{\\"id\\":\\"scip-typescript\\",\\"version\\":\\"${{SCIP_TYPESCRIPT_VERSION}}\\",\\"runtime\\":\\"{runtime}\\"}}," \\\n'
+            f'      "    {{\\"id\\":\\"scip-dotnet\\",\\"sdk\\":\\"{sdk}\\"}}," \\\n'
+            f'      "    {{\\"id\\":\\"scip-go\\",\\"version\\":\\"${{SCIP_GO_VERSION}}\\",\\"toolchain\\":\\"{toolchain}\\"}}" \\\n'
+            "      '}' > /opt/minos/provider-evidence/provider-inventory.json\n")
+
+
+def dockerfile(sha: str = TOOL_SHA, maven: str = "3.9.16", java: str = "1.0.0", extra: str = "",
+               inventory_block: str | None = None) -> str:
     return (f"FROM eclipse-temurin:24@sha256:{'a' * 64}\nARG MAVEN_VERSION={maven}\nARG MAVEN_ZIP_SHA256={sha}\n"
-            f"ARG SCIP_JAVA_VERSION={java}\nARG SCIP_GO_VERSION=2.0.0\n{extra}")
+            f"ARG SCIP_JAVA_VERSION={java}\nARG SCIP_GO_VERSION=2.0.0\n{extra}"
+            f"{inventory() if inventory_block is None else inventory_block}")
+
+
+def node(platform: str, version: str) -> dict:
+    return {"id": "nodejs", "platform": platform, "version": version, "format": "zip",
+            "url": f"https://nodejs.example/node-v{version}-{platform}.zip", "sha256": OTHER_SHA,
+            "sizeBytes": 1, "license": "MIT", "embedded": False}
 
 
 PROVIDER_CATALOG = '''
@@ -190,6 +212,47 @@ class CheckToolsManifestTest(unittest.TestCase):
             failures, _ = gate.check(root)
         self.assertTrue(any("does not call build-embedded-tools.py" in failure for failure in failures), failures)
 
+    # ------------------------------------------------------------------ Node runtime
+
+    def test_node_majors_that_differ_between_platforms_are_refused(self):
+        broken = self.minimal_catalog()
+        broken["artifacts"] += [node("windows-x64", "24.20.0"), node("linux-x64", "20.20.2")]
+        failures = self.run_gate(catalog=broken)
+        self.assertTrue(any("24.20.0" in failure and "20.20.2" in failure for failure in failures), failures)
+
+    def test_node_of_the_same_major_on_every_platform_is_accepted(self):
+        aligned = self.minimal_catalog()
+        aligned["artifacts"] += [node("windows-x64", "24.20.0"), node("linux-x64", "24.19.1")]
+        self.assertEqual([], self.run_gate(catalog=aligned))
+
+    # ------------------------------------------------------------------ provider inventory
+
+    def test_a_literal_version_in_the_provider_inventory_is_refused_with_its_line(self):
+        for field, block in (("toolchain", inventory(toolchain="1.97.1")),
+                             ("sdk", inventory(sdk="10.0.302")),
+                             ("runtime", inventory(runtime="Node 20")),
+                             ("toolchain", inventory(toolchain="${go_toolchain_version:-1.97.1}"))):
+            with self.subTest(block=block):
+                text = dockerfile(inventory_block=block)
+                line = next(number for number, content in enumerate(text.splitlines(), start=1)
+                            if f'\\"{field}\\"' in content)
+                failures = self.run_gate(dockerfile=text)
+                self.assertTrue(any(f"{gate.DOCKERFILE}:{line}:" in failure and field in failure
+                                    for failure in failures), failures)
+
+    def test_an_inventory_version_read_into_a_shell_variable_is_accepted(self):
+        block = inventory(sdk="${dotnet_sdk_version}", toolchain="$rust_toolchain_version",
+                          runtime="Node ${node_runtime_version}")
+        self.assertEqual([], self.run_gate(dockerfile=dockerfile(inventory_block=block)))
+
+    def test_an_inventory_version_that_comes_from_no_variable_is_refused(self):
+        failures = self.run_gate(dockerfile=dockerfile(inventory_block=inventory(toolchain="stable")))
+        self.assertTrue(any("toolchain" in failure and "shell variable" in failure for failure in failures), failures)
+
+    def test_a_dockerfile_that_writes_no_provider_inventory_is_refused(self):
+        failures = self.run_gate(dockerfile=dockerfile(inventory_block=""))
+        self.assertTrue(any("provider-inventory.json" in failure for failure in failures), failures)
+
     # ------------------------------------------------------------------ distribution
 
     @staticmethod
@@ -277,6 +340,27 @@ class ShippedTreeTest(unittest.TestCase):
         failures, components = gate.check(gate.DEFAULT_ROOT)
         self.assertEqual([], failures)
         self.assertGreater(components, 0)
+
+    def test_the_shipped_catalogue_with_an_older_node_major_on_linux_is_refused(self):
+        shipped = json.loads((gate.DEFAULT_ROOT / gate.CATALOG).read_text(encoding="utf-8"))
+        linux = next(artifact for artifact in shipped["artifacts"]
+                     if artifact["id"] == gate.NODE_RUNTIME and artifact["platform"] == "linux-x64")
+        linux["version"] = "20.20.2"
+        failures: list[str] = []
+        gate.check_node_runtime(shipped, failures)
+        self.assertTrue(any("linux-x64 is 20.20.2" in failure for failure in failures), failures)
+
+    def test_the_shipped_dockerfile_with_a_literal_toolchain_is_refused(self):
+        shipped = (gate.DEFAULT_ROOT / gate.DOCKERFILE).read_text(encoding="utf-8")
+        mutated, count = re.subn(r'(\\"toolchain\\":\\")[^"\\]*(\\")', r"\g<1>1.97.1\g<2>", shipped, count=1)
+        self.assertEqual(1, count, "the shipped Dockerfile no longer writes a toolchain field")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / gate.DOCKERFILE
+            path.parent.mkdir(parents=True)
+            path.write_text(mutated, encoding="utf-8")
+            failures: list[str] = []
+            gate.check_provider_inventory(Path(directory), failures)
+        self.assertTrue(any("toolchain" in failure and "1.97.1" in failure for failure in failures), failures)
 
 
 if __name__ == "__main__":

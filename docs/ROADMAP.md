@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-État produit revérifié le **7 octobre 2026**, mis à jour le **13 octobre 2026** (sprints 1 et 2 de l'audit du 10 octobre) ; planification additionnelle du **4 au 5 octobre 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1, 1.1.0 et 1.2.0 publiées ; hardening #113–#260, remédiation d'audit `develop` (PR #259, PR #272) et rafraîchissement Dependabot intégrés dans `main` (PR #284) ; 1.3.0-SNAPSHOT ouverte.**
+État produit revérifié le **7 octobre 2026**, mis à jour le **13 octobre 2026** (sprints 1 et 2 de l'audit du 10 octobre, sprint 3 en partie) ; planification additionnelle du **4 au 5 octobre 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1, 1.1.0 et 1.2.0 publiées ; hardening #113–#260, remédiation d'audit `develop` (PR #259, PR #272) et rafraîchissement Dependabot intégrés dans `main` (PR #284) ; 1.3.0-SNAPSHOT ouverte.**
 
 Les versions historiques détaillées restent archivées sous [`history/reconciliations/`](history/reconciliations/). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
 
@@ -128,12 +128,12 @@ Le blocage historique `docker compose` interactif de #246 est ainsi couvert par 
 
 ## Supply-chain et toolchains
 
-- cœur : Java 24 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven 3.10.0 avec checksum ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
+- cœur : Java 25 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven 3.10.0 avec checksum ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
 - IntelliJ : Java 21 / Gradle 9.8.1 / IntelliJ Platform 2026.1 ;
 - Dependabot : Maven + Gradle `minos-intellij` + GitHub Actions ;
 - workflows GitHub : actions épinglées par SHA ;
 - Docker release : toolchains/images/checksums immuables lorsque cette garantie est revendiquée ;
-- Docker MCP local : base Temurin 24 JRE désormais épinglée par digest et non plus par tag flottant.
+- Docker MCP local : base Temurin 25 JRE désormais épinglée par digest et non plus par tag flottant.
 
 ## Release 1.0.1 — publiée
 
@@ -153,7 +153,7 @@ Les releases 1.1.0 et 1.2.0 ont été publiées depuis (voir [`STATUS.md`](STATU
 
 | Sprint | Titre |
 |---|---|
-| 3 | Socle d'exécution supporté (JDK LTS, Node) |
+| 3 | Socle d'exécution supporté (JDK LTS, Node) — **en partie fait** : restent l'image de requête séparée (AUD-DEP-15) et les CVE de Testcontainers (AUD-DEP-14, bloqué) |
 | 4 | Chemin de requête : ne plus relire le snapshot |
 | 5 | Chaîne de release et d'approvisionnement |
 | 6 | Couverture réelle et plugin IntelliJ |

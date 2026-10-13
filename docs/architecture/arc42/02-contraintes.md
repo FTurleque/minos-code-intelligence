@@ -9,7 +9,7 @@
 
 | Réf | Contrainte | Nature | Preuve |
 |-----|-----------|--------|--------|
-| CT-1 | **Java 24** requis (range `[24,25)`) | Imposée — enforcer Maven | `pom.xml` `<requireJavaVersion>` |
+| CT-1 | **Java 25** requis (range `[25,26)`) | Imposée — enforcer Maven | `pom.xml` `<requireJavaVersion>` |
 | CT-2 | **Maven 3.9.x** requis (range `[3.9,4.0)`) | Imposée — enforcer Maven | `pom.xml` `<requireMavenVersion>` |
 | CT-3 | **Reactor Maven multi-module** : 14 modules enfants + parent | Imposée — ADR-0022 | `pom.xml` `<modules>` |
 | CT-4 | Direction de dépendances Maven stricte : `domain → engine → infra → adapters → services → surfaces → app` | Imposée — ADR-0022 | Structure `pom.xml` des modules |

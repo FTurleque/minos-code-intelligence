@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-État produit revérifié le : **7 octobre 2026** ; mis à jour le **13 octobre 2026** (sprints 1 et 2 de l'audit du 10 octobre). Planification additionnelle : **5 octobre 2026**.
+État produit revérifié le : **7 octobre 2026** ; mis à jour le **13 octobre 2026** (sprints 1 et 2 de l'audit du 10 octobre, sprint 3 en partie). Planification additionnelle : **5 octobre 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit courant. Les réconciliations détaillées antérieures restent archivées sous [`history/reconciliations/`](history/reconciliations/). Une capacité présente sur une branche ou une PR n'est dite intégrée dans `develop` qu'après merge ; le présent document décrit néanmoins les garanties du HEAD qui le contient afin qu'il reste exact avant et après promotion.
 
@@ -29,7 +29,18 @@ Le sprint 2 (« failles de sécurité et observabilité », 7 constats) est **co
 - **Journalisation** : le jar ombré lie SLF4J à `java.util.logging` (stderr ; stdout reste réservé au protocole MCP) ; les échecs des tâches d'arrière-plan du plugin sont journalisés dans `idea.log` ; les journaux de récupération de MINOS ne portent ni chemin absolu ni cause, sous garde (`check-private-io.py`).
 - **Scripts Windows** : le mot de passe PostgreSQL est écrit dans un fichier déjà restreint et vérifié ; le lanceur de développement `minos.cmd` ne cherche plus `java` dans le répertoire courant.
 
-Preuves, écarts avec le critère de sortie et suite à ouvrir : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md). Capacités OpenSpec créées ou étendues par l'archivage : voir `openspec/specs/`. Les sprints 3 à 11 de l'audit (socle JDK, chemin de requête, chaîne de release, couverture réelle, sorties publiques, confinement et E/S privées, orchestration d'indexation, frontières d'architecture, hygiène) restent à traiter.
+Preuves, écarts avec le critère de sortie et suite à ouvrir : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md). Capacités OpenSpec créées ou étendues par l'archivage : voir `openspec/specs/`. Le sprint 3 est traité en partie (section suivante) ; les sprints 4 à 11 (chemin de requête, chaîne de release, couverture réelle, sorties publiques, confinement et E/S privées, orchestration d'indexation, frontières d'architecture, hygiène) restent à traiter.
+
+## Audit 2026-10-10 — sprint 3, en partie (2026-10-13)
+
+Quatre des cinq changements du sprint 3 (« socle d'exécution supporté ») sont **fusionnés dans `develop`** (PR #434 à #437) :
+
+- **Java 25 LTS** : le noyau, la CLI, le MCP, le stockage et les providers sont compilés pour Java 25 (enforcer `[25,26)`), les deux images partent d'`eclipse-temurin:25` sur Ubuntu 24.04, le runtime de l'installateur Windows est produit par le JDK 25 ; le plugin IntelliJ reste en Java 21. La version est énoncée une fois (POM racine) et gardée par `check-toolchain-baseline.py` ; la politique de toolchain date la fin de support (ADR 0059). Une installation par jar demande un JDK 25.
+- **Node.js 24 LTS dans l'image Docker**, la même ligne que la distribution Windows ; l'inventaire de provenance lit les versions de .NET, Go, Rust et Node sur les binaires installés, et la qualification d'image les compare.
+- **Veille des dépendances livrées** : les deux verrous npm embarqués sont analysés par le gate OSV de chaque PR ; une veille hebdomadaire, non exigée, interroge une base d'avis pour le catalogue d'outils et le classpath de scip-java. Elle ne tournera qu'après la promotion vers `main`, et signale aujourd'hui quatre avis sur le classpath de scip-java 0.13.1, non traités.
+- **Notices et licences tierces** : le jar ombré et les images conservent les notices (agrégées) et un fichier de licence par dépendance ; `META-INF/LICENSE` est la licence de MINOS. Douze dépendances ne livrent aucun fichier de licence dans leur jar et ne sont couvertes que par le SBOM ; les outils non Maven de l'image sont hors périmètre.
+
+Limites : aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés sur le nouveau socle par exécution directe sous Linux, pas sous Windows. Restent à faire dans ce sprint : l'image de requête séparée (AUD-DEP-15, non commencée) et les CVE de Testcontainers en portée test (AUD-DEP-14, bloqué). Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
 
 ## État produit
 
@@ -146,12 +157,12 @@ La **gate JaCoCo ciblée** de `PR Validation` (`scripts/quality/check-jacoco.py`
 ## Supply-chain et toolchains
 
 - Maven Wrapper : Maven 3.10.0 avec checksum SHA-256 (`.mvn/wrapper/maven-wrapper.properties`), accepté par la plage `[3.9,4.0)` de l'enforcer ; l'image Docker et les outils embarqués (`embedded-tools.json`) restent en Maven 3.9.16 ;
-- cœur MINOS : Java 24 / Maven 3.9.x ;
+- cœur MINOS : Java 25 / Maven 3.9.x ;
 - plugin IntelliJ : Java 21 / Gradle 9.8.1 / IntelliJ Platform 2026.1 ;
 - Dependabot couvre Maven, GitHub Actions **et le build Gradle `minos-intellij`** ;
 - les actions GitHub sont épinglées sur des SHA immuables ;
 - `docker/Dockerfile.mcp.release` conserve ses images/toolchains/checksums de release reproductibles ;
-- le Dockerfile MCP local utilise lui aussi une base Temurin 24 JRE par digest immuable et n'est plus dépendant d'un tag flottant.
+- le Dockerfile MCP local utilise lui aussi une base Temurin 25 JRE par digest immuable et n'est plus dépendant d'un tag flottant.
 
 ## Garanties structurantes
 

@@ -76,6 +76,56 @@ ENTRYPOINT="$(docker image inspect --format '{{json .Config.Entrypoint}}' "$IMAG
 [[ "$RUNTIME_USER" == "10001:10001" ]]
 [[ "$ENTRYPOINT" == '["java","-cp","/opt/minos/minos.jar","com.minos.mcp.MinosMcpServer"]' ]]
 
+# AUD-DEP-16: the image ships the notices and licence files of the JAR it embeds, readable without
+# running MINOS. One "<sha256>  ./<path>" line per file of /opt/minos/licenses, compared below with
+# the entries of the shaded JAR the image was built from: a missing directory, an empty notice or a
+# file that differs from the JAR fails the qualification.
+docker run --rm --network none --read-only --entrypoint sh "$IMAGE" -ec \
+  'cd /opt/minos/licenses && find . -type f -exec sha256sum {} +' \
+  > "$QUALIFICATION_ROOT/image-licenses-sha256.txt"
+python3 - "${SHADED_JARS[0]}" "$QUALIFICATION_ROOT/image-licenses-sha256.txt" <<'PY'
+import hashlib
+import pathlib
+import sys
+import zipfile
+
+jar_path = pathlib.Path(sys.argv[1])
+image_hashes = {}
+for line in pathlib.Path(sys.argv[2]).read_text(encoding="utf-8").splitlines():
+    # "<sha256>  ./<path>" (text mode) or "<sha256> *./<path>" (binary mode).
+    digest, _, name = line.partition(" ")
+    name = name.lstrip(" *")
+    if name:
+        image_hashes[name.removeprefix("./")] = digest
+
+expected = {}
+with zipfile.ZipFile(jar_path) as jar:
+    for info in jar.infolist():
+        if info.is_dir():
+            continue
+        if info.filename in ("META-INF/NOTICE", "META-INF/LICENSE") or info.filename.startswith("META-INF/licenses/"):
+            content = jar.read(info)
+            if not content:
+                raise SystemExit(f"empty notice or licence file in the shaded JAR: {info.filename}")
+            expected[info.filename] = hashlib.sha256(content).hexdigest()
+
+for required in ("META-INF/NOTICE", "META-INF/LICENSE"):
+    if required not in expected:
+        raise SystemExit(f"the shaded JAR has no {required}")
+if not any(name.startswith("META-INF/licenses/") for name in expected):
+    raise SystemExit("the shaded JAR keeps no dependency licence under META-INF/licenses/")
+
+problems = []
+for name, digest in sorted(expected.items()):
+    if name not in image_hashes:
+        problems.append(f"missing from /opt/minos/licenses of the image: {name}")
+    elif image_hashes[name] != digest:
+        problems.append(f"/opt/minos/licenses/{name} of the image differs from the shaded JAR")
+if problems:
+    raise SystemExit("\n".join(problems))
+print(f"image licences: {len(expected)} notice and licence files identical to those of the shaded JAR")
+PY
+
 docker run --rm --network none --read-only --entrypoint cat "$IMAGE" \
   /opt/minos/provider-evidence/provider-inventory.json \
   > "$QUALIFICATION_ROOT/provider-inventory.json"
@@ -83,13 +133,24 @@ docker run --rm --network none --read-only --entrypoint cat "$IMAGE" \
   /opt/minos/provider-evidence/binary-sha256.txt \
   > "$QUALIFICATION_ROOT/provider-binary-sha256.txt"
 
-python3 - "$QUALIFICATION_ROOT/provider-inventory.json" "$ACTUAL_HEAD" <<'PY'
+# What the toolchain binaries of the built image report, one "<binary>=<raw output>" line each: the
+# provider inventory must say the same (it is provenance evidence, written at build time).
+docker run --rm --network none --read-only \
+  --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
+  --env HOME=/tmp --env DOTNET_CLI_HOME=/tmp \
+  --entrypoint sh "$IMAGE" -ec \
+  'printf "dotnet=%s\n" "$(dotnet --version)"; printf "go=%s\n" "$(go version)"; printf "rustc=%s\n" "$(rustc --version)"; printf "node=%s\n" "$(node --version)"' \
+  > "$QUALIFICATION_ROOT/toolchain-versions.txt"
+cat "$QUALIFICATION_ROOT/toolchain-versions.txt"
+
+python3 - "$QUALIFICATION_ROOT/provider-inventory.json" "$ACTUAL_HEAD" "$QUALIFICATION_ROOT/toolchain-versions.txt" <<'PY'
 import json
 import pathlib
 import sys
 
 inventory_path = pathlib.Path(sys.argv[1])
 expected_head = sys.argv[2]
+toolchain_path = pathlib.Path(sys.argv[3])
 data = json.loads(inventory_path.read_text(encoding="utf-8"))
 if data.get("formatVersion") != 1:
     raise SystemExit(f"unexpected provider inventory format: {data.get('formatVersion')!r}")
@@ -111,6 +172,40 @@ expected = {
 actual = {provider.get("id") for provider in data.get("providers", [])}
 if actual != expected:
     raise SystemExit(f"provider inventory mismatch: actual={sorted(actual)} expected={sorted(expected)}")
+
+# Every toolchain version of the inventory equals what the binary of the image reports.
+reported = dict(
+    line.split("=", 1) for line in toolchain_path.read_text(encoding="utf-8").splitlines() if "=" in line
+)
+
+
+def word(binary, index, prefix=""):
+    words = reported.get(binary, "").split()
+    if len(words) <= index or not words[index].startswith(prefix):
+        raise SystemExit(f"cannot read the version of the {binary} binary of the image: {reported.get(binary)!r}")
+    return words[index][len(prefix):]
+
+
+# provider id, inventory field, binary, version the binary reports, value the inventory must carry
+installed = [
+    ("scip-dotnet", "sdk", "dotnet", word("dotnet", 0)),              # 10.0.401
+    ("scip-go", "toolchain", "go", word("go", 2, "go")),              # go version go1.27.0 linux/amd64
+    ("rust-analyzer-scip", "toolchain", "rustc", word("rustc", 1)),   # rustc 1.99.0 (<commit> <date>)
+    ("scip-typescript", "runtime", "node", "Node " + word("node", 0, "v")),  # v24.20.0
+]
+providers = {provider.get("id"): provider for provider in data.get("providers", [])}
+mismatches = []
+for provider_id, field, binary, version in installed:
+    recorded = providers[provider_id].get(field)
+    if recorded != version:
+        mismatches.append(
+            f"provider inventory toolchain mismatch: {provider_id}.{field} is {recorded!r} "
+            f"but the {binary} binary of the image reports {version!r}"
+        )
+    else:
+        print(f"provider inventory {provider_id}.{field}={recorded!r} matches the {binary} binary of the image")
+if mismatches:
+    raise SystemExit("\n".join(mismatches))
 PY
 
 docker run --rm --network none --read-only --entrypoint sh "$IMAGE" -ec \

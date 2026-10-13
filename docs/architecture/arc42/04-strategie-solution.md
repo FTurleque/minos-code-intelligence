@@ -51,7 +51,7 @@ La direction des dépendances est strictement ascendante : les couches basses ig
 
 | Technologie | Rôle | Module |
 |------------|------|--------|
-| Java 24 | Langage et runtime | Tous |
+| Java 25 | Langage et runtime | Tous |
 | Maven 3.9 | Build, frontières et releases CI-friendly | `pom.xml` racine |
 | SCIP (protobuf) | Protocole d'indexation sémantique | `minos-provider-scip` |
 | SDK Java MCP 2.0 | Transport MCP STDIO | `minos-mcp` |

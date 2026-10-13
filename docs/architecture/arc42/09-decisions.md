@@ -13,7 +13,7 @@
 | [ADR-0002](../../adr/0002-scip-preferred-interoperability-protocol.md) | Utiliser SCIP comme protocole d'interopérabilité d'indexation sémantique privilégié | Accepted | 2026-07-22 | — |
 | [ADR-0003](../../adr/0003-glean-behind-code-knowledge-store.md) | Garder Glean optionnel derrière un port CodeKnowledgeStore MINOS | Accepted | 2026-07-22 | — |
 | [ADR-0004](../../adr/0004-stack-java-maven-core-sans-framework.md) | Implémenter le cœur MINOS avec Maven sans framework serveur | Partiellement remplacé par ADR-0005 | 2026-07-22 | ADR-0005 |
-| [ADR-0005](../../adr/0005-aligner-java-24-environnement-developpement.md) | Aligner MINOS sur Java 24 | Accepted | 2026-07-22 | Remplace partiellement ADR-0004 |
+| [ADR-0005](../../adr/0005-aligner-java-24-environnement-developpement.md) | Aligner MINOS sur Java 24 | Superseded | 2026-07-22 | Remplacé par ADR-0059 |
 | [ADR-0006](../../adr/0006-promouvoir-les-index-de-maniere-atomique.md) | Promouvoir les index de manière atomique | Accepted | 2026-07-22 | — |
 | [ADR-0007](../../adr/0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans le registre local | Accepted | 2026-07-22 | — |
 | [ADR-0008](../../adr/0008-negocier-indexeurs-par-capacites-explicites.md) | Négocier les indexeurs par capacités explicites | Accepted | 2026-07-22 | — |
@@ -66,3 +66,4 @@
 | [ADR-0055](../../adr/0055-unifier-les-adaptateurs-de-stockage.md) | Un module minos-storage, packages local/PostgreSQL et codec partagé | Accepted — implémentation à réaliser | 2026-10-05 | — |
 | [ADR-0056](../../adr/0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — implémentation à réaliser | 2026-10-05 | — |
 | [ADR-0057](../../adr/0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels planifiés | 2026-10-05 | — |
+| [ADR-0059](../../adr/0059-migrer-le-socle-vers-java-25-lts.md) | Migrer le socle vers Java 25 LTS et garder la baseline par un gate | Accepted | 2026-10-13 | Remplace ADR-0005 |

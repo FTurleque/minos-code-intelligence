@@ -3,15 +3,15 @@ FROM rust:1.99.0-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db127
 FROM golang:1.27.0-bookworm@sha256:ded31c68586d2e49e760acc2e65a884b23d032e9bbbed0ae0c55abd3fcaf4452 AS go-toolchain
 FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble@sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317 AS dotnet-toolchain
 
-FROM eclipse-temurin:24.0.2_12-jdk@sha256:7493205ffe6caa8074fa8a06a276bb1c5ac41d3dd0fd43a0db66d7f776e80b3e
+FROM eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:589ff4cc3f71aab462e7048a47a0d10edf57fbccde3fceea2281e610bf5880b4
 
 ARG TARGETARCH
 ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown
 ARG MINOS_BUILD_TIMESTAMP=unknown
-ARG UBUNTU_APT_SNAPSHOT=20260814T000000Z
-ARG NODE_VERSION=20.20.2
-ARG NODE_LINUX_SHA256=df770b2a6f130ed8627c9782c988fda9669fa23898329a61a871e32f965e007d
+ARG UBUNTU_APT_SNAPSHOT=20261003T000000Z
+ARG NODE_VERSION=24.20.0
+ARG NODE_LINUX_SHA256=2f2c0da162318f0de47665410c7c8c2ed3d36c8f3105de4bbc61176c70a7cbf2
 ARG MAVEN_VERSION=3.9.16
 ARG MAVEN_ZIP_SHA256=5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce
 ARG COURSIER_LAUNCHERS_COMMIT=15f36c167c30be237105f923151adaf177e7ee61
@@ -86,8 +86,9 @@ RUN set -eux; \
     rm -f "/tmp/${maven_archive}"; \
     mvn --version | grep -F "Apache Maven ${MAVEN_VERSION}"
 
-# scip-typescript 0.4.0 documents Node 18/20 support. Keep the last pinned Node 20 line
-# for provider compatibility and expose this limitation in the provider inventory.
+# scip-typescript and scip-python run on the Node line pinned by embedded-tools.json, the same
+# major as the Windows distribution (check-tools-manifest.py refuses two majors). The provider
+# inventory reports the version read from the installed binary, not this ARG.
 RUN set -eux; \
     node_archive="node-v${NODE_VERSION}-linux-x64.tar.xz"; \
     curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo "/tmp/${node_archive}" "https://nodejs.org/dist/v${NODE_VERSION}/${node_archive}"; \
@@ -198,7 +199,26 @@ RUN set -eux; \
     rm -rf /tmp/minos-coursier-build-cache \
       /tmp/scip-java-coordinate.version /tmp/scip-java-standalone.version
 
+# The toolchain versions of the provider inventory are read from the installed binaries: a version
+# typed here stays behind at the next bump of a FROM line. An unreadable or non-numeric version
+# fails the build before anything is written (scripts/ci/qualify-docker-release.sh compares the
+# inventory with the binaries of the built image).
 RUN set -eux; \
+    dotnet_sdk_version="$(dotnet --version)"; \
+    go_toolchain_version="$(go env GOVERSION)"; \
+    go_toolchain_version="${go_toolchain_version#go}"; \
+    rust_toolchain_version="$(rustc --version)"; \
+    rust_toolchain_version="${rust_toolchain_version#rustc }"; \
+    rust_toolchain_version="${rust_toolchain_version%% *}"; \
+    node_runtime_version="$(node --version)"; \
+    node_runtime_version="${node_runtime_version#v}"; \
+    for toolchain_version in "$dotnet_sdk_version" "$go_toolchain_version" "$rust_toolchain_version" "$node_runtime_version"; do \
+      case "$toolchain_version" in \
+        *[!0-9A-Za-z.+-]*) echo "unreadable toolchain version for the provider inventory: '${toolchain_version}'" >&2; exit 1 ;; \
+        [0-9]*.[0-9]*) ;; \
+        *) echo "unreadable toolchain version for the provider inventory: '${toolchain_version}'" >&2; exit 1 ;; \
+      esac; \
+    done; \
     mkdir -p /opt/minos/provider-evidence; \
     sha256sum \
       /usr/local/bin/cs \
@@ -224,12 +244,12 @@ RUN set -eux; \
       "  \"buildTools\": {\"maven\":\"${MAVEN_VERSION}\"}," \
       '  "providers": [' \
       "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}; Coursier transitive graph is not repository-lockfile-backed; produced binary hash is retained as build evidence; real Maven indexing executes from a writable MINOS staging tree and may resolve project dependencies\"}," \
-      "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm-lockfile+ci\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
+      "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm-lockfile+ci\",\"runtime\":\"Node ${node_runtime_version}\"}," \
       "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm-lockfile+ci\"}," \
       "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary+sha256\"}," \
-      "    {\"id\":\"scip-dotnet\",\"version\":\"${SCIP_DOTNET_VERSION}\",\"delivery\":\"pinned NuGet nupkg+sha256 local source\",\"sdk\":\"10.0.302\"}," \
-      "    {\"id\":\"scip-go\",\"version\":\"${SCIP_GO_VERSION}\",\"delivery\":\"go proxy+sumdb\",\"toolchain\":\"1.26.5\"}," \
-      "    {\"id\":\"rust-analyzer-scip\",\"version\":\"${RUST_ANALYZER_VERSION}\",\"release\":\"${RUST_ANALYZER_RELEASE}\",\"commit\":\"${RUST_ANALYZER_COMMIT}\",\"toolchain\":\"1.97.1\"}" \
+      "    {\"id\":\"scip-dotnet\",\"version\":\"${SCIP_DOTNET_VERSION}\",\"delivery\":\"pinned NuGet nupkg+sha256 local source\",\"sdk\":\"${dotnet_sdk_version}\"}," \
+      "    {\"id\":\"scip-go\",\"version\":\"${SCIP_GO_VERSION}\",\"delivery\":\"go proxy+sumdb\",\"toolchain\":\"${go_toolchain_version}\"}," \
+      "    {\"id\":\"rust-analyzer-scip\",\"version\":\"${RUST_ANALYZER_VERSION}\",\"release\":\"${RUST_ANALYZER_RELEASE}\",\"commit\":\"${RUST_ANALYZER_COMMIT}\",\"toolchain\":\"${rust_toolchain_version}\"}" \
       '  ]' \
       '}' > /opt/minos/provider-evidence/provider-inventory.json; \
     chmod -R a+rX /opt/minos/provider-tools /opt/minos/provider-evidence
@@ -269,6 +289,21 @@ RUN java -cp /opt/minos/minos.jar com.minos.adapter.scip.runtime.install.StampMa
       "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}" "${SCIP_GO_VERSION}" \
       "proxy.golang.org+sum.golang.org" \
     && chmod -R a+rX /opt/minos/provider-tools
+
+# AUD-DEP-16: the image redistributes the Java dependencies shaded into minos.jar, so it ships their
+# notices and licence files where they can be read without running MINOS: the aggregated
+# META-INF/NOTICE, the MINOS licence (META-INF/LICENSE) and META-INF/licenses/<artifact>-<version>/
+# are extracted from the very JAR that was copied, under /opt/minos/licenses (same relative paths as
+# in the JAR). `jar xf` silently extracts nothing for an absent entry: the tests fail the build
+# instead. Tools installed outside Maven (Node, Go, Rust, .NET, indexers) are not covered here, see
+# docs/developer/supply-chain.md.
+RUN mkdir -p /opt/minos/licenses \
+    && cd /opt/minos/licenses \
+    && jar xf /opt/minos/minos.jar META-INF/NOTICE META-INF/LICENSE META-INF/licenses/ \
+    && test -s META-INF/NOTICE \
+    && test -s META-INF/LICENSE \
+    && test -n "$(find META-INF/licenses -type f -size +0c -print -quit)" \
+    && chmod -R a+rX /opt/minos/licenses
 
 RUN chmod 0444 /opt/minos/minos.jar \
     && mkdir -p /var/lib/minos \

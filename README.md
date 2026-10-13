@@ -143,7 +143,7 @@ Le runtime 1.0.1 est calculé depuis le fat JAR final :
 
 ```text
 fat JAR
-→ jdeps JDK 24
+→ jdeps JDK 25
 → modules racines
 → jpackage
 → runtime/bin/java --list-modules
@@ -168,7 +168,7 @@ Le hardening post-audit impose notamment :
 
 ## Développement
 
-Pré-requis principaux : JDK 24 et Maven Wrapper du dépôt.
+Pré-requis principaux : JDK 25 et Maven Wrapper du dépôt.
 
 ```powershell
 .\mvnw.cmd clean verify

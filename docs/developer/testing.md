@@ -19,7 +19,7 @@ java -version
 .\mvnw.cmd -version
 ```
 
-Le build doit tourner réellement sous Java 24.
+Le build doit tourner réellement sous Java 25.
 
 ## Pipeline Maven
 
@@ -31,6 +31,7 @@ maven-compiler-plugin
 maven-surefire-plugin
 maven-failsafe-plugin
 maven-jar-plugin
+maven-dependency-plugin
 maven-shade-plugin
 ```
 
