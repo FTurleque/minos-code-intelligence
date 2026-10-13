@@ -16,6 +16,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -27,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
 
 /** Production wrapper binding Java advanced analysis to the immutable fingerprint snapshot. */
@@ -44,25 +46,48 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
             new LinkedHashMap<>(16, 0.75f, true);
     private long cacheWeightBytes;
     private long cacheEvictions;
+    private final SourceStateKeyMemo sourceStateKeys;
 
     public FingerprintConstrainedJavaProgramGraphProvider(ProjectFingerprintSnapshotStore fingerprints) {
-        this(fingerprints, new JavaSourceProgramGraphProvider());
+        this(fingerprints, System::nanoTime);
     }
 
-    FingerprintConstrainedJavaProgramGraphProvider(ProjectFingerprintSnapshotStore fingerprints,
-                                                   JavaSourceProgramGraphProvider delegate) {
+    /**
+     * @param monotonicNanoClock monotonic clock, in nanoseconds, that bounds the reuse of a source-derived key
+     *                           ({@link ProgramGraphService#SOURCE_STATE_REUSE_SECONDS})
+     */
+    public FingerprintConstrainedJavaProgramGraphProvider(ProjectFingerprintSnapshotStore fingerprints,
+                                                          LongSupplier monotonicNanoClock) {
         this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints");
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.delegate = new JavaSourceProgramGraphProvider();
+        this.sourceStateKeys = new SourceStateKeyMemo(
+                Duration.ofSeconds(ProgramGraphService.SOURCE_STATE_REUSE_SECONDS), monotonicNanoClock);
     }
 
     @Override public String id() { return JavaSourceProgramGraphProvider.PROVIDER_ID; }
 
     @Override
     public String cacheKey(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
+        return resolveCacheKey(project, snapshot).key();
+    }
+
+    /**
+     * With an exact fingerprint the key is the fingerprint itself and no source is read. Without one, the key is
+     * a hash of every Java source: it is computed once, then reused for a bounded delay (AUD-PERF-07), and the
+     * resolution says so.
+     */
+    @Override
+    public CacheKeyResolution resolveCacheKey(RegisteredProject project, CodeKnowledgeSnapshot snapshot)
+            throws IOException {
         Optional<ProjectFingerprintSnapshot> exact = exactFingerprint(project.id(), snapshot.snapshotId());
-        if (exact.isEmpty()) return delegate.cacheKey(project, snapshot);
-        return id() + ":snapshot-fingerprint:" + exact.orElseThrow().fingerprint().projectSha256()
-                + ":security-config:" + securityConfigSha256(project.rootPath());
+        if (exact.isPresent()) {
+            return CacheKeyResolution.exact(
+                    id() + ":snapshot-fingerprint:" + exact.orElseThrow().fingerprint().projectSha256()
+                            + ":security-config:" + securityConfigSha256(project.rootPath()));
+        }
+        JavaProgramGraphEngine.SourceStateKey state = sourceStateKeys.resolve(
+                project.id(), snapshot.snapshotId(), () -> delegate.sourceStateKey(project, snapshot));
+        return new CacheKeyResolution(state.key(), state.readsSources());
     }
 
     @Override

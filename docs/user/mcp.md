@@ -507,6 +507,18 @@ Les limites de requête sont explicites et les résultats restent bornés.
 
 `minos_security_paths` est une recherche bornée de chemins observés. **L'absence de chemin n'est pas une preuve de sûreté et un chemin observé n'est pas présenté comme une preuve runtime exhaustive de vulnérabilité.**
 
+#### Projet Java indexé pendant qu'un fichier changeait
+
+L'analyse Java de ces trois tools lit les fichiers source du disque. Quand le snapshot actif porte l'empreinte exacte de l'arbre source (indexation sur un arbre resté stable), MINOS vérifie que les fichiers sont ceux qui ont été indexés, et refuse l'analyse Java sinon (`JAVA_ADVANCED_PROVIDER_SOURCE_DIFFERS_FROM_SNAPSHOT_FINGERPRINT`).
+
+Quand un fichier a changé pendant `minos index`, le snapshot n'a pas cette empreinte. Les trois tools répondent quand même, et leurs `limitations` contiennent alors :
+
+```text
+PROGRAM_GRAPH_REFLECTS_DISK_AS_OF_AT_MOST_5_SECONDS_AGO_NOT_INDEXED_STATE
+```
+
+Cette limitation dit deux choses : le graphe est construit depuis les fichiers tels qu'ils sont sur le disque, **pas depuis l'état indexé** ; et, dans un serveur MCP qui reste ouvert, une modification n'est prise en compte qu'au plus tard 5 secondes après (MINOS ne relit pas tous les fichiers à chaque appel). Pour retrouver une analyse vérifiée contre l'état indexé, relancer `minos index` sans modifier l'arbre pendant l'indexation. La même limitation, avec le même identifiant, apparaît dans `minos ide program-graph`, `minos ide impact-v2`, `minos ide security-paths` et dans l'API Java.
+
 ### Recherche sémantique et hybride
 
 Les tools distinguent explicitement :

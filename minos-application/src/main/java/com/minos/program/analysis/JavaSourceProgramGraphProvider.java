@@ -42,6 +42,11 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
         return engine.cacheKey(project, snapshot);
     }
 
+    JavaProgramGraphEngine.SourceStateKey sourceStateKey(RegisteredProject project, CodeKnowledgeSnapshot snapshot)
+            throws IOException {
+        return engine.sourceStateKey(project, snapshot);
+    }
+
     @Override
     public ProgramGraph analyze(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
         return engine.analyze(project, snapshot);
