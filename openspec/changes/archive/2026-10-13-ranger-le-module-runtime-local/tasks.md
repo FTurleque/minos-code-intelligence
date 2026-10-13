@@ -20,7 +20,7 @@ Ordre : mesure, déplacement, preuve. Commande de référence : `./mvnw.cmd -B -
 
 ## 3. Preuve sur les deux plateformes
 
-- [ ] 3.1 **(manuelle)** Relever sur `Verify (ubuntu-24.04)` et `Verify (windows-2022)` que les tests de confinement s'exécutent (aucun saut silencieux) et que `SonarCloud Code Analysis` passe.
+- [x] 3.1 **(manuelle)** Relever sur `Verify (ubuntu-24.04)` et `Verify (windows-2022)` que les tests de confinement s'exécutent (aucun saut silencieux) et que `SonarCloud Code Analysis` passe. **Preuve (2026-10-13)** : run `pr-ci` 38316438452 (`develop`, `808938e5`) : sous Ubuntu `LinuxBubblewrapWorkerSandboxBackendTest` 4/0 sauté, `LinuxCgroupJobOwnershipIsolationTest` 10/0, `WindowsAppContainerWorkerSandboxBackendTest` 15/14 (propres à Windows, comptés) ; sous Windows 15/0, les classes Linux 4/4 et 10/10 ; `SandboxTestSupportTest` 8/0 des deux côtés. `SonarCloud Code Analysis` vert sur les PR #416 (`f3a03c19`) et #426 (`677f3e89`).
 
 ## 4. Clôture
 
@@ -34,4 +34,4 @@ Rendu possible par la PR #421 (SonarCloud importe aussi la couverture du job Win
 - [x] 5.1 Vérifier que le déplacement de `WindowsAppContainerWorkerSandboxBackend`, `SandboxLauncherScript`, `WindowsJobObjectProcessOwnership`, `WindowsExecutionPathIdentityProvider` et `WorkerSandboxBackends` dans `sandbox` ne crée aucun cycle, puis les déplacer avec leurs tests (`git mv`), réécrire `META-INF/services` et les chemins littéraux.
 - [x] 5.2 Élargir la visibilité au strict nécessaire et **refermer** ce que le rangement partiel avait ouvert pour ces classes ; ajouter `sandbox.WorkerSandboxBackends` à `RUNTIME_LOCAL_EXPORTED_TYPES` (règle A10), les autres modules le nommaient déjà.
 - [x] 5.3 Preuve : `./mvnw.cmd -B -ntp -pl minos-runtime-local -am test` (mêmes nombres qu'avant), `./mvnw.cmd -B -ntp -pl minos-app -am test-compile`, `python .claude/scripts/run_gates.py`, baseline SpotBugs régénéré.
-- [ ] 5.4 **(manuelle)** Relever sur la PR que `SonarCloud Code Analysis` mesure la couverture de ces classes à partir des deux rapports (preuve de la fusion fichier par fichier laissée ouverte par la PR #421).
+- [x] 5.4 **(manuelle)** Relever sur la PR que `SonarCloud Code Analysis` mesure la couverture de ces classes à partir des deux rapports (preuve de la fusion fichier par fichier laissée ouverte par la PR #421). **Preuve (2026-10-13)** : PR #426 (après le correctif #430) : mesure par fichier de l'API SonarCloud, `WindowsAppContainerWorkerSandboxBackend` 78,5 % (exécutée par le seul job Windows), `LinuxBubblewrapWorkerSandboxBackend` 83,9 % (seul job Linux), nouveau code 84,2 % : les deux rapports se cumulent fichier par fichier.
