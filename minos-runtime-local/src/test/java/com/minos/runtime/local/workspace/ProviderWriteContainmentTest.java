@@ -6,6 +6,7 @@ import com.minos.runtime.local.process.IndexerProcessPlan;
 import com.minos.runtime.local.process.ProcessIndexerExecutor;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.orchestration.ExecutionPathIdentityProvider;
 import com.minos.orchestration.IndexerCapability;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
@@ -16,6 +17,7 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -26,6 +28,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -59,10 +62,11 @@ class ProviderWriteContainmentTest {
                         runDirectory.resolve("index.scip"),
                         Duration.ofSeconds(120)));
 
+        IndexingExecutionRequest hostileRequest = executionRequest(hostileRun, project);
         IllegalStateException failure = assertThrows(
                 IllegalStateException.class,
                 () -> executor.executeSandboxed(
-                        executionRequest(hostileRun, project),
+                        hostileRequest,
                         containedTransformer(new ProviderWriteQuota(512L * 1024L, 256L, Duration.ofMillis(100L)),
                                 kills)));
 
@@ -92,9 +96,13 @@ class ProviderWriteContainmentTest {
                         Map.of(),
                         runDirectory.resolve("index.scip"),
                         Duration.ofSeconds(120)));
-        assertThrows(IllegalStateException.class, () -> hostile.executeSandboxed(
-                executionRequest(UUID.randomUUID(), project),
-                containedTransformer(new ProviderWriteQuota(512L * 1024L, 256L, Duration.ofMillis(100L)), kills)));
+        IndexingExecutionRequest hostileRequest = executionRequest(UUID.randomUUID(), project);
+        ProcessIndexerExecutor.ProcessPlanTransformer hostileContainment =
+                containedTransformer(new ProviderWriteQuota(512L * 1024L, 256L, Duration.ofMillis(100L)), kills);
+        IllegalStateException breach = assertThrows(IllegalStateException.class,
+                () -> hostile.executeSandboxed(hostileRequest, hostileContainment));
+        // Any other refusal would mean the hostile run never started, and the run below would follow nothing.
+        assertTrue(breach.getMessage().contains("write containment breached"), breach.getMessage());
 
         ProcessIndexerExecutor healthy = new ProcessIndexerExecutor(
                 PROVIDER,
@@ -181,12 +189,36 @@ class ProviderWriteContainmentTest {
                 IndexerQualification.QUALIFIED,
                 1,
                 List.of());
-        return new IndexingExecutionRequest(
+        IndexingExecutionRequest request = new IndexingExecutionRequest(
                 runId,
                 UUID.randomUUID(),
                 projectRoot,
                 new IndexerSelection(Language.JAVA, descriptor),
                 IndexingMode.FULL,
                 List.of());
+        // The executor refuses an unauthorized request without saying why, and the journal only names
+        // the exception class. Fail here instead, with the reason the identity capture gives.
+        assertTrue(request.pathAuthorization().isPresent(),
+                () -> "the execution roots could not be canonically authorized: "
+                        + identityCaptureDiagnostic(projectRoot));
+        return request;
+    }
+
+    /** Asks every identity provider again, directly, and reports what each one answers. */
+    private static String identityCaptureDiagnostic(Path projectRoot) {
+        List<String> answers = new ArrayList<>();
+        for (ExecutionPathIdentityProvider provider : ServiceLoader.load(ExecutionPathIdentityProvider.class)) {
+            String name = provider.getClass().getSimpleName();
+            try {
+                Path real = projectRoot.toRealPath();
+                answers.add(name + (provider.capture(real, real).isPresent()
+                        ? " captured both roots when asked again"
+                        : " declined this platform"));
+            } catch (IOException | RuntimeException failure) {
+                answers.add(name + " failed again: " + failure.getClass().getSimpleName()
+                        + ": " + failure.getMessage());
+            }
+        }
+        return answers.isEmpty() ? "no identity provider is registered" : String.join("; ", answers);
     }
 }
