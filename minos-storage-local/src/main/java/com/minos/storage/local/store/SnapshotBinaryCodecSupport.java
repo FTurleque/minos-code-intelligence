@@ -49,9 +49,11 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -931,6 +933,7 @@ final class SnapshotBinaryCodecSupport {
         private final CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT);
+        private final Map<String, String> distinctStrings = new HashMap<>();
 
         SnapshotInput(DataInputStream stream, StringEncoding encoding) {
             this.stream = stream;
@@ -946,6 +949,22 @@ final class SnapshotBinaryCodecSupport {
         int read() throws IOException { return stream.read(); }
 
         String readString() throws IOException {
+            return shared(readDecodedString());
+        }
+
+        /**
+         * One instance per distinct string of this decoding pass (ADR 0047, option A). The project id, the
+         * origin strings and the file ids are repeated on every entity: decoded as separate instances, they
+         * made a reread snapshot retain about 2.5 times the heap of the ingested one. The table lives and
+         * dies with this pass; the decoded model is equal, only instance identity changes.
+         */
+        private String shared(String value) {
+            if (value == null) return null;
+            String known = distinctStrings.putIfAbsent(value, value);
+            return known == null ? value : known;
+        }
+
+        private String readDecodedString() throws IOException {
             if (encoding == StringEncoding.UTF16_CHARS) return SnapshotBinaryCodecSupport.readString(stream);
             int length = stream.readInt();
             if (length == -1) return null;

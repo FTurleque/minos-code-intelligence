@@ -44,7 +44,14 @@ import static com.minos.domain.Preconditions.requireText;
 public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotStore {
     private static final long MAX_PERSISTED_SNAPSHOT_BYTES = SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES;
     private static final int MAX_ACTIVE_QUERY_RETRIES = 4;
-    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L;
+    /**
+     * Heap retained by a query view, as a multiple of its persisted size. With one instance per distinct
+     * string (ADR 0047, option A) a repository-shaped snapshot retains 1.41 to 1.46 times its V3 file
+     * (QueryViewWeightTest in minos-storage-local, same codec); 2 leaves a margin and also bounds a string of two-byte characters, which
+     * takes at most twice its UTF-8 size. It was 8 before the strings were shared, when a reread view
+     * retained 2.5 to 3.3 times its file.
+     */
+    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 2L;
     private static final int MAX_QUERY_CACHE_ENTRIES = 32;
     private static final long MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
     private static final int BUILD_LOCK_STRIPES = 64;

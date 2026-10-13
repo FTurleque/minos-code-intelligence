@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.SnapshotQueryView;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -13,6 +14,7 @@ import java.util.concurrent.Executors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FileSymbolSnapshotStoreCacheTest {
 
@@ -29,6 +31,41 @@ class FileSymbolSnapshotStoreCacheTest {
         assertEquals(1, store.cacheStats().fullSnapshotLoads());
         assertEquals(1, store.cacheStats().queryViewBuilds());
         assertEquals(1, store.cacheStats().hits());
+    }
+
+    @Test
+    void aViewWithinTheMeasuredAmplificationOfItsFileIsCached(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        CodeKnowledgeSnapshot snapshot = QueryViewWeightFixtures.repository(projectId, "admitted", 20,
+                List.<String[]>of(QueryViewWeightFixtures.ASCII));
+        long persisted = new SnapshotCodecV3().encodedSize(snapshot);
+        // Three times the persisted size: above the measured amplification, below the former factor of 8.
+        FileSymbolSnapshotStore store = new FileSymbolSnapshotStore(root, 4, 3L * persisted);
+        store.publish(projectId, "admitted", snapshot.symbols(), snapshot.occurrences(), snapshot.relationships());
+
+        SnapshotQueryView first = store.loadActiveQueryView(projectId).orElseThrow();
+        SnapshotQueryView second = store.loadActiveQueryView(projectId).orElseThrow();
+
+        assertEquals(1, store.cacheStats().fullSnapshotLoads());
+        assertEquals(1, store.cacheStats().entries());
+        assertTrue(first == second, "the second read returns the cached view");
+    }
+
+    @Test
+    void aViewHeavierThanTheCacheCeilingIsReloadedOnEveryRead(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        CodeKnowledgeSnapshot snapshot = QueryViewWeightFixtures.repository(projectId, "refused", 20,
+                List.<String[]>of(QueryViewWeightFixtures.ASCII));
+        long persisted = new SnapshotCodecV3().encodedSize(snapshot);
+        FileSymbolSnapshotStore store = new FileSymbolSnapshotStore(root, 4, persisted);
+        store.publish(projectId, "refused", snapshot.symbols(), snapshot.occurrences(), snapshot.relationships());
+
+        SnapshotQueryView first = store.loadActiveQueryView(projectId).orElseThrow();
+        SnapshotQueryView second = store.loadActiveQueryView(projectId).orElseThrow();
+
+        assertEquals(2, store.cacheStats().fullSnapshotLoads());
+        assertEquals(0, store.cacheStats().entries());
+        assertTrue(first != second, "a view that is not admitted is rebuilt");
     }
 
     @Test
