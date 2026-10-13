@@ -150,11 +150,10 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
      */
     private <T> T withSharedLock(IoOperation<T> operation) throws IOException {
         Objects.requireNonNull(operation, "operation");
-        try (BoundedFileLease ignored = BoundedFileLease.acquireShared(
-                lockFile, jvmLock, LOCK_TIMEOUT, "local project registry lease")) {
+        return BoundedFileLease.readShared(lockFile, jvmLock, LOCK_TIMEOUT, "local project registry lease", () -> {
             validateRegistryStorage();
             return delegate.readingWithoutMigration(operation::run);
-        }
+        });
     }
 
     private void validateRegistryStorage() throws IOException {

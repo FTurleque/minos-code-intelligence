@@ -111,9 +111,11 @@ Un écrivain (`acquire`, exclusif) attend la fin des lecteurs et réciproquement
 
 L'ouverture en lecture reste dans `BoundedFileLease`, seule primitive autorisée à ouvrir un canal de verrou (`check-private-io.py`). Aucun type nouveau n'est exporté : `InterProcessLocalProjectRegistry` choisit `acquireShared` pour ses six lectures et garde `acquire` pour ses cinq mutations.
 
-### D3. Fichier de verrou absent : le lecteur ne le crée pas (option A) — **mis en œuvre selon la recommandation, à confirmer en revue**
+### D3. Fichier de verrou absent : le lecteur ne le crée pas, et relit si un écrivain est apparu (option A) — **corrigé après la revue de sécurité, à confirmer par le propriétaire**
 
 Un lecteur ne crée jamais le fichier de verrou. S'il est absent, aucun écrivain n'a jamais tenu le bail sur ce registre (toute mutation le crée d'abord) : le lecteur ne prend que le verrou JVM. La seule course possible est avec la **première** mutation du registre, qui publie un fichier unique de façon atomique : le lecteur voit le registre vide ou le projet complet.
+
+**Correction après la revue de sécurité (2026-10-13).** L'argument ci-dessus est insuffisant, et la revue l'a reproduit : un lecteur parti sans verrou OS continue de lire pendant qu'un écrivain d'un autre processus crée le verrou puis enchaîne **plusieurs** mutations ; un inventaire qui croise projets et espaces peut alors mêler deux états. `BoundedFileLease.readShared` ferme la fenêtre sans rien écrire : si la lecture s'est faite sans verrou OS et que le fichier de verrou existe à sa fin, elle est **refaite** sous le verrou partagé ; s'il est toujours absent, aucun écrivain n'a rien modifié avant la fin de la lecture (il crée le verrou avant toute chose) et le résultat est gardé. Le registre lit par `readShared`. Les observations runtime gardent `acquireShared` : une session est publiée par un déplacement atomique et vérifiée par empreinte, la fenêtre y est sans effet. Deux durcissements de la même revue : l'existence du verrou est établie par lecture d'attributs, et seul « fichier inexistant » vaut absence (tout autre échec fait échouer la lecture — avant, `Files.exists` rendait « absent » sur toute erreur) ; l'échec d'ouverture du verrou en lecture ne porte plus le chemin, seulement la classe de l'exception.
 
 Alternative : refuser la lecture tant que le verrou n'existe pas (« registre non initialisé »). Plus strict, mais `minos project list` sur une installation neuve échouerait au lieu de répondre « aucun projet ». **Recommandation : ne pas créer, ne pas refuser.**
 

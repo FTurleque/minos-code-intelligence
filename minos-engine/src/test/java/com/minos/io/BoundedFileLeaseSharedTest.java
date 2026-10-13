@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -59,6 +60,46 @@ class BoundedFileLeaseSharedTest {
 
         assertFalse(jvmLock.isLocked());
         assertFalse(Files.exists(lockFile), "a reader never creates the lock file");
+    }
+
+    /**
+     * Sans fichier de verrou, le lecteur n'a que le verrou JVM : si un écrivain d'un autre processus crée le verrou
+     * pendant la lecture, le résultat peut chevaucher ses changements et la lecture est refaite sous le verrou partagé.
+     */
+    @Test
+    void aReadThatAWriterOvertookWhileNoLockFileExistedIsRunAgainUnderTheSharedLock() throws Exception {
+        Path lockFile = root.resolve("lease.lock");
+        ReentrantLock jvmLock = new ReentrantLock();
+        AtomicInteger runs = new AtomicInteger();
+
+        String result = BoundedFileLease.readShared(lockFile, jvmLock, TIMEOUT, "reader lease", () -> {
+            if (runs.incrementAndGet() == 1) {
+                // What a writer of another process does first; its JVM lock is not this reader's.
+                BoundedFileLease.acquire(lockFile, new ReentrantLock(), TIMEOUT, "writer lease").close();
+                return "read while a writer started";
+            }
+            return "read under the shared lock";
+        });
+
+        assertEquals("read under the shared lock", result);
+        assertEquals(2, runs.get());
+        assertFalse(jvmLock.isLocked());
+    }
+
+    @Test
+    void aReadRunsOnceWhenNoWriterAppearedAndOnceWhenTheLockFileAlreadyExists() throws Exception {
+        Path lockFile = root.resolve("lease.lock");
+        ReentrantLock jvmLock = new ReentrantLock();
+        AtomicInteger runs = new AtomicInteger();
+
+        BoundedFileLease.readShared(lockFile, jvmLock, TIMEOUT, "reader lease", runs::incrementAndGet);
+        assertEquals(1, runs.get(), "no writer appeared: the first result stands");
+        assertFalse(Files.exists(lockFile));
+
+        BoundedFileLease.acquire(lockFile, jvmLock, TIMEOUT, "writer lease").close();
+        BoundedFileLease.readShared(lockFile, jvmLock, TIMEOUT, "reader lease", runs::incrementAndGet);
+        assertEquals(2, runs.get(), "the read held the shared lock: it is not run again");
+        assertFalse(jvmLock.isLocked());
     }
 
     @Test

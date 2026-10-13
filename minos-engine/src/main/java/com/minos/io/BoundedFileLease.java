@@ -7,8 +7,10 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -59,8 +61,10 @@ public final class BoundedFileLease implements AutoCloseable {
      * not repaired. It is opened for reading and locked in shared mode, which excludes every writer
      * and no reader of another process.
      *
-     * <p>When the lock file does not exist, no writer ever held this lease (a writer creates the file
-     * before anything else): the reader takes the JVM lock only and creates nothing.</p>
+     * <p>When the lock file does not exist, no writer has held this lease yet (a writer creates the file
+     * before anything else): the reader takes the JVM lock only and creates nothing. A writer of another
+     * process may then start while such a reader is still reading; {@link #readShared} is the way to read
+     * that closes this window, and callers should prefer it.</p>
      */
     public static BoundedFileLease acquireShared(
             Path lockFile,
@@ -69,6 +73,41 @@ public final class BoundedFileLease implements AutoCloseable {
             String description
     ) throws IOException {
         return acquire(lockFile, jvmLock, timeout, description, true);
+    }
+
+    /**
+     * Runs {@code read} under a reader's lease and returns its result.
+     *
+     * <p>When the read ran without an OS lock because the lock file did not exist, and the file exists
+     * once the read is done, a writer started in the meantime and the result may straddle its changes:
+     * the read is run again, this time under the shared OS lock that excludes that writer. When the file
+     * is still absent, no writer changed anything before the read ended (a writer creates the file before
+     * anything else), so the first result stands. {@code read} must therefore be free of side effects.</p>
+     */
+    public static <T> T readShared(
+            Path lockFile,
+            ReentrantLock jvmLock,
+            Duration timeout,
+            String description,
+            LeasedRead<T> read
+    ) throws IOException {
+        Objects.requireNonNull(read, "read");
+        Path file = Objects.requireNonNull(lockFile, "lockFile").toAbsolutePath().normalize();
+        T result;
+        try (BoundedFileLease lease = acquireShared(file, jvmLock, timeout, description)) {
+            result = read.run();
+            if (lease.channel != null) return result;
+        }
+        if (lockFileIsAbsent(file, requireDescription(description))) return result;
+        try (BoundedFileLease ignored = acquireShared(file, jvmLock, timeout, description)) {
+            return read.run();
+        }
+    }
+
+    /** A read made under a reader's lease; it may run twice (see {@link #readShared}). */
+    @FunctionalInterface
+    public interface LeasedRead<T> {
+        T run() throws IOException;
     }
 
     private static BoundedFileLease acquire(
@@ -87,10 +126,10 @@ public final class BoundedFileLease implements AutoCloseable {
         try {
             acquireJvmLock(localLock, deadline, label);
             localAcquired = true;
-            if (shared && !Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+            if (shared && lockFileIsAbsent(file, label)) {
                 return new BoundedFileLease(localLock, null, null);
             }
-            channel = shared ? openExistingLockChannel(file) : openPrivateLockChannel(file, label);
+            channel = shared ? openExistingLockChannel(file, label) : openPrivateLockChannel(file, label);
             FileLock fileLock = acquireFileLock(channel, deadline, label, shared);
             return new BoundedFileLease(localLock, channel, fileLock);
         } catch (IOException | RuntimeException failure) {
@@ -148,12 +187,33 @@ public final class BoundedFileLease implements AutoCloseable {
 
     /**
      * Opens, for a reader, the lock file {@code file} that already exists: verified, never modified,
-     * opened for reading with {@link LinkOption#NOFOLLOW_LINKS}. The verification message never
-     * carries the path.
+     * opened for reading with {@link LinkOption#NOFOLLOW_LINKS}. No message carries the path.
      */
-    private static FileChannel openExistingLockChannel(Path file) throws IOException {
+    private static FileChannel openExistingLockChannel(Path file, String description) throws IOException {
         PrivateLocalStorage.verifyPrivateFile(file);
-        return FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+        try {
+            return FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+        } catch (IOException unopenable) {
+            // The original message is the absolute path: only its class is kept.
+            throw new IOException(description + " lock file cannot be opened for reading: "
+                    + unopenable.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Whether the lock file does not exist. Fails closed: only a missing file is "absent"; a lock file
+     * that cannot be inspected is an error, never a reason to read without the cross-process lock.
+     */
+    private static boolean lockFileIsAbsent(Path file, String description) throws IOException {
+        try {
+            Files.readAttributes(file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            return false;
+        } catch (NoSuchFileException absent) {
+            return true;
+        } catch (IOException uninspectable) {
+            throw new IOException(description + " lock file cannot be inspected: "
+                    + uninspectable.getClass().getSimpleName());
+        }
     }
 
     private static void preparePrivateLockFile(Path file, String description) throws IOException {
