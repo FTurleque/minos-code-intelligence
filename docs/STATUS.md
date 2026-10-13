@@ -33,14 +33,16 @@ Preuves, écarts avec le critère de sortie et suite à ouvrir : [`docs/audit/20
 
 ## Audit 2026-10-10 — sprint 3, en partie (2026-10-13)
 
-Quatre des cinq changements du sprint 3 (« socle d'exécution supporté ») sont **fusionnés dans `develop`** (PR #434 à #437) :
+Les cinq changements du sprint 3 (« socle d'exécution supporté ») sont **fusionnés dans `develop`** (PR #434 à #437 et #441) :
 
 - **Java 25 LTS** : le noyau, la CLI, le MCP, le stockage et les providers sont compilés pour Java 25 (enforcer `[25,26)`), les deux images partent d'`eclipse-temurin:25` sur Ubuntu 24.04, le runtime de l'installateur Windows est produit par le JDK 25 ; le plugin IntelliJ reste en Java 21. La version est énoncée une fois (POM racine) et gardée par `check-toolchain-baseline.py` ; la politique de toolchain date la fin de support (ADR 0059). Une installation par jar demande un JDK 25.
 - **Node.js 24 LTS dans l'image Docker**, la même ligne que la distribution Windows ; l'inventaire de provenance lit les versions de .NET, Go, Rust et Node sur les binaires installés, et la qualification d'image les compare.
 - **Veille des dépendances livrées** : les deux verrous npm embarqués sont analysés par le gate OSV de chaque PR ; une veille hebdomadaire, non exigée, interroge une base d'avis pour le catalogue d'outils et le classpath de scip-java. Elle ne tournera qu'après la promotion vers `main`, et signale aujourd'hui quatre avis sur le classpath de scip-java 0.13.1, non traités.
 - **Notices et licences tierces** : le jar ombré et les images conservent les notices (agrégées) et un fichier de licence par dépendance ; `META-INF/LICENSE` est la licence de MINOS. Douze dépendances ne livrent aucun fichier de licence dans leur jar et ne sont couvertes que par le SBOM ; les outils non Maven de l'image sont hors périmètre.
 
-Limites : aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés sur le nouveau socle par exécution directe sous Linux, pas sous Windows. Restent à faire dans ce sprint : l'image de requête séparée (AUD-DEP-15, non commencée) et les CVE de Testcontainers en portée test (AUD-DEP-14, bloqué). Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
+- **Image de requête séparée** : le plan de requête MCP et les amorçages tournent sur une image de 355 Mo (JRE et jar, aucun outil de compilation) ; l'indexation et les outils de provider gardent l'image complète. Une installation à une image reçoit la seconde à l'`Install` suivant.
+
+Limites : avec la racine de données en lecture seule, comme le déclarent les compose pour le plan de requête, les outils MCP échouent (défaut antérieur à ce sprint, non corrigé) ; aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés sur le nouveau socle par exécution directe sous Linux, pas sous Windows. Restent à faire dans ce sprint : les CVE de Testcontainers en portée test (AUD-DEP-14, bloqué), une preuve d'indexation par le runtime de l'installateur et le premier passage de la veille planifiée. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
 
 ## État produit
 
