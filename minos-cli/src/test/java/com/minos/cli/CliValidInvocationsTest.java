@@ -99,8 +99,9 @@ class CliValidInvocationsTest {
         assertReaches("architecture p", "getArchitectureIntelligence[p]");
         assertReaches("architecture p --module core", "getModuleContext[p, core]");
         assertReaches("architecture p --format JSON", "getArchitectureIntelligence[p]");
-        assertReaches("architecture p --format mermaid --module core", "getArchitectureIntelligence[p]");
-        assertReaches("architecture p --module core --format dot", "getArchitectureIntelligence[p]");
+        assertReaches("architecture p --format mermaid --module core", "getArchitectureIntelligenceForModule[p, core]");
+        assertReaches("architecture p --module core --format dot", "getArchitectureIntelligenceForModule[p, core]");
+        assertReaches("architecture p --format dot", "getArchitectureIntelligence[p]");
     }
 
     @Test
