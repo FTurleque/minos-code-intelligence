@@ -42,9 +42,6 @@ Sprint 3 de l'audit du 10 octobre 2026 : **AUD-DEP-01**. HEAD analysé : `2d1cc2
 
 **Correction après le premier passage en CI** (run `docker-release-validation` 38375352909, rouge) : l'étiquette sans suffixe d'`eclipse-temurin:25` repose sur Ubuntu 26.04, alors que celle de la série 24 reposait sur Ubuntu 24.04. L'instantané apt épinglé de l'image de release (`UBUNTU_APT_SNAPSHOT`) ne sert pas cette distribution : `apt-get install` échouait sur des dépendances insatisfaites. Les deux images prennent la variante `-noble` (même système qu'avant) ; les motifs littéraux de `check-audit-remediation-v2.py` et de `verify-run-configurations.ps1` exigent ce suffixe, et un cas « autre Ubuntu que noble » reste rouge dans `test_check_image_pins.py`. Changer de distribution est un autre changement, à qualifier pour lui-même.
 
-| | | |
-|---|---|---|
-
 Lecture du bytecode 25 par l'outillage : mesurée par exécution et non par lecture de notes de version. Le `verify` du reactor sous Temurin 25.0.4.1 exerce JaCoCo 0.8.15, ArchUnit 1.5.1 et maven-shade-plugin sur des classes de version 69 (résultat en tâche 4.1) ; SpotBugs 4.10.4 et PIT 1.30.0 ne tournent que dans `code-audit.yml`, à lancer à la PR (tâche 4.4) ; scip-java 0.13.1 est mesuré en tâche 4.2. Un outil qui ne lit pas ce bytecode se monte dans ce changement, il ne se désactive pas (D6).
 
 ## Goals / Non-Goals
