@@ -35,6 +35,19 @@ public final class ProgramGraphService {
     public static final int PUBLIC_MAX_NODES = 100_000;
     public static final int PUBLIC_MAX_EDGES = 500_000;
     private static final int BUILD_LOCK_STRIPES = 64;
+    /**
+     * How long a cache key obtained by hashing the project sources is reused before they are hashed again, when
+     * the snapshot has no exact fingerprint (AUD-PERF-07).
+     */
+    public static final int SOURCE_STATE_REUSE_SECONDS = 5;
+    /**
+     * Declared on every graph whose Java contribution comes from the sources on disk without an exact snapshot
+     * fingerprint: the graph is the disk as it was at most {@link #SOURCE_STATE_REUSE_SECONDS} seconds ago, not
+     * the indexed state. Running {@code minos index} on a stable tree restores the exact fingerprint.
+     */
+    public static final String SOURCE_STATE_REUSE_LIMITATION =
+            "PROGRAM_GRAPH_REFLECTS_DISK_AS_OF_AT_MOST_" + SOURCE_STATE_REUSE_SECONDS
+                    + "_SECONDS_AGO_NOT_INDEXED_STATE";
 
     private final ProjectResolver projectResolver;
     private final CodeKnowledgeSnapshotStore snapshotStore;
@@ -112,10 +125,10 @@ public final class ProgramGraphService {
         CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active symbol snapshot: " + project.id()));
         long keyStarted = System.nanoTime();
-        String providersKey = providerKey(project, snapshot);
+        ProviderKey providersKey = providerKey(project, snapshot);
         long keyElapsed = System.nanoTime() - keyStarted;
-        CacheKey key = new CacheKey(
-                project.id().toString(), snapshot.snapshotId(), providersKey, budget.maxNodes(), budget.maxEdges());
+        CacheKey key = new CacheKey(project.id().toString(), snapshot.snapshotId(), providersKey.key(),
+                budget.maxNodes(), budget.maxEdges());
 
         synchronized (cache) {
             providerKeyNanos += keyElapsed;
@@ -143,7 +156,8 @@ public final class ProgramGraphService {
                 fragments.add(provider.analyze(project, snapshot, budget));
             }
             ProgramGraph composed = withCapabilityLimitations(new ProgramGraphComposer().compose(
-                    project.id().toString(), snapshot.snapshotId(), fragments, budget));
+                    project.id().toString(), snapshot.snapshotId(), fragments, budget),
+                    providersKey.sourceStateReused());
             long analysisElapsed = System.nanoTime() - analysisStarted;
 
             synchronized (cache) {
@@ -255,9 +269,10 @@ public final class ProgramGraphService {
         return buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
     }
 
-    private ProgramGraph withCapabilityLimitations(ProgramGraph graph) {
+    private ProgramGraph withCapabilityLimitations(ProgramGraph graph, boolean sourceStateReused) {
         Set<ProgramGraphCapability> capabilities = new LinkedHashSet<>(graph.capabilities());
         Set<String> limitations = new LinkedHashSet<>(graph.limitations());
+        if (sourceStateReused) limitations.add(SOURCE_STATE_REUSE_LIMITATION);
         if (!capabilities.contains(ProgramGraphCapability.CALL_GRAPH)) limitations.add("CALL_GRAPH_UNAVAILABLE");
         if (!capabilities.contains(ProgramGraphCapability.CONTROL_FLOW)) limitations.add("CONTROL_FLOW_UNAVAILABLE");
         if (!capabilities.contains(ProgramGraphCapability.LOCAL_DATA_FLOW)) limitations.add("LOCAL_DATA_FLOW_UNAVAILABLE");
@@ -267,14 +282,22 @@ public final class ProgramGraphService {
                 limitations.stream().sorted().toList());
     }
 
-    private String providerKey(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
+    /**
+     * The key is content-derived, so a key reused without re-reading the sources and the same key freshly
+     * computed name the same graph: the declaration travels with the cached graph.
+     */
+    private ProviderKey providerKey(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
         List<String> keys = new ArrayList<>(providers.size());
+        boolean sourceStateReused = false;
         for (ProgramGraphProvider provider : providers) {
-            String key = provider.cacheKey(project, snapshot);
+            ProgramGraphProvider.CacheKeyResolution resolution = provider.resolveCacheKey(project, snapshot);
+            String key = resolution.key();
             if (key == null || key.isBlank()) throw new IllegalStateException("program graph provider returned a blank cache key: " + provider.id());
             keys.add(provider.id() + "=" + key);
+            sourceStateReused |= resolution.sourceStateReused();
         }
-        return keys.stream().sorted().reduce((left, right) -> left + "," + right).orElse("");
+        return new ProviderKey(
+                keys.stream().sorted().reduce((left, right) -> left + "," + right).orElse(""), sourceStateReused);
     }
 
     private static List<ProgramGraphProvider> normalizeProviders(List<ProgramGraphProvider> providers) {
@@ -310,4 +333,5 @@ public final class ProgramGraphService {
                              int entries, int maximumEntries, long weight, long maximumWeight) { }
     private record CacheKey(String projectId, String snapshotId, String providers, int maxNodes, int maxEdges) { }
     private record WeightedGraph(ProgramGraph graph, long weightBytes) { }
+    private record ProviderKey(String key, boolean sourceStateReused) { }
 }

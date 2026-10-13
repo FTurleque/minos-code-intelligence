@@ -12,19 +12,29 @@ import com.minos.domain.SymbolLocation;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphCapability;
 import com.minos.program.analysis.FingerprintConstrainedJavaProgramGraphProvider;
+import com.minos.program.analysis.ProgramGraphService;
+import com.minos.program.analysis.RelationshipProgramGraphProvider;
 import com.minos.registry.RegisteredProject;
+import jdk.jfr.Recording;
+import jdk.jfr.consumer.RecordedEvent;
+import jdk.jfr.consumer.RecordingFile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -78,6 +88,12 @@ class ProgramGraphPerformanceQualificationTest {
         assertTrue(cold.supports(ProgramGraphCapability.CONTROL_FLOW));
         assertTrue(cold.supports(ProgramGraphCapability.LOCAL_DATA_FLOW));
         assertTrue(cold.supports(ProgramGraphCapability.INTERPROCEDURAL_DATA_FLOW));
+        assertFalse(cold.limitations().contains(ProgramGraphService.SOURCE_STATE_REUSE_LIMITATION),
+                "an exact fingerprint proves the indexed state: nothing to declare");
+        // AUD-PERF-07: with an exact fingerprint a cache hit reads no source at all.
+        int warmSourcesRead = javaSourcesRead(root, () -> assertSame(cold, application.programGraphService()
+                .getGraph(project.id().toString(), QUALIFICATION_MAX_NODES, QUALIFICATION_MAX_EDGES)));
+        assertEquals(0, warmSourcesRead);
 
         Path changed = projectRoot.resolve(fileIds.getFirst());
         Files.writeString(changed, Files.readString(changed, StandardCharsets.UTF_8)
@@ -91,6 +107,8 @@ class ProgramGraphPerformanceQualificationTest {
         assertFalse(modified.supports(ProgramGraphCapability.CONTROL_FLOW));
         assertTrue(modified.limitations().contains(
                 FingerprintConstrainedJavaProgramGraphProvider.SOURCE_MISMATCH_LIMITATION));
+
+        SourceStateReuse reuse = qualifySourceStateReuse(root, application, fileCount);
 
         long sourceBytes;
         try (var paths = Files.walk(projectRoot)) {
@@ -121,6 +139,11 @@ class ProgramGraphPerformanceQualificationTest {
                   "cache_entries": %d,
                   "warm_identity_hit": true,
                   "modified_source_disposition": "%s",
+                  "warm_sources_read": %d,
+                  "source_state_reuse_seconds": %d,
+                  "unfingerprinted_sources_read_within_delay": %d,
+                  "unfingerprinted_sources_read_after_delay": %d,
+                  "unfingerprinted_limitation": "%s",
                   "decision": "KEEP_FINGERPRINT_CONSTRAINED_IN_MEMORY_CACHE"
                 }
                 """.formatted(
@@ -134,9 +157,91 @@ class ProgramGraphPerformanceQualificationTest {
                 stats.hits(),
                 stats.misses(),
                 stats.entries(),
-                FingerprintConstrainedJavaProgramGraphProvider.SOURCE_MISMATCH_LIMITATION);
+                FingerprintConstrainedJavaProgramGraphProvider.SOURCE_MISMATCH_LIMITATION,
+                warmSourcesRead,
+                ProgramGraphService.SOURCE_STATE_REUSE_SECONDS,
+                reuse.sourcesReadWithinDelay(),
+                reuse.sourcesReadAfterDelay(),
+                ProgramGraphService.SOURCE_STATE_REUSE_LIMITATION);
         Files.writeString(result, json, StandardCharsets.UTF_8);
         assertTrue(Files.size(result) > 0L);
+    }
+
+    /**
+     * AUD-PERF-07, snapshot without an exact fingerprint: the key obtained by hashing the sources is reused for a
+     * bounded delay. A manual monotonic clock makes both sides of the delay deterministic, without waiting.
+     */
+    private static SourceStateReuse qualifySourceStateReuse(Path root, MinosApplication application, int fileCount)
+            throws Exception {
+        Path projectRoot = Files.createDirectories(root.resolve("project-without-fingerprint"));
+        List<String> fileIds = generateCorpus(projectRoot, fileCount);
+        RegisteredProject project = application.projectRegistry()
+                .registerProject(projectRoot, "m28-program-graph-without-fingerprint");
+        String snapshotId = "snapshot-m28-program-graph-without-fingerprint";
+        application.snapshotStore().publish(
+                project.id(), snapshotId, symbols(project, snapshotId, fileIds), List.of(), List.of());
+        AtomicLong monotonicNanos = new AtomicLong(1L);
+        ProgramGraphService service = new ProgramGraphService(
+                application.projectRegistry(),
+                application.snapshotStore(),
+                List.of(new RelationshipProgramGraphProvider(),
+                        new FingerprintConstrainedJavaProgramGraphProvider(
+                                application.fingerprintStore(), monotonicNanos::get)));
+        String id = project.id().toString();
+
+        ProgramGraph first = service.getGraph(id, QUALIFICATION_MAX_NODES, QUALIFICATION_MAX_EDGES);
+        assertTrue(first.supports(ProgramGraphCapability.CONTROL_FLOW));
+        assertTrue(first.limitations().contains(ProgramGraphService.SOURCE_STATE_REUSE_LIMITATION));
+
+        Path changed = projectRoot.resolve(fileIds.getFirst());
+        Files.writeString(changed, Files.readString(changed, StandardCharsets.UTF_8).replace("copy++;", "copy += 2;"),
+                StandardCharsets.UTF_8);
+        monotonicNanos.addAndGet(Duration.ofSeconds(ProgramGraphService.SOURCE_STATE_REUSE_SECONDS).toNanos() - 1L);
+        int withinDelay = javaSourcesRead(root, () -> assertSame(first,
+                service.getGraph(id, QUALIFICATION_MAX_NODES, QUALIFICATION_MAX_EDGES),
+                "inside the delay the cached graph is served without reading any source"));
+        assertEquals(0, withinDelay);
+
+        monotonicNanos.addAndGet(1L);
+        ProgramGraph[] rebuilt = new ProgramGraph[1];
+        int afterDelay = javaSourcesRead(root, () -> rebuilt[0] =
+                service.getGraph(id, QUALIFICATION_MAX_NODES, QUALIFICATION_MAX_EDGES));
+        assertEquals(fileCount, afterDelay, "after the delay every source is read again");
+        assertNotSame(first, rebuilt[0], "the changed source gives a new key and a rebuilt graph");
+        assertTrue(rebuilt[0].limitations().contains(ProgramGraphService.SOURCE_STATE_REUSE_LIMITATION));
+        assertEquals(2L, service.cacheStats().misses());
+        assertEquals(1L, service.cacheStats().hits());
+        return new SourceStateReuse(withinDelay, afterDelay);
+    }
+
+    /** Number of distinct {@code .java} files actually read while {@code action} runs (JFR file-read events). */
+    private static int javaSourcesRead(Path root, QualifiedCall action) throws Exception {
+        Path recordingFile = Files.createTempFile(root, "source-reads-", ".jfr");
+        try (Recording recording = new Recording()) {
+            recording.enable("jdk.FileRead").withThreshold(Duration.ZERO).withoutStackTrace();
+            recording.start();
+            action.run();
+            recording.stop();
+            recording.dump(recordingFile);
+        }
+        Set<String> javaFiles = new HashSet<>();
+        try (RecordingFile events = new RecordingFile(recordingFile)) {
+            while (events.hasMoreEvents()) {
+                RecordedEvent event = events.readEvent();
+                String path = "jdk.FileRead".equals(event.getEventType().getName()) ? event.getString("path") : null;
+                if (path != null && path.toLowerCase(Locale.ROOT).endsWith(".java")) javaFiles.add(path);
+            }
+        }
+        Files.delete(recordingFile);
+        return javaFiles.size();
+    }
+
+    @FunctionalInterface
+    private interface QualifiedCall {
+        void run() throws Exception;
+    }
+
+    private record SourceStateReuse(int sourcesReadWithinDelay, int sourcesReadAfterDelay) {
     }
 
     private static List<String> generateCorpus(Path projectRoot, int fileCount) throws Exception {
