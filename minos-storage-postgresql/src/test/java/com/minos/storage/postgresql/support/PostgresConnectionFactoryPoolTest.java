@@ -15,6 +15,7 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,6 +66,19 @@ class PostgresConnectionFactoryPoolTest extends PostgresTestSupport {
     }
 
     @Test
+    void successiveCallsOnAWarmPoolSendNoValidationRoundTripToTheServer() throws Exception {
+        AtomicInteger validations = new AtomicInteger();
+        try (PostgresConnectionFactory pool = PostgresTestPools.countingValidations(connections, home, validations)) {
+            for (int call = 0; call < 3; call++) assertEquals(1, selectOne(pool));
+            pool.inTransaction(connection -> insertWorkspace(connection, "warm"));
+
+            assertEquals(0, validations.get());
+            assertEquals(1, countWorkspaces(pool, "warm"));
+            assertEquals(new PostgresConnectionFactory.PoolStats(2, 0, 1, 1, 0L, 0, 0L), pool.poolStats());
+        }
+    }
+
+    @Test
     void aTransactionCommitsItsWorkAndRollsBackOnEveryKindOfFailure() throws Exception {
         try (PostgresConnectionFactory pool = pool(2)) {
             pool.inTransaction(connection -> insertWorkspace(connection, "committed"));
@@ -94,7 +108,7 @@ class PostgresConnectionFactoryPoolTest extends PostgresTestSupport {
             assertEquals(0, countWorkspaces(pool, "runtime-failure"));
             assertEquals(0, countWorkspaces(pool, "sql-failure"));
             assertEquals(new PostgresConnectionFactory.PoolStats(2, 0, 1, 1, 0L, 0, 0L), pool.poolStats(),
-                    "a failure that is not a connection loss keeps the connection in the pool");
+                    "each failed call retired its connection; the pool is left with the one the counts reused");
             assertTrue(autoCommit(pool), "autocommit must be restored after a transaction");
         }
     }
@@ -175,7 +189,7 @@ class PostgresConnectionFactoryPoolTest extends PostgresTestSupport {
             PostgresConnectionFactory.ConnectionWork<Void> lostInNestedTransaction = connection -> pool.inTransaction(lost);
 
             assertThrows(SQLException.class, () -> pool.withConnection(ordinary));
-            assertEquals(1, pool.poolStats().physical(), "an ordinary SQL failure keeps the connection");
+            assertEquals(0, pool.poolStats().physical(), "a call that failed never puts its connection back to rest");
 
             assertThrows(SQLException.class, () -> pool.withConnection(lost));
             assertEquals(0, pool.poolStats().physical());
