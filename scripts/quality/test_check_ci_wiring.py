@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,8 @@ _MODULE_PATH = Path(__file__).parent / "check-ci-wiring.py"
 _SPEC = importlib.util.spec_from_file_location("check_ci_wiring", _MODULE_PATH)
 gate = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(gate)
+
+REPOSITORY = Path(__file__).resolve().parents[2]
 
 PR_CI = """name: PR Validation
 on:
@@ -127,10 +130,11 @@ class WiringTestCase(unittest.TestCase):
 class CleanTreeTest(WiringTestCase):
 
     def test_a_consistent_tree_passes_and_counts_what_it_resolved(self):
-        failures, resolved, wired = gate.check(self.tree())
+        failures, resolved, wired, lockfiles = gate.check(self.tree())
         self.assertEqual([], failures)
         self.assertEqual(7, resolved)
         self.assertEqual(2, wired)
+        self.assertEqual(0, lockfiles)
 
 
 class ResolutionTest(WiringTestCase):
@@ -264,6 +268,98 @@ class RulesetReadingTest(WiringTestCase):
     def test_replaying_a_recorded_payload_is_allowed(self):
         replay = PR_CI + "      - run: python scripts/quality/verify-ruleset.py --from-json payload.json\n"
         self.assertEqual([], self.failures(self.tree({"pr-ci.yml": replay})))
+
+
+RESOURCES = "tool/src/main/resources/com/example/runtime"
+SCANNED = PR_CI.replace(
+    "    uses: example/scanner/.github/workflows/scan.yml@0123456789abcdef\n",
+    "    uses: example/scanner/.github/workflows/scan.yml@0123456789abcdef\n"
+    "    with:\n"
+    "      scan-args: |-\n"
+    "        --recursive\n"
+    f"        --lockfile=package-lock.json:{RESOURCES}/scip-one-package-lock.json\n"
+    "        ./\n"
+    "      fail-on-vuln: true\n")
+
+
+class ShippedLockfileTest(WiringTestCase):
+    """AUD-DEP-03: the scanner recognises an npm lockfile by its name, so a prefixed one must be passed explicitly."""
+
+    def lock(self, root: Path, relative: str) -> None:
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"lockfileVersion": 3, "packages": {}}\n', encoding="utf-8")
+
+    def test_a_shipped_lockfile_passed_to_the_scan_is_accepted_and_counted(self):
+        root = self.tree({"pr-ci.yml": SCANNED})
+        self.lock(root, f"{RESOURCES}/scip-one-package-lock.json")
+        failures, _resolved, _wired, lockfiles = gate.check(root)
+        self.assertEqual([], failures)
+        self.assertEqual(1, lockfiles)
+
+    def test_a_shipped_lockfile_missing_from_the_scan_arguments_is_refused_by_name(self):
+        root = self.tree({"pr-ci.yml": SCANNED})
+        self.lock(root, f"{RESOURCES}/scip-one-package-lock.json")
+        self.lock(root, f"{RESOURCES}/scip-other-package-lock.json")
+        failures = self.failures(root)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn(f"{RESOURCES}/scip-other-package-lock.json", failures[0])
+        self.assertIn("--lockfile=package-lock.json:", failures[0])
+
+    def test_a_shipped_lockfile_is_refused_when_no_job_has_scan_arguments(self):
+        root = self.tree()
+        self.lock(root, f"{RESOURCES}/scip-one-package-lock.json")
+        failures = self.failures(root)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn(f"{RESOURCES}/scip-one-package-lock.json", failures[0])
+
+    def test_a_commented_lockfile_argument_does_not_count(self):
+        commented = SCANNED.replace("        --lockfile=", "        # --lockfile=")
+        root = self.tree({"pr-ci.yml": commented})
+        self.lock(root, f"{RESOURCES}/scip-one-package-lock.json")
+        self.assertEqual(1, len(self.failures(root)))
+
+    def test_a_lockfile_argument_outside_the_scan_arguments_does_not_count(self):
+        moved = PR_CI + f"      - run: echo --lockfile=package-lock.json:{RESOURCES}/scip-one-package-lock.json\n"
+        root = self.tree({"pr-ci.yml": moved})
+        self.lock(root, f"{RESOURCES}/scip-one-package-lock.json")
+        self.assertEqual(1, len(self.failures(root)))
+
+    def test_lockfiles_of_fixtures_tests_and_build_output_are_ignored(self):
+        root = self.tree({"pr-ci.yml": SCANNED})
+        self.lock(root, f"{RESOURCES}/scip-one-package-lock.json")
+        for ignored in ("fixtures/typescript/simple/package-lock.json",
+                        "tool/src/test/resources/com/example/scip-test-package-lock.json",
+                        "tool/target/classes/com/example/runtime/scip-one-package-lock.json",
+                        "fixtures/polyglot/app/src/main/resources/package-lock.json",
+                        ".claude/worktrees/other/tool/src/main/resources/scip-elsewhere-package-lock.json"):
+            self.lock(root, ignored)
+        failures, _resolved, _wired, lockfiles = gate.check(root)
+        self.assertEqual([], failures)
+        self.assertEqual(1, lockfiles)
+
+    def test_a_scan_argument_naming_a_lockfile_that_does_not_exist_is_refused(self):
+        root = self.tree({"pr-ci.yml": SCANNED})
+        failures = self.failures(root)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("scip-one-package-lock.json", failures[0])
+        self.assertIn("not a file", failures[0])
+
+    def test_the_repository_passes_its_shipped_lockfiles_and_a_copy_with_a_third_one_is_refused(self):
+        failures, _resolved, _wired, lockfiles = gate.check(REPOSITORY)
+        self.assertEqual([], failures)
+        self.assertGreaterEqual(lockfiles, 2)
+        root = self.tree()
+        shutil.copyfile(REPOSITORY / ".github" / "workflows" / "pr-ci.yml", root / ".github" / "workflows" / "pr-ci.yml")
+        shipped = gate.shipped_npm_lockfiles(REPOSITORY)
+        for relative in shipped:
+            self.lock(root, relative)
+        self.assertEqual([], [failure for failure in self.failures(root) if "lockfile" in failure])
+        added = Path(shipped[0]).parent.as_posix() + "/scip-autre-package-lock.json"
+        self.lock(root, added)
+        refused = [failure for failure in self.failures(root) if "lockfile" in failure]
+        self.assertEqual(1, len(refused), refused)
+        self.assertIn(added, refused[0])
 
 
 if __name__ == "__main__":

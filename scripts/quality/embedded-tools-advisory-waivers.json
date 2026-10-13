@@ -1,0 +1,5 @@
+{
+  "formatVersion": 1,
+  "description": "Dated waivers of scripts/quality/check-embedded-tools-advisories.py. One entry per finding that is accepted until a date: component (identifier of embedded-tools.json), finding (advisory identifier, or end-of-support), reason, expires (YYYY-MM-DD). An expired entry, a malformed one, or one that no longer matches a finding fails the watch. See docs/developer/supply-chain.md.",
+  "waivers": []
+}
