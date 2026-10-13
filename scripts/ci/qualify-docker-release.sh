@@ -44,9 +44,13 @@ SHORT_HEAD="${ACTUAL_HEAD:0:12}"
 IMAGE="minos-code-intelligence:docker-release-ci-$SHORT_HEAD"
 QUERY_IMAGE="$IMAGE-query"
 MCP_CONTAINER=""
+DATA_VOLUME=""
 cleanup() {
   if [[ -n "$MCP_CONTAINER" ]]; then
     docker rm --force "$MCP_CONTAINER" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$DATA_VOLUME" ]]; then
+    docker volume rm --force "$DATA_VOLUME" >/dev/null 2>&1 || true
   fi
   docker image rm --force "$IMAGE" "$QUERY_IMAGE" >/dev/null 2>&1 || true
   rm -rf "$WORK_ROOT"
@@ -293,21 +297,49 @@ docker run --rm --network none --read-only --entrypoint java "$QUERY_IMAGE" -ver
 # initialize(id=1) before sending notifications/initialized + tools/list; sending all three
 # JSON-RPC messages up front races the MCP initialization state machine and can drop the
 # post-initialize request even when the server is healthy.
-# The MINOS data root is a writable tmpfs here, not the read-only mount of the Compose files: the
-# symbol query below reads the project registry, and the registry takes its lock file open for
-# writing, which a read-only mount refuses whatever the image (recorded in the design of the
-# OpenSpec change separer-l-image-de-requete). What is proved here is the image, not that mount.
+# The MINOS data root is mounted READ-ONLY in that container, exactly as the Compose files mount it
+# for minos-mcp (ADR 0017: the query plane writes nothing). The index it reads is made beforehand,
+# in the same volume mounted writable, by one-shot containers that play the part of minos-admin; it
+# is made without any provider: the versioned SCIP artifact of a fixture is imported by the MINOS
+# jar of the image. HOME is the one the minos-admin service sets.
 FIXTURE_ROOT="$(git rev-parse --show-toplevel)/fixtures/typescript/typescript-modules"
+DATA_VOLUME="minos-docker-release-ci-data-${SHORT_HEAD}-$$"
+docker volume create "$DATA_VOLUME" >/dev/null
+# A new volume belongs to root: it is handed to the runtime user of the image, owner-only.
+docker run --rm --network none --user 0:0 \
+  --mount "type=volume,source=$DATA_VOLUME,target=/var/lib/minos" \
+  --entrypoint sh "$QUERY_IMAGE" -ec 'chown 10001:10001 /var/lib/minos && chmod 700 /var/lib/minos'
+run_minos_admin() {
+  docker run --rm --network none --read-only \
+    --cap-drop ALL --security-opt no-new-privileges:true \
+    --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
+    --env HOME=/var/lib/minos/cache/home \
+    --mount "type=volume,source=$DATA_VOLUME,target=/var/lib/minos" \
+    --mount "type=bind,source=$FIXTURE_ROOT,target=/workspace/projects/typescript-modules,readonly" \
+    --entrypoint java "$QUERY_IMAGE" -cp /opt/minos/minos.jar com.minos.cli.MinosLauncher "$@"
+}
+run_minos_admin project add /workspace/projects/typescript-modules --name query-fixture --format json \
+  > "$QUALIFICATION_ROOT/query-project-add.json"
+run_minos_admin import-scip query-fixture --provider scip-typescript --format json \
+  --file /workspace/projects/typescript-modules/.minos-m0/scip-typescript/index.scip \
+  > "$QUALIFICATION_ROOT/query-import-scip.json"
+
 MCP_CONTAINER="minos-docker-release-ci-mcp-${SHORT_HEAD}-$$"
 docker run --rm --detach \
   --name "$MCP_CONTAINER" \
   --network none --read-only \
   --cap-drop ALL --security-opt no-new-privileges:true \
-  --tmpfs /var/lib/minos:rw,nosuid,nodev,noexec,size=64m,mode=700,uid=10001,gid=10001 \
+  --mount "type=volume,source=$DATA_VOLUME,target=/var/lib/minos,readonly" \
   --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
   --mount "type=bind,source=$FIXTURE_ROOT,target=/workspace/projects/typescript-modules,readonly" \
   --entrypoint sleep "$QUERY_IMAGE" 600 \
   > "$QUALIFICATION_ROOT/mcp-container-id.txt"
+# The mount must really refuse a write: answers given on a data root that can be written would
+# prove nothing about the read-only mount that is shipped.
+if docker exec "$MCP_CONTAINER" sh -c ': > /var/lib/minos/.write-probe' 2>/dev/null; then
+  echo "The MINOS data root of the MCP container accepts a write: it is not mounted read-only." >&2
+  exit 1
+fi
 
 MCP_COMPOSE_SENTINEL="$WORK_ROOT/mcp-compose-sentinel.yaml"
 MCP_ENV_SENTINEL="$WORK_ROOT/mcp-env-sentinel"
@@ -323,16 +355,7 @@ if grep -E 'NoClassDefFoundError|Exception in thread "main"' "$QUALIFICATION_ROO
   exit 1
 fi
 
-# A real query on an existing index, answered by the query image alone. The index is made without
-# any provider: the versioned SCIP artifact of a fixture is imported by the MINOS jar of the image.
-# HOME is the one the minos-admin service sets: the import writes under it, the MCP server does not.
-docker exec --env HOME=/var/lib/minos/cache/home "$MCP_CONTAINER" java -cp /opt/minos/minos.jar com.minos.cli.MinosLauncher \
-  project add /workspace/projects/typescript-modules --name query-fixture --format json \
-  > "$QUALIFICATION_ROOT/query-project-add.json"
-docker exec --env HOME=/var/lib/minos/cache/home "$MCP_CONTAINER" java -cp /opt/minos/minos.jar com.minos.cli.MinosLauncher \
-  import-scip query-fixture --provider scip-typescript --format json \
-  --file /workspace/projects/typescript-modules/.minos-m0/scip-typescript/index.scip \
-  > "$QUALIFICATION_ROOT/query-import-scip.json"
+# A real query on the existing index, answered by the query image alone on the read-only data root.
 python3 - "$MCP_CONTAINER" "$QUALIFICATION_ROOT/mcp-symbol-query.json" "$QUALIFICATION_ROOT/mcp-symbol-query.stderr.log" <<'PY'
 import json
 import subprocess
@@ -388,11 +411,13 @@ with open(stderr_path, "wb") as stderr_log:
 with open(evidence_path, "w", encoding="utf-8") as evidence:
     json.dump({"serverInfo": initialize["serverInfo"], "tool": "minos_find_symbols", "count": symbols["count"],
                "symbols": names}, evidence, indent=2)
-print(f"query image: minos_find_symbols answered {symbols['count']} symbol(s) for GreetingService")
+print(f"query image, read-only data root: minos_find_symbols answered {symbols['count']} symbol(s) for GreetingService")
 PY
 
 docker rm --force "$MCP_CONTAINER" >/dev/null
 MCP_CONTAINER=""
+docker volume rm --force "$DATA_VOLUME" >/dev/null
+DATA_VOLUME=""
 
 cat > "$QUALIFICATION_ROOT/qualification.json" <<EOF
 {
