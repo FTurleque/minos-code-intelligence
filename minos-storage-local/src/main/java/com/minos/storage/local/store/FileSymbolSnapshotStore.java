@@ -380,7 +380,9 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         countWeight = safeAdd(countWeight, (long) descriptor.relationshipCount() * 1024L);
         Path snapshot = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
         long persistedWeight = safeMultiply(Files.size(snapshot), QUERY_VIEW_PERSISTED_AMPLIFICATION);
-        return Math.max(countWeight, persistedWeight);
+        // AUD-PERF-11 : l'index dérivé des arêtes entrantes, construit plus tard, vit autant que la vue en cache.
+        return safeAdd(Math.max(countWeight, persistedWeight),
+                InMemoryCodeKnowledgeStore.symbolEdgeIndexWeightBytes(descriptor.relationshipCount()));
     }
 
     private static long safeAdd(long left, long right) {

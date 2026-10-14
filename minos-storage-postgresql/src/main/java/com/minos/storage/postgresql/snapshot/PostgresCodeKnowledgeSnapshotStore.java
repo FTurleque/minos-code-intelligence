@@ -470,7 +470,9 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         countWeight = safeAdd(countWeight, metadata.occurrenceCount() * 640L);
         countWeight = safeAdd(countWeight, metadata.relationshipCount() * 1024L);
         long persistedWeight = safeMultiply(Math.max(0L, persistedBytes), QUERY_VIEW_PERSISTED_AMPLIFICATION);
-        return Math.max(countWeight, persistedWeight);
+        // AUD-PERF-11 : l'index dérivé des arêtes entrantes, construit plus tard, vit autant que la vue en cache.
+        return safeAdd(Math.max(countWeight, persistedWeight),
+                InMemoryCodeKnowledgeStore.symbolEdgeIndexWeightBytes(metadata.relationshipCount()));
     }
 
     private static long safeAdd(long left, long right) {

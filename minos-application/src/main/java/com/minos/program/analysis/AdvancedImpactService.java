@@ -4,7 +4,6 @@ import com.minos.domain.InformationNature;
 import com.minos.impact.ImpactAnalysisReport;
 import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.ProjectImpactQuery;
-import com.minos.program.ProgramEdgeKind;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphEdge;
 import com.minos.program.ProgramGraphNode;
@@ -12,12 +11,9 @@ import com.minos.program.ProgramGraphNode;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -35,7 +31,10 @@ public final class AdvancedImpactService {
     public AdvancedImpactReport analyze(String projectIdentifier, ImpactAnalysisRequest request) throws IOException {
         Objects.requireNonNull(request, "request");
         ImpactAnalysisReport baseline = baselineImpact.analyzeImpact(projectIdentifier, request);
-        ProgramGraph graph = programGraphs.fullGraph(projectIdentifier);
+        // AUD-PERF-11 : l'adjacence triée est celle de l'entrée de cache du graphe, construite une fois pour lui.
+        ProgramGraphService.ImpactGraph impactGraph = programGraphs.impactGraph(projectIdentifier);
+        ProgramGraph graph = impactGraph.graph();
+        ProgramGraphService.ImpactAdjacency adjacency = impactGraph.adjacency();
         String rootNodeId = "symbol:" + request.symbolId();
 
         Set<String> baselineIds = new HashSet<>();
@@ -43,9 +42,6 @@ public final class AdvancedImpactService {
         baseline.impacts().forEach(item -> baselineIds.add(item.symbol().id()));
         baseline.potentiallyImpactedTests().forEach(item -> baselineIds.add(item.symbol().id()));
 
-        Map<String, ProgramGraphNode> nodes = new LinkedHashMap<>();
-        graph.nodes().forEach(node -> nodes.put(node.id(), node));
-        Map<String, List<TraversalEdge>> adjacency = adjacency(graph);
         ArrayDeque<State> queue = new ArrayDeque<>();
         queue.add(new State(rootNodeId, List.of(), 0, 1.0, InformationNature.FACTUAL));
         Set<String> visited = new HashSet<>();
@@ -57,10 +53,10 @@ public final class AdvancedImpactService {
         while (!queue.isEmpty() && added.size() < request.maxResults()) {
             State state = queue.removeFirst();
             if (state.depth() >= request.maxDepth()) {
-                if (!adjacency.getOrDefault(state.nodeId(), List.of()).isEmpty()) depthReached = true;
+                if (!adjacency.next(state.nodeId()).isEmpty()) depthReached = true;
                 continue;
             }
-            for (TraversalEdge traversal : adjacency.getOrDefault(state.nodeId(), List.of())) {
+            for (ProgramGraphService.TraversalEdge traversal : adjacency.next(state.nodeId())) {
                 ProgramGraphEdge edge = traversal.edge();
                 String next = traversal.nextNodeId();
                 if (!visited.add(next)) {
@@ -70,7 +66,7 @@ public final class AdvancedImpactService {
                 double confidence = Math.min(state.confidence(), edge.confidence() == null ? 1.0 : edge.confidence());
                 InformationNature nature = mergeNature(state.nature(), edge.nature());
                 List<String> path = append(state.edgeIds(), edge.id());
-                ProgramGraphNode node = nodes.get(next);
+                ProgramGraphNode node = adjacency.node(next);
                 if (node != null && node.symbolId() != null && !baselineIds.contains(node.symbolId())) {
                     added.add(new AdvancedImpactItem(
                             node.symbolId(), node.label(), state.depth() + 1, confidence, nature, path));
@@ -90,21 +86,6 @@ public final class AdvancedImpactService {
                 limitations.stream().sorted().toList());
     }
 
-    private static Map<String, List<TraversalEdge>> adjacency(ProgramGraph graph) {
-        Map<String, List<TraversalEdge>> result = new LinkedHashMap<>();
-        for (ProgramGraphEdge edge : graph.edges().stream().sorted(Comparator.comparing(ProgramGraphEdge::id)).toList()) {
-            if (edge.kind() == ProgramEdgeKind.CONTROL_FLOW) continue;
-            if (edge.kind() == ProgramEdgeKind.CALL) {
-                result.computeIfAbsent(edge.targetNodeId(), ignored -> new ArrayList<>())
-                        .add(new TraversalEdge(edge, edge.sourceNodeId()));
-            } else {
-                result.computeIfAbsent(edge.sourceNodeId(), ignored -> new ArrayList<>())
-                        .add(new TraversalEdge(edge, edge.targetNodeId()));
-            }
-        }
-        return result;
-    }
-
     private static InformationNature mergeNature(InformationNature left, InformationNature right) {
         if (left == InformationNature.HEURISTIC || right == InformationNature.HEURISTIC) return InformationNature.HEURISTIC;
         if (left == InformationNature.DERIVED || right == InformationNature.DERIVED) return InformationNature.DERIVED;
@@ -116,9 +97,6 @@ public final class AdvancedImpactService {
         result.addAll(values);
         result.add(value);
         return List.copyOf(result);
-    }
-
-    private record TraversalEdge(ProgramGraphEdge edge, String nextNodeId) {
     }
 
     private record State(
