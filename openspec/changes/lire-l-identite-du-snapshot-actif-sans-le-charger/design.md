@@ -26,6 +26,17 @@ Sprint 4 de l'audit du 10 octobre 2026 : **AUD-PERF-01**. HEAD analysé : `2d1cc
 4. **Trois gates littéraux encodent le chemin actuel** : `check-mne.py:123-124` exige `activeSemanticIndex.builtAtEpochMilli()`, `corpusIdentity` et `identity().equals(corpusIdentity)` ; `check-mnd.py:105-106` ; `check-semantic-retrieval-consistency.py:121-138`. Remplacer `activeIndex` par les métadonnées impose de les mettre à jour dans la même tâche.
 5. **Le cache de corpus peut éviter jusqu'à la lecture des documents.** L'identité du corpus se calcule depuis les métadonnées ; si le corpus structuré est déjà en cache pour cette identité, aucun document n'est lu.
 
+### Autres appelants de `loadActiveKnowledge` (tâche 1.1, relus au HEAD `9e4a6e61` le 2026-10-14)
+
+| Site | Ce qui est lu du snapshot | Identifiant seul ? |
+|---|---|---|
+| `APP/workspace/WorkspaceIntelligenceService.java:113` | symboles et relations de chaque projet (résolution inter-dépôts : relations `:122`, symboles `:155`) | Non : contenu requis |
+| `APP/application/MinosApplicationAssembler.java:164` | `active.snapshotId()`, comparé à l'identifiant lié (`:167`) | **Oui** |
+| `APP/application/ProjectIndexStateReconciler.java:182` (`loadActive`, appelé `:79`, `:81`, `:144`) | `snapshotId()` (`:90`) et comparaison de snapshots ; le snapshot est rendu dans `Reconciliation.activeSnapshot`, dont le seul consommateur de production (`APP/application/ProjectInspectionService.java:181-182`) ne lit que `snapshotId` | **Oui** |
+| `minos-cli/.../operations/LocalAutonomousIndexOperations.java:238` | `snapshotId()` (`:240`, `:244`) | **Oui** |
+
+Trois sites sur quatre ne lisent que l'identifiant. Le plus coûteux est le réconciliateur : toute lecture de statut (`observeStatus`, donc `minos_index_status` et `project inspect`) charge le snapshot actif complet **deux fois** (`:79` et `:81`), trois en cas de réparation (`:144`). Ces sites sont hors du chemin de requête hybride visé par AUD-PERF-01 et ne sont pas modifiés par ce changement ; les faire passer à `activeSnapshotId` (désormais sur le port) est une suite à part, qui touche le record public `Reconciliation`.
+
 ## Goals / Non-Goals
 
 **Goals** : une requête hybride `READY` charge la vue du snapshot au plus une fois, ne lit aucun vecteur, ne calcule aucune taille d'index ; la garde de cohérence et les sorties sont inchangées.
