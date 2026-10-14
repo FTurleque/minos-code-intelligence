@@ -1,8 +1,11 @@
 package com.minos.store;
 
 import com.minos.domain.CodeEntityRef;
+import com.minos.domain.CodeEntityType;
 import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipDirection;
+import com.minos.domain.RelationshipKind;
+import com.minos.domain.ResolutionStatus;
 import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
@@ -11,6 +14,9 @@ import com.minos.domain.SymbolSearchCriteria;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -20,6 +26,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 
 import static com.minos.domain.Preconditions.requireText;
 
@@ -33,6 +42,13 @@ import static com.minos.domain.Preconditions.requireText;
 public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     private static final String PROJECT_ID = "projectId";
+    /**
+     * Upper bound of the heap one relationship adds to a {@link SymbolEdgeIndex}: an immutable map slot pair and,
+     * at worst, a list of its own for a target entered by that relationship alone. The relationships themselves
+     * are shared with the store, never copied.
+     */
+    private static final long SYMBOL_EDGE_INDEX_BYTES_PER_RELATIONSHIP = 96L;
+    private static final long SYMBOL_EDGE_INDEX_FIXED_BYTES = 1_024L;
 
     private final Map<String, Symbol> symbolsByScopedId = new ConcurrentHashMap<>();
     private final Map<String, SymbolOccurrence> occurrencesByScopedId = new ConcurrentHashMap<>();
@@ -41,6 +57,10 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
     private volatile SymbolIndexes symbolIndexes = SymbolIndexes.empty();
     private volatile OccurrenceIndexes occurrenceIndexes = OccurrenceIndexes.empty();
     private volatile RelationshipIndexes relationshipIndexes = RelationshipIndexes.empty();
+    /** Derived per-project indexes built on first demand and dropped by any symbol or relationship write. */
+    private final AtomicReference<ConcurrentHashMap<String, SymbolEdgeIndex>> symbolEdgeIndexes =
+            new AtomicReference<>(new ConcurrentHashMap<>());
+    private final AtomicLong symbolEdgeIndexBuilds = new AtomicLong();
 
     public InMemoryCodeKnowledgeStore() {
     }
@@ -67,6 +87,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
                 symbol
         ));
         symbolIndexes = SymbolIndexes.build(symbolsByScopedId.values());
+        symbolEdgeIndexes.set(new ConcurrentHashMap<>());
     }
 
     @Override
@@ -91,6 +112,43 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
                 relationship
         ));
         relationshipIndexes = RelationshipIndexes.build(relationshipsByScopedId.values());
+        symbolEdgeIndexes.set(new ConcurrentHashMap<>());
+    }
+
+    /**
+     * Relationships entering the symbols of one project, built once on first demand and then shared by every
+     * reader (AUD-PERF-11). Concurrent first readers wait for the single build; a later write drops the index so
+     * the next reader builds it again from the new state.
+     */
+    public SymbolEdgeIndex symbolEdgeIndex(String projectId) {
+        requireText(projectId, PROJECT_ID);
+        return symbolEdgeIndexes.get().computeIfAbsent(projectId, this::buildSymbolEdgeIndex);
+    }
+
+    /** How many {@link SymbolEdgeIndex} builds this store has run: the cost the index is meant to pay once. */
+    public long symbolEdgeIndexBuilds() {
+        return symbolEdgeIndexBuilds.get();
+    }
+
+    /**
+     * Heap an owner of a cached store must charge for its {@link SymbolEdgeIndex}, from the relationship count:
+     * the index is derived after the cache entry is weighed, so its upper bound is charged up front.
+     */
+    public static long symbolEdgeIndexWeightBytes(long relationshipCount) {
+        if (relationshipCount < 0L) {
+            throw new IllegalArgumentException("relationshipCount must not be negative");
+        }
+        if (relationshipCount > (Long.MAX_VALUE - SYMBOL_EDGE_INDEX_FIXED_BYTES)
+                / SYMBOL_EDGE_INDEX_BYTES_PER_RELATIONSHIP) {
+            return Long.MAX_VALUE;
+        }
+        return SYMBOL_EDGE_INDEX_FIXED_BYTES + relationshipCount * SYMBOL_EDGE_INDEX_BYTES_PER_RELATIONSHIP;
+    }
+
+    private SymbolEdgeIndex buildSymbolEdgeIndex(String projectId) {
+        symbolEdgeIndexBuilds.incrementAndGet();
+        return SymbolEdgeIndex.build(projectId, relationshipsByScopedId.values(),
+                symbolId -> symbolsByScopedId.containsKey(scopedKey(projectId, symbolId)));
     }
 
     @Override
@@ -431,6 +489,107 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
     private static void validateLimit(int limit) {
         if (limit < 1) {
             throw new IllegalArgumentException("limit must be greater than zero");
+        }
+    }
+
+    /**
+     * Relationships entering each symbol of one project, with the two facts an impact traversal states about the
+     * relationships it cannot follow. Immutable; the relationships are those of the store, not copies.
+     *
+     * <p>A list holds every relationship whose target is a symbol, whatever its kind, status or source, ordered by
+     * source identifier, kind, then relationship identifier: a reader that filters it keeps that order.</p>
+     */
+    public static final class SymbolEdgeIndex {
+
+        private static final Comparator<Relationship> INCOMING_ORDER = Comparator
+                .comparing((Relationship relationship) -> relationship.source().id())
+                .thenComparing(Relationship::kind)
+                .thenComparing(Relationship::id);
+
+        private final Map<String, List<Relationship>> incomingBySymbolId;
+        private final Set<RelationshipKind> unresolvedKinds;
+        private final Set<RelationshipKind> kindsLeavingProjectSymbols;
+
+        private SymbolEdgeIndex(
+                Map<String, List<Relationship>> incomingBySymbolId,
+                Set<RelationshipKind> unresolvedKinds,
+                Set<RelationshipKind> kindsLeavingProjectSymbols
+        ) {
+            this.incomingBySymbolId = incomingBySymbolId;
+            this.unresolvedKinds = unresolvedKinds;
+            this.kindsLeavingProjectSymbols = kindsLeavingProjectSymbols;
+        }
+
+        /** One-shot index of a snapshot, for a caller that holds no query view; nothing is cached. */
+        public static SymbolEdgeIndex of(CodeKnowledgeSnapshot snapshot) {
+            Objects.requireNonNull(snapshot, "snapshot");
+            Set<String> symbolIds = new HashSet<>();
+            snapshot.symbols().forEach(symbol -> symbolIds.add(symbol.id()));
+            return build(snapshot.projectId().toString(), snapshot.relationships(), symbolIds::contains);
+        }
+
+        private static SymbolEdgeIndex build(
+                String projectId,
+                Collection<Relationship> relationships,
+                Predicate<String> isProjectSymbol
+        ) {
+            Map<String, List<Relationship>> incoming = new HashMap<>();
+            Set<RelationshipKind> unresolved = EnumSet.noneOf(RelationshipKind.class);
+            Set<RelationshipKind> leaving = EnumSet.noneOf(RelationshipKind.class);
+            for (Relationship relationship : relationships) {
+                if (!projectId.equals(relationship.projectId())) {
+                    continue;
+                }
+                if (relationship.resolutionStatus() == ResolutionStatus.UNRESOLVED) {
+                    unresolved.add(relationship.kind());
+                }
+                CodeEntityRef target = relationship.target();
+                if (target == null) {
+                    continue;
+                }
+                if (!joinsProjectSymbols(relationship, isProjectSymbol)) {
+                    leaving.add(relationship.kind());
+                }
+                if (target.type() == CodeEntityType.SYMBOL) {
+                    incoming.computeIfAbsent(target.id(), ignored -> new ArrayList<>()).add(relationship);
+                }
+            }
+            Map<String, List<Relationship>> frozen = new HashMap<>();
+            incoming.forEach((symbolId, values) -> {
+                values.sort(INCOMING_ORDER);
+                frozen.put(symbolId, List.copyOf(values));
+            });
+            return new SymbolEdgeIndex(Map.copyOf(frozen), Set.copyOf(unresolved), Set.copyOf(leaving));
+        }
+
+        private static boolean joinsProjectSymbols(Relationship relationship, Predicate<String> isProjectSymbol) {
+            return relationship.source().type() == CodeEntityType.SYMBOL
+                    && relationship.target().type() == CodeEntityType.SYMBOL
+                    && isProjectSymbol.test(relationship.source().id())
+                    && isProjectSymbol.test(relationship.target().id());
+        }
+
+        /** Relationships whose target is this symbol, ordered by source identifier, kind, then identifier. */
+        public List<Relationship> incoming(String symbolId) {
+            return incomingBySymbolId.getOrDefault(symbolId, List.of());
+        }
+
+        /** Whether a relationship of one of these kinds has no resolved target. */
+        public boolean hasUnresolved(Set<RelationshipKind> kinds) {
+            return kinds.stream().anyMatch(unresolvedKinds::contains);
+        }
+
+        /**
+         * Whether a relationship of one of these kinds has a target but does not join two symbols of the project:
+         * a file or module end, or a symbol the project does not hold.
+         */
+        public boolean leavesProjectSymbols(Set<RelationshipKind> kinds) {
+            return kinds.stream().anyMatch(kindsLeavingProjectSymbols::contains);
+        }
+
+        /** Number of symbols entered by at least one relationship. */
+        public int targetCount() {
+            return incomingBySymbolId.size();
         }
     }
 

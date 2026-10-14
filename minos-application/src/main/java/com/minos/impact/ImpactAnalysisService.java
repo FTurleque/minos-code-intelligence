@@ -8,6 +8,9 @@ import com.minos.domain.ResolutionStatus;
 import com.minos.domain.Symbol;
 import com.minos.query.SnapshotCoverageLimitations;
 import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.store.InMemoryCodeKnowledgeStore;
+import com.minos.store.InMemoryCodeKnowledgeStore.SymbolEdgeIndex;
+import com.minos.store.SnapshotQueryView;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,9 +22,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Analyse d'impact potentiel par traversée inverse, bornée et explicable, du graphe MINOS.
+ *
+ * <p>Sur une vue de requête, la table des symboles et l'index des arêtes entrantes sont ceux de la vue, construits
+ * une fois pour elle et partagés par toutes les analyses (AUD-PERF-11) ; sur un snapshot seul, ils sont construits
+ * pour l'appel. Les deux chemins rendent le même rapport, ordre compris.</p>
  */
 public final class ImpactAnalysisService {
 
@@ -42,17 +50,24 @@ public final class ImpactAnalysisService {
             RelationshipKind.RELATED_TEST
     );
 
-    private static final Comparator<Relationship> RELATIONSHIP_ORDER = Comparator
-            .comparing((Relationship relationship) -> relationship.source().id())
-            .thenComparing(Relationship::kind)
-            .thenComparing(Relationship::id);
-
     private static final Comparator<Candidate> CANDIDATE_ORDER = Comparator
             .comparingInt(Candidate::depth)
             .thenComparing(Comparator.comparingDouble(Candidate::confidence).reversed())
             .thenComparing(Candidate::pathSignature)
             .thenComparing(Candidate::symbolId);
 
+    /** Analyse sur une vue de requête : index et recherche de symbole de la vue, sans parcours du snapshot. */
+    public ImpactAnalysisReport analyze(SnapshotQueryView view, ImpactAnalysisRequest request) {
+        Objects.requireNonNull(view, "view");
+        Objects.requireNonNull(request, "request");
+        CodeKnowledgeSnapshot snapshot = view.snapshot();
+        String projectId = snapshot.projectId().toString();
+        InMemoryCodeKnowledgeStore store = view.queryStore();
+        return analyze(snapshot, store.symbolEdgeIndex(projectId),
+                symbolId -> store.findSymbolById(projectId, symbolId).orElse(null), request);
+    }
+
+    /** Analyse sur un snapshot seul : la table des symboles et l'index sont construits pour cet appel. */
     public ImpactAnalysisReport analyze(CodeKnowledgeSnapshot snapshot, ImpactAnalysisRequest request) {
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(request, "request");
@@ -63,8 +78,16 @@ public final class ImpactAnalysisService {
                 throw new IllegalArgumentException("duplicate symbol id in snapshot: " + symbol.id());
             }
         }
+        return analyze(snapshot, SymbolEdgeIndex.of(snapshot), symbolsById::get, request);
+    }
 
-        Symbol root = symbolsById.get(request.symbolId());
+    private ImpactAnalysisReport analyze(
+            CodeKnowledgeSnapshot snapshot,
+            SymbolEdgeIndex edges,
+            Function<String, Symbol> symbolsById,
+            ImpactAnalysisRequest request
+    ) {
+        Symbol root = symbolsById.apply(request.symbolId());
         if (root == null) {
             throw new IllegalArgumentException("unknown symbol in snapshot: " + request.symbolId());
         }
@@ -73,7 +96,6 @@ public final class ImpactAnalysisService {
                     "impact root must be a local non-generated symbol: " + request.symbolId());
         }
 
-        Map<String, List<Relationship>> incoming = incomingRelationships(snapshot, symbolsById);
         Candidate rootCandidate = Candidate.root(root.id());
         PriorityQueue<Candidate> queue = new PriorityQueue<>(CANDIDATE_ORDER);
         queue.add(rootCandidate);
@@ -81,7 +103,7 @@ public final class ImpactAnalysisService {
         Map<String, Candidate> selected = new HashMap<>();
         Map<String, Candidate> testCandidates = new HashMap<>();
         selected.put(root.id(), rootCandidate);
-        EnumSet<ImpactLimitation> limitations = baselineLimitations(snapshot, symbolsById);
+        EnumSet<ImpactLimitation> limitations = baselineLimitations(snapshot, edges);
 
         while (!queue.isEmpty()) {
             Candidate current = queue.poll();
@@ -90,19 +112,20 @@ public final class ImpactAnalysisService {
                 continue;
             }
 
+            List<Relationship> incoming = incomingRelationships(edges, current.symbolId(), symbolsById);
             if (current.depth() >= request.maxDepth()) {
-                if (hasFurtherImpact(incoming.getOrDefault(current.symbolId(), List.of()), selected)) {
+                if (hasFurtherImpact(incoming, selected)) {
                     limitations.add(ImpactLimitation.MAX_DEPTH_REACHED);
                 }
                 continue;
             }
 
-            for (Relationship relationship : incoming.getOrDefault(current.symbolId(), List.of())) {
+            for (Relationship relationship : incoming) {
                 String impactedId = relationship.source().id();
                 if (impactedId.equals(root.id())) {
                     continue;
                 }
-                Symbol impacted = symbolsById.get(impactedId);
+                Symbol impacted = symbolsById.apply(impactedId);
                 if (impacted == null || impacted.external()) {
                     limitations.add(ImpactLimitation.EXTERNAL_TARGETS_NOT_TRAVERSED);
                     continue;
@@ -162,7 +185,7 @@ public final class ImpactAnalysisService {
         for (Candidate candidate : ordered) {
             includedIds.add(candidate.symbolId());
             impacts.add(toImpactedSymbol(
-                    symbolsById.get(candidate.symbolId()),
+                    symbolsById.apply(candidate.symbolId()),
                     candidate,
                     testCandidates.containsKey(candidate.symbolId())
             ));
@@ -171,7 +194,7 @@ public final class ImpactAnalysisService {
         List<ImpactedSymbol> impactedTests = testCandidates.values().stream()
                 .filter(candidate -> includedIds.contains(candidate.symbolId()))
                 .sorted(CANDIDATE_ORDER)
-                .map(candidate -> toImpactedSymbol(symbolsById.get(candidate.symbolId()), candidate, true))
+                .map(candidate -> toImpactedSymbol(symbolsById.apply(candidate.symbolId()), candidate, true))
                 .toList();
 
         return new ImpactAnalysisReport(
@@ -196,28 +219,25 @@ public final class ImpactAnalysisService {
         );
     }
 
-    private static Map<String, List<Relationship>> incomingRelationships(
-            CodeKnowledgeSnapshot snapshot,
-            Map<String, Symbol> symbolsById
+    /**
+     * Relations que la traversée suit vers {@code symbolId}, dans l'ordre de l'index (source, sorte, identifiant) :
+     * le filtrage d'une liste triée la garde triée. La cible est {@code symbolId}, symbole connu du snapshot.
+     */
+    private static List<Relationship> incomingRelationships(
+            SymbolEdgeIndex edges,
+            String symbolId,
+            Function<String, Symbol> symbolsById
     ) {
-        Map<String, List<Relationship>> incoming = new HashMap<>();
-        snapshot.relationships().stream()
-                .filter(Objects::nonNull)
-                .filter(relationship -> PROPAGATING_KINDS.contains(relationship.kind()))
-                .filter(ImpactAnalysisService::isTraversableResolution)
-                .filter(relationship -> relationship.target() != null)
-                .filter(relationship -> relationship.source().type() == CodeEntityType.SYMBOL)
-                .filter(relationship -> relationship.target().type() == CodeEntityType.SYMBOL)
-                .filter(relationship -> symbolsById.containsKey(relationship.source().id()))
-                .filter(relationship -> symbolsById.containsKey(relationship.target().id()))
-                .sorted(RELATIONSHIP_ORDER)
-                .forEach(relationship -> incoming
-                        .computeIfAbsent(relationship.target().id(), ignored -> new ArrayList<>())
-                        .add(relationship));
-        incoming.replaceAll((ignored, relationships) -> relationships.stream()
-                .sorted(RELATIONSHIP_ORDER)
-                .toList());
-        return incoming;
+        List<Relationship> traversable = new ArrayList<>();
+        for (Relationship relationship : edges.incoming(symbolId)) {
+            if (PROPAGATING_KINDS.contains(relationship.kind())
+                    && isTraversableResolution(relationship)
+                    && relationship.source().type() == CodeEntityType.SYMBOL
+                    && symbolsById.apply(relationship.source().id()) != null) {
+                traversable.add(relationship);
+            }
+        }
+        return traversable;
     }
 
     private static boolean isTraversableResolution(Relationship relationship) {
@@ -228,7 +248,7 @@ public final class ImpactAnalysisService {
 
     private static EnumSet<ImpactLimitation> baselineLimitations(
             CodeKnowledgeSnapshot snapshot,
-            Map<String, Symbol> symbolsById
+            SymbolEdgeIndex edges
     ) {
         EnumSet<ImpactLimitation> limitations = EnumSet.of(
                 ImpactLimitation.DYNAMIC_DISPATCH_NOT_PROVEN,
@@ -238,18 +258,10 @@ public final class ImpactAnalysisService {
         if (SnapshotCoverageLimitations.hasResolvedReferenceOccurrences(snapshot)) {
             limitations.add(ImpactLimitation.OCCURRENCE_REFERENCES_NOT_PROJECTED);
         }
-        if (snapshot.relationships().stream().anyMatch(relationship ->
-                PROPAGATING_KINDS.contains(relationship.kind())
-                        && relationship.resolutionStatus() == ResolutionStatus.UNRESOLVED)) {
+        if (edges.hasUnresolved(PROPAGATING_KINDS)) {
             limitations.add(ImpactLimitation.UNRESOLVED_RELATIONSHIPS_IGNORED);
         }
-        if (snapshot.relationships().stream().anyMatch(relationship ->
-                PROPAGATING_KINDS.contains(relationship.kind())
-                        && relationship.target() != null
-                        && (relationship.source().type() != CodeEntityType.SYMBOL
-                        || relationship.target().type() != CodeEntityType.SYMBOL
-                        || !symbolsById.containsKey(relationship.source().id())
-                        || !symbolsById.containsKey(relationship.target().id())))) {
+        if (edges.leavesProjectSymbols(PROPAGATING_KINDS)) {
             limitations.add(ImpactLimitation.EXTERNAL_TARGETS_NOT_TRAVERSED);
         }
         return limitations;

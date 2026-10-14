@@ -1,6 +1,7 @@
 package com.minos.storage.local.store;
 
 import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.store.InMemoryCodeKnowledgeStore;
 import com.minos.store.SnapshotQueryView;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -20,7 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The weight the query cache charges for a view must not be lower than the heap the view retains:
- * the cache bound is only a memory bound if the estimate is an upper one.
+ * the cache bound is only a memory bound if the estimate is an upper one. The view is measured with its derived
+ * index of incoming relationships built (AUD-PERF-11), since a cached view keeps it as long as it lives.
  *
  * <p>Run with {@code -Dminos.queryViewWeight.print=true} to print the measures instead of asserting.</p>
  */
@@ -52,8 +54,11 @@ class QueryViewWeightTest {
         FileSymbolSnapshotStore reader = new FileSymbolSnapshotStore(root);
         long before = settledHeap();
         SnapshotQueryView view = reader.loadActiveQueryView(projectId).orElseThrow();
+        // AUD-PERF-11 : l'index dérivé des arêtes entrantes vit autant que la vue ; il est compté dans la mesure.
+        InMemoryCodeKnowledgeStore.SymbolEdgeIndex edges = view.queryStore().symbolEdgeIndex(projectId.toString());
         long retained = settledHeap() - before;
         assertNotNull(view.snapshot());
+        assertTrue(edges.targetCount() > 0, "the derived index is built before the measure");
 
         long estimate = reader.cacheStats().weightBytes();
         long persisted = persistedBytes(root);

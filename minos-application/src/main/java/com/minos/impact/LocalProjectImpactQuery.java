@@ -3,13 +3,13 @@ package com.minos.impact;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.SnapshotQueryView;
 
 import java.io.IOException;
 import java.util.Objects;
 
-/** Bootstrap local M8 : résolution projet + snapshot de connaissance actif. */
+/** Bootstrap local M8 : résolution projet + vue de requête du snapshot de connaissance actif. */
 public final class LocalProjectImpactQuery implements ProjectImpactQuery {
 
     private final ProjectResolver projectResolver;
@@ -39,8 +39,9 @@ public final class LocalProjectImpactQuery implements ProjectImpactQuery {
     @Override
     public ImpactAnalysisReport analyzeImpact(String projectIdentifier, ImpactAnalysisRequest request) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
+        // AUD-PERF-11 : la vue active, en cache, porte l'index des arêtes entrantes construit une fois pour elle.
+        SnapshotQueryView view = snapshotStore.loadActiveQueryView(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active code knowledge snapshot: " + project.id()));
-        return impactService.analyze(snapshot, request);
+        return impactService.analyze(view, request);
     }
 }

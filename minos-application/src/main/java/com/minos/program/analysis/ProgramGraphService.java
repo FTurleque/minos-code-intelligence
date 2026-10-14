@@ -6,6 +6,7 @@ import com.minos.domain.Origin;
 import com.minos.domain.SymbolLocation;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.program.ProgramGraph;
+import com.minos.program.ProgramEdgeKind;
 import com.minos.program.ProgramGraphCapability;
 import com.minos.program.ProgramGraphEdge;
 import com.minos.program.ProgramGraphNode;
@@ -16,6 +17,8 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -23,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 /** Long-lived bounded query service for reconstructible M19 program graphs. */
@@ -61,6 +66,7 @@ public final class ProgramGraphService {
     private long cacheMisses;
     private long providerKeyNanos;
     private long analysisNanos;
+    private final AtomicLong impactAdjacencyBuilds = new AtomicLong();
 
     public ProgramGraphService(ProjectRegistry registry, CodeKnowledgeSnapshotStore snapshotStore) {
         this(registry, snapshotStore, productionProviders());
@@ -106,6 +112,11 @@ public final class ProgramGraphService {
         }
     }
 
+    /** How many impact adjacencies this service has built: one per graph it serves to impact analysis. */
+    long impactAdjacencyBuilds() {
+        return impactAdjacencyBuilds.get();
+    }
+
     public ProgramGraph getGraph(String projectIdentifier) throws IOException {
         return getGraph(projectIdentifier, DEFAULT_MAX_NODES, DEFAULT_MAX_EDGES);
     }
@@ -117,10 +128,27 @@ public final class ProgramGraphService {
     }
 
     ProgramGraph fullGraph(String projectIdentifier) throws IOException {
-        return graph(projectIdentifier, new ProgramGraphBudget(PUBLIC_MAX_NODES, PUBLIC_MAX_EDGES));
+        return fullEntry(projectIdentifier).graph();
+    }
+
+    /**
+     * The full graph with the traversal adjacency impact analysis needs, held by the same cache entry: the
+     * adjacency is built once per cached graph, on the first impact analysis, and charged in the entry weight.
+     */
+    ImpactGraph impactGraph(String projectIdentifier) throws IOException {
+        GraphEntry entry = fullEntry(projectIdentifier);
+        return new ImpactGraph(entry.graph(), entry.adjacency());
+    }
+
+    private GraphEntry fullEntry(String projectIdentifier) throws IOException {
+        return entry(projectIdentifier, new ProgramGraphBudget(PUBLIC_MAX_NODES, PUBLIC_MAX_EDGES));
     }
 
     private ProgramGraph graph(String projectIdentifier, ProgramGraphBudget budget) throws IOException {
+        return entry(projectIdentifier, budget).graph();
+    }
+
+    private GraphEntry entry(String projectIdentifier, ProgramGraphBudget budget) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active symbol snapshot: " + project.id()));
@@ -135,7 +163,7 @@ public final class ProgramGraphService {
             WeightedGraph cached = cache.get(key);
             if (cached != null) {
                 cacheHits++;
-                return cached.graph();
+                return cached.entry();
             }
         }
 
@@ -146,7 +174,7 @@ public final class ProgramGraphService {
                 WeightedGraph cached = cache.get(key);
                 if (cached != null) {
                     cacheHits++;
-                    return cached.graph();
+                    return cached.entry();
                 }
             }
 
@@ -159,20 +187,21 @@ public final class ProgramGraphService {
                     project.id().toString(), snapshot.snapshotId(), fragments, budget),
                     providersKey.sourceStateReused());
             long analysisElapsed = System.nanoTime() - analysisStarted;
+            GraphEntry entry = new GraphEntry(composed, impactAdjacencyBuilds);
 
             synchronized (cache) {
                 cacheMisses++;
                 analysisNanos += analysisElapsed;
                 removeSupersededEntries(project.id().toString(), budget, key);
-                long weight = graphWeight(composed);
+                long weight = saturatingAdd(graphWeight(composed), ImpactAdjacency.weight(composed));
                 if (weight <= maxCacheWeight) {
-                    WeightedGraph previous = cache.put(key, new WeightedGraph(composed, weight));
+                    WeightedGraph previous = cache.put(key, new WeightedGraph(entry, weight));
                     if (previous != null) cacheWeight -= previous.weightBytes();
                     cacheWeight = saturatingAdd(cacheWeight, weight);
                     evictCache();
                 }
             }
-            return composed;
+            return entry;
         } finally {
             buildLock.unlock();
         }
@@ -332,6 +361,97 @@ public final class ProgramGraphService {
     public record CacheStats(long hits, long misses, long providerKeyNanos, long analysisNanos,
                              int entries, int maximumEntries, long weight, long maximumWeight) { }
     private record CacheKey(String projectId, String snapshotId, String providers, int maxNodes, int maxEdges) { }
-    private record WeightedGraph(ProgramGraph graph, long weightBytes) { }
+    private record WeightedGraph(GraphEntry entry, long weightBytes) { }
+
+    /** A program graph with its impact adjacency, as one cache entry holds them. */
+    record ImpactGraph(ProgramGraph graph, ImpactAdjacency adjacency) { }
+
+    /**
+     * One composed graph and its impact adjacency, built on first demand and then kept as long as the graph:
+     * concurrent first readers wait for the single build (AUD-PERF-11).
+     */
+    private static final class GraphEntry {
+        private final ProgramGraph graph;
+        private final AtomicLong builds;
+        private final AtomicReference<ImpactAdjacency> adjacency = new AtomicReference<>();
+        private final Object buildMonitor = new Object();
+
+        private GraphEntry(ProgramGraph graph, AtomicLong builds) {
+            this.graph = graph;
+            this.builds = builds;
+        }
+
+        ProgramGraph graph() {
+            return graph;
+        }
+
+        ImpactAdjacency adjacency() {
+            ImpactAdjacency built = adjacency.get();
+            if (built != null) return built;
+            synchronized (buildMonitor) {
+                built = adjacency.get();
+                if (built == null) {
+                    builds.incrementAndGet();
+                    built = ImpactAdjacency.of(graph);
+                    adjacency.set(built);
+                }
+                return built;
+            }
+        }
+    }
+
+    /**
+     * Program-graph adjacency in the direction impact propagates: a call is followed from callee to caller, every
+     * other edge but control flow from source to target. Each list keeps the edges in identifier order.
+     */
+    static final class ImpactAdjacency {
+        private static final long FIXED_WEIGHT = 1_024L;
+        private static final long WEIGHT_PER_NODE = 64L;
+        private static final long WEIGHT_PER_EDGE = 96L;
+
+        private final Map<String, ProgramGraphNode> nodesById;
+        private final Map<String, List<TraversalEdge>> next;
+
+        private ImpactAdjacency(Map<String, ProgramGraphNode> nodesById, Map<String, List<TraversalEdge>> next) {
+            this.nodesById = nodesById;
+            this.next = next;
+        }
+
+        static ImpactAdjacency of(ProgramGraph graph) {
+            Map<String, ProgramGraphNode> nodes = new HashMap<>();
+            graph.nodes().forEach(node -> nodes.put(node.id(), node));
+            Map<String, List<TraversalEdge>> result = new HashMap<>();
+            List<ProgramGraphEdge> ordered = graph.edges().stream().sorted(Comparator.comparing(ProgramGraphEdge::id)).toList();
+            for (ProgramGraphEdge edge : ordered) {
+                if (edge.kind() == ProgramEdgeKind.CONTROL_FLOW) continue;
+                if (edge.kind() == ProgramEdgeKind.CALL) {
+                    result.computeIfAbsent(edge.targetNodeId(), ignored -> new ArrayList<>())
+                            .add(new TraversalEdge(edge, edge.sourceNodeId()));
+                } else {
+                    result.computeIfAbsent(edge.sourceNodeId(), ignored -> new ArrayList<>())
+                            .add(new TraversalEdge(edge, edge.targetNodeId()));
+                }
+            }
+            Map<String, List<TraversalEdge>> frozen = new HashMap<>();
+            result.forEach((nodeId, edges) -> frozen.put(nodeId, List.copyOf(edges)));
+            return new ImpactAdjacency(Map.copyOf(nodes), Map.copyOf(frozen));
+        }
+
+        /** Upper bound of the heap the adjacency of this graph retains: its own slots, never the graph facts. */
+        static long weight(ProgramGraph graph) {
+            long weight = saturatingAdd(FIXED_WEIGHT, (long) graph.nodes().size() * WEIGHT_PER_NODE);
+            return saturatingAdd(weight, (long) graph.edges().size() * WEIGHT_PER_EDGE);
+        }
+
+        ProgramGraphNode node(String nodeId) {
+            return nodesById.get(nodeId);
+        }
+
+        List<TraversalEdge> next(String nodeId) {
+            return next.getOrDefault(nodeId, List.of());
+        }
+    }
+
+    record TraversalEdge(ProgramGraphEdge edge, String nextNodeId) { }
     private record ProviderKey(String key, boolean sourceStateReused) { }
 }

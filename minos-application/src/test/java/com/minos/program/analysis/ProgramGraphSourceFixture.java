@@ -19,6 +19,8 @@ import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.InMemoryCodeKnowledgeStore;
+import com.minos.store.SnapshotDescriptor;
 import com.minos.store.SnapshotQueryView;
 import com.minos.store.SymbolSnapshot;
 import jdk.jfr.Recording;
@@ -209,7 +211,7 @@ final class ProgramGraphSourceFixture {
         }
     }
 
-    /** Snapshots en mémoire : le dernier publié devient actif. */
+    /** Snapshots en mémoire : le dernier publié devient actif ; sa vue de requête est construite à la demande. */
     static final class Snapshots implements CodeKnowledgeSnapshotStore {
         private final Map<UUID, CodeKnowledgeSnapshot> active = new HashMap<>();
 
@@ -240,7 +242,11 @@ final class ProgramGraphSourceFixture {
 
         @Override
         public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) {
-            throw new UnsupportedOperationException("query views are not used by these tests");
+            return loadActiveKnowledge(projectId).map(snapshot -> new SnapshotQueryView(
+                    new SnapshotDescriptor(3, snapshot.snapshotId(), snapshot.snapshotId() + ".bin", "0".repeat(64),
+                            snapshot.symbols().size(), snapshot.occurrences().size(),
+                            snapshot.relationships().size()),
+                    snapshot, new InMemoryCodeKnowledgeStore(snapshot), 0L));
         }
     }
 
