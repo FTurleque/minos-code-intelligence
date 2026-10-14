@@ -383,7 +383,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         try {
             ScipJavaClasspath.verify(listing, lock, !CommandLocator.isWindows());
             return true;
-        } catch (IOException | RuntimeException unusable) {
+        } catch (IOException | RuntimeException _) {
             return false;
         }
     }
@@ -411,33 +411,15 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 Path fileName = jar.getFileName();
                 String name = ScipJavaClasspath.requireJarName(fileName == null ? null : fileName.toString());
                 Path copy = partial.resolve(name);
-                try (InputStream input = new BoundedInputStream(ConfinedFileOpener.openRegularFileNoFollow(jar),
-                        MAX_CLASSPATH_JAR_BYTES, "scip-java classpath jar")) {
-                    writeNewFile(copy, input);
-                }
+                copyJar(jar, copy);
                 names.add(name);
                 copies.add(copy);
             }
             lock.verify(copies);
             writeNewFile(partial.resolve(ScipJavaClasspath.LAUNCHER),
-                    new ByteArrayInputStream(ScipJavaClasspath.launcher(names)));
-            writeNewFile(partial.resolve(CLASSPATH_FILE), new ByteArrayInputStream(ScipJavaClasspath.listing(names)));
-            deleteRecursively(previous);
-            boolean replacing = Files.exists(destination, LinkOption.NOFOLLOW_LINKS);
-            if (replacing) move(destination, previous);
-            try {
-                move(partial, destination);
-            } catch (IOException swapFailure) {
-                if (replacing) {
-                    try {
-                        move(previous, destination);
-                    } catch (IOException restoreFailure) {
-                        swapFailure.addSuppressed(restoreFailure);
-                    }
-                }
-                throw swapFailure;
-            }
-            deleteRecursively(previous);
+                    new ByteArrayInputStream(ScipJavaClasspath.launcherBytes(names)));
+            writeNewFile(partial.resolve(CLASSPATH_FILE), new ByteArrayInputStream(ScipJavaClasspath.listingBytes(names)));
+            swapIn(partial, destination, previous);
         } catch (IOException | RuntimeException failure) {
             try {
                 deleteRecursively(partial);
@@ -445,6 +427,35 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 failure.addSuppressed(cleanupFailure);
             }
             throw failure;
+        }
+    }
+
+    /** Replaces {@code destination} by {@code partial}, keeping the previous tree aside until the swap is done. */
+    private static void swapIn(Path partial, Path destination, Path previous) throws IOException {
+        deleteRecursively(previous);
+        boolean replacing = Files.exists(destination, LinkOption.NOFOLLOW_LINKS);
+        if (replacing) move(destination, previous);
+        try {
+            move(partial, destination);
+        } catch (IOException swapFailure) {
+            if (replacing) restore(previous, destination, swapFailure);
+            throw swapFailure;
+        }
+        deleteRecursively(previous);
+    }
+
+    private static void restore(Path previous, Path destination, IOException swapFailure) {
+        try {
+            move(previous, destination);
+        } catch (IOException restoreFailure) {
+            swapFailure.addSuppressed(restoreFailure);
+        }
+    }
+
+    private static void copyJar(Path jar, Path copy) throws IOException {
+        try (InputStream input = new BoundedInputStream(
+                ConfinedFileOpener.openRegularFileNoFollow(jar), MAX_CLASSPATH_JAR_BYTES, "scip-java classpath jar")) {
+            writeNewFile(copy, input);
         }
     }
 
@@ -467,7 +478,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         if (Files.isRegularFile(listing, LinkOption.NOFOLLOW_LINKS)) {
             return windows || Files.isRegularFile(listing.resolveSibling(ScipJavaClasspath.LAUNCHER), LinkOption.NOFOLLOW_LINKS);
         }
-        return !windows && CommandLocator.find("scip-java").isPresent();
+        return !windows && CommandLocator.find(SCIP_JAVA_ID).isPresent();
     }
 
     private void installJavaWindowsRuntime() throws IOException {

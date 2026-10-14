@@ -68,7 +68,7 @@ class ScipJavaClasspathInstallationTest {
         assertEquals("scip-java-0.13.1.jar\nscala-library-2.13.16.jar\n", Files.readString(listing));
         assertArrayEquals(SCIP, Files.readAllBytes(directory.resolve("scip-java-0.13.1.jar")));
         assertArrayEquals(SCALA, Files.readAllBytes(directory.resolve("scala-library-2.13.16.jar")));
-        assertArrayEquals(ScipJavaClasspath.launcher(List.of("scip-java-0.13.1.jar", "scala-library-2.13.16.jar")),
+        assertArrayEquals(ScipJavaClasspath.launcherBytes(List.of("scip-java-0.13.1.jar", "scala-library-2.13.16.jar")),
                 Files.readAllBytes(directory.resolve(ScipJavaClasspath.LAUNCHER)));
         assertFalse(Files.exists(directory.resolveSibling(directory.getFileName() + ".partial")));
         assertTrue(manager.installedClasspathVerifies(lock()));
@@ -104,8 +104,9 @@ class ScipJavaClasspathInstallationTest {
         ClasspathLock other = lock(pinned("scip-java-0.13.1.jar", "other".getBytes(StandardCharsets.UTF_8)),
                 pinned("scala-library-2.13.16.jar", SCALA));
 
+        List<Path> cache = cache();
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> manager.installClasspath(cache(), other));
+                () -> manager.installClasspath(cache, other));
 
         assertEquals("scip-java classpath verification failed: scip-java-0.13.1.jar does not match its pinned SHA-256",
                 failure.getMessage());
@@ -120,7 +121,9 @@ class ScipJavaClasspathInstallationTest {
         ManagedScipProviderRuntimeManager manager = manager();
         Path odd = Files.writeString(temp.resolve("odd name.jar"), "x");
 
-        assertThrows(IllegalStateException.class, () -> manager.installClasspath(List.of(odd), lock()));
+        List<Path> resolved = List.of(odd);
+        ClasspathLock lock = lock();
+        assertThrows(IllegalStateException.class, () -> manager.installClasspath(resolved, lock));
         assertFalse(Files.exists(manager.scipJavaClasspathFile()));
     }
 

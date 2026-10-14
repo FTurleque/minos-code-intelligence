@@ -75,14 +75,14 @@ public final class ScipJavaClasspath {
     }
 
     /** The listing of {@code names}, one per line. */
-    public static byte[] listing(List<String> names) {
+    public static byte[] listingBytes(List<String> names) {
         StringBuilder text = new StringBuilder();
         for (String name : requireNames(names)) text.append(name).append('\n');
         return text.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     /** The launcher of {@code names}: a stored (uncompressed) jar holding only its manifest, the same bytes every time. */
-    public static byte[] launcher(List<String> names) {
+    public static byte[] launcherBytes(List<String> names) {
         Manifest manifest = new Manifest();
         Attributes attributes = manifest.getMainAttributes();
         attributes.put(Attributes.Name.MANIFEST_VERSION, "1.0");
@@ -145,13 +145,11 @@ public final class ScipJavaClasspath {
         Objects.requireNonNull(verifier, "verifier");
         Path directory = Objects.requireNonNull(listing, "listing").toAbsolutePath().normalize().getParent();
         List<String> names = readListing(listing);
-        List<Path> jars = new ArrayList<>(names.size());
-        for (String name : names) jars.add(directory.resolve(name));
-        verifier.verify(jars);
+        verifier.verify(names.stream().map(directory::resolve).toList());
         if (!withLauncher) return null;
         Path launcher = directory.resolve(LAUNCHER);
         if (!Files.isRegularFile(launcher, LinkOption.NOFOLLOW_LINKS)
-                || !Arrays.equals(launcher(names), readLauncher(launcher))) {
+                || !Arrays.equals(launcherBytes(names), readLauncher(launcher))) {
             throw new IllegalStateException("scip-java classpath verification failed: " + LAUNCHER
                     + " does not match the verified classpath");
         }

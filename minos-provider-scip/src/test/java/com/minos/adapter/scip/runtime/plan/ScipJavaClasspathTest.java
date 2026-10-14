@@ -7,7 +7,6 @@ import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -41,13 +40,13 @@ class ScipJavaClasspathTest {
     private Path installed(List<String> names) throws IOException {
         Path directory = Files.createDirectories(temp.resolve("classpath"));
         for (String name : names) Files.writeString(directory.resolve(name), name);
-        Files.write(directory.resolve(ScipJavaClasspath.LAUNCHER), ScipJavaClasspath.launcher(names));
-        return Files.write(directory.resolve(ScipJavaClasspath.LISTING), ScipJavaClasspath.listing(names));
+        Files.write(directory.resolve(ScipJavaClasspath.LAUNCHER), ScipJavaClasspath.launcherBytes(names));
+        return Files.write(directory.resolve(ScipJavaClasspath.LISTING), ScipJavaClasspath.listingBytes(names));
     }
 
     @Test
     void theListingNamesTheJarsOnePerLineAndReadsBackInOrder() throws IOException {
-        Path listing = Files.write(temp.resolve(ScipJavaClasspath.LISTING), ScipJavaClasspath.listing(NAMES));
+        Path listing = Files.write(temp.resolve(ScipJavaClasspath.LISTING), ScipJavaClasspath.listingBytes(NAMES));
 
         assertEquals("scip-java-0.13.1.jar\nscala-library-2.13.16.jar\n", Files.readString(listing));
         assertEquals(NAMES, ScipJavaClasspath.readListing(listing));
@@ -101,8 +100,8 @@ class ScipJavaClasspathTest {
 
     @Test
     void theLauncherIsTheSameBytesEveryTimeAndNamesTheMainClassAndTheJars() throws IOException {
-        byte[] first = ScipJavaClasspath.launcher(NAMES);
-        assertArrayEquals(first, ScipJavaClasspath.launcher(List.copyOf(NAMES)));
+        byte[] first = ScipJavaClasspath.launcherBytes(NAMES);
+        assertArrayEquals(first, ScipJavaClasspath.launcherBytes(List.copyOf(NAMES)));
 
         Path launcher = Files.write(temp.resolve("launcher.jar"), first);
         try (JarFile jar = new JarFile(launcher.toFile())) {
@@ -111,7 +110,7 @@ class ScipJavaClasspathTest {
             assertEquals("scip-java-0.13.1.jar scala-library-2.13.16.jar", attributes.getValue(Attributes.Name.CLASS_PATH));
             assertEquals(1, jar.size(), "the launcher holds its manifest and nothing else");
         }
-        assertFalse(java.util.Arrays.equals(first, ScipJavaClasspath.launcher(List.of("scip-java-0.13.1.jar"))));
+        assertFalse(java.util.Arrays.equals(first, ScipJavaClasspath.launcherBytes(List.of("scip-java-0.13.1.jar"))));
     }
 
     @Test
@@ -137,7 +136,7 @@ class ScipJavaClasspathTest {
             jar.closeEntry();
         }
         Path launcher = Files.write(directory.resolve(ScipJavaClasspath.LAUNCHER),
-                ScipJavaClasspath.launcher(List.of("scip-java-0.13.1.jar")));
+                ScipJavaClasspath.launcherBytes(List.of("scip-java-0.13.1.jar")));
         Path java = Path.of(System.getProperty("java.home"), "bin", "java");
         List<String> command = new ArrayList<>(ScipJavaProcessPlanFactory.classpathCommand(
                 java, launcher, temp.resolve("out").resolve("index.scip")));
@@ -204,7 +203,7 @@ class ScipJavaClasspathTest {
         Path launcher = listing.resolveSibling(ScipJavaClasspath.LAUNCHER);
         String expected = "scip-java classpath verification failed: scip-java-launcher.jar does not match the verified classpath";
 
-        Files.write(launcher, ScipJavaClasspath.launcher(List.of("scip-java-0.13.1.jar")));
+        Files.write(launcher, ScipJavaClasspath.launcherBytes(List.of("scip-java-0.13.1.jar")));
         assertEquals(expected, assertThrows(IllegalStateException.class,
                 () -> ScipJavaClasspath.verify(listing, ACCEPT, true)).getMessage());
 

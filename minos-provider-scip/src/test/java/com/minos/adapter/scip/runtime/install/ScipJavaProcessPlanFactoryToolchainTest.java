@@ -67,8 +67,8 @@ class ScipJavaProcessPlanFactoryToolchainTest {
         Path directory = Files.createDirectories(temp.resolve("classpath"));
         List<String> names = List.of("scip-java-0.13.1.jar", "scala-library-2.13.jar");
         for (String name : names) Files.writeString(directory.resolve(name), name);
-        Files.write(directory.resolve(ScipJavaClasspath.LAUNCHER), ScipJavaClasspath.launcher(names));
-        return Files.write(directory.resolve(ScipJavaClasspath.LISTING), ScipJavaClasspath.listing(names));
+        Files.write(directory.resolve(ScipJavaClasspath.LAUNCHER), ScipJavaClasspath.launcherBytes(names));
+        return Files.write(directory.resolve(ScipJavaClasspath.LISTING), ScipJavaClasspath.listingBytes(names));
     }
 
     // ------------------------------------------------------------------ both platforms: the project JDK
