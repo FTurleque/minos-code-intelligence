@@ -372,12 +372,12 @@
     "sprint": 2,
     "depends_on": [],
     "bloque": [],
-    "statut": "Partiel",
-    "changement": "epingler-et-isoler-l-installation-des-providers",
+    "statut": "Fermé avec réserve",
+    "changement": "epingler-et-isoler-l-installation-des-providers, executer-scip-java-sur-classpath-verifie",
     "verification": {
-      "verdict": "partiel",
-      "preuve": "Installation : ManagedScipProviderRuntimeManager.java:315-327 coursier fetch + ClasspathLock.verify, plus de 'launch' à l'installation ; InstallationProcessEnvironment.apply sur les 3 ProcessBuilder (l.794, Polyglot:460, Python:257). MAIS ScipJavaProcessPlanFactory.java:153-164 : repli 'coursier launch <coordonnée> --jvm system' sans empreinte quand le lanceur autonome manque",
-      "reserve": "Le défaut d'origine (résolution par coordonnée seule, sans hachage) reste atteignable au moment de l'indexation (résidu D2) ; le suivi le note mais déclare Fermé."
+      "verdict": "fermé avec réserve",
+      "preuve": "PR #449 fusionnée le 2026-10-14 (dc4cffb9) : le plan d'indexation revérifie chaque jar du classpath installé contre le verrou SHA-256 avant chaque exécution, sous Windows et sous Linux ; `coursier launch` retiré (ScipJavaProcessPlanFactory, ScipJavaClasspath). Verify (ubuntu-24.04) et Verify (windows-2022) verts, run 38572983303 ; image complète verte, run 38572982326.",
+      "reserve": "Indexation réelle dans bubblewrap et AppContainer non rejouée (la CI n'exécute aucun provider, tâche manuelle 1.5) ; un scip-java installé à la main dans le PATH, sans classpath installé, reste exécuté sans vérification (décision du propriétaire) ; fenêtre vérification → ouverture par la JVM (même compte)."
     }
   },
   {
@@ -450,12 +450,12 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Partiel",
-    "changement": "idem (reste)",
+    "statut": "Fermé",
+    "changement": "borner-la-couverture-globale-et-du-coeur",
     "verification": {
-      "verdict": "partiel",
-      "preuve": "PostgresRuntimeObservationStoreTest.java 9 @Test ; check-jacoco.py:175 m30-postgresql-pgvector toujours au seul préfixe de paquet, aucun plancher de classe",
-      "reserve": "Tests neutralisés par assumeTrue(dockerAvailable) (PostgresTestSupport.java:101) si Docker absent : skip silencieux possible en CI."
+      "verdict": "fermé",
+      "preuve": "PR #451 fusionnée le 2026-10-14 (4cc5a817) : check-jacoco.py déclare PostgresRuntimeObservationStore dans m30-postgresql-pgvector avec un plancher de classe 0,95 / 0,85 (mesure Linux 65/65 lignes, 18/20 branches) ; MINOS JACOCO GATE SUCCESS sous Linux, run 38623008754. Les tests PostgreSQL sont exigés en CI Linux (pr-ci.yml, -Dminos.postgresql.tests.required=true) : pas de saut silencieux.",
+      "reserve": null
     }
   },
   {
@@ -735,12 +735,12 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Partiel",
-    "changement": "idem",
+    "statut": "Fermé avec réserve",
+    "changement": "durcir-les-workflows-github",
     "verification": {
-      "verdict": "partiel",
-      "preuve": "intellij-plugin-release.yml:92 et release-windows.yml:101 gradle-version '9.8.1' = wrapper 9.8.1 ; mais intellij-plugin-release.yml:113, release-windows.yml:107,112 'gradle --no-daemon' hors wrapper ; intellij-plugin-release.yml:24,144 runs-on ubuntu-latest",
-      "reserve": "Conforme au suivi (partiellement corrigé)."
+      "verdict": "fermé avec réserve",
+      "preuve": "PR #450 fusionnée le 2026-10-14 (13ac5682) : intellij-plugin-release.yml et release-windows.yml construisent le plugin par ./gradlew / gradlew.bat, sans gradle-version ; runs-on ubuntu-24.04 ; check-toolchain-baseline.py refuse tout gradle-version, check-workflow-pins.py refuse un runner -latest (auto-test test_check_workflow_pins.py). CI verte, runs 38627054379 et 38627053606.",
+      "reserve": "Le build Gradle de release ne tourne qu'au prochain candidat (tâche manuelle 5.2 de durcir-les-workflows-github)."
     }
   },
   {
@@ -1508,12 +1508,12 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Partiel",
-    "changement": "idem (reste)",
+    "statut": "Fermé",
+    "changement": "borner-la-couverture-globale-et-du-coeur",
     "verification": {
-      "verdict": "partiel",
-      "preuve": "WindowsJobObjectProcessOwnershipPlanTest.java (7 @Test, @EnabledOnOs(WINDOWS), exécuté par la matrice windows-2022 de pr-ci.yml:202) ; check-jacoco.py:131-135 scope provider-sandbox-windows sans WindowsJobObjectProcessOwnership",
-      "reserve": "Conforme au suivi : rattachement au scope JaCoCo manquant."
+      "verdict": "fermé",
+      "preuve": "PR #451 fusionnée le 2026-10-14 (4cc5a817) : WindowsJobObjectProcessOwnership rattachée à provider-sandbox-windows avec un plancher de classe 0,93 / 0,70 (mesure Windows 67/68 lignes, 15/20 branches) ; WindowsJobObjectProcessOwnershipPlanTest 7/0 et MINOS JACOCO GATE SUCCESS sous Windows, run 38623008754.",
+      "reserve": null
     }
   },
   {

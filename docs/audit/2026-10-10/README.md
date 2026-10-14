@@ -1,6 +1,8 @@
 # Audit MINOS — 10 octobre 2026
 
 > **Mise à jour du 13/10/2026** : état revérifié sur `develop` (`90c24fd0`) — 26 constats fermés (dont 17 avec réserve), 4 partiels, 42 spécifiés. Voir [`ETAT-2026-10-13.md`](ETAT-2026-10-13.md) ; `findings.json` porte désormais les champs `statut`, `changement` et `verification`.
+>
+> **Mise à jour du 14/10/2026** : les 4 partiels (AUD-SEC-02, AUD-DEP-05, AUD-TST-04, AUD-TST-12) sont fermés, dont deux avec réserve (PR #449, #450, #451) ; voir la dernière section de [`ETAT-2026-10-13.md`](ETAT-2026-10-13.md).
 
 Audit technique complet (6 axes) du dépôt `minos-code-intelligence` au HEAD `816cdd0c` de `develop` (merge de la PR #391). Il succède à l'[audit de septembre](../archive/2026-09/AUDIT-2026-09.md), à l'[audit d'octobre](../archive/2026-10-06/README.md) et à l'[audit outillé du 8 octobre](../../quality/code-audit-constats.md) : leurs constats clos ne sont pas re-signalés, et ceux qui restent ouverts au HEAD sont repris avec leur identifiant d'origine (champ **Connu**).
 
