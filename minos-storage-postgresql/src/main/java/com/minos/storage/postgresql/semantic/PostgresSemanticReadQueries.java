@@ -3,6 +3,7 @@ package com.minos.storage.postgresql.semantic;
 import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
+import com.minos.semantic.SemanticVectorStore.IndexChecksums;
 import com.minos.semantic.SemanticVectorStore.IndexDocuments;
 import com.minos.semantic.SemanticVectorStore.IndexMetadata;
 import com.minos.semantic.SemanticVectorStore.IndexSnapshot;
@@ -15,7 +16,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -82,6 +85,35 @@ final class PostgresSemanticReadQueries {
                         new IndexMetadata(projectId, snapshotId, providerId, modelId, dimensions, builtAt,
                                 documents.size()),
                         documents));
+            }
+        }
+    }
+
+    /**
+     * Metadata of the index and the stable key and checksum of each of its documents, in one statement that
+     * reads neither the contents nor the embedding column.
+     */
+    static Optional<IndexChecksums> checksums(Connection connection, String projectId, UUID id) throws SQLException {
+        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,d.stable_key,d.checksum "
+                + "FROM semantic_index_meta m LEFT JOIN semantic_documents d "
+                + "ON d.project_id=m.project_id AND d.snapshot_id=m.snapshot_id WHERE m.project_id=?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setObject(1, id);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) return Optional.empty();
+                String snapshotId = result.getString(1);
+                String providerId = result.getString(2);
+                String modelId = result.getString(3);
+                int dimensions = result.getInt(4);
+                long builtAt = result.getLong(5);
+                Map<String, String> checksums = new HashMap<>();
+                do {
+                    if (result.getString(6) != null) checksums.put(result.getString(6), result.getString(7));
+                } while (result.next());
+                return Optional.of(new IndexChecksums(
+                        new IndexMetadata(projectId, snapshotId, providerId, modelId, dimensions, builtAt,
+                                checksums.size()),
+                        checksums));
             }
         }
     }

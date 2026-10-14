@@ -11,7 +11,6 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -102,9 +101,7 @@ public final class SemanticIndexService {
                     appendProviderLimitations(List.of("SEMANTIC_INDEX_MISSING"), provider));
         }
         SemanticVectorStore.IndexMetadata index = stored.orElseThrow();
-        boolean modelAligned = provider.id().equals(index.providerId())
-                && provider.modelId().equals(index.modelId())
-                && provider.dimensions() == index.dimensions();
+        boolean modelAligned = sameModel(index, provider);
         boolean snapshotAligned = active.orElseThrow().equals(index.snapshotId());
         State state = modelAligned && snapshotAligned ? State.READY : State.STALE;
         List<String> limitations = new ArrayList<>();
@@ -123,9 +120,20 @@ public final class SemanticIndexService {
                     0L, sizeBytes(projectId), List.of("SEMANTIC_EMBEDDING_PROVIDER_UNAVAILABLE"));
         }
         EmbeddingProvider provider = embeddingProvider.orElseThrow();
+        long started = System.nanoTime();
+        Optional<SemanticVectorStore.IndexMetadata> previousMetadata = store.metadata(projectId);
+        if (previousMetadata.isPresent()) {
+            SemanticVectorStore.IndexMetadata index = previousMetadata.orElseThrow();
+            Optional<String> activeSnapshotId = snapshots.activeSnapshotId(project.id());
+            if (activeSnapshotId.isPresent() && isCurrent(index, activeSnapshotId.orElseThrow(), provider)) {
+                // The index already describes the active snapshot with this model: nothing is rebuilt or written.
+                return new UpdateReport(projectId, index.snapshotId(), State.READY,
+                        index.documentCount(), 0, 0, 0, index.documentCount(),
+                        (System.nanoTime() - started) / 1_000_000L, sizeBytes(projectId), providerLimitations(provider));
+            }
+        }
         CodeKnowledgeSnapshot active = snapshots.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active knowledge snapshot: " + project.displayName()));
-        long started = System.nanoTime();
         List<SemanticDocument> currentDocuments = documents.build(
                 project, active, SemanticIndexBudget.DEFAULT, provider.dimensions());
         if (currentDocuments.size() > MAX_DOCUMENTS) {
@@ -133,23 +141,20 @@ public final class SemanticIndexService {
         }
 
         long currentWorkingSetBytes = estimateWorkingSet(currentDocuments, provider.dimensions());
-        Optional<SemanticVectorStore.IndexMetadata> previousMetadata = store.metadata(projectId);
-        boolean reusableMetadata = previousMetadata.isPresent()
-                && provider.id().equals(previousMetadata.orElseThrow().providerId())
-                && provider.modelId().equals(previousMetadata.orElseThrow().modelId())
-                && provider.dimensions() == previousMetadata.orElseThrow().dimensions();
+        boolean reusableMetadata = previousMetadata.isPresent() && sameModel(previousMetadata.orElseThrow(), provider);
         long persistedBytes = previousMetadata.isPresent() ? sizeBytes(projectId) : 0L;
         boolean reuseFitsWorkingSet = reusableMetadata
                 && safeAdd(currentWorkingSetBytes, safeMultiply(persistedBytes, PERSISTED_INDEX_AMPLIFICATION))
                     <= MAX_SYNCHRONIZE_WORKING_SET_BYTES;
-        Optional<SemanticVectorStore.IndexSnapshot> previousOptional = reuseFitsWorkingSet
-                ? store.load(projectId) : Optional.empty();
-        SemanticVectorStore.IndexSnapshot previous = previousOptional.orElse(null);
-        boolean reusableModel = previous != null;
-        Map<String, SemanticVectorStore.IndexedDocument> oldByStableKey = new HashMap<>();
-        if (reusableModel) {
-            for (SemanticVectorStore.IndexedDocument value : previous.documents()) oldByStableKey.put(value.document().stableKey(), value);
-        }
+        // Reuse is decided on stable keys and checksums alone: the stored vectors are neither read nor sent
+        // back, the store keeps them for the documents marked as reused and refuses a reuse it cannot honour.
+        Map<String, String> oldChecksums = reuseFitsWorkingSet
+                ? store.checksums(projectId)
+                    .filter(previous -> sameModel(previous.metadata(), provider))
+                    .map(SemanticVectorStore.IndexChecksums::checksumsByStableKey)
+                    .orElse(null)
+                : null;
+        boolean reusableModel = oldChecksums != null;
 
         int added = 0;
         int changed = 0;
@@ -158,20 +163,19 @@ public final class SemanticIndexService {
         Set<String> currentKeys = new LinkedHashSet<>();
         for (SemanticDocument document : currentDocuments) {
             currentKeys.add(document.stableKey());
-            SemanticVectorStore.IndexedDocument old = oldByStableKey.get(document.stableKey());
-            SemanticVector vector;
-            if (old != null && old.document().checksum().equals(document.checksum())) {
-                vector = old.vector();
+            String oldChecksum = reusableModel ? oldChecksums.get(document.stableKey()) : null;
+            if (document.checksum().equals(oldChecksum)) {
+                indexed.add(SemanticVectorStore.IndexedDocument.reusingStoredVector(document));
                 reused++;
             } else {
-                vector = provider.embed(document.stableKey(), document.content());
+                SemanticVector vector = provider.embed(document.stableKey(), document.content());
                 validateVector(provider, document, vector);
-                if (old == null) added++; else changed++;
+                indexed.add(new SemanticVectorStore.IndexedDocument(document, vector));
+                if (oldChecksum == null) added++; else changed++;
             }
-            indexed.add(new SemanticVectorStore.IndexedDocument(document, vector));
         }
         int removed = reusableModel
-                ? (int) oldByStableKey.keySet().stream().filter(key -> !currentKeys.contains(key)).count()
+                ? (int) oldChecksums.keySet().stream().filter(key -> !currentKeys.contains(key)).count()
                 : previousMetadata.map(SemanticVectorStore.IndexMetadata::documentCount).orElse(0);
         if (!reusableModel && previousMetadata.isPresent()) {
             added = currentDocuments.size(); changed = 0; reused = 0;
@@ -192,6 +196,17 @@ public final class SemanticIndexService {
         return new UpdateReport(projectId, active.snapshotId(), State.READY,
                 currentDocuments.size(), added, changed, removed, reused,
                 elapsedMillis, sizeBytes(projectId), limitations);
+    }
+
+    private static boolean sameModel(SemanticVectorStore.IndexMetadata index, EmbeddingProvider provider) {
+        return provider.id().equals(index.providerId())
+                && provider.modelId().equals(index.modelId())
+                && provider.dimensions() == index.dimensions();
+    }
+
+    private static boolean isCurrent(SemanticVectorStore.IndexMetadata index, String activeSnapshotId,
+                                     EmbeddingProvider provider) {
+        return activeSnapshotId.equals(index.snapshotId()) && sameModel(index, provider);
     }
 
     private long sizeBytes(String projectId) throws IOException { return store.sizeBytes(projectId); }

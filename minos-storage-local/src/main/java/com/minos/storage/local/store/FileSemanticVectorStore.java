@@ -175,8 +175,11 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     }
 
     @Override
-    public void replace(IndexSnapshot snapshot) throws IOException {
-        Objects.requireNonNull(snapshot, "snapshot");
+    public void replace(IndexSnapshot requested) throws IOException {
+        Objects.requireNonNull(requested, "snapshot");
+        // A document marked as reused keeps the vector this store holds for it; the file is rewritten whole.
+        IndexSnapshot snapshot = requested.withStoredVectors(
+                requested.reusesStoredVectors() ? load(requested.projectId()) : Optional.empty());
         if (snapshot.documents().size() > MAX_DOCUMENTS) throw new IOException("semantic index exceeds document limit");
         if (snapshot.dimensions() > MAX_DIMENSIONS) throw new IOException("semantic index exceeds dimension limit");
         Path directory = ensureProjectDirectory(snapshot.projectId());

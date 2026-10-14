@@ -448,7 +448,7 @@ class SemanticQueryPathStatesTest {
             if (!expectedActiveSnapshotId.equals(current)) {
                 throw new StaleSemanticSyncException(next.projectId(), expectedActiveSnapshotId, current);
             }
-            index = next;
+            index = next.withStoredVectors(Optional.ofNullable(index));
         }
 
         @Override
