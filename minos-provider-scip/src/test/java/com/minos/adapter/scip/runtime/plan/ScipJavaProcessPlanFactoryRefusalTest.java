@@ -29,9 +29,15 @@ class ScipJavaProcessPlanFactoryRefusalTest {
     @TempDir
     Path temporaryDirectory;
 
+    private static final ScipJavaClasspath.Verifier ACCEPT = jars -> { };
+
     private ScipJavaProcessPlanFactory factory() {
-        return new ScipJavaProcessPlanFactory(
-                temporaryDirectory.resolve("cs"), COORDINATE, temporaryDirectory.resolve("runner.ps1"));
+        return factory(temporaryDirectory.resolve("cs"), COORDINATE, temporaryDirectory.resolve("runner.ps1"), ACCEPT);
+    }
+
+    private ScipJavaProcessPlanFactory factory(Path coursier, String coordinate, Path runner, ScipJavaClasspath.Verifier verifier) {
+        return new ScipJavaProcessPlanFactory(coursier, coordinate, runner, temporaryDirectory.resolve("mvn"),
+                temporaryDirectory.resolve("classpath.txt"), verifier);
     }
 
     private static IndexingExecutionRequest request(Path project, IndexingMode mode, List<String> changedFiles) {
@@ -44,24 +50,22 @@ class ScipJavaProcessPlanFactoryRefusalTest {
     }
 
     @Test
-    void everyConstructorShapeAcceptsAValidConfiguration() {
+    void aValidConfigurationIsAcceptedWithOrWithoutTheOptionalPaths() {
         Path coursier = temporaryDirectory.resolve("cs");
         Path runner = temporaryDirectory.resolve("runner.ps1");
-        Path maven = temporaryDirectory.resolve("mvn");
-        Path classpath = temporaryDirectory.resolve("classpath.txt");
 
-        assertDoesNotThrow(() -> new ScipJavaProcessPlanFactory(coursier, COORDINATE, runner));
-        assertDoesNotThrow(() -> new ScipJavaProcessPlanFactory(coursier, COORDINATE, runner, maven));
-        assertDoesNotThrow(() -> new ScipJavaProcessPlanFactory(coursier, COORDINATE, runner, maven, classpath));
+        assertDoesNotThrow(() -> factory(coursier, COORDINATE, runner, ACCEPT));
+        assertDoesNotThrow(() -> new ScipJavaProcessPlanFactory(coursier, COORDINATE, runner, null, null, ACCEPT));
     }
 
     @Test
-    void theCoursierAndRunnerPathsAreMandatory() {
+    void theCoursierRunnerAndClasspathVerifierAreMandatory() {
         Path runner = temporaryDirectory.resolve("runner.ps1");
         Path coursier = temporaryDirectory.resolve("cs");
 
-        assertThrows(NullPointerException.class, () -> new ScipJavaProcessPlanFactory(null, COORDINATE, runner));
-        assertThrows(NullPointerException.class, () -> new ScipJavaProcessPlanFactory(coursier, COORDINATE, null));
+        assertThrows(NullPointerException.class, () -> factory(null, COORDINATE, runner, ACCEPT));
+        assertThrows(NullPointerException.class, () -> factory(coursier, COORDINATE, null, ACCEPT));
+        assertThrows(NullPointerException.class, () -> factory(coursier, COORDINATE, runner, null));
     }
 
     @Test
@@ -69,8 +73,8 @@ class ScipJavaProcessPlanFactoryRefusalTest {
         Path coursier = temporaryDirectory.resolve("cs");
         Path runner = temporaryDirectory.resolve("runner.ps1");
 
-        assertThrows(IllegalArgumentException.class, () -> new ScipJavaProcessPlanFactory(coursier, null, runner));
-        assertThrows(IllegalArgumentException.class, () -> new ScipJavaProcessPlanFactory(coursier, "  ", runner));
+        assertThrows(IllegalArgumentException.class, () -> factory(coursier, null, runner, ACCEPT));
+        assertThrows(IllegalArgumentException.class, () -> factory(coursier, "  ", runner, ACCEPT));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -47,13 +48,27 @@ class ScipJavaProcessPlanFactoryToolchainTest {
 
     private ChildJvm.Outcome plan(Path project, Path coursier, Path runner, Path maven, Path classpath,
                                   Map<String, String> environment) throws IOException, InterruptedException {
+        return plan(project, coursier, runner, maven, classpath, "accept", environment);
+    }
+
+    private ChildJvm.Outcome plan(Path project, Path coursier, Path runner, Path maven, Path classpath, String verifier,
+                                  Map<String, String> environment) throws IOException, InterruptedException {
         String paths = String.join(";", coursier.toString(), runner.toString(),
-                maven == null ? "-" : maven.toString(), classpath == null ? "-" : classpath.toString());
+                maven == null ? "-" : maven.toString(), classpath == null ? "-" : classpath.toString(), verifier);
         return ChildJvm.run(tools, scratch, environment, "javaplan", project.toString(), run().toString(), paths);
     }
 
     private ChildJvm.Outcome plan(Path coursier, Path maven, Path classpath) throws IOException, InterruptedException {
         return plan(project(), coursier, temp.resolve("runner.ps1"), maven, classpath, Map.of());
+    }
+
+    /** An installed classpath as the installation leaves it: jars, launcher, then the listing. */
+    private Path installedClasspath() throws IOException {
+        Path directory = Files.createDirectories(temp.resolve("classpath"));
+        List<String> names = List.of("scip-java-0.13.1.jar", "scala-library-2.13.jar");
+        for (String name : names) Files.writeString(directory.resolve(name), name);
+        Files.write(directory.resolve(ScipJavaClasspath.LAUNCHER), ScipJavaClasspath.launcher(names));
+        return Files.write(directory.resolve(ScipJavaClasspath.LISTING), ScipJavaClasspath.listing(names));
     }
 
     // ------------------------------------------------------------------ both platforms: the project JDK
@@ -102,25 +117,71 @@ class ScipJavaProcessPlanFactoryToolchainTest {
 
     @Test
     @EnabledOnOs(OS.LINUX)
-    void onLinuxWithoutAStandaloneLauncherCoursierLaunchesScipJavaByItsMainClass() throws Exception {
+    void onLinuxWithoutAStandaloneLauncherTheVerifiedClasspathRunsThroughItsLauncherNeverThroughCoursier() throws Exception {
         Path coursier = Files.createFile(temp.resolve("cs"));
+        Path listing = installedClasspath();
 
-        ChildJvm.Outcome outcome = plan(coursier, null, null);
+        ChildJvm.Outcome outcome = plan(coursier, null, listing);
 
         assertNull(outcome.get("plan.failure"), outcome.get("plan.failure"));
         List<String> command = List.of(outcome.get("plan.command").split(" \\| "));
-        assertEquals(coursier.toString(), command.get(0));
-        assertEquals(List.of("launch", "org.scip-code:scip-java:0.13.1", "--jvm", "system",
-                "--main", "org.scip_code.scip_java.ScipJava", "--", "index", "--output"), command.subList(1, 10));
-        assertTrue(command.get(10).endsWith("index.scip"), command.get(10));
+        assertEquals(6, command.size(), command.toString());
+        assertEquals(Path.of(System.getProperty("java.home"), "bin", "java").toAbsolutePath().normalize().toString(),
+                command.get(0));
+        assertEquals("-jar", command.get(1));
+        assertEquals(listing.resolveSibling(ScipJavaClasspath.LAUNCHER).toString(), command.get(2));
+        assertEquals(List.of("index", "--output"), command.subList(3, 5));
+        assertTrue(command.get(5).endsWith("index.scip"), command.get(5));
+        assertFalse(command.contains(coursier.toString()), "nothing is resolved by coordinate at index time");
+        assertFalse(command.contains("launch"));
+        assertTrue(Files.isRegularFile(run().resolve("workspace").resolve("pom.xml")));
     }
 
     @Test
     @EnabledOnOs(OS.LINUX)
-    void onLinuxWithNeitherALauncherNorCoursierThePlanIsRefused() throws Exception {
-        ChildJvm.Outcome outcome = plan(temp.resolve("absent-cs"), null, null);
+    void onLinuxAnInstalledClasspathWinsOverAStandaloneLauncherOnThePath() throws Exception {
+        FakeTools.succeeding(tools, "scip-java");
+        Path listing = installedClasspath();
 
-        assertEquals("IllegalStateException: scip-java standalone launcher and Coursier executable are missing",
+        ChildJvm.Outcome outcome = plan(temp.resolve("cs"), null, listing);
+
+        assertNull(outcome.get("plan.failure"), outcome.get("plan.failure"));
+        List<String> command = List.of(outcome.get("plan.command").split(" \\| "));
+        assertEquals("-jar", command.get(1), command.toString());
+        assertEquals(listing.resolveSibling(ScipJavaClasspath.LAUNCHER).toString(), command.get(2));
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void onLinuxAJarThatNoLongerMatchesTheLockIsRefusedBeforeAnythingIsStaged() throws Exception {
+        ChildJvm.Outcome outcome = plan(project(), temp.resolve("cs"), temp.resolve("runner.ps1"), null,
+                installedClasspath(), "refuse", Map.of());
+
+        assertEquals("IllegalStateException: scip-java classpath verification failed: scip-java-0.13.1.jar does not match "
+                + "its pinned SHA-256; run `minos tools install scip-java`", outcome.get("plan.failure"));
+        assertNull(outcome.get("plan.command"));
+        assertFalse(Files.exists(run().resolve("workspace")), "a refused classpath must not stage the project");
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void onLinuxALauncherThatDoesNotMatchTheListingIsRefused() throws Exception {
+        Path listing = installedClasspath();
+        Files.writeString(listing.resolveSibling(ScipJavaClasspath.LAUNCHER), "not the derived launcher");
+
+        ChildJvm.Outcome outcome = plan(temp.resolve("cs"), null, listing);
+
+        assertEquals("IllegalStateException: scip-java classpath verification failed: scip-java-launcher.jar does not "
+                + "match the verified classpath; run `minos tools install scip-java`", outcome.get("plan.failure"));
+        assertNull(outcome.get("plan.command"));
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void onLinuxWithNeitherAStandaloneLauncherNorAnInstalledClasspathThePlanIsRefused() throws Exception {
+        ChildJvm.Outcome outcome = plan(Files.createFile(temp.resolve("cs")), null, temp.resolve("absent-classpath.txt"));
+
+        assertEquals("IllegalStateException: managed scip-java classpath is not installed; run `minos tools install scip-java`",
                 outcome.get("plan.failure"));
         assertNull(outcome.get("plan.command"));
     }
@@ -194,7 +255,7 @@ class ScipJavaProcessPlanFactoryToolchainTest {
 
     @Test
     @EnabledOnOs(OS.WINDOWS)
-    void onWindowsAClasspathFileThatIsNotThereIsNotPassedToTheRunner() throws Exception {
+    void onWindowsAMissingClasspathIsRefusedRatherThanResolvedByTheRunner() throws Exception {
         Path coursier = Files.createFile(temp.resolve("cs.exe"));
         Files.createFile(temp.resolve("runner.ps1"));
         Path maven = Files.createFile(temp.resolve("mvn.cmd"));
@@ -202,7 +263,24 @@ class ScipJavaProcessPlanFactoryToolchainTest {
 
         ChildJvm.Outcome outcome = plan(coursier, maven, temp.resolve("absent-classpath.txt"));
 
-        assertNull(outcome.get("plan.failure"), outcome.get("plan.failure"));
-        assertFalse(outcome.get("plan.command").contains("-ClasspathFile"), outcome.get("plan.command"));
+        assertEquals("IllegalStateException: managed scip-java classpath is not installed; run `minos tools install scip-java`",
+                outcome.get("plan.failure"));
+        assertNull(outcome.get("plan.command"));
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void onWindowsAJarThatNoLongerMatchesTheLockIsRefused() throws Exception {
+        Path coursier = Files.createFile(temp.resolve("cs.exe"));
+        Files.createFile(temp.resolve("runner.ps1"));
+        Path maven = Files.createFile(temp.resolve("mvn.cmd"));
+        FakeTools.succeeding(tools, "powershell");
+
+        ChildJvm.Outcome outcome = plan(project(), coursier, temp.resolve("runner.ps1"), maven, installedClasspath(),
+                "refuse", Map.of());
+
+        assertEquals("IllegalStateException: scip-java classpath verification failed: scip-java-0.13.1.jar does not match "
+                + "its pinned SHA-256; run `minos tools install scip-java`", outcome.get("plan.failure"));
+        assertNull(outcome.get("plan.command"));
     }
 }

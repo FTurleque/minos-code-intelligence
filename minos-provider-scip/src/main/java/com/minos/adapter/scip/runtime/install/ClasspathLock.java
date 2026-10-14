@@ -2,6 +2,7 @@ package com.minos.adapter.scip.runtime.install;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
 import com.minos.io.ConfinedFileOpener;
 import com.minos.io.Sha256;
 
@@ -27,7 +28,7 @@ import java.util.TreeSet;
  * got with this lock before it keeps anything: a jar substituted upstream or by a mirror, a jar added to the
  * dependency graph, a jar missing, all fail. Messages name the jar file only, never a directory.</p>
  */
-final class ClasspathLock {
+final class ClasspathLock implements ScipJavaClasspath.Verifier {
 
     static final String RESOURCE = EmbeddedToolsCatalog.RESOURCE_ROOT + "scip-java-classpath.lock.json";
 
@@ -85,7 +86,8 @@ final class ClasspathLock {
      *
      * @throws IllegalStateException naming the first jar that differs (file name only)
      */
-    void verify(List<Path> resolved) throws IOException {
+    @Override
+    public void verify(List<Path> resolved) throws IOException {
         Objects.requireNonNull(resolved, "resolved");
         Map<String, Path> byName = indexByFileName(resolved);
         for (String name : new TreeSet<>(byName.keySet())) {
