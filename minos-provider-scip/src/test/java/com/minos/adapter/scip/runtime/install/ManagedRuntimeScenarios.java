@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
 import com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerDescriptor;
@@ -27,7 +28,8 @@ import java.util.stream.Collectors;
  *
  * <p>The {@code javaplan} scenario instead builds the scip-java process plan of a project: the arguments are
  * the project root, the run directory, and the {@code ;}-separated coursier, runner, managed Maven and classpath
- * file paths ({@code -} for an absent one).</p>
+ * file paths ({@code -} for an absent one), optionally followed by {@code refuse}: the classpath verifier then
+ * refuses the first jar as the pinned lock would refuse an altered one (by default it accepts every jar).</p>
  */
 public final class ManagedRuntimeScenarios {
 
@@ -74,10 +76,17 @@ public final class ManagedRuntimeScenarios {
     }
 
     private static void javaPlan(Path project, Path runDirectory, String[] paths) {
+        boolean refuse = paths.length > 4 && "refuse".equals(paths[4]);
+        ScipJavaClasspath.Verifier verifier = jars -> {
+            if (refuse) {
+                throw new IllegalStateException("scip-java classpath verification failed: "
+                        + jars.getFirst().getFileName() + " does not match its pinned SHA-256");
+            }
+        };
         ScipJavaProcessPlanFactory factory = new ScipJavaProcessPlanFactory(
                 Path.of(paths[0]), "org.scip-code:scip-java:0.13.1", Path.of(paths[1]),
                 "-".equals(paths[2]) ? null : Path.of(paths[2]),
-                "-".equals(paths[3]) ? null : Path.of(paths[3]));
+                "-".equals(paths[3]) ? null : Path.of(paths[3]), verifier);
         IndexerDescriptor descriptor = new IndexerDescriptor(
                 "scip-java", "0.13.1", "scip-java", Set.of(Language.JAVA), Set.of(), Set.of(),
                 IndexerQualification.QUALIFIED, 1, List.of());

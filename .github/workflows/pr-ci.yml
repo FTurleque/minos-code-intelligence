@@ -105,6 +105,9 @@ jobs:
       - name: Docker lifecycle query-image tests (pwsh here, Windows PowerShell 5.1 and pwsh in the verify job)
         run: python scripts/install/test_mcp_lifecycle_query_image.py -v
 
+      - name: Delegated cgroup root validation tests (provisioning scripts run with a recording sudo)
+        run: python scripts/deploy/test_cgroup_root_validation.py -v
+
       - name: Shipped tools gate (one description shared by Java, the Docker image and the Windows distribution)
         run: python scripts/quality/check-tools-manifest.py
 

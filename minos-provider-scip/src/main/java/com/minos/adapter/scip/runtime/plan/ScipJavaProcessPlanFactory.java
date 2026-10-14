@@ -23,17 +23,23 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
-/** Plan d'exécution local de scip-java. */
+/**
+ * Plan d'exécution local de scip-java.
+ *
+ * <p>Le classpath exécuté est celui que l'installation a vérifié et rangé dans {@code MINOS_HOME/tools}
+ * ({@link ScipJavaClasspath}) : chaque jar est comparé de nouveau au verrou avant le plan, sous Windows comme
+ * sous Linux. Rien n'est résolu par coordonnée au moment de l'indexation. Seule exception, hors Windows et sans
+ * classpath installé : un lanceur autonome {@code scip-java} présent dans le {@code PATH} (celui que construit l'image
+ * Docker, ou un outil choisi par l'opérateur, comme {@code node} pour les autres providers).</p>
+ */
 public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFactory {
-    /** Main class of scip-java, launched by the index plan (the installation never launches it). */
-    private static final String SCIP_JAVA_MAIN_CLASS = "org.scip_code.scip_java.ScipJava";
-
+    private static final String REPAIR = "run `minos tools install scip-java`";
 
     private static final Set<String> STAGING_EXCLUDED_DIRECTORIES = Set.of(
             ".gradle", ".cache", "build");
@@ -43,26 +49,27 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
     private final String coordinate;
     private final Path windowsRunner;
     private final Path windowsManagedMaven;
-    private final Path windowsClasspathFile;
-
-    public ScipJavaProcessPlanFactory(Path coursier, String coordinate, Path windowsRunner) {
-        this(coursier, coordinate, windowsRunner, null);
-    }
-
-    public ScipJavaProcessPlanFactory(Path coursier, String coordinate, Path windowsRunner, Path windowsManagedMaven) {
-        this(coursier, coordinate, windowsRunner, windowsManagedMaven, null);
-    }
+    private final Path classpathFile;
+    private final ScipJavaClasspath.Verifier classpathVerifier;
 
     /**
-     * @param windowsClasspathFile the pre-resolved scip-java classpath shipped with the distribution
-     *     (one jar per line, relative to the file), read by the runner instead of asking Coursier; null
-     *     when the classpath is resolved through Coursier. Unused off Windows.
+     * @param coursier Coursier, handed to the Windows runner; unused off Windows.
      * @param windowsManagedMaven MINOS-managed Maven executable used on Windows so the sandboxed
      *     runner never has to discover a wrapper or host {@code mvn} itself — both are unreachable
      *     from inside the AppContainer sandbox in general. Unused off Windows.
+     * @param classpathFile the listing of the scip-java classpath kept in {@code MINOS_HOME/tools}
+     *     ({@value ScipJavaClasspath#LISTING}); null when it is not installed, which refuses the plan
+     *     unless a standalone launcher is on the {@code PATH} off Windows.
+     * @param classpathVerifier compares the jars of the listing with the pinned lock before every plan.
      */
     public ScipJavaProcessPlanFactory(
-            Path coursier, String coordinate, Path windowsRunner, Path windowsManagedMaven, Path windowsClasspathFile) {
+            Path coursier,
+            String coordinate,
+            Path windowsRunner,
+            Path windowsManagedMaven,
+            Path classpathFile,
+            ScipJavaClasspath.Verifier classpathVerifier
+    ) {
         this.coursier = Objects.requireNonNull(coursier, "coursier").toAbsolutePath().normalize();
         if (coordinate == null || coordinate.isBlank()) {
             throw new IllegalArgumentException("coordinate must not be blank");
@@ -71,7 +78,8 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         this.windowsRunner = Objects.requireNonNull(windowsRunner, "windowsRunner")
                 .toAbsolutePath().normalize();
         this.windowsManagedMaven = windowsManagedMaven == null ? null : windowsManagedMaven.toAbsolutePath().normalize();
-        this.windowsClasspathFile = windowsClasspathFile == null ? null : windowsClasspathFile.toAbsolutePath().normalize();
+        this.classpathFile = classpathFile == null ? null : classpathFile.toAbsolutePath().normalize();
+        this.classpathVerifier = Objects.requireNonNull(classpathVerifier, "classpathVerifier");
     }
 
     @Override
@@ -103,9 +111,10 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                 throw new IllegalStateException(
                         "MINOS-managed Maven is missing; run `minos tools install scip-java`: " + windowsManagedMaven);
             }
+            verifiedClasspath(false);
             Path providerOutput = normalizedRunDirectory.resolve("scip-java-output");
             Files.createDirectories(providerOutput);
-            List<String> runner = new ArrayList<>(List.of(
+            List<String> runner = List.of(
                     "-NoProfile",
                     "-NonInteractive",
                     "-ExecutionPolicy", "Bypass",
@@ -115,11 +124,8 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                     "-Coordinate", coordinate,
                     "-Language", request.selection().language().name(),
                     "-OutputDirectory", providerOutput.toString(),
-                    "-MavenCommand", windowsManagedMaven.toString()));
-            if (windowsClasspathFile != null && Files.isRegularFile(windowsClasspathFile, LinkOption.NOFOLLOW_LINKS)) {
-                runner.add("-ClasspathFile");
-                runner.add(windowsClasspathFile.toString());
-            }
+                    "-MavenCommand", windowsManagedMaven.toString(),
+                    "-ClasspathFile", classpathFile.toString());
             return new IndexerProcessPlan(
                     CommandLocator.invocation(powershell, runner.toArray(String[]::new)),
                     root,
@@ -129,39 +135,55 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             );
         }
 
+        // The installed classpath comes first and is verified again, before anything is staged. Only without it
+        // does a standalone launcher on the PATH run: the one the Docker image builds, or one the operator chose.
+        boolean classpathInstalled = classpathFile != null && Files.isRegularFile(classpathFile, LinkOption.NOFOLLOW_LINKS);
+        var standalone = classpathInstalled ? Optional.<Path>empty() : CommandLocator.find("scip-java");
+        Path launcher = standalone.isPresent() ? null : verifiedClasspath(true);
+
         // scip-java's Maven build creates target/scip-targetroot and other compiler outputs in the
         // project tree. Linux/Docker runs therefore execute against a writable staging copy under
         // MINOS_HOME/runs. The staging copy uses the same bounded .gitignore/.minosignore contract
         // as discovery and additionally omits provider-specific cache/build directories and root
         // Maven wrappers.
         Path executionRoot = prepareWritableWorkspace(root, normalizedRunDirectory);
-
-        var standalone = CommandLocator.find("scip-java");
-        if (standalone.isPresent()) {
-            return new IndexerProcessPlan(
-                    standaloneCommand(standalone.orElseThrow(), output),
-                    executionRoot,
-                    Map.of(),
-                    output,
-                    Duration.ofHours(1)
-            );
-        }
-
-        if (!Files.isRegularFile(coursier)) {
-            throw new IllegalStateException("scip-java standalone launcher and Coursier executable are missing");
-        }
+        List<String> command = launcher == null
+                ? standaloneCommand(standalone.orElseThrow(), output)
+                : classpathCommand(projectJava(), launcher, output);
         return new IndexerProcessPlan(
-                List.of(
-                        coursier.toString(),
-                        "launch", coordinate,
-                        "--jvm", "system",
-                        "--main", SCIP_JAVA_MAIN_CLASS,
-                        "--", "index", "--output", output.toString()
-                ),
+                command,
                 executionRoot,
                 Map.of(),
                 output,
                 Duration.ofHours(1)
+        );
+    }
+
+    /**
+     * The installed classpath, verified against the lock (and its launcher, when asked).
+     *
+     * @return the launcher, or null when it was not asked for
+     * @throws IllegalStateException with the repair command when the classpath is absent, unreadable or altered
+     */
+    private Path verifiedClasspath(boolean withLauncher) {
+        if (classpathFile == null || !Files.isRegularFile(classpathFile, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalStateException("managed scip-java classpath is not installed; " + REPAIR);
+        }
+        try {
+            return ScipJavaClasspath.verify(classpathFile, classpathVerifier, withLauncher);
+        } catch (IllegalStateException altered) {
+            throw new IllegalStateException(altered.getMessage() + "; " + REPAIR, altered);
+        } catch (IOException unreadable) {
+            throw new IllegalStateException("managed scip-java classpath cannot be read; " + REPAIR, unreadable);
+        }
+    }
+
+    /** {@code java -jar <launcher> index --output <output>}: the launcher's manifest names the verified jars. */
+    static List<String> classpathCommand(Path java, Path launcher, Path output) {
+        return List.of(
+                Objects.requireNonNull(java, "java").toAbsolutePath().normalize().toString(),
+                "-jar", Objects.requireNonNull(launcher, "launcher").toAbsolutePath().normalize().toString(),
+                "index", "--output", Objects.requireNonNull(output, "output").toAbsolutePath().normalize().toString()
         );
     }
 
@@ -293,6 +315,11 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             throw new IllegalArgumentException("project staging path escapes workspace: " + source);
         }
         return target;
+    }
+
+    /** The {@code java} of the project JDK that {@link #requireProjectJdk()} accepted. */
+    private static Path projectJava() {
+        return Path.of(System.getenv("JAVA_HOME")).resolve("bin").resolve(CommandLocator.isWindows() ? "java.exe" : "java");
     }
 
     private static void requireProjectJdk() {
