@@ -12,12 +12,14 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.store.CodeKnowledgeSnapshot;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Builds deterministic SYMBOL/FILE/CHUNK semantic units from one active MINOS snapshot. */
 public final class SemanticDocumentFactory {
@@ -26,6 +28,29 @@ public final class SemanticDocumentFactory {
     private static final int CHUNK_MAX_TOKENS = 768;
     private static final int FILE_MAX_TOKENS = 2_048;
     private static final String HASH_SEPARATOR = "\u001f";
+
+    /** Reads the sources of one project, one call per file read. */
+    @FunctionalInterface
+    interface SourceFiles {
+        Optional<LocalSourceReader.SourceFile> read(String fileId) throws IOException;
+    }
+
+    /** Opens the sources of a project for one build. */
+    @FunctionalInterface
+    interface SourceFilesOpener {
+        SourceFiles open(Path projectRoot) throws IOException;
+    }
+
+    private final SourceFilesOpener sources;
+
+    public SemanticDocumentFactory() {
+        this(root -> new LocalSourceReader(root)::read);
+    }
+
+    /** Reads the sources through {@code sources}; for a test that observes the reads. */
+    SemanticDocumentFactory(SourceFilesOpener sources) {
+        this.sources = Objects.requireNonNull(sources, "sources");
+    }
 
     public List<SemanticDocument> build(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
         return build(project, snapshot, SemanticIndexBudget.DEFAULT, 1);
@@ -46,7 +71,7 @@ public final class SemanticDocumentFactory {
         }
 
         SemanticIndexBudget.Tracker tracker = budget.tracker(dimensions);
-        LocalSourceReader sourceReader = new LocalSourceReader(project.rootPath());
+        SourceFiles sourceFiles = sources.open(project.rootPath());
         List<SemanticDocument> documents = new ArrayList<>();
         Map<String, List<Symbol>> symbolsByFile = new LinkedHashMap<>();
 
@@ -66,12 +91,14 @@ public final class SemanticDocumentFactory {
         for (Map.Entry<String, List<Symbol>> entry : symbolsByFile.entrySet()) {
             String fileId = entry.getKey();
             List<Symbol> ordered = entry.getValue().stream().sorted(Comparator.comparing(Symbol::symbolKey)).toList();
-            // Symbols from the same file are processed consecutively. LocalSourceReader retains only
-            // one bounded decoded source, so a file is not reread once per symbol.
+            // The file is read once, here, and its symbols' excerpts are cut from that content. It goes out
+            // of scope with this iteration: nothing read survives the build, so a later build rereads it.
+            Optional<LocalSourceReader.SourceFile> source = sourceFiles.read(fileId);
             for (Symbol symbol : ordered) {
                 SymbolLocation location = symbol.location();
                 String symbolContent = bounded(symbolText(symbol), SYMBOL_MAX_TOKENS);
-                String chunkText = sourceReader.readExcerpt(location, 2, CHUNK_MAX_TOKENS)
+                String chunkText = source
+                        .flatMap(file -> file.excerpt(location, 2, CHUNK_MAX_TOKENS))
                         .map(SourceExcerpt::content)
                         .filter(value -> !value.isBlank())
                         .orElse(symbolContent);
