@@ -47,6 +47,21 @@ Ordre dans le sprint 6 : ce changement passe **en premier**, parce qu'il demande
 6. **Un plancher de classe exige que le préfixe soit déclaré** dans `prefixes` (`GATE:495-497`, « undeclared prefix ») : pour `m30-postgresql-pgvector`, le préfixe de classe s'ajoute à côté du préfixe de paquet (sans double compte, `GATE:461`).
 7. **Des gates affirment des chaînes de `check-jacoco.py`** : `scripts/docs/check-current-docs.py:193-197` (« through M30 » et trois noms de scope), `scripts/remediation/check-p0-p2.py:338-341` (deux planchers de classe au caractère près), six `check-*-consistency.py`. L'audit n'en dit rien.
 
+## Mesures pour AUD-TST-04 et AUD-TST-12
+
+Relevé du 2026-10-14 dans les rapports JaCoCo de `pr-ci.yml` (lecture seule) : run `38470947827` (`develop` `90c24fd0`), confirmé à l'identique pour ces deux classes par le run `38466461171` (`develop` `bf57169c`). Rapport agrégé (artefact `pr-validation-<OS>-1`) et rapport de module (`jacoco-modules-<OS>`) concordent. Le gate compte par préfixe : la classe et ses classes internes.
+
+| Classe (préfixe) | Système | Classes | Lignes | Branches | Plancher de classe |
+|---|---|---|---|---|---|
+| `WindowsJobObjectProcessOwnership` (+ `$1`) | Windows | 2 | 67 / 68 (0,985) | 15 / 20 (0,750) | 0,93 / 0,70 |
+| `WindowsJobObjectProcessOwnership` (+ `$1`) | Linux | 2 | 2 / 68 (0,029) | 0 / 20 (0,000) | sans objet (`provider-sandbox-windows` `SKIPPED`) |
+| `PostgresRuntimeObservationStore` | Linux | 1 | 65 / 65 (1,000) | 18 / 20 (0,900) | 0,95 / 0,85 |
+| `PostgresRuntimeObservationStore` | Windows | 1 | 0 / 65 | 0 / 20 | sans objet (`--skip-scope m30-postgresql-pgvector`) |
+
+- Planchers de classe = mesure moins environ 5 points, arrondie au centième inférieur ; ils ne préjugent pas de D3, qui porte sur le plancher `global`.
+- `provider-sandbox-windows` passe sous Windows de 317 / 346 lignes et 118 / 148 branches (3 classes) à 384 / 414 et 133 / 168 (5 classes), au-dessus de ses planchers inchangés 0,55 / 0,35. `m30-postgresql-pgvector` reste à 42 classes (le préfixe de classe ne compte pas deux fois) : 1 537 / 1 658 lignes, 519 / 619 branches sous Linux.
+- **Vérifié sur rapport CI seulement** : le gate a été rejoué sur un poste Windows contre les rapports téléchargés des deux runs, avec les options de la CI (Linux : sans option ; Windows : `--skip-scope m30-postgresql-pgvector`). Pour le rapport Linux, `sys.platform` a été fixé à `linux` avant de charger le gate. Aucun build Maven n'a été exécuté ; la preuve sur les runners reste la tâche 7.1.
+
 ## Goals / Non-Goals
 
 **Goals** : la couverture globale est bornée sur chaque système de qualification ; les classes du cœur nommées sont sous un scope ; aucune classe propre à une plateforme n'est jugée là où elle ne peut pas s'exécuter ; chaque plancher vient d'une mesure datée.
