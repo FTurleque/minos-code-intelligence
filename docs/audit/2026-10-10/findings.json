@@ -15,7 +15,14 @@
     "confiance": "confirmé",
     "sprint": 2,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "ouvrir-le-depot-git-sans-executer-ses-filtres",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "GitIntelligenceService.java:213-224 contrôle propriétaire du gitdir et du common dir (fail-closed) ; :303-321 neutralise en mémoire filter.*.clean/smudge du config du dépôt avant status() (:336) ; GitIntelligenceTrustTest 12 @Test, sans @Disabled/assume",
+      "reserve": "Remontée sans plafond conservée (choix D1). Seul <commonDir>/config (et ses include) est lu : un config.worktree (extensions.worktreeConfig) et les filtres de la config utilisateur/système ne sont pas neutralisés (D3 en attente). Tests Java non exécutés ici."
+    }
   },
   {
     "id": "AUD-PERF-01",
@@ -35,7 +42,14 @@
     "depends_on": [],
     "bloque": [
       "AUD-PERF-06"
-    ]
+    ],
+    "statut": "Fermé avec réserve",
+    "changement": "lire-l-identite-du-snapshot-actif-sans-le-charger",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Fusionné PR #445 (48afdd04). HybridSearchService.java:59 seul loadActiveKnowledge ; :61 statusWithoutSize ; SemanticSearchService.java:41,53 statusWithoutSize (activeSnapshotId léger, SemanticIndexService.java:80) ; plus d'activeIndex/store.load sur le chemin hybride ; HybridQueryCostTest asserte loads<=1, vectors.loads==0, sizeCalls==0",
+      "reserve": "Au HEAD : 1 chargement du snapshot, 3 lectures d'identité légères, 4 lectures de métadonnées (3 status + metadata :65). Store fichier : search par défaut fait load() (mis en cache). Tests non exécutés ici."
+    }
   },
   {
     "id": "AUD-DEP-01",
@@ -55,7 +69,14 @@
     "depends_on": [
       "AUD-TST-03"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "migrer-le-socle-vers-java-25",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "pom.xml:44 release 25, pom.xml:198 [25,26) ; Dockerfile.mcp.release:26,37,69 eclipse-temurin:25.0.4.1 ; ScipIndexerCatalog.java:336 'Java 25 JDK' ; docs/TOOLCHAIN_POLICY.md:9-10 Java 25 ; check-toolchain-baseline.py rc=0 (java=25, 36 places) ; test_check_toolchain_baseline OK ; test_check_image_pins OK",
+      "reserve": "Restent java-version: '24' dans release-promotion-gate.yml:79 et docker-upgrade-qualification.yml:62 (candidat A, exception tracée dans le gate, à retirer) ; fixture java-24-smoke voulue ; commentaire 'measured on JDK 24' DurableAtomicFile.java:207. Aucune exécution Java 25 vérifiable ici."
+    }
   },
   {
     "id": "AUD-ARC-01",
@@ -76,7 +97,10 @@
       "AUD-ARC-02",
       "AUD-ARC-10"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Dette figée",
+    "changement": "figer-la-dette-de-frontieres-par-des-cliquets` (règle A11)",
+    "verification": null
   },
   {
     "id": "AUD-ARC-02",
@@ -98,7 +122,10 @@
     "bloque": [
       "AUD-ARC-01",
       "AUD-PERF-04"
-    ]
+    ],
+    "statut": "Spécifié",
+    "changement": "unifier-l-orchestration-d-indexation",
+    "verification": null
   },
   {
     "id": "AUD-ARC-03",
@@ -116,7 +143,14 @@
     "confiance": "confirmé",
     "sprint": 1,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "idem",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "check-module-boundaries.py → '... documentation=A9-arc42-05' SUCCESS ; arc42/05-vue-blocs.md:64 minos-runtime-local → minos-domain, minos-engine",
+      "reserve": "Limites assumées par le suivi : prose de SYNTHESE.md et diagrammes de couches non gardés."
+    }
   },
   {
     "id": "AUD-ARC-04",
@@ -134,7 +168,10 @@
     "confiance": "confirmé",
     "sprint": 9,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "decouvrir-les-fournisseurs-par-chargeur-explicite",
+    "verification": null
   },
   {
     "id": "AUD-ARC-05",
@@ -155,7 +192,10 @@
       "AUD-ARC-10",
       "AUD-SEC-06"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Dette figée",
+    "changement": "idem (règle A12) et `trancher-les-decisions-d-architecture-du-sprint-10` (D2)",
+    "verification": null
   },
   {
     "id": "AUD-ARC-07",
@@ -175,7 +215,10 @@
     "depends_on": [
       "AUD-PERF-03"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Décision à prendre",
+    "changement": "trancher-les-decisions-d-architecture-du-sprint-10` (D1)",
+    "verification": null
   },
   {
     "id": "AUD-ARC-08",
@@ -195,7 +238,10 @@
     "depends_on": [
       "AUD-ARC-10"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Dette figée",
+    "changement": "figer-la-dette-de-frontieres-par-des-cliquets` (règle A13)",
+    "verification": null
   },
   {
     "id": "AUD-QUA-01",
@@ -215,7 +261,10 @@
     "depends_on": [
       "AUD-TST-13"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "garantir-la-parite-du-lanceur-job-object",
+    "verification": null
   },
   {
     "id": "AUD-QUA-02",
@@ -234,7 +283,10 @@
     "confiance": "confirmé",
     "sprint": 9,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "retirer-les-services-sans-appelant-de-production` (et `unifier-l-orchestration-d-indexation` pour le coordinateur)",
+    "verification": null
   },
   {
     "id": "AUD-QUA-03",
@@ -252,7 +304,10 @@
     "confiance": "confirmé",
     "sprint": 9,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "donner-un-contrat-d-erreur-au-port-d-etat-d-index",
+    "verification": null
   },
   {
     "id": "AUD-QUA-04",
@@ -270,7 +325,14 @@
     "confiance": "confirmé",
     "sprint": 2,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "idem",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Plus aucun catch (Throwable) dans minos-intellij ; MinosBackgroundTask.java:41-50 factorise et journalise (logger.warn avec la cause) ; describe() nomme la classe si message vide ; MinosBackgroundTaskTest présent",
+      "reserve": "La cause complète part dans idea.log (chemins absolus possibles, D2-a en attente) ; les Error ne sont plus attrapées (propagées à l'IDE, acceptable)."
+    }
   },
   {
     "id": "AUD-QUA-05",
@@ -288,7 +350,10 @@
     "confiance": "confirmé",
     "sprint": 11,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "mutualiser-les-caches-lru-et-nommer-les-additions-bornees",
+    "verification": null
   },
   {
     "id": "AUD-SEC-02",
@@ -306,7 +371,14 @@
     "confiance": "confirmé",
     "sprint": 2,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Partiel",
+    "changement": "epingler-et-isoler-l-installation-des-providers",
+    "verification": {
+      "verdict": "partiel",
+      "preuve": "Installation : ManagedScipProviderRuntimeManager.java:315-327 coursier fetch + ClasspathLock.verify, plus de 'launch' à l'installation ; InstallationProcessEnvironment.apply sur les 3 ProcessBuilder (l.794, Polyglot:460, Python:257). MAIS ScipJavaProcessPlanFactory.java:153-164 : repli 'coursier launch <coordonnée> --jvm system' sans empreinte quand le lanceur autonome manque",
+      "reserve": "Le défaut d'origine (résolution par coordonnée seule, sans hachage) reste atteignable au moment de l'indexation (résidu D2) ; le suivi le note mais déclare Fermé."
+    }
   },
   {
     "id": "AUD-TST-02",
@@ -327,7 +399,10 @@
       "AUD-TST-07",
       "AUD-TST-08"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "idem",
+    "verification": null
   },
   {
     "id": "AUD-TST-03",
@@ -349,7 +424,14 @@
       "AUD-DEP-01",
       "AUD-PERF-08",
       "AUD-SEC-06"
-    ]
+    ],
+    "statut": "Fermé avec réserve",
+    "changement": "idem",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "SandboxTestSupport.java:26-67 (decide : échec si requis, TestAbortedException sinon) ; pr-ci.yml:291 et :296 passent -Dminos.sandbox.tests.required=true ; check-current-docs.py:161 l'exige → SUCCESS",
+      "reserve": "Preuve d'exécution CI (135 tests, 0 sauté Windows) non rejouable ici (pas de JDK 25). Quelques assumeTrue annexes non soumis au mode requis : LinuxBubblewrapWorkerSandboxBackendTest.java:80 (python3), LinuxCgroupJobContainmentTest.java:53 (/dev/shm)."
+    }
   },
   {
     "id": "AUD-TST-04",
@@ -367,7 +449,14 @@
     "confiance": "confirmé",
     "sprint": 6,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Partiel",
+    "changement": "idem (reste)",
+    "verification": {
+      "verdict": "partiel",
+      "preuve": "PostgresRuntimeObservationStoreTest.java 9 @Test ; check-jacoco.py:175 m30-postgresql-pgvector toujours au seul préfixe de paquet, aucun plancher de classe",
+      "reserve": "Tests neutralisés par assumeTrue(dockerAvailable) (PostgresTestSupport.java:101) si Docker absent : skip silencieux possible en CI."
+    }
   },
   {
     "id": "AUD-TST-05",
@@ -385,7 +474,10 @@
     "confiance": "confirmé",
     "sprint": 6,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "mesurer-la-couverture-du-plugin-intellij",
+    "verification": null
   },
   {
     "id": "AUD-PERF-02",
@@ -403,7 +495,10 @@
     "confiance": "confirmé",
     "sprint": 4,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "lire-chaque-source-une-fois-par-fichier",
+    "verification": null
   },
   {
     "id": "AUD-PERF-03",
@@ -424,7 +519,14 @@
     "bloque": [
       "AUD-ARC-07",
       "AUD-PERF-11"
-    ]
+    ],
+    "statut": "Fermé avec réserve",
+    "changement": "ramener-le-poids-des-vues-a-la-mesure",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "FileSymbolSnapshotStore.java:51 et PostgresCodeKnowledgeSnapshotStore.java:58 QUERY_VIEW_PERSISTED_AMPLIFICATION = 2L (les deux stores) ; fusionné PR #442 ; check-mne.py rc=0",
+      "reserve": "Facteur 2 (pas 1,4) ; mesure sur corpus réel (tâche 2.4) toujours en attente. Suivi dit 'Implémenté' : code bien fusionné dans develop."
+    }
   },
   {
     "id": "AUD-PERF-04",
@@ -444,7 +546,10 @@
     "depends_on": [
       "AUD-ARC-02"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "hacher-l-arbre-source-une-fois-par-indexation",
+    "verification": null
   },
   {
     "id": "AUD-PERF-05",
@@ -462,7 +567,14 @@
     "confiance": "confirmé",
     "sprint": 4,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé",
+    "changement": "decouvrir-une-seule-fois-par-requete-d-architecture",
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "Fusionné PR #447. MinosApplicationMcpBackend.java:178-179 getArchitectureIntelligenceForModule ; LocalProjectArchitectureQuery.java:67-70 un seul loadContext ; ArchitectureCommand.java:56 même méthode (site CLI corrigé)",
+      "reserve": null
+    }
   },
   {
     "id": "AUD-PERF-06",
@@ -482,7 +594,10 @@
     "depends_on": [
       "AUD-PERF-01"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "synchroniser-l-index-semantique-par-differentiel",
+    "verification": null
   },
   {
     "id": "AUD-PERF-07",
@@ -500,7 +615,14 @@
     "confiance": "plausible",
     "sprint": 4,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "ne-plus-hacher-les-sources-avant-le-cache-du-graphe",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Fusionné PR #448 (pas seulement branche locale). ProgramGraphService.java:42 SOURCE_STATE_REUSE_SECONDS=5 ; :128 clé toujours calculée avant cache.get (:135) mais réutilisée 5 s ; limitation PROGRAM_GRAPH_REFLECTS_DISK… (tests ProgramGraphSourceStateReuseTest/LimitationTest)",
+      "reserve": "Sans empreinte exacte, la clé rehache toutes les sources au premier appel après 5 s ; graphe potentiellement périmé de 5 s (limitation déclarée)."
+    }
   },
   {
     "id": "AUD-PERF-08",
@@ -520,7 +642,10 @@
     "depends_on": [
       "AUD-TST-03"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "espacer-le-sondage-de-propriete-des-processus",
+    "verification": null
   },
   {
     "id": "AUD-DEP-02",
@@ -538,7 +663,14 @@
     "confiance": "confirmé",
     "sprint": 3,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "aligner-node-et-l-inventaire-de-l-image-docker",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "embedded-tools.json:135,147 nodejs 24.20.0 (windows et linux) ; Dockerfile.mcp.release:76 ARG NODE_VERSION=24.20.0 ; check-tools-manifest.py rc=0",
+      "reserve": "scip-python sous Node 24 non qualifié par mesure dans ce snapshot (build Docker non rejouable)."
+    }
   },
   {
     "id": "AUD-DEP-03",
@@ -556,7 +688,14 @@
     "confiance": "confirmé",
     "sprint": 3,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "surveiller-les-outils-embarques",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "pr-ci.yml:30-31 --lockfile=package-lock.json:… pour les 2 verrous ; check-ci-wiring.py rc=0 ('shipped npm lockfiles passed to the vulnerability scan=2') ; check-embedded-tools-advisories.py existe, rc=2 ici (api.osv.dev 403, 'No verdict')",
+      "reserve": "Veille planifiée du catalogue non vérifiée en exécution ; pas de Dependabot npm (choix assumé)."
+    }
   },
   {
     "id": "AUD-DEP-04",
@@ -574,7 +713,10 @@
     "confiance": "confirmé",
     "sprint": 5,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "verrouiller-les-dependances-gradle-du-plugin",
+    "verification": null
   },
   {
     "id": "AUD-DEP-05",
@@ -592,7 +734,14 @@
     "confiance": "confirmé",
     "sprint": 5,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Partiel",
+    "changement": "idem",
+    "verification": {
+      "verdict": "partiel",
+      "preuve": "intellij-plugin-release.yml:92 et release-windows.yml:101 gradle-version '9.8.1' = wrapper 9.8.1 ; mais intellij-plugin-release.yml:113, release-windows.yml:107,112 'gradle --no-daemon' hors wrapper ; intellij-plugin-release.yml:24,144 runs-on ubuntu-latest",
+      "reserve": "Conforme au suivi (partiellement corrigé)."
+    }
   },
   {
     "id": "AUD-DEP-06",
@@ -610,7 +759,10 @@
     "confiance": "confirmé",
     "sprint": 5,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "attester-et-signer-la-release-windows",
+    "verification": null
   },
   {
     "id": "AUD-DEP-07",
@@ -628,7 +780,10 @@
     "confiance": "confirmé",
     "sprint": 5,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "publier-le-plugin-avec-la-release",
+    "verification": null
   },
   {
     "id": "AUD-DEP-08",
@@ -646,7 +801,14 @@
     "confiance": "confirmé",
     "sprint": 2,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "rendre-la-journalisation-observable",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "minos-app/pom.xml:30 slf4j-jdk14 (plus aucun slf4j-nop dans les POM) ; test minos-app/src/test/java/com/minos/packaging/ShadedJarLoggingIT.java",
+      "reserve": "IT non exécuté ici (pas de build Java 25)."
+    }
   },
   {
     "id": "AUD-DEP-09",
@@ -664,7 +826,14 @@
     "confiance": "plausible",
     "sprint": 1,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé, non vérifiable ici",
+    "changement": "idem",
+    "verification": {
+      "verdict": "non vérifiable",
+      "preuve": "Versionné vérifié : .github/required-checks.json liste les 7 contextes (dont Static invariants, osv-scan, Gitleaks, IntelliJ plugin (gate)) ; check-ci-wiring.py rc=0 (required checks resolved=8) ; test_verify_ruleset.py → Ran 14 tests OK, câblé pr-ci.yml:147",
+      "reserve": "État réel du ruleset GitHub (verify-ruleset.py → 0) non vérifiable ici. Incohérence dans le suivi : statut 'Fermé' mais colonne preuve encore 'À fermer par… code 1'."
+    }
   },
   {
     "id": "AUD-ARC-06",
@@ -682,7 +851,14 @@
     "confiance": "confirmé",
     "sprint": 1,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé",
+    "changement": "durcir-les-gardes-d-architecture` puis `casser-les-cycles-de-packages",
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "check-module-boundaries.py:622 KNOWN_PACKAGE_CYCLES = {} ; sortie 'A8 package cycles: 0 known cycles over 0 packages, none new (67 packages analysed, plugin included)'",
+      "reserve": "Le texte de preuve du suivi est périmé (« quatre cycles subsistent ») alors que HEAD n'en a plus aucun."
+    }
   },
   {
     "id": "AUD-ARC-09",
@@ -700,7 +876,10 @@
     "confiance": "confirmé",
     "sprint": 8,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "refuser-l-execution-de-provider-sans-frontiere",
+    "verification": null
   },
   {
     "id": "AUD-ARC-10",
@@ -722,7 +901,14 @@
       "AUD-ARC-01",
       "AUD-ARC-05",
       "AUD-ARC-08"
-    ]
+    ],
+    "statut": "Fermé",
+    "changement": "durcir-les-gardes-d-architecture",
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "python3 -m unittest scripts/architecture/test_check_module_boundaries.py → Ran 104 tests OK (suivi : 90 ; 13 à l'audit) ; câblé pr-ci.yml:124 ; groupId lu via repository_group_id()",
+      "reserve": null
+    }
   },
   {
     "id": "AUD-ARC-11",
@@ -740,7 +926,10 @@
     "confiance": "confirmé",
     "sprint": 10,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Dette figée",
+    "changement": "idem (arêtes d'exécution) et décision D3",
+    "verification": null
   },
   {
     "id": "AUD-ARC-12",
@@ -758,7 +947,10 @@
     "confiance": "confirmé",
     "sprint": 10,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Dette figée",
+    "changement": "idem (règle A14) et décision D4",
+    "verification": null
   },
   {
     "id": "AUD-QUA-06",
@@ -776,7 +968,14 @@
     "confiance": "confirmé",
     "sprint": 2,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "idem",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "RecoveryLogMessages.java (chemin relatif + classe) utilisé à RunDirectoryRetention.java:185,207 et ProviderResidueReclamation.java:66,84 ; RecoveryLogMessagesTest 4 cas",
+      "reserve": "Aucun gate versionné (la « garde à deux règles » annoncée n'existe pas dans scripts/quality, D3-a en attente) : seuls les sites cités sont corrigés, un nouveau WARNING avec chemin absolu passerait."
+    }
   },
   {
     "id": "AUD-QUA-07",
@@ -794,7 +993,10 @@
     "confiance": "confirmé",
     "sprint": 11,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "decouper-les-methodes-d-analyse-et-d-ingestion",
+    "verification": null
   },
   {
     "id": "AUD-QUA-08",
@@ -812,7 +1014,10 @@
     "confiance": "confirmé",
     "sprint": 11,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "retirer-les-jalons-des-identifiants",
+    "verification": null
   },
   {
     "id": "AUD-QUA-09",
@@ -830,7 +1035,10 @@
     "confiance": "confirmé",
     "sprint": 11,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "garder-les-fonctions-de-scripts-jumelles",
+    "verification": null
   },
   {
     "id": "AUD-QUA-10",
@@ -848,7 +1056,10 @@
     "confiance": "confirmé",
     "sprint": 8,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "retirer-le-crochet-statique-de-l-ouverture-confinee",
+    "verification": null
   },
   {
     "id": "AUD-QUA-11",
@@ -866,7 +1077,10 @@
     "confiance": "confirmé",
     "sprint": 11,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "fixer-la-langue-des-commentaires",
+    "verification": null
   },
   {
     "id": "AUD-SEC-03",
@@ -884,7 +1098,10 @@
     "confiance": "confirmé",
     "sprint": 8,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "etendre-le-garde-d-e-s-privees-aux-ecritures-brutes",
+    "verification": null
   },
   {
     "id": "AUD-SEC-04",
@@ -902,7 +1119,10 @@
     "confiance": "confirmé",
     "sprint": 7,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "idem",
+    "verification": null
   },
   {
     "id": "AUD-SEC-05",
@@ -920,7 +1140,10 @@
     "confiance": "confirmé",
     "sprint": 7,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "ne-plus-laisser-fuir-de-chemin-absolu-dans-les-erreurs",
+    "verification": null
   },
   {
     "id": "AUD-SEC-06",
@@ -942,7 +1165,10 @@
     ],
     "bloque": [
       "AUD-ARC-05"
-    ]
+    ],
+    "statut": "Spécifié",
+    "changement": "conserver-les-refus-conditionnels-windows",
+    "verification": null
   },
   {
     "id": "AUD-SEC-07",
@@ -960,7 +1186,10 @@
     "confiance": "confirmé",
     "sprint": 7,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "reserver-minos-ollama-au-runtime-docker",
+    "verification": null
   },
   {
     "id": "AUD-SEC-08",
@@ -978,7 +1207,10 @@
     "confiance": "plausible",
     "sprint": 7,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "echapper-les-libelles-mermaid",
+    "verification": null
   },
   {
     "id": "AUD-SEC-09",
@@ -996,7 +1228,10 @@
     "confiance": "confirmé",
     "sprint": 7,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "prouver-le-refus-des-arguments-mcp-inconnus",
+    "verification": null
   },
   {
     "id": "AUD-SEC-10",
@@ -1014,7 +1249,10 @@
     "confiance": "confirmé",
     "sprint": 7,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "ne-plus-exposer-la-racine-absolue-ni-les-e-mails-d-auteurs",
+    "verification": null
   },
   {
     "id": "AUD-SEC-11",
@@ -1032,7 +1270,10 @@
     "confiance": "confirmé",
     "sprint": 7,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "declarer-la-provenance-des-regles-de-securite",
+    "verification": null
   },
   {
     "id": "AUD-SEC-12",
@@ -1050,7 +1291,14 @@
     "confiance": "confirmé",
     "sprint": 2,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "durcir-secret-postgres-et-lanceur-de-developpement",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "configure-runtime-settings.ps1:113-125 et configure-m30-docker-services.ps1:154-166 : fichier créé vide, restreint, vérifié, puis écrit ; suppression en cas d'échec ; fichier existant restreint+vérifié (:169-178) ; test_secret_file_acl.py (8 tests, sautés hors Windows, câblé pr-ci.yml:96)",
+      "reserve": "Fenêtre résiduelle : le fichier vide existe avec l'ACL héritée avant restriction ; un handle ouvert pendant cette fenêtre conserve ses droits sous Windows. Tests non exécutés ici (Linux)."
+    }
   },
   {
     "id": "AUD-SEC-13",
@@ -1068,7 +1316,14 @@
     "confiance": "plausible",
     "sprint": 2,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "idem",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "minos.cmd:13-15 JAVA_HOME\\bin\\java.exe sinon set NoDefaultCurrentDirectoryInExePath=1 avant 'java' ; test_dev_launcher.py retire la variable (l.9,27), 6 tests sautés hors Windows",
+      "reserve": "Exécution des tests seulement en CI Windows, non rejouée ici."
+    }
   },
   {
     "id": "AUD-TST-01",
@@ -1088,7 +1343,10 @@
     "depends_on": [
       "AUD-TST-07"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "borner-la-couverture-globale-et-du-coeur",
+    "verification": null
   },
   {
     "id": "AUD-TST-06",
@@ -1106,7 +1364,14 @@
     "confiance": "confirmé",
     "sprint": 1,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé",
+    "changement": "rendre-visibles-les-tests-de-confinement-sautes",
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "grep -rnE 'if \\(.*(currentPlatform\\(\\)|isWindows).*\\) *return;' minos-runtime-local/src/test → 0 ligne ; WindowsAppContainerWorkerSandboxBackendTest.java:76,166 @EnabledOnOs(OS.WINDOWS)",
+      "reserve": null
+    }
   },
   {
     "id": "AUD-TST-07",
@@ -1127,7 +1392,14 @@
     "bloque": [
       "AUD-TST-01",
       "AUD-TST-02"
-    ]
+    ],
+    "statut": "Fermé",
+    "changement": "imposer-les-gates-et-leurs-auto-tests",
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "pr-ci.yml:150-151 exécute check-jacoco.py --self-test dans invariants ; rejoué : 'MINOS JACOCO GATE SELF-TEST SUCCESS (11 scenarios)' rc=0 ; check-ci-wiring.py → 'gate self-tests wired in invariants=20' rc=0",
+      "reserve": null
+    }
   },
   {
     "id": "AUD-TST-08",
@@ -1147,7 +1419,14 @@
     "depends_on": [],
     "bloque": [
       "AUD-TST-02"
-    ]
+    ],
+    "statut": "Fermé avec réserve",
+    "changement": "idem",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "check-jacoco.py:150-158 scope m29-backend-routing 'report_of: minos-app' via module_report() (l.241) dérivé du POM",
+      "reserve": "minos-app/pom.xml:37 garde le <directory> redirigé vers la racine : le gate suit la redirection au lieu de la supprimer (l'action proposait de rendre son target/ à minos-app). Mesure PASS 0,914/0,676 non rejouable ici."
+    }
   },
   {
     "id": "AUD-TST-09",
@@ -1165,7 +1444,10 @@
     "confiance": "confirmé",
     "sprint": 6,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "prouver-l-attente-des-verrous-et-l-idempotence",
+    "verification": null
   },
   {
     "id": "AUD-TST-10",
@@ -1183,7 +1465,10 @@
     "confiance": "confirmé",
     "sprint": 6,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "idem",
+    "verification": null
   },
   {
     "id": "AUD-TST-11",
@@ -1201,7 +1486,10 @@
     "confiance": "confirmé",
     "sprint": 6,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "completer-la-mutation-et-son-document",
+    "verification": null
   },
   {
     "id": "AUD-TST-12",
@@ -1219,7 +1507,14 @@
     "confiance": "confirmé",
     "sprint": 6,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Partiel",
+    "changement": "idem (reste)",
+    "verification": {
+      "verdict": "partiel",
+      "preuve": "WindowsJobObjectProcessOwnershipPlanTest.java (7 @Test, @EnabledOnOs(WINDOWS), exécuté par la matrice windows-2022 de pr-ci.yml:202) ; check-jacoco.py:131-135 scope provider-sandbox-windows sans WindowsJobObjectProcessOwnership",
+      "reserve": "Conforme au suivi : rattachement au scope JaCoCo manquant."
+    }
   },
   {
     "id": "AUD-TST-13",
@@ -1239,7 +1534,14 @@
     "depends_on": [],
     "bloque": [
       "AUD-QUA-01"
-    ]
+    ],
+    "statut": "Fermé",
+    "changement": "idem",
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "intellij-plugin.yml:3-10 sans paths: ; python3 scripts/ci/test_plugin_gate.py → Ran 19 tests OK ; câblé pr-ci.yml:148",
+      "reserve": null
+    }
   },
   {
     "id": "AUD-TST-18",
@@ -1257,7 +1559,10 @@
     "confiance": "confirmé",
     "sprint": 6,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "rendre-le-test-scip-java-hermetique",
+    "verification": null
   },
   {
     "id": "AUD-PERF-09",
@@ -1275,7 +1580,10 @@
     "confiance": "plausible",
     "sprint": 9,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "borner-les-preuves-des-tests-lies",
+    "verification": null
   },
   {
     "id": "AUD-PERF-10",
@@ -1293,7 +1601,10 @@
     "confiance": "confirmé",
     "sprint": 11,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "calculer-le-rang-de-symbole-une-fois",
+    "verification": null
   },
   {
     "id": "AUD-PERF-11",
@@ -1313,7 +1624,10 @@
     "depends_on": [
       "AUD-PERF-03"
     ],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "indexer-les-aretes-d-impact-avec-la-vue",
+    "verification": null
   },
   {
     "id": "AUD-PERF-12",
@@ -1331,7 +1645,14 @@
     "confiance": "confirmé",
     "sprint": 4,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "valider-les-connexions-a-l-emprunt-seulement",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Fusionné PR #444. support/PostgresConnectionFactory.java:509-513 isValid seulement à l'emprunt et après >= 30 s d'inactivité (:32) ; :598 reprise sur SQLState 08 ; PostgresConnectionFactoryPoolTest sans @Disabled ; check-p0-p2.py rc=0",
+      "reserve": "Aucune durée mesurée ; restriction auto-commit 'à confirmer' par le propriétaire."
+    }
   },
   {
     "id": "AUD-PERF-13",
@@ -1349,7 +1670,10 @@
     "confiance": "confirmé",
     "sprint": 4,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "idem",
+    "verification": null
   },
   {
     "id": "AUD-DEP-10",
@@ -1367,7 +1691,14 @@
     "confiance": "confirmé",
     "sprint": 3,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé",
+    "changement": "idem",
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "Dockerfile.mcp.release:310-316 inventaire construit depuis ${dotnet_sdk_version}/${go_toolchain_version}/${rust_toolchain_version} (lus sur binaires, :135-138) au lieu de littéraux ; plus de 10.0.302/1.26.5/1.97.1",
+      "reserve": "Contrôle sur image construite non rejouable ici."
+    }
   },
   {
     "id": "AUD-DEP-11",
@@ -1385,7 +1716,10 @@
     "confiance": "confirmé",
     "sprint": 5,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "rendre-le-build-maven-reproductible",
+    "verification": null
   },
   {
     "id": "AUD-DEP-12",
@@ -1403,7 +1737,10 @@
     "confiance": "confirmé",
     "sprint": 5,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "durcir-les-workflows-github",
+    "verification": null
   },
   {
     "id": "AUD-DEP-13",
@@ -1421,7 +1758,10 @@
     "confiance": "confirmé",
     "sprint": 5,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Spécifié",
+    "changement": "idem",
+    "verification": null
   },
   {
     "id": "AUD-DEP-14",
@@ -1439,7 +1779,14 @@
     "confiance": "plausible",
     "sprint": 3,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Ouvert",
+    "changement": "aucun nouveau changement : `aligner-dependances-de-test-testcontainers`, tâche 4.1",
+    "verification": {
+      "verdict": "non fermé",
+      "preuve": "pom.xml:63 <testcontainers.version>2.0.5</testcontainers.version> inchangé",
+      "reserve": "Conforme au suivi ('Déjà porté', non corrigé) : risque à inscrire au registre."
+    }
   },
   {
     "id": "AUD-DEP-15",
@@ -1457,7 +1804,14 @@
     "confiance": "confirmé",
     "sprint": 3,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé",
+    "changement": "separer-l-image-de-requete",
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "Dockerfile.mcp.release:37 cible 'query' sur base -jre, :69 'admin' sur -jdk ; compose-mcp.connected.yaml:41,155,181 MINOS_QUERY_IMAGE, :108,212 MINOS_IMAGE ; check-compose-limits rc=0",
+      "reserve": "HEALTHCHECK écarté volontairement ; build d'image non rejoué."
+    }
   },
   {
     "id": "AUD-DEP-16",
@@ -1475,7 +1829,14 @@
     "confiance": "plausible",
     "sprint": 3,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "conserver-les-notices-tierces",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "minos-app/pom.xml:40-59 copie licences/notices vers META-INF/licenses/<artifact>-<version>/ ; Dockerfile.mcp:12-19 et Dockerfile.mcp.release:26-33 extraction + test -s ; ShadedJarNoticesIT (failsafe, assertions réelles, pas de @Disabled)",
+      "reserve": "IT non exécutable ici (pas de Java 25) ; outils non Maven hors périmètre (D3)."
+    }
   },
   {
     "id": "AUD-ARC-13",
@@ -1493,7 +1854,10 @@
     "confiance": "plausible",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   },
   {
     "id": "AUD-ARC-14",
@@ -1511,7 +1875,10 @@
     "confiance": "confirmé",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   },
   {
     "id": "AUD-QUA-12",
@@ -1529,7 +1896,10 @@
     "confiance": "confirmé",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   },
   {
     "id": "AUD-SEC-14",
@@ -1547,7 +1917,10 @@
     "confiance": "confirmé",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   },
   {
     "id": "AUD-SEC-15",
@@ -1565,7 +1938,10 @@
     "confiance": "confirmé",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   },
   {
     "id": "AUD-TST-14",
@@ -1583,7 +1959,10 @@
     "confiance": "confirmé",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   },
   {
     "id": "AUD-TST-15",
@@ -1601,7 +1980,10 @@
     "confiance": "confirmé",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   },
   {
     "id": "AUD-TST-16",
@@ -1619,7 +2001,10 @@
     "confiance": "confirmé",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   },
   {
     "id": "AUD-TST-17",
@@ -1637,7 +2022,10 @@
     "confiance": "confirmé",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   },
   {
     "id": "AUD-PERF-14",
@@ -1655,7 +2043,10 @@
     "confiance": "confirmé",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   },
   {
     "id": "AUD-DEP-17",
@@ -1673,6 +2064,9 @@
     "confiance": "confirmé",
     "sprint": null,
     "depends_on": [],
-    "bloque": []
+    "bloque": [],
+    "statut": "Info",
+    "changement": null,
+    "verification": null
   }
 ]
