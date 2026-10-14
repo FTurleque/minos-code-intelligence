@@ -103,15 +103,15 @@ def forbid_root_cgroup_procs_delegation() -> None:
 
 
 def require_contained_cgroup_delegation() -> None:
-    """The provisioning helpers must implement the contained delegation model."""
-    for relative in (
-        "scripts/ci/delegate-linux-cgroup.sh",
-        "scripts/deploy/provision-linux-sandbox-cgroup.sh",
-    ):
-        text = read(relative)
-        require(relative, text, "--attach-pid")
-        require(relative, text, "minos-controller")
-        require(relative, text, "DELEGATION CONTAINMENT")
+    """The provisioning helper must implement the contained delegation model."""
+    provision = "scripts/deploy/provision-linux-sandbox-cgroup.sh"
+    text = read(provision)
+    require(provision, text, "--attach-pid")
+    require(provision, text, "minos-controller")
+    require(provision, text, "DELEGATION CONTAINMENT")
+    # The CI helper only wraps it, so CI qualifies the very delegation operators run.
+    ci_helper = "scripts/ci/delegate-linux-cgroup.sh"
+    require(ci_helper, read(ci_helper), provision)
     # The workloads that actually exercise the qualified Linux sandbox must place their own shell
     # inside the delegated subtree, otherwise the cgroup path silently degrades to SKIPPED tests.
     for relative in (
