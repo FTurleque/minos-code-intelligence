@@ -194,8 +194,11 @@ def main() -> int:
         require("docs/developer/quality-gates.md", quality, "check-minos-01.py")
 
         # 10. The CI gate itself is wired and provisions a real delegated cgroup on Linux.
-        delegation = read("scripts/ci/delegate-linux-cgroup.sh")
-        require("scripts/ci/delegate-linux-cgroup.sh", delegation,
+        # The CI script wraps the operator provisioning script, which performs the delegation itself.
+        require("scripts/ci/delegate-linux-cgroup.sh", read("scripts/ci/delegate-linux-cgroup.sh"),
+                "MINOS_SANDBOX_CGROUP_ROOT", "scripts/deploy/provision-linux-sandbox-cgroup.sh")
+        require("scripts/deploy/provision-linux-sandbox-cgroup.sh",
+                read("scripts/deploy/provision-linux-sandbox-cgroup.sh"),
                 "MINOS_SANDBOX_CGROUP_ROOT", "cgroup.subtree_control", "cgroup.procs")
         require(".github/workflows/pr-ci.yml", read(".github/workflows/pr-ci.yml"),
                 "scripts/remediation/check-minos-01.py", "scripts/ci/delegate-linux-cgroup.sh")

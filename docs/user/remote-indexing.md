@@ -110,6 +110,8 @@ La qualification `linux-bubblewrap-cgroup2-v5` (voir [`remote-worker-sandbox-dis
 
      MINOS lancé depuis ce shell hérite du cgroup et n'a donc jamais besoin de migrer un processus au-delà de sa propre frontière.
 
+     La racine `MINOS_SANDBOX_CGROUP_ROOT` (par défaut `/sys/fs/cgroup/minos.slice`) est cédée récursivement au compte MINOS : le script la refuse, avant toute commande privilégiée, si elle n'est pas un chemin canonique sous `/sys/fs/cgroup` (aucun composant vide, `.` ou `..` ; lettres, chiffres, `.`, `_`, `@` et `-` seulement) dont le dernier composant commence par `minos`. Un cgroup existant étranger à MINOS (`user.slice`, un service système) ne peut donc pas être délégué par erreur. L'option `--env-file FICHIER` ajoute `MINOS_SANDBOX_CGROUP_ROOT=<racine>` à un fichier d'environnement (un `EnvironmentFile` systemd, par exemple) une fois le sous-arbre délégué.
+
 #### Pourquoi `--attach-pid` plutôt qu'une permission plus large
 
 cgroup v2 n'autorise un délégataire non privilégié à migrer un processus que s'il peut écrire **à la fois** le `cgroup.procs` de destination **et** celui de l'ancêtre commun des cgroups source et destination. Un MINOS démarré *hors* du sous-arbre délégué a donc le cgroup racine comme ancêtre commun — et accorder au compte MINOS un droit d'écriture durable sur `/sys/fs/cgroup/cgroup.procs` lui permettrait de déplacer des processus n'importe où dans la hiérarchie, y compris **hors** de sa propre frontière de délégation. C'est une évasion de délégation ; MINOS ne demande donc jamais ce droit.
