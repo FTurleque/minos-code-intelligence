@@ -27,12 +27,12 @@ Ordre : mesure sur les deux systèmes, décisions, puis par section rouge, corre
 
 ## 5. Classes propres à une plateforme (AUD-TST-02, AUD-TST-12)
 
-- [ ] 5.1 [AUD-TST-12] Rouge : sous Windows, `provider-sandbox-windows` avec un plancher de classe pour `WindowsJobObjectProcessOwnership` provisoirement supérieur à la mesure. **Preuve du rouge : le gate nomme la classe.** Correction : préfixe ajouté au scope, plancher de classe issu de 1.2 (rapport Windows). Preuve : gate vert sous Windows ; scope `SKIPPED` sous Linux.
+- [x] 5.1 [AUD-TST-12] Rouge : sous Windows, `provider-sandbox-windows` avec un plancher de classe pour `WindowsJobObjectProcessOwnership` provisoirement supérieur à la mesure. **Preuve du rouge : le gate nomme la classe.** Correction : préfixe ajouté au scope, plancher de classe issu de 1.2 (rapport Windows). Preuve : gate vert sous Windows ; scope `SKIPPED` sous Linux.
 - [ ] 5.2 [AUD-TST-02] Même démarche pour `CgroupJobOwnership` dans `provider-sandbox-linux` (rapport Linux). Preuve : gate vert sous Linux ; scope `SKIPPED` sous Windows. Dire quel système n'a été vérifié qu'en CI.
 
 ## 6. Plancher de classe du store PostgreSQL (AUD-TST-04)
 
-- [ ] 6.1 [AUD-TST-04] Rouge : `prefixMinimums` pour `com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore` **sans** déclarer le préfixe. **Preuve du rouge : « prefix minimum references undeclared prefix ».** Correction : préfixe de classe ajouté à côté du préfixe de paquet, plancher issu du rapport Linux de 1.1. Preuve : gate vert sur un rapport Linux avec PostgreSQL ; scope JaCoCo `m30-postgresql-pgvector` ; `python scripts/docs/check-current-docs.py` vert (nom du scope conservé).
+- [x] 6.1 [AUD-TST-04] Rouge : `prefixMinimums` pour `com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore` **sans** déclarer le préfixe. **Preuve du rouge : « prefix minimum references undeclared prefix ».** Correction : préfixe de classe ajouté à côté du préfixe de paquet, plancher issu du rapport Linux de 1.1. Preuve : gate vert sur un rapport Linux avec PostgreSQL ; scope JaCoCo `m30-postgresql-pgvector` ; `python scripts/docs/check-current-docs.py` vert (nom du scope conservé).
 - [ ] 6.2 [AUD-TST-04] Si D5 retient la suite de contrat : l'écrire dans cette tâche avec ses deux héritiers, puis `./mvnw -B -ntp -pl minos-storage-postgresql -am verify` et `./mvnw -B -ntp -pl minos-storage-local -am verify` ; dire si les tests PostgreSQL ont tourné localement ou seulement en CI.
 
 ## 7. Preuve en CI
