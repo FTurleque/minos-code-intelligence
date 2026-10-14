@@ -95,21 +95,23 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Gradle 9.8.1
+      # MINOS-AUD-H09 / AUD-DEP-05 : la version vient du wrapper (minos-intellij/gradle/wrapper, SHA-256 de la
+      # distribution vérifié), comme dans intellij-plugin.yml ; setup-gradle ne sert qu'au cache et valide aussi le
+      # gradle-wrapper.jar contre les sommes publiées par Gradle. Aucun gradle-version (check-toolchain-baseline.py).
+      - name: Set up Gradle (wrapper)
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
         with:
-          gradle-version: '9.8.1'
           cache-provider: basic
 
       - name: IntelliJ unit/build/structure gates
         working-directory: minos-intellij
         shell: pwsh
-        run: gradle --no-daemon test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure
+        run: ./gradlew.bat --no-daemon test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure
 
       - name: IntelliJ Plugin Verifier
         working-directory: minos-intellij
         shell: pwsh
-        run: gradle --no-daemon verifyPlugin
+        run: ./gradlew.bat --no-daemon verifyPlugin
 
       - name: Set up Java 25 for MINOS release
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1

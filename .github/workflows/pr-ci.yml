@@ -66,8 +66,11 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Immutable workflow supply-chain gate
+      - name: Immutable workflow supply-chain gate (actions by SHA, Inno Setup provenance, no floating runner image)
         run: python scripts/quality/check-workflow-pins.py
+
+      - name: Immutable workflow supply-chain gate self-test
+        run: python scripts/quality/test_check_workflow_pins.py -v
 
       - name: Single execution gate (Maven verify, product facts, JaCoCo and sandbox toolchain run once per OS, here only)
         run: python scripts/quality/check-single-execution.py
@@ -87,7 +90,7 @@ jobs:
       - name: Compose resource limits gate self-test
         run: python scripts/quality/test_check_compose_limits.py -v
 
-      - name: Toolchain baseline gate (the Gradle wrapper, the policy and the release workflows state one version)
+      - name: Toolchain baseline gate (the Gradle wrapper and the policy state one version, no workflow installs Gradle)
         run: python scripts/quality/check-toolchain-baseline.py
 
       - name: Toolchain baseline gate self-test

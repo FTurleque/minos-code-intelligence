@@ -1,0 +1,361 @@
+#!/usr/bin/env python3
+"""Self-test of check-workflow-pins.py: for each rule of the gate, one witness refused and one accepted,
+on temporary trees and on mutated copies of the real workflows."""
+from __future__ import annotations
+
+import contextlib
+import importlib.util
+import io
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+_MODULE_PATH = Path(__file__).parent / "check-workflow-pins.py"
+_SPEC = importlib.util.spec_from_file_location("check_workflow_pins", _MODULE_PATH)
+gate = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(gate)
+
+REPOSITORY = Path(__file__).resolve().parents[2]
+SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+RELEASE_SCRIPTS = ("scripts/release/build-windows-installer.ps1", "scripts/release/iscc-provenance.ps1",
+                   "scripts/release/test-iscc-provenance.ps1")
+
+COVERED_PATHS = ("      - 'scripts/quality/check-workflow-pins.py'\n"
+                 "      - '.github/workflows/release-windows.yml'\n")
+WINDOWS_INSTALLER = ("name: Windows Installer Validation\n\non:\n"
+                     f"  pull_request:\n    branches: [main, develop]\n    paths:\n{COVERED_PATHS}"
+                     f"  push:\n    branches: [main, develop]\n    paths:\n{COVERED_PATHS}"
+                     "\njobs:\n  qualify:\n    runs-on: windows-2022\n    steps:\n"
+                     f"      - uses: actions/checkout@{SHA} # v7\n")
+INSTALLER_SCRIPT = ("param([string]$IsccPath, [string]$RequiredIsccVersion)\n"
+                    "if ([string]::IsNullOrWhiteSpace($IsccPath) -ne [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {\n"
+                    "  throw 'IsccPath and RequiredIsccVersion go together.'\n}\n"
+                    "if ([string]::IsNullOrWhiteSpace($IsccPath)) {\n  $IsccCandidates = @('C:/Inno/ISCC.exe')\n}\n"
+                    "Assert-IsccEngineVersion -Log $log -Expected $RequiredIsccVersion\n")
+
+INNO_STEP = ("jobs:\n  build:\n    runs-on: windows-2022\n    steps:\n"
+             "      - name: Install Inno Setup\n        shell: pwsh\n        run: |\n"
+             "          choco install innosetup --version=6.7.1 --yes\n"
+             "          $path = 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'\n"
+             "          \"ISCC_PATH=$path\" >> $env:GITHUB_ENV\n"
+             "      - name: Build\n        shell: pwsh\n"
+             "        run: ./scripts/release/publish-windows-release.ps1 -IsccPath $env:ISCC_PATH "
+             "-RequiredIsccVersion 6.7.1\n")
+
+
+class TreeTest(unittest.TestCase):
+    """A temporary tree in which the whole gate passes; each test mutates one place."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.write(f"{gate.WORKFLOWS}/windows-installer.yml", WINDOWS_INSTALLER)
+        self.write(RELEASE_SCRIPTS[0], INSTALLER_SCRIPT)
+        self.write(RELEASE_SCRIPTS[1], "function Assert-IsccEngineVersion {}\n")
+        self.write(RELEASE_SCRIPTS[2], "# tests\n")
+
+    def write(self, relative: str, content: str) -> None:
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    def failures(self) -> list[str]:
+        return gate.check(self.root)[0]
+
+
+class PinRulesTest(unittest.TestCase):
+
+    def test_an_action_pinned_by_commit_sha_is_accepted_and_counted(self):
+        failures, checked = gate.find_pin_violations("x.yml", f"    steps:\n      - uses: actions/checkout@{SHA} # v7\n")
+        self.assertEqual([], failures)
+        self.assertEqual(1, checked)
+
+    def test_an_action_on_a_mutable_tag_is_refused(self):
+        failures, checked = gate.find_pin_violations("x.yml", "    steps:\n      - uses: actions/checkout@v7\n")
+        self.assertEqual(["x.yml:2: mutable uses ref actions/checkout@v7"], failures)
+        self.assertEqual(1, checked)
+
+    def test_a_local_action_is_neither_checked_nor_counted(self):
+        self.assertEqual(([], 0), gate.find_pin_violations("x.yml", "      - uses: ./.github/actions/setup@main\n"))
+
+    def test_an_inno_setup_pinned_to_the_qualified_version_is_accepted(self):
+        text = "        run: choco install innosetup --version=6.7.1 --yes\n"
+        self.assertEqual(([], 0), gate.find_pin_violations("x.yml", text))
+
+    def test_an_unpinned_inno_setup_is_refused(self):
+        failures, _checked = gate.find_pin_violations("x.yml", "        run: choco install innosetup --yes\n")
+        self.assertEqual([f"x.yml:1: Inno Setup must be pinned to {gate.INNO_VERSION}"], failures)
+
+    def test_an_inno_setup_version_read_from_a_pinned_env_is_accepted(self):
+        text = ("env:\n  INNO_SETUP_VERSION: '6.7.1'\n"
+                "        run: choco install innosetup --version=$env:INNO_SETUP_VERSION --yes\n")
+        self.assertEqual(([], 0), gate.find_pin_violations("x.yml", text))
+
+    def test_an_inno_setup_version_read_from_an_env_with_another_version_is_refused(self):
+        text = ("env:\n  INNO_SETUP_VERSION: '6.2.0'\n"
+                "        run: choco install innosetup --version=$env:INNO_SETUP_VERSION --yes\n")
+        failures, _checked = gate.find_pin_violations("x.yml", text)
+        self.assertEqual(1, len(failures))
+        self.assertTrue(failures[0].startswith("x.yml:3: 'choco install innosetup' reads $env:INNO_SETUP_VERSION"))
+
+
+class RunBlockTest(unittest.TestCase):
+
+    def test_an_expression_inside_a_run_block_is_refused(self):
+        text = "      - run: |\n          echo start\n          echo ${{ inputs.version }}\n"
+        failures = gate.find_run_block_violations("x.yml", text)
+        self.assertEqual(1, len(failures))
+        self.assertTrue(failures[0].startswith("x.yml:3: '${{ ... }}' interpolated directly inside a run: block"))
+
+    def test_an_expression_inside_an_inline_run_is_refused(self):
+        failures = gate.find_run_block_violations("x.yml", "      - run: echo ${{ github.head_ref }}\n")
+        self.assertEqual(1, len(failures))
+        self.assertTrue(failures[0].startswith("x.yml:1: "))
+
+    def test_an_expression_routed_through_env_is_accepted(self):
+        text = ("      - env:\n          VERSION: ${{ inputs.version }}\n        run: |\n"
+                "          echo \"$VERSION\"\n          # a comment may name ${{ inputs.version }}\n"
+                "      - uses: actions/checkout@abc\n        with:\n          ref: ${{ github.sha }}\n")
+        self.assertEqual([], gate.find_run_block_violations("x.yml", text))
+
+    def test_a_closed_enum_step_outcome_is_accepted(self):
+        text = "      - run: echo ${{ steps.build.outcome }} ${{ steps.build.conclusion }}\n"
+        self.assertEqual([], gate.find_run_block_violations("x.yml", text))
+
+
+class InnoProvenanceTest(unittest.TestCase):
+
+    def test_a_workflow_without_inno_setup_is_not_concerned(self):
+        self.assertEqual([], gate.find_inno_setup_provenance_violations("x.yml", "jobs: {}\n"))
+
+    def test_a_named_install_step_that_exports_and_forwards_iscc_path_is_accepted(self):
+        self.assertEqual([], gate.find_inno_setup_provenance_violations("x.yml", INNO_STEP))
+
+    def test_choco_install_outside_a_named_inno_setup_step_is_refused(self):
+        text = INNO_STEP.replace("- name: Install Inno Setup", "- name: Install compiler")
+        self.assertEqual(["x.yml: 'choco install innosetup' found outside an identifiable Inno Setup install step "
+                          "(expected a step name containing 'Inno Setup'); cannot verify compiler provenance."],
+                         gate.find_inno_setup_provenance_violations("x.yml", text))
+
+    def test_an_ambiguous_iscc_search_is_refused(self):
+        text = INNO_STEP.replace("          $path = 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'\n",
+                                 "          $path = (Get-Command ISCC.exe).Source\n")
+        failures = gate.find_inno_setup_provenance_violations("x.yml", text)
+        self.assertEqual(1, len(failures))
+        self.assertIn("('Get-Command ISCC.exe')", failures[0])
+
+    def test_an_install_step_that_does_not_export_iscc_path_is_refused(self):
+        text = INNO_STEP.replace("          \"ISCC_PATH=$path\" >> $env:GITHUB_ENV\n", "")
+        failures = gate.find_inno_setup_provenance_violations("x.yml", text)
+        self.assertEqual(1, len(failures))
+        self.assertIn("does not export a resolved ISCC_PATH", failures[0])
+
+    def test_a_workflow_that_never_forwards_iscc_path_is_refused(self):
+        text = INNO_STEP.replace(" -IsccPath $env:ISCC_PATH", "")
+        failures = gate.find_inno_setup_provenance_violations("x.yml", text)
+        self.assertEqual(1, len(failures))
+        self.assertIn("no step forwards -IsccPath", failures[0])
+
+
+class IsccPropagationTest(unittest.TestCase):
+
+    def test_a_setup_building_invocation_with_both_flags_is_accepted(self):
+        self.assertEqual([], gate.find_iscc_propagation_violations("x.yml", INNO_STEP))
+
+    def test_a_setup_building_invocation_without_the_qualified_compiler_is_refused(self):
+        text = INNO_STEP.replace(" -IsccPath $env:ISCC_PATH -RequiredIsccVersion 6.7.1", " -ValidateOnly")
+        failures = gate.find_iscc_propagation_violations("x.yml", text)
+        self.assertEqual(1, len(failures))
+        self.assertTrue(failures[0].startswith("x.yml:13: publish-windows-release.ps1 can compile a setup here but "
+                                               "the invocation does not pass -IsccPath, -RequiredIsccVersion"))
+
+    def test_a_publish_only_invocation_is_exempt(self):
+        text = INNO_STEP.replace(" -IsccPath $env:ISCC_PATH -RequiredIsccVersion 6.7.1", " -PublishOnly")
+        self.assertEqual([], gate.find_iscc_propagation_violations("x.yml", text))
+
+    def test_a_workflow_that_does_not_install_inno_setup_is_not_concerned(self):
+        text = "        run: ./scripts/release/build-local-windows-candidate.ps1\n"
+        self.assertEqual([], gate.find_iscc_propagation_violations("x.yml", text))
+
+
+class WindowsQualificationCoverageTest(TreeTest):
+
+    def coverage(self) -> list[str]:
+        return gate.find_windows_qualification_coverage_violations(self.root)
+
+    def test_filters_that_cover_the_release_workflow_and_the_gate_are_accepted(self):
+        self.assertEqual([], self.coverage())
+
+    def test_a_missing_windows_qualification_workflow_is_refused(self):
+        (self.root / gate.WORKFLOWS / "windows-installer.yml").unlink()
+        self.assertEqual([".github/workflows/windows-installer.yml: Windows qualification workflow not found"],
+                         self.coverage())
+
+    def test_a_trigger_without_paths_filter_is_refused(self):
+        self.write(f"{gate.WORKFLOWS}/windows-installer.yml",
+                   WINDOWS_INSTALLER.replace(f"  push:\n    branches: [main, develop]\n    paths:\n{COVERED_PATHS}",
+                                             "  push:\n    branches: [main, develop]\n"))
+        self.assertEqual([".github/workflows/windows-installer.yml: no 'push' paths filter found; cannot verify that "
+                          "Windows qualification covers the release workflow."], self.coverage())
+
+    def test_filters_that_no_longer_cover_the_release_workflow_are_refused(self):
+        self.write(f"{gate.WORKFLOWS}/windows-installer.yml",
+                   WINDOWS_INSTALLER.replace("      - '.github/workflows/release-windows.yml'\n", ""))
+        self.assertEqual([f".github/workflows/windows-installer.yml: '{trigger}' paths filter does not include "
+                          "'.github/workflows/release-windows.yml'; changing it would skip Windows qualification."
+                          for trigger in ("pull_request", "push")], self.coverage())
+
+    def test_pull_request_and_push_filters_that_differ_are_refused(self):
+        self.write(f"{gate.WORKFLOWS}/windows-installer.yml",
+                   WINDOWS_INSTALLER.replace("  push:\n    branches: [main, develop]\n    paths:\n",
+                                             "  push:\n    branches: [main, develop]\n    paths:\n      - 'docker/**'\n"))
+        self.assertEqual([".github/workflows/windows-installer.yml: pull_request and push paths filters differ; a "
+                          "change qualified on a PR must be re-qualified on the branch it lands on."], self.coverage())
+
+
+class InstallerScriptTest(TreeTest):
+
+    def script_failures(self) -> list[str]:
+        return gate.check_build_windows_installer_script(self.root)
+
+    def test_a_script_that_honours_and_proves_the_qualified_compiler_is_accepted(self):
+        self.assertEqual([], self.script_failures())
+
+    def test_a_missing_installer_script_is_refused(self):
+        (self.root / RELEASE_SCRIPTS[0]).unlink()
+        self.assertEqual([f"{RELEASE_SCRIPTS[0]}: script not found"], self.script_failures())
+
+    def test_a_script_without_an_iscc_path_parameter_is_refused(self):
+        self.write(RELEASE_SCRIPTS[0], "param([string]$Version)\n")
+        failures = self.script_failures()
+        self.assertEqual(1, len(failures))
+        self.assertIn("does not accept an -IsccPath parameter", failures[0])
+
+    def test_a_script_that_never_branches_on_iscc_path_is_refused(self):
+        self.write(RELEASE_SCRIPTS[0], "param([string]$IsccPath)\nAssert-IsccEngineVersion\n")
+        failures = self.script_failures()
+        self.assertTrue(any("does not branch on whether -IsccPath was supplied" in failure for failure in failures))
+        self.assertTrue(any("does not reject a half-qualified invocation" in failure for failure in failures))
+
+    def test_an_ambiguous_search_before_the_guard_is_refused(self):
+        self.write(RELEASE_SCRIPTS[0], "$IsccCandidates = @('a')\n" + INSTALLER_SCRIPT)
+        failures = self.script_failures()
+        self.assertEqual(1, len(failures))
+        self.assertIn("ambiguous ISCC candidate search appears before the -IsccPath guard", failures[0])
+
+    def test_a_script_that_does_not_assert_the_engine_version_is_refused(self):
+        self.write(RELEASE_SCRIPTS[0], INSTALLER_SCRIPT.replace("Assert-IsccEngineVersion", "Write-Host"))
+        failures = self.script_failures()
+        self.assertEqual(1, len(failures))
+        self.assertIn("does not assert the engine version", failures[0])
+
+    def test_a_script_that_accepts_a_half_qualified_invocation_is_refused(self):
+        self.write(RELEASE_SCRIPTS[0], INSTALLER_SCRIPT.replace(
+            " -ne [string]::IsNullOrWhiteSpace($RequiredIsccVersion)", ""))
+        failures = self.script_failures()
+        self.assertEqual(1, len(failures))
+        self.assertIn("does not reject a half-qualified invocation", failures[0])
+
+    def test_a_missing_provenance_helper_is_refused(self):
+        (self.root / RELEASE_SCRIPTS[1]).unlink()
+        self.assertEqual([f"{RELEASE_SCRIPTS[1]}: required Inno Setup provenance file not found"], self.script_failures())
+
+
+class FloatingRunnerTest(TreeTest):
+
+    def runners(self, text: str) -> tuple[list[str], int]:
+        return gate.find_floating_runner_violations("x.yml", text)
+
+    def test_a_versioned_runner_image_is_accepted_and_counted(self):
+        self.assertEqual(([], 2), self.runners("jobs:\n  a:\n    runs-on: ubuntu-24.04\n  b:\n    runs-on: 'windows-2022'\n"))
+
+    def test_a_floating_runner_image_is_refused(self):
+        failures, count = self.runners("jobs:\n  a:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n")
+        self.assertEqual(["x.yml:3: floating runner image 'ubuntu-latest' -- pin a versioned runner image "
+                          "(ubuntu-24.04, windows-2022): '-latest' changes without a commit."], failures)
+        self.assertEqual(1, count)
+
+    def test_a_floating_label_in_a_flow_or_block_sequence_is_refused(self):
+        flow = self.runners("jobs:\n  a:\n    runs-on: [self-hosted, linux-latest]\n")[0]
+        block = self.runners("jobs:\n  a:\n    runs-on:\n      - self-hosted\n      - windows-latest\n    steps: []\n")[0]
+        self.assertEqual(1, len(flow))
+        self.assertTrue(flow[0].startswith("x.yml:3: floating runner image 'linux-latest'"))
+        self.assertEqual(1, len(block))
+        self.assertTrue(block[0].startswith("x.yml:5: floating runner image 'windows-latest'"))
+
+    def test_a_floating_label_chosen_through_a_matrix_is_refused(self):
+        text = ("jobs:\n  verify:\n    strategy:\n      matrix:\n        os: [ubuntu-24.04, macos-latest]\n"
+                "    runs-on: ${{ matrix.os }}\n")
+        failures, count = self.runners(text)
+        self.assertEqual(1, len(failures))
+        self.assertTrue(failures[0].startswith("x.yml:5: floating runner image 'macos-latest'"))
+        self.assertEqual(1, count)
+
+    def test_comments_and_non_runner_names_ending_in_latest_are_accepted(self):
+        text = ("# ubuntu-latest used to float under this workflow\njobs:\n  a:\n"
+                "    runs-on: ubuntu-24.04  # was ubuntu-latest\n    steps:\n"
+                "      - run: docker pull example/image:latest && echo cache-latest\n")
+        self.assertEqual(([], 1), self.runners(text))
+
+    def test_the_whole_gate_names_a_floating_runner_of_any_workflow(self):
+        self.write(f"{gate.WORKFLOWS}/release.yml", "jobs:\n  publish:\n    runs-on: ubuntu-latest\n")
+        failures = self.failures()
+        self.assertEqual(1, len(failures))
+        self.assertTrue(failures[0].startswith(".github/workflows/release.yml:3: floating runner image 'ubuntu-latest'"))
+
+
+class WholeGateTest(TreeTest):
+
+    def test_a_tree_in_agreement_is_accepted_with_its_counters(self):
+        self.assertEqual(([], 1, 1), gate.check(self.root))
+
+    def test_the_root_option_points_the_gate_at_another_tree(self):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            self.assertEqual(0, gate.main(["--root", str(self.root)]))
+        self.assertIn("WORKFLOW SUPPLY-CHAIN PIN GATE SUCCESS (external uses=1, runs-on=1, Inno=6.7.1)", stdout.getvalue())
+        self.write(f"{gate.WORKFLOWS}/release.yml", "jobs:\n  a:\n    runs-on: ubuntu-latest\n")
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            self.assertEqual(1, gate.main(["--root", str(self.root)]))
+        self.assertIn("WORKFLOW SUPPLY-CHAIN PIN GATE FAILED", stderr.getvalue())
+        self.assertIn(" - .github/workflows/release.yml:3: floating runner image 'ubuntu-latest'", stderr.getvalue())
+
+
+class RepositoryTest(TreeTest):
+
+    def copy_repository(self) -> None:
+        shutil.rmtree(self.root / gate.WORKFLOWS)
+        shutil.copytree(REPOSITORY / gate.WORKFLOWS, self.root / gate.WORKFLOWS)
+        for relative in RELEASE_SCRIPTS:
+            shutil.copyfile(REPOSITORY / relative, self.root / relative)
+
+    def mutate(self, name: str, old: str, new: str) -> None:
+        path = self.root / gate.WORKFLOWS / name
+        text = path.read_text(encoding="utf-8")
+        self.assertIn(old, text)
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def test_the_repository_passes_the_gate(self):
+        failures, checked, runners = gate.check(REPOSITORY)
+        self.assertEqual([], failures)
+        self.assertGreater(checked, 0)
+        self.assertGreater(runners, 0)
+
+    def test_a_copy_of_the_repository_is_accepted_then_each_mutation_is_named(self):
+        self.copy_repository()
+        self.assertEqual([], self.failures())
+        self.mutate("intellij-plugin-release.yml", "runs-on: ubuntu-24.04", "runs-on: ubuntu-latest")
+        self.mutate("release-windows.yml", f"actions/checkout@{SHA}", "actions/checkout@v7")
+        self.mutate("pr-ci.yml", "os: [ubuntu-24.04, windows-2022]", "os: [ubuntu-latest, windows-2022]")
+        failures = self.failures()
+        for expected in (".github/workflows/intellij-plugin-release.yml:", "floating runner image 'ubuntu-latest'",
+                         ".github/workflows/release-windows.yml:", "mutable uses ref actions/checkout@v7",
+                         ".github/workflows/pr-ci.yml:"):
+            self.assertTrue(any(expected in failure for failure in failures), expected)
+        self.assertEqual(3, len(failures))
+
+
+if __name__ == "__main__":
+    unittest.main()
