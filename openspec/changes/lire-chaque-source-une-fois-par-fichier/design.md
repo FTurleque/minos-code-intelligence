@@ -15,6 +15,13 @@ Sprint 4 de l'audit du 10 octobre 2026 : **AUD-PERF-02**. HEAD analysé : `2d1cc
 
 **Non mesuré pendant cette analyse** : les durées (6 ms par document, 112,7 s, 467 à 515 s) sont celles de septembre ; aucune mesure refaite.
 
+### Relevé de la tâche 1.1 (2026-10-14, HEAD `9e4a6e61`)
+
+- **Fichier absent, opaque (`file:`) ou qui n'est pas un fichier régulier** : `resolveReadableSource` rend vide, `readExcerpt` rend vide, et `SemanticDocumentFactory` remplace l'extrait par le texte du symbole (`orElse(symbolContent)`). Même chose pour une ligne de début au-delà de la fin du fichier et pour un fichier vide.
+- **Fichier trop gros (plus de 16 Mio)** : `BoundedInputStream` lève une `IOException` qui interrompt toute la construction, dès le premier symbole du fichier. **Chemin qui sort de la racine ou lien qui s'en échappe** : `IllegalArgumentException`, qui interrompt aussi la construction. La lecture par fichier garde ces deux comportements : l'exception est levée à la lecture du fichier, avant son premier symbole, comme aujourd'hui.
+- **Gates littéraux** : aucun `scripts/**/*.py` ne cite `readExcerpt` ni `LocalSourceReader` ; `check-jacoco.py` nomme seulement `SemanticDocumentFactory` dans le scope `semantic-hybrid-retrieval`.
+- **Référence des documents** : l'empreinte de tous les documents construits sur la fixture du test `SemanticDocumentFactorySourceReadsTest` a été relevée à ce HEAD et figée dans le test (`a97f1a0e…`). La fixture couvre des fins de ligne LF et CRLF, un extrait réduit à son budget de jetons, une ligne au-delà de la fin et un fichier absent. **Écart** : les « fixtures de qualification » ne contiennent aucune source lue par la fabrique (corpus sans fichiers sur disque) ; la référence porte donc sur une fixture dédiée.
+
 ### Écarts avec l'action proposée par l'audit
 
 1. **La méthode va sur la classe concrète, pas sur le port.** L'audit propose `LocalSourceReader.load(fileId)`. `SemanticDocumentFactory` instancie déjà le lecteur concret (`:49`) : ajouter la lecture par fichier à la classe suffit et laisse le port `SourceReader` intact (aucune autre implémentation à adapter).
