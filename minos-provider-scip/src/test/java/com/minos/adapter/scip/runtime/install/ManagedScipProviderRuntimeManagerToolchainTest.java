@@ -186,9 +186,22 @@ class ManagedScipProviderRuntimeManagerToolchainTest {
     }
 
     @Test
-    @EnabledOnOs(OS.LINUX)
-    void onLinuxScipJavaWithCoursierAndAJdkIsInstalledSubjectToTheHostSandbox() throws Exception {
+    void coursierAloneIsNotAnInstallationTheVerifiedClasspathIsRequired() throws Exception {
         FakeTools.succeeding(tools, "cs");
+
+        ChildJvm.Outcome outcome = child(JAVA, "inspect,executor");
+
+        assertEquals("NOT_INSTALLED", outcome.get("inspect.state"));
+        assertTrue(outcome.get("inspect.diagnostics").contains("managed scip-java 0.13.1 classpath is not installed in MINOS_HOME/tools"),
+                outcome.get("inspect.diagnostics"));
+        assertTrue(outcome.get("executor.failure").contains("provider runtime is not ready"), outcome.get("executor.failure"));
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void onLinuxAStandaloneLauncherAndCoursierWithAJdkAreInstalledSubjectToTheHostSandbox() throws Exception {
+        FakeTools.succeeding(tools, "cs");
+        FakeTools.succeeding(tools, "scip-java");
 
         ChildJvm.Outcome outcome = child(JAVA, "inspect,executor");
 
