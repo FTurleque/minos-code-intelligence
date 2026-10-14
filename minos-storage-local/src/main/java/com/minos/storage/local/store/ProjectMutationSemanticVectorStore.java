@@ -41,6 +41,11 @@ public final class ProjectMutationSemanticVectorStore implements SemanticVectorS
     }
 
     @Override
+    public Optional<IndexChecksums> checksums(String projectId) throws IOException {
+        return delegate.checksums(projectId);
+    }
+
+    @Override
     public String searchEngine() {
         return delegate.searchEngine();
     }

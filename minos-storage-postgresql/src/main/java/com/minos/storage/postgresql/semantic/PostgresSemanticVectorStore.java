@@ -44,6 +44,16 @@ public final class PostgresSemanticVectorStore implements SemanticVectorStore {
     }
 
     @Override
+    public Optional<IndexChecksums> checksums(String projectId) throws IOException {
+        UUID id = uuid(projectId);
+        try {
+            return connections.withConnection(connection -> PostgresSemanticReadQueries.checksums(connection, projectId, id));
+        } catch (SQLException exception) {
+            throw new IOException("unable to load pgvector semantic checksums", exception);
+        }
+    }
+
+    @Override
     public Optional<IndexSnapshot> load(String projectId) throws IOException {
         UUID id = uuid(projectId);
         try {
