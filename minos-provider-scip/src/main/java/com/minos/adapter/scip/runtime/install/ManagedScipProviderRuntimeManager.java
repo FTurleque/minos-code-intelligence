@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
 import com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory;
 import com.minos.adapter.scip.runtime.plan.ScipTypeScriptProcessPlanFactory;
 import com.minos.io.PrivateLocalStorage;
@@ -15,6 +16,7 @@ import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -79,6 +81,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private static final long MAX_NODE_ARCHIVE_BYTES = 128L * 1024L * 1024L;
     private static final long MAX_NODE_ARCHIVE_ENTRIES = 8_192L;
     private static final long MAX_NODE_EXTRACTED_BYTES = 256L * 1024L * 1024L;
+    // The largest jar of the lock is 54 MiB; a copy stops well before filling the disk.
+    private static final long MAX_CLASSPATH_JAR_BYTES = 128L * 1024L * 1024L;
     private static final long MAX_ASSEMBLED_ARCHIVE_BYTES = 256L * 1024L * 1024L;
     private static final long MAX_ASSEMBLED_ENTRIES = 50_000L;
     private static final long MAX_ASSEMBLED_EXTRACTED_BYTES = 512L * 1024L * 1024L;
@@ -178,8 +182,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     providerId, home, new ScipJavaProcessPlanFactory(
                             status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner(),
                             CommandLocator.isWindows() ? mavenExecutable() : null,
-                            Files.isRegularFile(scipJavaClasspathFile(), LinkOption.NOFOLLOW_LINKS)
-                                    ? scipJavaClasspathFile() : null));
+                            scipJavaClasspathFile(), jars -> ClasspathLock.packaged().verify(jars)));
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
         };
     }
@@ -233,6 +236,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         if (coursier.isEmpty()) diagnostics.add("Coursier is not installed in MINOS_HOME/tools and was not found in PATH");
         if (!windowsRuntimeInstalled) diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION + " Windows compatibility runtime is not installed");
         if (!mavenInstalled) diagnostics.add("managed Maven " + mavenArtifact().version() + " is not installed in MINOS_HOME/tools");
+        boolean classpathInstalled = scipJavaClasspathInstalled();
+        if (!classpathInstalled) diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION + " classpath is not installed in MINOS_HOME/tools");
         if (CommandLocator.isWindows()) {
             if (powerShellExecutable().isEmpty()) diagnostics.add(ExternalPrerequisite.of("PowerShell (powershell.exe or pwsh.exe) is required for scip-java on Windows"));
             if (!gitBashAvailable()) diagnostics.add(ExternalPrerequisite.of("Git Bash (bash.exe) is required for scip-java on Windows"));
@@ -245,7 +250,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             Path javac = Path.of(javaHome).resolve("bin").resolve(CommandLocator.isWindows() ? "javac.exe" : "javac");
             if (!Files.isRegularFile(javac)) diagnostics.add(ExternalPrerequisite.of("JAVA_HOME does not contain javac: " + javaHome));
         }
-        boolean installed = coursier.isPresent() && windowsRuntimeInstalled && mavenInstalled;
+        boolean installed = coursier.isPresent() && windowsRuntimeInstalled && mavenInstalled && classpathInstalled;
         ProviderRuntimeStatus.State state = !installed
                 ? ProviderRuntimeStatus.State.NOT_INSTALLED
                 : diagnostics.isEmpty() ? ProviderRuntimeStatus.State.READY : ProviderRuntimeStatus.State.BLOCKED;
@@ -300,11 +305,12 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             installJavaWindowsRuntime();
             ensureMaven(true);
         }
-        if (!Files.isRegularFile(scipJavaClasspathFile(), LinkOption.NOFOLLOW_LINKS)) {
+        ClasspathLock lock = ClasspathLock.packaged();
+        if (!installedClasspathVerifies(lock)) {
             run(List.of(coursier.toString(), "--help"), home, toolsRoot.resolve("coursier-verify.log"), Duration.ofMinutes(1));
             List<Path> jars = fetchVerifiedClasspath(
-                    coursier, home, toolsRoot.resolve("scip-java-install.log"), ClasspathLock.packaged());
-            writeClasspathFile(jars);
+                    coursier, home, toolsRoot.resolve("scip-java-install.log"), lock);
+            installClasspath(jars, lock);
         }
         ProviderRuntimeStatus status = inspectJava();
         if (!status.ready()) throw new IllegalStateException("scip-java installation is incomplete: " + String.join("; ", status.diagnostics()));
@@ -366,16 +372,113 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         return jars;
     }
 
-    /** The verified jars, one absolute path per line, written last: its presence means the classpath was verified. */
-    private void writeClasspathFile(List<Path> jars) throws IOException {
-        PrivateLocalStorage.ensurePrivateDirectory(scipJavaClasspathRoot());
-        Path destination = scipJavaClasspathFile();
+    /**
+     * Whether the installed classpath is the verified one: its jars match the lock and, off Windows, its launcher
+     * matches the listing. An absent, unreadable or altered tree (or one written by an older MINOS, which listed the
+     * jars of the Coursier cache by absolute path) is installed again.
+     */
+    boolean installedClasspathVerifies(ClasspathLock lock) {
+        Path listing = scipJavaClasspathFile();
+        if (!Files.isRegularFile(listing, LinkOption.NOFOLLOW_LINKS)) return false;
+        try {
+            ScipJavaClasspath.verify(listing, lock, !CommandLocator.isWindows());
+            return true;
+        } catch (IOException | RuntimeException _) {
+            return false;
+        }
+    }
+
+    /**
+     * Copies the verified jars into MINOS_HOME/tools (the index plan never reads the Coursier cache), verifies the
+     * copies, writes the launcher and, last, the listing, then swaps the tree in. The layout is the one of the
+     * Windows distribution: jars and listing side by side, the listing naming the jars relative to itself.
+     *
+     * <p>The files inherit the owner-only access of the private partial directory instead of carrying a protected
+     * access list each, as the extracted Windows distribution does: the Windows sandbox grants its read access on the
+     * directory, and a protected file would not inherit it. The previous tree is moved aside, not deleted, until the
+     * new one is in place, so a failed swap restores it.</p>
+     */
+    void installClasspath(List<Path> jars, ClasspathLock lock) throws IOException {
+        Path destination = scipJavaClasspathRoot();
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
-        Files.deleteIfExists(partial);
-        StringBuilder text = new StringBuilder();
-        for (Path jar : jars) text.append(jar).append('\n');
-        PrivateLocalStorage.writePrivateFile(partial, text.toString().getBytes(StandardCharsets.UTF_8));
-        move(partial, destination);
+        Path previous = destination.resolveSibling(destination.getFileName() + ".previous");
+        deleteRecursively(partial);
+        PrivateLocalStorage.ensurePrivateDirectory(partial);
+        try {
+            List<String> names = new ArrayList<>(jars.size());
+            List<Path> copies = new ArrayList<>(jars.size());
+            for (Path jar : jars) {
+                Path fileName = jar.getFileName();
+                String name = ScipJavaClasspath.requireJarName(fileName == null ? null : fileName.toString());
+                Path copy = partial.resolve(name);
+                copyJar(jar, copy);
+                names.add(name);
+                copies.add(copy);
+            }
+            lock.verify(copies);
+            writeNewFile(partial.resolve(ScipJavaClasspath.LAUNCHER),
+                    new ByteArrayInputStream(ScipJavaClasspath.launcherBytes(names)));
+            writeNewFile(partial.resolve(CLASSPATH_FILE), new ByteArrayInputStream(ScipJavaClasspath.listingBytes(names)));
+            swapIn(partial, destination, previous);
+        } catch (IOException | RuntimeException failure) {
+            try {
+                deleteRecursively(partial);
+            } catch (IOException cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
+    }
+
+    /** Replaces {@code destination} by {@code partial}, keeping the previous tree aside until the swap is done. */
+    private static void swapIn(Path partial, Path destination, Path previous) throws IOException {
+        deleteRecursively(previous);
+        boolean replacing = Files.exists(destination, LinkOption.NOFOLLOW_LINKS);
+        if (replacing) move(destination, previous);
+        try {
+            move(partial, destination);
+        } catch (IOException swapFailure) {
+            if (replacing) restore(previous, destination, swapFailure);
+            throw swapFailure;
+        }
+        deleteRecursively(previous);
+    }
+
+    private static void restore(Path previous, Path destination, IOException swapFailure) {
+        try {
+            move(previous, destination);
+        } catch (IOException restoreFailure) {
+            swapFailure.addSuppressed(restoreFailure);
+        }
+    }
+
+    private static void copyJar(Path jar, Path copy) throws IOException {
+        try (InputStream input = new BoundedInputStream(
+                ConfinedFileOpener.openRegularFileNoFollow(jar), MAX_CLASSPATH_JAR_BYTES, "scip-java classpath jar")) {
+            writeNewFile(copy, input);
+        }
+    }
+
+    /** A new file in a private directory, never through a link, whose access is inherited from the directory. */
+    private static void writeNewFile(Path target, InputStream content) throws IOException {
+        try (OutputStream output = Files.newOutputStream(
+                target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            content.transferTo(output);
+        }
+    }
+
+    /**
+     * What the index plan can run: the installed classpath (and, off Windows, its launcher) or, off Windows and only
+     * when no classpath is installed, a standalone launcher on the PATH (the one of the Docker image, or one the
+     * operator chose). Presence only: the plan verifies the bytes.
+     */
+    private boolean scipJavaClasspathInstalled() {
+        boolean windows = CommandLocator.isWindows();
+        Path listing = scipJavaClasspathFile();
+        if (Files.isRegularFile(listing, LinkOption.NOFOLLOW_LINKS)) {
+            return windows || Files.isRegularFile(listing.resolveSibling(ScipJavaClasspath.LAUNCHER), LinkOption.NOFOLLOW_LINKS);
+        }
+        return !windows && CommandLocator.find(SCIP_JAVA_ID).isPresent();
     }
 
     private void installJavaWindowsRuntime() throws IOException {

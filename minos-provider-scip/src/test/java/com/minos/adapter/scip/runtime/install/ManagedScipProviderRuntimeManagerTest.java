@@ -58,7 +58,9 @@ class ManagedScipProviderRuntimeManagerTest {
                     UUID.randomUUID(), UUID.randomUUID(), project,
                     new IndexerSelection(Language.KOTLIN, descriptor));
 
-            var plan = new ScipJavaProcessPlanFactory(coursier, "org.scip-code:scip-java:0.13.1", runner, maven)
+            Path classpath = Files.writeString(temporaryDirectory.resolve("classpath.txt"), "a.jar\n");
+            var plan = new ScipJavaProcessPlanFactory(
+                            coursier, "org.scip-code:scip-java:0.13.1", runner, maven, classpath, jars -> { })
                     .create(request, temporaryDirectory.resolve("run"));
             int languageArgument = plan.command().indexOf("-Language");
             int mavenArgument = plan.command().indexOf("-MavenCommand");
