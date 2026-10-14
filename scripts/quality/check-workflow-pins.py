@@ -1,20 +1,33 @@
 #!/usr/bin/env python3
 """Fail when a GitHub workflow uses a mutable third-party action, an unpinned Inno Setup,
-an ambiguously-resolved Inno Setup compiler, or interpolates a GitHub Actions expression
-directly inside a shell run: block instead of routing it through env:."""
+an ambiguously-resolved Inno Setup compiler, a floating runner image, or interpolates a GitHub
+Actions expression directly inside a shell run: block instead of routing it through env:.
+
+A floating runner image (`ubuntu-latest`, any `runs-on` label ending in `-latest`) changes under
+the workflow without a commit: the job then runs on a system no pull request qualified. Every
+`runs-on` names a versioned image (`ubuntu-24.04`, `windows-2022`); a GitHub-hosted floating label
+is refused anywhere in a workflow, so a matrix cannot reintroduce it through `${{ matrix.os }}`.
+
+`--root` points the gate at another tree (default: this repository).
+Self-test: scripts/quality/test_check_workflow_pins.py.
+"""
 from __future__ import annotations
 
 import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-WORKFLOWS = ROOT / ".github" / "workflows"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gate_cli  # noqa: E402 - après l'ajout du dossier du script au chemin
+
+DEFAULT_ROOT = Path(__file__).resolve().parents[2]
+WORKFLOWS = ".github/workflows"
 USES = re.compile(r"\buses:\s*[\"']?(?P<target>[^@\s\"']+)@(?P<ref>[^\s\"'#]+)")
 SHA = re.compile(r"[0-9a-fA-F]{40}")
 INNO_VERSION = "6.7.1"
 
-RUN_KEY = re.compile(r"^(?P<indent>[ \t]*)run:[ \t]*(?P<rest>.*)$")
+# `run:` as a key of a step, including the first key of a step written `- run: ...`.
+RUN_KEY = re.compile(r"^(?P<indent>[ \t]*)(?:-[ \t]+)?run:[ \t]*(?P<rest>.*)$")
 BLOCK_SCALAR = re.compile(r"^[|>][+-]?\d*$")
 GHA_EXPRESSION = re.compile(r"\$\{\{\s*(?P<inner>.*?)\s*\}\}")
 
@@ -26,6 +39,63 @@ SAFE_RUN_EXPRESSIONS = re.compile(r"^steps\.[A-Za-z0-9_-]+\.(outcome|conclusion)
 ISCC_AMBIGUOUS_SEARCH_MARKERS = ("Get-Command ISCC.exe",)
 ISCC_ENV_EXPORT = re.compile(r"ISCC_PATH=.*>>\s*\$env:GITHUB_ENV")
 
+RUNS_ON = re.compile(r"^(?P<indent>[ \t]*)(?:-[ \t]+)?runs-on:[ \t]*(?P<value>.*)$")
+# A runs-on label that floats with its provider: anything ending in `-latest`.
+FLOATING_RUNNER = re.compile(r"(?<![\w.-])(?P<label>[\w.-]+-latest)(?![\w.-])")
+# GitHub-hosted floating labels: only ever runner images, refused on any line (matrix, env, inputs).
+HOSTED_FLOATING_RUNNER = re.compile(r"(?<![\w.-])(?P<label>(?:ubuntu|windows|macos)-latest)(?![\w.-])")
+
+
+def relative(root: Path, path: Path) -> str:
+    """Path of a file of the tree, with `/` separators on every system."""
+    return path.relative_to(root).as_posix()
+
+
+def _without_comment(line: str) -> str:
+    """The YAML content of a line: a whole-line comment is empty, a trailing ` #` comment is dropped."""
+    if line.strip().startswith("#"):
+        return ""
+    return re.split(r"\s#", line, maxsplit=1)[0]
+
+
+def find_floating_runner_violations(label: str, text: str) -> tuple[list[str], int]:
+    """(failures, number of runs-on keys read): no job runs on a runner image that floats.
+
+    A `runs-on` value is read inline (scalar or flow sequence) and on the lines nested under it (block
+    sequence, `labels:` of a runner group). A GitHub-hosted floating label is also refused on any other
+    line, where it can only be a runner chosen through an expression (`${{ matrix.os }}`).
+    """
+    failures: list[str] = []
+    flagged: set[int] = set()
+    runs_on = 0
+    lines = text.splitlines()
+    nested_indent: int | None = None
+    for number, line in enumerate(lines, start=1):
+        content = _without_comment(line)
+        if not content.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" \t"))
+        if nested_indent is not None and indent <= nested_indent:
+            nested_indent = None
+        match = RUNS_ON.match(content)
+        if match:
+            runs_on += 1
+            nested_indent = indent
+            candidates = FLOATING_RUNNER.finditer(match.group("value"))
+        elif nested_indent is not None:
+            candidates = FLOATING_RUNNER.finditer(content)
+        else:
+            candidates = HOSTED_FLOATING_RUNNER.finditer(content)
+        for candidate in candidates:
+            if number in flagged:
+                break
+            flagged.add(number)
+            failures.append(
+                f"{label}:{number}: floating runner image '{candidate.group('label')}' -- pin a versioned "
+                f"runner image (ubuntu-24.04, windows-2022): '-latest' changes without a commit."
+            )
+    return failures, runs_on
+
 
 def _has_unsafe_interpolation(text: str) -> bool:
     matches = list(GHA_EXPRESSION.finditer(text))
@@ -34,7 +104,7 @@ def _has_unsafe_interpolation(text: str) -> bool:
     return any(not SAFE_RUN_EXPRESSIONS.match(match.group("inner")) for match in matches)
 
 
-def find_run_block_violations(workflow: Path, text: str) -> list[str]:
+def find_run_block_violations(label: str, text: str) -> list[str]:
     """Flag any `${{ ... }}` interpolated directly inside a run: shell block.
 
     Untrusted/external GitHub Actions values (workflow inputs, PR/ref/tag metadata, step
@@ -65,7 +135,7 @@ def find_run_block_violations(workflow: Path, text: str) -> list[str]:
             stripped = line.strip()
             if not stripped.startswith("#") and _has_unsafe_interpolation(line):
                 failures.append(
-                    f"{workflow.relative_to(ROOT)}:{line_number}: "
+                    f"{label}:{line_number}: "
                     f"'${{{{ ... }}}}' interpolated directly inside a run: block -- route it "
                     f"through env: instead: {stripped}"
                 )
@@ -82,7 +152,7 @@ def find_run_block_violations(workflow: Path, text: str) -> list[str]:
                 continue
             if not rest.startswith("#") and _has_unsafe_interpolation(rest):
                 failures.append(
-                    f"{workflow.relative_to(ROOT)}:{line_number}: "
+                    f"{label}:{line_number}: "
                     f"'${{{{ ... }}}}' interpolated directly inside a run: block -- route it "
                     f"through env: instead: {rest}"
                 )
@@ -90,7 +160,7 @@ def find_run_block_violations(workflow: Path, text: str) -> list[str]:
     return failures
 
 
-def find_inno_setup_provenance_violations(workflow: Path, text: str) -> list[str]:
+def find_inno_setup_provenance_violations(label: str, text: str) -> list[str]:
     """A workflow that installs a pinned Inno Setup must also prove it uses exactly that binary.
 
     A textual `--version=X.Y.Z` pin on `choco install innosetup` does not, by itself, guarantee
@@ -127,7 +197,7 @@ def find_inno_setup_provenance_violations(workflow: Path, text: str) -> list[str
         # choco install innosetup exists but not inside a recognizably-named step: fail closed,
         # the invariant cannot be verified.
         failures.append(
-            f"{workflow.relative_to(ROOT)}: 'choco install innosetup' found outside an "
+            f"{label}: 'choco install innosetup' found outside an "
             f"identifiable Inno Setup install step (expected a step name containing "
             f"'Inno Setup'); cannot verify compiler provenance."
         )
@@ -136,20 +206,20 @@ def find_inno_setup_provenance_violations(workflow: Path, text: str) -> list[str
     for marker in ISCC_AMBIGUOUS_SEARCH_MARKERS:
         if marker in block_text:
             failures.append(
-                f"{workflow.relative_to(ROOT)}: Inno Setup install step still searches for "
+                f"{label}: Inno Setup install step still searches for "
                 f"ISCC.exe ambiguously ('{marker}') instead of using the deterministic path the "
                 f"choco package just installed."
             )
 
     if not ISCC_ENV_EXPORT.search(block_text):
         failures.append(
-            f"{workflow.relative_to(ROOT)}: Inno Setup install step does not export a resolved "
+            f"{label}: Inno Setup install step does not export a resolved "
             f"ISCC_PATH via $env:GITHUB_ENV; downstream steps cannot prove which compiler they use."
         )
 
     if "-IsccPath" not in text:
         failures.append(
-            f"{workflow.relative_to(ROOT)}: workflow installs Inno Setup but no step forwards "
+            f"{label}: workflow installs Inno Setup but no step forwards "
             f"-IsccPath to a release/installer build script; the resolved compiler is never "
             f"actually enforced downstream."
         )
@@ -161,7 +231,7 @@ SETUP_BUILDING_INVOCATION = re.compile(
     r"scripts[\\/]release[\\/](?P<script>publish-windows-release\.ps1|build-local-windows-candidate\.ps1)")
 
 
-def find_iscc_propagation_violations(workflow: Path, text: str) -> list[str]:
+def find_iscc_propagation_violations(label: str, text: str) -> list[str]:
     """Every setup-building invocation in an Inno-installing workflow must carry the qualified compiler.
 
     build-windows-installer.ps1 only honours a pinned compiler when it is actually told about one;
@@ -187,14 +257,14 @@ def find_iscc_propagation_violations(workflow: Path, text: str) -> list[str]:
         missing = [flag for flag in ("-IsccPath", "-RequiredIsccVersion") if flag not in line]
         if missing:
             failures.append(
-                f"{workflow.relative_to(ROOT)}:{line_number}: {match.group('script')} can compile a "
+                f"{label}:{line_number}: {match.group('script')} can compile a "
                 f"setup here but the invocation does not pass {', '.join(missing)}; the build would "
                 f"fall back to ambiguous ISCC.exe resolution."
             )
     return failures
 
 
-def find_windows_qualification_coverage_violations() -> list[str]:
+def find_windows_qualification_coverage_violations(root: Path) -> list[str]:
     """windows-installer.yml must re-qualify Windows when the files defining release compilation change.
 
     The Windows qualification workflow is what actually proves the candidate builds, installs,
@@ -203,9 +273,10 @@ def find_windows_qualification_coverage_violations() -> list[str]:
     thing being changed.
     """
     failures: list[str] = []
-    workflow = WORKFLOWS / "windows-installer.yml"
+    workflow = root / WORKFLOWS / "windows-installer.yml"
+    label = relative(root, workflow)
     if not workflow.is_file():
-        return [f"{workflow.relative_to(ROOT)}: Windows qualification workflow not found"]
+        return [f"{label}: Windows qualification workflow not found"]
 
     trigger_paths = _trigger_path_filters(workflow.read_text(encoding="utf-8"))
     required_coverage = (
@@ -215,21 +286,21 @@ def find_windows_qualification_coverage_violations() -> list[str]:
     for trigger in ("pull_request", "push"):
         if trigger not in trigger_paths:
             failures.append(
-                f"{workflow.relative_to(ROOT)}: no '{trigger}' paths filter found; cannot verify that "
+                f"{label}: no '{trigger}' paths filter found; cannot verify that "
                 f"Windows qualification covers the release workflow."
             )
             continue
         for required in required_coverage:
             if required not in trigger_paths[trigger]:
                 failures.append(
-                    f"{workflow.relative_to(ROOT)}: '{trigger}' paths filter does not include "
+                    f"{label}: '{trigger}' paths filter does not include "
                     f"'{required}'; changing it would skip Windows qualification."
                 )
 
     if "pull_request" in trigger_paths and "push" in trigger_paths:
         if trigger_paths["pull_request"] != trigger_paths["push"]:
             failures.append(
-                f"{workflow.relative_to(ROOT)}: pull_request and push paths filters differ; a change "
+                f"{label}: pull_request and push paths filters differ; a change "
                 f"qualified on a PR must be re-qualified on the branch it lands on."
             )
     return failures
@@ -268,23 +339,23 @@ def _trigger_path_filters(text: str) -> dict[str, list[str]]:
     return filters
 
 
-def check_build_windows_installer_script() -> list[str]:
+def check_build_windows_installer_script(root: Path) -> list[str]:
     """The installer build script must not let an explicit -IsccPath be second-guessed."""
     failures: list[str] = []
-    script = ROOT / "scripts" / "release" / "build-windows-installer.ps1"
+    script = root / "scripts" / "release" / "build-windows-installer.ps1"
     if not script.is_file():
-        failures.append(f"{script.relative_to(ROOT)}: script not found")
+        failures.append(f"{relative(root, script)}: script not found")
         return failures
     text = script.read_text(encoding="utf-8")
     if "$IsccPath" not in text:
         failures.append(
-            f"{script.relative_to(ROOT)}: does not accept an -IsccPath parameter; the release/CI "
+            f"{relative(root, script)}: does not accept an -IsccPath parameter; the release/CI "
             f"path cannot pin the compiler it uses."
         )
         return failures
     if not re.search(r"IsNullOrWhiteSpace\(\$IsccPath\)", text):
         failures.append(
-            f"{script.relative_to(ROOT)}: does not branch on whether -IsccPath was supplied; "
+            f"{relative(root, script)}: does not branch on whether -IsccPath was supplied; "
             f"an explicit release-qualified path could still be silently overridden by a search."
         )
     # The ambiguous multi-candidate search must only run when -IsccPath was NOT supplied. A
@@ -294,7 +365,7 @@ def check_build_windows_installer_script() -> list[str]:
     candidates_match = re.search(r"\$IsccCandidates\s*=", text)
     if guard_match and candidates_match and candidates_match.start() < guard_match.start():
         failures.append(
-            f"{script.relative_to(ROOT)}: ambiguous ISCC candidate search appears before the "
+            f"{relative(root, script)}: ambiguous ISCC candidate search appears before the "
             f"-IsccPath guard; an explicit release-qualified path could be shadowed."
         )
 
@@ -302,59 +373,81 @@ def check_build_windows_installer_script() -> list[str]:
     # engine version reported by the compiler it actually ran.
     if "Assert-IsccEngineVersion" not in text:
         failures.append(
-            f"{script.relative_to(ROOT)}: does not assert the engine version reported by the "
+            f"{relative(root, script)}: does not assert the engine version reported by the "
             f"compiler it executes; installed-package metadata alone cannot prove which binary "
             f"produced the setup."
         )
     if not re.search(r"IsNullOrWhiteSpace\(\$IsccPath\)\s*-ne\s*\[string\]::IsNullOrWhiteSpace\(\$RequiredIsccVersion\)", text):
         failures.append(
-            f"{script.relative_to(ROOT)}: does not reject a half-qualified invocation; -IsccPath and "
+            f"{relative(root, script)}: does not reject a half-qualified invocation; -IsccPath and "
             f"-RequiredIsccVersion must be required together so neither the binary nor its version "
             f"can go unproven."
         )
 
-    helper = ROOT / "scripts" / "release" / "iscc-provenance.ps1"
-    tests = ROOT / "scripts" / "release" / "test-iscc-provenance.ps1"
+    helper = root / "scripts" / "release" / "iscc-provenance.ps1"
+    tests = root / "scripts" / "release" / "test-iscc-provenance.ps1"
     for required in (helper, tests):
         if not required.is_file():
-            failures.append(f"{required.relative_to(ROOT)}: required Inno Setup provenance file not found")
+            failures.append(f"{relative(root, required)}: required Inno Setup provenance file not found")
     return failures
 
 
-def main() -> int:
+def find_pin_violations(label: str, text: str) -> tuple[list[str], int]:
+    """(failures, number of external `uses:` read): actions pinned by commit SHA, Inno Setup by version."""
     failures: list[str] = []
     checked = 0
-    for workflow in sorted(WORKFLOWS.glob("*.y*ml")):
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        match = USES.search(line)
+        if match:
+            target = match.group("target")
+            ref = match.group("ref")
+            if not target.startswith("./"):
+                checked += 1
+                if not SHA.fullmatch(ref):
+                    failures.append(f"{label}:{line_number}: mutable uses ref {target}@{ref}")
+        if "choco install innosetup" in line.lower() and f"--version={INNO_VERSION}" not in line and "$env:INNO_SETUP_VERSION" not in line:
+            failures.append(f"{label}:{line_number}: Inno Setup must be pinned to {INNO_VERSION}")
+        if "choco install innosetup" in line.lower() and "$env:INNO_SETUP_VERSION" in line:
+            if not re.search(rf"INNO_SETUP_VERSION:\s*['\"]?{re.escape(INNO_VERSION)}\b", text):
+                failures.append(
+                    f"{label}:{line_number}: 'choco install innosetup' "
+                    f"reads $env:INNO_SETUP_VERSION but no env: INNO_SETUP_VERSION: '{INNO_VERSION}' "
+                    f"pin was found in this workflow."
+                )
+    return failures, checked
+
+
+def check(root: Path) -> tuple[list[str], int, int]:
+    """(failures, number of external `uses:` read, number of `runs-on` read) for the workflows of `root`."""
+    failures: list[str] = []
+    checked = 0
+    runners = 0
+    workflows = root / WORKFLOWS
+    for workflow in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
+        label = relative(root, workflow)
         text = workflow.read_text(encoding="utf-8")
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            match = USES.search(line)
-            if match:
-                target = match.group("target")
-                ref = match.group("ref")
-                if not target.startswith("./"):
-                    checked += 1
-                    if not SHA.fullmatch(ref):
-                        failures.append(f"{workflow.relative_to(ROOT)}:{line_number}: mutable uses ref {target}@{ref}")
-            if "choco install innosetup" in line.lower() and f"--version={INNO_VERSION}" not in line and "$env:INNO_SETUP_VERSION" not in line:
-                failures.append(f"{workflow.relative_to(ROOT)}:{line_number}: Inno Setup must be pinned to {INNO_VERSION}")
-            if "choco install innosetup" in line.lower() and "$env:INNO_SETUP_VERSION" in line:
-                if not re.search(rf"INNO_SETUP_VERSION:\s*['\"]?{re.escape(INNO_VERSION)}\b", text):
-                    failures.append(
-                        f"{workflow.relative_to(ROOT)}:{line_number}: 'choco install innosetup' "
-                        f"reads $env:INNO_SETUP_VERSION but no env: INNO_SETUP_VERSION: '{INNO_VERSION}' "
-                        f"pin was found in this workflow."
-                    )
-        failures.extend(find_run_block_violations(workflow, text))
-        failures.extend(find_inno_setup_provenance_violations(workflow, text))
-        failures.extend(find_iscc_propagation_violations(workflow, text))
-    failures.extend(find_windows_qualification_coverage_violations())
-    failures.extend(check_build_windows_installer_script())
+        pin_failures, pin_checked = find_pin_violations(label, text)
+        failures.extend(pin_failures)
+        checked += pin_checked
+        failures.extend(find_run_block_violations(label, text))
+        failures.extend(find_inno_setup_provenance_violations(label, text))
+        failures.extend(find_iscc_propagation_violations(label, text))
+        runner_failures, runner_count = find_floating_runner_violations(label, text)
+        failures.extend(runner_failures)
+        runners += runner_count
+    failures.extend(find_windows_qualification_coverage_violations(root))
+    failures.extend(check_build_windows_installer_script(root))
+    return failures, checked, runners
+
+
+def main(argv: list[str] | None = None) -> int:
+    failures, checked, runners = check(gate_cli.parse_root(__doc__, DEFAULT_ROOT, argv))
     if failures:
         print("WORKFLOW SUPPLY-CHAIN PIN GATE FAILED", file=sys.stderr)
         for failure in failures:
             print(f" - {failure}", file=sys.stderr)
         return 1
-    print(f"WORKFLOW SUPPLY-CHAIN PIN GATE SUCCESS (external uses={checked}, Inno={INNO_VERSION})")
+    print(f"WORKFLOW SUPPLY-CHAIN PIN GATE SUCCESS (external uses={checked}, runs-on={runners}, Inno={INNO_VERSION})")
     return 0
 
 

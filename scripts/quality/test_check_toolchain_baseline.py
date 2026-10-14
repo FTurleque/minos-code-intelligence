@@ -23,6 +23,26 @@ def wrapper(version: str) -> str:
             f"distributionUrl=https\\://services.gradle.org/distributions/gradle-{version}-bin.zip\n")
 
 
+# A release job that builds the plugin as the pull-request CI does: setup-gradle for its cache only, then the wrapper.
+WRAPPER_RELEASE = ("jobs:\n  build:\n    steps:\n      - uses: gradle/actions/setup-gradle@abc # v6\n"
+                   "        with:\n          cache-provider: basic\n"
+                   "      - working-directory: minos-intellij\n        run: ./gradlew --no-daemon test buildPlugin\n"
+                   "      - working-directory: minos-intellij\n        shell: pwsh\n"
+                   "        run: ./gradlew.bat --no-daemon verifyPlugin\n")
+
+
+def installs_gradle(value: str) -> str:
+    """The release job of the pull request #427: setup-gradle installs a Gradle of its own (line 6)."""
+    return ("jobs:\n  build:\n    steps:\n      - uses: gradle/actions/setup-gradle@abc # v6\n"
+            f"        with:\n          gradle-version: {value}\n"
+            "      - working-directory: minos-intellij\n        run: gradle --no-daemon test buildPlugin\n")
+
+
+def refused(line: int, stated: str) -> str:
+    return (f"{gate.WORKFLOWS}/release.yml:{line} installs Gradle {stated} through `gradle-version:`: build the plugin "
+            "with the wrapper (`./gradlew` or `gradlew.bat` in minos-intellij) and remove `gradle-version:`")
+
+
 class ToolchainBaselineTest(unittest.TestCase):
 
     def setUp(self):
@@ -32,9 +52,7 @@ class ToolchainBaselineTest(unittest.TestCase):
         self.write(gate.WRAPPER, wrapper("9.8.1"))
         self.write(gate.POLICY, "### IntelliJ plugin\n\n- Java: **21**.\n- Gradle: **9.8.1**, through the wrapper.\n")
         self.write(gate.AGENTS, "| Plugin | Java **21**, Gradle **9.8.1** (`minos-intellij/gradlew`) |\n")
-        self.write(f"{gate.WORKFLOWS}/release.yml",
-                   "jobs:\n  build:\n    steps:\n      - uses: gradle/actions/setup-gradle@abc # v6\n"
-                   "        with:\n          gradle-version: '9.8.1'\n")
+        self.write(f"{gate.WORKFLOWS}/release.yml", WRAPPER_RELEASE)
         self.write(f"{gate.WORKFLOWS}/plugin.yml",
                    "jobs:\n  build:\n    steps:\n      - run: ./gradlew --no-daemon test\n")
 
@@ -50,18 +68,34 @@ class ToolchainBaselineTest(unittest.TestCase):
         failures, version, compared = gate.check_gradle(self.root)
         self.assertEqual([], failures)
         self.assertEqual("9.8.1", version)
-        self.assertEqual(3, compared, "the policy, AGENTS.md and the one workflow that installs Gradle")
+        self.assertEqual(2, compared, "the policy and AGENTS.md; a workflow that builds with the wrapper states nothing")
 
     def test_a_raised_wrapper_is_refused_until_the_policy_follows(self):
         self.write(gate.WRAPPER, wrapper("9.9.0"))
-        failures = self.failures()
-        self.assertIn(f"{gate.POLICY} states Gradle 9.8.1, the wrapper is 9.9.0", failures)
-        self.assertIn(f"{gate.AGENTS} states Gradle 9.8.1, the wrapper is 9.9.0", failures)
-        self.assertIn(f"{gate.WORKFLOWS}/release.yml:6 installs Gradle 9.8.1, the wrapper is 9.9.0", failures)
+        self.assertEqual([f"{gate.POLICY} states Gradle 9.8.1, the wrapper is 9.9.0",
+                          f"{gate.AGENTS} states Gradle 9.8.1, the wrapper is 9.9.0"], self.failures(),
+                         "the workflows build with the wrapper: they follow it by construction")
+
+    def test_a_workflow_that_installs_the_wrapper_version_is_refused(self):
+        self.write(f"{gate.WORKFLOWS}/release.yml", installs_gradle("'9.8.1'"))
+        failures, _version, compared = gate.check_gradle(self.root)
+        self.assertEqual([refused(6, "9.8.1")], failures)
+        self.assertEqual(2, compared, "a refused gradle-version: is no place in agreement")
 
     def test_a_release_workflow_left_on_an_older_gradle_is_refused(self):
         self.write(f"{gate.WORKFLOWS}/release.yml", "        with:\n          gradle-version: \"9.6.1\"  # pinned\n")
-        self.assertEqual([f"{gate.WORKFLOWS}/release.yml:2 installs Gradle 9.6.1, the wrapper is 9.8.1"], self.failures())
+        self.assertEqual([refused(2, "9.6.1")], self.failures())
+
+    def test_a_gradle_version_written_as_an_expression_or_left_empty_is_refused(self):
+        self.write(f"{gate.WORKFLOWS}/release.yml", installs_gradle("${{ env.GRADLE }}"))
+        self.assertEqual([refused(6, "${{ env.GRADLE }}")], self.failures())
+        self.write(f"{gate.WORKFLOWS}/release.yml", installs_gradle(""))
+        self.assertEqual([refused(6, "(empty)")], self.failures())
+
+    def test_a_workflow_with_the_wrapper_alone_is_accepted(self):
+        self.write(f"{gate.WORKFLOWS}/release.yml", WRAPPER_RELEASE
+                   + "      # gradle-version: is not needed, the wrapper names the distribution\n")
+        self.assertEqual([], self.failures())
 
     def test_a_policy_that_no_longer_states_the_baseline_is_refused(self):
         self.write(gate.POLICY, "### IntelliJ plugin\n\n- Gradle through the wrapper.\n")
@@ -108,6 +142,21 @@ class ToolchainBaselineTest(unittest.TestCase):
         self.write(gate.WRAPPER, gate.DISTRIBUTION.sub(
             lambda match: match.group(0).replace(match.group("version"), "99.0"), properties))
         self.assertTrue(any("the wrapper is 99.0" in failure for failure in self.failures()))
+
+    def test_a_copy_of_the_release_workflow_that_installs_gradle_again_is_refused(self):
+        shutil.rmtree(self.root / gate.WORKFLOWS)
+        shutil.copytree(REPOSITORY / gate.WORKFLOWS, self.root / gate.WORKFLOWS)
+        self.assertEqual([], self.failures())
+        release = self.root / gate.WORKFLOWS / "intellij-plugin-release.yml"
+        text = release.read_text(encoding="utf-8")
+        self.assertIn("          cache-provider: basic\n", text)
+        release.write_text(text.replace("          cache-provider: basic\n",
+                                        "          gradle-version: '9.8.1'\n          cache-provider: basic\n", 1),
+                           encoding="utf-8")
+        failures = self.failures()
+        self.assertEqual(1, len(failures))
+        self.assertRegex(failures[0], r"^\.github/workflows/intellij-plugin-release\.yml:\d+ installs Gradle 9\.8\.1 "
+                                      r"through `gradle-version:`")
 
 
 def pom(release: str, enforced: str) -> str:

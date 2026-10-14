@@ -5,7 +5,7 @@ Ordre dans chaque section : rouge, correction, preuve. Chaque workflow modifié 
 ## 1. Relevé et auto-test du gate (AUD-DEP-12, AUD-DEP-05, AUD-DEP-13)
 
 - [ ] 1.1 [AUD-DEP-12] Relever les durées des derniers runs réussis de chaque job sans délai (`gh run list` / `gh run view`) pour fixer les valeurs de `timeout-minutes` ; relever le système de chaque job qui construit le plugin (wrapper `gradlew` ou `gradlew.bat`). Consigner dans `design.md`.
-- [ ] 1.2 [AUD-DEP-12] Créer `scripts/quality/test_check_workflow_pins.py` sur arbres temporaires, d'abord pour les règles **existantes** du gate (un cas refusé, un cas accepté par règle) ; le câbler dans `invariants` (`pr-ci.yml`). Preuve : `python scripts/quality/check-ci-wiring.py` et `python scripts/quality/check-single-execution.py` verts.
+- [x] 1.2 [AUD-DEP-12] Créer `scripts/quality/test_check_workflow_pins.py` sur arbres temporaires, d'abord pour les règles **existantes** du gate (un cas refusé, un cas accepté par règle) ; le câbler dans `invariants` (`pr-ci.yml`). Preuve : `python scripts/quality/check-ci-wiring.py` et `python scripts/quality/check-single-execution.py` verts.
 
 ## 2. Jeton du checkout et délais (AUD-DEP-12)
 
@@ -14,8 +14,8 @@ Ordre dans chaque section : rouge, correction, preuve. Chaque workflow modifié 
 
 ## 3. Runner et wrapper Gradle (AUD-DEP-05)
 
-- [ ] 3.1 [AUD-DEP-05] Rouge : cas d'auto-test « `runs-on` en `-latest` » (gate des workflows) et « `gradle-version:` dans un workflow » (`test_check_toolchain_baseline.py`, cas `:36` inversé). **Preuve du rouge sur `intellij-plugin-release.yml:24,144` et sur les deux `gradle-version:`.**
-- [ ] 3.2 [AUD-DEP-05] `intellij-plugin-release.yml` et `release-windows.yml` : `./gradlew` (ou `gradlew.bat`) à la place de `gradle-version:` + `gradle` ; `ubuntu-24.04` ; règle 3 de `check-toolchain-baseline.py` réécrite (D2) ; `docs/TOOLCHAIN_POLICY.md` et `AGENTS.md` alignés si le texte cite `gradle-version:`. Preuve : les deux gates et leurs auto-tests verts ; `check-current-docs.py` vert (chaînes exigées de `release-windows.yml` conservées).
+- [x] 3.1 [AUD-DEP-05] Rouge : cas d'auto-test « `runs-on` en `-latest` » (gate des workflows) et « `gradle-version:` dans un workflow » (`test_check_toolchain_baseline.py`, cas `:36` inversé). **Preuve du rouge sur `intellij-plugin-release.yml:24,144` et sur les deux `gradle-version:`.**
+- [x] 3.2 [AUD-DEP-05] `intellij-plugin-release.yml` et `release-windows.yml` : `./gradlew` (ou `gradlew.bat`) à la place de `gradle-version:` + `gradle` ; `ubuntu-24.04` ; règle 3 de `check-toolchain-baseline.py` réécrite (D2) ; `docs/TOOLCHAIN_POLICY.md` et `AGENTS.md` alignés si le texte cite `gradle-version:`. Preuve : les deux gates et leurs auto-tests verts ; `check-current-docs.py` vert (chaînes exigées de `release-windows.yml` conservées).
 
 ## 4. Identifiants Docker Hub (AUD-DEP-13)
 

@@ -2,22 +2,24 @@
 """Fail when a toolchain baseline (Gradle of the plugin, Java of the product) is written with two versions.
 
 docs/TOOLCHAIN_POLICY.md says a baseline change is deliberate. The Gradle wrapper of `minos-intellij` is
-what the pull-request CI builds the plugin with, and Dependabot raises it; the policy, AGENTS.md and the
-release workflows (which install Gradle explicitly) each wrote the version again. Two raises of the
-wrapper (9.6.1 to 9.8.0, then 9.8.1) left the policy and the release workflows on 9.6.1: a release was
-built with a version the pull-request CI no longer qualified.
+what the pull-request CI builds the plugin with, and Dependabot raises it; the policy and AGENTS.md write
+the version again. The release workflows used to install Gradle explicitly (`gradle-version:`): two raises
+of the wrapper (9.6.1 to 9.8.0, then 9.8.1) left the policy and those workflows on 9.6.1, and a release
+was built with a version the pull-request CI no longer qualified.
 
 The wrapper is the reference. Rules:
 
 1. `minos-intellij/gradle/wrapper/gradle-wrapper.properties` names one Gradle distribution version.
 2. `docs/TOOLCHAIN_POLICY.md` states that version (`Gradle: **X**`), and so does `AGENTS.md`
    (`Gradle **X**`).
-3. Every `gradle-version:` of a workflow is that version; a workflow that builds with `./gradlew` needs
-   none and stays in agreement by construction.
+3. No workflow holds a `gradle-version:`, whatever its value: the release builds the plugin with the
+   wrapper (`./gradlew` or `gradlew.bat` in `minos-intellij`), like the pull-request CI, so it has no
+   version of its own to drift. `gradle/actions/setup-gradle` may stay for its cache, without it.
 
-A raise of the wrapper therefore fails this gate until the policy and the release workflows follow: the
-change of baseline is made in one pull request, in the open. What this gate does not prove: that the
-version is qualified on Linux and Windows (the plugin jobs do), nor that prose elsewhere repeats it.
+A raise of the wrapper therefore fails this gate until the policy and AGENTS.md follow: the change of
+baseline is made in one pull request, in the open. What this gate does not prove: that the version is
+qualified on Linux and Windows (the plugin jobs do), that a workflow which builds the plugin calls the
+wrapper rather than a `gradle` found on the runner, nor that prose elsewhere repeats the version.
 
 The Java baseline of the product follows the same model. `maven.compiler.release` of the root POM is the
 reference `N`. Rules:
@@ -57,7 +59,8 @@ WORKFLOWS = ".github/workflows"
 DISTRIBUTION = re.compile(r"^distributionUrl=.*/gradle-(?P<version>\d+(?:\.\d+)*)-(?:bin|all)\.zip\s*$", re.MULTILINE)
 POLICY_VERSION = re.compile(r"Gradle: \*\*(?P<version>[^*]+)\*\*")
 AGENTS_VERSION = re.compile(r"Gradle \*\*(?P<version>[^*]+)\*\*")
-WORKFLOW_VERSION = re.compile(r"^\s*gradle-version:\s*['\"]?(?P<version>[^'\"\s#]+)['\"]?\s*(?:#.*)?$")
+# Any `gradle-version:` key of a workflow (quoted key, empty value or expression included); a comment is not one.
+WORKFLOW_VERSION = re.compile(r"^\s*(?:-\s+)?['\"]?gradle-version['\"]?\s*:(?P<value>.*)$")
 
 POM = "pom.xml"
 OPENSPEC_CONFIG = "openspec/config.yaml"
@@ -125,17 +128,24 @@ def check_gradle(root: Path) -> tuple[list[str], str, int]:
             compared += 1
             if other != version:
                 failures.append(f"{relative} states Gradle {other}, the wrapper is {version}")
+    failures.extend(workflow_gradle_versions(root))
+    return failures, version, compared
+
+
+def workflow_gradle_versions(root: Path) -> list[str]:
+    """Rule 3: a `gradle-version:` is refused whatever its value; it is no place in agreement with the wrapper."""
+    failures: list[str] = []
     workflows = root / WORKFLOWS
     for workflow in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
         for number, line in enumerate(workflow.read_text(encoding="utf-8").splitlines(), start=1):
             match = WORKFLOW_VERSION.match(line)
             if not match:
                 continue
-            compared += 1
-            if match.group("version") != version:
-                failures.append(f"{WORKFLOWS}/{workflow.name}:{number} installs Gradle {match.group('version')}, "
-                                f"the wrapper is {version}")
-    return failures, version, compared
+            stated = re.split(r"\s#", match.group("value"), maxsplit=1)[0].strip().strip("'\"") or "(empty)"
+            failures.append(f"{WORKFLOWS}/{workflow.name}:{number} installs Gradle {stated} through `gradle-version:`: "
+                            f"build the plugin with the wrapper (`./gradlew` or `gradlew.bat` in minos-intellij) "
+                            f"and remove `gradle-version:`")
+    return failures
 
 
 def java_steps_failures(root: Path, version: str) -> tuple[list[str], int]:

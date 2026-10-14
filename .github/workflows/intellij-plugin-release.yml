@@ -21,7 +21,7 @@ env:
 jobs:
   build:
     name: Resolve release commit and build IntelliJ plugin (read-only)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     outputs:
       commit: ${{ steps.resolve.outputs.commit }}
@@ -86,10 +86,12 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Gradle 9.8.1
+      # MINOS-AUD-H09 / AUD-DEP-05 : la version vient du wrapper (minos-intellij/gradle/wrapper, SHA-256 de la
+      # distribution vérifié), comme dans intellij-plugin.yml ; setup-gradle ne sert qu'au cache et valide aussi le
+      # gradle-wrapper.jar contre les sommes publiées par Gradle. Aucun gradle-version (check-toolchain-baseline.py).
+      - name: Set up Gradle (wrapper)
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
         with:
-          gradle-version: '9.8.1'
           cache-provider: basic
 
       - name: Resolve plugin version from release tag
@@ -110,7 +112,7 @@ jobs:
         env:
           MINOS_VERSION: ${{ steps.version.outputs.value }}
         run: >-
-          gradle --no-daemon
+          ./gradlew --no-daemon
           "-PminosVersion=$MINOS_VERSION"
           test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure verifyPlugin
 
@@ -141,7 +143,7 @@ jobs:
   publish:
     name: Attach verified plugin to GitHub Release
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
