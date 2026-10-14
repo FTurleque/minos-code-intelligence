@@ -132,10 +132,18 @@ SCOPES = {
         "prefixes": (
             "com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend",
             "com/minos/runtime/local/sandbox/WindowsContainmentScript",
+            # AUD-TST-12: the Job Object ownership is Windows-only code (its test is @EnabledOnOs(WINDOWS)).
+            "com/minos/runtime/local/sandbox/WindowsJobObjectProcessOwnership",
         ),
         "platform": "windows",
         "line": 0.55,
         "branch": 0.35,
+        # Measured on Windows (the class and its anonymous inner class), pr-ci.yml run 38470947827 (develop 90c24fd0),
+        # confirmed by run 38466461171, 2026-10-14: line 67/68 (0.985), branch 15/20 (0.750). Floor = measure minus
+        # about 5 points, so the class cannot hide behind its two siblings.
+        "prefixMinimums": {
+            "com/minos/runtime/local/sandbox/WindowsJobObjectProcessOwnership": {"line": 0.93, "branch": 0.70},
+        },
     },
     "m26-runtime-dynamic-intelligence": {
         "prefixes": ("com/minos/dynamic/", "com/minos/application/dynamic/", "com/minos/storage/local/store/FileRuntimeObservationStore", "com/minos/cli/command/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
@@ -172,7 +180,22 @@ SCOPES = {
             "com/minos/bootstrap/StorageBackendSelection",
         ), "line": 0.52, "branch": 0.32,
     },
-    "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.60, "branch": 0.40},
+    "m30-postgresql-pgvector": {
+        "prefixes": (
+            "com/minos/storage/postgresql/",
+            # AUD-TST-04: the class prefix is declared beside the package prefix (a class matching both is counted
+            # once) so that the runtime observation store cannot hide behind its 41 siblings.
+            "com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore",
+        ),
+        "line": 0.60,
+        "branch": 0.40,
+        # Measured on Linux (the only system that runs PostgreSQL; the scope is skipped on Windows), pr-ci.yml run
+        # 38470947827 (develop 90c24fd0), confirmed by run 38466461171, 2026-10-14: line 65/65 (1.000),
+        # branch 18/20 (0.900). Floor = measure minus about 5 points.
+        "prefixMinimums": {
+            "com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore": {"line": 0.95, "branch": 0.85},
+        },
+    },
     "nexus-export": {"prefixes": ("com/minos/nexus/", "com/minos/integration/nexus/"), "line": 0.30, "branch": 0.12},
     # The lifecycle orchestrator behind every indexing run (register -> execute providers -> stage
     # -> promote -> persist, with commit-uncertain recovery and failure rollback). It is exercised
