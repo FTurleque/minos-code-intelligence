@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -53,8 +54,15 @@ class ScipJavaProcessPlanFactoryToolchainTest {
 
     private ChildJvm.Outcome plan(Path project, Path coursier, Path runner, Path maven, Path classpath, String verifier,
                                   Map<String, String> environment) throws IOException, InterruptedException {
+        return plan(project, coursier, runner, maven, classpath, verifier, "JAVA", environment);
+    }
+
+    private ChildJvm.Outcome plan(Path project, Path coursier, Path runner, Path maven, Path classpath, String verifier,
+                                  String language, Map<String, String> environment)
+            throws IOException, InterruptedException {
         String paths = String.join(";", coursier.toString(), runner.toString(),
-                maven == null ? "-" : maven.toString(), classpath == null ? "-" : classpath.toString(), verifier);
+                maven == null ? "-" : maven.toString(), classpath == null ? "-" : classpath.toString(), verifier,
+                language);
         return ChildJvm.run(tools, scratch, environment, "javaplan", project.toString(), run().toString(), paths);
     }
 
@@ -251,6 +259,28 @@ class ScipJavaProcessPlanFactoryToolchainTest {
         assertTrue(outcome.get("plan.artifact").endsWith("scip-java-output" + java.io.File.separator + "index.scip"),
                 outcome.get("plan.artifact"));
         assertTrue(Files.isDirectory(run().resolve("scip-java-output")));
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void onWindowsAKotlinProjectGivesItsLanguageToTheRunner() throws Exception {
+        // AUD-TST-18: this half of ManagedScipProviderRuntimeManagerTest ran in the test JVM and read the JAVA_HOME of
+        // the host; it runs here, in a child JVM whose environment the test sets.
+        Path coursier = Files.createFile(temp.resolve("cs.exe"));
+        Files.createFile(temp.resolve("runner.ps1"));
+        Path maven = Files.createFile(temp.resolve("mvn.cmd"));
+        Path classpath = Files.writeString(temp.resolve("classpath.txt"), "a.jar\n");
+        FakeTools.succeeding(tools, "powershell");
+
+        ChildJvm.Outcome outcome = plan(project(), coursier, temp.resolve("runner.ps1"), maven, classpath, "accept",
+                "KOTLIN", Map.of());
+
+        assertNull(outcome.get("plan.failure"), outcome.get("plan.failure"));
+        // On Windows the PowerShell invocation may reach the plan as one quoted cmd.exe argument: read the words in order.
+        String command = outcome.get("plan.command").replace("\"", "");
+        assertTrue(command.matches("(?s).*-Language( \\| | )KOTLIN( .*|$)"), command);
+        assertTrue(command.matches("(?s).*-MavenCommand( \\| | )" + Pattern.quote(maven.toString()) + "( .*|$)"),
+                command);
     }
 
     @Test
