@@ -52,8 +52,9 @@ class ParkedThreadsTest {
 
     @Test
     void failsAsSoonAsTheCallerReportsItsCompletion() {
+        Thread caller = Thread.currentThread();
         AssertionFailedError failure = assertThrows(AssertionFailedError.class,
-                () -> ParkedThreads.awaitParkedIn(Thread.currentThread(), LOCKER, () -> true, DEADLINE));
+                () -> ParkedThreads.awaitParkedIn(caller, LOCKER, () -> true, DEADLINE));
 
         assertTrue(failure.getMessage().contains("completed before"), failure.getMessage());
     }
@@ -64,14 +65,15 @@ class ParkedThreadsTest {
         Thread elsewhere = new Thread(() -> {
             try {
                 release.await(10, TimeUnit.SECONDS);
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }, "parked-threads-elsewhere");
+        Duration deadline = Duration.ofMillis(100);
         elsewhere.start();
         try {
             AssertionFailedError failure = assertThrows(AssertionFailedError.class,
-                    () -> ParkedThreads.awaitParkedIn(elsewhere, LOCKER, Duration.ofMillis(100)));
+                    () -> ParkedThreads.awaitParkedIn(elsewhere, LOCKER, deadline));
 
             assertTrue(failure.getMessage().contains("was not observed waiting in " + LOCKER + " within PT0.1S"),
                     failure.getMessage());

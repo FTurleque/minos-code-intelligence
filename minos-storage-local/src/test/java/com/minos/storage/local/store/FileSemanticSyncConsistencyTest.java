@@ -26,7 +26,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -76,7 +75,7 @@ class FileSemanticSyncConsistencyTest {
 
         assertThrows(StaleSemanticSyncException.class, () ->
                 store.replaceConditionally(snap(projectId, "snap-1"), "snap-1",
-                        () -> Optional.empty())); // active pointer absent (project deleted/expired)
+                        Optional::empty)); // active pointer absent (project deleted/expired)
     }
 
     // -------------------------------------------------------------------------
