@@ -19,7 +19,7 @@ description: Préparer et contrôler (sans jamais publier de soi-même) une prom
 4. **Critère local, jamais lancé par la CI** : `scripts/release/qualify-offline-install.ps1 -Package minos-<version>-windows-x64.zip` (machine neuve, sans réseau) — à demander à l'utilisateur de lancer ou à lancer sur sa demande.
 5. Supply-chain : SBOM CycloneDX et `THIRD-PARTY-NOTICES.txt` produits, `python scripts/release/check-supply-chain.py`, `python scripts/quality/check-tools-manifest.py` (charge d'outils ↔ catalogue), actions épinglées par SHA, images par digest.
 6. Documentation : `docs/STATUS.md`, `docs/ROADMAP.md`, notes de version, `docs/user/production-installation.md` à jour (skill `minos-doc-sync`).
-7. Publication Windows : workflow manuel `release-windows.yml` (version SemVer en entrée ; seul le job de publication a `contents: write`). Plugin : `intellij-plugin-release.yml` se déclenche à la publication de la release.
+7. Publication Windows : workflow manuel `release-windows.yml` (version SemVer en entrée ; seul le job de publication a `contents: write`). Plugin : `release-windows.yml` appelle `intellij-plugin-release.yml` (job `plugin`) puis vérifie que la release porte le zip du plugin et sa somme (job `release-complete`) ; une release créée à la main, ou un échec de ce job, se répare par `workflow_dispatch` de `intellij-plugin-release.yml` avec le tag.
 
 ## Rapport
 Pour chaque point : fait / non fait / non vérifiable ici, avec la commande ou le run. Lister les **actions manuelles** restant au propriétaire (ruleset, secrets, publication). Ne jamais déclarer « prêt » sur la seule base d'une CI verte de PR.
