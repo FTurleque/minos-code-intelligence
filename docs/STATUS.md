@@ -29,9 +29,9 @@ Le sprint 2 (« failles de sécurité et observabilité », 7 constats) est **co
 - **Journalisation** : le jar ombré lie SLF4J à `java.util.logging` (stderr ; stdout reste réservé au protocole MCP) ; les échecs des tâches d'arrière-plan du plugin sont journalisés dans `idea.log` ; les journaux de récupération de MINOS ne portent ni chemin absolu ni cause, sous garde (`check-private-io.py`).
 - **Scripts Windows** : le mot de passe PostgreSQL est écrit dans un fichier déjà restreint et vérifié ; le lanceur de développement `minos.cmd` ne cherche plus `java` dans le répertoire courant.
 
-Preuves, écarts avec le critère de sortie et suite à ouvrir : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md). Capacités OpenSpec créées ou étendues par l'archivage : voir `openspec/specs/`. Le sprint 3 est traité en partie (section suivante) ; les sprints 4 à 11 (chemin de requête, chaîne de release, couverture réelle, sorties publiques, confinement et E/S privées, orchestration d'indexation, frontières d'architecture, hygiène) restent à traiter.
+Preuves, écarts avec le critère de sortie et suite à ouvrir : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md). Capacités OpenSpec créées ou étendues par l'archivage : voir `openspec/specs/`. Les sprints 3 et 4 sont traités (sections suivantes) ; les sprints 5 à 11 (chaîne de release, couverture réelle, sorties publiques, confinement et E/S privées, orchestration d'indexation, frontières d'architecture, hygiène) restent à traiter.
 
-## Audit 2026-10-10 — sprint 3, en partie (2026-10-13)
+## Audit 2026-10-10 — sprint 3 (2026-10-13, trois preuves en attente)
 
 Les cinq changements du sprint 3 (« socle d'exécution supporté ») sont **fusionnés dans `develop`** (PR #434 à #437 et #441) :
 
@@ -44,7 +44,20 @@ Les cinq changements du sprint 3 (« socle d'exécution supporté ») sont **fus
 
 Le défaut mis au jour par ce sprint — les outils MCP échouaient avec la racine de données en lecture seule, comme la montent les compose pour le plan de requête — est corrigé (changement `lire-le-registre-sans-ecrire`) : une lecture du registre ou des observations runtime prend un verrou partagé sans rien écrire, et la qualification de l'image interroge le serveur sur un volume en lecture seule. Conditions et limites : [`docs/user/docker-runtime.md`](user/docker-runtime.md).
 
-Limites : aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés sur le nouveau socle par exécution directe sous Linux, pas sous Windows. Restent à faire dans ce sprint : les CVE de Testcontainers en portée test (AUD-DEP-14, bloqué), une preuve d'indexation par le runtime de l'installateur et le premier passage de la veille planifiée. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
+Limites : aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés sur le nouveau socle par exécution directe sous Linux, pas sous Windows. Restent à faire dans ce sprint, aucun depuis `develop` : les CVE de Testcontainers en portée test (AUD-DEP-14, bloqué), une preuve d'indexation par le runtime Java 25 de l'installateur, le premier passage de la veille planifiée (après la promotion vers `main`) et une décision sur les quatre avis du classpath de scip-java. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
+
+## Audit 2026-10-10 — sprint 4 (2026-10-15)
+
+Les huit changements du sprint 4 (« chemin de requête : ne plus relire le snapshot », neuf constats) sont **fusionnés dans `develop`** (PR #442, #444, #445, #447, #448, #456, #457, #458) ; six sont archivés, deux restent ouverts sur une mesure :
+
+- **Cache des vues de requête** : les chaînes sont dédoublonnées au décodage, ce qui divise par deux le tas retenu par une vue ; le poids estimé d'une vue passe à deux fois sa taille persistée, de sorte qu'un gros projet tient dans le cache au lieu d'être relu à chaque requête. Un snapshot est décodé et authentifié en un seul parcours ; rien de décodé n'est publié si l'empreinte diffère.
+- **Requête hybride** : une requête prête lit l'identité du snapshot actif et les métadonnées de l'index sans charger les vecteurs ni calculer la taille de l'index ; la garde `SEMANTIC_INDEX_CHANGED_DURING_QUERY` est conservée.
+- **Index sémantique** : une indexation sans changement n'écrit rien ; sinon, les vecteurs des documents inchangés sont réutilisés et seuls les documents modifiés sont recalculés et envoyés. La construction des documents lit chaque fichier source une fois au lieu d'une fois par symbole.
+- **Impact et graphe de programme** : l'index des arêtes entrantes et l'adjacence du graphe sont construits une fois par vue ou par graphe en cache, avec des rapports identiques ; une requête d'architecture avec module ne découvre le projet qu'une fois (MCP et CLI).
+- **Graphe de programme Java** : sans empreinte exacte des sources, la clé de cache est hachée une fois puis réutilisée cinq secondes ; la limitation `PROGRAM_GRAPH_REFLECTS_DISK_AS_OF_AT_MOST_5_SECONDS_AGO_NOT_INDEXED_STATE` le déclare.
+- **PostgreSQL** : une connexion du pool n'est validée qu'à l'emprunt après 30 s de repos ; une coupure sur la première instruction est rejouée une fois sur une connexion neuve, jamais après une écriture.
+
+Limites : les gains sont prouvés par des décomptes en test et des mesures sur corpus synthétique ou sur la seule construction des documents ; la mesure du cache des vues sur un index réel de ce dépôt (AUD-PERF-03, tâche 2.4) n'a pas pu être faite sur le poste de développement et reste ouverte, comme la mesure de la synchronisation sémantique sur un index réel avec provider d'embeddings (AUD-PERF-06, tâche 3.3). Aucune durée de requête n'est annoncée. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
 
 ## État produit
 

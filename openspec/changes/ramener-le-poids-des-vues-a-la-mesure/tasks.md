@@ -22,6 +22,6 @@ Ordre dans chaque section : rouge, correction, preuve. Tout `-pl` s'accompagne d
 
 ## 4. Clôture
 
-- [ ] 4.1 Compléter la « Mise en œuvre » de l'ADR 0047 (décision 1 : valeur retenue, mesures) ; rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-03 : statut, décision D2, mesures 2.4) ; signaler AUD-PERF-11 et AUD-ARC-07 comme débloqués.
+- [x] 4.1 Compléter la « Mise en œuvre » de l'ADR 0047 (décision 1 : valeur retenue, mesures) ; rejouer `python scripts/docs/check-current-docs.py`. **Preuve (2026-10-15)** : `docs/adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md`, « Mise en œuvre » complétée (lot 3 et mesure réelle absente) ; `check-current-docs.py` vert.
+- [x] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-03 : statut, décision D2, mesures 2.4) ; signaler AUD-PERF-11 et AUD-ARC-07 comme débloqués. **Preuve (2026-10-15)** : `docs/audit/2026-10-10/SUIVI.md`, ligne du constat dans le tableau du sprint 4 et section « Implémentation » ou « Clôture du sprint 4 ».
 - [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, ADR 0047, documentation d'exploitation (tas du serveur MCP).

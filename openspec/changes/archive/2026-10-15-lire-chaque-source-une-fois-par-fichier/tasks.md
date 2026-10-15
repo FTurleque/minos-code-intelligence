@@ -14,5 +14,5 @@ Ordre : rouge, correction, preuve. Changement limité à `minos-application` ; �
 
 ## 3. Clôture
 
-- [ ] 3.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-02 : statut, mesure, renvoi « connu » corrigé vers l'audit d'architecture de septembre).
-- [ ] 3.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md` si la durée d'indexation avec embeddings y est citée. **Exécuté (2026-10-14)** : `openspec validate --all --strict` : 68 passed, 0 failed. Tâche laissée ouverte : la mise à jour des docs avant archivage revient à la PR de clôture.
+- [x] 3.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-02 : statut, mesure, renvoi « connu » corrigé vers l'audit d'architecture de septembre). **Preuve (2026-10-15)** : `docs/audit/2026-10-10/SUIVI.md`, ligne du constat dans le tableau du sprint 4 et section « Implémentation » ou « Clôture du sprint 4 ».
+- [x] 3.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md` si la durée d'indexation avec embeddings y est citée. **Exécuté (2026-10-14)** : `openspec validate --all --strict` : 68 passed, 0 failed. Tâche laissée ouverte : la mise à jour des docs avant archivage revient à la PR de clôture. **Preuve (2026-10-15)** : `openspec validate --all --strict` → 0 échec ; `docs/STATUS.md`, section « Audit 2026-10-10 — sprint 4 » ; `python scripts/docs/check-current-docs.py` et `product-facts.py --check` verts. Aucune autre page ne décrit ce comportement (recherche dans `docs/user` et `docs/developer`).

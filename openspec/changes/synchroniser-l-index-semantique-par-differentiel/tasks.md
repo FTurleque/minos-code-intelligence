@@ -20,5 +20,5 @@ Ordre dans chaque section : rouge, correction, preuve. Prérequis : `lire-l-iden
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-06 : statut, écarts 1 à 3, mesures, ce qui n'a pas été mesuré).
+- [x] 4.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-06 : statut, écarts 1 à 3, mesures, ce qui n'a pas été mesuré). **Preuve (2026-10-15)** : `docs/audit/2026-10-10/SUIVI.md`, ligne du constat dans le tableau du sprint 4 et section « Implémentation » ou « Clôture du sprint 4 ».
 - [ ] 4.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, documentation d'exploitation PostgreSQL si elle décrit la synchronisation. **Exécuté (2026-10-14)** : `openspec validate --all --strict` : 68 passed, 0 failed. Laissée ouverte : docs à mettre à jour avant archivage (`docs/STATUS.md`, exploitation PostgreSQL) réservées à la PR de clôture.
