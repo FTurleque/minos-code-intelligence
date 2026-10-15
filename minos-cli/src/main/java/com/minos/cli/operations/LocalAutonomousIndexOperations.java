@@ -31,7 +31,6 @@ import com.minos.orchestration.ResumableRunSummary;
 import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
-import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
@@ -231,17 +230,25 @@ public final class LocalAutonomousIndexOperations
                 .orElse(null);
     }
 
-    private IndexingRun recoverPromotedRunIfNeeded(IndexingRun run) throws IOException {
+    /**
+     * The snapshot a run that did not succeed has nevertheless promoted: its staged snapshot, when that is the active
+     * one. Only the identity of the active snapshot is read; the snapshot is not loaded.
+     */
+    static Optional<String> promotedSnapshotId(IndexingRun run, CodeKnowledgeSnapshotStore snapshots)
+            throws IOException {
         if (run.status() == IndexingRun.Status.SUCCEEDED || run.stagedSnapshotId().isEmpty()) {
-            return run;
+            return Optional.empty();
         }
-        Optional<CodeKnowledgeSnapshot> active = snapshotStore.loadActiveKnowledge(run.projectId());
-        if (active.isEmpty()
-                || !run.stagedSnapshotId().orElseThrow().equals(active.orElseThrow().snapshotId())) {
+        return snapshots.activeSnapshotId(run.projectId()).filter(run.stagedSnapshotId().orElseThrow()::equals);
+    }
+
+    private IndexingRun recoverPromotedRunIfNeeded(IndexingRun run) throws IOException {
+        Optional<String> promoted = promotedSnapshotId(run, snapshotStore);
+        if (promoted.isEmpty()) {
             return run;
         }
 
-        String activeSnapshotId = active.orElseThrow().snapshotId();
+        String activeSnapshotId = promoted.orElseThrow();
         Instant completedAt = run.completedAt().orElseGet(Instant::now);
         IndexingRun recovered = new IndexingRun(
                 run.id(),
@@ -353,9 +360,9 @@ public final class LocalAutonomousIndexOperations
     }
 
     private ProjectIndexState alignedIndexState(UUID projectId, boolean persist) throws IOException {
-        ProjectIndexStateReconciler.Reconciliation reconciliation = persist
-                ? projectIndexStateReconciler.reconcile(projectId)
-                : projectIndexStateReconciler.observe(projectId);
+        ProjectIndexStateReconciler.ReconciledState reconciliation = persist
+                ? projectIndexStateReconciler.reconcileState(projectId)
+                : projectIndexStateReconciler.observeState(projectId);
         if (reconciliation.projectState().isPresent()) {
             return reconciliation.projectState().orElseThrow();
         }
