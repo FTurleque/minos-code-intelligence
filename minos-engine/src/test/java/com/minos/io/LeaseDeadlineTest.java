@@ -7,6 +7,7 @@ import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,17 +22,22 @@ class LeaseDeadlineTest {
         assertThrows(NullPointerException.class, () -> LeaseDeadline.after(null));
         assertEquals("lock timeout must be positive",
                 assertThrows(IllegalArgumentException.class, () -> LeaseDeadline.after(Duration.ZERO)).getMessage());
+        Duration negative = Duration.ofMillis(-1);
         assertEquals("lock timeout must be positive",
-                assertThrows(IllegalArgumentException.class, () -> LeaseDeadline.after(Duration.ofMillis(-1))).getMessage());
+                assertThrows(IllegalArgumentException.class, () -> LeaseDeadline.after(negative)).getMessage());
     }
 
     @Test
-    void theRemainingBudgetNeverExceedsTheTimeoutAndShrinks() throws InterruptedException {
+    void theRemainingBudgetNeverExceedsTheTimeoutAndShrinks() {
         Duration timeout = Duration.ofSeconds(30);
         LeaseDeadline deadline = LeaseDeadline.after(timeout);
 
         long first = deadline.remainingNanos();
-        Thread.sleep(2);
+        // Let the monotonic clock advance by at least a millisecond without sleeping.
+        long start = System.nanoTime();
+        while (System.nanoTime() - start < 1_000_000L) {
+            Thread.onSpinWait();
+        }
         long second = deadline.remainingNanos();
 
         assertTrue(first <= timeout.toNanos(), "remaining " + first);
@@ -73,7 +79,7 @@ class LeaseDeadlineTest {
             }
         }
 
-        assertTrue(failure != null, "the budget never ran out");
+        assertNotNull(failure, "the budget never ran out");
         assertEquals("timed out waiting for the cache lock after PT0.12S", failure.getMessage());
         assertTrue(pauses <= 3, pauses + " pauses within 120 ms, each of at most 50 ms");
     }
