@@ -328,6 +328,10 @@ MINOS Java 25
 
 Le build du plugin ne dépend d'aucun artefact Maven `com.minos:*`.
 
+## Couverture du plugin
+
+Les tests du plugin sont des tests JUnit sans fixture de plateforme : la logique testable vit dans des classes sans type IntelliJ (`MinosSymbolRanking`, `MinosJsonFields`, `MinosRegistryNoticeText`, `MinosSettingsRules`, gardées par `PlatformFreeLogicTest`). La couverture est mesurée par JaCoCo (`./gradlew test jacocoTestReport`) et bornée par `jacocoTestCoverageVerification`, jugé par le job Linux de `IntelliJ plugin (gate)` : 0,33 en lignes et en branches pour le plugin, 0,47 / 0,39 pour `protocol/` (mesure Linux du 15 octobre 2026 moins 2 points : 0,359 / 0,357 et 0,498 / 0,419). Le job Windows publie son rapport, où le lanceur à propriété forte s'exécute aussi. Ne sont pas couverts par des tests unitaires, par construction : la fenêtre d'outils (`MinosToolWindowPanel`, `MinosToolWindowFactory`, `MinosUiController`), l'écran de réglages (`MinosSettingsConfigurable`), la navigation (`MinosNavigation`), les enveloppes d'action et les appels de la plateforme (`MinosProjectService`, `MinosRegistryNotice`, `MinosSettingsState`).
+
 ## Compatibilité IntelliJ
 
 Le plugin cible Java 21 et `sinceBuild=261`, soit la branche IntelliJ Platform 2026.1. La qualification M21-S6 utilise le Plugin Verifier sur la distribution courante et les releases stables `261` résolues par le plugin Gradle JetBrains.

@@ -36,13 +36,21 @@ Ordre dans le sprint 6 : indépendant des cinq autres changements du sprint ; à
 
 **Non-Goals** : atteindre un taux donné ; tester l'interface Swing ; intégrer le plugin à SonarCloud.
 
+## Mesures et relevés des tâches 1.1 et 1.3 (2026-10-15)
+
+- **Interférence avec l'IntelliJ Platform Gradle Plugin, mesurée** : le rapport par défaut donne **0 %** partout. Deux causes, corrigées dans `build.gradle.kts` : les classes du plugin sont définies par les chargeurs de l'IDE sans emplacement de code, que l'agent JaCoCo ignore par défaut (`isIncludeNoLocationClasses = true`) ; les tests exécutent les classes réécrites par `instrumentCode`, que le rapport doit lire (`build/instrumented/instrumentCode`).
+- **Mesure avant extraction** (Windows, poste) : plugin 653 / 1 775 lignes (0,368), 311 / 944 branches (0,329) ; `protocol/` 0,554 / 0,444.
+- **Mesure après extraction** : Windows (poste, Temurin 25, 92 tests) plugin 0,390 / 0,381, `protocol/` 0,557 / 0,458 ; **Linux** (WSL Ubuntu, JDK 21) plugin 637 / 1 776 (0,359), 336 / 940 (0,357), `protocol/` 459 / 922 (0,498), 238 / 568 (0,419). L'écart vient du lanceur à propriété forte, exécuté sous Windows seulement (`MinosStrongProcessLauncher` 0,337 en lignes sous Linux). Durée de `test` sans effet mesurable (≈ 40 s avant et après). La CI n'a pas encore tourné.
+- **Sommes Gradle** : JaCoCo ajoute cinq composants `org.jacoco` aux métadonnées de vérification, régénérées sous Windows puis rejouées sous Linux (identiques).
+- **1.3** : logique sans type de la plateforme extraite — choix et score du symbole candidat, chemin relatif (`service/MinosSymbolRanking`), lecture des champs JSON partagée par les deux classes d'actions (`protocol/MinosJsonFields`), texte de la notice de registre (`protocol/MinosRegistryNoticeText`), bornes et valeurs par défaut des réglages (`settings/MinosSettingsRules`). Quand aucun symbole ne correspond, `resolveSymbol` lève « MINOS found no symbol named … » (inchangé) ; s'il n'en reste aucun d'utilisable, « MINOS returned no usable symbol result ». Restent sans test unitaire, **nommément** : `MinosToolWindowPanel`, `MinosToolWindowFactory`, `MinosSettingsConfigurable`, `MinosUiController`, `MinosNavigation`, les enveloppes d'action (`MinosEditorActions`, `MinosM21Actions`), `MinosSettingsState`, `MinosProjectService` (lecture PSI) et `MinosRegistryNotice` (appel de la plateforme). Écart de forme : la normalisation de l'exécutable rogne désormais aussi les espaces d'une valeur chargée (elle ne le faisait que pour une valeur saisie).
+
 ## Decisions
 
 ### D1. Mesure par le greffon JaCoCo de Gradle
 
 Greffon `jacoco` (fourni par Gradle, aucun greffon tiers), version de l'outil alignée sur celle du reactor ; rapport XML et HTML produit après `test`. La tâche de rapport s'ajoute à la commande existante du workflow, sur les deux jobs. Le rapport est publié par l'envoi d'artefacts existant.
 
-### D2. Plancher dans le build du plugin — **décision en attente du propriétaire**
+### D2. Plancher dans le build du plugin — **recommandation retenue par le propriétaire le 2026-10-15** (planchers Linux : plugin 0,33 / 0,33, `protocol/` 0,47 / 0,39)
 
 Recommandation : règle de vérification JaCoCo dans `build.gradle.kts` (lignes et branches du plugin entier, plus un plancher propre à `protocol/`, qui porte le lancement de processus), valeur = mesure de la tâche 1.1 moins 2 points, exécutée par le job Linux ; l'échec remonte par `IntelliJ plugin (gate)`. Alternatives : (a) rapport publié sans seuil — ne ferme pas le constat ; (b) seuil lu par `scripts/quality/check-jacoco.py` — ce gate tourne dans `Verify`, où le plugin n'est pas construit : il faudrait le rejouer dans un second job, contre `check-single-execution.py`.
 
@@ -50,7 +58,7 @@ Recommandation : règle de vérification JaCoCo dans `build.gradle.kts` (lignes 
 
 Le plancher global est jugé sur le job Linux. Le job Windows publie son rapport ; un plancher de classe pour `MinosStrongProcessLauncher` y est ajouté seulement si la mesure 1.1 montre une couverture stable. Aucun plancher n'est présenté comme tenu sur un système où il n'est pas évalué.
 
-### D4. Extraction, pas de fixture de plateforme — **décision en attente du propriétaire**
+### D4. Extraction, pas de fixture de plateforme — **recommandation retenue par le propriétaire le 2026-10-15**
 
 Recommandation : garder la règle. Sont extraits vers des classes sans type `com.intellij.*`, testées en JUnit simple : le choix du symbole candidat et son score (`MinosProjectService`), le texte de la notice de registre, et ce que la tâche 1.3 relèvera de logique indépendante de l'IDE dans `MinosM21Actions`, `MinosEditorActions` et `MinosSettingsState` (ces trois classes n'ont pas été lues en détail pendant l'analyse). Restent sans test unitaire, **nommément** : `MinosToolWindowPanel`, `MinosToolWindowFactory`, `MinosSettingsConfigurable`, `MinosUiController`, `MinosNavigation` et les enveloppes d'action. Alternative : autoriser `BasePlatformTestCase` pour la fenêtre d'outils, ce qui amende la règle des tests et allonge le job du plugin.
 

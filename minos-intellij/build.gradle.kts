@@ -14,6 +14,8 @@ buildscript {
 
 plugins {
     java
+    // AUD-TST-05: the coverage of the plugin is measured by Gradle's own JaCoCo plugin (no third-party plugin).
+    jacoco
     id("org.jetbrains.intellij.platform") version "2.19.0"
     // Audit only (MINOS-AUD-H09, docs/quality/code-audit.md): their tasks run when called by name, never in
     // `test buildPlugin`. Versions and settings mirror the reactor's audit profiles. Dependency-Check is left out
@@ -96,7 +98,55 @@ tasks {
     }
     test {
         useJUnitPlatform()
+        // The IDE's class loaders define the plugin classes without a code source location, which the JaCoCo agent
+        // skips by default: count them, and leave the JDK internals out.
+        extensions.configure<JacocoTaskExtension> {
+            isIncludeNoLocationClasses = true
+            excludes = listOf("jdk.internal.*")
+        }
     }
+    // AUD-TST-05: XML (for the gates and the CI artifacts) and HTML report of the plugin's own classes.
+    jacocoTestReport {
+        dependsOn(test)
+        reports {
+            xml.required = true
+            html.required = true
+        }
+        // The tests run against the classes the IntelliJ Platform Gradle Plugin rewrites (instrumentCode, @NotNull
+        // checks): the report reads those, or JaCoCo would match no execution data and report everything at 0.
+        dependsOn("instrumentCode")
+        classDirectories.setFrom(layout.buildDirectory.dir("instrumented/instrumentCode").map {
+            fileTree(it) { include("com/minos/intellij/**") }
+        })
+    }
+    // AUD-TST-05: an erosion of the plugin coverage fails the build, judged on Linux (the job of IntelliJ plugin
+    // (gate)); the Windows job publishes its report, where the strong process launcher also runs (decision D3).
+    jacocoTestCoverageVerification {
+        dependsOn(jacocoTestReport)
+        executionData.setFrom(jacocoTestReport.get().executionData)
+        classDirectories.setFrom(jacocoTestReport.get().classDirectories)
+        // Measured on Linux (WSL Ubuntu, JDK 21) on 2026-10-15: plugin line 637/1776 (0.359), branch 336/940 (0.357);
+        // protocol/ line 459/922 (0.498), branch 238/568 (0.419). Windows measures more (0.390 / 0.381, protocol/
+        // 0.557 / 0.458: the strong process launcher runs there). Floor = Linux measure minus 2 points, raised with the
+        // coverage, never lowered without a reason written in docs/audit/2026-10-10/SUIVI.md.
+        violationRules {
+            rule {
+                limit { counter = "LINE"; minimum = "0.33".toBigDecimal() }
+                limit { counter = "BRANCH"; minimum = "0.33".toBigDecimal() }
+            }
+            rule {
+                element = "PACKAGE"
+                includes = listOf("com.minos.intellij.protocol")
+                limit { counter = "LINE"; minimum = "0.47".toBigDecimal() }
+                limit { counter = "BRANCH"; minimum = "0.39".toBigDecimal() }
+            }
+        }
+    }
+}
+
+jacoco {
+    // The version of the Maven reactor (pom.xml, jacoco.version).
+    toolVersion = "0.8.15"
 }
 
 spotbugs {
