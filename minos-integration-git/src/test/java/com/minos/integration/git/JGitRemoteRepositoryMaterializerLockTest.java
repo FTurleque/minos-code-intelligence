@@ -1,5 +1,6 @@
 package com.minos.integration.git;
 
+import com.minos.io.BoundedFileLease;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;
@@ -23,16 +24,19 @@ import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.Optional;
 import java.util.TimeZone;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /** The materialization lock: bounded, fail closed, owner-only, never through a link. */
 class JGitRemoteRepositoryMaterializerLockTest {
@@ -68,8 +72,16 @@ class JGitRemoteRepositoryMaterializerLockTest {
         ExecutorService pool = Executors.newSingleThreadExecutor();
         try (FileChannel holder = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
             FileLock held = holder.lock();
-            Future<RemoteMaterialization> waiting = pool.submit(() -> materializer.materialize(request(commit)));
-            Thread.sleep(300);
+            AtomicReference<Thread> caller = new AtomicReference<>();
+            CountDownLatch started = new CountDownLatch(1);
+            Future<RemoteMaterialization> waiting = pool.submit(() -> {
+                caller.set(Thread.currentThread());
+                started.countDown();
+                return materializer.materialize(request(commit));
+            });
+            assertTrue(started.await(10, TimeUnit.SECONDS));
+            // The materialization is observed retrying the held file lock, not assumed blocked after a delay.
+            awaitWaitingForTheFileLease(caller.get(), waiting, Duration.ofSeconds(10));
             assertFalse(waiting.isDone(), "the materialization waits for the holder");
             held.release();
             materializer.release(waiting.get(30, TimeUnit.SECONDS));
@@ -129,6 +141,30 @@ class JGitRemoteRepositoryMaterializerLockTest {
         } finally {
             materializer.release(materialization);
         }
+    }
+
+    /**
+     * Waits until {@code caller} is parked (waiting or timed waiting) in the bounded file lease, which is where
+     * a lock acquisition waits; fails if the call completes first or when the deadline expires.
+     */
+    private static void awaitWaitingForTheFileLease(Thread caller, Future<?> call, Duration timeout) {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (!parkedInTheFileLease(caller)) {
+            if (call.isDone()) fail("the materialization completed before it was observed waiting for the lock");
+            if (System.nanoTime() - deadline >= 0L) {
+                fail("the materialization was not observed waiting for the lock within " + timeout);
+            }
+            Thread.onSpinWait();
+        }
+    }
+
+    private static boolean parkedInTheFileLease(Thread thread) {
+        Thread.State state = thread.getState();
+        if (state != Thread.State.WAITING && state != Thread.State.TIMED_WAITING) return false;
+        for (StackTraceElement frame : thread.getStackTrace()) {
+            if (frame.getClassName().equals(BoundedFileLease.class.getName())) return true;
+        }
+        return false;
     }
 
     private static Path onlyLockFile(Path home) throws IOException {

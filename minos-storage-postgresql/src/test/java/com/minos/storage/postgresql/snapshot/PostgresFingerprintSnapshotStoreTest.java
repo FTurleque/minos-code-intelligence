@@ -8,6 +8,8 @@ import com.minos.incremental.ProjectFingerprintSnapshot;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,7 +41,28 @@ class PostgresFingerprintSnapshotStoreTest extends PostgresTestSupport {
         ProjectFingerprintSnapshot snapshot = fingerprint(projectId, "snap-1");
 
         store.publish(projectId, "snap-1", snapshot.fingerprint());
-        store.publish(projectId, "snap-1", snapshot.fingerprint());
+        ProjectFingerprintSnapshot second = store.publish(projectId, "snap-1", snapshot.fingerprint());
+
+        // AUD-TST-09: the second publication is re-read, not merely survived.
+        assertEquals(snapshot, second);
+        assertEquals(1L, rowCount("fingerprint_snapshots", projectId), "one stored fingerprint row");
+        PostgresFingerprintSnapshotStore reloaded = new PostgresFingerprintSnapshotStore(connections, new PostgresJsonCodec());
+        assertEquals(Optional.of(snapshot), reloaded.load(projectId, "snap-1"));
+        reloaded.promote(projectId, "snap-1");
+        assertEquals(1L, rowCount("fingerprint_active", projectId), "one active fingerprint row");
+        assertEquals(Optional.of(snapshot), reloaded.loadActive(projectId));
+    }
+
+    private long rowCount(String table, UUID projectId) throws Exception {
+        return connections.withConnection(c -> {
+            try (PreparedStatement s = c.prepareStatement("SELECT count(*) FROM " + table + " WHERE project_id=?")) {
+                s.setObject(1, projectId);
+                try (ResultSet result = s.executeQuery()) {
+                    result.next();
+                    return result.getLong(1);
+                }
+            }
+        });
     }
 
     @Test

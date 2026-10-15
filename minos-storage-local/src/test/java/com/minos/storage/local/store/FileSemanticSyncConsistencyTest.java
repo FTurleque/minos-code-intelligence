@@ -5,6 +5,7 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.semantic.StaleSemanticSyncException;
+import com.minos.testsupport.ParkedThreads;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -12,6 +13,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -261,8 +263,8 @@ class FileSemanticSyncConsistencyTest {
             syncThread.start();
 
             assertTrue(attempted.await(5, TimeUnit.SECONDS));
-            // Give the thread a moment to reach channel.lock() and block
-            Thread.sleep(150);
+            // The thread is observed retrying the file lock held by the other JVM, not assumed blocked after a delay.
+            ParkedThreads.awaitParkedIn(syncThread, "com.minos.io.BoundedFileLease", Duration.ofSeconds(5));
             assertFalse(commitSucceeded.get(),
                     "replaceConditionally must be blocked while subprocess holds the cross-JVM file lock");
 
