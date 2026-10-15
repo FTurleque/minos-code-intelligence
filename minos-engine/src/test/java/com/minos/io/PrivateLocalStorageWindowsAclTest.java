@@ -366,6 +366,58 @@ class PrivateLocalStorageWindowsAclTest {
         }
     }
 
+    // MINOS-AUD-H23: a pre-existing directory is never handed to another account. The profile is a temporary directory
+    // passed as user.home, and "another account" is the owner of the Windows directory passed as the current user:
+    // the real profile is never touched.
+
+    @Test
+    void aMinosHomeOnTheProfileOrOneOfItsParentsIsRefusedAndItsAclIsLeftAlone() throws Exception {
+        Path profile = Files.createDirectories(temporary.resolve("Users").resolve("someone"));
+        UserPrincipal me = Files.getOwner(profile);
+        for (Path refused : List.of(profile, profile.getParent())) {
+            List<AclEntry> before = acl(refused);
+
+            IOException refusal = assertThrows(IOException.class,
+                    () -> PrivateLocalStorage.ensurePrivateDirectory(refused, me, profile));
+
+            assertTrue(refusal.getMessage().contains("dedicated to MINOS"), refusal.getMessage());
+            assertFalse(refusal.getMessage().contains(temporary.toString()), "no path in the message");
+            assertEquals(before, acl(refused), "a refused directory keeps its DACL");
+        }
+        PrivateLocalStorage.ensurePrivateDirectory(profile.resolve(".minos"), me, profile);
+    }
+
+    @Test
+    void aPreExistingDirectoryOfAnotherAccountIsRefusedAndItsAclIsLeftAlone() throws Exception {
+        Path shared = Files.createDirectories(temporary.resolve("shared"));
+        List<AclEntry> before = acl(shared);
+        UserPrincipal someoneElse = Files.getOwner(Path.of(System.getenv("SystemRoot")));
+
+        IOException refusal = assertThrows(IOException.class,
+                () -> PrivateLocalStorage.ensurePrivateDirectory(shared, someoneElse, temporary.resolve("profile")));
+
+        assertTrue(refusal.getMessage().contains("belongs to another account"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(temporary.toString()), "no path in the message");
+        assertEquals(before, acl(shared), "a refused directory keeps its DACL");
+    }
+
+    @Test
+    void aPreExistingDirectoryOfTheUserIsStillMadePrivate() throws Exception {
+        Path mine = Files.createDirectories(temporary.resolve("mine"));
+        UserPrincipal me = Files.getOwner(mine);
+
+        PrivateLocalStorage.ensurePrivateDirectory(mine, me, temporary.resolve("profile"));
+
+        assertTrue(acl(mine).stream().allMatch(entry -> entry.type() != AclEntryType.ALLOW
+                || entry.principal().equals(me)), "only the owner is allowed");
+        assertTrue(isDaclProtected(mine));
+    }
+
+    private static List<AclEntry> acl(Path path) throws IOException {
+        return Files.getFileAttributeView(path, AclFileAttributeView.class, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                .getAcl();
+    }
+
     private static String currentUserSid() throws Exception {
         Process process = new ProcessBuilder(
                 Path.of(System.getenv("SystemRoot"), "System32", "whoami.exe").toString(),
