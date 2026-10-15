@@ -147,6 +147,13 @@ jobs:
       - name: CI wiring gate (required checks resolve to jobs that can report; every gate self-test runs here)
         run: python scripts/quality/check-ci-wiring.py
 
+      # AUD-QUA-01: the plugin's copy of the Job Object launcher against the one the engine assembles.
+      - name: Job Object launcher parity gate
+        run: python scripts/quality/check-job-object-launcher-parity.py
+
+      - name: Job Object launcher parity gate self-test
+        run: python scripts/quality/test_check_job_object_launcher_parity.py -v
+
       - name: CI wiring, ruleset comparison and plugin gate self-tests
         run: |
           python scripts/quality/test_check_ci_wiring.py -v
