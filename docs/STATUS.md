@@ -48,7 +48,7 @@ Limites : aucun contrôle de CI n'exécute un provider géré ; les providers on
 
 ## Audit 2026-10-10 — sprint 4 (2026-10-15)
 
-Les huit changements du sprint 4 (« chemin de requête : ne plus relire le snapshot », neuf constats) sont **fusionnés dans `develop`** (PR #442, #444, #445, #447, #448, #456, #457, #458) ; six sont archivés, deux restent ouverts sur une mesure :
+Les huit changements du sprint 4 (« chemin de requête : ne plus relire le snapshot », neuf constats) sont **fusionnés dans `develop`** (PR #442, #444, #445, #447, #448, #456, #457, #458) et **archivés** (les deux derniers le 2026-10-15, après leur mesure sur un index réel) :
 
 - **Cache des vues de requête** : les chaînes sont dédoublonnées au décodage, ce qui divise par deux le tas retenu par une vue ; le poids estimé d'une vue passe à deux fois sa taille persistée, de sorte qu'un gros projet tient dans le cache au lieu d'être relu à chaque requête. Un snapshot est décodé et authentifié en un seul parcours ; rien de décodé n'est publié si l'empreinte diffère.
 - **Requête hybride** : une requête prête lit l'identité du snapshot actif et les métadonnées de l'index sans charger les vecteurs ni calculer la taille de l'index ; la garde `SEMANTIC_INDEX_CHANGED_DURING_QUERY` est conservée.
@@ -57,7 +57,7 @@ Les huit changements du sprint 4 (« chemin de requête : ne plus relire le snap
 - **Graphe de programme Java** : sans empreinte exacte des sources, la clé de cache est hachée une fois puis réutilisée cinq secondes ; la limitation `PROGRAM_GRAPH_REFLECTS_DISK_AS_OF_AT_MOST_5_SECONDS_AGO_NOT_INDEXED_STATE` le déclare.
 - **PostgreSQL** : une connexion du pool n'est validée qu'à l'emprunt après 30 s de repos ; une coupure sur la première instruction est rejouée une fois sur une connexion neuve, jamais après une écriture.
 
-Limites : les gains sont prouvés par des décomptes en test et des mesures sur corpus synthétique ou sur la seule construction des documents ; la mesure du cache des vues sur un index réel de ce dépôt (AUD-PERF-03, tâche 2.4) n'a pas pu être faite sur le poste de développement et reste ouverte, comme la mesure de la synchronisation sémantique sur un index réel avec provider d'embeddings (AUD-PERF-06, tâche 3.3). Aucune durée de requête n'est annoncée. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
+Mesures sur un index réel de ce dépôt (2026-10-15, produit sous Linux) : sur le code de production du reactor (snapshot de 114 Mo), une seconde lecture de la même vue passe de 2 chargements complets et environ 0,9 s à 1 chargement et environ 0,5 ms ; sur un index sémantique réel de 25 210 documents (`embeddinggemma`, PostgreSQL), synchroniser après une ligne modifiée passe de 10,4–10,9 s à 3,2–4,2 s et de 117–218 Mo à 33–55 Mo de journal, et une synchronisation sans changement de ≈ 11 s à ≈ 50 ms. Limites relevées par ces mesures : le reactor complet, tests compris, n'est pas indexable (snapshot de 300 Mo au-delà de la limite de 256 Mio) ; sans retouche, l'indexation de ce dépôt ne retient que `minos-app` (build de `minos-app` dans le `target/` racine) ; le code de production complet dépasse le budget de vecteurs de la synchronisation sémantique. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
 
 ## État produit
 
