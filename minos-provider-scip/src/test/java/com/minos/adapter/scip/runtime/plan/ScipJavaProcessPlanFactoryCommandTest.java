@@ -22,11 +22,47 @@ class ScipJavaProcessPlanFactoryCommandTest {
     void createsStandaloneScipJavaCommandWithoutCoursierRuntimeDependency() {
         Path launcher = temporaryDirectory.resolve("scip-java");
         Path output = temporaryDirectory.resolve("run").resolve("index.scip");
+        Path targetRoot = ScipJavaProcessPlanFactory.targetRoot(output);
 
         assertEquals(List.of(
                 launcher.toAbsolutePath().normalize().toString(),
-                "index", "--output", output.toAbsolutePath().normalize().toString()
-        ), ScipJavaProcessPlanFactory.standaloneCommand(launcher, output));
+                "index", "--output", output.toAbsolutePath().normalize().toString(),
+                "--targetroot", targetRoot.toAbsolutePath().normalize().toString()
+        ), ScipJavaProcessPlanFactory.standaloneCommand(launcher, output, targetRoot));
+    }
+
+    /**
+     * Sans {@code --targetroot}, scip-java écrit ses semanticdb dans {@code target/scip-targetroot} à la racine
+     * du projet : un module qui construit dans ce {@code target/} (comme {@code minos-app}) les efface par son
+     * {@code clean}, et l'index ne garde que ce module.
+     */
+    @Test
+    void theTargetRootIsInTheRunBesideTheArtifactAndOutsideTheWorkspace() {
+        Path run = temporaryDirectory.resolve("run");
+        Path output = run.resolve("index.scip");
+        Path workspace = run.resolve("workspace");
+
+        Path targetRoot = ScipJavaProcessPlanFactory.targetRoot(output);
+
+        assertEquals(run.resolve("scip-java-targetroot").toAbsolutePath().normalize(), targetRoot);
+        assertTrue(targetRoot.isAbsolute());
+        assertFalse(targetRoot.startsWith(workspace.toAbsolutePath().normalize()),
+                "the project's own clean must not be able to delete scip-java's intermediate files");
+    }
+
+    @Test
+    void theWindowsRunnerAlsoGivesScipJavaATargetRootForJava() throws IOException {
+        String runner;
+        try (var stream = ScipJavaProcessPlanFactoryCommandTest.class.getResourceAsStream(
+                "/com/minos/adapter/scip/runtime/scip-java-windows-runner.ps1")) {
+            runner = new String(java.util.Objects.requireNonNull(stream, "runner resource").readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        }
+        String javaBranch = runner.substring(runner.indexOf("        else {", runner.indexOf("if ($Language -eq 'KOTLIN')")));
+        javaBranch = javaBranch.substring(0, javaBranch.indexOf("$exit = $LASTEXITCODE"));
+
+        assertTrue(javaBranch.contains("ScipJava index"), javaBranch);
+        assertTrue(javaBranch.contains("--targetroot $targetRoot"), javaBranch);
     }
 
     @Test
