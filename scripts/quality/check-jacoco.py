@@ -11,6 +11,45 @@ import xml.etree.ElementTree as ET
 
 
 SCOPES = {
+    # AUD-TST-01: the whole product, floored per system. com/minos/app/ is left out by name: the aggregate report does
+    # not carry minos-app's own tests (m29-backend-routing reads minos-app's report instead). Measured on the
+    # pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system: Linux line 0.865 / branch 0.716, Windows line 0.834 / branch 0.698 (classes of the other system at 0,
+    # PostgreSQL skipped on Windows). Floor = measure minus 2 points, raised at each sprint closure, never lowered
+    # without a reason written in docs/audit/2026-10-10/SUIVI.md.
+    "global": {
+        "prefixes": ("com/minos/",),
+        "exclusions": ("com/minos/app/",),
+        "line": {"linux": 0.84, "windows": 0.81},
+        "branch": {"linux": 0.69, "windows": 0.67},
+    },
+    # AUD-TST-02: the binary codec and the persisted state of the local store, measured identically on both systems
+    # (pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system): line 0.912, branch 0.758. Floor = measure minus 2 points.
+    "storage-codec-and-state": {
+        "prefixes": (
+            "com/minos/storage/local/store/SnapshotBinaryCodecSupport",
+            "com/minos/storage/local/orchestration/FileIndexStateStore",
+            "com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore",
+            "com/minos/storage/local/registry/LocalProjectRegistry",
+        ),
+        "line": 0.89, "branch": 0.73,
+    },
+    # AUD-TST-02: the confined I/O primitives (34 classes with their inner ones), Linux line 0.801 / branch 0.701,
+    # Windows 0.814 / 0.717 (pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system). Floor = the lower measure minus 2 points. LeaseDeadline (0.812 / 0.750 on
+    # Windows before it had a test of its own) is floored by class: 32/32 lines, 15/16 branches with LeaseDeadlineTest
+    # alone on Windows; floor = measure minus about 5 points.
+    "confined-io-primitives": {
+        "prefixes": ("com/minos/io/", "com/minos/io/LeaseDeadline"),
+        "line": 0.78, "branch": 0.68,
+        "prefixMinimums": {
+            "com/minos/io/LeaseDeadline": {"line": 0.95, "branch": 0.85},
+        },
+    },
+    # AUD-TST-02: the retention of run directories (common code), Linux 0.913 / 0.843, Windows 0.898 / 0.843
+    # (pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system). Floor = the lower measure minus 2 points.
+    "run-directory-retention": {
+        "prefixes": ("com/minos/runtime/local/workspace/RunDirectoryRetention",),
+        "line": 0.87, "branch": 0.82,
+    },
     "domain-invariants": {"prefixes": ("com/minos/domain/",), "line": 0.80, "branch": 0.60},
     "persistence-cache-indexes": {
         "prefixes": (
@@ -68,10 +107,14 @@ SCOPES = {
             "com/minos/adapter/scip/runtime/plan/ScipClangProcessPlanFactory", "com/minos/adapter/scip/runtime/plan/ScipDotnetProcessPlanFactory",
             "com/minos/adapter/scip/runtime/plan/ScipGoProcessPlanFactory", "com/minos/adapter/scip/runtime/plan/RustAnalyzerScipProcessPlanFactory",
             "com/minos/adapter/scip/runtime/install/StrongOwnedProcessExecutors",
+            # AUD-TST-02: Linux 0.711 / 0.572, Windows 0.668 / 0.548 (pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system); class floor = the lower measure
+            # minus about 5 points.
+            "com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager",
         ),
         "line": 0.50,
         "branch": 0.28,
         "prefixMinimums": {
+            "com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager": {"line": 0.61, "branch": 0.49},
             "com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager": {"line": 0.28, "branch": 0.20},
             "com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35},
             "com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15},
@@ -123,10 +166,17 @@ SCOPES = {
         "prefixes": (
             "com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend",
             "com/minos/runtime/local/sandbox/LinuxCgroupJob",
+            # AUD-TST-02: the cgroup v2 ownership of a process tree is Linux code.
+            "com/minos/runtime/local/sandbox/CgroupJobOwnership",
         ),
         "platform": "linux",
         "line": 0.55,
         "branch": 0.35,
+        # Measured on Linux (pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system): line 175/180 (0.972), branch 89/96 (0.927). Floor = measure minus about
+        # 5 points, so the class cannot hide behind its siblings.
+        "prefixMinimums": {
+            "com/minos/runtime/local/sandbox/CgroupJobOwnership": {"line": 0.92, "branch": 0.87},
+        },
     },
     "provider-sandbox-windows": {
         "prefixes": (
@@ -245,6 +295,13 @@ def load_classes(report: Path, cache: dict[Path, list[ET.Element]]) -> list[ET.E
             raise FileNotFoundError(report)
         cache[report] = ET.parse(report).getroot().findall(".//class")
     return cache[report]
+
+
+def floor_for(value: float | dict[str, float], platform: str) -> float | None:
+    """A floor written once for every system, or per system ({"linux": .., "windows": ..}); None when absent here."""
+    if isinstance(value, dict):
+        return float(value[platform]) if platform in value else None
+    return float(value)
 
 
 def current_platform() -> str:
@@ -419,12 +476,36 @@ def self_test() -> int:
     expect("unrecognised build directory is refused", isinstance(unknown, str) and "minos-x" in unknown
            and "/somewhere/else" in unknown, True)
 
+    # 12-16. floors per platform and named exclusions (AUD-TST-01).
+    here = current_platform()
+    elsewhere = "windows" if here != "windows" else "linux"
+    package = ("com/minos/selftest/",)
+    code, failed = run({"per-platform": {"prefixes": package, "line": {here: 0.60, elsewhere: 0.99},
+                                         "branch": {here: 0.55, elsewhere: 0.99}}})
+    expect("floor of the current platform met: exit", code, 0)
+    expect("floor of the current platform met: failures", failed, [])
+    code, failed = run({"per-platform": {"prefixes": package, "line": {here: 0.70, elsewhere: 0.10},
+                                         "branch": {here: 0.10, elsewhere: 0.10}}})
+    expect("measure under the floor of the current platform: exit", code, 1)
+    expect("measure under the floor of the current platform: failures", failed, ["per-platform"])
+    code, failed = run({"per-platform": {"prefixes": package, "line": {elsewhere: 0.10}, "branch": {elsewhere: 0.10}}})
+    expect("no floor for the current platform fails, never SKIPPED: exit", code, 1)
+    expect("no floor for the current platform fails, never SKIPPED: failures", failed, ["per-platform"])
+    code, failed = run({"excluding": {"prefixes": package, "exclusions": ("com/minos/selftest/Weak",),
+                                      "line": 0.85, "branch": 0.75}})
+    expect("named exclusion applied: exit", code, 0)
+    expect("named exclusion applied: failures", failed, [])
+    code, failed = run({"excluding": {"prefixes": package, "exclusions": ("com/minos/selftest/Gone",),
+                                      "line": 0.10, "branch": 0.10}})
+    expect("exclusion that matches no class: exit", code, 1)
+    expect("exclusion that matches no class: failures", failed, ["excluding"])
+
     if failures:
         print("MINOS JACOCO GATE SELF-TEST FAILED", file=sys.stderr)
         for failure in failures:
             print(f" - {failure}", file=sys.stderr)
         return 1
-    print("MINOS JACOCO GATE SELF-TEST SUCCESS (11 scenarios)")
+    print("MINOS JACOCO GATE SELF-TEST SUCCESS (16 scenarios)")
     return 0
 
 
@@ -481,7 +562,20 @@ def main() -> int:
             continue
 
         prefixes = tuple(config["prefixes"])
-        classes = [clazz for clazz in all_classes if clazz.attrib.get("name", "").startswith(prefixes)]
+        # AUD-TST-01: classes left out by name (e.g. com/minos/app/, whose own tests the aggregate report does not
+        # carry). Each exclusion must still designate a class of the scope, like a prefix.
+        exclusions = tuple(config.get("exclusions", ()))
+        dead_exclusions = sorted(
+            exclusion for exclusion in exclusions
+            if not any(clazz.attrib.get("name", "").startswith(exclusion) for clazz in all_classes
+                       if clazz.attrib.get("name", "").startswith(prefixes)))
+        if dead_exclusions:
+            failures.append(f"{name}: exclusion(s) match no class of the scope in {report}: {', '.join(dead_exclusions)}")
+            results["scopes"][name] = {"classes": 0, "report": str(report), "status": "FAIL",
+                                       "deadExclusions": dead_exclusions}
+            continue
+        classes = [clazz for clazz in all_classes if clazz.attrib.get("name", "").startswith(prefixes)
+                   and not clazz.attrib.get("name", "").startswith(exclusions)]
         if not classes:
             failures.append(f"{name}: no classes matched {prefixes} in {report}")
             results["scopes"][name] = {"classes": 0, "report": str(report), "status": "FAIL"}
@@ -508,8 +602,16 @@ def main() -> int:
         counters = counters_for(classes)
         line = ratio(*counters["LINE"])
         branch = ratio(*counters["BRANCH"])
-        line_min = float(config["line"])
-        branch_min = float(config["branch"])
+        line_min = floor_for(config["line"], platform)
+        branch_min = floor_for(config["branch"], platform)
+        if line_min is None or branch_min is None:
+            # A scope that floors each system separately and has no floor here fails: it is not skipped.
+            failures.append(f"{name}: no line/branch floor for platform {platform} (line={line:.3f}, "
+                            f"branch={branch:.3f})")
+            results["scopes"][name] = {"classes": len(classes), "report": str(report), "line": round(line, 6),
+                                       "branch": round(branch, 6), "status": "FAIL",
+                                       "reason": f"no floor for platform {platform}"}
+            continue
         passed = line >= line_min and branch >= branch_min
         if not passed:
             failures.append(f"{name}: line={line:.3f} (min {line_min:.3f}), branch={branch:.3f} (min {branch_min:.3f})")
@@ -548,6 +650,8 @@ def main() -> int:
         }
         if prefix_results:
             result["prefixes"] = prefix_results
+        if exclusions:
+            result["exclusions"] = list(exclusions)
         results["scopes"][name] = result
 
     output = Path(args.output)

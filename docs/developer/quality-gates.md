@@ -161,6 +161,8 @@ Chaque préfixe déclaré dans un scope doit désigner au moins une classe réel
 python scripts/quality/check-jacoco.py --self-test
 ```
 
+**Couverture globale et planchers par système (AUD-TST-01).** Le scope `global` borne tout `com/minos/` lu dans le rapport agrégé, avec un plancher par système (`"line": {"linux": …, "windows": …}`) : les classes propres à l'autre système y sont à 0 et PostgreSQL n'est exécuté que sous Linux, si bien qu'un chiffre unique serait trop bas pour protéger ou rouge sur un système. Un scope qui plancher par système et n'a pas de plancher pour le système courant **échoue** (il n'est pas sauté ; seuls `platform` et `--skip-scope` produisent `SKIPPED`). `com/minos/app/` en est exclu **nommément** (`exclusions`), parce que l'agrégat ne porte pas les tests de `minos-app` (`m29-backend-routing` lit le rapport du module) ; une exclusion qui ne désigne plus aucune classe du scope échoue, comme un préfixe mort, et elle figure dans `jacoco-gate.json`. **Cliquet** : un plancher = mesure de la CI moins 2 points, par système, daté en commentaire ; il se relève à chaque clôture de sprint et ne s'abaisse jamais sans raison écrite dans `docs/audit/2026-10-10/SUIVI.md`. Les planchers de classe (`prefixMinimums`) suivent la règle « mesure moins environ 5 points ». Scopes du cœur ajoutés le 2026-10-15 : `storage-codec-and-state`, `confined-io-primitives` (plancher de classe pour `LeaseDeadline`), `run-directory-retention` ; `CgroupJobOwnership` dans `provider-sandbox-linux`, `ManagedScipProviderRuntimeManager` dans `m24-polyglot-provider-platform`, chacune avec un plancher de classe.
+
 Le résultat machine-readable est écrit par défaut dans :
 
 ```text
