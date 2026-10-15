@@ -24,9 +24,14 @@ jobs:
       # with the product are prefixed with the name of their tool, so --recursive does not see them: each is
       # passed explicitly, parsed as a package-lock.json (AUD-DEP-03). scripts/quality/check-ci-wiring.py fails
       # when a lockfile under a src/main/resources directory is missing from this list.
+      # AUD-DEP-04: minos-intellij/gradle.lockfile (what the plugin ships and tests with) is scanned. The lock of the
+      # plugin's build script classpath (buildscript-gradle.lockfile: the IntelliJ Platform, SpotBugs and PIT Gradle
+      # plugins) is excluded by name: those build tools are not shipped, and four of their components carry advisories
+      # that only a raise of the Gradle plugins can clear (docs/developer/supply-chain.md).
       scan-args: |-
         --recursive
         --experimental-exclude=g:**/fixtures/**
+        --experimental-exclude=g:**/minos-intellij/buildscript-gradle.lockfile
         --lockfile=package-lock.json:minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/scip-python-package-lock.json
         --lockfile=package-lock.json:minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/scip-typescript-package-lock.json
         ./
