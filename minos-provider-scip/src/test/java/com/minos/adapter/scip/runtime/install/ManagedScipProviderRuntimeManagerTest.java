@@ -21,7 +21,7 @@ class ManagedScipProviderRuntimeManagerTest {
     Path temporaryDirectory;
 
     @Test
-    void fetchesPinnedScipJavaWithoutLaunchingIt() throws IOException {
+    void fetchesPinnedScipJavaWithoutLaunchingIt() {
         Path coursier = temporaryDirectory.resolve("cs.exe");
 
         List<String> command = ManagedScipProviderRuntimeManager.scipJavaFetchCommand(coursier);
