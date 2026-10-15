@@ -71,6 +71,14 @@ Get-Content ".\MINOS-$Version-windows-x64-setup.exe.sha256"
 
 Les empreintes doivent être identiques. Ne pas exécuter un setup dont le hash ne correspond pas.
 
+Depuis la release qui suit le changement `attester-et-signer-la-release-windows`, chaque fichier d'une release porte aussi une **attestation de provenance** GitHub, vérifiable avec la CLI `gh` :
+
+```powershell
+gh attestation verify ".\MINOS-$Version-windows-x64-setup.exe" --repo FTurleque/minos-code-intelligence
+```
+
+Elle prouve que le fichier a été produit par le workflow de release de ce dépôt, au commit de la release. **Les installateurs et exécutables ne sont pas signés Authenticode** : Windows SmartScreen peut avertir au premier lancement ; l'empreinte et l'attestation sont les preuves d'origine disponibles.
+
 La release publie en plus la variante **lite** du ZIP (voir §2 bis) :
 
 ```text
