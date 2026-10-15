@@ -23,6 +23,8 @@ Le plugin ne lance plus le CLI sous une simple supervision PID. La frontière d'
 
 Le polling `ProcessHandle` reste actif uniquement comme défense en profondeur et protection PID-reuse.
 
+Sous Windows, le plugin réserve à leur propriétaire le dossier MINOS (`MINOS_HOME` des réglages, sinon `%USERPROFILE%\.minos`) et ses sous-dossiers `intellij\process-ownership`. Ce dossier doit donc être **dédié à MINOS** : le plugin refuse, sans rien modifier, le profil lui-même, un de ses dossiers parents, une racine de volume, ou un dossier qui existe déjà et appartient à un autre compte (message « … must be a directory dedicated to MINOS » ou « … already exists and belongs to another account »). Remède : choisir un `MINOS_HOME` dédié, ou reprendre la propriété du dossier. Avant cette garde, un `MINOS_HOME` posé sur le profil réduisait l'accès au profil à son propriétaire, Système, et rendait le poste inutilisable (incident MINOS-AUD-H23).
+
 ## Installation du plugin
 
 Artefact :

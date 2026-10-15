@@ -10,6 +10,15 @@ buildscript {
     configurations.classpath {
         resolutionStrategy.activateDependencyLocking()
     }
+    // AUD-DEP-04: the Gradle plugins below bring Jackson 2.21.4 and jsoup 1.22.2, both with published advisories
+    // (osv-scan). Not shipped by MINOS, but run by the build: raised to their first fixed versions until the plugins
+    // bring them. undertow-core has no fixed version: its exception is minos-intellij/osv-scanner.toml.
+    dependencies {
+        classpath(platform("com.fasterxml.jackson:jackson-bom:2.21.7"))
+        constraints {
+            classpath("org.jsoup:jsoup:1.23.2")
+        }
+    }
 }
 
 plugins {
