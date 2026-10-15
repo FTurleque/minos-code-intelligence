@@ -68,12 +68,12 @@ class LeaseDeadlineTest {
         IOException failure = null;
         int pauses = 0;
         // Each pause sleeps at most 50 ms: the budget is spent after a bounded number of them, and the last one fails
-        // instead of returning with nothing left.
+        // instead of returning with nothing left. The budget is not re-read after a pause that returned: a last pause can
+        // leave less than a millisecond, which may run out before the test reads it.
         while (failure == null && pauses < 100) {
             try {
                 deadline.pauseBeforeRetry("the cache lock");
                 pauses++;
-                assertTrue(deadline.remainingNanos() > 0L, "a pause returned although the budget was spent");
             } catch (IOException timedOut) {
                 failure = timedOut;
             }
