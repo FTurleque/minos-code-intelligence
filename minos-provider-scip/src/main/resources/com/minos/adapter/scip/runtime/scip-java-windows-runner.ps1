@@ -420,7 +420,10 @@ try {
                 --scip-config $config --targetroot $targetRoot --output $generated
         }
         else {
-            & $java -classpath "$patch;$classpath" org.scip_code.scip_java.ScipJava index
+            # Outside the project's own build tree: a module building into the root target/ would delete it in its clean.
+            $targetRoot = Join-Path $output 'scip-java-target'
+            Remove-Item -LiteralPath $targetRoot -Recurse -Force -ErrorAction SilentlyContinue
+            & $java -classpath "$patch;$classpath" org.scip_code.scip_java.ScipJava index --targetroot $targetRoot
         }
         $exit = $LASTEXITCODE
     }
