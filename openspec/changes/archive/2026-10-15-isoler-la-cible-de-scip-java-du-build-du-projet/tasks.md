@@ -14,4 +14,4 @@ Ordre dans chaque section : rouge, correction, preuve. Tout `-pl` s'accompagne d
 ## 3. Clôture
 
 - [x] 3.1 `docs/audit/2026-10-10/SUIVI.md` (constat 2 de la clôture du sprint 4 : corrigé) ; `docs/STATUS.md` si la limite y est citée. **Fait (2026-10-15)** : constat 2 marqué corrigé dans SUIVI ; phrase de limites de la section sprint 4 de STATUS mise à jour.
-- [ ] 3.2 `openspec validate --all --strict` ; archivage après fusion.
+- [x] 3.2 `openspec validate --all --strict` ; archivage après fusion. **Fait (2026-10-15)** : PR #462 fusionnée (`7cda51d4`), CI verte (dont `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, SonarCloud : 100 % de couverture du nouveau code, 0 problème) ; `openspec validate --all --strict` vert avant archivage.
