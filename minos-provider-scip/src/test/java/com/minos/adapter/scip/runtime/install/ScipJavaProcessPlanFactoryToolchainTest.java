@@ -104,10 +104,13 @@ class ScipJavaProcessPlanFactoryToolchainTest {
 
         assertNull(outcome.get("plan.failure"), outcome.get("plan.failure"));
         List<String> command = List.of(outcome.get("plan.command").split(" \\| "));
-        assertEquals(4, command.size(), command.toString());
+        assertEquals(6, command.size(), command.toString());
         assertTrue(command.get(0).endsWith("/scip-java"), command.get(0));
         assertEquals(List.of("index", "--output"), command.subList(1, 3));
         assertTrue(command.get(3).endsWith("index.scip"), command.get(3));
+        assertEquals("--targetroot", command.get(4));
+        assertEquals(run().resolve("scip-java-targetroot").toAbsolutePath().normalize().toString(), command.get(5),
+                "scip-java's intermediate files stay in the run, outside the staged copy");
         Path workspace = run().resolve("workspace");
         assertEquals(workspace.toRealPath(), Path.of(outcome.get("plan.workingDirectory")).toRealPath());
         assertTrue(Files.isRegularFile(workspace.resolve("pom.xml")), "the provider works on a staged copy");
@@ -125,13 +128,15 @@ class ScipJavaProcessPlanFactoryToolchainTest {
 
         assertNull(outcome.get("plan.failure"), outcome.get("plan.failure"));
         List<String> command = List.of(outcome.get("plan.command").split(" \\| "));
-        assertEquals(6, command.size(), command.toString());
+        assertEquals(8, command.size(), command.toString());
         assertEquals(Path.of(System.getProperty("java.home"), "bin", "java").toAbsolutePath().normalize().toString(),
                 command.get(0));
         assertEquals("-jar", command.get(1));
         assertEquals(listing.resolveSibling(ScipJavaClasspath.LAUNCHER).toString(), command.get(2));
         assertEquals(List.of("index", "--output"), command.subList(3, 5));
         assertTrue(command.get(5).endsWith("index.scip"), command.get(5));
+        assertEquals("--targetroot", command.get(6));
+        assertTrue(command.get(7).endsWith("scip-java-targetroot"), command.get(7));
         assertFalse(command.contains(coursier.toString()), "nothing is resolved by coordinate at index time");
         assertFalse(command.contains("launch"));
         assertTrue(Files.isRegularFile(run().resolve("workspace").resolve("pom.xml")));
