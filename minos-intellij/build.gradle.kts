@@ -137,7 +137,8 @@ tasks {
         // Measured on Linux (WSL Ubuntu, JDK 21) on 2026-10-15: plugin line 637/1776 (0.359), branch 336/940 (0.357);
         // protocol/ line 459/922 (0.498), branch 238/568 (0.419). Windows measures more (0.390 / 0.381, protocol/
         // 0.557 / 0.458: the strong process launcher runs there). Floor = Linux measure minus 2 points, rounded down to the
-        // hundredth (0.339 -> 0.33, 0.337 -> 0.33, 0.478 -> 0.47, 0.399 -> 0.39), raised with the coverage, never lowered without a reason written in docs/audit/2026-10-10/SUIVI.md.
+        // hundredth (0.339 -> 0.33, 0.337 -> 0.33, 0.478 -> 0.47, 0.399 -> 0.39), raised with the coverage, never
+        // lowered without a reason written in docs/audit/2026-10-10/SUIVI.md.
         violationRules {
             rule {
                 limit { counter = "LINE"; minimum = "0.33".toBigDecimal() }
