@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /** Resolves builder overrides and production defaults into one immutable application composition. */
 final class MinosApplicationAssembler {
@@ -160,16 +161,21 @@ final class MinosApplicationAssembler {
                 hostedStore,
                 hostedIdentities,
                 builder.hostedTenantKeyProvider,
-                (projectId, snapshotId) -> {
-                    var active = snapshots.loadActiveKnowledge(projectId)
-                            .orElseThrow(() -> new IOException(
-                                    "hosted project has no active snapshot: " + projectId));
-                    if (!snapshotId.equals(active.snapshotId())) {
-                        throw new IOException(
-                                "hosted binding requires the exact active snapshot: " + snapshotId);
-                    }
-                },
+                (projectId, snapshotId) -> requireExactActiveSnapshot(snapshots, projectId, snapshotId),
                 builder.hostedClock));
+    }
+
+    /**
+     * A hosted binding names the exact active snapshot. Only its identity is compared: the snapshot is not loaded
+     * here, and the queries that follow load and verify it.
+     */
+    static void requireExactActiveSnapshot(CodeKnowledgeSnapshotStore snapshots, UUID projectId, String snapshotId)
+            throws IOException {
+        String active = snapshots.activeSnapshotId(projectId)
+                .orElseThrow(() -> new IOException("hosted project has no active snapshot: " + projectId));
+        if (!snapshotId.equals(active)) {
+            throw new IOException("hosted binding requires the exact active snapshot: " + snapshotId);
+        }
     }
 
     private static void closeBackendOnFailure(StorageBackend backend, Exception original) {

@@ -11,7 +11,6 @@ import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
@@ -177,9 +176,10 @@ public final class ProjectInspectionService {
     ) throws IOException {
         // A status read takes no lifecycle lease and writes nothing: it reports the last state published
         // by the indexing run, brought in line with the authoritative snapshot in memory only (lot 2, P1).
-        ProjectIndexStateReconciler.Reconciliation consistency = reconciler.observeStatus(project.id());
-        Optional<CodeKnowledgeSnapshot> active = consistency.activeSnapshot();
-        String activeSnapshotId = active.map(CodeKnowledgeSnapshot::snapshotId).orElse(null);
+        // Only the identity of the active snapshot is read: the snapshot itself is never loaded.
+        ProjectIndexStateReconciler.ReconciledState consistency = reconciler.observeStatusState(project.id());
+        Optional<String> active = consistency.activeSnapshotId();
+        String activeSnapshotId = active.orElse(null);
         Optional<ProjectIndexState> persistedState = consistency.projectState();
         String indexState = persistedState
                 .map(state -> state.availability().name())
