@@ -249,6 +249,7 @@ class FileSemanticSyncConsistencyTest {
 
             // Our JVM tries replaceConditionally → channel.lock() must block on the subprocess's file lock
             AtomicBoolean commitSucceeded = new AtomicBoolean(false);
+            AtomicReference<Throwable> syncError = new AtomicReference<>();
             CountDownLatch attempted = new CountDownLatch(1);
 
             Thread syncThread = new Thread(() -> {
@@ -257,7 +258,9 @@ class FileSemanticSyncConsistencyTest {
                     store.replaceConditionally(snap(projectId, "snap-1"), "snap-1",
                             () -> Optional.of("snap-1"));
                     commitSucceeded.set(true);
-                } catch (IOException ignored) {}
+                } catch (IOException e) {
+                    syncError.set(e);
+                }
             });
             syncThread.start();
 
@@ -275,7 +278,7 @@ class FileSemanticSyncConsistencyTest {
             // Now our sync thread should unblock and complete
             syncThread.join(10_000);
             assertTrue(commitSucceeded.get(),
-                    "replaceConditionally must succeed after cross-JVM file lock is released");
+                    "replaceConditionally must succeed after cross-JVM file lock is released: " + syncError.get());
         } finally {
             subprocess.destroyForcibly();
         }
