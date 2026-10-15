@@ -16,7 +16,7 @@ Sur un système de fichiers à ACL (Windows), avant de rendre privé un dossier 
 
 Un dossier créé par l'appel, et les systèmes POSIX, gardent leur comportement : sous POSIX, un non-propriétaire ne peut déjà pas changer les droits d'un dossier, et le conteneur (dossier MINOS en lecture seule pour le plan de requête, parent non inscriptible) ne doit rien écrire de plus.
 
-Le probe d'identité, aujourd'hui créé dans le dossier parent, se replie sur le dossier temporaire du système quand le parent n'est pas inscriptible.
+Le probe d'identité, aujourd'hui créé dans le dossier parent, se replie sur le dossier vérifié lui-même quand le parent n'est pas inscriptible (jamais sur un dossier inscriptible par tous).
 
 ## Capabilities
 

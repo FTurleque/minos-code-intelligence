@@ -26,9 +26,9 @@ La garde s'applique quand le système de fichiers n'est pas POSIX (Windows). Sou
 
 `verifyOwnedByCurrentUser` est appelé sur un dossier préexistant avant `hardenDirectory`. Le message ne contient aucun chemin (règle des sorties) et dit de reprendre la propriété ou de choisir un autre `MINOS_HOME`.
 
-### D4. Probe replié sur le dossier temporaire
+### D4. Probe replié sur le dossier vérifié
 
-Si le probe ne peut pas être créé dans le parent (non inscriptible), il l'est dans le dossier temporaire du système : le propriétaire attribué à un nouveau fichier ne dépend pas du dossier.
+Si le probe ne peut pas être créé dans le parent (non inscriptible), il l'est dans le dossier vérifié lui-même, jamais dans un dossier inscriptible par tous (SonarCloud S5443 refusait le repli sur le dossier temporaire du système) : le propriétaire attribué à un nouveau fichier ne dépend pas du dossier.
 
 ### D5. Point de test
 
