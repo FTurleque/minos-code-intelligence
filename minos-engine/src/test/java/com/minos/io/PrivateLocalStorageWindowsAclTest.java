@@ -319,20 +319,8 @@ class PrivateLocalStorageWindowsAclTest {
 
     /** Reads the protected-DACL bit the way an administrator would: from the SDDL {@code icacls /save} writes. */
     private static boolean isDaclProtected(Path path) throws Exception {
-        Path saved = Files.createTempFile("minos-dacl-", ".txt");
-        try {
-            Process process = new ProcessBuilder(
-                    Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString(),
-                    path.toString(), "/save", saved.toString(), "/q")
-                    .redirectErrorStream(true).start();
-            process.getInputStream().readAllBytes();
-            assertEquals(0, process.waitFor());
-            String sddl = new String(Files.readAllBytes(saved), java.nio.charset.StandardCharsets.UTF_16LE);
-            String dacl = sddl.lines().filter(line -> line.startsWith("D:")).findFirst().orElseThrow();
-            return dacl.substring(2, dacl.indexOf('(')).contains("P");
-        } finally {
-            Files.deleteIfExists(saved);
-        }
+        String dacl = rawSddl(path).lines().filter(line -> line.startsWith("D:")).findFirst().orElseThrow();
+        return dacl.substring(2, dacl.indexOf('(')).contains("P");
     }
 
     /** Real ACL view, counting how many times the DACL is written. */
@@ -373,18 +361,18 @@ class PrivateLocalStorageWindowsAclTest {
     @Test
     void aMinosHomeOnTheProfileOrOneOfItsParentsIsRefusedAndItsAclIsLeftAlone() throws Exception {
         Path profile = Files.createDirectories(temporary.resolve("Users").resolve("someone"));
-        UserPrincipal me = Files.getOwner(profile);
+        UserPrincipal currentUser = Files.getOwner(profile);
         for (Path refused : List.of(profile, profile.getParent())) {
             List<AclEntry> before = acl(refused);
 
             IOException refusal = assertThrows(IOException.class,
-                    () -> PrivateLocalStorage.ensurePrivateDirectory(refused, me, profile));
+                    () -> PrivateLocalStorage.ensurePrivateDirectory(refused, currentUser, profile));
 
             assertTrue(refusal.getMessage().contains("dedicated to MINOS"), refusal.getMessage());
             assertFalse(refusal.getMessage().contains(temporary.toString()), "no path in the message");
             assertEquals(before, acl(refused), "a refused directory keeps its DACL");
         }
-        PrivateLocalStorage.ensurePrivateDirectory(profile.resolve(".minos"), me, profile);
+        PrivateLocalStorage.ensurePrivateDirectory(profile.resolve(".minos"), currentUser, profile);
     }
 
     @Test
@@ -404,13 +392,66 @@ class PrivateLocalStorageWindowsAclTest {
     @Test
     void aPreExistingDirectoryOfTheUserIsStillMadePrivate() throws Exception {
         Path mine = Files.createDirectories(temporary.resolve("mine"));
-        UserPrincipal me = Files.getOwner(mine);
+        UserPrincipal currentUser = Files.getOwner(mine);
 
-        PrivateLocalStorage.ensurePrivateDirectory(mine, me, temporary.resolve("profile"));
+        PrivateLocalStorage.ensurePrivateDirectory(mine, currentUser, temporary.resolve("profile"));
 
         assertTrue(acl(mine).stream().allMatch(entry -> entry.type() != AclEntryType.ALLOW
-                || entry.principal().equals(me)), "only the owner is allowed");
+                || entry.principal().equals(currentUser)), "only the owner is allowed");
         assertTrue(isDaclProtected(mine));
+    }
+
+    @Test
+    void theIdentityProbeFallsBackOnTheCheckedDirectoryWhenItsParentCannotBeWritten() throws Exception {
+        Path parent = Files.createDirectories(temporary.resolve("locked-parent"));
+        Path home = Files.createDirectories(parent.resolve("home"));
+        UserPrincipal currentUser = Files.getOwner(home);
+        denyWriting(parent, currentUser);
+        try {
+            assertEquals(currentUser, PrivateLocalStorage.probeOwner(home));
+            try (var leftovers = Files.list(home)) {
+                assertEquals(0L, leftovers.count(), "the probe is deleted");
+            }
+        } finally {
+            allowWritingAgain(parent);
+        }
+    }
+
+    @Test
+    void anIdentityThatCannotBeProbedFailsWithoutAPathInTheMessage() throws Exception {
+        Path parent = Files.createDirectories(temporary.resolve("locked-parent"));
+        Path home = Files.createDirectories(parent.resolve("locked-home"));
+        UserPrincipal currentUser = Files.getOwner(home);
+        denyWriting(home, currentUser);
+        denyWriting(parent, currentUser);
+        try {
+            IOException refusal = assertThrows(IOException.class, () -> PrivateLocalStorage.probeOwner(home));
+
+            assertTrue(refusal.getMessage().contains("cannot verify who owns"), refusal.getMessage());
+            for (Throwable cause = refusal; cause != null; cause = cause.getCause()) {
+                assertFalse(String.valueOf(cause.getMessage()).contains(temporary.toString()),
+                        "no path in the message or its causes: " + cause);
+            }
+        } finally {
+            allowWritingAgain(home);
+            allowWritingAgain(parent);
+        }
+    }
+
+    /** Puts a DENY entry for creating files and folders in front of the DACL; the owner can still remove it. */
+    private static void denyWriting(Path directory, UserPrincipal principal) throws IOException {
+        AclFileAttributeView view = Files.getFileAttributeView(
+                directory, AclFileAttributeView.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        List<AclEntry> entries = new java.util.ArrayList<>(view.getAcl());
+        entries.add(0, AclEntry.newBuilder().setType(AclEntryType.DENY).setPrincipal(principal)
+                .setPermissions(AclEntryPermission.ADD_FILE, AclEntryPermission.ADD_SUBDIRECTORY).build());
+        view.setAcl(entries);
+    }
+
+    private static void allowWritingAgain(Path directory) throws IOException {
+        AclFileAttributeView view = Files.getFileAttributeView(
+                directory, AclFileAttributeView.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        view.setAcl(view.getAcl().stream().filter(entry -> entry.type() != AclEntryType.DENY).toList());
     }
 
     private static List<AclEntry> acl(Path path) throws IOException {

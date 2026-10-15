@@ -319,6 +319,23 @@ public final class PrivateLocalStorage {
     private static UserPrincipal currentOwner(Path near) throws IOException {
         UserPrincipal known = currentOwner;
         if (known != null) return known;
+        currentOwner = probeOwner(near);
+        return currentOwner;
+    }
+
+    /**
+     * The probe could be written neither beside the checked object nor in it. The original exception names the probe's
+     * absolute path: it is replaced by a message without a path, as every refusal of this class is, keeping only the
+     * kind of failure as a path-free cause.
+     */
+    private static IOException ownerUnverifiable(IOException failure) {
+        IOException cause = failure instanceof AccessDeniedException ? new AccessDeniedException(null)
+                : new IOException(failure.getClass().getSimpleName());
+        return new IOException("MINOS cannot verify who owns an existing directory it cannot write to; its permissions "
+                + "are unchanged. Choose a MINOS_HOME the current account can write to", cause);
+    }
+
+    static UserPrincipal probeOwner(Path near) throws IOException {
         // The probe lives next to the object being checked, never in a publicly writable directory: the owner the
         // system gives a new file does not depend on the directory it is created in. When the parent cannot be written
         // (the parent of a MINOS home is often another account's), the checked directory itself is used.
@@ -327,12 +344,17 @@ public final class PrivateLocalStorage {
         try {
             probe = Files.createTempFile(directory, "minos-owner-", ".probe");
         } catch (IOException parentNotWritable) {
-            if (directory.equals(near) || !Files.isDirectory(near, LinkOption.NOFOLLOW_LINKS)) throw parentNotWritable;
-            probe = Files.createTempFile(near, "minos-owner-", ".probe");
+            if (directory.equals(near) || !Files.isDirectory(near, LinkOption.NOFOLLOW_LINKS)) {
+                throw ownerUnverifiable(parentNotWritable);
+            }
+            try {
+                probe = Files.createTempFile(near, "minos-owner-", ".probe");
+            } catch (IOException notWritableEither) {
+                throw ownerUnverifiable(notWritableEither);
+            }
         }
         try {
-            currentOwner = Files.getOwner(probe, LinkOption.NOFOLLOW_LINKS);
-            return currentOwner;
+            return Files.getOwner(probe, LinkOption.NOFOLLOW_LINKS);
         } finally {
             Files.deleteIfExists(probe);
         }
