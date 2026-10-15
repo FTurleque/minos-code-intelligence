@@ -40,6 +40,7 @@ import java.util.Set;
  */
 public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFactory {
     private static final String REPAIR = "run `minos tools install scip-java`";
+    private static final String OUTPUT = "output";
 
     private static final Set<String> STAGING_EXCLUDED_DIRECTORIES = Set.of(
             ".gradle", ".cache", "build");
@@ -186,7 +187,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
      * and the index keeps that module alone.
      */
     static Path targetRoot(Path output) {
-        return Objects.requireNonNull(output, "output").toAbsolutePath().normalize().resolveSibling("scip-java-targetroot");
+        return Objects.requireNonNull(output, OUTPUT).toAbsolutePath().normalize().resolveSibling("scip-java-targetroot");
     }
 
     /** {@code java -jar <launcher> index --output <output> --targetroot <targetRoot>}: the launcher's manifest names the verified jars. */
@@ -194,14 +195,14 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         return List.of(
                 Objects.requireNonNull(java, "java").toAbsolutePath().normalize().toString(),
                 "-jar", Objects.requireNonNull(launcher, "launcher").toAbsolutePath().normalize().toString(),
-                "index", "--output", Objects.requireNonNull(output, "output").toAbsolutePath().normalize().toString(),
+                "index", "--output", Objects.requireNonNull(output, OUTPUT).toAbsolutePath().normalize().toString(),
                 "--targetroot", Objects.requireNonNull(targetRoot, "targetRoot").toAbsolutePath().normalize().toString()
         );
     }
 
     static List<String> standaloneCommand(Path launcher, Path output, Path targetRoot) {
         Path normalizedLauncher = Objects.requireNonNull(launcher, "launcher").toAbsolutePath().normalize();
-        Path normalizedOutput = Objects.requireNonNull(output, "output").toAbsolutePath().normalize();
+        Path normalizedOutput = Objects.requireNonNull(output, OUTPUT).toAbsolutePath().normalize();
         Path normalizedTargetRoot = Objects.requireNonNull(targetRoot, "targetRoot").toAbsolutePath().normalize();
         return List.of(
                 normalizedLauncher.toString(),
