@@ -118,11 +118,56 @@ public final class PrivateLocalStorage {
      *         including when the filesystem cannot enforce or verify ownership at all
      */
     public static Path ensurePrivateDirectory(Path directory) throws IOException {
+        return ensurePrivateDirectory(directory, null, null, true);
+    }
+
+    /**
+     * MINOS-AUD-H23: on an ACL filesystem, hardening rewrites the DACL for the owner of the directory. A directory that
+     * already existed is therefore hardened only if it is dedicated to MINOS (not the user profile, one of its parents
+     * or a volume root) and belongs to {@code currentUser} (the current user when null); otherwise nothing is changed.
+     * POSIX needs no such guard: a non-owner cannot change the mode of a directory, and the read-only data root of the
+     * container must not be written to.
+     */
+    static Path ensurePrivateDirectory(Path directory, UserPrincipal currentUser, Path userHome) throws IOException {
+        return ensurePrivateDirectory(directory, currentUser, userHome, false);
+    }
+
+    private static Path ensurePrivateDirectory(Path directory, UserPrincipal currentUser, Path userHome,
+                                               boolean readUserHome) throws IOException {
         Path target = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) && !supportsPosix(target)) {
+            refuseSharedLocation(target, readUserHome ? userHome(System.getProperty("user.home")) : userHome);
+            UserPrincipal expected = currentUser != null ? currentUser : currentOwner(target);
+            if (!Files.getOwner(target, LinkOption.NOFOLLOW_LINKS).equals(expected)) {
+                throw new IOException("MINOS refuses to make private an existing directory that belongs to another "
+                        + "account; its permissions are unchanged. Take ownership of it, or choose another MINOS_HOME");
+            }
+        }
         createPrivateDirectories(target);
         hardenDirectory(target);
         verifyPrivateDirectory(target);
         return target;
+    }
+
+    static void refuseSharedLocation(Path target, Path userHome) throws IOException {
+        Path home = userHome == null ? null : userHome.toAbsolutePath().normalize();
+        if (target.getParent() == null || (home != null && home.startsWith(target))) {
+            throw new IOException("MINOS refuses to make private a directory that is not dedicated to MINOS (the user "
+                    + "profile, one of its parents or a volume root); its permissions are unchanged. Choose another "
+                    + "MINOS_HOME");
+        }
+    }
+
+    /** {@code user.home} when it names an existing absolute directory; an unknown home ("?") guards nothing. */
+    static Path userHome(String property) {
+        String value = property == null ? "" : property.trim();
+        if (value.isEmpty()) return null;
+        try {
+            Path home = Path.of(value);
+            return home.isAbsolute() && Files.isDirectory(home, LinkOption.NOFOLLOW_LINKS) ? home : null;
+        } catch (java.nio.file.InvalidPathException _) {
+            return null;
+        }
     }
 
     /**
@@ -274,13 +319,42 @@ public final class PrivateLocalStorage {
     private static UserPrincipal currentOwner(Path near) throws IOException {
         UserPrincipal known = currentOwner;
         if (known != null) return known;
-        // The probe lives next to the object being checked, never in the shared temporary directory: the
-        // owner the system gives a new file does not depend on the directory it is created in.
+        currentOwner = probeOwner(near);
+        return currentOwner;
+    }
+
+    /**
+     * The probe could be written neither beside the checked object nor in it. The original exception names the probe's
+     * absolute path: it is replaced by a message without a path, as every refusal of this class is, keeping only the
+     * kind of failure as a path-free cause.
+     */
+    private static IOException ownerUnverifiable(IOException failure) {
+        IOException cause = failure instanceof AccessDeniedException ? new AccessDeniedException(null)
+                : new IOException(failure.getClass().getSimpleName());
+        return new IOException("MINOS cannot verify who owns an existing directory it cannot write to; its permissions "
+                + "are unchanged. Choose a MINOS_HOME the current account can write to", cause);
+    }
+
+    static UserPrincipal probeOwner(Path near) throws IOException {
+        // The probe lives next to the object being checked, never in a publicly writable directory: the owner the
+        // system gives a new file does not depend on the directory it is created in. When the parent cannot be written
+        // (the parent of a MINOS home is often another account's), the checked directory itself is used.
         Path directory = near.getParent() != null ? near.getParent() : near;
-        Path probe = Files.createTempFile(directory, "minos-owner-", ".probe");
+        Path probe;
         try {
-            currentOwner = Files.getOwner(probe, LinkOption.NOFOLLOW_LINKS);
-            return currentOwner;
+            probe = Files.createTempFile(directory, "minos-owner-", ".probe");
+        } catch (IOException parentNotWritable) {
+            if (directory.equals(near) || !Files.isDirectory(near, LinkOption.NOFOLLOW_LINKS)) {
+                throw ownerUnverifiable(parentNotWritable);
+            }
+            try {
+                probe = Files.createTempFile(near, "minos-owner-", ".probe");
+            } catch (IOException notWritableEither) {
+                throw ownerUnverifiable(notWritableEither);
+            }
+        }
+        try {
+            return Files.getOwner(probe, LinkOption.NOFOLLOW_LINKS);
         } finally {
             Files.deleteIfExists(probe);
         }
