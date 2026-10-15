@@ -142,6 +142,12 @@ AppContainer et les droits qu'ils auraient laissés restent en place jusqu'à su
 "*<SID>"` pour chaque chemin du journal, puis suppression du journal. Ils sont peu nombreux : l'ancien lanceur nettoyait tout à
 chaque démarrage.
 
+## Windows : « MINOS refuses to make private … not dedicated to MINOS » ou « … belongs to another account »
+
+MINOS réserve à son propriétaire chaque dossier privé qu'il utilise, à commencer par `MINOS_HOME`. Sous Windows, il refuse désormais, **sans rien modifier**, un dossier qui existait déjà et qui est le profil de l'utilisateur, un de ses parents, une racine de volume, ou un dossier appartenant à un autre compte : rendre un tel dossier privé donnerait l'accès exclusif à son propriétaire (pour le profil, Système), et le poste ne démarrerait plus aucune JVM (incident MINOS-AUD-H23).
+
+Remède : choisir un `MINOS_HOME` dédié (par défaut `%USERPROFILE%\.minos`) ; pour un dossier créé par une exécution en administrateur, en reprendre la propriété (`takeown /F <dossier>` puis `icacls <dossier> /setowner <compte>`) ou le recréer. Le plugin IntelliJ applique la même règle à son dossier MINOS.
+
 ## Espace disque dans `MINOS_HOME`
 
 Une copie de projet (`local-provider-workspaces/`), un temporaire de clonage distant (`remote-cache/repositories/.entry-*.tmp`) ou un
