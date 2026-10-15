@@ -32,6 +32,6 @@ Ordre dans chaque section : rouge, correction, preuve. Prérequis : `ramener-le-
 
 ## 5. Clôture
 
-- [ ] 5.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-11, AUD-PERF-13 : statut, compteurs avant/après, écart sur l'ADR 0056).
-- [ ] 5.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md` (aucune autre attendue).
+- [x] 5.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-11, AUD-PERF-13 : statut, compteurs avant/après, écart sur l'ADR 0056). **Preuve (2026-10-15)** : `docs/audit/2026-10-10/SUIVI.md`, ligne du constat dans le tableau du sprint 4 et section « Implémentation » ou « Clôture du sprint 4 ».
+- [x] 5.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md` (aucune autre attendue). **Preuve (2026-10-15)** : `openspec validate --all --strict` → 0 échec ; `docs/STATUS.md`, section « Audit 2026-10-10 — sprint 4 » ; `python scripts/docs/check-current-docs.py` et `product-facts.py --check` verts. Aucune autre page ne décrit ce comportement (recherche dans `docs/user` et `docs/developer`).
   **Résultat (2026-10-14)** : `openspec validate --all --strict` → `Totals: 68 passed, 0 failed (68 items)`. Tâche laissée ouverte : `docs/STATUS.md` et l'archivage relèvent de la PR de clôture.

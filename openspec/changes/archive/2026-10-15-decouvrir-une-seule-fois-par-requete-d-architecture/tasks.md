@@ -15,4 +15,4 @@ Ordre : rouge, correction, preuve. Tout `-pl` s'accompagne de `-am`.
 ## 3. Clôture
 
 - [x] 3.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-05 : statut, site CLI ajouté, mesure). **Preuve (2026-10-13)** : ligne AUD-PERF-05 du tableau du sprint 4 passée à « Implémenté » et section « Implémentation — AUD-PERF-05 » ajoutée ; `python .claude/scripts/run_gates.py` rejoué après l'édition : « 40/40 gates passent » (code 0).
-- [ ] 3.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md` (aucune autre attendue).
+- [x] 3.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md` (aucune autre attendue). **Preuve (2026-10-15)** : `openspec validate --all --strict` → 0 échec ; `docs/STATUS.md`, section « Audit 2026-10-10 — sprint 4 » ; `python scripts/docs/check-current-docs.py` et `product-facts.py --check` verts. Aucune autre page ne décrit ce comportement (recherche dans `docs/user` et `docs/developer`).

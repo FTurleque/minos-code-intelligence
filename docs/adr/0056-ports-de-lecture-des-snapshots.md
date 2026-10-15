@@ -26,6 +26,8 @@ Complète l'[ADR 0024](0024-active-snapshot-query-view-and-rebuildable-indexes.m
 
 Validation : consommateur compilé avant/après si contrat publié, double de lecture non mémoire, absence d'accès aux mutations depuis les cas d'usage de lecture, cohérence pendant promotion concurrente, résultats identiques sur fixtures et golden existants.
 
+**Mise en œuvre partielle, 2026-10-13** (changement OpenSpec `lire-l-identite-du-snapshot-actif-sans-le-charger`, constat AUD-PERF-01 de l'audit du 10 octobre 2026, PR #445) : le port `CodeKnowledgeSnapshotStore` gagne la lecture `activeSnapshotId` en méthode `default` (chargement complet puis identifiant), redéfinie par lecture du seul pointeur actif dans `FileSymbolSnapshotStore` et `PostgresCodeKnowledgeSnapshotStore` ; `SemanticVectorStore.documents` lit documents et métadonnées sans vecteurs (redéfinie sous PostgreSQL). Ajouts seuls, aucun record public modifié. Une requête hybride prête charge le snapshot une fois au lieu de cinq (décompte par faux stores). Trois autres appelants de `loadActiveKnowledge` ne lisent que l'identifiant et ne sont pas encore passés au port (relevé dans le `design.md` archivé du changement).
+
 ## Références
 
 - [Cockburn — Ports and Adapters](https://alistair.cockburn.us/hexagonal-architecture)
