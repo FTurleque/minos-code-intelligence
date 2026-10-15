@@ -175,12 +175,12 @@ class ProjectIndexStateReconcilerTest {
         ProjectIndexState stale = new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
                 Optional.of("snapshot-old"), Optional.empty(), Instant.parse("2026-08-14T08:00:00Z"), Optional.empty());
         IndexStateStore failing = new IndexStateStore() {
-            public Optional<ProjectIndexState> findProjectState(UUID id) { return Optional.of(stale); }
-            public Optional<IndexingRun> findRun(UUID id) { return Optional.empty(); }
-            public List<IndexingRun> listRuns(UUID id) { return List.of(); }
-            public void saveProjectState(ProjectIndexState state) { throw new IllegalStateException("synthetic disk failure"); }
-            public void saveRun(IndexingRun run) { }
-            public ProjectLease acquireProjectLease(UUID id) { return () -> { }; }
+            @Override public Optional<ProjectIndexState> findProjectState(UUID id) { return Optional.of(stale); }
+            @Override public Optional<IndexingRun> findRun(UUID id) { return Optional.empty(); }
+            @Override public List<IndexingRun> listRuns(UUID id) { return List.of(); }
+            @Override public void saveProjectState(ProjectIndexState state) { throw new IllegalStateException("synthetic disk failure"); }
+            @Override public void saveRun(IndexingRun run) { }
+            @Override public ProjectLease acquireProjectLease(UUID id) { return () -> { }; }
         };
 
         IOException failure = assertThrows(IOException.class,

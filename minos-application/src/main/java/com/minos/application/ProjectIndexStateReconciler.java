@@ -313,8 +313,8 @@ public final class ProjectIndexStateReconciler {
             boolean repaired
     ) {
         public ReconciledState {
-            activeSnapshotId = Objects.requireNonNull(activeSnapshotId, "activeSnapshotId");
-            projectState = Objects.requireNonNull(projectState, "projectState");
+            Objects.requireNonNull(activeSnapshotId, "activeSnapshotId");
+            Objects.requireNonNull(projectState, "projectState");
         }
     }
 
@@ -331,8 +331,8 @@ public final class ProjectIndexStateReconciler {
             boolean repaired
     ) {
         public Reconciliation {
-            activeSnapshot = Objects.requireNonNull(activeSnapshot, "activeSnapshot");
-            projectState = Objects.requireNonNull(projectState, "projectState");
+            Objects.requireNonNull(activeSnapshot, "activeSnapshot");
+            Objects.requireNonNull(projectState, "projectState");
         }
     }
 }
