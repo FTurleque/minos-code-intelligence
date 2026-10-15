@@ -179,7 +179,9 @@ class ProjectIndexStateReconcilerTest {
             @Override public Optional<IndexingRun> findRun(UUID id) { return Optional.empty(); }
             @Override public List<IndexingRun> listRuns(UUID id) { return List.of(); }
             @Override public void saveProjectState(ProjectIndexState state) { throw new IllegalStateException("synthetic disk failure"); }
-            @Override public void saveRun(IndexingRun run) { }
+            @Override public void saveRun(IndexingRun run) {
+                // runs are not written by a reconciliation: nothing to record
+            }
             @Override public ProjectLease acquireProjectLease(UUID id) { return () -> { }; }
         };
 
