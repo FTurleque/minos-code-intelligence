@@ -490,3 +490,11 @@ Six changements OpenSpec, même branche. Aucun build, test ni gate exécuté.
 | AUD-QUA-07 | `decouper-les-methodes-d-analyse-et-d-ingestion` | **Spécifié** (sans exigence nouvelle) | Décompte de l'audit non reproduit (24 méthodes de 80 lignes ou plus par une autre mesure, contre 40). `LocalIsolatedIndexWorker` hors lot (six gates le citent). |
 
 Capacités nouvelles créées à l'archivage des sprints 6 à 11 : aucune (les exigences s'ajoutent aux capacités existantes et à `recherche-semantique`, créée par le sprint 4). Preuve de la spécification : `openspec validate --all --strict` → 66 passés, 0 échec. Les changements des sprints 6, 7, 8, 9 et 11 ont été rédigés à partir d'une contre-vérification des preuves au HEAD ; ils n'ont pas reçu de seconde relecture indépendante après rédaction.
+
+## Cause probable de MINOS-AUD-H23 et garde du plugin (2026-10-15, branche `sec/proteger-la-dacl-des-dossiers-du-plugin`)
+
+Le 15 octobre, un PIT local du plugin IntelliJ a de nouveau réduit la DACL de `C:\Users\fturl` à `AUTORITE NT\Système:(F)` seul. Mécanisme lu dans le code : `MinosStrongProcessLauncher.restrictWindowsOwnerOnly` remplace la DACL d'un dossier par son seul propriétaire ; un mutant de `ownershipHome` fait du profil (propriétaire Système) le dossier MINOS. Le danger existe aussi sans mutation, pour un `MINOS_HOME` configuré sur le profil ou un dossier partagé.
+
+- **Corrigé côté plugin** (changement `proteger-la-dacl-des-dossiers-du-plugin`) : le profil, ses parents et une racine de volume sont refusés avant toute modification ; un dossier préexistant n'est rendu privé que s'il appartient à l'utilisateur courant (identité = propriétaire d'un fichier créé par le processus). Rouge puis vert sous Windows, 82 tests du plugin. Preuve CI en attente.
+- **Reste, côté moteur** : `PrivateLocalStorage.ensurePrivateDirectory` durcit un dossier existant sans `verifyOwnedByCurrentUser` et met son propriétaire dans l'entrée ALLOW : même conséquence pour un `MINOS_HOME` posé sur le profil. À instruire dans un changement des E/S privées.
+- Le PIT du plugin ne tourne jamais sur un poste (`docs/quality/code-audit.md`).
