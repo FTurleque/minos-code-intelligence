@@ -8,6 +8,11 @@ the workflow without a commit: the job then runs on a system no pull request qua
 `runs-on` names a versioned image (`ubuntu-24.04`, `windows-2022`); a GitHub-hosted floating label
 is refused anywhere in a workflow, so a matrix cannot reintroduce it through `${{ matrix.os }}`.
 
+Job hardening (AUD-DEP-12, AUD-DEP-13): every `actions/checkout` says `persist-credentials: false` (this repository
+is public: its `git fetch` calls are anonymous; a private repository would authenticate them explicitly); every job
+that runs on a runner declares `timeout-minutes`; a job that logs in to Docker Hub logs out in its first `run:` step
+after the login, unless DOCKER_LOGIN_KEPT names it with a reason, and a stale entry of that list is refused.
+
 `--root` points the gate at another tree (default: this repository).
 Self-test: scripts/quality/test_check_workflow_pins.py.
 """
@@ -95,6 +100,154 @@ def find_floating_runner_violations(label: str, text: str) -> tuple[list[str], i
                 f"runner image (ubuntu-24.04, windows-2022): '-latest' changes without a commit."
             )
     return failures, runs_on
+
+
+TOP_LEVEL_JOBS = re.compile(r"^jobs:\s*$")
+MAPPING_KEY = re.compile(r"^(?P<indent>[ \t]*)(?:-[ \t]+)?(?P<key>[A-Za-z0-9_-]+):(?:\s|$)")
+STEP_ITEM = re.compile(r"^(?P<indent>[ \t]*)-(?:[ \t]|$)")
+PERSIST_CREDENTIALS_FALSE = re.compile(r"^\s*persist-credentials:\s*['\"]?false['\"]?\s*$")
+CHECKOUT = "actions/checkout"
+DOCKER_LOGIN = "docker/login-action"
+
+# Jobs that keep their Docker Hub login while the repository's code runs (AUD-DEP-13, decision D4 of
+# durcir-les-workflows-github): {(workflow file, job id): reason}. Every other job that logs in pulls what it needs,
+# then runs `docker logout` in the first `run:` step after the login. An entry that no longer names a job logging
+# in is refused, so the list can only shrink with the workflows.
+DOCKER_LOGIN_KEPT = {
+    ("pr-ci.yml", "verify"):
+        "Testcontainers pulls its images (pgvector) during mvnw verify: the list is not closed before the tests run.",
+    ("code-audit.yml", "mutation"):
+        "PIT replays the tests of the chosen module, Testcontainers included: same open list as verify.",
+    ("docker-upgrade-qualification.yml", "real-docker-upgrade"):
+        "Candidate A is built from another commit, whose Dockerfile may name other base-image digests.",
+    ("release-promotion-gate.yml", "docker-upgrade-qualification"):
+        "Candidate A is real main, whose Dockerfile may name other base-image digests than the candidate's.",
+}
+
+
+def _content_indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" \t"))
+
+
+def _jobs(text: str) -> list[tuple[str, int, list[tuple[int, str]]]]:
+    """(job id, line number of its key, [(line number, line)] of its body) for each job of the top-level `jobs:`."""
+    jobs: list[tuple[str, int, list[tuple[int, str]]]] = []
+    in_jobs = False
+    job_indent: int | None = None
+    for number, line in enumerate(text.splitlines(), start=1):
+        content = _without_comment(line)
+        if not content.strip():
+            continue
+        indent = _content_indent(content)
+        if indent == 0:
+            in_jobs = bool(TOP_LEVEL_JOBS.match(content))
+            continue
+        if not in_jobs:
+            continue
+        if job_indent is None:
+            job_indent = indent
+        key = MAPPING_KEY.match(content)
+        if indent == job_indent and key:
+            jobs.append((key.group("key"), number, []))
+        elif jobs and indent > job_indent:
+            jobs[-1][2].append((number, content))
+    return jobs
+
+
+def _child_keys(body: list[tuple[int, str]]) -> dict[str, int]:
+    """{key: line number} of the direct keys of a job body."""
+    if not body:
+        return {}
+    indent = _content_indent(body[0][1])
+    keys: dict[str, int] = {}
+    for number, line in body:
+        key = MAPPING_KEY.match(line)
+        if key and _content_indent(line) == indent and not STEP_ITEM.match(line):
+            keys.setdefault(key.group("key"), number)
+    return keys
+
+
+def _steps(body: list[tuple[int, str]]) -> list[tuple[int, list[str]]]:
+    """(line number, lines) of each item of the `steps:` sequence of a job body."""
+    steps: list[tuple[int, list[str]]] = []
+    steps_indent: int | None = None
+    item_indent: int | None = None
+    for number, line in body:
+        indent = _content_indent(line)
+        if steps_indent is None:
+            key = MAPPING_KEY.match(line)
+            if key and key.group("key") == "steps" and not STEP_ITEM.match(line):
+                steps_indent = indent
+            continue
+        item = STEP_ITEM.match(line)
+        if indent < steps_indent or (indent == steps_indent and not item):
+            break
+        if item and (item_indent is None or indent == item_indent):
+            item_indent = indent
+            steps.append((number, [line]))
+        elif steps:
+            steps[-1][1].append(line)
+    return steps
+
+
+def _step_uses(step: list[str], action: str) -> bool:
+    return any((match := USES.search(line)) is not None and match.group("target") == action for line in step)
+
+
+def _step_runs(step: list[str]) -> bool:
+    return any(RUN_KEY.match(line) for line in step)
+
+
+def find_job_hardening_violations(label: str, text: str) -> tuple[list[str], set[str]]:
+    """(failures, ids of the jobs kept logged in to Docker Hub) for the jobs of one workflow.
+
+    * a checkout leaves the repository token in `.git/config` unless it says `persist-credentials: false`; every
+      `git fetch` of the workflows is anonymous on this public repository, so none needs it;
+    * a job that runs on a runner (`runs-on`) without `timeout-minutes` can hold it for GitHub's 360-minute default;
+      a reusable-workflow call (`uses:` at job level) has no runner and cannot carry the key;
+    * a job that logs in to Docker Hub runs `docker logout` in its first `run:` step after the login, unless it is
+      named in DOCKER_LOGIN_KEPT with its reason.
+    """
+    workflow = label.rsplit("/", 1)[-1]
+    failures: list[str] = []
+    kept: set[str] = set()
+    for job, job_line, body in _jobs(text):
+        keys = _child_keys(body)
+        if "runs-on" in keys and "timeout-minutes" not in keys:
+            failures.append(
+                f"{label}:{job_line}: job '{job}' runs on a runner without timeout-minutes -- a stuck step would "
+                f"hold the runner for GitHub's 360-minute default."
+            )
+        logged_in = False
+        for step_line, step in _steps(body):
+            if _step_uses(step, CHECKOUT) and not any(PERSIST_CREDENTIALS_FALSE.match(line) for line in step):
+                failures.append(
+                    f"{label}:{step_line}: actions/checkout without 'persist-credentials: false' -- the repository "
+                    f"token stays in .git/config for every later step of job '{job}'."
+                )
+            if _step_uses(step, DOCKER_LOGIN):
+                logged_in = True
+                if (workflow, job) in DOCKER_LOGIN_KEPT:
+                    kept.add(job)
+                continue
+            if logged_in and _step_runs(step) and (workflow, job) not in DOCKER_LOGIN_KEPT:
+                logged_in = False
+                if not any("docker logout" in line for line in step):
+                    failures.append(
+                        f"{label}:{step_line}: job '{job}' runs code while logged in to Docker Hub -- pull the pinned "
+                        f"images, then 'docker logout' in the first run: step after the login, or name the job in "
+                        f"DOCKER_LOGIN_KEPT with its reason."
+                    )
+    return failures, kept
+
+
+def find_stale_docker_login_entries(kept: set[tuple[str, str]]) -> list[str]:
+    """Entries of DOCKER_LOGIN_KEPT that no longer name a job logging in to Docker Hub (missing workflow included)."""
+    return [
+        f"{WORKFLOWS}/{workflow}: job '{job}' is listed in DOCKER_LOGIN_KEPT but no longer logs in to Docker Hub "
+        f"-- remove the entry."
+        for workflow, job in sorted(DOCKER_LOGIN_KEPT) if (workflow, job) not in kept
+    ]
 
 
 def _has_unsafe_interpolation(text: str) -> bool:
@@ -422,6 +575,7 @@ def check(root: Path) -> tuple[list[str], int, int]:
     failures: list[str] = []
     checked = 0
     runners = 0
+    kept_logins: set[tuple[str, str]] = set()
     workflows = root / WORKFLOWS
     for workflow in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
         label = relative(root, workflow)
@@ -435,6 +589,10 @@ def check(root: Path) -> tuple[list[str], int, int]:
         runner_failures, runner_count = find_floating_runner_violations(label, text)
         failures.extend(runner_failures)
         runners += runner_count
+        job_failures, kept = find_job_hardening_violations(label, text)
+        failures.extend(job_failures)
+        kept_logins.update((workflow.name, job) for job in kept)
+    failures.extend(find_stale_docker_login_entries(kept_logins))
     failures.extend(find_windows_qualification_coverage_violations(root))
     failures.extend(check_build_windows_installer_script(root))
     return failures, checked, runners
