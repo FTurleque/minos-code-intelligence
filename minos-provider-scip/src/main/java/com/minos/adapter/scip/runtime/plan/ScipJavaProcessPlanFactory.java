@@ -40,6 +40,7 @@ import java.util.Set;
  */
 public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFactory {
     private static final String REPAIR = "run `minos tools install scip-java`";
+    private static final String OUTPUT = "output";
 
     private static final Set<String> STAGING_EXCLUDED_DIRECTORIES = Set.of(
             ".gradle", ".cache", "build");
@@ -147,9 +148,10 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         // as discovery and additionally omits provider-specific cache/build directories and root
         // Maven wrappers.
         Path executionRoot = prepareWritableWorkspace(root, normalizedRunDirectory);
+        Path targetRoot = targetRoot(output);
         List<String> command = launcher == null
-                ? standaloneCommand(standalone.orElseThrow(), output)
-                : classpathCommand(projectJava(), launcher, output);
+                ? standaloneCommand(standalone.orElseThrow(), output, targetRoot)
+                : classpathCommand(projectJava(), launcher, output, targetRoot);
         return new IndexerProcessPlan(
                 command,
                 executionRoot,
@@ -178,21 +180,34 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         }
     }
 
-    /** {@code java -jar <launcher> index --output <output>}: the launcher's manifest names the verified jars. */
-    static List<String> classpathCommand(Path java, Path launcher, Path output) {
+    /**
+     * The directory where scip-java writes its intermediate files: beside the artifact, in the run, outside the
+     * staged workspace. Left to its Maven default ({@code target/scip-targetroot} at the project root), a module
+     * whose build directory is that root {@code target/} (as {@code minos-app}) deletes them in its {@code clean}
+     * and the index keeps that module alone.
+     */
+    static Path targetRoot(Path output) {
+        return Objects.requireNonNull(output, OUTPUT).toAbsolutePath().normalize().resolveSibling("scip-java-targetroot");
+    }
+
+    /** {@code java -jar <launcher> index --output <output> --targetroot <targetRoot>}: the launcher's manifest names the verified jars. */
+    static List<String> classpathCommand(Path java, Path launcher, Path output, Path targetRoot) {
         return List.of(
                 Objects.requireNonNull(java, "java").toAbsolutePath().normalize().toString(),
                 "-jar", Objects.requireNonNull(launcher, "launcher").toAbsolutePath().normalize().toString(),
-                "index", "--output", Objects.requireNonNull(output, "output").toAbsolutePath().normalize().toString()
+                "index", "--output", Objects.requireNonNull(output, OUTPUT).toAbsolutePath().normalize().toString(),
+                "--targetroot", Objects.requireNonNull(targetRoot, "targetRoot").toAbsolutePath().normalize().toString()
         );
     }
 
-    static List<String> standaloneCommand(Path launcher, Path output) {
+    static List<String> standaloneCommand(Path launcher, Path output, Path targetRoot) {
         Path normalizedLauncher = Objects.requireNonNull(launcher, "launcher").toAbsolutePath().normalize();
-        Path normalizedOutput = Objects.requireNonNull(output, "output").toAbsolutePath().normalize();
+        Path normalizedOutput = Objects.requireNonNull(output, OUTPUT).toAbsolutePath().normalize();
+        Path normalizedTargetRoot = Objects.requireNonNull(targetRoot, "targetRoot").toAbsolutePath().normalize();
         return List.of(
                 normalizedLauncher.toString(),
-                "index", "--output", normalizedOutput.toString()
+                "index", "--output", normalizedOutput.toString(),
+                "--targetroot", normalizedTargetRoot.toString()
         );
     }
 

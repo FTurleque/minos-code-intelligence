@@ -138,8 +138,9 @@ class ScipJavaClasspathTest {
         Path launcher = Files.write(directory.resolve(ScipJavaClasspath.LAUNCHER),
                 ScipJavaClasspath.launcherBytes(List.of("scip-java-0.13.1.jar")));
         Path java = Path.of(System.getProperty("java.home"), "bin", "java");
+        Path output = temp.resolve("out").resolve("index.scip");
         List<String> command = new ArrayList<>(ScipJavaProcessPlanFactory.classpathCommand(
-                java, launcher, temp.resolve("out").resolve("index.scip")));
+                java, launcher, output, ScipJavaProcessPlanFactory.targetRoot(output)));
 
         // The child JVM gets no inherited environment: JAVA_TOOL_OPTIONS on a runner would add a line to its output.
         Path stdout = temp.resolve("child.stdout");
@@ -156,7 +157,8 @@ class ScipJavaClasspathTest {
         }
 
         assertEquals(0, process.exitValue(), Files.readString(stderr));
-        assertEquals("scip-java index --output " + temp.resolve("out").resolve("index.scip").toAbsolutePath().normalize(),
+        assertEquals("scip-java index --output " + output.toAbsolutePath().normalize()
+                        + " --targetroot " + temp.resolve("out").resolve("scip-java-targetroot").toAbsolutePath().normalize(),
                 Files.readString(stdout).trim());
     }
 
@@ -165,11 +167,13 @@ class ScipJavaClasspathTest {
         Path java = temp.resolve("jdk").resolve("bin").resolve("java");
         Path launcher = temp.resolve("classpath").resolve(ScipJavaClasspath.LAUNCHER);
         Path output = temp.resolve("run").resolve("index.scip");
+        Path targetRoot = temp.resolve("run").resolve("scip-java-targetroot");
 
         assertEquals(List.of(java.toAbsolutePath().normalize().toString(), "-jar",
                         launcher.toAbsolutePath().normalize().toString(), "index", "--output",
-                        output.toAbsolutePath().normalize().toString()),
-                ScipJavaProcessPlanFactory.classpathCommand(java, launcher, output));
+                        output.toAbsolutePath().normalize().toString(),
+                        "--targetroot", targetRoot.toAbsolutePath().normalize().toString()),
+                ScipJavaProcessPlanFactory.classpathCommand(java, launcher, output, targetRoot));
     }
 
     @Test
