@@ -253,7 +253,7 @@ Vérifier soi-même (deux clones propres du commit, construction, comparaison de
 python scripts/quality/check-reproducible-build.py twice --work <dossier vide>
 ```
 
-`reproducible-build.yml` le fait sous Linux sur les PR qui touchent le build Maven et avant chaque publication (appelé par `release-windows.yml`). **Hors périmètre** : le zip, l'installateur et les images ne sont pas reproductibles bit à bit ; un JAR construit sous Windows n'est pas prouvé identique à un JAR construit sous Linux.
+`reproducible-build.yml` le fait sous Linux sur les PR qui touchent le build Maven et avant chaque publication (appelé par `release-windows.yml`). **Hors périmètre** : le zip, l'installateur et les images ne sont pas reproductibles bit à bit. **Linux et Windows ne donnent pas le même JAR** (mesuré le 2026-10-16 au commit `1aec925d`) : sous Linux, le JAR de la CI et celui d'un conteneur du poste ont le même SHA-256 ; le JAR construit sous Windows depuis une copie de travail en `core.autocrlf=true` en diffère par 20 entrées sur 10 146, toutes des fichiers texte copiés tels quels (`META-INF/LICENSE`, les `pom.xml` de `META-INF/maven/`, les ressources JSON et le `ScipWriter.java` du provider SCIP) dont seules les fins de ligne changent (CRLF) ; aucune classe ne diffère. La reproductibilité vaut donc par plateforme.
 
 ## Dépendances du plugin IntelliJ : verrou et sommes (AUD-DEP-04)
 
