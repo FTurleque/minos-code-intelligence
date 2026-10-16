@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -55,7 +56,8 @@ class PostgresProjectMutationLockIntegrationTest extends PostgresTestSupport {
                     throw new RuntimeException(exception);
                 }
             });
-            Thread.sleep(200);
+            // pg_locks shows the request as not granted: the wait is observed, not assumed after a delay.
+            awaitAdvisoryLockWaiter(projectId, Duration.ofSeconds(10));
             assertFalse(published.get(), "structural publication must wait for the shared mutation key");
             release.countDown();
             holder.get(10, TimeUnit.SECONDS);

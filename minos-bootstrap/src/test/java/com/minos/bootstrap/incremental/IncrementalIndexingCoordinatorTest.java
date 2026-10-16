@@ -19,12 +19,14 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
+import com.minos.testsupport.ParkedThreads;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
@@ -96,12 +98,16 @@ class IncrementalIndexingCoordinatorTest {
             assertTrue(fingerprintStore.promoteEntered.await(10, TimeUnit.SECONDS));
             assertEquals(1, executor.calls.get());
 
+            AtomicReference<Thread> secondCaller = new AtomicReference<>();
             var second = pool.submit(() -> {
+                secondCaller.set(Thread.currentThread());
                 secondStarted.countDown();
                 return coordinator.refresh(projectId, project, IndexingRequirements.baseline());
             });
             assertTrue(secondStarted.await(10, TimeUnit.SECONDS));
-            Thread.sleep(150L);
+            // The second refresh is observed queued on the in-memory project lease, not assumed after a delay.
+            ParkedThreads.awaitParkedIn(secondCaller.get(), InMemoryIndexStateStore.class.getName(),
+                    second::isDone, Duration.ofSeconds(10));
             assertFalse(second.isDone(),
                     "a second refresh must remain behind the project lease while baseline promotion is in progress");
             assertEquals(1, executor.calls.get(), "no second provider run may begin before baseline promotion completes");

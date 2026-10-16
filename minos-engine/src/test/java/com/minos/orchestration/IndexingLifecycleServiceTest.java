@@ -9,6 +9,7 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectIndexState.Availability;
+import com.minos.testsupport.ParkedThreads;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.EnumSet;
@@ -110,12 +112,16 @@ class IndexingLifecycleServiceTest {
         try (var pool = Executors.newFixedThreadPool(2)) {
             var firstRun = pool.submit(() -> first.execute(projectId, root, negotiation));
             assertTrue(firstEntered.await(10, TimeUnit.SECONDS));
+            AtomicReference<Thread> secondCaller = new AtomicReference<>();
             var secondRun = pool.submit(() -> {
+                secondCaller.set(Thread.currentThread());
                 secondCallerStarted.countDown();
                 return second.execute(projectId, root, negotiation);
             });
             assertTrue(secondCallerStarted.await(10, TimeUnit.SECONDS));
-            Thread.sleep(150L);
+            // The second caller is observed queued on the in-memory project lease, not assumed after a delay.
+            ParkedThreads.awaitParkedIn(secondCaller.get(), InMemoryIndexStateStore.class.getName(),
+                    secondRun::isDone, Duration.ofSeconds(10));
             assertEquals(1, invocations.get(), "second lifecycle must not start a provider while the lease is held");
             assertFalse(secondRun.isDone());
 
