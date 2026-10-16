@@ -227,9 +227,16 @@ jobs:
             minos-intellij/build/reports/**
             minos-intellij/build/test-results/**
 
+  # AUD-DEP-11: the shaded JAR of the released commit is rebuilt twice and compared before anything is published.
+  reproducible-build:
+    name: Reproducible shaded JAR
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/reproducible-build.yml
+
   publish:
     name: Publish verified Windows x64 release
-    needs: build
+    needs: [build, reproducible-build]
     if: github.ref == 'refs/heads/main'
     runs-on: windows-2022
     timeout-minutes: 30

@@ -25,7 +25,8 @@ rm -rf "$QUALIFICATION_ROOT"
 mkdir -p "$QUALIFICATION_ROOT"
 
 chmod +x mvnw
-./mvnw -B -ntp -DskipTests -DskipITs package
+# AUD-DEP-11: the JAR entries carry the date of the commit, so the image is built from a reproducible JAR.
+./mvnw -B -ntp -DskipTests -DskipITs "-Dproject.build.outputTimestamp=$(git show -s --format=%cI HEAD)" package
 
 mapfile -t SHADED_JARS < <(find target -maxdepth 1 -type f -name 'minos-code-intelligence-*-all.jar' -print | sort)
 if [[ "${#SHADED_JARS[@]}" -ne 1 ]]; then
