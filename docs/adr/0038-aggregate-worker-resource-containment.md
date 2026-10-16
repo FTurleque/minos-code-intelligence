@@ -27,6 +27,8 @@ Une revendication d'isolation qui n'est pas exactement vraie est pire qu'une abs
 
 Un cgroup v2 dédié au run/provider/scope est créé avant l'exécution, configuré avec `memory.max`, `memory.swap.max`, `pids.max` et `cpu.max` relus depuis le noyau, rejoint par le processus sandbox avant l'exec du code non fiable, invisible depuis la sandbox, puis détruit par `cgroup.kill` et supprimé. `prlimit` est conservé comme défense en profondeur par processus.
 
+*Amendé le 2026-10-16 (MINOS-AUD-H17) : `RLIMIT_NPROC` n'est ni une limite par processus ni une limite de l'arbre du provider, mais un plafond des tâches de l'utilisateur réel, threads de l'hôte compris.* Posé à 128 par `prlimit --nproc`, il faisait échouer le lancement (bubblewrap en `EAGAIN` au `fork`) dès que le compte exécutait déjà 128 threads : un IDE ouvert, un runner CI chargé, le compte d'un conteneur. Il ne défendait rien que `pids.max` ne borne déjà. Il est retiré : le nombre de processus de l'arbre du provider est borné par `pids.max` seul, obligatoire (sans cgroup délégué, pas de backend). `prlimit` garde `RLIMIT_AS`, `RLIMIT_NOFILE` et `RLIMIT_CPU`.
+
 Sans racine cgroup déléguée réellement sondée, le backend Linux n'existe pas et l'exécution non fiable échoue avant le lancement du provider.
 
 ### 3. Durcir la frontière Windows existante

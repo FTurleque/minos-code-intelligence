@@ -115,7 +115,7 @@ Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité
 | H14 | Un refus dont l'identifiant de requête est invalide est rejeté avant l'authentification, sans trace | Défaut confirmé (test rouge), **corrigé** | P3 | E | `renforcer-tests-revelees-par-mutation` (décision) |
 | H15 | `HostedAuditDelivery` n'attrape que `IOException` | Défaut confirmé (test rouge), **corrigé** | P3 | E | `renforcer-tests-revelees-par-mutation` (décision) |
 | H16 | Les limitations d'une requête de relations sont lues sur un second chargement du snapshot actif | Risque | P3 | A | — (lot 2 de `declarer-limites-impact-scip`) |
-| H17 | Linux : `--nproc=128` limite toutes les tâches de l'utilisateur réel, pas un processus | Risque (non exécuté) | P3 | A | — (lié à A03) |
+| H17 | Linux : `--nproc=128` limite toutes les tâches de l'utilisateur réel, pas un processus | Défaut confirmé (reproduit), **corrigé** le 2026-10-16 (`--nproc` retiré, `pids.max` seul) | P3 | A | — (lié à A03) |
 | H18 | Windows : la sonde AppContainer lit sa sortie après la fin du processus | Défaut confirmé (reproduit), **corrigé** le 2026-10-09 (sortie dans un fichier) | P3 | A | — (lié à A07) |
 | H19 | `scripts/intellij/run-minos.ps1` lance `mvnw package` avant le serveur MCP sur stdio | Non reproduit | — | E | `corriger-documentation-plugin-et-suivi-audit` |
 | H20 | Variables obligatoires des fichiers Compose sans garde `${VAR:?message}` | Amélioration, **faite** le 2026-10-09 (35 gardes par fichier ; configuration résolue identique quand les variables sont fournies) | P3 | E | — |
