@@ -265,6 +265,16 @@ python scripts/quality/check-reproducible-build.py twice --work <dossier vide>
 4. Relire le diff : une nouvelle somme pour une version qui ne change pas, ou une `<trust>` ajoutée, se justifie par écrit ou s'annule.
 5. Rejouer `python scripts/quality/check-toolchain-baseline.py` et la qualification du plugin de `docs/TOOLCHAIN_POLICY.md`.
 
+## Publication du plugin IntelliJ avec la release (AUD-DEP-07)
+
+Une release créée par `release-windows.yml` avec le jeton du workflow ne déclenche **aucun** événement `release:` : c'est pourquoi v1.1.0 et v1.2.0 n'ont pas de `minos-intellij-*.zip`. Depuis le changement `publier-le-plugin-avec-la-release` :
+
+- `release-windows.yml` appelle `intellij-plugin-release.yml` (job `plugin`, `needs: publish`, `contents: write` accordé par l'appelant) avec le tag `v<version>` et le commit publié ;
+- `intellij-plugin-release.yml` démarre sur `workflow_call` et `workflow_dispatch` (entrée `tag`), plus jamais sur `release:` ; il garde ses contrôles (format du tag, commit cible de la release en 40 caractères hexadécimaux égal au commit attendu, tag non déplacé, envoi sans écrasement) ;
+- un dernier job, `release-complete`, échoue si la release ne porte pas exactement une `minos-intellij-*.zip` et sa `.sha256`. La release est déjà publiée à ce moment (décision D3, option A) : l'échec est visible et se répare par un **rejeu** de `intellij-plugin-release.yml` par `workflow_dispatch` avec le tag.
+
+Une release créée **à la main** ne reçoit pas le plugin d'elle-même : rejouer `intellij-plugin-release.yml` par `workflow_dispatch`. Les releases immuables de GitHub sont désactivées sur le dépôt ; si elles étaient activées, l'ajout d'un asset après publication serait refusé et le plugin devrait être attaché avant la publication (option B du design). Le lien est gardé par `check-ci-wiring.py` (règle 5). **Non prouvé avant la prochaine release** : les workflows de release ne tournent pas sur une PR ; la preuve est le run réel.
+
 ## Frontière avec la CI
 
 Aucune modification de workflow GitHub Actions n'est incluse dans S5 en juillet 2026. L'épinglage immuable des actions, les checks distants et la branch protection restent dans M21-S2, explicitement en pause jusqu'en août.

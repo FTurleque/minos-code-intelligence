@@ -17,10 +17,14 @@ Four rules, all anchored on the structure of the workflows and never on a senten
    ``scan-args``. The scanner recognises an npm lockfile by its file name, and the shipped ones are prefixed with
    the name of their tool: without that line they are not scanned. The list is computed from the tree, so a
    lockfile added later cannot be forgotten; an argument that names a file that does not exist is refused too.
+5. A workflow that publishes a GitHub Release (``publish-windows-release.ps1`` without ``-ValidateOnly``, or
+   ``gh release create``) calls ``intellij-plugin-release.yml`` from one of its jobs (AUD-DEP-07): a release created
+   with the workflow token triggers no ``release:`` event, so nothing else would attach the plugin. That workflow
+   starts on ``workflow_call`` and has no ``release:`` trigger, which would publish the plugin a second time.
 
 What this does not prove: that the ruleset configured on GitHub contains these checks (that is
 scripts/quality/verify-ruleset.py, run by hand), nor that a step runs on every event, nor that the scanner
-accepts the arguments (that is the run of the job itself).
+accepts the arguments, nor that a release really carries the plugin (that is the run of the job itself).
 
 Self-test: scripts/quality/test_check_ci_wiring.py.
 """
@@ -56,6 +60,10 @@ NPM_LOCKFILE_SUFFIX = "package-lock.json"
 NOT_SHIPPED_DIRECTORIES = frozenset({".git", "target", "build", "node_modules", "fixtures", "__pycache__"})
 SCAN_ARGUMENTS = re.compile(r"^(\s+)scan-args\s*:")
 LOCKFILE_ARGUMENT = re.compile(r"^\s*--lockfile=package-lock\.json:(?:\./)?(\S+)\s*$")
+PLUGIN_RELEASE = "intellij-plugin-release.yml"
+# A step that creates the release: the publication script outside its validation-only mode, or the CLI itself.
+RELEASE_PUBLICATION = re.compile(r"publish-windows-release\.ps1(?!.*-ValidateOnly)|\bgh\s+release\s+create\b")
+PLUGIN_RELEASE_CALL = re.compile(rf"^    uses:\s*['\"]?\./{re.escape(WORKFLOWS)}/{re.escape(PLUGIN_RELEASE)}['\"]?\s*$")
 
 
 def code_lines(text: str) -> list[tuple[int, str]]:
@@ -347,6 +355,48 @@ def check_shipped_lockfiles_are_scanned(root: Path) -> tuple[list[str], int]:
     return failures, len(shipped)
 
 
+def workflow_triggers(text: str) -> list[str]:
+    """The events of the ``on:`` block (inline form or one key per event)."""
+    block = top_level_block(code_lines(text), "on")
+    if not block:
+        return []
+    head = block[0][1].split(":", 1)[1].strip()
+    if head:
+        return [item.strip() for item in re.sub(r"[\[\]]", "", head).split(",") if item.strip()]
+    return list(event_sections(block))
+
+
+def check_releases_publish_the_plugin(root: Path) -> list[str]:
+    """Rule 5: the plugin is published by the workflow that publishes the release, and only by it."""
+    failures: list[str] = []
+    workflows = root / WORKFLOWS
+    publishing = 0
+    for workflow in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
+        if workflow.name == PLUGIN_RELEASE:
+            continue
+        text = workflow.read_text(encoding="utf-8")
+        if not any(RELEASE_PUBLICATION.search(line) for _, line in code_lines(text)):
+            continue
+        publishing += 1
+        if not any(PLUGIN_RELEASE_CALL.match(line) for job in jobs_of(text).values() for _, line in job["lines"]):
+            failures.append(f"{WORKFLOWS}/{workflow.name}: publishes a GitHub Release but no job calls "
+                            f"./{WORKFLOWS}/{PLUGIN_RELEASE}: the release would ship without the IntelliJ plugin")
+    plugin = workflows / PLUGIN_RELEASE
+    if not plugin.is_file():
+        if publishing:
+            failures.append(f"{WORKFLOWS}/{PLUGIN_RELEASE}: missing, no workflow can attach the IntelliJ plugin to a "
+                            f"release")
+        return failures
+    triggers = workflow_triggers(plugin.read_text(encoding="utf-8"))
+    if "workflow_call" not in triggers:
+        failures.append(f"{WORKFLOWS}/{PLUGIN_RELEASE}: does not start on workflow_call, the release workflow cannot "
+                        f"call it")
+    if "release" in triggers:
+        failures.append(f"{WORKFLOWS}/{PLUGIN_RELEASE}: still starts on a release: event, which would publish the "
+                        f"plugin a second time beside the call of the release workflow")
+    return failures
+
+
 def check(root: Path) -> tuple[list[str], int, int, int]:
     failures, resolved = check_required_checks(root)
     wiring_failures, wired = check_self_tests_are_wired(root)
@@ -354,6 +404,7 @@ def check(root: Path) -> tuple[list[str], int, int, int]:
     failures += check_no_ruleset_reading_in_ci(root)
     lockfile_failures, lockfiles = check_shipped_lockfiles_are_scanned(root)
     failures += lockfile_failures
+    failures += check_releases_publish_the_plugin(root)
     return failures, resolved, wired, lockfiles
 
 

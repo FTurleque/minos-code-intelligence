@@ -44,7 +44,7 @@ Alternative écartée : créer la release avec un jeton d'application GitHub pou
 
 `release: published` est retiré. `workflow_dispatch` (entrée `tag`) permet de rejouer la publication du plugin pour une release existante ; le commit attendu est alors lu sur la release (`gh release view --json targetCommitish`) et vérifié comme aujourd'hui. Les huit lectures de `github.event.release.*` passent par des variables calculées une fois à partir des entrées.
 
-### D3. La release n'est annoncée publiée qu'avec le plugin — **décision en attente du propriétaire**
+### D3. La release n'est annoncée publiée qu'avec le plugin — **option A retenue par le propriétaire le 2026-10-15**
 
 Recommandation (option A) : le job `plugin` s'exécute après `publish` ; un dernier job de contrôle vérifie par `gh release view` que l'asset `minos-intellij-*.zip` et sa somme sont présents, et **échoue** sinon. La release existe déjà à ce moment : l'échec est visible (workflow rouge) et se répare par `workflow_dispatch` du plugin.
 
