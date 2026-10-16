@@ -31,7 +31,7 @@ Le sprint 2 (« failles de sécurité et observabilité », 7 constats) est **co
 
 Preuves, écarts avec le critère de sortie et suite à ouvrir : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md). Capacités OpenSpec créées ou étendues par l'archivage : voir `openspec/specs/`. Les sprints 3 et 4 sont traités (sections suivantes) ; les sprints 5 à 11 (chaîne de release, couverture réelle, sorties publiques, confinement et E/S privées, orchestration d'indexation, frontières d'architecture, hygiène) restent à traiter.
 
-## Audit 2026-10-10 — sprint 3 (2026-10-13, trois preuves en attente)
+## Audit 2026-10-10 — sprint 3 (2026-10-13, restes mis à jour le 2026-10-16)
 
 Les cinq changements du sprint 3 (« socle d'exécution supporté ») sont **fusionnés dans `develop`** (PR #434 à #437 et #441) :
 
@@ -44,7 +44,7 @@ Les cinq changements du sprint 3 (« socle d'exécution supporté ») sont **fus
 
 Le défaut mis au jour par ce sprint — les outils MCP échouaient avec la racine de données en lecture seule, comme la montent les compose pour le plan de requête — est corrigé (changement `lire-le-registre-sans-ecrire`) : une lecture du registre ou des observations runtime prend un verrou partagé sans rien écrire, et la qualification de l'image interroge le serveur sur un volume en lecture seule. Conditions et limites : [`docs/user/docker-runtime.md`](user/docker-runtime.md).
 
-Limites : aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés sur le nouveau socle par exécution directe sous Linux, pas sous Windows. Restent à faire dans ce sprint, aucun depuis `develop` : les CVE de Testcontainers en portée test (AUD-DEP-14, bloqué), une preuve d'indexation par le runtime Java 25 de l'installateur, le premier passage de la veille planifiée (après la promotion vers `main`) et une décision sur les quatre avis du classpath de scip-java. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
+Limites : aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés sur le nouveau socle par exécution directe sous Linux, pas sous Windows. La distribution Windows 1.3.0 indexe par son runtime Java 25 embarqué (preuve du 2026-10-16 sur un projet TypeScript ; `migrer-le-socle-vers-java-25` est archivé). Sur le poste de développement, l'indexation d'un petit projet Java échoue (`IllegalStateException`), à l'identique avec la 1.2.0 en Java 24 : défaut antérieur, à instruire à part. Restent à faire, aucun depuis `develop` : les CVE de Testcontainers en portée test (AUD-DEP-14, bloqué : pas de docker-java postérieur à 3.7.1), le premier passage de la veille planifiée (après la promotion vers `main`) et une décision sur les quatre avis du classpath de scip-java. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
 
 ## Audit 2026-10-10 — sprint 4 (2026-10-15)
 
@@ -58,6 +58,17 @@ Les huit changements du sprint 4 (« chemin de requête : ne plus relire le snap
 - **PostgreSQL** : une connexion du pool n'est validée qu'à l'emprunt après 30 s de repos ; une coupure sur la première instruction est rejouée une fois sur une connexion neuve, jamais après une écriture.
 
 Mesures sur un index réel de ce dépôt (2026-10-15, produit sous Linux) : sur le code de production du reactor (snapshot de 114 Mo), une seconde lecture de la même vue passe de 2 chargements complets et environ 0,9 s à 1 chargement et environ 0,5 ms ; sur un index sémantique réel de 25 210 documents (`embeddinggemma`, PostgreSQL), synchroniser après une ligne modifiée passe de 10,4–10,9 s à 3,2–4,2 s et de 117–218 Mo à 33–55 Mo de journal, et une synchronisation sans changement de ≈ 11 s à ≈ 50 ms. Limites relevées par ces mesures : le reactor complet, tests compris, n'est pas indexable (snapshot de 300 Mo au-delà de la limite de 256 Mio) ; l'indexation de ce dépôt ne retenait que `minos-app` (build de `minos-app` dans le `target/` racine, qui effaçait les fichiers intermédiaires de scip-java) : scip-java écrit désormais ces fichiers dans le répertoire du run et les 14 modules sont indexés ; le code de production complet dépasse le budget de vecteurs de la synchronisation sémantique. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
+
+## Audit 2026-10-10 — sprint 5 (2026-10-16, preuves de release en attente)
+
+Les cinq changements du sprint 5 (« chaîne de release et d'approvisionnement ») sont **fusionnés dans `develop`** (PR #467, #468, #469, #470, #472) :
+
+- **Workflows GitHub** : aucun checkout ne garde le jeton Git (`persist-credentials: false`), chaque job a un délai ; le code exécuté connecté à Docker Hub est limité à une liste fermée de quatre jobs, les autres se déconnectent après avoir tiré leurs images épinglées. `check-workflow-pins.py` le garde et a désormais un auto-test.
+- **Plugin IntelliJ** : ses dépendances sont verrouillées (verrous Gradle stricts, sommes SHA-256 vérifiées) et il est construit par son wrapper Gradle, y compris en release. Le workflow de release attache le zip du plugin à la release ; v1.1.0 et v1.2.0 n'en ont pas et ne seront pas rattrapées.
+- **Release Windows** : les artefacts reçoivent une attestation de provenance GitHub. Les exécutables **ne sont pas signés** (aucun service de signature souscrit) et le manifeste de release le dit ; quand la signature est exigée (variable `MINOS_REQUIRE_SIGNED_RELEASE`), le workflow échoue sur tout exécutable publié sans signature Authenticode valide et horodatée.
+- **Build Maven reproductible** : deux constructions du même commit donnent le même jar ombré, sous Linux d'une machine à l'autre ; toutes les versions de plugins sont épinglées. Un jar construit sous Windows diffère d'un jar Linux par les fins de ligne de 20 fichiers texte (aucune classe) : la reproductibilité vaut par plateforme.
+
+Restent à faire : vérifier la portée du jeton Docker Hub (propriétaire) et relever, au prochain candidat de release, la construction du plugin par le wrapper, le zip du plugin attaché et l'attestation. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
 
 ## État produit
 

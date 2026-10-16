@@ -25,11 +25,11 @@ Ordre dans chaque section : rouge, correction, preuve. Chaque workflow modifié 
 
 ## 5. Preuve en CI
 
-- [ ] 5.1 **(manuelle)** [AUD-DEP-12, AUD-DEP-13] À la PR : tous les checks exigés verts ; relever que `Verify (ubuntu-24.04)` tire ses images sans erreur de quota ; lancer `docker-upgrade-qualification.yml` et `code-audit.yml` par `workflow_dispatch` ; noter les run ids dans `SUIVI.md`.
+- [x] 5.1 **(manuelle)** [AUD-DEP-12, AUD-DEP-13] À la PR : tous les checks exigés verts ; relever que `Verify (ubuntu-24.04)` tire ses images sans erreur de quota ; lancer `docker-upgrade-qualification.yml` et `code-audit.yml` par `workflow_dispatch` ; noter les run ids dans `SUIVI.md`. — fait (2026-10-16). PR #467 (fusion `22ad3cf9`, tête `06a6e143`) : tous les checks exigés verts (run 38871259922 : `Verify` ×2, `Static invariants`, `osv-scan` ; Gitleaks 38871259502 ; `IntelliJ plugin (gate)` 38871259392 ; SonarCloud) ; le journal de `Verify (ubuntu-24.04)` tire ses images (Testcontainers 2.0.5) sans aucune erreur de quota ni `toomanyrequests`. Par `workflow_dispatch` sur `develop` (`0e5f14a7`), après la fusion : `docker-upgrade-qualification.yml` vert, run 38949628619 (« A -> B upgrade qualification SUCCESS: 97c86a70… -> 0e5f14a7… », 7 min 43 s) ; `code-audit.yml` vert, run 38949624814 (job du plugin : tests, SpotBugs, PIT, 5 min 37 s), et quatre exécutions PIT par module (runs 38949591116, 38949600058, 38949607781, 38949616181 ; voir `completer-la-mutation-et-son-document`).
 - [ ] 5.2 **(manuelle)** [AUD-DEP-05] Au prochain candidat de release : relever que `release-windows.yml` et `intellij-plugin-release.yml` construisent le plugin par le wrapper ; noter les run ids. Tant que ce n'est pas fait, AUD-DEP-05 reste « implémenté, preuve de release en attente ».
 
 ## 6. Clôture
 
 - [x] 6.1 `docs/developer/supply-chain.md` et `docs/developer/quality-gates.md` : règles nouvelles du gate, hypothèse « dépôt public » pour `persist-credentials`, liste fermée Docker Hub. Rejouer `check-current-docs.py`.
-- [ ] 6.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-DEP-12, AUD-DEP-05, AUD-DEP-13 : statuts, décomptes corrigés, décision D4, run ids).
+- [x] 6.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-DEP-12, AUD-DEP-05, AUD-DEP-13 : statuts, décomptes corrigés, décision D4, run ids). — fait (2026-10-16) : lignes AUD-DEP-12, AUD-DEP-05, AUD-DEP-13 du sprint 5 (PR #467, décomptes corrigés, D4 = A avec l'écart de la liste fermée, run ids).
 - [ ] 6.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/developer/supply-chain.md`, `docs/TOOLCHAIN_POLICY.md`.
