@@ -253,6 +253,32 @@ Une release créée par `release-windows.yml` avec le jeton du workflow ne décl
 
 Une release créée **à la main** ne reçoit pas le plugin d'elle-même : rejouer `intellij-plugin-release.yml` par `workflow_dispatch`. Les releases immuables de GitHub sont désactivées sur le dépôt ; si elles étaient activées, l'ajout d'un asset après publication serait refusé et le plugin devrait être attaché avant la publication (option B du design). Le lien est gardé par `check-ci-wiring.py` (règle 5). **Non prouvé avant la prochaine release** : les workflows de release ne tournent pas sur une PR ; la preuve est le run réel.
 
+## Construction reproductible (AUD-DEP-11)
+
+Deux constructions du même commit, sur le même système, donnent le même JAR ombré. `project.build.outputTimestamp` est écrit dans le POM racine (`2026-01-01T00:00:00Z`, valeur d'un build sans Git ou de développement) et les scripts qui construisent un livrable (`build-windows-distribution.ps1`, `qualify-docker-release.sh`) passent la date du commit. Maven 3.10, celui du wrapper, fixait déjà une date par défaut ; Maven 3.9, que l'enforcer accepte, non : le POM ne dépend plus de la version de Maven. `requirePluginVersions` refuse tout plugin sans version, phases `clean`, `deploy` et `site` comprises.
+
+Vérifier soi-même (deux clones propres du commit, construction, comparaison des entrées) :
+
+```text
+python scripts/quality/check-reproducible-build.py twice --work <dossier vide>
+```
+
+`reproducible-build.yml` le fait sous Linux sur les PR qui touchent le build Maven et avant chaque publication (appelé par `release-windows.yml`). **Hors périmètre** : le zip, l'installateur et les images ne sont pas reproductibles bit à bit ; un JAR construit sous Windows n'est pas prouvé identique à un JAR construit sous Linux.
+
+## Dépendances du plugin IntelliJ : verrou et sommes (AUD-DEP-04)
+
+- **Verrous** (mode strict) : `minos-intellij/gradle.lockfile` pour ce que le plugin livre, compile et teste (`compileClasspath`, `runtimeClasspath`, `testCompileClasspath`, `testRuntimeClasspath`), `minos-intellij/buildscript-gradle.lockfile` pour les greffons Gradle du build. Pas de `lockAllConfigurations()` : les configurations `intellijPlatform*` résolvent des distributions d'IDE qui varient selon le système et à chaque version corrective ; la coordonnée locale `idea:*` que les classpaths de compilation atteignent est ignorée par le verrou. Une dépendance hors verrou fait échouer le build ; une version déclarée différente du verrou serait **ramenée silencieusement** à celle du verrou, d'où la règle 11 de `check-toolchain-baseline.py` (déclaration = verrou).
+- **Sommes** : `minos-intellij/gradle/verification-metadata.xml` vérifie le SHA-256 de tout ce que Gradle résout (métadonnées comprises), générées sous Windows puis complétées sous Linux, **sauf** les composants tirés d'une distribution IntelliJ (`bundledModule`, `bundledPlugin`, `localIde`, `idea`, `com.jetbrains.intellij.java`, `util-jdom`) : leur version suit le build d'IDE choisi à l'exécution (2026.1 puis 2026.1.5 le 2026-10-15) et MINOS ne les livre pas. Cette confiance est une liste fermée (règle 12). Les IDE que le Plugin Verifier télécharge lui-même ne passent pas par la résolution de Gradle et ne sont pas vérifiés.
+- **OSV** : `gradle.lockfile` est lu par le check exigé `osv-scan` (aucun avis connu sur ses coordonnées le 2026-10-15). `buildscript-gradle.lockfile` et `gradle/verification-metadata.xml` le sont aussi : `--experimental-exclude` n'exclut que des dossiers (exclusion par nom de fichier constatée inopérante au run `osv-scan` de la PR #471). Les greffons Gradle du build tiraient jackson-core et jackson-databind 2.21.4 et jsoup 1.22.2, porteurs d'avis : le `buildscript` de `build.gradle.kts` les monte à leur première version corrigée (BOM Jackson 2.21.7, contrainte jsoup 1.23.2), et leurs anciennes sommes sont retirées. undertow-core 2.4.3.Final n'a **aucune version corrigée** : c'est la seule exception, posée par `minos-intellij/osv-scanner.toml` (et sa copie dans `gradle/`, OSV n'appliquant un `osv-scanner.toml` qu'aux fichiers de son dossier), sur la version exacte et **jusqu'au 2027-01-15**, date à laquelle le scan la signale de nouveau. À réévaluer à chaque montée des greffons Gradle.
+
+### Montée d'une dépendance du plugin
+
+1. Changer la version dans `minos-intellij/build.gradle.kts`.
+2. Régénérer les verrous : `./gradlew --no-configuration-cache dependencies buildEnvironment --write-locks`.
+3. Régénérer les sommes **sous Linux puis sous Windows** (WSL convient) avec les tâches des jobs du plugin : `./gradlew --no-configuration-cache --write-verification-metadata sha256 buildEnvironment dependencies test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure verifyPlugin spotbugsMain`.
+4. Relire le diff : une nouvelle somme pour une version qui ne change pas, ou une `<trust>` ajoutée, se justifie par écrit ou s'annule.
+5. Rejouer `python scripts/quality/check-toolchain-baseline.py` et la qualification du plugin de `docs/TOOLCHAIN_POLICY.md`.
+
 ## Frontière avec la CI
 
 Aucune modification de workflow GitHub Actions n'est incluse dans S5 en juillet 2026. L'épinglage immuable des actions, les checks distants et la branch protection restent dans M21-S2, explicitement en pause jusqu'en août.
