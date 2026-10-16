@@ -187,7 +187,10 @@ if ($JavaVersion -notmatch '"25(?:\.|"|-)') {
 if (-not $ReuseBuild) {
     Push-Location $RepoRoot
     try {
-        $MavenArgs = @("-Drevision=$Version")
+        # AUD-DEP-11: the JAR entries and the SBOM carry the date of the commit, so a rebuild of it gives the same JAR.
+        $CommitTimestamp = ((& git -C $RepoRoot show -s --format=%cI HEAD) | Select-Object -First 1).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($CommitTimestamp)) { throw 'Unable to read the date of the commit.' }
+        $MavenArgs = @("-Drevision=$Version", "-Dproject.build.outputTimestamp=$CommitTimestamp")
         if ($SkipVerify) {
             $MavenArgs += '-DskipTests'
         }
@@ -209,6 +212,7 @@ if (-not $ReuseBuild) {
 
         $CycloneDxArgs = @(
             "-Drevision=$Version",
+            "-Dproject.build.outputTimestamp=$CommitTimestamp",
             '-DschemaVersion=1.6',
             '-DoutputFormat=json',
             '-DoutputName=minos-cyclonedx',

@@ -9,6 +9,7 @@ import io
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 _MODULE_PATH = Path(__file__).parent / "check-workflow-pins.py"
@@ -26,8 +27,8 @@ COVERED_PATHS = ("      - 'scripts/quality/check-workflow-pins.py'\n"
 WINDOWS_INSTALLER = ("name: Windows Installer Validation\n\non:\n"
                      f"  pull_request:\n    branches: [main, develop]\n    paths:\n{COVERED_PATHS}"
                      f"  push:\n    branches: [main, develop]\n    paths:\n{COVERED_PATHS}"
-                     "\njobs:\n  qualify:\n    runs-on: windows-2022\n    steps:\n"
-                     f"      - uses: actions/checkout@{SHA} # v7\n")
+                     "\njobs:\n  qualify:\n    runs-on: windows-2022\n    timeout-minutes: 75\n    steps:\n"
+                     f"      - uses: actions/checkout@{SHA} # v7\n        with:\n          persist-credentials: false\n")
 INSTALLER_SCRIPT = ("param([string]$IsccPath, [string]$RequiredIsccVersion)\n"
                     "if ([string]::IsNullOrWhiteSpace($IsccPath) -ne [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {\n"
                     "  throw 'IsccPath and RequiredIsccVersion go together.'\n}\n"
@@ -47,7 +48,14 @@ INNO_STEP = ("jobs:\n  build:\n    runs-on: windows-2022\n    steps:\n"
 class TreeTest(unittest.TestCase):
     """A temporary tree in which the whole gate passes; each test mutates one place."""
 
+    # The closed list of Docker Hub logins seen by the test: none in a temporary tree, the real one for the repository.
+    docker_login_kept: dict | None = {}
+
     def setUp(self):
+        if self.docker_login_kept is not None:
+            patcher = mock.patch.object(gate, "DOCKER_LOGIN_KEPT", self.docker_login_kept)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
@@ -300,7 +308,7 @@ class FloatingRunnerTest(TreeTest):
         self.assertEqual(([], 1), self.runners(text))
 
     def test_the_whole_gate_names_a_floating_runner_of_any_workflow(self):
-        self.write(f"{gate.WORKFLOWS}/release.yml", "jobs:\n  publish:\n    runs-on: ubuntu-latest\n")
+        self.write(f"{gate.WORKFLOWS}/release.yml", "jobs:\n  publish:\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n")
         failures = self.failures()
         self.assertEqual(1, len(failures))
         self.assertTrue(failures[0].startswith(".github/workflows/release.yml:3: floating runner image 'ubuntu-latest'"))
@@ -324,6 +332,8 @@ class WholeGateTest(TreeTest):
 
 
 class RepositoryTest(TreeTest):
+
+    docker_login_kept = None
 
     def copy_repository(self) -> None:
         shutil.rmtree(self.root / gate.WORKFLOWS)
@@ -355,6 +365,138 @@ class RepositoryTest(TreeTest):
                          ".github/workflows/pr-ci.yml:"):
             self.assertTrue(any(expected in failure for failure in failures), expected)
         self.assertEqual(3, len(failures))
+
+    def test_job_hardening_mutations_of_the_repository_are_named(self):
+        self.copy_repository()
+        self.mutate("secret-scan.yml", "          persist-credentials: false\n", "")
+        self.mutate("pr-ci.yml", "    timeout-minutes: 90\n", "")
+        self.mutate("docker-release-validation.yml", "          docker logout\n", "")
+        failures = self.failures()
+        for expected in (".github/workflows/secret-scan.yml:", "actions/checkout without 'persist-credentials: false'",
+                         "job 'verify' runs on a runner without timeout-minutes",
+                         "job 'provider-complete-image' runs code while logged in to Docker Hub"):
+            self.assertTrue(any(expected in failure for failure in failures), expected)
+        self.assertEqual(3, len(failures))
+
+    def test_a_kept_login_that_disappears_from_the_repository_is_a_stale_entry(self):
+        self.copy_repository()
+        self.mutate("code-audit.yml", "uses: docker/login-action@", "uses: example/not-a-login@")
+        self.assertEqual([".github/workflows/code-audit.yml: job 'mutation' is listed in DOCKER_LOGIN_KEPT but no "
+                          "longer logs in to Docker Hub -- remove the entry."], self.failures())
+
+
+CHECKOUT_STEP = f"      - name: Checkout\n        uses: actions/checkout@{SHA} # v7\n"
+LOGIN_STEP = (f"      - name: Log in\n        uses: docker/login-action@{SHA} # v4\n"
+              "        with:\n          username: x\n")
+
+
+class JobHardeningTest(TreeTest):
+
+    def hardening(self, text: str, label: str = ".github/workflows/x.yml") -> tuple[list[str], set[str]]:
+        return gate.find_job_hardening_violations(label, text)
+
+    def job(self, steps: str, keys: str = "    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n") -> str:
+        return f"name: x\non: push\njobs:\n  build:\n{keys}    steps:\n{steps}"
+
+    def test_a_checkout_that_does_not_persist_the_token_is_accepted(self):
+        text = self.job(CHECKOUT_STEP + "        with:\n          fetch-depth: 0\n          persist-credentials: false\n")
+        self.assertEqual(([], set()), self.hardening(text))
+
+    def test_a_checkout_written_as_a_first_key_is_read_too(self):
+        text = self.job(f"      - uses: actions/checkout@{SHA}\n        with: {{persist-credentials: 'false'}}\n")
+        failures, _kept = self.hardening(text)
+        self.assertEqual(1, len(failures), "a flow mapping is not read: the key must be written on its own line")
+        text = self.job(f"      - uses: actions/checkout@{SHA}\n        with:\n          persist-credentials: 'false'\n")
+        self.assertEqual(([], set()), self.hardening(text))
+
+    def test_a_checkout_that_persists_the_token_is_refused(self):
+        for with_block in ("", "        with:\n          fetch-depth: 0\n",
+                           "        with:\n          persist-credentials: true\n"):
+            failures, _kept = self.hardening(self.job(CHECKOUT_STEP + with_block))
+            self.assertEqual([".github/workflows/x.yml:8: actions/checkout without 'persist-credentials: false' -- "
+                              "the repository token stays in .git/config for every later step of job 'build'."],
+                             failures, with_block)
+
+    def test_the_option_of_another_step_does_not_cover_a_checkout(self):
+        text = self.job(CHECKOUT_STEP + f"      - uses: actions/setup-java@{SHA}\n        with:\n"
+                        "          persist-credentials: false\n")
+        failures, _kept = self.hardening(text)
+        self.assertEqual(1, len(failures))
+        self.assertTrue(failures[0].startswith(".github/workflows/x.yml:8: actions/checkout without"))
+
+    def test_a_job_on_a_runner_without_a_timeout_is_refused(self):
+        text = self.job("      - run: echo ok\n", keys="    runs-on: ubuntu-24.04\n")
+        self.assertEqual(([".github/workflows/x.yml:4: job 'build' runs on a runner without timeout-minutes -- a "
+                           "stuck step would hold the runner for GitHub's 360-minute default."], set()),
+                         self.hardening(text))
+
+    def test_a_step_timeout_does_not_stand_for_the_job_timeout(self):
+        text = self.job("      - run: echo ok\n        timeout-minutes: 5\n", keys="    runs-on: ubuntu-24.04\n")
+        failures, _kept = self.hardening(text)
+        self.assertEqual(1, len(failures))
+        self.assertIn("job 'build' runs on a runner without timeout-minutes", failures[0])
+
+    def test_a_matrix_runner_with_a_timeout_is_accepted(self):
+        keys = ("    strategy:\n      matrix:\n        os: [ubuntu-24.04, windows-2022]\n"
+                "    runs-on: ${{ matrix.os }}\n    timeout-minutes: 90\n")
+        self.assertEqual(([], set()), self.hardening(self.job("      - run: echo ok\n", keys=keys)))
+
+    def test_a_reusable_workflow_call_needs_no_timeout(self):
+        text = ("jobs:\n  scan:\n    uses: ./.github/workflows/osv.yml\n    permissions:\n      contents: read\n"
+                "  after:\n    needs: scan\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    steps:\n"
+                "      - run: echo ok\n")
+        self.assertEqual(([], set()), self.hardening(text))
+
+    def test_keys_outside_the_jobs_block_are_not_jobs(self):
+        text = "on:\n  workflow_dispatch:\n    inputs:\n      runs-on:\n        type: string\njobs: {}\n"
+        self.assertEqual(([], set()), self.hardening(text))
+
+    def test_a_login_followed_by_a_logout_before_any_other_code_is_accepted(self):
+        text = self.job(LOGIN_STEP + f"      - uses: actions/setup-java@{SHA}\n"
+                        "      - name: Pull, then log out\n        run: |\n          docker pull a@sha256:0\n"
+                        "          docker logout\n      - run: ./build.sh\n")
+        self.assertEqual(([], set()), self.hardening(text))
+
+    def test_code_run_while_logged_in_is_refused(self):
+        text = self.job(LOGIN_STEP + "      - name: Build\n        run: ./build.sh\n"
+                        "      - run: docker logout\n")
+        failures, _kept = self.hardening(text)
+        self.assertEqual([".github/workflows/x.yml:12: job 'build' runs code while logged in to Docker Hub -- pull "
+                          "the pinned images, then 'docker logout' in the first run: step after the login, or name "
+                          "the job in DOCKER_LOGIN_KEPT with its reason."], failures)
+
+    def test_a_logout_written_in_a_comment_does_not_count(self):
+        text = self.job(LOGIN_STEP + "      - run: |\n          # docker logout\n          ./build.sh\n")
+        failures, _kept = self.hardening(text)
+        self.assertEqual(1, len(failures))
+        self.assertIn("runs code while logged in to Docker Hub", failures[0])
+
+    def test_a_job_of_the_closed_list_keeps_its_login_and_is_reported_as_kept(self):
+        with mock.patch.object(gate, "DOCKER_LOGIN_KEPT", {("x.yml", "build"): "Testcontainers pulls during the tests."}):
+            text = self.job(LOGIN_STEP + "      - run: ./mvnw verify\n")
+            self.assertEqual(([], {"build"}), self.hardening(text))
+            self.assertEqual([], gate.find_stale_docker_login_entries({("x.yml", "build")}))
+
+    def test_a_stale_entry_of_the_closed_list_is_refused(self):
+        with mock.patch.object(gate, "DOCKER_LOGIN_KEPT", {("x.yml", "build"): "reason"}):
+            text = self.job("      - run: ./mvnw verify\n")
+            failures, kept = self.hardening(text)
+            self.assertEqual(([], set()), (failures, kept))
+            self.assertEqual([".github/workflows/x.yml: job 'build' is listed in DOCKER_LOGIN_KEPT but no longer logs "
+                              "in to Docker Hub -- remove the entry."], gate.find_stale_docker_login_entries(kept))
+
+    def test_the_whole_gate_refuses_a_closed_list_entry_whose_workflow_is_gone(self):
+        with mock.patch.object(gate, "DOCKER_LOGIN_KEPT", {("gone.yml", "verify"): "reason"}):
+            self.assertEqual([".github/workflows/gone.yml: job 'verify' is listed in DOCKER_LOGIN_KEPT but no longer "
+                              "logs in to Docker Hub -- remove the entry."], self.failures())
+
+    def test_the_whole_gate_names_each_hardening_failure_of_a_workflow(self):
+        self.write(f"{gate.WORKFLOWS}/release.yml",
+                   "jobs:\n  publish:\n    runs-on: ubuntu-24.04\n    steps:\n" + CHECKOUT_STEP)
+        failures = self.failures()
+        self.assertEqual(2, len(failures))
+        self.assertTrue(failures[0].startswith(".github/workflows/release.yml:2: job 'publish' runs on a runner"))
+        self.assertTrue(failures[1].startswith(".github/workflows/release.yml:5: actions/checkout without"))
 
 
 if __name__ == "__main__":

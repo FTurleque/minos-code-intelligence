@@ -49,11 +49,13 @@ jobs:
   invariants:
     name: Static invariants (single run)
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
 
     steps:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
@@ -126,6 +128,10 @@ jobs:
       # know every entry of the catalogue and every jar of the classpath lock.
       - name: Embedded tools advisory watch self-test (simulated answers, no network)
         run: python scripts/quality/check-embedded-tools-advisories.py --self-test
+
+      # AUD-DEP-11: the comparison of two builds, on simulated archives (the real double build is reproducible-build.yml).
+      - name: Reproducible build comparison self-test
+        run: python scripts/quality/check-reproducible-build.py --self-test
 
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
@@ -211,6 +217,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
 
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -218,6 +225,7 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
@@ -377,6 +385,7 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
