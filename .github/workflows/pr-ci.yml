@@ -24,6 +24,10 @@ jobs:
       # with the product are prefixed with the name of their tool, so --recursive does not see them: each is
       # passed explicitly, parsed as a package-lock.json (AUD-DEP-03). scripts/quality/check-ci-wiring.py fails
       # when a lockfile under a src/main/resources directory is missing from this list.
+      # AUD-DEP-04: minos-intellij/gradle.lockfile (what the plugin ships and tests with) is scanned. The lock of the
+      # plugin's build script classpath (buildscript-gradle.lockfile) and gradle/verification-metadata.xml are scanned
+      # too: --experimental-exclude only excludes directories. Jackson and jsoup are raised there by build.gradle.kts;
+      # undertow-core, with no fixed version, is the only exception (minos-intellij/osv-scanner.toml, expiring).
       scan-args: |-
         --recursive
         --experimental-exclude=g:**/fixtures/**
@@ -124,6 +128,10 @@ jobs:
       # know every entry of the catalogue and every jar of the classpath lock.
       - name: Embedded tools advisory watch self-test (simulated answers, no network)
         run: python scripts/quality/check-embedded-tools-advisories.py --self-test
+
+      # AUD-DEP-11: the comparison of two builds, on simulated archives (the real double build is reproducible-build.yml).
+      - name: Reproducible build comparison self-test
+        run: python scripts/quality/check-reproducible-build.py --self-test
 
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py

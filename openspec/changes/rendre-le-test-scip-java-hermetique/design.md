@@ -36,7 +36,7 @@ Ordre dans le sprint 6 : indépendant des autres changements. `borner-la-couvert
 
 ## Decisions
 
-### D1. Où corriger — **décision en attente du propriétaire**
+### D1. Où corriger — **option A retenue par le propriétaire le 2026-10-15**
 
 **Option A (recommandée) : corriger le test seul.** La partie commune (commande de résolution Coursier) reste un test sans condition. La partie Windows devient un test `@EnabledOnOs(OS.WINDOWS)` exécuté par `ChildJvm`, environnement posé par le test, sur le modèle de `ScipJavaProcessPlanFactoryToolchainTest` ; si la tâche 1.1 montre qu'il double le test `:175`, seule l'affirmation manquante (`-Language KOTLIN`) y est ajoutée et la branche est supprimée. Aucun code de production, aucun gate littéral touché, aucune question d'ADR.
 
@@ -44,7 +44,7 @@ Ordre dans le sprint 6 : indépendant des autres changements. `borner-la-couvert
 
 **Écartée** : `JAVA_HOME` posé par surefire (écart 4).
 
-### D2. Garde durable — **décision en attente du propriétaire**
+### D2. Garde durable — **recommandation retenue par le propriétaire le 2026-10-15** (garde surefire posée ; aucun test légitime du module n'a besoin du `JAVA_HOME` de l'hôte, tâche 1.2)
 
 Recommandation : retirer `JAVA_HOME` de l'environnement des tests de `minos-provider-scip` par la configuration surefire du module (`excludedEnvironmentVariables`, à confirmer avec surefire 3.6.0 en tâche 1.2). Un test qui lirait le `JAVA_HOME` de l'hôte échouerait alors **partout**, y compris en CI. Les JVM filles ne sont pas touchées : `ChildJvm` pose sa propre valeur. Alternative : ne rien configurer et s'en remettre à la preuve locale de la tâche 2.3 (la régression redeviendrait invisible en CI). À écarter si la tâche 1.2 montre qu'un test légitime du module a besoin du `JAVA_HOME` de l'hôte.
 

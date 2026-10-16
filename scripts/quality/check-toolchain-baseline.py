@@ -39,6 +39,23 @@ What these rules do not prove: that the date written in the policy is the vendor
 own version guard follow (they fail by themselves on the first run), nor that Java `N` is qualified (the
 `Verify` jobs, the image and the installer workflows do).
 
+The dependencies of the IntelliJ plugin are locked (AUD-DEP-04). Rules:
+
+8. `minos-intellij/gradle.lockfile` (what the plugin ships, compiles against and tests with) and
+   `minos-intellij/buildscript-gradle.lockfile` (the Gradle plugins of its build) exist.
+9. `minos-intellij/build.gradle.kts` activates locking in strict mode for the build script and for the project, and
+   never through `lockAllConfigurations()` (it would lock IDE distributions that differ by system and release).
+10. `gradle.lockfile` names no IDE distribution (`idea:*`, `com.jetbrains.intellij.*`): MINOS does not ship it.
+11. Every dependency declared with a version in `build.gradle.kts` (`implementation("g:a:v")`, ...) is locked at that
+    version: a lock overrides a declaration silently, so a raise that forgot `--write-locks` would ship the old one.
+12. `minos-intellij/gradle/verification-metadata.xml` exists, verifies metadata, records SHA-256 sums, and trusts
+    nothing but the closed list TRUSTED_IDE_GROUPS: the components of an IntelliJ distribution, versioned by the IDE
+    build selected at run time (option C of the change). Any other `<trust>` is refused.
+
+What these rules do not prove: that the lock matches what Gradle resolves (the strict build of the plugin jobs fails
+on a dependency outside the lock), that the sums cover what each system resolves (the plugin jobs fail on a missing
+or wrong sum), nor that a locked version is free of known vulnerabilities (osv-scan reads it).
+
 Self-test: scripts/quality/test_check_toolchain_baseline.py.
 """
 from __future__ import annotations
@@ -269,11 +286,103 @@ def check_java(root: Path) -> tuple[list[str], str, int]:
     return failures, version, compared
 
 
+PLUGIN_BUILD = "minos-intellij/build.gradle.kts"
+PLUGIN_LOCK = "minos-intellij/gradle.lockfile"
+PLUGIN_BUILDSCRIPT_LOCK = "minos-intellij/buildscript-gradle.lockfile"
+STRICT_LOCK_MODE = re.compile(r"^\s*lockMode\s*=\s*LockMode\.STRICT\s*$", re.MULTILINE)
+ACTIVATED_LOCKING = re.compile(r"activateDependencyLocking\(\)")
+LOCK_ALL = re.compile(r"lockAllConfigurations\(\)")
+LOCK_ENTRY = re.compile(r"^(?P<module>[^#\s=]+:[^#\s=]+):(?P<version>[^#\s=]+)=", re.MULTILINE)
+DECLARED_DEPENDENCY = re.compile(
+    r"^\s*(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testCompileOnly|testRuntimeOnly)"
+    r"\(\s*\"(?P<module>[^\":\s]+:[^\":\s]+):(?P<version>[^\":\s]+)\"\s*\)", re.MULTILINE)
+IDE_DISTRIBUTION = re.compile(r"^(?:idea|com\.jetbrains\.intellij\.[^:]+):")
+PLUGIN_VERIFICATION = "minos-intellij/gradle/verification-metadata.xml"
+VERIFY_METADATA = re.compile(r"<verify-metadata>\s*true\s*</verify-metadata>")
+SHA256_ENTRY = re.compile(r"<sha256\s+value=\"[0-9a-f]{64}\"")
+TRUST = re.compile(r"<trust\b(?P<attributes>[^>]*)/?>")
+TRUST_ATTRIBUTE = re.compile(r"(?P<name>[\w-]+)=\"(?P<value>[^\"]*)\"")
+# (group, name, regex) of every component Gradle may resolve without a sum: an IntelliJ distribution and the IDE-build
+# libraries the IntelliJ Platform Gradle Plugin takes from it. Nothing that MINOS ships.
+TRUSTED_IDE_GROUPS = frozenset({
+    ("^(bundledModule|bundledPlugin|localIde|idea)$", None, "true"),
+    ("com.jetbrains.intellij.java", None, None),
+    ("com.jetbrains.intellij.platform", "util-jdom", None),
+})
+
+
+def verification_failures(root: Path) -> list[str]:
+    """Rule 12: the sums of what the plugin build resolves are recorded, and only the IDE is trusted."""
+    text = read(root, PLUGIN_VERIFICATION)
+    if text is None:
+        return [f"{PLUGIN_VERIFICATION} is missing: run `./gradlew --write-verification-metadata sha256` with the tasks "
+                "of the plugin jobs, under Linux then Windows"]
+    failures: list[str] = []
+    if not VERIFY_METADATA.search(text):
+        failures.append(f"{PLUGIN_VERIFICATION} does not verify metadata (<verify-metadata>true</verify-metadata>)")
+    if not SHA256_ENTRY.search(text):
+        failures.append(f"{PLUGIN_VERIFICATION} records no SHA-256 sum")
+    for match in TRUST.finditer(text):
+        attributes = {item.group("name"): item.group("value") for item in TRUST_ATTRIBUTE.finditer(match.group("attributes"))}
+        key = (attributes.get("group"), attributes.get("name"), attributes.get("regex"))
+        if key not in TRUSTED_IDE_GROUPS or set(attributes) - {"group", "name", "regex", "reason"}:
+            failures.append(f"{PLUGIN_VERIFICATION} trusts {match.group(0).strip()}, outside the IDE components of "
+                            "TRUSTED_IDE_GROUPS: record its SHA-256 instead")
+    return failures
+
+
+def code_of(text: str) -> str:
+    """A Kotlin build script without its `//` comments, which may name what the code must not do."""
+    return "\n".join(line.split("//", 1)[0] for line in text.splitlines())
+
+
+def check_plugin_locks(root: Path) -> tuple[list[str], int]:
+    """(failures, number of declared dependencies found at their locked version): rules 8 to 11."""
+    failures: list[str] = []
+    build = read(root, PLUGIN_BUILD)
+    lock = read(root, PLUGIN_LOCK)
+    for relative, text in ((PLUGIN_LOCK, lock), (PLUGIN_BUILDSCRIPT_LOCK, read(root, PLUGIN_BUILDSCRIPT_LOCK))):
+        if text is None:
+            failures.append(f"{relative} is missing: run `./gradlew dependencies buildEnvironment --write-locks` "
+                            "in minos-intellij and commit the lock files")
+    if build is None:
+        return failures + [f"{PLUGIN_BUILD} is missing"], 0
+    code = code_of(build)
+    if LOCK_ALL.search(code):
+        failures.append(f"{PLUGIN_BUILD} locks every configuration (lockAllConfigurations()), IDE distributions "
+                        "included: lock the named configurations of the plugin only")
+    if len(STRICT_LOCK_MODE.findall(code)) < 2 or len(ACTIVATED_LOCKING.findall(code)) < 2:
+        failures.append(f"{PLUGIN_BUILD} does not lock both the build script classpath and the project "
+                        "configurations in strict mode (lockMode = LockMode.STRICT, activateDependencyLocking())")
+    failures.extend(verification_failures(root))
+    if lock is None:
+        return failures, 0
+    locked = {match.group("module"): match.group("version") for match in LOCK_ENTRY.finditer(lock)}
+    for module in sorted(locked):
+        if IDE_DISTRIBUTION.match(module):
+            failures.append(f"{PLUGIN_LOCK} locks the IDE distribution {module}:{locked[module]}, which MINOS does "
+                            "not ship: ignore it (dependencyLocking.ignoredDependencies)")
+    agreeing = 0
+    for match in DECLARED_DEPENDENCY.finditer(code):
+        module, version = match.group("module"), match.group("version")
+        if module not in locked:
+            failures.append(f"{PLUGIN_BUILD} declares {module}:{version}, which {PLUGIN_LOCK} does not lock: "
+                            "run --write-locks")
+        elif locked[module] != version:
+            failures.append(f"{PLUGIN_BUILD} declares {module}:{version} but {PLUGIN_LOCK} locks "
+                            f"{locked[module]}: the lock would ship {locked[module]}, run --write-locks")
+        else:
+            agreeing += 1
+    return failures, agreeing
+
+
 def check(root: Path) -> tuple[list[str], str, int]:
     """(failures, both baselines, number of places compared with their reference)."""
     gradle_failures, gradle, gradle_compared = check_gradle(root)
     java_failures, java, java_compared = check_java(root)
-    return gradle_failures + java_failures, f"gradle={gradle}, java={java}", gradle_compared + java_compared
+    lock_failures, locked = check_plugin_locks(root)
+    return (gradle_failures + java_failures + lock_failures, f"gradle={gradle}, java={java}",
+            gradle_compared + java_compared + locked)
 
 
 def main() -> int:
