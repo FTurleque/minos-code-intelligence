@@ -13,6 +13,7 @@ Dependabot couvre Maven (`/`), le build Gradle du plugin (`/minos-intellij`), Gi
 3. **GitHub Actions** : épinglées par SHA de commit avec la version en commentaire ; `python scripts/quality/check-workflow-pins.py` doit passer.
 4. **Images** : `image:tag@sha256:digest`, une seule source par image gérée ; `python scripts/quality/check-image-pins.py`. pgvector : seuls les tags de même suffixe (`-pg17`).
 5. **Gradle wrapper** : la somme SHA-256 de la distribution est épinglée dans `gradle-wrapper.properties` ; `gradlew.bat` est renormalisé (LF dans l'index, CRLF à l'extraction).
+   **Dépendances du plugin** (AUD-DEP-04) : verrous `minos-intellij/gradle.lockfile` et `buildscript-gradle.lockfile`, sommes `minos-intellij/gradle/verification-metadata.xml`. Une montée régénère les deux dans la même PR (procédure « Montée d'une dépendance du plugin » de `docs/developer/supply-chain.md`) ; une PR Dependabot reste rouge tant que ce n'est pas fait (`check-toolchain-baseline.py`, build strict). Une somme qui change **sans** changement de version est un signal d'alerte, pas une formalité.
 6. Convergence : `./mvnw -B -ntp dependency:tree -pl <module> -am` ; une seule version de `slf4j-api` dans le JAR ombré (2.0.x).
 
 ## Vérifications
