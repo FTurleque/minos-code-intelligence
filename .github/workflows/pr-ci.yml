@@ -127,6 +127,10 @@ jobs:
       - name: Embedded tools advisory watch self-test (simulated answers, no network)
         run: python scripts/quality/check-embedded-tools-advisories.py --self-test
 
+      # AUD-DEP-11: the comparison of two builds, on simulated archives (the real double build is reproducible-build.yml).
+      - name: Reproducible build comparison self-test
+        run: python scripts/quality/check-reproducible-build.py --self-test
+
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
 
