@@ -60,6 +60,10 @@ MinosMultiRepositoryApiContractTest
 
 Ils empêchent notamment une fuite de types fournisseur ou de packages internes vers les contrats publics.
 
+### Variables d'environnement des tests
+
+Un test ne lit jamais l'environnement de l'hôte pour décider de son résultat. Un test de processus fils pose lui-même l'environnement de ce processus (modèle : `ChildJvm` de `minos-provider-scip`, qui vide l'environnement puis pose `PATH` et `JAVA_HOME`). Une moitié de test propre à un système s'écrit dans un test `@EnabledOnOs`, compté comme sauté ailleurs, jamais derrière un `if`. `minos-provider-scip` retire `JAVA_HOME` du JVM de ses tests (`excludedEnvironmentVariables` de surefire) : un test qui lirait le `JAVA_HOME` de l'hôte y échoue partout, CI comprise (AUD-TST-18).
+
 ### Fixtures réelles
 
 Le dépôt contient des fixtures qui servent à mesurer le comportement sur de vrais artefacts SCIP et de vrais graphes.
