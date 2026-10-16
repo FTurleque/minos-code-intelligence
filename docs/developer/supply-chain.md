@@ -222,6 +222,18 @@ Les jobs Linux qui téléchargent des images passent par `docker/login-action` (
 
 Jobs concernés : `Verify (ubuntu-24.04)` de `pr-ci.yml` (Testcontainers réutilise la connexion du démon Docker), `docker-release-validation.yml`, `release-promotion-gate.yml`, `docker-upgrade-qualification.yml` et le job PIT de `code-audit.yml`. Sans ces secrets (dépôt non configuré, PR depuis un fork), l'étape est sautée et les téléchargements restent anonymes : rien ne casse, la limite s'applique.
 
+## Construction reproductible (AUD-DEP-11)
+
+Deux constructions du même commit, sur le même système, donnent le même JAR ombré. `project.build.outputTimestamp` est écrit dans le POM racine (`2026-01-01T00:00:00Z`, valeur d'un build sans Git ou de développement) et les scripts qui construisent un livrable (`build-windows-distribution.ps1`, `qualify-docker-release.sh`) passent la date du commit. Maven 3.10, celui du wrapper, fixait déjà une date par défaut ; Maven 3.9, que l'enforcer accepte, non : le POM ne dépend plus de la version de Maven. `requirePluginVersions` refuse tout plugin sans version, phases `clean`, `deploy` et `site` comprises.
+
+Vérifier soi-même (deux clones propres du commit, construction, comparaison des entrées) :
+
+```text
+python scripts/quality/check-reproducible-build.py twice --work <dossier vide>
+```
+
+`reproducible-build.yml` le fait sous Linux sur les PR qui touchent le build Maven et avant chaque publication (appelé par `release-windows.yml`). **Hors périmètre** : le zip, l'installateur et les images ne sont pas reproductibles bit à bit ; un JAR construit sous Windows n'est pas prouvé identique à un JAR construit sous Linux.
+
 ## Dépendances du plugin IntelliJ : verrou et sommes (AUD-DEP-04)
 
 - **Verrous** (mode strict) : `minos-intellij/gradle.lockfile` pour ce que le plugin livre, compile et teste (`compileClasspath`, `runtimeClasspath`, `testCompileClasspath`, `testRuntimeClasspath`), `minos-intellij/buildscript-gradle.lockfile` pour les greffons Gradle du build. Pas de `lockAllConfigurations()` : les configurations `intellijPlatform*` résolvent des distributions d'IDE qui varient selon le système et à chaque version corrective ; la coordonnée locale `idea:*` que les classpaths de compilation atteignent est ignorée par le verrou. Une dépendance hors verrou fait échouer le build ; une version déclarée différente du verrou serait **ramenée silencieusement** à celle du verrou, d'où la règle 11 de `check-toolchain-baseline.py` (déclaration = verrou).
