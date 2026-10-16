@@ -37,7 +37,7 @@ Sprint 5 de l'audit du 10 octobre 2026 : **AUD-DEP-04**. HEAD analysé : `2d1cc2
 
 Alternative écartée : `lockAllConfigurations()` (écart 1).
 
-### D2. Vérification de sommes — **décision en attente du propriétaire**
+### D2. Vérification de sommes — **option C retenue le 2026-10-15** (A recommandée « si les artefacts d'IDE sont stables » : la mesure 1.1 montre qu'ils ne le sont pas)
 
 - **Option A (recommandée) : vérification SHA-256 de tout ce qui est résolu**, métadonnées générées sous Linux et complétées sous Windows, artefacts d'IDE compris s'ils sont stables pour une version donnée d'IntelliJ Platform. Conséquence assumée : une PR Dependabot Gradle est rouge tant que les métadonnées ne sont pas régénérées (procédure écrite, D4).
 - **Option B : verrou seul.** OSV voit les dépendances ; l'intégrité repose sur HTTPS et les dépôts. Plus simple, PR Dependabot vertes ; la limite est déclarée.
@@ -53,6 +53,13 @@ Le choix se fait **après** la mesure de la tâche 1.1.
 ### D4. Procédure de montée écrite
 
 `docs/developer/` et le skill `minos-dependency-update` décrivent : régénérer le verrou (`--write-locks`), régénérer les métadonnées sous Linux puis Windows (`--write-verification-metadata sha256`), relire le diff (une somme qui change **sans** changement de version est un signal d'alerte, pas une formalité), rejouer la qualification du plugin de `docs/TOOLCHAIN_POLICY.md`.
+
+## Mesures de la tâche 1.1 (2026-10-15)
+
+- **Configurations** : `resolvableConfigurations` liste une trentaine de configurations `intellijPlatform*` à côté des quatre classpaths Java. `compileClasspath` et `testCompileClasspath` atteignent la coordonnée locale `idea:idea:2026.1` (l'IDE extrait) ; `runtimeClasspath` ne livre que gson et error_prone_annotations. Verrou : les quatre classpaths Java, `idea:*` ignoré (`ignoredDependencies`), et le classpath du script de build ; 13 coordonnées livrées ou de test, 77 de build.
+- **Dérive** : une dépendance hors verrou fait échouer le build (« Resolved 'org.apache.commons:commons-lang3:3.18.0' which is not part of the dependency lock state ») ; une version **déclarée** différente du verrou est en revanche ramenée silencieusement à la version verrouillée (`2.13.2 -> 2.14.0`, contrainte `strictly`) : d'où la règle 11 du gate.
+- **Sommes** : générées sous Windows (`test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure verifyPlugin spotbugsMain pitest`), complétées avec `--refresh-dependencies` (six métadonnées de greffons manquaient), puis régénérées sous Linux (WSL Ubuntu, JDK 21) : **identiques**, 209 composants. Les composants tirés de l'IDE changent de version au fil des builds d'IDE choisis à l'exécution (`idea:idea` 2026.1 et 2026.1.5, `localIde` IU-261.22158.277, `com.jetbrains.intellij.java` 261.22158.277) : option C, confiance limitée à ces groupes. Une somme altérée (gson) fait échouer le build.
+- **OSV** : interrogation de l'API OSV (pas d'OSV-Scanner sur le poste) sur les 90 coordonnées verrouillées : aucun avis sur `gradle.lockfile` ; quatre composants du classpath de build en portent (jackson-databind et jackson-core 2.21.4, undertow-core 2.4.3.Final, jsoup 1.22.2) : `buildscript-gradle.lockfile` exclu nommément du scan exigé.
 
 ## Direction des dépendances
 
