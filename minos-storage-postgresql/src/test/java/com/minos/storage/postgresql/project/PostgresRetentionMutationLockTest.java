@@ -5,6 +5,7 @@ import com.minos.storage.postgresql.support.PostgresProjectMutationLock;
 import com.minos.storage.PersistentRetentionPolicy;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -50,7 +51,8 @@ class PostgresRetentionMutationLockTest extends PostgresTestSupport {
                     throw new RuntimeException(exception);
                 }
             });
-            Thread.sleep(200);
+            // pg_locks shows the request as not granted: the wait is observed, not assumed after a delay.
+            awaitAdvisoryLockWaiter(projectId, Duration.ofSeconds(10));
             assertFalse(compacted.get(), "retention must wait for the shared project mutation lock");
             release.countDown();
             holder.get(10, TimeUnit.SECONDS);
