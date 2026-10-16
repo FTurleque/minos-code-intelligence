@@ -260,3 +260,44 @@ jobs:
       - name: Publier la GitHub Release
         shell: pwsh
         run: .\scripts\release\publish-windows-release.ps1 -Version $env:RELEASE_VERSION -TargetCommit $env:TARGET_COMMIT -PublishOnly
+
+  # AUD-DEP-07: the release is created with the workflow token, which triggers no `release:` event. The plugin is
+  # therefore built from the published tag and attached by a direct call; the caller grants the write permission the
+  # attaching job of the called workflow asks for (check-ci-wiring.py, rule 5).
+  plugin:
+    name: Build and attach the IntelliJ plugin
+    needs: publish
+    permissions:
+      contents: write
+    uses: ./.github/workflows/intellij-plugin-release.yml
+    with:
+      tag: v${{ inputs.version }}
+      commit: ${{ github.sha }}
+
+  # The release is published before the plugin is attached (decision D3 of publier-le-plugin-avec-la-release): a
+  # release without its plugin turns this workflow red instead of passing unnoticed. Repair: replay
+  # intellij-plugin-release.yml by workflow_dispatch with the tag.
+  release-complete:
+    name: Check that the release carries the IntelliJ plugin
+    needs: [publish, plugin]
+    if: ${{ always() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Require the plugin archive and its checksum on the release
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="v$RELEASE_VERSION"
+          ASSETS="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          ZIP="$(printf '%s\n' "$ASSETS" | grep -E '^minos-intellij-.+\.zip$' || true)"
+          if [ "$(printf '%s' "$ZIP" | grep -c .)" -ne 1 ]; then
+            echo "Release $TAG does not carry exactly one minos-intellij-*.zip (found: '${ZIP}'). Replay intellij-plugin-release.yml with tag=$TAG." >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "$ASSETS" | grep -Fxq "$ZIP.sha256"; then
+            echo "Release $TAG carries $ZIP without $ZIP.sha256." >&2
+            exit 1
+          fi
+          echo "Release $TAG carries $ZIP and its checksum."
