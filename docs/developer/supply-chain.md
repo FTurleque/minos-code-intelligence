@@ -111,20 +111,24 @@ Le helper :
 
 utilise `signtool.exe`, SHA-256 et vérifie ensuite `Get-AuthenticodeSignature`.
 
-Le runner S5 accepte un candidat non signé tant qu'aucun certificat de production n'est configuré. Pour rendre la signature obligatoire :
+Ce script suppose un certificat **déjà installé dans un magasin de la machine** (`signtool /sha1`) : il n'est pas branchable tel quel sur un runner GitHub hébergé, et **aucun workflow ne l'appelle**. **État réel : les releases ne sont pas signées** (décision D2 de `attester-et-signer-la-release-windows` : pas de signature tant qu'aucun service de signature n'est souscrit ; le service par identité fédérée reste l'option recommandée et demandera un ADR).
+
+**Garde-fou (AUD-DEP-06).** `scripts/release/release-signature.ps1` lit deux variables du dépôt, transmises par `release-windows.yml` : `MINOS_REQUIRE_SIGNED_RELEASE` (`1` : signature exigée ; `0` ou absente : non exigée ; toute autre valeur échoue) et `MINOS_SIGNING_MODE`. Aucun mode n'est encore implémenté : exiger la signature fait échouer le job `build` **avant toute construction**. Quand elle sera active, chaque exécutable de la distribution et l'installateur devront porter une signature Authenticode `Valid` **et horodatée** (une signature sans horodatage expire avec son certificat). Sans exigence, rien n'est signé à moitié et le manifeste de release écrit `"authenticode": {"required": false, "state": "unsigned"}` (`create-release-manifest.py`, contrôlé par `check-supply-chain.py`). Ordre imposé : signature, puis manifeste et sommes, puis qualification ; la qualification (`publish-windows-release.ps1`, fonction `Verify-Sha256`) recalcule la somme de chaque fichier publié dans les deux modes et échoue si un fichier a changé après le calcul de sa somme. Tests : `scripts/release/test-release-signature.ps1` (PowerShell 7 dans `invariants`, Windows PowerShell 5.1 dans `Verify (windows-2022)`).
+
+**Attestation de provenance.** Le job `publish` de `release-windows.yml` atteste chaque fichier publié (installateur, zips complet et lite, SBOM, notices) par `actions/attest-build-provenance`, et le job `publish` de `intellij-plugin-release.yml` atteste l'archive du plugin ; `id-token: write` et `attestations: write` ne sont accordés qu'à ces deux jobs (`check-workflow-pins.py`). Vérifier un téléchargement :
 
 ```powershell
-$env:MINOS_REQUIRE_SIGNED_RELEASE = '1'
+gh attestation verify .\MINOS-<version>-windows-x64-setup.exe --repo FTurleque/minos-code-intelligence
 ```
 
-Dans ce mode, un setup sans signature Authenticode `Valid` échoue.
+La vérification nomme le workflow et le commit qui ont produit le fichier ; elle est indépendante de l'hébergement des `.sha256`. **Non prouvé avant la prochaine release** : aucune attestation n'a encore été émise.
 
 ## Gate M21-S5
 
 Entrée autoritative locale :
 
 ```powershell
-.\scripts\m21\run-s5.ps1 -ExpectedHead <sha>
+.\scripts\history\m21\run-s5.ps1 -ExpectedHead <sha>
 ```
 
 Le runner :

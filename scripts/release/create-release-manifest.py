@@ -16,7 +16,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--version", required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    # AUD-DEP-06: the Authenticode state is written, never presumed; release-signature.ps1 decides it.
+    parser.add_argument("--authenticode-required", required=True, choices=("0", "1"))
+    parser.add_argument("--authenticode-state", required=True, choices=AUTHENTICODE_STATES)
     return parser.parse_args()
+
+
+AUTHENTICODE_STATES = ("unsigned", "signed")
+
+
+def authenticode(required: str, state: str) -> dict:
+    """The additive `authenticode` field: a required signature is `signed`, and only a required one can be."""
+    if (required == "1") != (state == "signed"):
+        raise RuntimeError(f"authenticode state '{state}' contradicts required={required}")
+    return {"required": required == "1", "state": state}
 
 
 def sha256(path: Path) -> str:
@@ -61,6 +74,7 @@ def main() -> int:
             "sbom": "supply-chain/minos.cdx.json",
             "thirdPartyNotices": "supply-chain/THIRD-PARTY-NOTICES.txt",
             "files": files,
+            "authenticode": authenticode(args.authenticode_required, args.authenticode_state),
         }
         output.write_text(
             json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False) + "\n",

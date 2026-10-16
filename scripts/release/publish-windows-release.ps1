@@ -223,6 +223,11 @@ $LiteZipHash = Verify-Sha256 $LiteZip $LiteZipChecksum
 $LiteSbomHash = Verify-Sha256 $LiteSbom $LiteSbomChecksum
 $LiteNoticesHash = Verify-Sha256 $LiteNotices $LiteNoticesChecksum
 
+# AUD-DEP-06: the installer is checked like the executables of the distribution (build-windows-distribution.ps1). The
+# sums above are recomputed on the final files in both modes, so a file signed after its sum was written fails there.
+. (Join-Path $RepoRoot 'scripts\release\release-signature.ps1')
+$SetupSignatureState = Get-ReleaseSignatureState -Required (Get-ReleaseSignatureRequirement $env:MINOS_REQUIRE_SIGNED_RELEASE) -Mode $env:MINOS_SIGNING_MODE -Executable @($Setup)
+
 if (-not $PublishOnly) {
     if (-not (Test-Path -LiteralPath $SmokeSetup -PathType Leaf)) { throw "Isolated smoke setup missing: $SmokeSetup" }
 
@@ -324,6 +329,7 @@ if ($ValidateOnly) {
     Write-Host "MCP handshake : PASS (ZIP + isolated setup)"
     Write-Host "SBOM SHA-256  : $SbomHash"
     Write-Host "Notices SHA   : $NoticesHash"
+    Write-Host "Authenticode  : $SetupSignatureState"
     return
 }
 
@@ -357,6 +363,7 @@ Write-Host "Commit        : $TargetCommit"
 Write-Host "Setup SHA-256 : $SetupHash"
 Write-Host "ZIP SHA-256   : $ZipHash"
 Write-Host "Lite ZIP SHA  : $LiteZipHash"
+Write-Host "Authenticode  : $SetupSignatureState"
 Write-Host "MCP handshake : PASS (ZIP + isolated setup)"
 Write-Host "SBOM SHA-256  : $SbomHash"
 Write-Host "Notices SHA   : $NoticesHash"

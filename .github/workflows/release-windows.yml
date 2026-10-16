@@ -31,6 +31,10 @@ env:
   # block.
   RELEASE_VERSION: ${{ inputs.version }}
   TARGET_COMMIT: ${{ github.sha }}
+  # AUD-DEP-06: repository variables. MINOS_REQUIRE_SIGNED_RELEASE=1 requires an Authenticode-signed release; no
+  # signing mode is implemented yet (MINOS_SIGNING_MODE), so requiring it fails the build before anything is made.
+  MINOS_REQUIRE_SIGNED_RELEASE: ${{ vars.MINOS_REQUIRE_SIGNED_RELEASE }}
+  MINOS_SIGNING_MODE: ${{ vars.MINOS_SIGNING_MODE }}
   INNO_SETUP_VERSION: '6.7.1'
 
 jobs:
@@ -163,6 +167,14 @@ jobs:
           Write-Host "Qualified ISCC: $isccPath (chocolatey innosetup package version=$installedVersion)"
           "ISCC_PATH=$isccPath" >> $env:GITHUB_ENV
 
+      - name: Contrôler l'exigence de signature avant de construire
+        shell: pwsh
+        run: |
+          . .\scripts\release\release-signature.ps1
+          $required = Get-ReleaseSignatureRequirement $env:MINOS_REQUIRE_SIGNED_RELEASE
+          Assert-ReleaseSigningConfigured -Required $required -Mode $env:MINOS_SIGNING_MODE
+          Write-Host "Signature Authenticode exigée : $required"
+
       - name: Afficher la toolchain
         shell: pwsh
         run: |
@@ -240,8 +252,11 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: windows-2022
     timeout-minutes: 30
+    # AUD-DEP-06: id-token and attestations are granted to this job only, for the provenance attestation.
     permissions:
       contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout exact candidate
@@ -256,6 +271,17 @@ jobs:
         with:
           name: minos-${{ inputs.version }}-windows-release-assets
           path: target/dist
+
+      # AUD-DEP-06: every published file is attested before the release exists (origin: this repository, this
+      # workflow, this commit). Check a download with: gh attestation verify <file> --repo <owner>/<repository>.
+      - name: Attester la provenance des artefacts publiés
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            target/dist/*.exe
+            target/dist/*.zip
+            target/dist/*.cdx.json
+            target/dist/*-THIRD-PARTY-NOTICES.txt
 
       - name: Publier la GitHub Release
         shell: pwsh
