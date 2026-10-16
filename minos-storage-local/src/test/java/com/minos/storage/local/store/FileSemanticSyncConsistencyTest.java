@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -35,6 +36,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * Verifies the MINOS-03 invariant: stale writers cannot overwrite a newer committed index.
  */
 class FileSemanticSyncConsistencyTest {
+
+    private static final String BOUNDED_FILE_LEASE = "com.minos.io.BoundedFileLease";
 
     // -------------------------------------------------------------------------
     // Unit: conditional replace rejects stale snapshot
@@ -94,57 +97,58 @@ class FileSemanticSyncConsistencyTest {
         AtomicBoolean aSawStale = new AtomicBoolean(false);
         AtomicBoolean bSucceeded = new AtomicBoolean(false);
         CountDownLatch aHoldsLock = new CountDownLatch(1);
-        CountDownLatch bDone = new CountDownLatch(1);
 
         // Thread A: enters replaceConditionally but blocks before the active-reader completes
         // We simulate the "embedding delay" by having the reader gate on a latch
         CountDownLatch releaseA = new CountDownLatch(1);
-        AtomicReference<Throwable> errorA = new AtomicReference<>();
+        AtomicReference<Throwable> unexpectedError = new AtomicReference<>();
 
-        try (var executor = Executors.newFixedThreadPool(2)) {
-            // Thread A: holds the per-project lock while "re-verifying" (reader blocks on latch)
-            Future<?> futureA = executor.submit(() -> {
-                try {
-                    store.replaceConditionally(snap(projectId, "snap-1"), "snap-1", () -> {
-                        aHoldsLock.countDown(); // signal: A is inside the lock, reader called
-                        try { releaseA.await(10, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                        return Optional.of("snap-2"); // active promoted to snap-2 while A was embedding
-                    });
-                } catch (StaleSemanticSyncException e) {
-                    aSawStale.set(true);
-                } catch (Throwable t) {
-                    errorA.set(t);
-                }
-            });
-
+        // Thread A: holds the per-project lock while "re-verifying" (reader blocks on latch)
+        Thread writerA = daemon("semantic-sync-writer-a", () -> {
+            try {
+                store.replaceConditionally(snap(projectId, "snap-1"), "snap-1", () -> {
+                    aHoldsLock.countDown(); // signal: A is inside the lock, reader called
+                    try { releaseA.await(10, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                    return Optional.of("snap-2"); // active promoted to snap-2 while A was embedding
+                });
+            } catch (StaleSemanticSyncException e) {
+                aSawStale.set(true);
+            } catch (Throwable t) {
+                unexpectedError.compareAndSet(null, t);
+            }
+        });
+        // Thread B: tries to commit snap-2 while A holds the lock
+        Thread writerB = daemon("semantic-sync-writer-b", () -> {
+            try {
+                store.replaceConditionally(snap(projectId, "snap-2"), "snap-2",
+                        () -> Optional.of("snap-2"));
+                bSucceeded.set(true);
+            } catch (Throwable t) {
+                unexpectedError.compareAndSet(null, t);
+            }
+        });
+        try {
+            writerA.start();
             // Wait for A to be inside the lock (reader blocked)
             assertTrue(aHoldsLock.await(10, TimeUnit.SECONDS));
 
-            // Thread B: tries to commit snap-2 while A holds the lock → must block
-            Future<?> futureB = executor.submit(() -> {
-                try {
-                    store.replaceConditionally(snap(projectId, "snap-2"), "snap-2",
-                            () -> Optional.of("snap-2"));
-                    bSucceeded.set(true);
-                } catch (IOException e) {
-                    errorA.compareAndSet(null, e);
-                } finally {
-                    bDone.countDown();
-                }
-            });
-
+            writerB.start();
+            // B is observed waiting for the lease A holds, not assumed blocked.
+            ParkedThreads.awaitParkedIn(writerB, BOUNDED_FILE_LEASE, Duration.ofSeconds(10));
+            assertFalse(bSucceeded.get(), "thread B must not commit while A holds the lock");
+        } finally {
             // Release A (its reader returns snap-2 ≠ expected snap-1 → StaleSemanticSyncException)
             releaseA.countDown();
-            futureA.get(10, TimeUnit.SECONDS);
-
+            writerA.join(TimeUnit.SECONDS.toMillis(10));
             // After A releases the lock, B should proceed and succeed
-            assertTrue(bDone.await(10, TimeUnit.SECONDS));
-            futureB.get(5, TimeUnit.SECONDS);
+            writerB.join(TimeUnit.SECONDS.toMillis(10));
         }
 
+        assertFalse(writerA.isAlive(), "thread A must complete");
+        assertFalse(writerB.isAlive(), "thread B must complete");
         assertTrue(aSawStale.get(), "thread A must have seen StaleSemanticSyncException");
         assertTrue(bSucceeded.get(), "thread B must succeed after A releases the lock");
-        assertFalse(errorA.get() != null, "no unexpected errors: " + errorA.get());
+        assertNull(unexpectedError.get(), "no unexpected errors");
         assertEquals("snap-2", store.metadata(projectId).orElseThrow().snapshotId(),
                 "durable index must reflect snap-2 (the winner)");
     }
@@ -189,7 +193,7 @@ class FileSemanticSyncConsistencyTest {
             futureY.get(10, TimeUnit.SECONDS);
 
             assertTrue(ySucceeded.get(), "project Y must complete independently of project X");
-            assertFalse(errors.get() != null, "no unexpected errors: " + errors.get());
+            assertNull(errors.get(), "no unexpected errors");
 
             xProceed.countDown();
             futureX.get(10, TimeUnit.SECONDS);
@@ -205,12 +209,11 @@ class FileSemanticSyncConsistencyTest {
         FileSemanticVectorStore store = new FileSemanticVectorStore(temp);
         String projectId = UUID.randomUUID().toString();
 
-        try {
-            store.replaceConditionally(snap(projectId, "snap-1"), "snap-1",
-                    () -> { throw new IOException("simulated I/O failure"); });
-        } catch (IOException expected) {
-            assertEquals("simulated I/O failure", expected.getMessage());
-        }
+        SemanticVectorStore.IndexSnapshot first = snap(projectId, "snap-1");
+        IOException failure = assertThrows(IOException.class, () ->
+                store.replaceConditionally(first, "snap-1",
+                        () -> { throw new IOException("simulated I/O failure"); }));
+        assertEquals("simulated I/O failure", failure.getMessage());
 
         // Lock must be released — a follow-up call must proceed
         store.replaceConditionally(snap(projectId, "snap-1"), "snap-1",
@@ -230,20 +233,8 @@ class FileSemanticSyncConsistencyTest {
         // Compute the expected lock file path (same formula as FileSemanticVectorStore)
         Path lockFile = temp.resolve(".sync-locks").resolve(projectId + ".lock");
 
-        Optional<String> commandOpt = ProcessHandle.current().info().command();
-        assumeTrue(commandOpt.isPresent(), "JVM command path unavailable — skipping cross-JVM test");
-
-        String classpath = System.getProperty("java.class.path", "");
-        assumeTrue(!classpath.isBlank(), "java.class.path unavailable — skipping cross-JVM test");
-
-        Process subprocess = new ProcessBuilder(
-                commandOpt.get(), "-cp", classpath,
-                SemanticSyncLockHolderProcess.class.getName(), lockFile.toString())
-                .redirectErrorStream(false)
-                .start();
-
-        try {
-            BufferedReader out = new BufferedReader(new InputStreamReader(subprocess.getInputStream()));
+        Process subprocess = startLockHolder(lockFile);
+        try (BufferedReader out = new BufferedReader(new InputStreamReader(subprocess.getInputStream()))) {
             String ready = out.readLine();
             assumeTrue("READY".equals(ready), "subprocess did not signal READY (got: " + ready + ") — skipping cross-JVM test");
 
@@ -252,7 +243,7 @@ class FileSemanticSyncConsistencyTest {
             AtomicReference<Throwable> syncError = new AtomicReference<>();
             CountDownLatch attempted = new CountDownLatch(1);
 
-            Thread syncThread = new Thread(() -> {
+            Thread syncThread = daemon("semantic-sync-cross-jvm", () -> {
                 attempted.countDown();
                 try {
                     store.replaceConditionally(snap(projectId, "snap-1"), "snap-1",
@@ -266,7 +257,7 @@ class FileSemanticSyncConsistencyTest {
 
             assertTrue(attempted.await(5, TimeUnit.SECONDS));
             // The thread is observed retrying the file lock held by the other JVM, not assumed blocked after a delay.
-            ParkedThreads.awaitParkedIn(syncThread, "com.minos.io.BoundedFileLease", Duration.ofSeconds(5));
+            ParkedThreads.awaitParkedIn(syncThread, BOUNDED_FILE_LEASE, Duration.ofSeconds(5));
             assertFalse(commitSucceeded.get(),
                     "replaceConditionally must be blocked while subprocess holds the cross-JVM file lock");
 
@@ -287,6 +278,28 @@ class FileSemanticSyncConsistencyTest {
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /** Starts a JVM that holds the file lock until its stdin closes; its stderr is discarded so it never blocks. */
+    private static Process startLockHolder(Path lockFile) throws IOException {
+        Optional<String> commandOpt = ProcessHandle.current().info().command();
+        assumeTrue(commandOpt.isPresent(), "JVM command path unavailable — skipping cross-JVM test");
+
+        String classpath = System.getProperty("java.class.path", "");
+        assumeTrue(!classpath.isBlank(), "java.class.path unavailable — skipping cross-JVM test");
+
+        return new ProcessBuilder(
+                commandOpt.get(), "-cp", classpath,
+                SemanticSyncLockHolderProcess.class.getName(), lockFile.toString())
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start();
+    }
+
+    /** A daemon thread, so a failed assertion never leaves the test JVM waiting for it. */
+    private static Thread daemon(String name, Runnable body) {
+        Thread thread = new Thread(body, name);
+        thread.setDaemon(true);
+        return thread;
+    }
 
     private static SemanticVectorStore.IndexSnapshot snap(String projectId, String snapshotId) {
         String stableKey = "symbol:fixture:" + snapshotId;

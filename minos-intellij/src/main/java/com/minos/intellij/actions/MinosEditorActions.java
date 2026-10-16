@@ -16,6 +16,7 @@ import com.intellij.psi.PsiFile;
 import com.minos.intellij.navigation.MinosLocation;
 import com.minos.intellij.navigation.MinosNavigation;
 import com.minos.intellij.protocol.MinosCliClient;
+import com.minos.intellij.protocol.MinosJsonFields;
 import com.minos.intellij.service.MinosProjectService;
 import com.minos.intellij.task.MinosBackgroundTask;
 import com.minos.intellij.ui.MinosUiController;
@@ -211,15 +212,10 @@ public final class MinosEditorActions {
     }
 
     private static String required(JsonObject object, String name) {
-        String value = nullable(object, name);
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("MINOS symbol is missing `" + name + "`");
-        }
-        return value;
+        return MinosJsonFields.required(object, name);
     }
 
     private static String nullable(JsonObject object, String name) {
-        JsonElement element = object.get(name);
-        return element == null || element.isJsonNull() ? null : element.getAsString();
+        return MinosJsonFields.nullable(object, name);
     }
 }

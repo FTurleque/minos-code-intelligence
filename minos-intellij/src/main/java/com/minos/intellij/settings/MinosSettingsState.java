@@ -64,22 +64,15 @@ public final class MinosSettingsState implements PersistentStateComponent<MinosS
     }
 
     private void normalize() {
-        if (settings.executable == null || settings.executable.isBlank()) {
-            settings.executable = defaultExecutable();
-        }
+        settings.executable = MinosSettingsRules.executable(settings.executable, System.getProperty("os.name"));
         if (settings.minosHome == null) {
             settings.minosHome = "";
         }
-        if (settings.timeoutSeconds < 1 || settings.timeoutSeconds > 300) {
-            settings.timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
-        }
-        if (settings.maxGraphNodes < 10 || settings.maxGraphNodes > 500) {
-            settings.maxGraphNodes = DEFAULT_MAX_GRAPH_NODES;
-        }
+        settings.timeoutSeconds = MinosSettingsRules.timeoutSeconds(settings.timeoutSeconds);
+        settings.maxGraphNodes = MinosSettingsRules.maxGraphNodes(settings.maxGraphNodes);
     }
 
     private static String defaultExecutable() {
-        String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
-        return os.contains("win") ? "minos.cmd" : "minos";
+        return MinosSettingsRules.defaultExecutable(System.getProperty("os.name"));
     }
 }

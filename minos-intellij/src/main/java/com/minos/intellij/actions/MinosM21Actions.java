@@ -13,6 +13,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.psi.PsiFile;
 import com.minos.intellij.protocol.MinosM21Client;
+import com.minos.intellij.protocol.MinosJsonFields;
 import com.minos.intellij.service.MinosProjectService;
 import com.minos.intellij.settings.MinosSettingsState;
 import com.minos.intellij.task.MinosBackgroundTask;
@@ -216,10 +217,7 @@ public final class MinosM21Actions {
     }
 
     private static String required(JsonObject object, String name) {
-        if (object == null || !object.has(name) || object.get(name).isJsonNull() || object.get(name).getAsString().isBlank()) {
-            throw new IllegalArgumentException("MINOS symbol is missing `" + name + "`");
-        }
-        return object.get(name).getAsString();
+        return MinosJsonFields.required(object, name);
     }
 
     @FunctionalInterface
