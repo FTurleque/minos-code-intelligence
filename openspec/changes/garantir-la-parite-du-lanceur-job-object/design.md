@@ -43,9 +43,26 @@ Fragments présents à l'identique dans la copie du plugin (6) : `command-line-q
 
 **Non-Goals** : unifier les deux scripts ; modifier le confinement du moteur ; changer le format du plan de propriété.
 
+## Comparaison de la tâche 1.1 (2026-10-15)
+
+Moteur assemblé par `windows_launcher.assemble`, comparé ligne à ligne (`difflib`, fins de ligne et espaces de fin ignorés) : **39 lignes propres au moteur, 35 au plugin** (l'analyse relevait 42 et 38 par une autre découpe). Dix zones avant alignement :
+
+| Zone | Lieu | Nature |
+|---|---|---|
+| `using System.IO` | fragment `script-preamble` | fond (mode `cmd-c`, `Path.Combine`) |
+| signature de `Run`, appel de `BuildCommandLine` | gabarit | fond (mode `cmd-c`) |
+| `BuildRawCmdCommandLine` contre `isPreQuotedForCmdShell` | fragment `command-line-builder` | fond (MINOS-AUD-C04) |
+| lecture de `command.mode` et suppression du plan | gabarit | fond |
+| suppression du plan pendant la lecture | fragment `plan-parsing` | lieu de la suppression |
+| trois messages (« MINOS CLI » contre « provider ») | `resume-and-verify`, gabarit, `plan-parsing` | libellé |
+| mise en page de `CreateProcessW` | fragment `createprocess-call` | forme |
+| trois commentaires et un bloc `if` | gabarit | forme |
+
+Après alignement de la forme dans la copie du plugin (D4) : 23 lignes propres au moteur, 32 au plugin, dix zones toutes rangées dans trois différences assumées ; `createprocess-call` rejoint les fragments identiques (sept).
+
 ## Decisions
 
-### D1. Gate de parité plutôt que génération — **décision en attente du propriétaire**
+### D1. Gate de parité plutôt que génération — **option A retenue par le propriétaire le 2026-10-15**
 
 **Option A (recommandée) : gate statique** `scripts/quality/check-job-object-launcher-parity.py` (nouveau ; bibliothèque standard, squelette `scripts/quality/gate_cli.py`, option `--root`). Il assemble le script du moteur par la fonction existante de `scripts/remediation/windows_launcher.py` (pas de troisième assembleur), puis : (1) exige que chaque fragment de la liste « identiques » figure tel quel dans `PS1` ; (2) calcule le diff ligne à ligne du reste et exige que chaque zone divergente appartienne à la liste fermée des différences assumées (D2). Garde le plugin autonome et rend la divergence visible sans décider de son fond.
 
@@ -55,7 +72,7 @@ Fragments présents à l'identique dans la copie du plugin (6) : `command-line-q
 
 Chaque entrée : un nom, le fragment ou la zone du gabarit concernés, une justification, un maximum de lignes divergentes. Entrées attendues après la tâche 2.3 : mode `cmd-c` explicite (`BuildRawCmdCommandLine`, signature de `Run`, lecture de `command.mode`, `using System.IO`) ; messages qui nomment « CLI » au lieu de « provider » ; suppression du plan faite avant le démarrage du CLI plutôt que dans la lecture du plan. C'est un cliquet : une entrée sans objet échoue, un maximum ne se relève pas sans justification écrite.
 
-### D3. Sort de la divergence de fond — **décision en attente du propriétaire**
+### D3. Sort de la divergence de fond — **recommandation retenue le 2026-10-15 : nommée ici (`raw-cmd-mode`), instruite à part** (reste inscrit dans `SUIVI.md`)
 
 Recommandation : **la nommer, ne pas la trancher ici**. Elle touche le confinement des providers, qualifié contre une base figée ; l'aligner sur le mode strict du plugin est un changement de `confinement-code-non-fiable`, à ouvrir à part avec sa requalification Windows. Tant qu'elle existe, le gate l'affiche à chaque exécution. Alternative : l'aligner dans ce changement (périmètre et risque nettement plus larges).
 

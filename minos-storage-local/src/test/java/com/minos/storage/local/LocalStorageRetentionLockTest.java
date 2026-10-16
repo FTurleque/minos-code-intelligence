@@ -4,6 +4,7 @@ import com.minos.storage.PersistentRetentionPolicy;
 import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.io.PrivateLocalStorage;
+import com.minos.testsupport.ParkedThreads;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -23,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -37,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LocalStorageRetentionLockTest {
 
     private static final PersistentRetentionPolicy POLICY = PersistentRetentionPolicy.DEFAULT;
+    private static final String BOUNDED_FILE_LEASE = "com.minos.io.BoundedFileLease";
 
     private static LocalStorageRetentionService service(Path home, Duration lockTimeout) throws IOException {
         Path knowledgeRoot = home.resolve("symbol-snapshots");
@@ -73,8 +76,16 @@ class LocalStorageRetentionLockTest {
         ExecutorService pool = Executors.newSingleThreadExecutor();
         try (FileChannel holder = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
             FileLock held = holder.lock();
-            Future<?> compaction = pool.submit(() -> retention.compact(projectId, POLICY));
-            Thread.sleep(300);
+            AtomicReference<Thread> compactor = new AtomicReference<>();
+            CountDownLatch started = new CountDownLatch(1);
+            Future<?> compaction = pool.submit(() -> {
+                compactor.set(Thread.currentThread());
+                started.countDown();
+                return retention.compact(projectId, POLICY);
+            });
+            assertTrue(started.await(10, TimeUnit.SECONDS));
+            // The compaction is observed retrying the held file lock, not assumed blocked after a delay.
+            ParkedThreads.awaitParkedIn(compactor.get(), BOUNDED_FILE_LEASE, compaction::isDone, Duration.ofSeconds(5));
             assertFalse(compaction.isDone(), "the compaction waits for the lock holder");
             held.release();
             compaction.get(10, TimeUnit.SECONDS);

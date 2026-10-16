@@ -14,6 +14,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -48,6 +49,11 @@ class PostgresSchemaMigratorTest extends PostgresTestSupport {
     void isIdempotentWhenCalledRepeatedly() throws Exception {
         new PostgresSchemaMigrator(connections).migrate();
         new PostgresSchemaMigrator(connections).migrate();
+
+        // AUD-TST-09: the replayed migration is re-read, not merely survived.
+        assertEquals(IntStream.rangeClosed(1, PostgresSchemaMigrator.CURRENT_VERSION).boxed().toList(),
+                schemaVersions(),
+                "schema_version must hold every version from 1 to the current one, once each");
     }
 
     @Test
@@ -83,11 +89,33 @@ class PostgresSchemaMigratorTest extends PostgresTestSupport {
                 return null;
             }
         });
+        try {
+            List<Integer> before = schemaVersions();
 
-        IOException exception = assertThrows(IOException.class,
-                () -> new PostgresSchemaMigrator(connections).migrate());
-        assertTrue(exception.getMessage().contains("999"),
-                "exception must mention the detected version: " + exception.getMessage());
+            IOException exception = assertThrows(IOException.class,
+                    () -> new PostgresSchemaMigrator(connections).migrate());
+            assertTrue(exception.getMessage().contains("999"),
+                    "exception must mention the detected version: " + exception.getMessage());
+            assertEquals(before, schemaVersions(), "a refused migration leaves schema_version unchanged");
+        } finally {
+            connections.withConnection(c -> {
+                try (Statement s = c.createStatement()) {
+                    s.execute("DELETE FROM schema_version WHERE version = 999");
+                    return null;
+                }
+            });
+        }
+    }
+
+    private List<Integer> schemaVersions() throws Exception {
+        return connections.withConnection(c -> {
+            try (Statement s = c.createStatement();
+                 ResultSet r = s.executeQuery("SELECT version FROM schema_version ORDER BY version")) {
+                List<Integer> versions = new ArrayList<>();
+                while (r.next()) versions.add(r.getInt(1));
+                return versions;
+            }
+        });
     }
 
     /**

@@ -5,11 +5,13 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.testsupport.ParkedThreads;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -64,7 +66,11 @@ class ProjectMutationSemanticVectorStoreTest {
             assertTrue(semanticInsideSharedLease.await(10, TimeUnit.SECONDS),
                     "semantic commit must hold the shared project mutation lease before promotion starts");
 
+            AtomicReference<Thread> promoter = new AtomicReference<>();
+            CountDownLatch promotionStarted = new CountDownLatch(1);
             Future<?> structuralPromotion = executor.submit(() -> {
+                promoter.set(Thread.currentThread());
+                promotionStarted.countDown();
                 try {
                     snapshots.publish(projectId, "snap-2", List.of());
                     structuralPromoted.set(true);
@@ -73,7 +79,10 @@ class ProjectMutationSemanticVectorStoreTest {
                 }
             });
 
-            Thread.sleep(200);
+            assertTrue(promotionStarted.await(10, TimeUnit.SECONDS));
+            // The promotion is observed queued on the shared project mutation lease, not assumed after a delay.
+            ParkedThreads.awaitParkedIn(promoter.get(), "com.minos.io.BoundedFileLease",
+                    structuralPromotion::isDone, Duration.ofSeconds(5));
             assertFalse(structuralPromoted.get(),
                     "structural promotion must block while semantic recheck and commit own the shared lease");
 

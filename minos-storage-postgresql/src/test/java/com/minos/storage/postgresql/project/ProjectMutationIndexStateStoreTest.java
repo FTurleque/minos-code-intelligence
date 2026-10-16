@@ -8,13 +8,16 @@ import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -22,8 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 class ProjectMutationIndexStateStoreTest extends PostgresTestSupport {
+    private static final Duration WAIT_DEADLINE = Duration.ofSeconds(10);
+
     @Test
     void sameProjectMutationWaitsForSharedLock() throws Exception {
         UUID id = UUID.randomUUID();
@@ -56,6 +62,8 @@ class ProjectMutationIndexStateStoreTest extends PostgresTestSupport {
                 store.saveProjectState(state);
             });
             assertTrue(writerStarted.await(10, TimeUnit.SECONDS));
+            // pg_locks shows the writer's advisory lock request as not granted: the wait is observed, not assumed.
+            awaitAdvisoryLockWaiter(id, WAIT_DEADLINE);
             assertFalse(writer.isDone(), "same-project state mutation must remain blocked by the shared advisory lock");
             assertNull(delegate.state.get());
             release.countDown();
@@ -110,7 +118,8 @@ class ProjectMutationIndexStateStoreTest extends PostgresTestSupport {
                 store.saveProjectState(state);
             });
             assertTrue(writerStarted.await(10, TimeUnit.SECONDS));
-            Thread.sleep(150L);
+            // pg_locks shows the writer's transaction lock request as not granted behind the session lease.
+            awaitAdvisoryLockWaiter(id, WAIT_DEADLINE);
             assertFalse(writer.isDone(), "project mutation must wait for the session lifecycle lease");
             assertNull(delegate.state.get());
 
@@ -141,9 +150,11 @@ class ProjectMutationIndexStateStoreTest extends PostgresTestSupport {
             });
             assertTrue(firstHeld.await(10, TimeUnit.SECONDS));
 
-            List<java.util.concurrent.Future<?>> waiters = new ArrayList<>();
+            List<Future<?>> waiters = new ArrayList<>();
+            List<Thread> waiterThreads = Collections.synchronizedList(new ArrayList<>());
             for (int index = 0; index < 6; index++) {
                 waiters.add(pool.submit(() -> {
+                    waiterThreads.add(Thread.currentThread());
                     waitersStarted.countDown();
                     try (IndexStateStore.ProjectLease ignored = store.acquireProjectLease(id)) {
                         return null;
@@ -151,7 +162,11 @@ class ProjectMutationIndexStateStoreTest extends PostgresTestSupport {
                 }));
             }
             assertTrue(waitersStarted.await(10, TimeUnit.SECONDS));
-            Thread.sleep(200L);
+            // Every waiter is observed queued on the local project gate (a lock of this JVM) before the pool
+            // is measured: the measurement no longer depends on the waiters having had time to arrive.
+            for (int index = 0; index < waiters.size(); index++) {
+                awaitParkedInStore(waiterThreads.get(index), waiters, WAIT_DEADLINE);
+            }
 
             PostgresConnectionFactory.PoolStats duringWait = connections.poolStats();
             assertEquals(0, duringWait.leased(),
@@ -209,6 +224,33 @@ class ProjectMutationIndexStateStoreTest extends PostgresTestSupport {
             assertTrue(secondAcquired.await(10, TimeUnit.SECONDS));
             second.get(10, TimeUnit.SECONDS);
         }
+    }
+
+    /**
+     * Waits until {@code thread} is parked (waiting or timed waiting) in {@link ProjectMutationIndexStateStore},
+     * where a lifecycle lease waits for the local project gate; fails if a waiter completes first or when the
+     * deadline expires.
+     */
+    private static void awaitParkedInStore(Thread thread, List<Future<?>> waiters, Duration timeout) {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (!parkedInStore(thread)) {
+            if (waiters.stream().anyMatch(Future::isDone)) {
+                fail("a same-project lifecycle waiter completed while the first lease was held");
+            }
+            if (System.nanoTime() - deadline >= 0L) {
+                fail(thread.getName() + " was not observed waiting for the project lifecycle lease within " + timeout);
+            }
+            Thread.onSpinWait();
+        }
+    }
+
+    private static boolean parkedInStore(Thread thread) {
+        Thread.State state = thread.getState();
+        if (state != Thread.State.WAITING && state != Thread.State.TIMED_WAITING) return false;
+        for (StackTraceElement frame : thread.getStackTrace()) {
+            if (frame.getClassName().equals(ProjectMutationIndexStateStore.class.getName())) return true;
+        }
+        return false;
     }
 
     private static ProjectIndexState ready(UUID id) {

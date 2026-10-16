@@ -243,16 +243,6 @@ Chaque `actions/checkout` porte `persist-credentials: false` : le jeton du dép�
 
 Chaque job qui s'exécute sur un runner (`runs-on`) déclare `timeout-minutes` ; un appel de workflow réutilisable (`uses:` au niveau du job) n'a pas de runner et en est exempté. Les deux règles sont gardées par `check-workflow-pins.py`.
 
-## Publication du plugin IntelliJ avec la release (AUD-DEP-07)
-
-Une release créée par `release-windows.yml` avec le jeton du workflow ne déclenche **aucun** événement `release:` : c'est pourquoi v1.1.0 et v1.2.0 n'ont pas de `minos-intellij-*.zip`. Depuis le changement `publier-le-plugin-avec-la-release` :
-
-- `release-windows.yml` appelle `intellij-plugin-release.yml` (job `plugin`, `needs: publish`, `contents: write` accordé par l'appelant) avec le tag `v<version>` et le commit publié ;
-- `intellij-plugin-release.yml` démarre sur `workflow_call` et `workflow_dispatch` (entrée `tag`), plus jamais sur `release:` ; il garde ses contrôles (format du tag, commit cible de la release en 40 caractères hexadécimaux égal au commit attendu, tag non déplacé, envoi sans écrasement) ;
-- un dernier job, `release-complete`, échoue si la release ne porte pas exactement une `minos-intellij-*.zip` et sa `.sha256`. La release est déjà publiée à ce moment (décision D3, option A) : l'échec est visible et se répare par un **rejeu** de `intellij-plugin-release.yml` par `workflow_dispatch` avec le tag.
-
-Une release créée **à la main** ne reçoit pas le plugin d'elle-même : rejouer `intellij-plugin-release.yml` par `workflow_dispatch`. Les releases immuables de GitHub sont désactivées sur le dépôt ; si elles étaient activées, l'ajout d'un asset après publication serait refusé et le plugin devrait être attaché avant la publication (option B du design). Le lien est gardé par `check-ci-wiring.py` (règle 5). **Non prouvé avant la prochaine release** : les workflows de release ne tournent pas sur une PR ; la preuve est le run réel.
-
 ## Construction reproductible (AUD-DEP-11)
 
 Deux constructions du même commit, sur le même système, donnent le même JAR ombré. `project.build.outputTimestamp` est écrit dans le POM racine (`2026-01-01T00:00:00Z`, valeur d'un build sans Git ou de développement) et les scripts qui construisent un livrable (`build-windows-distribution.ps1`, `qualify-docker-release.sh`) passent la date du commit. Maven 3.10, celui du wrapper, fixait déjà une date par défaut ; Maven 3.9, que l'enforcer accepte, non : le POM ne dépend plus de la version de Maven. `requirePluginVersions` refuse tout plugin sans version, phases `clean`, `deploy` et `site` comprises.
@@ -278,6 +268,16 @@ python scripts/quality/check-reproducible-build.py twice --work <dossier vide>
 3. Régénérer les sommes **sous Linux puis sous Windows** (WSL convient) avec les tâches des jobs du plugin : `./gradlew --no-configuration-cache --write-verification-metadata sha256 buildEnvironment dependencies test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure verifyPlugin spotbugsMain`.
 4. Relire le diff : une nouvelle somme pour une version qui ne change pas, ou une `<trust>` ajoutée, se justifie par écrit ou s'annule.
 5. Rejouer `python scripts/quality/check-toolchain-baseline.py` et la qualification du plugin de `docs/TOOLCHAIN_POLICY.md`.
+
+## Publication du plugin IntelliJ avec la release (AUD-DEP-07)
+
+Une release créée par `release-windows.yml` avec le jeton du workflow ne déclenche **aucun** événement `release:` : c'est pourquoi v1.1.0 et v1.2.0 n'ont pas de `minos-intellij-*.zip`. Depuis le changement `publier-le-plugin-avec-la-release` :
+
+- `release-windows.yml` appelle `intellij-plugin-release.yml` (job `plugin`, `needs: publish`, `contents: write` accordé par l'appelant) avec le tag `v<version>` et le commit publié ;
+- `intellij-plugin-release.yml` démarre sur `workflow_call` et `workflow_dispatch` (entrée `tag`), plus jamais sur `release:` ; il garde ses contrôles (format du tag, commit cible de la release en 40 caractères hexadécimaux égal au commit attendu, tag non déplacé, envoi sans écrasement) ;
+- un dernier job, `release-complete`, échoue si la release ne porte pas exactement une `minos-intellij-*.zip` et sa `.sha256`. La release est déjà publiée à ce moment (décision D3, option A) : l'échec est visible et se répare par un **rejeu** de `intellij-plugin-release.yml` par `workflow_dispatch` avec le tag.
+
+Une release créée **à la main** ne reçoit pas le plugin d'elle-même : rejouer `intellij-plugin-release.yml` par `workflow_dispatch`. Les releases immuables de GitHub sont désactivées sur le dépôt ; si elles étaient activées, l'ajout d'un asset après publication serait refusé et le plugin devrait être attaché avant la publication (option B du design). Le lien est gardé par `check-ci-wiring.py` (règle 5). **Non prouvé avant la prochaine release** : les workflows de release ne tournent pas sur une PR ; la preuve est le run réel.
 
 ## Frontière avec la CI
 
