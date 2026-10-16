@@ -47,6 +47,27 @@ Ordre dans le sprint 6 : ce changement passe **en premier**, parce qu'il demande
 6. **Un plancher de classe exige que le préfixe soit déclaré** dans `prefixes` (`GATE:495-497`, « undeclared prefix ») : pour `m30-postgresql-pgvector`, le préfixe de classe s'ajoute à côté du préfixe de paquet (sans double compte, `GATE:461`).
 7. **Des gates affirment des chaînes de `check-jacoco.py`** : `scripts/docs/check-current-docs.py:193-197` (« through M30 » et trois noms de scope), `scripts/remediation/check-p0-p2.py:338-341` (deux planchers de classe au caractère près), six `check-*-consistency.py`. L'audit n'en dit rien.
 
+## Mesures des tâches 1.1 et 1.2 (2026-10-15)
+
+Rapports agrégés (artefacts `pr-validation-<OS>-1`) et rapports de module (`jacoco-modules-<OS>`) des runs `pr-ci.yml` **38719668720** (`develop` `83dd1fbb`) et **38697957273** (`develop` `ae7b02b0`), lecture seule ; les deux runs concordent à 0,001 près.
+
+| Mesure | Linux (ligne / branche) | Windows (ligne / branche) |
+|---|---|---|
+| `com/minos/` | 26 999 / 31 406 (0,860) ; 10 070 / 14 156 (0,711) | 26 031 / 31 406 (0,829) ; 9 825 / 14 156 (0,694) |
+| `com/minos/` sans `com/minos/app/` | 0,865 ; 0,716 | 0,834 ; 0,698 |
+| `storage-codec-and-state` (4 classes, 17 avec les internes) | 0,912 ; 0,758 | 0,912 ; 0,758 |
+| `com/minos/io/` (34 classes avec les internes) | 0,801 ; 0,701 | 0,814 ; 0,717 |
+| `LeaseDeadline` (sans test propre) | 26 / 32 (0,812) ; 13 / 16 (0,812) | 0,812 ; 12 / 16 (0,750) |
+| `RunDirectoryRetention` | 0,913 ; 0,843 | 0,898 ; 0,843 |
+| `CgroupJobOwnership` | 175 / 180 (0,972) ; 89 / 96 (0,927) | (0,950 ; 0,906, classe Linux) |
+| `ManagedScipProviderRuntimeManager` | 0,711 ; 0,572 | 0,668 ; 0,548 |
+| `ProjectIgnoreRules` | 0,896 ; 0,800 | idem |
+| `IdeIntelligenceCommand` | 0,590 ; 0,778 | idem |
+| `ScipIngestionAdapter` | 0,943 ; 0,765 | idem |
+| `SandboxLauncherScript` | 0,074 ; 0,100 | 0,839 ; 0,743 (code Windows) |
+
+Appariement rejoué au HEAD de la branche : **223 fichiers sur 531** sous un scope ciblé (48,1 % des lignes) sur `origin/develop` (l'analyse du 13 octobre comptait 221 sur 527) ; **246 sur 531** (58,6 %) avec les scopes de ce changement, `global` couvrant le reste.
+
 ## Mesures pour AUD-TST-04 et AUD-TST-12
 
 Relevé du 2026-10-14 dans les rapports JaCoCo de `pr-ci.yml` (lecture seule) : run `38470947827` (`develop` `90c24fd0`), confirmé à l'identique pour ces deux classes par le run `38466461171` (`develop` `bf57169c`). Rapport agrégé (artefact `pr-validation-<OS>-1`) et rapport de module (`jacoco-modules-<OS>`) concordent. Le gate compte par préfixe : la classe et ses classes internes.
@@ -78,7 +99,7 @@ Un scope peut déclarer `line` et `branch` **par plateforme** (`linux`, `windows
 
 Le scope porte une liste d'exclusions (préfixes) ; chaque exclusion est nominative et affichée dans la sortie et dans `jacoco-gate.json`. `com/minos/app/` reste jugé par `m29-backend-routing` (`report_of: minos-app`). Une exclusion qui ne désigne plus aucune classe échoue, comme un préfixe mort.
 
-### D3. Valeur des planchers et cliquet — **décision en attente du propriétaire**
+### D3. Valeur des planchers et cliquet — **recommandation retenue par le propriétaire le 2026-10-15** (moins 2 points par système ; aucun scope ciblé pour les quatre autres absents, couverts par `global` : le plus faible, `IdeIntelligenceCommand`, est à 0,590 en lignes)
 
 Recommandation : plancher = mesure de la tâche 1.1 **moins 2 points**, par système, pour les lignes et pour les branches ; relevé à chaque clôture de sprint ; jamais abaissé sans justification écrite dans `SUIVI.md`. Alternatives : moins 1 point (plus de faux rouges sur une PR qui ajoute du code peu couvert) ; moins 5 points (protège moins). La mesure, la date et le run sont consignés à côté du plancher.
 
@@ -91,7 +112,7 @@ Recommandation : plancher = mesure de la tâche 1.1 **moins 2 points**, par syst
 - `ManagedScipProviderRuntimeManager` : rejoint `m24-polyglot-provider-platform` avec un plancher de classe ; ce scope est rouge sur poste Windows hors régression, à comparer à `develop`.
 - Les quatre autres gros absents (`ProjectIgnoreRules`, `IdeIntelligenceCommand`, `ScipIngestionAdapter`, `SandboxLauncherScript`) sont couverts par `global` ; un scope ciblé pour eux se décide sur la mesure (tâche 1.3), pas d'avance.
 
-### D5. Suite de contrat commune des stores d'observation — **décision en attente du propriétaire**
+### D5. Suite de contrat commune des stores d'observation — **recommandation retenue le 2026-10-15 : pas de suite dans ce changement**
 
 Recommandation : **ne pas** l'écrire dans ce changement. Les deux tests existent dans deux modules ; une suite commune demande un support de test partagé (un `test-jar`, `minos-engine/pom.xml:27-33` en publie déjà un) et dépasse l'objet « borner ». Le plancher de classe (écart 6) ferme le risque signalé par l'audit. Alternative : classe abstraite de contrat dans le `test-jar` de `minos-engine`, héritée par les deux modules.
 
