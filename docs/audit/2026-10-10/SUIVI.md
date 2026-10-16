@@ -271,7 +271,7 @@ Non vérifié pendant l'analyse (réseau non utilisé, aucun build) : dates de f
 | AUD-DEP-02, AUD-DEP-10 | #436 | **Fermé** | image 38386272571 : les quatre versions de l'inventaire égales aux binaires, Node 24.20.0 |
 | AUD-DEP-16 | #437 | **Fermé** | image 38395864386 : 35 fichiers de notice et de licence identiques à ceux du jar |
 | AUD-DEP-15 | #441 | **Fermé** | image 38427825652 : image de requête de 355 Mo sans outil de compilation, requête MCP réelle ; mise à niveau A → B 38419610229 |
-| AUD-DEP-14 | — | **Bloqué** | attend une version de docker-java postérieure à 3.7.1 et la clé NVD |
+| AUD-DEP-14 | — | **Risque accepté jusqu'au 2027-01-15** (2026-10-17, R-27) | aucune version corrective de docker-java ; rejeu Dependency-Check des tests du 2026-10-17 : les quatre CVE seules, visibles dans le rapport |
 
 Constats faits pendant l'implémentation :
 
@@ -390,7 +390,7 @@ Aucun ne peut être levé depuis `develop` ni depuis ce poste ; ils restent cons
 | Indexation par le runtime Java 25 de l'installateur | **Levé** : distribution 1.3.0 de la CI (`windows-installer.yml`, run 38927003115, `b5c4ae4b`, SHA-256 vérifié), extraite sans installation ; `MINOS 1.3.0`, runtime embarqué 25.0.4.1 ; indexation d'un projet TypeScript d'essai réussie. `migrer-le-socle-vers-java-25` est archivé. **Défaut préexistant relevé** : l'indexation d'un petit projet Maven Java échoue sur le poste (`IllegalStateException`, message opaque), à l'identique avec MINOS 1.2.0 (runtime 24) : non imputable à Java 25, à instruire à part |
 | Premier passage de la veille planifiée | inchangé : attend la promotion vers `main` |
 | Quatre avis OSV sur le classpath de scip-java 0.13.1 | décision **laissée ouverte une seconde fois le 2026-10-16** |
-| CVE de Testcontainers en portée test | inchangé : Maven Central n'a toujours pas de docker-java postérieur à 3.7.1 (`maven-metadata.xml` lu le 2026-10-16 ; Testcontainers 2.0.5) |
+| CVE de Testcontainers en portée test | **risque accepté jusqu'au 2027-01-15** (décision du propriétaire, 2026-10-17 ; registre des risques R-27, constat H03) : Maven Central n'a toujours pas de docker-java postérieur à 3.7.1, et une version imposée de `httpclient5`/`httpcore5` ne remplace pas la copie embarquée dans le transport `zerodep`, que Testcontainers instancie en dur. Les CVE restent visibles dans le rapport de Dependency-Check. `aligner-dependances-de-test-testcontainers` est archivé (`openspec/changes/archive/2026-10-17-aligner-dependances-de-test-testcontainers`) |
 | Tests de confinement intermittents | Linux : la limite `prlimit --nproc` est retirée, `pids.max` du cgroup seul borne les processus (MINOS-AUD-H17, PR #479 fusionnée le 2026-10-16) ; Windows (`ProviderWriteContainmentTest`) : cause toujours non établie |
 
 Corrigé le 2026-10-14 : le commentaire de l'action OSV réutilisable dans `pr-ci.yml` nommait `v2.3.8` pour un commit sans tag qui appelle `osv-scanner-action` en v2.6.0. Toujours non corrigé : `sync-tools-manifest.py --write` réécrit le Dockerfile en LF sous Windows.
