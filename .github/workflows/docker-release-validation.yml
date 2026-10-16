@@ -35,19 +35,31 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       # Docker Hub limits anonymous pulls per runner address (429 toomanyrequests on 2026-10-09 stopped base images,
       # pgvector for the PostgreSQL tests, and the Docker qualifications). With the repository secrets
-      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), pulls are authenticated, Testcontainers
-      # included; without them (forks, secrets not created) this step is skipped and pulls stay anonymous.
+      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), the base images are pulled authenticated;
+      # without them (forks, secrets not created) this step is skipped and pulls stay anonymous.
       - name: Log in to Docker Hub (when the secrets exist)
         if: ${{ env.DOCKERHUB_USERNAME != '' }}
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # AUD-DEP-13: the qualification builds only from the FROM images of docker/Dockerfile.mcp.release, all pinned by
+      # digest (check-image-pins.py); `docker build` finds them in the local store. They are pulled while logged in,
+      # then the credentials leave the runner before any script of the repository runs (check-workflow-pins.py).
+      - name: Pull the pinned base images, then log out of Docker Hub
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -nE 's/^FROM[[:space:]]+(--platform=[^[:space:]]+[[:space:]]+)?([^[:space:]]+@sha256:[0-9a-f]{64}).*$/\2/p' \
+            docker/Dockerfile.mcp.release | sort -u | xargs -r -n 1 docker pull --quiet
+          docker logout
 
       - name: Assert exact candidate HEAD
         shell: bash
