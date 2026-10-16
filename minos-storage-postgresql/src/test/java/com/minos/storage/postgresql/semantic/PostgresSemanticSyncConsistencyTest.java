@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -93,7 +94,8 @@ class PostgresSemanticSyncConsistencyTest extends PostgresTestSupport {
                 try { semantic.replace(snap(text, "snap-1")); replaceDone.set(true); }
                 catch (Exception exception) { throw new RuntimeException(exception); }
             });
-            Thread.sleep(200);
+            // pg_locks shows the request as not granted: the wait is observed, not assumed after a delay.
+            awaitAdvisoryLockWaiter(projectId, Duration.ofSeconds(10));
             assertFalse(replaceDone.get(), "raw replace must wait for the shared project mutation lock");
             release.countDown();
             holder.get(10, TimeUnit.SECONDS);

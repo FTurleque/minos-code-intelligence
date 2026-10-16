@@ -5,6 +5,7 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.semantic.StaleSemanticSyncException;
+import com.minos.testsupport.ParkedThreads;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -12,6 +13,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,7 +26,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -74,7 +75,7 @@ class FileSemanticSyncConsistencyTest {
 
         assertThrows(StaleSemanticSyncException.class, () ->
                 store.replaceConditionally(snap(projectId, "snap-1"), "snap-1",
-                        () -> Optional.empty())); // active pointer absent (project deleted/expired)
+                        Optional::empty)); // active pointer absent (project deleted/expired)
     }
 
     // -------------------------------------------------------------------------
@@ -248,6 +249,7 @@ class FileSemanticSyncConsistencyTest {
 
             // Our JVM tries replaceConditionally → channel.lock() must block on the subprocess's file lock
             AtomicBoolean commitSucceeded = new AtomicBoolean(false);
+            AtomicReference<Throwable> syncError = new AtomicReference<>();
             CountDownLatch attempted = new CountDownLatch(1);
 
             Thread syncThread = new Thread(() -> {
@@ -256,13 +258,15 @@ class FileSemanticSyncConsistencyTest {
                     store.replaceConditionally(snap(projectId, "snap-1"), "snap-1",
                             () -> Optional.of("snap-1"));
                     commitSucceeded.set(true);
-                } catch (IOException ignored) {}
+                } catch (IOException e) {
+                    syncError.set(e);
+                }
             });
             syncThread.start();
 
             assertTrue(attempted.await(5, TimeUnit.SECONDS));
-            // Give the thread a moment to reach channel.lock() and block
-            Thread.sleep(150);
+            // The thread is observed retrying the file lock held by the other JVM, not assumed blocked after a delay.
+            ParkedThreads.awaitParkedIn(syncThread, "com.minos.io.BoundedFileLease", Duration.ofSeconds(5));
             assertFalse(commitSucceeded.get(),
                     "replaceConditionally must be blocked while subprocess holds the cross-JVM file lock");
 
@@ -274,7 +278,7 @@ class FileSemanticSyncConsistencyTest {
             // Now our sync thread should unblock and complete
             syncThread.join(10_000);
             assertTrue(commitSucceeded.get(),
-                    "replaceConditionally must succeed after cross-JVM file lock is released");
+                    "replaceConditionally must succeed after cross-JVM file lock is released: " + syncError.get());
         } finally {
             subprocess.destroyForcibly();
         }
