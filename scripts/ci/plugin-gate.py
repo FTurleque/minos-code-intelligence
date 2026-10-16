@@ -33,6 +33,10 @@ PLUGIN_PATHS = (
     "docs/roadmap/M18_EXECUTION.md",
     ".github/workflows/intellij-plugin.yml",
     "scripts/ci/plugin-gate.py",
+    # AUD-QUA-01: the engine's Job Object launcher, which the plugin copies, and the gate that keeps both in parity.
+    "minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-fragments/",
+    "minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-job-object-owner-v1.ps1.template",
+    "scripts/quality/check-job-object-launcher-parity.py",
 )
 
 GIT_RANGES = {"pull_request": "{base}...{head}", "push": "{base}..{head}"}

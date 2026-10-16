@@ -103,3 +103,76 @@ Les verrous de fichier diffèrent entre les deux systèmes (verrouillage obligat
 - `pg_locks` montre tous les verrous de la base de test : la requête filtre sur la clé du projet ou sur la session du concurrent, sinon un test parallèle la fausse.
 - La preuve D2 n'est pas automatisée (pas de mutation en CI) : elle vaut au moment de la réécriture. Les tests de mutation (AUD-TST-11) la rejouent à la demande.
 - La couverture ne doit pas bouger ; SonarCloud ne voit que du code de test.
+
+## Mesuré à l'implémentation (2026-10-15)
+
+Branche `test/prouver-l-attente-des-verrous`, partie de `develop` à `83dd1fbb`. Poste Windows 10, JDK 25 (Temurin 25.0.4.1), Docker Desktop 29.8.2 : **les tests PostgreSQL ont tourné localement** (Testcontainers, `-Dminos.postgresql.tests.required=true`). Aucun code de production modifié : chaque neutralisation de D2 a été retirée par `git checkout -- */src/main` juste après son exécution, et `git status -- '*/src/main/*'` était vide avant le commit.
+
+### Tâche 1.1 — nature des verrous, relue dans les classes testées
+
+| Site (méthode) | Verrou réellement attendu | Signal retenu |
+|---|---|---|
+| `LocalStorageRetentionLockTest.aCompactionWaitsFor…` | verrou de fichier tenu par le test dans la même JVM : `BoundedFileLease` reçoit `OverlappingFileLockException` et attend dans `LeaseDeadline.pauseBeforeRetry` | fil observé en attente dans `BoundedFileLease` |
+| `FileHostedControlPlaneStoreLockTest.aWriterWaitsFor…` | idem (`FileHostedControlPlaneStore.lock` → `BoundedFileLease`) | idem |
+| `JGitRemoteRepositoryMaterializerLockTest.theMaterializationLockCanBeAcquired…` | idem (`JGitRemoteRepositoryMaterializer` → `BoundedFileLease`) | idem, aide locale au test (le module ne dépend pas du test-jar du moteur) |
+| `ProjectIndexLeaseTest.serializesConcurrentAcquisitionForSameProject` | **verrou de la JVM** (`ReentrantLock` de `ProjectIndexLease.LockState`, pris par `BoundedFileLease.acquireJvmLock`), pas un verrou de fichier | idem |
+| `FileSemanticSyncConsistencyTest.crossJvmFileLockBlocks…` | verrou de fichier tenu par une **autre JVM** ; `tryLock` rend `null` et `BoundedFileLease` attend entre deux essais | idem |
+| `ProjectMutationSemanticVectorStoreTest.structuralPromotionCannotInterleave…` | bail `SnapshotProjectLease` : bande de `ReentrantLock` de la JVM puis verrou de fichier, via `BoundedFileLease` | idem |
+| `IndexingLifecycleServiceTest.lifecycleLeaseSerializes…` | `ReentrantLock` de `InMemoryIndexStateStore.acquireProjectLease` (JVM) | fil observé en attente dans `InMemoryIndexStateStore` |
+| `IncrementalIndexingCoordinatorTest.projectLeaseRemainsHeld…` | idem | idem |
+| `ProjectMutationIndexStateStoreTest.sameProjectMutationWaitsForSharedLock` (ancien `:59`, sans délai) | `pg_advisory_xact_lock` de `PostgresProjectMutationLock.acquire` | `pg_locks` : verrou consultatif non accordé sur la clé du projet |
+| `ProjectMutationIndexStateStoreTest.lifecycleLeaseBlocks…` | idem, derrière le `pg_try_advisory_lock` de session du bail | idem |
+| `ProjectMutationIndexStateStoreTest.sameProjectLifecycleWaitersDoNotConsumeQueryPool` | **verrou de la JVM** : portail local équitable (`ReentrantLock(true)`) de `acquireLocalGate` ; les six attendants n'atteignent jamais PostgreSQL | fils observés en attente dans `ProjectMutationIndexStateStore` |
+| `PostgresRetentionMutationLockTest`, `PostgresSemanticSyncConsistencyTest.rawSemanticMutations…`, `PostgresProjectMutationLockIntegrationTest` | `pg_advisory_xact_lock` de `PostgresProjectMutationLock.acquire` | `pg_locks` |
+
+**Écarts avec la table d'analyse.** (1) Le site `:154` n'attend pas un verrou consultatif mais le portail local de la JVM. (2) `ProjectIndexLeaseTest` attend un verrou de la JVM, pas un verrou de fichier. (3) Toute attente de verrou de fichier du dépôt passe par `BoundedFileLease`, qui ne bloque jamais dans un appel natif (`tryLock` puis pause bornée) : le fil est `TIMED_WAITING` avec un cadre `BoundedFileLease`, y compris face à une autre JVM. La preuve directe de D1 pour la JVM vaut donc aussi pour les six sites de fichier ; le loquet posé avant l'appel est conservé et l'assertion négative suit l'observation. (4) L'analyse disait qu'aucun `@RepeatedTest` n'existait : il y en a trois au HEAD (`SourceStateKeyMemoTest:92`, `PostgresConnectionFactoryValidationTest:602,642`) ; sans effet ici.
+
+**Écart à D5.** Observer un fil en attente n'est pas « trois lignes de loquet » : l'aide vit une fois dans `minos-engine/src/test/java/com/minos/testsupport/ParkedThreads.java` (test-jar déjà partagé, comme `LogCapture`), avec son propre test `ParkedThreadsTest` (attente observée ; échec si l'appel se termine sans attendre ; échec à l'échéance si le fil attend ailleurs). `minos-integration-git` et `minos-storage-postgresql` ne dépendent pas de ce test-jar : chacun porte une copie locale d'une dizaine de lignes plutôt qu'une nouvelle dépendance de build. L'aide `pg_locks` est `PostgresTestSupport.awaitAdvisoryLockWaiter` (D5), avec son test `PostgresAdvisoryLockWaiterTest` (attendant observé ; échec à l'échéance quand le verrou est tenu sans attendant ; attendant d'un autre projet ignoré). Aucune aide n'ajoute de `Thread.sleep` : la boucle est cadencée par l'aller-retour SQL ou par `Thread.onSpinWait()`, et bornée par une échéance qui fait échouer le test.
+
+**Inventaire des `Thread.sleep` de test.** Au HEAD `83dd1fbb`, la chaîne apparaît 49 fois dans 34 fichiers, dont 3 dans une Javadoc (`SemanticSyncConsistencyTest:45`, `ConfinedFileOpenerTest:30`, `PostgresSchemaMigratorTest:98`) : **46 appels dans 31 fichiers** (l'analyse en comptait 48 dans 33 au HEAD `949e1569`). Classement :
+
+- 13 preuves d'attente (table ci-dessus ; le quatorzième site n'avait pas de délai) ;
+- 17 attentes actives bornées (boucle à échéance sur un fichier, un processus ou un compteur) : `ResumeAfterHardKillIntegrationTest:151`, `ProcessIndexerExecutorTest:245`, `LinuxCgroupJobOwnershipIsolationTest:333,344`, `LinuxStrongProcessOwnershipContainmentTest:112`, `WindowsJobObjectContainmentTest:207`, `ProviderWriteQuotaSupervisorTest:117`, `SnapshotCompactionConcurrencyTest:73`, et neuf dans `minos-intellij` (`MinosProcessSupervisorOrphanTest:103,114,135,141`, `MinosProcessSupervisorTest:349,370`, `MinosStrongProcessLauncherTest:49,322,330`) ;
+- 10 simulations de durée (processus fils qui « pend », lecture lente, rythme d'écriture) : `ResumeCrashFixtureMain:126`, `DirectoryReplacingProviderMain:30`, `ProcessIndexerExecutorTest:190,199`, `ProcessOwnershipTrackerHostProtectionTest:21`, `LinuxStrongProcessOwnershipContainmentTest:43`, `StrongProcessOwnershipIndexerExecutorTest:150`, `JGitCloneDeadlineTest:56`, `ProviderWriteQuotaSupervisorTest:33,49` ;
+- 4 stabilisations du tas après `System.gc()` : `SnapshotScalabilityBenchmark:425`, `HybridCorpusWeightTest:124`, `InMemoryBackendBenchmark:342`, `QueryViewWeightTest:93` ;
+- 2 délais d'échantillonnage suivis d'une assertion, sans verrou : `ProviderWriteQuotaSupervisorTest:64,79` (hors périmètre, à reprendre à part).
+
+**Après le changement : 33 appels dans 19 fichiers** (46 − 13).
+
+### Tâche 1.2 — tables écrites et seconde publication
+
+- `PostgresCodeKnowledgeSnapshotStore.publishSnapshot` écrit `knowledge_snapshots` (clé `(project_id, snapshot_id)`) et `knowledge_active` (clé `project_id`) dans une transaction, sous le verrou de mutation du projet ; l'insertion n'a lieu que si l'identité est absente (`existingSha == null`).
+- `PostgresFingerprintSnapshotStore.publish` écrit `fingerprint_snapshots` (clé `(project_id, snapshot_id)`) ; `promote` écrit `fingerprint_active`. Une identité existante et égale est rendue telle quelle.
+- **Contenu différent sous le même identifiant** : les deux stores le refusent par `IOException` (« … already exists with different content »), transaction annulée ; pour la connaissance, une différence de format seule (V2 réimporté après V3, ADR 0046) est acceptée après décodage des deux charges. Déjà couvert par `rejectsIdentityMutationWithDifferentContent` dans les deux classes ; non spécifié par ce changement.
+- Les clés primaires rendent une ligne dupliquée impossible au HEAD : sans contrôle d'existence, la seconde insertion échoue sur la contrainte. D'où une preuve du rouge en deux temps (A et B ci-dessous).
+
+### Preuves du rouge (D2)
+
+| Neutralisation locale (jamais commitée) | Test | Sortie rouge |
+|---|---|---|
+| `BoundedFileLease.acquire` rend un bail libre (fichier créé, aucun verrou) | `LocalStorageRetentionLockTest.aCompactionWaitsFor…` | `:88 pool-2-thread-1 completed before it was observed waiting in com.minos.io.BoundedFileLease` |
+| idem | `ProjectIndexLeaseTest.serializesConcurrentAcquisition…` | `:45 pool-3-thread-1 completed before it was observed waiting in com.minos.io.BoundedFileLease` |
+| idem | `FileHostedControlPlaneStoreLockTest.aWriterWaitsFor…` | `:84 pool-4-thread-1 completed before it was observed waiting in com.minos.io.BoundedFileLease` |
+| idem | `FileSemanticSyncConsistencyTest.crossJvmFileLockBlocks…` | `:267 Thread-1 completed before it was observed waiting in com.minos.io.BoundedFileLease` |
+| idem | `ProjectMutationSemanticVectorStoreTest.structuralPromotion…` | `:84 pool-5-thread-2 completed before it was observed waiting in com.minos.io.BoundedFileLease` |
+| idem | `JGitRemoteRepositoryMaterializerLockTest.theMaterializationLock…` | `:84 the materialization completed before it was observed waiting for the lock` |
+| `InMemoryIndexStateStore` sans `lock()` ni `unlock()` | `IndexingLifecycleServiceTest.lifecycleLeaseSerializes…` | `:123 pool-2-thread-2 completed before it was observed waiting in com.minos.orchestration.InMemoryIndexStateStore` |
+| idem | `IncrementalIndexingCoordinatorTest.projectLeaseRemainsHeld…` | `:109 pool-2-thread-2 was not observed waiting in com.minos.orchestration.InMemoryIndexStateStore within PT10S (state TIMED_WAITING)` |
+| `PostgresProjectMutationLock.acquire` rend la main sans verrou | les cinq sites `pg_locks` | `PostgresTestSupport.awaitAdvisoryLockWaiter:187 no session was observed waiting for the advisory lock of project <uuid> within PT10S` (5 sur 5) |
+| portail local de `ProjectMutationIndexStateStore` ouvert | `sameProjectLifecycleWaitersDoNotConsumeQueryPool` | `:174 the local project gate must allow only the current lifecycle owner to reserve a dedicated session ==> expected: <1> but was: <7>` |
+| A : contrôles d'existence et garde `version < 4` retirés | les trois tests d'idempotence | `IOException` (« unable to publish … », « unable to initialize … ») : rouge, **mais l'ancien test sans assertion l'aurait été aussi** (clé primaire) |
+| B : A, plus clés primaires et `ON CONFLICT` retirés (duplication silencieuse) | `PostgresCodeKnowledgeSnapshotStoreTest.isIdempotentForSameContent` | `:93 one stored snapshot row ==> expected: <1> but was: <2>` |
+| B | `PostgresFingerprintSnapshotStoreTest.isIdempotentForSameContent` | `:48 one stored fingerprint row ==> expected: <1> but was: <2>` |
+| B | `PostgresSchemaMigratorTest.isIdempotentWhenCalledRepeatedly` | `:54 … ==> expected: <[1, 2, 3, 4]> but was: <[1, 2, 3, 4, 4, 4]>` |
+| `ParkedThreads.isParkedIn` rendant toujours `true` | `ParkedThreadsTest` | 4 échecs sur 5 : `failsWhenTheCallerCompletedWithoutWaiting:46`, `failsAsSoonAsTheCallerReportsItsCompletion:55`, `failsAtTheDeadlineWhenTheCallerWaitsElsewhere:73` « Expected org.opentest4j.AssertionFailedError to be thrown, but nothing was thrown », `aRunningThreadIsNotParked:86 expected: <false> but was: <true>` |
+
+Sous la neutralisation B, **les trois tests du HEAD, sans relecture, restent verts** (3 exécutés, 0 échec) : c'est la vacuité relevée par AUD-TST-09. Sous la neutralisation du bail en mémoire, l'ancien `IncrementalIndexingCoordinatorTest` échouait plus loin (`expected: <NONE> but was: <FULL>`) : le second appel attendait ailleurs (`TIMED_WAITING` hors du bail), ce que le délai fixe ne distinguait pas. `PostgresAdvisoryLockWaiterTest.observesASessionWaitingForTheProjectLock` est rouge sous la neutralisation consultative, ses deux cas de refus restent verts (ils ne dépendent pas du verrou).
+
+### Rejeu (D3)
+
+`@RepeatedTest(50)` temporaire (script hors dépôt, retiré avant commit), une exécution Maven ciblée : **50 sur 50** pour chacun des 14 sites, des 3 tests d'idempotence, des 3 tests de `PostgresAdvisoryLockWaiterTest` et des 3 tests concurrents de `ParkedThreadsTest`, soit 1 150 exécutions répétées, 0 échec, 0 saut. Windows seulement : **Linux n'a pas été rejoué localement** ; la CI Ubuntu exécute chaque test une fois par run (tâche 6.2).
+
+### Ce qui n'a pas tourné
+
+- Linux (Ubuntu 24.04) : ni les tests réécrits ni leur rejeu ; à constater à la PR.
+- `check-jacoco.py` sur un rapport agrégé, qui demande un `verify` de tout le reactor : non lancé. Le changement n'ajoute que des assertions et retire des délais ; aucun chemin de production n'est moins exercé.

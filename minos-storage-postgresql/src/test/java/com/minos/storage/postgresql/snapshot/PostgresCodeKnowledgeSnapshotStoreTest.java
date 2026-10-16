@@ -86,7 +86,41 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
         CodeKnowledgeSnapshot snapshot = snapshot(projectId, "snap-1", symbol(projectId, "sym-a"));
 
         store.publish(projectId, "snap-1", snapshot.symbols(), snapshot.occurrences(), snapshot.relationships());
+        String storedSha = storedSha(projectId, "snap-1");
         store.publish(projectId, "snap-1", snapshot.symbols(), snapshot.occurrences(), snapshot.relationships());
+
+        // AUD-TST-09: the second publication is re-read, not merely survived.
+        assertEquals(1L, rowCount("knowledge_snapshots", projectId), "one stored snapshot row");
+        assertEquals(1L, rowCount("knowledge_active", projectId), "one active pointer row");
+        assertEquals(storedSha, storedSha(projectId, "snap-1"), "the stored payload is untouched");
+        PostgresCodeKnowledgeSnapshotStore reloaded = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
+        assertEquals(Optional.of("snap-1"), reloaded.activeSnapshotId(projectId));
+        assertEquals(snapshot, reloaded.loadActiveKnowledge(projectId).orElseThrow());
+    }
+
+    private long rowCount(String table, UUID projectId) throws Exception {
+        return connections.withConnection(c -> {
+            try (PreparedStatement s = c.prepareStatement("SELECT count(*) FROM " + table + " WHERE project_id=?")) {
+                s.setObject(1, projectId);
+                try (ResultSet result = s.executeQuery()) {
+                    result.next();
+                    return result.getLong(1);
+                }
+            }
+        });
+    }
+
+    private String storedSha(UUID projectId, String snapshotId) throws Exception {
+        return connections.withConnection(c -> {
+            try (PreparedStatement s = c.prepareStatement(
+                    "SELECT sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
+                s.setObject(1, projectId);
+                s.setString(2, snapshotId);
+                try (ResultSet result = s.executeQuery()) {
+                    return result.next() ? result.getString(1) : null;
+                }
+            }
+        });
     }
 
     @Test
