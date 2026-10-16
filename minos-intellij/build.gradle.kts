@@ -1,6 +1,26 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.models.ProductRelease
 
+// AUD-DEP-04: the classpath of this build script (the Gradle plugins below and what they bring) is locked in
+// buildscript-gradle.lockfile, strictly: a resolution that differs from the lock fails the build.
+buildscript {
+    dependencyLocking {
+        lockMode = LockMode.STRICT
+    }
+    configurations.classpath {
+        resolutionStrategy.activateDependencyLocking()
+    }
+    // AUD-DEP-04: the Gradle plugins below bring Jackson 2.21.4 and jsoup 1.22.2, both with published advisories
+    // (osv-scan). Not shipped by MINOS, but run by the build: raised to their first fixed versions until the plugins
+    // bring them. undertow-core has no fixed version: its exception is minos-intellij/osv-scanner.toml.
+    dependencies {
+        classpath(platform("com.fasterxml.jackson:jackson-bom:2.21.7"))
+        constraints {
+            classpath("org.jsoup:jsoup:1.23.2")
+        }
+    }
+}
+
 plugins {
     java
     id("org.jetbrains.intellij.platform") version "2.19.0"
@@ -18,6 +38,22 @@ repositories {
     mavenCentral()
     intellijPlatform {
         defaultRepositories()
+    }
+}
+
+// AUD-DEP-04: what the plugin ships (runtimeClasspath), compiles against and tests with is locked in gradle.lockfile,
+// strictly. Not lockAllConfigurations(): the intellijPlatform* configurations resolve IDE distributions that differ by
+// operating system and change with every IDE bug-fix release (the verifier selects 261.*), and the classes of an IDE
+// are not shipped by MINOS. For the same reason the IDE that compileClasspath and testCompileClasspath reach through
+// the local `idea:idea` coordinate (intellijIdea below) is ignored by the lock.
+dependencyLocking {
+    lockMode = LockMode.STRICT
+    ignoredDependencies.add("idea:*")
+}
+
+configurations {
+    listOf("compileClasspath", "runtimeClasspath", "testCompileClasspath", "testRuntimeClasspath").forEach { name ->
+        named(name) { resolutionStrategy.activateDependencyLocking() }
     }
 }
 
