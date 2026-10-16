@@ -84,9 +84,14 @@ jobs:
             exit 1
           fi
 
+      # AUD-TST-05: the coverage report of the plugin, and its floors (build.gradle.kts), judged on Linux.
       - name: Unit tests and plugin build
         working-directory: minos-intellij
-        run: ./gradlew --no-daemon test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure
+        run: ./gradlew --no-daemon test jacocoTestReport jacocoTestCoverageVerification buildPlugin verifyPluginProjectConfiguration verifyPluginStructure
+
+      - name: Require the plugin coverage report
+        shell: bash
+        run: test -s minos-intellij/build/reports/jacoco/test/jacocoTestReport.xml
 
       - name: IntelliJ Plugin Verifier
         working-directory: minos-intellij
@@ -132,10 +137,19 @@ jobs:
         with:
           cache-provider: basic
 
+      # AUD-TST-05: the Windows job publishes its coverage report (the strong process launcher runs only here); the
+      # floors are judged by the Linux job.
       - name: Run IntelliJ unit tests on Windows
         working-directory: minos-intellij
         shell: pwsh
-        run: ./gradlew.bat --no-daemon test
+        run: ./gradlew.bat --no-daemon test jacocoTestReport
+
+      - name: Require the plugin coverage report (Windows)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath minos-intellij/build/reports/jacoco/test/jacocoTestReport.xml -PathType Leaf)) {
+            throw 'The JaCoCo report of the plugin was not produced.'
+          }
 
       - name: Upload Windows ownership diagnostics
         if: always()

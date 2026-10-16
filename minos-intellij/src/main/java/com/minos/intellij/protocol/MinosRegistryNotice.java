@@ -18,8 +18,7 @@ public final class MinosRegistryNotice {
     /** {@code unreadable} is the CLI's own wording, for instance « 1 registry entry is unreadable ». */
     public static void show(Project project, String unreadable) {
         NotificationGroupManager.getInstance().getNotificationGroup(GROUP_ID)
-                .createNotification("MINOS: " + unreadable + ". The project works; run `minos project list` to see which.",
-                        NotificationType.WARNING)
+                .createNotification(MinosRegistryNoticeText.message(unreadable), NotificationType.WARNING)
                 .notify(project);
     }
 }
