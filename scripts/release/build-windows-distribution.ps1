@@ -488,12 +488,21 @@ Invoke-NativeChecked -File $Python -Arguments @(
     '--output', (Join-Path $SupplyChainDirectory 'THIRD-PARTY-NOTICES.txt'),
     '--strict'
 ) -Failure 'Third-party notice generation failed'
+# AUD-DEP-06: the Authenticode state of the executables is decided after any signature and before the manifest and
+# the sums are computed (signature, then sums, then qualification). No signing mode exists yet: a required signature
+# fails here, and an unrequired one is recorded as "unsigned", never presumed.
+. (Join-Path $RepoRoot 'scripts\release\release-signature.ps1')
+$SignatureRequired = Get-ReleaseSignatureRequirement $env:MINOS_REQUIRE_SIGNED_RELEASE
+$Executables = @(Get-ChildItem -LiteralPath $Distribution -Recurse -File | Where-Object { $_.Extension -ieq '.exe' } | ForEach-Object { $_.FullName })
+$SignatureState = Get-ReleaseSignatureState -Required $SignatureRequired -Mode $env:MINOS_SIGNING_MODE -Executable $Executables
 Invoke-NativeChecked -File $Python -Arguments @(
     'scripts/release/create-release-manifest.py',
     '--distribution', $Distribution,
     '--version', $Version,
     '--commit', $Commit,
-    '--output', (Join-Path $Distribution 'RELEASE-MANIFEST.json')
+    '--output', (Join-Path $Distribution 'RELEASE-MANIFEST.json'),
+    '--authenticode-required', $(if ($SignatureRequired) { '1' } else { '0' }),
+    '--authenticode-state', $SignatureState
 ) -Failure 'Release manifest generation failed'
 Invoke-NativeChecked -File $Python -Arguments @(
     'scripts/release/check-supply-chain.py',
