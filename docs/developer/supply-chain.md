@@ -222,6 +222,23 @@ Les jobs Linux qui téléchargent des images passent par `docker/login-action` (
 
 Jobs concernés : `Verify (ubuntu-24.04)` de `pr-ci.yml` (Testcontainers réutilise la connexion du démon Docker), `docker-release-validation.yml`, `release-promotion-gate.yml`, `docker-upgrade-qualification.yml` et le job PIT de `code-audit.yml`. Sans ces secrets (dépôt non configuré, PR depuis un fork), l'étape est sautée et les téléchargements restent anonymes : rien ne casse, la limite s'applique.
 
+**Durée de la connexion (AUD-DEP-13).** Un job connecté tire ce dont il a besoin puis exécute `docker logout` dans la première étape `run:` qui suit la connexion, avant tout script du dépôt : c'est le cas de `docker-release-validation.yml`, dont la liste d'images est fermée (les `FROM` épinglés de `docker/Dockerfile.mcp.release`). Restent connectés, nommément et avec leur raison dans `DOCKER_LOGIN_KEPT` de `scripts/quality/check-workflow-pins.py` :
+
+| Job | Raison |
+|---|---|
+| `pr-ci.yml` `verify` | Testcontainers tire `pgvector` pendant `mvnw verify` : la liste n'est pas close avant les tests |
+| `code-audit.yml` `mutation` | PIT rejoue les tests du module choisi, Testcontainers compris |
+| `docker-upgrade-qualification.yml` `real-docker-upgrade` | le candidat A est construit depuis un autre commit, dont le Dockerfile peut nommer d'autres empreintes |
+| `release-promotion-gate.yml` `docker-upgrade-qualification` | le candidat A est `main`, même raison |
+
+Le gate refuse tout autre job qui exécute du code connecté, et toute entrée de la liste qui ne désigne plus un job connecté. **Portée du jeton : non vérifiée par le dépôt.** « Lecture seule » n'est écrit que dans ce document et dans les commentaires des workflows ; l'API de Docker Hub ne permet pas de la lire. La vérification revient au propriétaire du compte (tâche 4.1 de `durcir-les-workflows-github`), qui la date ici une fois faite.
+
+## Jeton du dépôt et délais des jobs (AUD-DEP-12)
+
+Chaque `actions/checkout` porte `persist-credentials: false` : le jeton du dépôt ne reste pas dans `.git/config` pour les étapes suivantes. Rien ne casse **parce que le dépôt est public** : les opérations Git qui suivent un checkout (`git fetch origin main` de `pr-ci.yml`, `git fetch --tags` et `git ls-remote` de `release-windows.yml` et de `publish-windows-release.ps1`) sont anonymes, aucun workflow ne pousse, et les appels `gh` reçoivent `GH_TOKEN` par variable d'environnement. Si le dépôt devenait privé, ces opérations devraient s'authentifier explicitement, dans la seule étape qui en a besoin.
+
+Chaque job qui s'exécute sur un runner (`runs-on`) déclare `timeout-minutes` ; un appel de workflow réutilisable (`uses:` au niveau du job) n'a pas de runner et en est exempté. Les deux règles sont gardées par `check-workflow-pins.py`.
+
 ## Construction reproductible (AUD-DEP-11)
 
 Deux constructions du même commit, sur le même système, donnent le même JAR ombré. `project.build.outputTimestamp` est écrit dans le POM racine (`2026-01-01T00:00:00Z`, valeur d'un build sans Git ou de développement) et les scripts qui construisent un livrable (`build-windows-distribution.ps1`, `qualify-docker-release.sh`) passent la date du commit. Maven 3.10, celui du wrapper, fixait déjà une date par défaut ; Maven 3.9, que l'enforcer accepte, non : le POM ne dépend plus de la version de Maven. `requirePluginVersions` refuse tout plugin sans version, phases `clean`, `deploy` et `site` comprises.
