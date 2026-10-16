@@ -195,3 +195,96 @@ Le build du plugin SHALL vérifier la somme SHA-256 des artefacts qu'il résout 
 - **GIVEN** la documentation de la chaîne d'approvisionnement
 - **WHEN** elle est relue après ce changement
 - **THEN** elle nomme les artefacts vérifiés par somme et ceux qui ne le sont pas
+
+### Requirement: Les blocs communs du lanceur Job Object du plugin sont identiques à ceux du moteur
+Le lanceur Job Object embarqué par le plugin IntelliJ SHALL contenir à l'identique chaque fragment du moteur déclaré commun (imports Win32, structures de limites, vérification de la configuration du job, citation des arguments). Un gate statique SHALL assembler le script du moteur comme le runtime et SHALL échouer en nommant le fragment quand un bloc commun diffère. Un gabarit ou un fragment introuvable SHALL faire échouer le gate.
+
+#### Scenario: Fragment commun modifié d'un seul côté
+- **GIVEN** une copie du dépôt où une ligne du fragment des imports Win32 du moteur est modifiée sans toucher au plugin
+- **WHEN** `python scripts/quality/check-job-object-launcher-parity.py --root <copie>` est exécuté
+- **THEN** le gate échoue en nommant le fragment
+
+#### Scenario: Dépôt réel
+- **GIVEN** le dépôt
+- **WHEN** le gate est exécuté
+- **THEN** il réussit et affiche le nombre de fragments communs contrôlés
+
+#### Scenario: Fragment introuvable
+- **GIVEN** une copie du dépôt où un fragment inclus par le gabarit est supprimé
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en nommant le fragment manquant et ne conclut pas à la parité
+
+### Requirement: Toute différence assumée entre les deux lanceurs est nommée et bornée
+Une différence entre le lanceur du plugin et le script assemblé du moteur SHALL figurer dans une liste fermée qui porte, pour chaque entrée, un nom, une justification et un maximum de lignes. Le gate SHALL échouer sur une différence hors liste, sur un maximum dépassé et sur une entrée qui ne correspond plus à aucune différence. Il SHALL afficher la liste à chaque exécution.
+
+#### Scenario: Différence hors liste
+- **GIVEN** une copie du dépôt où une ligne est ajoutée au lanceur du plugin hors de toute zone assumée
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en citant la ligne
+
+#### Scenario: Entrée sans objet
+- **GIVEN** une liste qui nomme une différence que les deux scripts ne présentent plus
+- **WHEN** le gate est exécuté
+- **THEN** il échoue en nommant l'entrée périmée
+
+#### Scenario: Différences affichées
+- **GIVEN** le dépôt, où la construction de la ligne de commande diffère entre plugin et moteur
+- **WHEN** le gate est exécuté
+- **THEN** il réussit et sa sortie nomme cette différence et sa justification
+
+### Requirement: Un changement de fragment du lanceur déclenche la CI du plugin
+La portée du gate du plugin SHALL inclure les fragments et le gabarit du lanceur Job Object du moteur ainsi que le gate de parité. Une pull request qui ne modifie que l'un de ces fichiers SHALL exécuter les jobs du plugin, dont les tests Windows du lanceur.
+
+#### Scenario: Fragment seul modifié
+- **GIVEN** une liste de fichiers modifiés réduite à un fragment du lanceur du moteur
+- **WHEN** la portée du plugin est calculée par `scripts/ci/plugin-gate.py`
+- **THEN** la portée est vraie
+
+#### Scenario: Fichier sans rapport
+- **GIVEN** une liste de fichiers modifiés réduite à `README.md`
+- **WHEN** la portée est calculée
+- **THEN** la portée est fausse
+
+### Requirement: La couverture des tests du plugin est mesurée et publiée
+Le build Gradle du plugin IntelliJ SHALL produire un rapport JaCoCo des tests unitaires limité aux classes `com.minos.intellij`. Le workflow du plugin SHALL produire ce rapport sur Linux et sur Windows et le publier en artefact. L'absence du rapport après les tests SHALL faire échouer le job.
+
+#### Scenario: Rapport produit localement
+- **GIVEN** le dossier `minos-intellij`
+- **WHEN** `./gradlew --no-daemon test jacocoTestReport` est exécuté
+- **THEN** un rapport XML de couverture existe sous `build/reports/jacoco/` et ne contient que des classes `com/minos/intellij/`
+
+#### Scenario: Rapport absent
+- **GIVEN** une copie du build où la tâche de rapport est retirée
+- **WHEN** la vérification de couverture est exécutée
+- **THEN** elle échoue au lieu de réussir sans mesure
+
+### Requirement: Une couverture du plugin sous son plancher est refusée
+Le build du plugin SHALL échouer quand la couverture de lignes ou de branches mesurée est sous le plancher déclaré dans `build.gradle.kts`, pour le plugin entier et pour le paquet `protocol`. Cet échec SHALL faire échouer le check exigé du plugin. Un plancher SHALL NOT être présenté comme tenu sur un système où il n'est pas évalué.
+
+#### Scenario: Test supprimé
+- **GIVEN** une copie du plugin où une classe de test de `protocol` est supprimée
+- **WHEN** `./gradlew --no-daemon test jacocoTestCoverageVerification` est exécuté
+- **THEN** le build échoue en nommant la règle violée, la mesure et le plancher
+
+#### Scenario: Dépôt réel
+- **GIVEN** le plugin au HEAD du changement
+- **WHEN** la même commande est exécutée sous Linux
+- **THEN** elle réussit
+
+### Requirement: La logique du plugin est testable sans la plateforme IntelliJ
+La logique du plugin qui ne manipule pas l'IDE (choix et score du symbole candidat, texte des notices, interprétation des réponses du CLI) SHALL vivre dans des classes sans type `com.intellij` et SHALL être testée en JUnit simple. Les tests du plugin SHALL NOT exiger une fixture de plateforme. Les classes d'interface laissées sans test unitaire SHALL être nommées dans la documentation du plugin.
+
+#### Scenario: Score du symbole candidat
+- **GIVEN** deux symboles renvoyés par le CLI, dont un seul dans le fichier et à la ligne du curseur
+- **WHEN** la logique extraite choisit le candidat
+- **THEN** elle retient ce symbole, sans instancier de projet ni d'éditeur
+
+#### Scenario: Aucun candidat
+- **GIVEN** une réponse du CLI sans symbole correspondant
+- **WHEN** la logique extraite choisit le candidat
+- **THEN** elle signale l'absence (résultat vide ou erreur de protocole explicite, selon le comportement relevé au HEAD) et ne choisit pas un symbole par défaut
+
+#### Scenario: Dépendance à la plateforme réintroduite
+- **GIVEN** une classe de logique extraite qui importe un type `com.intellij`
+- **WHEN** `./gradlew --no-daemon test` est exécuté
+- **THEN** le test de garde des classes sans plateforme échoue en nommant la classe

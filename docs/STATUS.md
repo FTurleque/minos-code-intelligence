@@ -70,6 +70,18 @@ Les cinq changements du sprint 5 (« chaîne de release et d'approvisionnement �
 
 Restent à faire : vérifier la portée du jeton Docker Hub (propriétaire) et relever, au prochain candidat de release, la construction du plugin par le wrapper, le zip du plugin attaché et l'attestation. Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
 
+## Audit 2026-10-10 — sprint 6 (2026-10-16)
+
+Les six changements du sprint 6 (« couverture réelle et plugin IntelliJ ») sont **fusionnés dans `develop`** (PR #471, #473, #474, #475, #476, #477) :
+
+- **Couverture bornée** : le gate JaCoCo juge le scope `global` avec un plancher par système (dernière mesure en CI : lignes 0,866 sous Linux, 0,834 sous Windows) et trois scopes du cœur de plus (codec et état du stockage, primitives d'E/S confinées, rétention des runs) ; les classes de propriété de processus ont leur plancher de classe sur leur système.
+- **Tests de concurrence** : les 14 tests qui prouvaient une attente par un `sleep` observent désormais le concurrent en attente (verrou consultatif PostgreSQL vu dans `pg_locks`, ou fil parqué dans la classe qui porte le verrou) ; tous rejoués 50 fois sous Windows, les cinq tests de verrou de fichier aussi sous Linux. Les tests d'idempotence relisent l'état après le second appel.
+- **Test scip-java hermétique** : aucun test de `minos-provider-scip` ne lit plus le `JAVA_HOME` de l'hôte ; surefire le retire.
+- **Plugin IntelliJ** : couverture mesurée par JaCoCo et bornée dans son build (0,33 en lignes et en branches ; mesure CI Linux 0,357 / 0,359). SonarCloud n'analyse pas le plugin. Le lanceur Job Object du plugin est gardé en parité avec celui du moteur par un gate, trois différences étant assumées et listées.
+- **Mutation** : le document d'audit porte un seul état PIT par module, et chaque module ainsi que le plugin a désormais un rapport PIT produit par `code-audit.yml` sous Ubuntu (16 octobre) ; les classes propres à Windows de `minos-runtime-local` restent non analysées. Aucun plancher de mutation n'est fixé.
+
+Reste hors de ce sprint : aligner la construction de ligne de commande du moteur sur le mode strict du plugin (`raw-cmd-mode`). Détail et preuves : [`docs/audit/2026-10-10/SUIVI.md`](audit/2026-10-10/SUIVI.md).
+
 ## État produit
 
 - **C0 → M30** : terminés et intégrés.

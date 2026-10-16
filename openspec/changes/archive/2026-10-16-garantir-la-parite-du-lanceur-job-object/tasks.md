@@ -19,10 +19,10 @@ Ordre : comparaison et décisions, puis par section rouge, correction, preuve. A
 
 - [x] 3.1 [AUD-QUA-01] Rouge : cas ajoutés à `scripts/ci/test_plugin_gate.py` — un fragment de `windows-fragments/` seul, le gabarit seul, le gate de parité seul → portée vraie. **Preuve du rouge : portée fausse au HEAD.** — rouge : 3 sous-cas en échec au HEAD.
 - [x] 3.2 [AUD-QUA-01] Étendre `PLUGIN_PATHS` de `scripts/ci/plugin-gate.py` (D5). Preuve : `python scripts/ci/test_plugin_gate.py` vert (chaque préfixe existe) ; `python scripts/quality/check-ci-wiring.py` vert. — fait ; `test_plugin_gate.py` vert (20 cas, chaque préfixe existe).
-- [ ] 3.3 **(manuelle)** [AUD-QUA-01] À la PR : `Static invariants (single run)` et `IntelliJ plugin (gate)` verts, job Windows du plugin exécuté ; noter les run ids.
+- [x] 3.3 **(manuelle)** [AUD-QUA-01] À la PR : `Static invariants (single run)` et `IntelliJ plugin (gate)` verts, job Windows du plugin exécuté ; noter les run ids. — fait (PR #474, fusion `1a5e037d`, tête `5f0c1fd1`) : `Static invariants (single run)` vert (run 38897886912) ; `IntelliJ plugin (gate)` vert (run 38897886395) avec ses deux jobs exécutés, `IntelliJ 2026.1 / Java 21` et `Windows process ownership / Java 21` (job 116962705407).
 
 ## 4. Clôture
 
 - [x] 4.1 `docs/developer/quality-gates.md` : le gate de parité, la liste des différences assumées et la règle « on aligne dans la copie du plugin, jamais dans un fragment ». Rejouer `python scripts/docs/check-current-docs.py`. — fait (« Parité du lanceur Job Object » dans `quality-gates.md`).
-- [ ] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-QUA-01 : mesure 38 / 42 au lieu de 70, sens réel de la divergence, décisions D1 et D3, reste éventuel sur le moteur, run ids).
-- [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/developer/quality-gates.md`, `docs/user/intellij-plugin.md` si le lanceur y est décrit.
+- [x] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-QUA-01 : mesure 38 / 42 au lieu de 70, sens réel de la divergence, décisions D1 et D3, reste éventuel sur le moteur, run ids). — fait (2026-10-16) : ligne AUD-QUA-01 du sprint 6 ; le reste D3 (`raw-cmd-mode` du moteur) y reste inscrit, hors de ce changement.
+- [x] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/developer/quality-gates.md`, `docs/user/intellij-plugin.md` si le lanceur y est décrit. — fait (2026-10-16) : `openspec validate --all --strict` vert avant archivage ; `docs/STATUS.md` ; `docs/developer/quality-gates.md` déjà à jour (4.1) ; `docs/user/intellij-plugin.md` ne décrit pas le lanceur.
