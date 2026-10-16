@@ -151,6 +151,7 @@ public static class MinosJobObjectOwnerV1 {
         IntPtr job = IntPtr.Zero;
         PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
         try {
+            // The ownership authority exists before the provider process exists.
             job = CreateJobObject(IntPtr.Zero, null);
             if (job == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
             ConfigureAndVerifyJob(job);
@@ -166,11 +167,20 @@ public static class MinosJobObjectOwnerV1 {
             environmentBlock = BuildEnvironmentBlock(environment);
             uint flags = CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | CREATE_NO_WINDOW;
             if (!CreateProcessW(
-                    command[0], commandLine, IntPtr.Zero, IntPtr.Zero, true, flags,
-                    environmentBlock, workingDirectory, ref startup, out pi)) {
+                    command[0],
+                    commandLine,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    true,
+                    flags,
+                    environmentBlock,
+                    workingDirectory,
+                    ref startup,
+                    out pi)) {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             }
 
+            // The child is still suspended here and therefore cannot have spawned anything.
             if (!AssignProcessToJobObject(job, pi.hProcess)) {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             }
@@ -191,7 +201,10 @@ public static class MinosJobObjectOwnerV1 {
             }
             return unchecked((int)exitCode);
         } finally {
-            if (job != IntPtr.Zero) TerminateJobObject(job, 1);
+            if (job != IntPtr.Zero) {
+                // Normal exit, failure, or wrapper teardown: descendants cannot outlive this handle.
+                TerminateJobObject(job, 1);
+            }
             if (pi.hThread != IntPtr.Zero) CloseHandle(pi.hThread);
             if (pi.hProcess != IntPtr.Zero) CloseHandle(pi.hProcess);
             if (job != IntPtr.Zero) CloseHandle(job);

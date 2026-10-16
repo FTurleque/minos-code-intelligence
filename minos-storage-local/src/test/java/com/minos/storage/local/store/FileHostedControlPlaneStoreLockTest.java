@@ -7,6 +7,7 @@ import com.minos.hosted.HostedRole;
 import com.minos.hosted.HostedTenantState;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.testsupport.DerivedTenantKeys;
+import com.minos.testsupport.ParkedThreads;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -21,10 +22,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -34,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** S5/S6: the tenant lock is bounded, its file is owner-only and never followed through a link. */
 class FileHostedControlPlaneStoreLockTest {
     private static final Instant NOW = Instant.parse("2026-07-29T09:00:00Z");
+    private static final String BOUNDED_FILE_LEASE = "com.minos.io.BoundedFileLease";
 
     private static FileHostedControlPlaneStore store(Path root, Duration lockTimeout) throws IOException {
         return new FileHostedControlPlaneStore(
@@ -67,11 +71,17 @@ class FileHostedControlPlaneStoreLockTest {
         try (FileChannel holder = FileChannel.open(
                 root.resolve(tenant + ".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
             FileLock held = holder.lock();
+            AtomicReference<Thread> writer = new AtomicReference<>();
+            CountDownLatch started = new CountDownLatch(1);
             Future<?> creation = pool.submit(() -> {
+                writer.set(Thread.currentThread());
+                started.countDown();
                 store.create(state(tenant));
                 return null;
             });
-            Thread.sleep(300);
+            assertTrue(started.await(10, TimeUnit.SECONDS));
+            // The writer is observed retrying the held file lock, not assumed blocked after a delay.
+            ParkedThreads.awaitParkedIn(writer.get(), BOUNDED_FILE_LEASE, creation::isDone, Duration.ofSeconds(5));
             assertFalse(creation.isDone(), "the creation waits for the lock holder");
             held.release();
             creation.get(10, TimeUnit.SECONDS);

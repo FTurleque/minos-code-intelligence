@@ -1,6 +1,7 @@
 package com.minos.storage.postgresql;
 
 import com.minos.storage.postgresql.support.PostgresConnectionFactory;
+import com.minos.storage.postgresql.support.PostgresProjectMutationLock;
 import com.minos.storage.postgresql.support.PostgresSchemaMigrator;
 import com.minos.storage.StorageBackendConfiguration;
 import org.junit.jupiter.api.AfterAll;
@@ -14,11 +15,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Duration;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -149,6 +155,39 @@ public abstract class PostgresTestSupport {
             String quoted = statement.enquoteIdentifier(database, true);
             statement.execute("DROP DATABASE IF EXISTS " + quoted);
             statement.execute("CREATE DATABASE " + quoted);
+        }
+    }
+
+    /**
+     * Waits until a session of the test database is waiting for, and not yet granted, the project mutation
+     * advisory lock of {@code projectId} (AUD-TST-10). This is the direct proof that a concurrent writer is
+     * blocked by the lock: {@code pg_locks} lists the request as {@code granted = false}. The query filters on
+     * the lock key ({@link PostgresProjectMutationLock#key}) and on the current database, so a lock held or
+     * awaited for another project is ignored. The polling connection is opened outside the pool under test.
+     * When no such waiter appears before {@code timeout}, the test fails with a message.
+     */
+    protected static void awaitAdvisoryLockWaiter(UUID projectId, Duration timeout) throws SQLException {
+        long key = PostgresProjectMutationLock.key(projectId);
+        long deadline = System.nanoTime() + timeout.toNanos();
+        try (Connection observer = DriverManager.getConnection(
+                     canonicalJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             PreparedStatement waiters = observer.prepareStatement("""
+                     SELECT count(*) FROM pg_locks
+                     WHERE locktype = 'advisory' AND NOT granted AND objsubid = 1
+                       AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+                       AND ((classid::bigint << 32) | objid::bigint) = ?
+                     """)) {
+            waiters.setLong(1, key);
+            while (true) {
+                try (ResultSet result = waiters.executeQuery()) {
+                    result.next();
+                    if (result.getLong(1) > 0L) return;
+                }
+                if (System.nanoTime() - deadline >= 0L) {
+                    fail("no session was observed waiting for the advisory lock of project " + projectId
+                            + " within " + timeout);
+                }
+            }
         }
     }
 
