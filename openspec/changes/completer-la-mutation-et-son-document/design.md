@@ -44,7 +44,7 @@ Le tableau des statuts du § 5.2 devient la source unique : un module par ligne,
 
 Ordre : `minos-cli`, `minos-bootstrap`, `minos-runtime-local`, puis `minos-app` (le plus long, écart 4), puis le job du plugin. Chaque résultat entre dans le tableau avec son identifiant d'exécution, le système et la date. Le document distingue « muté sous Linux » de « muté sous Windows » : les classes propres à Windows de `minos-runtime-local` restent **non analysées** tant qu'aucune machine Windows jetable n'a rejoué le module ; la mise en garde du § 7.2 (PIT d'un code qui modifie l'hôte : jamais sur un poste) est conservée.
 
-### D3. Plancher PIT par module — **décision en attente du propriétaire**
+### D3. Plancher PIT par module — **recommandation retenue par le propriétaire le 2026-10-15** (aucun plancher avant des rapports complets)
 
 Recommandation : **aucun plancher** tant que les 14 modules et le plugin n'ont pas un rapport complet ; ensuite, un plancher par module, **non bloquant** d'abord (contrôlé dans `code-audit.yml`, pas dans `pr-ci.yml`), décidé dans la suite de `etendre-audit-outille-a-tout-le-perimetre`. Alternatives : (a) plancher dès maintenant sur les 10 modules complets — fige des scores mesurés pendant un incident d'environnement (H23) et sur un seul système ; (b) ne jamais fixer de plancher et garder PIT comme outil d'audit à la demande.
 
