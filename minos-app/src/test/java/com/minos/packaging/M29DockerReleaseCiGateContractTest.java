@@ -29,7 +29,9 @@ class M29DockerReleaseCiGateContractTest {
 
         assertTrue(qualification.contains("ACTUAL_HEAD=\"$(git rev-parse HEAD)\""));
         assertTrue(qualification.contains("Docker release exact-head mismatch"));
-        assertTrue(qualification.contains("./mvnw -B -ntp -DskipTests -DskipITs package"));
+        assertTrue(qualification.contains(
+                "./mvnw -B -ntp -DskipTests -DskipITs \"-Dproject.build.outputTimestamp=$(git show -s --format=%cI HEAD)\" package"),
+                "the image must embed a JAR built with the reproducible timestamp of the commit (AUD-DEP-11)");
         assertTrue(qualification.contains("minos-code-intelligence-*-all.jar"));
         assertTrue(qualification.contains("scip-typescript-package-lock.json"));
         assertTrue(qualification.contains("scip-python-package-lock.json"));
