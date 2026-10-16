@@ -63,7 +63,23 @@ Les étapes `gradle-version:` + `gradle …` deviennent `./gradlew …` dans `mi
 
 `timeout-minutes` sur chaque job à `runs-on` ; valeurs fixées d'après les durées observées des derniers runs (tâche 1.1), avec marge ; l'appel réutilisable est l'exception nommée dans le gate. `ubuntu-latest` devient `ubuntu-24.04` ; le gate refuse tout `runs-on` terminé par `-latest`.
 
-### D4. Identifiants Docker Hub — **décision en attente du propriétaire**
+**Relevé de la tâche 1.1 (2026-10-15)**, durées des jobs réussis lues par `gh run view` (6 derniers runs réussis de chaque workflow, sauf mention) :
+
+| Job | Durée maximale observée | `timeout-minutes` retenu |
+|---|---|---|
+| `pr-ci.yml` `invariants` | 1,3 min | 15 |
+| `pr-ci.yml` `verify` | 8,6 min (Linux), 26,6 min (Windows) | 90 |
+| `code-audit.yml` `spotbugs` | 4,1 min (2 runs) | 30 |
+| `code-audit.yml` `mutation` | 20,2 min (2 runs, module choisi) ; `minos-app`, le plus long, **jamais mesuré** | 120 |
+| `code-audit.yml` `dependency-check` | **aucun run réussi** (clé NVD absente) | 90 |
+| `m0-java-ci.yml` `verify` | **aucun run** (`workflow_dispatch` seul) ; équivalent de `Verify (ubuntu-24.04)` | 60 |
+| `release-promotion-gate.yml` `docker-upgrade-evidence` | 0,3 min | 10 |
+
+Les trois valeurs sans mesure sont des bornes larges, à resserrer au premier run réussi.
+
+### D4. Identifiants Docker Hub — **option A retenue par le propriétaire le 2026-10-15, avec un écart**
+
+**Écart constaté à l'implémentation** : la liste d'images n'est fermée que pour **un** des trois jobs de qualification. `docker-release-validation.yml` ne construit que depuis les `FROM` épinglés de `docker/Dockerfile.mcp.release` : il les tire connecté, puis `docker logout`. Les deux jobs de montée de version (`docker-upgrade-qualification.yml` `real-docker-upgrade`, `release-promotion-gate.yml` `docker-upgrade-qualification`) construisent aussi le **candidat A** depuis un autre commit (le précédent, ou `main`), dont le Dockerfile peut nommer d'autres empreintes : un pré-tirage depuis l'arbre courant ne les couvrirait pas, et un tirage anonyme pendant la qualification retomberait sous la limite du 9 octobre. Ils rejoignent la liste fermée avec cette raison (quatre entrées au lieu de deux). Les fermer exigerait de lire les `FROM` des deux arbres (`git show <ref>:docker/…`) avant la connexion : changement possible, non fait ici.
 
 Recommandation (option A) : (1) **vérifier et documenter** que le jeton est en lecture seule sur les dépôts publics (tâche manuelle : seul le propriétaire du compte peut le lire), l'écrire dans `supply-chain.md` ; (2) dans les jobs dont la liste d'images est **fermée** (les trois jobs de qualification Docker), tirer les images épinglées puis `docker logout` avant d'exécuter les scripts ; (3) dans `pr-ci.yml` `verify` et `code-audit.yml` `mutation`, où Testcontainers tire pendant les tests, garder la connexion et l'**inscrire dans une liste fermée** du gate avec sa raison.
 
