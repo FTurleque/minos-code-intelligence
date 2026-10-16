@@ -362,5 +362,105 @@ class ShippedLockfileTest(WiringTestCase):
         self.assertIn(added, refused[0])
 
 
+RELEASE = """name: Release
+on:
+  workflow_dispatch:
+jobs:
+  publish:
+    runs-on: windows-2022
+    steps:
+      - run: .\\\\scripts\\\\release\\\\publish-windows-release.ps1 -Version 1.0.0 -PublishOnly
+  plugin:
+    needs: publish
+    permissions:
+      contents: write
+    uses: ./.github/workflows/intellij-plugin-release.yml
+    with:
+      tag: v1.0.0
+"""
+
+PLUGIN_RELEASE = """name: Publish IntelliJ Plugin
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo build
+"""
+
+
+class ReleasePluginTest(WiringTestCase):
+
+    def release_failures(self, workflows: dict[str, str | None]) -> list[str]:
+        return gate.check_releases_publish_the_plugin(self.tree(workflows))
+
+    def test_a_release_that_calls_the_plugin_workflow_is_accepted(self):
+        self.assertEqual([], self.release_failures({"release.yml": RELEASE, "intellij-plugin-release.yml": PLUGIN_RELEASE}))
+        self.assertEqual([], self.failures(self.tree({"release.yml": RELEASE,
+                                                      "intellij-plugin-release.yml": PLUGIN_RELEASE})))
+
+    def test_a_release_without_the_plugin_call_is_refused(self):
+        release = RELEASE.split("  plugin:\n")[0]
+        self.assertEqual([".github/workflows/release.yml: publishes a GitHub Release but no job calls "
+                          "./.github/workflows/intellij-plugin-release.yml: the release would ship without the "
+                          "IntelliJ plugin"],
+                         self.release_failures({"release.yml": release, "intellij-plugin-release.yml": PLUGIN_RELEASE}))
+
+    def test_a_release_created_by_the_cli_counts_as_a_publication(self):
+        release = RELEASE.split("  plugin:\n")[0].replace(
+            ".\\\\scripts\\\\release\\\\publish-windows-release.ps1 -Version 1.0.0 -PublishOnly", "gh release create v1.0.0")
+        failures = self.release_failures({"release.yml": release, "intellij-plugin-release.yml": PLUGIN_RELEASE})
+        self.assertEqual(1, len(failures))
+        self.assertIn("publishes a GitHub Release but no job calls", failures[0])
+
+    def test_a_validation_only_run_and_a_commented_call_do_not_publish(self):
+        validation = RELEASE.split("  plugin:\n")[0].replace("-PublishOnly", "-SkipBuild -ValidateOnly")
+        commented = RELEASE.split("  plugin:\n")[0].replace("      - run:", "      # gh release create v1\n      - run:").replace(
+            "-PublishOnly", "-ValidateOnly")
+        self.assertEqual([], self.release_failures({"a.yml": validation, "b.yml": commented}))
+
+    def test_a_plugin_call_written_in_a_comment_does_not_count(self):
+        release = RELEASE.replace("    uses: ./.github", "    # uses: ./.github")
+        failures = self.release_failures({"release.yml": release, "intellij-plugin-release.yml": PLUGIN_RELEASE})
+        self.assertEqual(1, len(failures))
+        self.assertIn("no job calls", failures[0])
+
+    def test_a_missing_plugin_workflow_is_refused_when_a_release_is_published(self):
+        self.assertEqual([".github/workflows/intellij-plugin-release.yml: missing, no workflow can attach the IntelliJ "
+                          "plugin to a release"], self.release_failures({"release.yml": RELEASE}))
+        self.assertEqual([], self.release_failures({}))
+
+    def test_a_plugin_workflow_started_by_the_release_event_only_is_refused(self):
+        plugin = PLUGIN_RELEASE.replace(
+            "  workflow_call:\n    inputs:\n      tag:\n        type: string\n  workflow_dispatch:\n",
+            "  release:\n    types: [published]\n")
+        failures = self.release_failures({"release.yml": RELEASE, "intellij-plugin-release.yml": plugin})
+        self.assertEqual([".github/workflows/intellij-plugin-release.yml: does not start on workflow_call, the release "
+                          "workflow cannot call it",
+                          ".github/workflows/intellij-plugin-release.yml: still starts on a release: event, which "
+                          "would publish the plugin a second time beside the call of the release workflow"], failures)
+
+    def test_a_release_trigger_kept_beside_the_call_is_refused(self):
+        plugin = PLUGIN_RELEASE.replace("  workflow_dispatch:\n", "  workflow_dispatch:\n  release:\n    types: [published]\n")
+        failures = self.release_failures({"intellij-plugin-release.yml": plugin})
+        self.assertEqual(1, len(failures))
+        self.assertIn("still starts on a release: event", failures[0])
+
+    def test_an_inline_trigger_list_is_read(self):
+        plugin = PLUGIN_RELEASE.replace(
+            "on:\n  workflow_call:\n    inputs:\n      tag:\n        type: string\n  workflow_dispatch:\n",
+            "on: [release, workflow_dispatch]\n")
+        failures = self.release_failures({"intellij-plugin-release.yml": plugin})
+        self.assertEqual(2, len(failures))
+
+    def test_the_repository_publishes_the_plugin_with_its_release(self):
+        self.assertEqual([], gate.check_releases_publish_the_plugin(REPOSITORY))
+
+
 if __name__ == "__main__":
     unittest.main()
