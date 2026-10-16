@@ -29,7 +29,8 @@ import java.util.stream.Collectors;
  * <p>The {@code javaplan} scenario instead builds the scip-java process plan of a project: the arguments are
  * the project root, the run directory, and the {@code ;}-separated coursier, runner, managed Maven and classpath
  * file paths ({@code -} for an absent one), optionally followed by {@code refuse}: the classpath verifier then
- * refuses the first jar as the pinned lock would refuse an altered one (by default it accepts every jar).</p>
+ * refuses the first jar as the pinned lock would refuse an altered one (by default it accepts every jar), then by
+ * the language of the request ({@code JAVA} by default).</p>
  */
 public final class ManagedRuntimeScenarios {
 
@@ -77,6 +78,7 @@ public final class ManagedRuntimeScenarios {
 
     private static void javaPlan(Path project, Path runDirectory, String[] paths) {
         boolean refuse = paths.length > 4 && "refuse".equals(paths[4]);
+        Language language = paths.length > 5 ? Language.valueOf(paths[5]) : Language.JAVA;
         ScipJavaClasspath.Verifier verifier = jars -> {
             if (refuse) {
                 throw new IllegalStateException("scip-java classpath verification failed: "
@@ -88,12 +90,12 @@ public final class ManagedRuntimeScenarios {
                 "-".equals(paths[2]) ? null : Path.of(paths[2]),
                 "-".equals(paths[3]) ? null : Path.of(paths[3]), verifier);
         IndexerDescriptor descriptor = new IndexerDescriptor(
-                "scip-java", "0.13.1", "scip-java", Set.of(Language.JAVA), Set.of(), Set.of(),
+                "scip-java", "0.13.1", "scip-java", Set.of(language), Set.of(), Set.of(),
                 IndexerQualification.QUALIFIED, 1, List.of());
         try {
             IndexerProcessPlan plan = factory.create(new IndexingExecutionRequest(
                     UUID.randomUUID(), UUID.randomUUID(), project,
-                    new IndexerSelection(Language.JAVA, descriptor)), runDirectory);
+                    new IndexerSelection(language, descriptor)), runDirectory);
             print("plan.command", String.join(" | ", plan.command()));
             print("plan.workingDirectory", plan.workingDirectory().toString());
             print("plan.artifact", plan.generatedArtifact().toString());
