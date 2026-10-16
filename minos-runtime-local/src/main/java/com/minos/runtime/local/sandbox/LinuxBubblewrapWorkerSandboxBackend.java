@@ -49,7 +49,12 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     static final long MAX_JOB_MEMORY_BYTES = 8L * 1024L * 1024L * 1024L;
     /** Per-process address space; defence in depth on top of the aggregate cgroup limit. */
     static final long MAX_ADDRESS_SPACE_BYTES = MAX_JOB_MEMORY_BYTES;
-    /** Aggregate process/thread count of the whole provider tree, enforced by {@code pids.max}. */
+    /**
+     * Aggregate process/thread count of the whole provider tree, enforced by {@code pids.max} only.
+     * No {@code prlimit --nproc}: RLIMIT_NPROC counts every task of the real user, host threads
+     * included, so it bounds neither a process nor the provider tree and would refuse the launch of
+     * an account that already runs that many threads (MINOS-AUD-H17).
+     */
     static final int MAX_PROCESSES = 128;
     static final int MAX_OPEN_FILES = 2048;
     /** Aggregate CPU bandwidth per {@link LinuxCgroupJob#CPU_PERIOD_MICROS}, enforced by {@code cpu.max}. */
@@ -345,7 +350,6 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         List<String> sandbox = new ArrayList<>();
         sandbox.add(prlimit.toString());
         sandbox.add("--as=" + MAX_ADDRESS_SPACE_BYTES + ":" + MAX_ADDRESS_SPACE_BYTES);
-        sandbox.add("--nproc=" + MAX_PROCESSES + ":" + MAX_PROCESSES);
         sandbox.add("--nofile=" + MAX_OPEN_FILES + ":" + MAX_OPEN_FILES);
         long boundedCpuSeconds = Math.max(1L, cpuSeconds);
         sandbox.add("--cpu=" + boundedCpuSeconds + ":" + boundedCpuSeconds);

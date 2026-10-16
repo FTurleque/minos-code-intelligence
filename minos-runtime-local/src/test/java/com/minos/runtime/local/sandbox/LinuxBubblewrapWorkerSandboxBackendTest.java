@@ -23,10 +23,12 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,8 +66,8 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         assertTrue(command.contains("--ro-bind"));
         assertTrue(command.contains("--as=" + LinuxBubblewrapWorkerSandboxBackend.MAX_ADDRESS_SPACE_BYTES
                 + ":" + LinuxBubblewrapWorkerSandboxBackend.MAX_ADDRESS_SPACE_BYTES));
-        assertTrue(command.contains("--nproc=" + LinuxBubblewrapWorkerSandboxBackend.MAX_PROCESSES
-                + ":" + LinuxBubblewrapWorkerSandboxBackend.MAX_PROCESSES));
+        assertTrue(command.stream().noneMatch(argument -> argument.startsWith("--nproc")),
+                "RLIMIT_NPROC counts the tasks of the whole host account: the process count is pids.max");
         assertTrue(command.contains("--nofile=" + LinuxBubblewrapWorkerSandboxBackend.MAX_OPEN_FILES
                 + ":" + LinuxBubblewrapWorkerSandboxBackend.MAX_OPEN_FILES));
         assertTrue(discovered.orElseThrow().enforcesNetworkDeny());
@@ -88,10 +90,10 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         String python = """
                 import resource, socket, sys
                 expected_as = int(sys.argv[1])
-                expected_nproc = int(sys.argv[2])
+                sandbox_processes = int(sys.argv[2])
                 expected_nofile = int(sys.argv[3])
                 assert resource.getrlimit(resource.RLIMIT_AS)[0] == expected_as
-                assert resource.getrlimit(resource.RLIMIT_NPROC)[0] == expected_nproc
+                assert resource.getrlimit(resource.RLIMIT_NPROC)[0] != sandbox_processes
                 assert resource.getrlimit(resource.RLIMIT_NOFILE)[0] == expected_nofile
                 try:
                     socket.create_connection(('1.1.1.1', 53), timeout=1.0)
@@ -168,6 +170,54 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         assertEquals("process-sandbox-artifact", Files.readString(artifact.finalArtifact(), StandardCharsets.UTF_8));
     }
 
+    /**
+     * RLIMIT_NPROC counts every task of the real user, not the tasks of the sandbox: a host account
+     * that already runs more threads than {@link LinuxBubblewrapWorkerSandboxBackend#MAX_PROCESSES}
+     * (an IDE, a busy CI runner, the uid of a container) must still launch the sandbox. The process
+     * count of the provider tree is bounded by {@code pids.max} of its cgroup, which this launch does
+     * not need to prove.
+     */
+    @Test
+    void aHostAccountBusierThanTheSandboxProcessLimitStillLaunchesIt() throws Exception {
+        var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
+        SandboxTestSupport.requireBackend(discovered, "bubblewrap/prlimit runtime is required for Linux sandbox isolation");
+        assumeTrue(!"0".equals(statusField(Path.of("/proc/self/status"), "Uid:")),
+                "root is not bound by RLIMIT_NPROC");
+        Path working = Files.createTempDirectory("minos-bwrap-busy-working-");
+        Path run = Files.createTempDirectory("minos-bwrap-busy-run-");
+        Path artifact = run.resolve("index.scip");
+        IndexerProcessPlan plan = new IndexerProcessPlan(
+                List.of("/bin/sh", "-c", "printf busy-account > \"$1\"", "sh", artifact.toString()),
+                working,
+                Map.of(),
+                artifact,
+                Duration.ofSeconds(30));
+        List<String> command = discovered.orElseThrow().sandboxPlan(plan, run, WorkerNetworkPolicy.DENY).command();
+
+        CountDownLatch release = new CountDownLatch(1);
+        List<Thread> parked = new ArrayList<>();
+        try {
+            int ceiling = 4 * LinuxBubblewrapWorkerSandboxBackend.MAX_PROCESSES;
+            while (hostAccountTasks() <= LinuxBubblewrapWorkerSandboxBackend.MAX_PROCESSES + 16 && parked.size() < ceiling) {
+                parked.add(Thread.ofPlatform().daemon().start(() -> awaitQuietly(release)));
+            }
+            long tasks = hostAccountTasks();
+            assumeTrue(tasks > LinuxBubblewrapWorkerSandboxBackend.MAX_PROCESSES,
+                    "the host account could not be made busier than the sandbox process limit");
+
+            Process process = new ProcessBuilder(command).directory(working.toFile()).redirectErrorStream(true).start();
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS), "sandboxed launch timed out");
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), "host account tasks: " + tasks + System.lineSeparator() + output);
+            assertEquals("busy-account", Files.readString(artifact, StandardCharsets.UTF_8));
+        } finally {
+            release.countDown();
+            for (Thread thread : parked) {
+                thread.join(5_000L);
+            }
+        }
+    }
+
     @Test
     void allowPlanSharesHostNetworkAndDropsCapabilities() throws Exception {
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
@@ -185,8 +235,8 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
 
     /**
      * What a failed sandboxed launch left behind: the bounded tail of the provider stderr and the
-     * number of tasks of the host account, which is what {@code prlimit --nproc} is compared with
-     * when bubblewrap creates its user namespace.
+     * number of tasks of the host account, which RLIMIT_NPROC would be compared with if anything set
+     * it (MINOS-AUD-H17: the sandbox no longer does).
      */
     private static String launchFailureDiagnostic(Path home, Path project, IndexingExecutionRequest request) {
         Path stderr = home.resolve("runs").resolve(request.runId().toString())
@@ -202,7 +252,7 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         }
         return "provider stderr: " + tail.replace(home.toString(), "<home>").replace(project.toString(), "<project>")
                 + System.lineSeparator() + "host account tasks after the failure: " + hostAccountTasks()
-                + " (sandbox prlimit --nproc=" + LinuxBubblewrapWorkerSandboxBackend.MAX_PROCESSES + ")";
+                + " (sandbox pids.max=" + LinuxBubblewrapWorkerSandboxBackend.MAX_PROCESSES + ")";
     }
 
     /** Threads owned by the account running this JVM, as RLIMIT_NPROC counts them; -1 when unreadable. */
@@ -224,6 +274,14 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
             return tasks;
         } catch (IOException | RuntimeException _) {
             return -1L;
+        }
+    }
+
+    private static void awaitQuietly(CountDownLatch release) {
+        try {
+            release.await();
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
         }
     }
 

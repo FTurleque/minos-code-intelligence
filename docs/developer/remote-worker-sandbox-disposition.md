@@ -49,7 +49,7 @@ Concrètement (`ProviderRuntimeStatus.State`, `com.minos.runtime`) :
 | `MEASURED_ONLY` | valeur connue seulement après coup : diagnostic, jamais une garantie |
 | `UNAVAILABLE` | la primitive n’existe pas sur cet hôte ou cette configuration |
 
-Une limite **par processus** (`RLIMIT_AS`, `RLIMIT_NPROC`, `RLIMIT_CPU`) est multipliée par chaque `fork` : elle reste une défense en profondeur et n’est jamais déclarée `OS_ENFORCED` sur une dimension agrégée.
+Une limite **par processus** (`RLIMIT_AS`, `RLIMIT_NOFILE`, `RLIMIT_CPU`) est multipliée par chaque `fork` : elle reste une défense en profondeur et n’est jamais déclarée `OS_ENFORCED` sur une dimension agrégée. `RLIMIT_NPROC` n’est pas posé : il compte toutes les tâches de l’utilisateur réel, hôte compris, et ferait échouer le lancement d’un compte déjà chargé (MINOS-AUD-H17, ADR 0038) ; le nombre de processus est borné par `pids.max`.
 
 `UNTRUSTED_CODE_SUPPORTED` exige (`WorkerResourceContainment.unmetRequirements()`) :
 
