@@ -40,7 +40,11 @@ Le job `publish` appelle `actions/attest-build-provenance` (épinglée par SHA) 
 
 Livrable **seule** : le lot 1 des tâches ne dépend pas de D2.
 
-### D2. Mode de signature — **décision en attente du propriétaire**
+### D2. Mode de signature — **tranchée le 2026-10-15 : option C de fait, A recommandée dès qu'un abonnement existe**
+
+Le propriétaire a retenu l'option recommandée de chaque changement. Ici, la recommandation A est conditionnée à un abonnement à un service de signature, qui n'existe pas au 2026-10-15 : l'option C s'applique (release non signée, et dite telle), avec le garde-fou D3 livré. Brancher A demandera un ADR et l'ajout du mode à `$script:MinosSigningModes` de `scripts/release/release-signature.ps1` (tâche 3.1).
+
+**Écart d'implémentation.** Le test du garde-fou est un script PowerShell (`scripts/release/test-release-signature.ps1`, sur le modèle de `test-iscc-provenance.ps1`) et non `test_release_signature_gate.py` : les fonctions du garde-fou se chargent sans effet de bord et la signature est décrite par un lecteur injecté, ce qui les éprouve aussi sous Linux ; un cas lit la vraie signature d'un fichier non signé sous Windows. La qualification recalculait **déjà** les sommes dans les deux modes (`Verify-Sha256`, `publish-windows-release.ps1`) : le test exécute cette fonction réelle, extraite par l'analyseur PowerShell, au lieu d'en ajouter une seconde.
 
 - **Option A (recommandée si un abonnement est possible) : service de signature** (Azure Trusted Signing ou équivalent), appelé depuis le job `build` par une identité fédérée (OIDC), sans secret de longue durée. Demande un compte, une validation d'identité et un ADR.
 - **Option B : certificat sur matériel, runner auto-hébergé.** `sign-windows-artifact.ps1` fonctionne alors tel quel ; demande d'exploiter un runner de confiance.

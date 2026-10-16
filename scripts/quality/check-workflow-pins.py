@@ -13,6 +13,11 @@ is public: its `git fetch` calls are anonymous; a private repository would authe
 that runs on a runner declares `timeout-minutes`; a job that logs in to Docker Hub logs out in its first `run:` step
 after the login, unless DOCKER_LOGIN_KEPT names it with a reason, and a stale entry of that list is refused.
 
+Release provenance (AUD-DEP-06): a job that publishes release assets (`publish-windows-release.ps1` outside
+`-ValidateOnly`, `gh release create`, `gh release upload`) runs `actions/attest-build-provenance` before it and holds
+`id-token: write` and `attestations: write` at job level; no workflow grants either at its top level. Every script
+path named by docs/developer/supply-chain.md is a file of the repository.
+
 `--root` points the gate at another tree (default: this repository).
 Self-test: scripts/quality/test_check_workflow_pins.py.
 """
@@ -239,6 +244,83 @@ def find_job_hardening_violations(label: str, text: str) -> tuple[list[str], set
                         f"DOCKER_LOGIN_KEPT with its reason."
                     )
     return failures, kept
+
+
+ATTESTATION = "actions/attest-build-provenance"
+ATTESTATION_PERMISSIONS = ("id-token", "attestations")
+# A step that puts files on a GitHub Release: the publication script outside its validation-only mode, or the CLI.
+RELEASE_ASSET_PUBLICATION = re.compile(
+    r"publish-windows-release\.ps1(?!.*-ValidateOnly)|\bgh\s+release\s+(?:create|upload)\b")
+TOP_LEVEL_PERMISSIONS = re.compile(r"^permissions:\s*(?P<value>\S*)\s*$")
+SUPPLY_CHAIN_DOC = "docs/developer/supply-chain.md"
+DOCUMENTED_SCRIPT = re.compile(r"(?:\.[\\/])?(?P<path>scripts[\\/][A-Za-z0-9_.\\/-]+\.(?:ps1|psm1|py|sh|json))")
+
+
+def _permissions(lines: list[tuple[int, str]], indent: int) -> dict[str, str]:
+    """{scope: access} of the `permissions:` key written at `indent` among `lines` (`write-all` grants every scope)."""
+    granted: dict[str, str] = {}
+    inside = False
+    for _number, line in lines:
+        current = _content_indent(line)
+        key = MAPPING_KEY.match(line)
+        if inside:
+            if current <= indent:
+                break
+            if key:
+                granted[key.group("key")] = line.split(":", 1)[1].strip().strip("'\"")
+            continue
+        if key and current == indent and key.group("key") == "permissions" and not STEP_ITEM.match(line):
+            value = line.split(":", 1)[1].strip().strip("'\"")
+            if value == "write-all":
+                return {scope: "write" for scope in ATTESTATION_PERMISSIONS}
+            inside = value == ""
+    return granted
+
+
+def find_release_attestation_violations(label: str, text: str) -> list[str]:
+    """A job that publishes release assets attests them first, with the two permissions at job level only."""
+    failures: list[str] = []
+    lines = [(number, _without_comment(line)) for number, line in enumerate(text.splitlines(), start=1)]
+    top_level = _permissions([(n, line) for n, line in lines if line.strip()], 0)
+    for scope in ATTESTATION_PERMISSIONS:
+        if top_level.get(scope) == "write":
+            failures.append(
+                f"{label}: '{scope}: write' granted to the whole workflow -- grant it to the publishing job only."
+            )
+    for job, job_line, body in _jobs(text):
+        steps = _steps(body)
+        publishing = [line for line, step in steps
+                      if _step_runs(step) and any(RELEASE_ASSET_PUBLICATION.search(content) for content in step)]
+        if not publishing:
+            continue
+        if not any(_step_uses(step, ATTESTATION) for line, step in steps if line < publishing[0]):
+            failures.append(
+                f"{label}:{job_line}: job '{job}' publishes release assets without attesting their provenance "
+                f"first ({ATTESTATION})."
+            )
+        granted = _permissions(body, _content_indent(body[0][1]) if body else 0)
+        for scope in ATTESTATION_PERMISSIONS:
+            if granted.get(scope) != "write":
+                failures.append(
+                    f"{label}:{job_line}: job '{job}' publishes release assets without '{scope}: write' in its own "
+                    f"permissions; the provenance attestation needs it."
+                )
+    return failures
+
+
+def find_missing_documented_scripts(root: Path) -> list[str]:
+    """Script paths named by the supply-chain documentation that are not files of the repository."""
+    document = root / SUPPLY_CHAIN_DOC
+    if not document.is_file():
+        return []
+    failures: list[str] = []
+    for number, line in enumerate(document.read_text(encoding="utf-8").splitlines(), start=1):
+        for match in DOCUMENTED_SCRIPT.finditer(line):
+            if not (root / match.group("path").replace("\\", "/")).is_file():
+                failures.append(
+                    f"{SUPPLY_CHAIN_DOC}:{number}: names {match.group(0)}, which is not a file of the repository."
+                )
+    return failures
 
 
 def find_stale_docker_login_entries(kept: set[tuple[str, str]]) -> list[str]:
@@ -592,7 +674,9 @@ def check(root: Path) -> tuple[list[str], int, int]:
         job_failures, kept = find_job_hardening_violations(label, text)
         failures.extend(job_failures)
         kept_logins.update((workflow.name, job) for job in kept)
+        failures.extend(find_release_attestation_violations(label, text))
     failures.extend(find_stale_docker_login_entries(kept_logins))
+    failures.extend(find_missing_documented_scripts(root))
     failures.extend(find_windows_qualification_coverage_violations(root))
     failures.extend(check_build_windows_installer_script(root))
     return failures, checked, runners

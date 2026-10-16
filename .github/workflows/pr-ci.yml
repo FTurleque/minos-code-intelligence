@@ -209,6 +209,16 @@ jobs:
         shell: pwsh
         run: ./scripts/release/test-iscc-provenance.ps1
 
+      # AUD-DEP-06: the release signature guard and the recomputed checksums (PowerShell 7 here, 5.1 under Windows
+      # below), and the Authenticode state of the release manifest.
+      - name: Release signature guard and manifest state tests
+        shell: pwsh
+        run: |
+          ./scripts/release/test-release-signature.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/release/test_release_manifest.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Docker upgrade evidence checker unit tests
         run: python scripts/release/test_check_docker_upgrade_evidence.py -v
 
@@ -336,6 +346,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # AUD-DEP-15: the Docker lifecycle script is started by the installer under Windows PowerShell 5.1.
           python scripts/install/test_mcp_lifecycle_query_image.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # AUD-DEP-06: the release scripts run under Windows PowerShell 5.1 too; the real Get-AuthenticodeSignature.
+          & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File scripts/release/test-release-signature.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Targeted JaCoCo gate (Windows, PostgreSQL scope qualified on Linux)

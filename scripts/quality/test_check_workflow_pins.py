@@ -499,5 +499,81 @@ class JobHardeningTest(TreeTest):
         self.assertTrue(failures[1].startswith(".github/workflows/release.yml:5: actions/checkout without"))
 
 
+ATTEST_STEP = (f"      - uses: actions/attest-build-provenance@{SHA} # v4\n"
+               "        with:\n          subject-path: target/dist/*.exe\n")
+PUBLISH_STEP = "      - run: ./scripts/release/publish-windows-release.ps1 -Version 1.0.0 -PublishOnly\n"
+
+
+class ReleaseAttestationTest(TreeTest):
+
+    def publishing_job(self, steps: str, permissions: str = "      contents: write\n      id-token: write\n"
+                       "      attestations: write\n", top: str = "permissions:\n  contents: read\n") -> str:
+        return (f"name: release\non: workflow_dispatch\n{top}jobs:\n  publish:\n    runs-on: windows-2022\n"
+                f"    timeout-minutes: 30\n    permissions:\n{permissions}    steps:\n{steps}")
+
+    def attestation(self, text: str) -> list[str]:
+        return gate.find_release_attestation_violations("x.yml", text)
+
+    def test_a_publication_attested_first_with_job_permissions_is_accepted(self):
+        self.assertEqual([], self.attestation(self.publishing_job(ATTEST_STEP + PUBLISH_STEP)))
+
+    def test_a_publication_without_attestation_is_refused_and_names_the_job(self):
+        self.assertEqual(["x.yml:6: job 'publish' publishes release assets without attesting their provenance first "
+                          "(actions/attest-build-provenance)."], self.attestation(self.publishing_job(PUBLISH_STEP)))
+
+    def test_an_attestation_after_the_publication_does_not_count(self):
+        failures = self.attestation(self.publishing_job(PUBLISH_STEP + ATTEST_STEP))
+        self.assertEqual(1, len(failures))
+        self.assertIn("without attesting their provenance first", failures[0])
+
+    def test_each_cli_publication_counts(self):
+        for command in ("gh release create v1 a.zip", "gh release upload \"$TAG\" a.zip --repo x"):
+            failures = self.attestation(self.publishing_job(f"      - run: {command}\n"))
+            self.assertEqual(1, len(failures), command)
+
+    def test_a_validation_only_run_and_a_commented_upload_publish_nothing(self):
+        steps = ("      - run: ./scripts/release/publish-windows-release.ps1 -Version 1.0.0 -ValidateOnly\n"
+                 "      - run: |\n          # gh release upload v1 a.zip --clobber\n          echo done\n")
+        self.assertEqual([], self.attestation(self.publishing_job(steps, permissions="      contents: read\n")))
+
+    def test_missing_job_permissions_are_refused_one_by_one(self):
+        failures = self.attestation(self.publishing_job(ATTEST_STEP + PUBLISH_STEP,
+                                                        permissions="      contents: write\n      id-token: write\n"))
+        self.assertEqual(["x.yml:6: job 'publish' publishes release assets without 'attestations: write' in its own "
+                          "permissions; the provenance attestation needs it."], failures)
+        failures = self.attestation(self.publishing_job(ATTEST_STEP + PUBLISH_STEP, permissions="      contents: write\n"))
+        self.assertEqual(2, len(failures))
+
+    def test_write_all_at_job_level_grants_the_permissions(self):
+        text = self.publishing_job(ATTEST_STEP + PUBLISH_STEP, permissions="").replace(
+            "    permissions:\n    steps:", "    permissions: write-all\n    steps:")
+        self.assertEqual([], self.attestation(text))
+
+    def test_attestation_permissions_granted_to_the_whole_workflow_are_refused(self):
+        top = "permissions:\n  contents: read\n  id-token: write\n  attestations: write\n"
+        failures = self.attestation(self.publishing_job(ATTEST_STEP + PUBLISH_STEP, top=top))
+        self.assertEqual(["x.yml: 'id-token: write' granted to the whole workflow -- grant it to the publishing job "
+                          "only.",
+                          "x.yml: 'attestations: write' granted to the whole workflow -- grant it to the publishing "
+                          "job only."], failures)
+        self.assertEqual(2, len(self.attestation(self.publishing_job(ATTEST_STEP + PUBLISH_STEP,
+                                                                      top="permissions: write-all\n"))))
+
+    def test_a_documented_script_that_does_not_exist_is_refused(self):
+        self.write(gate.SUPPLY_CHAIN_DOC, "Run `scripts/release/build-windows-installer.ps1`, then\n"
+                                          "```powershell\n.\\scripts\\m21\\run-s5.ps1 -ExpectedHead <sha>\n```\n")
+        self.assertEqual(["docs/developer/supply-chain.md:3: names .\\scripts\\m21\\run-s5.ps1, which is not a file "
+                          "of the repository."], self.failures())
+
+    def test_the_repository_attests_what_its_releases_publish(self):
+        for name, job in (("release-windows.yml", "publish"), ("intellij-plugin-release.yml", "publish")):
+            text = (REPOSITORY / gate.WORKFLOWS / name).read_text(encoding="utf-8")
+            self.assertEqual([], gate.find_release_attestation_violations(name, text))
+            mutated = text.replace("uses: actions/attest-build-provenance@", "uses: example/not-attest@", 1)
+            failures = gate.find_release_attestation_violations(name, mutated)
+            self.assertEqual(1, len(failures), name)
+            self.assertIn(f"job '{job}' publishes release assets without attesting", failures[0])
+
+
 if __name__ == "__main__":
     unittest.main()
