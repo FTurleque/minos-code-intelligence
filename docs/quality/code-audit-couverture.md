@@ -94,9 +94,9 @@ Statuts : **exécuté** (périmètre compté), **partiel**, **bloqué**, **non a
 | Composant | SpotBugs | PIT | ArchUnit | Dependency-Check | Gitleaks |
 |---|---|---|---|---|---|
 | 13 modules de code du réacteur | exécuté | état par module au § 5.2 (source unique) | exécuté | exécuté | exécuté |
-| `minos-app` | exécuté | non exécuté (§ 5.2) | exécuté (importé, porte les tests) | exécuté (agrégat) | exécuté |
+| `minos-app` | exécuté | exécuté sous Linux (§ 5.2) | exécuté (importé, porte les tests) | exécuté (agrégat) | exécuté |
 | Agrégateur `minos-parent` | N/A (aucun bytecode) | N/A | N/A | exécuté (racine de l'agrégat) | exécuté |
-| `minos-intellij` | exécuté (classes recompilées) | bloqué (§ 5.2) | **non exécuté** : hors réacteur, aucune règle d'architecture décidée pour le plugin | exécuté (dépendances reconstituées) | exécuté |
+| `minos-intellij` | exécuté (classes recompilées) | exécuté sous Linux (§ 5.2) | **non exécuté** : hors réacteur, aucune règle d'architecture décidée pour le plugin | exécuté (dépendances reconstituées) | exécuté |
 | Scripts PowerShell, shell, Python, lanceurs | N/A (pas de bytecode) | N/A | N/A | N/A (aucun manifeste de dépendances) | exécuté |
 | Workflows, Compose, Dockerfiles, installateur | N/A | N/A | N/A | **non couvert** (images Docker et actions hors du champ de l'outil) | exécuté |
 | `fixtures/`, `benchmarks/` | N/A (données de test) | N/A | N/A | N/A | exécuté |
@@ -198,6 +198,13 @@ Les journaux et rapports volumineux ne sont **pas** versionnés. Ils ont été c
 | E30 | PIT `minos-storage-postgresql` | 2 fils, tests du module seulement | 1 h 23 | muté ; 18 timeouts, 18 conteneurs orphelins supprimés ensuite |
 | E31 | Nettoyage Docker | suppression des conteneurs `org.testcontainers=true` / `pgvector:0.8.7-pg17` créés par E27 (74) et E30 (18) | — | 0 conteneur Testcontainers restant ; aucun autre conteneur touché |
 | E24 | Contrôles complémentaires | analyse syntaxique PowerShell (116 fichiers) et `bash -n` (11) ; YAML (26) ; `docker compose config` (2) | < 1 min | voir § 6 |
+| E32 | PIT `minos-cli`, `minos-bootstrap`, `minos-app` (`code-audit.yml`, Ubuntu 24.04, `-am`, toutes les classes `com.minos.*`) | runs 38949591116, 38949600058, 38949616181 | 2 h 00 | **coupés par le délai du job** : `-am` mute toute la chaîne amont (`minos-cli` au 9e module sur 12) ; aucun rapport retenu |
+| E33 | PIT `minos-runtime-local` (`code-audit.yml`, `-am`) | run 38949607781 | 33 min | muté, avec `minos-domain` et `minos-engine` ; aucun `RUN_ERROR` |
+| E34 | PIT plugin IntelliJ (`code-audit.yml`, job du plugin) | run 38949624814 | 5 min 37 s | muté |
+| E35 | PIT `minos-bootstrap` (`target_classes=com.minos.bootstrap.*`) | run 38964572729 | 2 min 46 s | muté |
+| E36 | PIT `minos-app` (`target_classes=com.minos.app.*`) | run 38964582139 | < 2 min | **échec** : 10 tests `ShadedJar*IT` rouges sans mutation (ils lisent le jar ombré de `package`) |
+| E37 | PIT `minos-app` (`target_classes=com.minos.app.*`, `target_tests=com.minos.*Test`) | run 38964900758 | 1 min 25 s | muté |
+| E38 | PIT `minos-cli` (`target_classes=com.minos.cli.*`) | run 38964562390 | 27 min 37 s | muté |
 
 ## 5. Résultats détaillés
 
@@ -226,7 +233,7 @@ Motifs du réacteur : `EI_EXPOSE_REP` 104, `NP_NULL_ON_SOME_PATH_FROM_RETURN_VAL
 
 ### 5.2 PIT par module
 
-**PIT est incomplet** : voir le tableau des statuts à la fin de ce paragraphe (source unique). Exécutions E20 à E31 du § 4.
+**PIT est incomplet** : voir le tableau des statuts à la fin de ce paragraphe (source unique). Exécutions E20 à E31 du § 4 (poste Windows, 8 octobre) et E32 à E38 (`code-audit.yml`, Ubuntu 24.04, 16 octobre).
 
 | Module | Classes compilées | Classes mutées | Mutants | Tués (assertion) | Survivants | Sans couverture | Timeouts / erreurs | Non viables | Tués / mutants | Tués / couverts |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -256,13 +263,13 @@ Lecture du tableau :
 - `minos-application` (1 585 mutants sans couverture) est surtout testé depuis `minos-cli`, `minos-api` et `minos-app` : même limite inter-modules.
 - Survivants qualifiés : [code-audit-constats.md](code-audit-constats.md), fiche H07.
 
-**Statut PIT par module — source unique** (AUD-TST-11, corrigé le 2026-10-15). Les autres sections de ce document renvoient à ce tableau au lieu de recompter : 10 modules exécutés, 1 partiel, 1 interrompu, 2 non exécutés sur les 14 du réacteur ; le plugin IntelliJ est bloqué. Avant correction, le document portait trois décomptes incompatibles (« 6 complets, 1 partiel, 1 interrompu, 6 non exécutés » au § 3.3, « 11 sur 14 » ici, « 3 sur 14 » au § 7). Toutes les exécutions ci-dessous ont tourné sur le poste Windows le 8 octobre ; aucune exécution de `code-audit.yml` (Ubuntu 24.04) n'est encore relevée.
+**Statut PIT par module — source unique** (AUD-TST-11, corrigé le 2026-10-15, complété le 2026-10-16). Les autres sections de ce document renvoient à ce tableau au lieu de recompter : les 14 modules du réacteur sont exécutés (`minos-runtime-local` sans ses classes propres à Windows) ainsi que le plugin IntelliJ. Avant correction, le document portait trois décomptes incompatibles (« 6 complets, 1 partiel, 1 interrompu, 6 non exécutés » au § 3.3, « 11 sur 14 » ici, « 3 sur 14 » au § 7). Les exécutions E20 à E30 ont tourné sur le poste Windows le 8 octobre ; E33 à E38 par `code-audit.yml` sous Ubuntu 24.04 le 16 octobre.
 
 | Module | Statut PIT | Système | Exécution | Raison |
 |---|---|---|---|---|
 | `minos-domain` | **exécuté** | Windows (poste) | E20 | |
 | `minos-engine` | **exécuté** | Windows (poste) | E20 | |
-| `minos-runtime-local` | **partiel** | Windows (poste) | E20 | 560 mutants non analysés (minions non démarrés pendant l'incident H23) ; à rejouer sur une machine jetable. Sous Linux (`code-audit.yml`), les classes propres à Windows (AppContainer, Job Object) resteront **non analysées** |
+| `minos-runtime-local` | **exécuté** (classes propres à Windows **non analysées**) | Ubuntu 24.04 (`code-audit.yml`) | E33 | 2 045 mutants, aucun `RUN_ERROR` (le rejeu remplace E20 et ses 560 mutants non analysés). Les quatre classes propres à Windows portent 228 mutants, dont 211 sans couverture sous Linux (`WindowsAppContainerWorkerSandboxBackend`, `WindowsExecutionPathIdentityProvider`, `WindowsJobObjectProcessOwnership`) : non analysées tant qu'aucune machine Windows jetable n'a rejoué le module (D2) |
 | `minos-storage-local` | **exécuté** | Windows (poste) | E27 | |
 | `minos-provider-scip` | **exécuté** | Windows (poste) | E27 | |
 | `minos-integration-git` | **exécuté** | Windows (poste) | E27 | |
@@ -271,10 +278,24 @@ Lecture du tableau :
 | `minos-nexus` | **exécuté** | Windows (poste) | E28 | |
 | `minos-api` | **exécuté** | Windows (poste) | E29 | ses seuls tests |
 | `minos-mcp` | **exécuté** | Windows (poste) | E29 | ses seuls tests |
-| `minos-cli` | **interrompu** | Windows (poste) | E28 | arrêté par le chien de garde, 2 autorisations AppContainer restées plus de 3 min sur le JDK (H22 reproduit) ; à faire sur machine jetable ou par `code-audit.yml` |
-| `minos-bootstrap` | **non exécuté** | — | — | ses tests démarrent le bac à sable Windows et PostgreSQL ; à faire sur machine jetable ou par `code-audit.yml` |
-| `minos-app` | **non exécuté** | — | — | même raison ; avec `-am`, presque tout le réacteur est muté en une exécution |
-| `minos-intellij` | **bloqué** | Windows (poste) | E21 | couverture calculée, puis 42 minions morts pendant l'incident H23 ; résultats écartés. **Jamais sur un poste** : voir § 7.1, cause probable de H23 |
+| `minos-cli` | **exécuté** | Ubuntu 24.04 (`code-audit.yml`) | E38 | classes du module seules (`target_classes`) ; E28 (poste, chien de garde) et E32 (`-am` sans restriction, délai dépassé) n'ont pas produit de rapport |
+| `minos-bootstrap` | **exécuté** | Ubuntu 24.04 (`code-audit.yml`) | E35 | classes du module seules (`target_classes`) ; E32 sans restriction coupé par le délai |
+| `minos-app` | **exécuté** | Ubuntu 24.04 (`code-audit.yml`) | E37 | classes du module seules, tests `com.minos.*Test` : les `ShadedJar*IT` exigent le jar ombré et arrêtent PIT (E36) |
+| `minos-intellij` | **exécuté** | Ubuntu 24.04 (`code-audit.yml`, job du plugin) | E34 | E21 (poste, incident H23) écarté. **Jamais sur un poste** : voir § 7.1, cause probable de H23 |
+
+**Résultats des exécutions sous Ubuntu 24.04** (`code-audit.yml`, `develop` `0e5f14a7`, 2026-10-16 ; sortie de `audit-report-summary.py pit --module <module>` sur les artefacts téléchargés ; mêmes colonnes que le tableau ci-dessus) :
+
+| Module | Exécution | Durée | Mutants | Tués (assertion) | Survivants | Sans couverture | Timeouts / erreurs | Tués / mutants | Tués / couverts |
+|---|---|---|---|---|---|---|---|---|---|
+| `minos-domain` (amont, E33) | E33 | — | 232 | 102 | 41 | 89 | 0 | 44 % | 71 % |
+| `minos-engine` (amont, E33) | E33 | — | 3480 | 1923 | 956 | 592 | 9 | 55 % | 67 % |
+| `minos-runtime-local` | E33 | 33 min | 2045 | 1031 | 504 | 490 | 20 | 50 % | 66 % |
+| `minos-cli` | E38 | 27 min 37 s | 926 | 626 | 209 | 89 | 2 | 68 % | 75 % |
+| `minos-bootstrap` | E35 | 2 min 46 s | 42 | 20 | 1 | 21 | 0 | 48 % | 95 % |
+| `minos-app` | E37 | 1 min 25 s | 83 | 27 | 24 | 32 | 0 | 33 % | 53 % |
+| `minos-intellij` | E34 | 5 min 37 s | 1090 | 274 | 143 | 661 | 12 | 25 % | 64 % |
+
+Lecture : sous Linux, `minos-runtime-local` ne couvre pas son code Windows (D2) ; `minos-intellij` a 661 mutants sans couverture, surtout dans les classes d'interface et d'action de la plateforme, que ses tests ne chargent pas par construction (`docs/user/intellij-plugin.md`, « Couverture du plugin »). Aucun plancher PIT n'est fixé (D3 : pas de plancher avant des rapports complets).
 
 
 ## 6. Angles morts : contrôles complémentaires
@@ -297,7 +318,7 @@ La lecture de code (revérification des anciens constats, § 6 de [code-audit-co
 
 ## 7. Blocages, limites et point de reprise
 
-> **L'audit est incomplet.** PIT n'a pas muté tout le réacteur ni le plugin IntelliJ : état par module au § 5.2 (source unique). Les quatre autres outils ont couvert leur périmètre applicable (§ 3).
+> **L'audit est incomplet.** PIT a un rapport pour chaque module et pour le plugin, mais les classes propres à Windows de `minos-runtime-local` restent non analysées : état par module au § 5.2 (source unique). Les quatre autres outils ont couvert leur périmètre applicable (§ 3).
 
 ### 7.1 Incident d'environnement (8 octobre, entre 10 h 12 et 11 h 55)
 
