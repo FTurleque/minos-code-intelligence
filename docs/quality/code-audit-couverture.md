@@ -93,7 +93,7 @@ Statuts : **exécuté** (périmètre compté), **partiel**, **bloqué**, **non a
 
 | Composant | SpotBugs | PIT | ArchUnit | Dependency-Check | Gitleaks |
 |---|---|---|---|---|---|
-| 13 modules de code du réacteur | exécuté | 6 exécutés, 1 partiel, 1 interrompu, 5 non exécutés (§ 5.2) | exécuté | exécuté | exécuté |
+| 13 modules de code du réacteur | exécuté | état par module au § 5.2 (source unique) | exécuté | exécuté | exécuté |
 | `minos-app` | exécuté | non exécuté (§ 5.2) | exécuté (importé, porte les tests) | exécuté (agrégat) | exécuté |
 | Agrégateur `minos-parent` | N/A (aucun bytecode) | N/A | N/A | exécuté (racine de l'agrégat) | exécuté |
 | `minos-intellij` | exécuté (classes recompilées) | bloqué (§ 5.2) | **non exécuté** : hors réacteur, aucune règle d'architecture décidée pour le plugin | exécuté (dépendances reconstituées) | exécuté |
@@ -120,7 +120,7 @@ Statuts : **exécuté** (périmètre compté), **partiel**, **bloqué**, **non a
 | Élément | Valeur |
 |---|---|
 | Configuration | profil `audit-mutation`, `targetClasses`/`targetTests` = `com.minos.*`, mutateurs `DEFAULTS`, 10 fils, `timeoutConstant` 8 000 ms, `timeoutFactor` 1,5, tas 1 024 Mo par minion, `-Duser.dir` à la racine, `crossModule=false` |
-| Exécuté | oui, mais **incomplet** : 6 modules complets, `minos-runtime-local` partiel, `minos-storage-postgresql` interrompu, 6 modules non exécutés ; plugin IntelliJ bloqué |
+| Exécuté | oui, mais **incomplet** : état par module au § 5.2 (source unique) |
 | Périmètre analysé | 537 classes mutées sur 830 compilées dans les 7 modules traités ; 12 384 mutants (dont 560 non analysés) |
 | Exclusions | aucune |
 | Résultats | voir § 5.2 |
@@ -226,7 +226,7 @@ Motifs du réacteur : `EI_EXPOSE_REP` 104, `NP_NULL_ON_SOME_PATH_FROM_RETURN_VAL
 
 ### 5.2 PIT par module
 
-**PIT est incomplet : 11 modules sur 14 analysés** (`minos-runtime-local` partiellement) ; `minos-cli`, `minos-bootstrap`, `minos-app` et le plugin IntelliJ ne sont pas mutés. Exécutions E20 à E31 du § 4.
+**PIT est incomplet** : voir le tableau des statuts à la fin de ce paragraphe (source unique). Exécutions E20 à E31 du § 4.
 
 | Module | Classes compilées | Classes mutées | Mutants | Tués (assertion) | Survivants | Sans couverture | Timeouts / erreurs | Non viables | Tués / mutants | Tués / couverts |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -256,13 +256,25 @@ Lecture du tableau :
 - `minos-application` (1 585 mutants sans couverture) est surtout testé depuis `minos-cli`, `minos-api` et `minos-app` : même limite inter-modules.
 - Survivants qualifiés : [code-audit-constats.md](code-audit-constats.md), fiche H07.
 
-| Module | Statut PIT | Raison |
-|---|---|---|
-| `minos-domain`, `minos-engine`, `minos-storage-local`, `minos-provider-scip`, `minos-integration-git`, `minos-application`, `minos-storage-postgresql`, `minos-nexus`, `minos-api`, `minos-mcp` | **exécuté** | `minos-storage-postgresql` avec 2 fils (E30) ; `minos-api` et `minos-mcp` avec leurs seuls tests (E29) |
-| `minos-runtime-local` | **partiel** | 560 mutants non analysés (minions non démarrés pendant l'incident H23) ; à rejouer sur une machine jetable |
-| `minos-cli` | **interrompu, à faire sur machine jetable** | E28 : arrêté par le chien de garde, 2 autorisations AppContainer restées plus de 3 min sur le JDK (H22 reproduit) |
-| `minos-bootstrap`, `minos-app` | **non exécuté, à faire sur machine jetable** | leurs tests démarrent le même bac à sable Windows (et PostgreSQL pour `minos-bootstrap`) |
-| `minos-intellij` | **bloqué** | E21 : couverture calculée, puis 42 minions morts pendant l'incident H23 ; résultats écartés |
+**Statut PIT par module — source unique** (AUD-TST-11, corrigé le 2026-10-15). Les autres sections de ce document renvoient à ce tableau au lieu de recompter : 10 modules exécutés, 1 partiel, 1 interrompu, 2 non exécutés sur les 14 du réacteur ; le plugin IntelliJ est bloqué. Avant correction, le document portait trois décomptes incompatibles (« 6 complets, 1 partiel, 1 interrompu, 6 non exécutés » au § 3.3, « 11 sur 14 » ici, « 3 sur 14 » au § 7). Toutes les exécutions ci-dessous ont tourné sur le poste Windows le 8 octobre ; aucune exécution de `code-audit.yml` (Ubuntu 24.04) n'est encore relevée.
+
+| Module | Statut PIT | Système | Exécution | Raison |
+|---|---|---|---|---|
+| `minos-domain` | **exécuté** | Windows (poste) | E20 | |
+| `minos-engine` | **exécuté** | Windows (poste) | E20 | |
+| `minos-runtime-local` | **partiel** | Windows (poste) | E20 | 560 mutants non analysés (minions non démarrés pendant l'incident H23) ; à rejouer sur une machine jetable. Sous Linux (`code-audit.yml`), les classes propres à Windows (AppContainer, Job Object) resteront **non analysées** |
+| `minos-storage-local` | **exécuté** | Windows (poste) | E27 | |
+| `minos-provider-scip` | **exécuté** | Windows (poste) | E27 | |
+| `minos-integration-git` | **exécuté** | Windows (poste) | E27 | |
+| `minos-application` | **exécuté** | Windows (poste) | E27 | |
+| `minos-storage-postgresql` | **exécuté** | Windows (poste) | E30 | 2 fils, tests du module seulement (E27 interrompu) |
+| `minos-nexus` | **exécuté** | Windows (poste) | E28 | |
+| `minos-api` | **exécuté** | Windows (poste) | E29 | ses seuls tests |
+| `minos-mcp` | **exécuté** | Windows (poste) | E29 | ses seuls tests |
+| `minos-cli` | **interrompu** | Windows (poste) | E28 | arrêté par le chien de garde, 2 autorisations AppContainer restées plus de 3 min sur le JDK (H22 reproduit) ; à faire sur machine jetable ou par `code-audit.yml` |
+| `minos-bootstrap` | **non exécuté** | — | — | ses tests démarrent le bac à sable Windows et PostgreSQL ; à faire sur machine jetable ou par `code-audit.yml` |
+| `minos-app` | **non exécuté** | — | — | même raison ; avec `-am`, presque tout le réacteur est muté en une exécution |
+| `minos-intellij` | **bloqué** | Windows (poste) | E21 | couverture calculée, puis 42 minions morts pendant l'incident H23 ; résultats écartés. **Jamais sur un poste** : voir § 7.1, cause probable de H23 |
 
 
 ## 6. Angles morts : contrôles complémentaires
@@ -285,7 +297,7 @@ La lecture de code (revérification des anciens constats, § 6 de [code-audit-co
 
 ## 7. Blocages, limites et point de reprise
 
-> **L'audit est incomplet.** PIT n'a analysé que 3 modules sur 14 et le plugin IntelliJ n'a pas été muté. Les quatre autres outils ont couvert leur périmètre applicable (§ 3).
+> **L'audit est incomplet.** PIT n'a pas muté tout le réacteur ni le plugin IntelliJ : état par module au § 5.2 (source unique). Les quatre autres outils ont couvert leur périmètre applicable (§ 3).
 
 ### 7.1 Incident d'environnement (8 octobre, entre 10 h 12 et 11 h 55)
 
@@ -297,6 +309,8 @@ Pendant le PIT de `minos-runtime-local`, le poste a changé d'état ; c'est le c
 - Aucun processus issu des exécutions PIT ne restait actif à 12 h. Les processus `java` démarrés vers 1 h du matin appartiennent à MORPHEUS et n'ont pas été touchés.
 
 **Aucune réparation n'a été tentée par l'audit** : modifier les droits du profil ou du JDK est une décision de l'utilisateur, à prendre en administrateur.
+
+**Reproduit le 15 octobre 2026, cause probable établie.** Le PIT du plugin IntelliJ a été relancé sur le poste (`gradlew … pitest`, pour générer les sommes de vérification de Gradle) ; vers 13 h, le profil a de nouveau perdu ses droits : DACL de `C:\Users\fturl` réduite à la seule entrée `AUTORITE NT\Système:(F)`, sans héritage, illisible même en administrateur, et `Error loading java.security file` pour toute JVM. Mécanisme lu dans le code : `MinosStrongProcessLauncher.ownershipHome` retourne `user.home` + `.minos` (`defaultHome ? root.resolve(".minos") : root`) ; un mutant de cette condition rend `user.home` lui-même, que `restrictWindowsOwnerOnly` réduit à son propriétaire par `view.setAcl(List.of(ownerOnly))`, or le propriétaire du profil est Système. Le PIT du plugin (E21) tournait aussi pendant l'incident du 8 octobre. Réparation faite par l'utilisateur, en administrateur : `takeown /F C:\Users\fturl /A`, `icacls … /grant` (Système, Administrateurs, l'utilisateur, `(OI)(CI)F`), `/setowner`, `/inheritance:r`. **Conséquences** : le PIT du plugin ne tourne jamais sur un poste (seulement par `code-audit.yml`) ; le danger existe aussi hors mutation pour un répertoire MINOS configuré sur un dossier partagé, à instruire à part.
 
 **Réparation par l'utilisateur (8 octobre, vers 13 h, en administrateur)** : DACL sauvegardés dans `C:\acl-backup\` ; la racine du profil ne portait plus qu'une entrée `BUILTIN\Administrateurs:(F)` non héritable, avec Administrateurs pour propriétaire ; elle a été rétablie à SYSTEM, Administrateurs et l'utilisateur en `(OI)(CI)(F)`, sans héritage, propriétaire SYSTEM. Les 460 entrées `S-1-15-2-…` ont été retirées de la racine du JDK (0 restante). Vérifié ensuite : la JVM charge `java.security`, `./mvnw -v` répond, le profil est traversable. Les deux réparations ayant été faites ensemble, laquelle a débloqué la JVM n'est pas établi. La reprise de PIT tourne sous un chien de garde qui arrête Maven si une entrée AppContainer reste plus de trois minutes sur la racine du JDK.
 
@@ -313,7 +327,7 @@ Pendant le PIT de `minos-runtime-local`, le poste a changé d'état ; c'est le c
 
 ### 7.3 Point de reprise
 
-État au 8 octobre 2026, 19 h 30 : inventaire, Gitleaks, SpotBugs (réacteur et plugin), ArchUnit, Dependency-Check (réacteur et plugin), contrôles complémentaires et revérification des constats **terminés** ; PIT **terminé** pour 10 modules, **partiel** pour `minos-runtime-local` (560 mutants à rejouer), **à faire sur une machine jetable** pour `minos-cli`, `minos-bootstrap`, `minos-app` (leurs tests laissent des autorisations AppContainer sur l'hôte, H22) et `minos-runtime-local` ; plugin IntelliJ **non muté** ; passe `crossModule` **non exécutée**. Trois entrées `S-1-15-2-…` laissées sur le JDK par E28 sont à retirer par l'utilisateur.
+État au 8 octobre 2026, 19 h 30 : inventaire, Gitleaks, SpotBugs (réacteur et plugin), ArchUnit, Dependency-Check (réacteur et plugin), contrôles complémentaires et revérification des constats **terminés** ; PIT : état par module au § 5.2 (`minos-cli`, `minos-bootstrap`, `minos-app` et la reprise de `minos-runtime-local` **à faire sur une machine jetable** : leurs tests laissent des autorisations AppContainer sur l'hôte, H22) ; plugin IntelliJ **non muté** ; passe `crossModule` **non exécutée**. Trois entrées `S-1-15-2-…` laissées sur le JDK par E28 sont à retirer par l'utilisateur.
 
 Après levée de l'incident H23, depuis la racine du dépôt :
 
