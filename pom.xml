@@ -124,6 +124,23 @@
         -->
         <dependency-check.maven.plugin.version>13.0.0</dependency-check.maven.plugin.version>
         <dependency-check.failBuildOnCVSS>11</dependency-check.failBuildOnCVSS>
+        <maven.resources.plugin.version>3.5.0</maven.resources.plugin.version>
+        <!--
+          AUD-DEP-11: the date written on every entry of the JARs (jar, shade) and of the SBOM, so that two builds
+          of one commit give the same bytes. The scripts that build a deliverable pass the date of the commit
+          (-Dproject.build.outputTimestamp=<git show -s format=%cI>); this fixed, older value serves a build without
+          Git (a source archive) or a developer build, and is never presented as the build date.
+        -->
+        <project.build.outputTimestamp>2026-01-01T00:00:00Z</project.build.outputTimestamp>
+        <!--
+          AUD-DEP-11: the plugins Maven binds to the lifecycle by default, pinned at the version the wrapper
+          resolved on 2026-10-15 (help:effective-pom), so that requirePluginVersions holds and a new Maven
+          cannot change them silently. deploy and site never run: the rule checks their phases too.
+        -->
+        <maven.clean.plugin.version>3.5.0</maven.clean.plugin.version>
+        <maven.install.plugin.version>3.2.0</maven.install.plugin.version>
+        <maven.deploy.plugin.version>3.2.0</maven.deploy.plugin.version>
+        <maven.site.plugin.version>3.22.0</maven.site.plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -197,6 +214,7 @@
                             <rules>
                                 <requireJavaVersion><version>[25,26)</version></requireJavaVersion>
                                 <requireMavenVersion><version>[3.9,4.0)</version></requireMavenVersion>
+                                <requirePluginVersions/>
                             </rules>
                         </configuration>
                     </execution>
@@ -250,6 +268,37 @@
 
         <pluginManagement>
             <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>${maven.resources.plugin.version}</version>
+                </plugin>
+                <!-- AUD-DEP-11: lifecycle plugins pinned (see the properties). -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${maven.jar.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>${maven.clean.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>${maven.install.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>${maven.deploy.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>${maven.site.plugin.version}</version>
+                </plugin>
                 <!--
                   Shared configuration of the audit tools. Only the profiles below put these plugins in the
                   build; this block gives a direct goal invocation (spotbugs:check, pitest:mutationCoverage) the
