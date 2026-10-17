@@ -58,6 +58,8 @@ flowchart LR
 
 Ouvrir ensuite `architecture.mmd` dans un renderer compatible Mermaid, ou copier son contenu dans un bloc Mermaid Markdown.
 
+Les noms de module, chemins, nom de projet et identifiant de snapshot viennent des fichiers du dépôt analysé, qui n'est pas de confiance : MINOS y échappe `&`, `<`, `>`, `"` et `|` (entités `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&#124;`) et ne laisse aucune séquence `%%{` ouvrir une directive Mermaid dans les lignes de commentaire. Le seul balisage HTML émis est le saut de ligne `<br/>` des libellés. L'assainissement final de l'affichage reste à la charge du moteur de rendu (niveau de sécurité `strict` conseillé).
+
 ### Option C — produire un SVG ou PNG avec Graphviz
 
 MINOS produit d'abord le fichier DOT :

@@ -39,6 +39,27 @@ Le nom et le chemin relatif sont échappés séparément ; `<br/>` est ajouté e
 
 `&lt;` / `&gt;` par défaut, cohérent avec `&amp;` et `&quot;` déjà émis. Si la tâche 1.1 montre qu'un moteur Mermaid courant affiche l'entité littéralement, la forme numérique ou la syntaxe `#…;` est retenue, et la décision est consignée ici. L'exigence porte sur le résultat (aucun `<` ni `>` issu du dépôt), pas sur la forme.
 
+**Vérifié le 2026-10-17 (tâche 1.1)** : rendu réel par Mermaid 11.4.1 (`mermaid.render`, navigateur du poste, `securityLevel` `strict` et `loose`, résultats identiques) d'un libellé `["…"]`.
+
+| Entrée dans le libellé | Texte affiché | Élément HTML créé |
+|---|---|---|
+| `x<img src=x onerror=alert(1)>y` (état actuel) | — | **`<img>` créé**, y compris en `strict` (seul `onerror` est retiré) |
+| `x&lt;img src=x onerror=alert(1)&gt;y` | `x<img src=x onerror=alert(1)>y` (texte) | aucun |
+| `x#lt;img#gt;y` | `x<img>y` (texte) | aucun |
+| `x&#60;img&#62;y` | `x&<img&>y` : l'esperluette reste visible | aucun |
+| `a&amp;b`, `a&quot;b` | `a&b`, `a"b` | aucun |
+| `core<br/>packages/core` | saut de ligne | `<br>` seul |
+
+**Forme retenue : `&lt;` et `&gt;`** (décision par défaut confirmée). La forme numérique `&#60;` est écartée : Mermaid la transforme en `&` suivi d'un `<`, l'esperluette devient visible. Même défaut relevé sur le `&#124;` déjà émis pour `|` (affiché `&|`), **hors périmètre** : il ne crée aucun risque et le changer modifierait des sorties nominales.
+
+**Vérifié le 2026-10-17 (tâche 1.2)** :
+
+- Un code `#60;` ou `#62;` fourni par le dépôt est décodé par Mermaid en **texte** `<` / `>` (jamais en élément) : **aucun effet exploitable**, seulement un affichage trompeur. Aucune neutralisation n'est ajoutée.
+- **`%%{init: {"theme":"dark"}}%%` placé au milieu d'une ligne de commentaire `%% …` est interprété comme directive** : la couleur de texte des nœuds passe de `#333` (thème par défaut) à `#ccc` (thème sombre), en `strict` comme en `loose`. Le risque est confirmé : un nom de projet peut reconfigurer le rendu (thème, options de diagramme). `securityLevel` n'est pas modifiable par une directive, d'où une gravité restée faible.
+- Neutralisation éprouvée : `%%{` devient `%% {` (insertion d'un espace entre `%` et `{`) ; la couleur reste `#333`, la ligne reste un commentaire.
+
+La confiance du constat passe de « plausible » à **confirmée** pour les chevrons (élément `<img>` créé par le rendu réel) et pour la directive (thème modifié).
+
 ### D3. Commentaires : neutraliser sans attendre la preuve d'exploitabilité
 
 Dans une ligne `%% …`, un texte issu de la vue ne peut plus produire la séquence `%%{`. La neutralisation ne vise que les textes de la vue, pas le préfixe `%%` écrit par MINOS : aucune sortie nominale n'est censée changer (à confirmer par les goldens en tâche 3.2), ce qui la rend moins coûteuse que la preuve du contraire ; la tâche 1.2 qualifie quand même le risque pour le suivi.
@@ -54,7 +75,7 @@ Changement interne à `minos-application` (`com.minos.output`). Aucune arête no
 ## Qualification des capacités
 
 - Rendu Mermaid du graphe d'architecture : qualifié pour les noms sans caractère actif, inchangé.
-- Rendu d'un nom contenant `<` ou `>` : aujourd'hui émis brut ; devient **qualifié en sortie** (échappé) ; l'affichage chez le consommateur reste **non qualifié** tant que 1.1 n'a pas été faite.
+- Rendu d'un nom contenant `<` ou `>` : aujourd'hui émis brut ; devient **qualifié en sortie** (échappé) ; l'affichage chez le consommateur est **qualifié** pour Mermaid 11.4.1 (tâche 1.1), non qualifié pour les autres moteurs.
 
 ## Windows et Linux
 
