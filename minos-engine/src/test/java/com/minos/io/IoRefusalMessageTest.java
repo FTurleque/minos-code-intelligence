@@ -66,10 +66,67 @@ class IoRefusalMessageTest {
         assertEquals("synthetic", failure.getCause().getMessage());
     }
 
-    private static void assertNoAbsolutePath(Throwable failure, Path temp) {
+    @Test
+    void aDeletionDurabilitySyncFailureDoesNotNameTheAbsolutePath(@TempDir Path temp) throws Exception {
+        Path target = Files.writeString(temp.resolve("record.properties"), "value");
+
+        CommitUncertainException failure = assertThrows(CommitUncertainException.class,
+                () -> DurableAtomicFile.deleteIfExists(target, "record store", parent -> {
+                    throw new IOException("synthetic directory fsync failure");
+                }));
+
+        assertNoAbsolutePath(failure, temp);
+        assertTrue(failure.getMessage().contains("record.properties"), failure.getMessage());
+    }
+
+    @Test
+    void aMoveDurabilityAcknowledgementFailureDoesNotNameTheAbsolutePath(@TempDir Path temp) throws Exception {
+        Path source = Files.writeString(temp.resolve("next.tmp"), "new-value");
+        Path target = temp.resolve("record.properties");
+
+        CommitUncertainException failure = assertThrows(CommitUncertainException.class,
+                () -> DurableAtomicFile.move(source, target, true, "record store", parent -> {
+                    throw new IOException("synthetic directory fsync failure");
+                }));
+
+        assertNoAbsolutePath(failure, temp);
+        assertTrue(failure.getMessage().contains("record.properties"), failure.getMessage());
+    }
+
+    @Test
+    void anUnsupportedAtomicMoveDoesNotNameTheAbsolutePath(@TempDir Path temp) throws Exception {
+        Path source = Files.writeString(temp.resolve("next.tmp"), "new-value");
+        Path target = temp.resolve("record.properties");
+        DurableAtomicFile.Platform platform = new DurableAtomicFile.Platform((from, to, options) -> {
+            throw new java.nio.file.AtomicMoveNotSupportedException(from.toString(), to.toString(), "synthetic");
+        }, false, pause -> { });
+
+        IOException failure = assertThrows(IOException.class, () -> DurableAtomicFile.move(
+                source, target, true, "replacement", directory -> { }, platform));
+
+        assertNoAbsolutePath(failure, temp);
+        assertTrue(failure.getMessage().contains("required atomic replacement"), failure.getMessage());
+    }
+
+    @Test
+    void anUnsupportedExclusivePublicationDoesNotNameTheAbsolutePath(@TempDir Path temp) throws Exception {
+        Path source = Files.writeString(temp.resolve("next.tmp"), "new-value");
+        Path target = temp.resolve("record.properties");
+        DurableAtomicFile.Platform platform = new DurableAtomicFile.Platform(
+                Files::move, (link, existing) -> { throw new UnsupportedOperationException("no hard links"); },
+                false, pause -> { });
+
+        IOException failure = assertThrows(IOException.class, () -> DurableAtomicFile.move(
+                source, target, false, "publication", directory -> { }, platform));
+
+        assertNoAbsolutePath(failure, temp);
+        assertTrue(failure.getMessage().contains("required exclusive publication"), failure.getMessage());
+    }
+
+    private static void assertNoAbsolutePath(Throwable failure, Path testDirectory) {
         String message = failure.getMessage();
-        assertFalse(message.contains(temp.toString()), message);
-        assertFalse(message.contains(temp.toAbsolutePath().normalize().toString()), message);
-        assertFalse(message.contains(temp.getFileName().toString()), message);
+        assertFalse(message.contains(testDirectory.toString()), message);
+        assertFalse(message.contains(testDirectory.toAbsolutePath().normalize().toString()), message);
+        assertFalse(message.contains(testDirectory.getFileName().toString()), message);
     }
 }

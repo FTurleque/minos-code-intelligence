@@ -92,6 +92,7 @@ La forme lecteur et les chemins UNC concernent Windows ; `forceDirectory` (`Dura
 
 Les cinq sites du design sont confirmés au HEAD. **Corrigés en plus**, parce que leur absence rendait le correctif sans effet pour l'appelant ou qu'ils sont le même motif dans le même fichier :
 - `FileProjectFingerprintSnapshotStore` `:376` et `:598` (répertoire de projet non régulier) ;
+- `DurableAtomicFile` : les quatre autres messages de durabilité ou de support (`deleteIfExists`, accusé de durabilité d'un `move`, `atomicMove`, publication exclusive), relevés par la revue du superviseur ; couture `deleteIfExists(Path, String, DirectorySync)` ajoutée ;
 - `FileIndexStateStore` `:578` (répertoire), `:173` (« cannot read MINOS project state »), `:636` et `:644` (« cannot read/write MINOS index state ») : le message qui atteint l'appelant est celui de l'`UncheckedIOException`, pas celui de sa cause.
 
 **Relevés et non corrigés** (même famille « fichier refusé » ou contenu invalide, hors du périmètre des cinq sites ; à traiter dans un changement dédié) :
