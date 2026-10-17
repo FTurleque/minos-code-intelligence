@@ -24,5 +24,5 @@ Remaniement à comportement constant : dans chaque section, la caractérisation 
 
 ## 5. Clôture
 
-- [ ] 5.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-QUA-07 : méthode et résultat de la mesure 1.1, longueurs avant/après, méthodes laissées hors lot avec leur raison — `LocalIsolatedIndexWorker.execute`, `CodeSearchService.search`, `sandboxPlan`, `MinosApplicationAssembler.build`).
+- [ ] 5.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-QUA-07 : méthode et résultat de la mesure 1.1, longueurs avant/après, méthodes laissées hors lot avec leur raison — `LocalIsolatedIndexWorker.execute`, `CodeSearchService.search`, `sandboxPlan`, `MinosApplicationAssembler.build`).
 - [ ] 5.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : aucune page utilisateur ; `docs/developer/indexing-and-storage.md` seulement si elle décrit la signature d'`execute`.

@@ -15,7 +15,7 @@ SCOPES = {
     # not carry minos-app's own tests (m29-backend-routing reads minos-app's report instead). Measured on the
     # pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system: Linux line 0.865 / branch 0.716, Windows line 0.834 / branch 0.698 (classes of the other system at 0,
     # PostgreSQL skipped on Windows). Floor = measure minus 2 points, raised at each sprint closure, never lowered
-    # without a reason written in docs/audit/2026-10-10/SUIVI.md.
+    # without a reason written in docs/project/audits/2026-10-10/SUIVI.md.
     "global": {
         "prefixes": ("com/minos/",),
         "exclusions": ("com/minos/app/",),

@@ -29,5 +29,5 @@ Ordre dans chaque section : rouge, correction, preuve. Tout `-pl` s'accompagne d
 ## 5. Clôture
 
 - [ ] 5.1 `docs/developer/quality-gates.md` : le gate neuf et sa liste fermée ; `docs/developer/architecture.md` si un package est créé. Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 5.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-QUA-05 : décomptes corrigés 7 et 21, double comportement de `checkedAdd`, décisions D2 et D3, état de chaque lot).
-- [ ] 5.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/developer/quality-gates.md`, « Mise en œuvre » de l'ADR 0044 si D2 crée un package.
+- [ ] 5.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-QUA-05 : décomptes corrigés 7 et 21, double comportement de `checkedAdd`, décisions D2 et D3, état de chaque lot).
+- [ ] 5.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/developer/quality-gates.md`, « Mise en œuvre » de l'ADR 0044 si D2 crée un package.

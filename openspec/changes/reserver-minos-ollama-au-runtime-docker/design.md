@@ -15,7 +15,7 @@ Sprint 7 de l'audit du 10 octobre 2026 : **AUD-SEC-07**. HEAD analysé : `949e15
 - Emplacement d'exécution : `minos-engine/src/main/java/com/minos/registry/ProjectPathMapping.java:37-45` (`resolveRuntimeLocation` : propriété `minos.runtime.location`, sinon variable `MINOS_RUNTIME_LOCATION`), `:22-29` (valeur vide = `NATIVE`, valeur inconnue = exception). Les services Docker posent `MINOS_RUNTIME_LOCATION: docker` (`docker/compose-mcp.connected.yaml:53`).
 - `scripts/install/configure-runtime-settings.ps1:298-299` : avec `McpBackend=docker`, l'endpoint écrit dans `minos.properties` est `http://minos-ollama:11434/api/embed`.
 - `minos-application/src/test/java/com/minos/application/semantic/OllamaEmbeddingProviderTest.java:28-42` encode le comportement actuel (l'endpoint géré est accepté sans emplacement).
-- ADR 0031 (`docs/adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md:16`) : « loopback endpoints only » ; `:27` ne liste que les hôtes de bouclage.
+- ADR 0031 (`docs/architecture/adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md:16`) : « loopback endpoints only » ; `:27` ne liste que les hôtes de bouclage.
 
 **Non vérifié** : aucun build ni test lancé. **Non tracé** : le chemin par lequel un lanceur natif ouvre `MinosApplication` sur un `MINOS_HOME` dont `minos.properties` a été écrit pour Docker, et donc l'effet réel d'un refus au constructeur (tâche 1.1). Non relevé : la façon dont `MinosRuntimeSettings` expose l'environnement et les propriétés à passer à `resolveRuntimeLocation`.
 
@@ -56,7 +56,7 @@ Le message « Ollama endpoint must use loopback or the managed Docker service mi
 
 ### D5. ADR 0031
 
-Amendement planifié (tâche 4.1) : § 2 et « Security and operability » énoncent l'exception « service géré `minos-ollama`, runtime Docker seulement ». Si le propriétaire juge qu'il s'agit d'une décision nouvelle, elle prend le prochain numéro libre de `docs/adr/README.md`.
+Amendement planifié (tâche 4.1) : § 2 et « Security and operability » énoncent l'exception « service géré `minos-ollama`, runtime Docker seulement ». Si le propriétaire juge qu'il s'agit d'une décision nouvelle, elle prend le prochain numéro libre de `docs/architecture/adr/README.md`.
 
 ## Direction des dépendances
 

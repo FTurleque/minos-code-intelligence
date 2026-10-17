@@ -38,7 +38,7 @@ Le `Path` fourni est le home MINOS, pas la racine du projet analysé.
 
 Les constructeurs qui ouvrent un home (`new LocalMinosApi(Path)`, `new LocalMinosMultiRepositoryApi(Path)`,
 `new LocalProviderPlatformApi(Path)`) passent par `MinosApplication.open(home)`, qui découvre la racine de
-composition de MINOS par `ServiceLoader` ([ADR 0042](../adr/0042-racine-de-composition.md)). Le module
+composition de MINOS par `ServiceLoader` ([ADR 0042](../architecture/adr/0042-racine-de-composition.md)). Le module
 **`com.minos:minos-bootstrap` doit donc être présent au classpath d'exécution** :
 
 - le JAR distribué `minos-code-intelligence-*-all.jar` le contient déjà ;
@@ -316,7 +316,7 @@ Pour les détails d’architecture, voir [../developer/public-surfaces.md](../de
 
 ## Ruptures
 
-### Packages internes renommés : un package, un module ([ADR 0044](../adr/0044-un-package-un-module.md))
+### Packages internes renommés : un package, un module ([ADR 0044](../architecture/adr/0044-un-package-un-module.md))
 
 Aucune signature de `com.minos.api` ne change : les contrats publics ne nomment que `com.minos.api.*` et
 `com.minos.application.MinosApplication`. Les points d'entrée de processus gardent leur nom
@@ -346,7 +346,7 @@ Seuls changent des packages internes : un code qui importait directement l'une d
 
 **Alias supprimés.** Les quatre alias dépréciés de `minos-cli` — `com.minos.cli.ProjectOperations`, `com.minos.cli.ProjectSymbolQuery`, `com.minos.cli.LocalProjectOperations`, `com.minos.cli.LocalProjectSymbolQuery` — n'existent plus : ils ne faisaient que déléguer aux types de `com.minos.application` du même nom, à utiliser directement.
 
-### Constructeurs télescopiques retirés ([ADR 0045](../adr/0045-constructeur-unique-et-point-d-entree-nomme.md))
+### Constructeurs télescopiques retirés ([ADR 0045](../architecture/adr/0045-constructeur-unique-et-point-d-entree-nomme.md))
 
 Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change : `MinosApplication` est regroupée par domaine en interne, et ses accesseurs gardent nom, type et instance retournée.
 

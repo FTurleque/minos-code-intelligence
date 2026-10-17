@@ -61,7 +61,7 @@ Une exécution PIT SHALL NOT être tenue pour réussie sur la seule fin du proce
 - **THEN** elle réussit et affiche le nombre de mutations par statut, le score de mutation et la force des tests
 
 ### Requirement: Les commandes documentées correspondent à la configuration
-Chaque commande de `docs/quality/code-audit.md` SHALL être exécutable telle quelle depuis la racine du dépôt, et la documentation SHALL distinguer celles qui n'ont pas été exécutées dans l'environnement de l'intégration.
+Chaque commande de `docs/developer/quality/code-audit.md` SHALL être exécutable telle quelle depuis la racine du dépôt, et la documentation SHALL distinguer celles qui n'ont pas été exécutées dans l'environnement de l'intégration.
 
 #### Scenario: Commande non exécutée
 - **WHEN** une commande de la documentation n'a pas été lancée (bash sous Linux ou macOS, workflow GitHub Actions)
@@ -71,7 +71,7 @@ Chaque commande de `docs/quality/code-audit.md` SHALL être exécutable telle qu
 Le document de couverture de l'audit SHALL porter un tableau unique donnant, pour chaque module du reactor et pour le plugin IntelliJ, un statut de mutation (exécuté, partiel, non exécuté, bloqué), le système, l'exécution et la raison. Les autres sections SHALL y renvoyer et SHALL NOT redonner un décompte de modules mutés.
 
 #### Scenario: Décompte unique
-- **GIVEN** `docs/quality/code-audit-couverture.md`
+- **GIVEN** `docs/developer/quality/code-audit-couverture.md`
 - **WHEN** on y cherche les décomptes de la forme « modules sur 14 » relatifs à PIT
 - **THEN** il n'en existe qu'à un seul endroit, celui du tableau d'état
 

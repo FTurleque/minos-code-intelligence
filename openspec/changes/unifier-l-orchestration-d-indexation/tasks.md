@@ -26,10 +26,10 @@ Ordre : relevé et décisions, puis dans chaque section rouge, correction, preuv
 ## 5. Documentation d'architecture (AUD-ARC-02)
 
 - [ ] 5.1 [AUD-ARC-02] `docs/architecture/arc42/05-vue-blocs.md` (`:147`) et `docs/architecture/diagrams/c4-component-application.md` (`:16`) : remplacer le coordinateur par le cas d'usage ; `docs/developer/architecture.md` si le flux y est décrit. Preuve : `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check` verts.
-- [ ] 5.2 [AUD-ARC-02] Note de « Mise en œuvre » de l'ADR 0057 (§ 2 réalisé) ; cocher SH-05 dans `docs/roadmap/storage-hexagonal-2026-10/TASKS.md` et noter la suppression du coordinateur dans la cartographie SH-01.
+- [ ] 5.2 [AUD-ARC-02] Note de « Mise en œuvre » de l'ADR 0057 (§ 2 réalisé) ; cocher SH-05 dans `docs/project/roadmap/storage-hexagonal-2026-10/TASKS.md` et noter la suppression du coordinateur dans la cartographie SH-01.
 
 ## 6. Clôture
 
-- [ ] 6.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-ARC-02 : statut, décisions D1 et D3, tests reportés ; AUD-QUA-02 : coordinateur retiré ; AUD-ARC-01 et AUD-PERF-04 signalés comme débloqués).
+- [ ] 6.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-ARC-02 : statut, décisions D1 et D3, tests reportés ; AUD-QUA-02 : coordinateur retiré ; AUD-ARC-01 et AUD-PERF-04 signalés comme débloqués).
 - [ ] 6.2 Signaler aux changements actifs qui citent des lignes de `LocalAutonomousIndexOperations` (écart 5 de `design.md`) que leurs références ont dérivé.
-- [ ] 6.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/ROADMAP.md`, ADR 0057, `docs/architecture/arc42/05-vue-blocs.md`.
+- [ ] 6.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md`, ADR 0057, `docs/architecture/arc42/05-vue-blocs.md`.

@@ -30,5 +30,5 @@ Ordre dans chaque section : rouge, correction, preuve. Tout `-pl` s'accompagne d
 ## 6. Clôture
 
 - [ ] 6.1 Compléter la « Mise en œuvre » de l'ADR 0043 (convention étendue aux identifiants de production, gate, liste restante) ; `docs/developer/quality-gates.md` (gate neuf). Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 6.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-QUA-08 : périmètre réel, décisions D2 et D3, preuve Windows 4.2, entrées restantes de la liste).
-- [ ] 6.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/developer/quality-gates.md`, `docs/user/intellij-plugin.md` si elle nomme une classe, ADR 0043.
+- [ ] 6.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-QUA-08 : périmètre réel, décisions D2 et D3, preuve Windows 4.2, entrées restantes de la liste).
+- [ ] 6.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/developer/quality-gates.md`, `docs/user/intellij-plugin.md` si elle nomme une classe, ADR 0043.

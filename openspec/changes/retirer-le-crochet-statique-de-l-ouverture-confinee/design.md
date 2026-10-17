@@ -14,7 +14,7 @@ Sprint 8 de l'audit du 10 octobre 2026 : **AUD-QUA-10**. HEAD analysé : `949e15
 - Appelants de production des deux entrées publiques : 50 appels dans 29 fichiers.
 - Gates littéraux : `scripts/remediation/check-p0-p2.py:140-141` exige dans `ConfinedFileOpener.java` les chaînes `attributes.isOther()` et `does <em>not</em> claim the same ancestor-identity proof` ; `:335` et `scripts/remediation/check-audit-remediation-v2.py:143,153` exigent, **chez des appelants**, `ConfinedFileOpener.openConfinedRegularFile(sourceRoot, relative)`, `ConfinedFileOpener.openRegularFileNoFollow(file)` et `ConfinedFileOpener.openConfinedRegularFile`. Aucun ne cite `beforeOpenForTests`.
 - Aucune configuration de parallélisme JUnit dans le dépôt (recherche de `junit.jupiter.execution.parallel` et de `<parallel>` dans les `pom.xml` et fichiers de propriétés : aucun résultat).
-- Q15 figure « CONFIRMÉ » dans `docs/audit/archive/2026-09/AUDIT-2026-09.md:531`, fichier **archivé**.
+- Q15 figure « CONFIRMÉ » dans `docs/project/audits/archive/2026-09/AUDIT-2026-09.md:531`, fichier **archivé**.
 
 **Non vérifié** : aucun build ni test exécuté. L'affirmation de l'audit selon laquelle le constructeur de `IndexingExecutionRequest` ne fait plus d'E/S n'a pas été relue ici.
 
@@ -22,7 +22,7 @@ Sprint 8 de l'audit du 10 octobre 2026 : **AUD-QUA-10**. HEAD analysé : `949e15
 
 1. **Une seule surcharge ne suffit pas.** L'audit propose `openRegularFileNoFollow(path, Runnable beforeOpen)` ; le crochet sert aussi les deux chemins de `openConfinedRegularFile` (`:201`, `:225`) ; la répartition des tests entre les deux entrées n'a pas été relue (tâche 1.1). Il faut une surcharge par entrée publique, et le paramètre doit descendre dans les deux méthodes privées.
 2. **L'impact « tests parallèles » est théorique aujourd'hui** : rien n'active le parallélisme. Le défaut réel est un état global modifiable dans une primitive de sécurité, et la dépendance des tests à un `@AfterEach`.
-3. **« Mettre à jour Q15 » ne peut pas viser l'archive.** La mise à jour se fait dans `docs/audit/2026-10-10/SUIVI.md` (partie E/S du record close selon l'audit, partie crochet close par ce changement).
+3. **« Mettre à jour Q15 » ne peut pas viser l'archive.** La mise à jour se fait dans `docs/project/audits/2026-10-10/SUIVI.md` (partie E/S du record close selon l'audit, partie crochet close par ce changement).
 
 ## Goals / Non-Goals
 

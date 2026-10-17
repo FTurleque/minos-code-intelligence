@@ -22,5 +22,5 @@ Ordre dans chaque section : rouge, correction, preuve. Les `.ps1` restent en CRL
 ## 4. Clôture
 
 - [ ] 4.1 `docs/developer/quality-gates.md` : la garde d'identité, sa liste, le module partagé. Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-QUA-09 : décomptes corrigés, `Require-Identifier` divergent, `Resolve-Python` sans objet, décision D1, sort de `Invoke-NativeChecked`).
+- [ ] 4.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-QUA-09 : décomptes corrigés, `Require-Identifier` divergent, `Resolve-Python` sans objet, décision D1, sort de `Invoke-NativeChecked`).
 - [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/developer/quality-gates.md` ; `docs/user/production-installation.md` seulement si D1 retient la bibliothèque livrée.

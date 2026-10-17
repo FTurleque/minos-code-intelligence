@@ -26,11 +26,11 @@ Deux lots indépendants : 1-2 (racine absolue par le MCP) et 3-4 (e-mail des aut
 
 ## 5. Décisions écrites
 
-- [ ] 5.1 [AUD-SEC-10] Amender l'ADR 0019 (« Mise en œuvre » : adresse rendue sur demande seulement) ; si D1-B, écrire où la version du contrat MCP est publiée (ADR 0017 complété ou ADR au prochain numéro libre de `docs/adr/README.md`) (D5). Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 5.2 [AUD-SEC-10] Ouvrir dans `docs/audit/2026-10-10/SUIVI.md` une ligne de suite pour `workTree` et `originRemote` (exposition de même nature, hors périmètre ; rédaction de l'URL non vérifiée).
+- [ ] 5.1 [AUD-SEC-10] Amender l'ADR 0019 (« Mise en œuvre » : adresse rendue sur demande seulement) ; si D1-B, écrire où la version du contrat MCP est publiée (ADR 0017 complété ou ADR au prochain numéro libre de `docs/architecture/adr/README.md`) (D5). Rejouer `python scripts/docs/check-current-docs.py`.
+- [ ] 5.2 [AUD-SEC-10] Ouvrir dans `docs/project/audits/2026-10-10/SUIVI.md` une ligne de suite pour `workTree` et `originRemote` (exposition de même nature, hors périmètre ; rédaction de l'URL non vérifiée).
 
 ## 6. Clôture
 
 - [ ] 6.1 `docs/user/mcp.md` (valeur de `rootPath`), `docs/user/cli.md` (option de `git-activity`, valeur par défaut), `docs/user/java-api.md` (paramètre et valeur par défaut). Rejouer `check-current-docs.py` et `python scripts/docs/product-facts.py --check`.
-- [ ] 6.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-SEC-10 : statut par lot, décisions D1 et D2, écarts « relatif à MINOS_HOME » et « hacher »).
-- [ ] 6.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, ADR 0019, `docs/user/mcp.md`, `docs/user/cli.md`, `docs/user/java-api.md`.
+- [ ] 6.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-SEC-10 : statut par lot, décisions D1 et D2, écarts « relatif à MINOS_HOME » et « hacher »).
+- [ ] 6.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, ADR 0019, `docs/user/mcp.md`, `docs/user/cli.md`, `docs/user/java-api.md`.

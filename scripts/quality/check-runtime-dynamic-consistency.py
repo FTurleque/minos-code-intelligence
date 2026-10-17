@@ -158,20 +158,20 @@ def main() -> int:
         forbid("scripts/m26/run-final.ps1", windows, "gh workflow", "gh run", "workflow_dispatch")
         forbid("scripts/m26/run-final.sh", linux, "gh workflow", "gh run", "workflow_dispatch")
 
-        execution = read("docs/roadmap/M26_EXECUTION.md")
-        adr = read("docs/adr/0034-partial-runtime-observations-with-explicit-static-correlation.md")
+        execution = read("docs/project/roadmap/M26_EXECUTION.md")
+        adr = read("docs/architecture/adr/0034-partial-runtime-observations-with-explicit-static-correlation.md")
         user = read("docs/user/runtime-intelligence.md")
         developer = read("docs/developer/runtime-dynamic-intelligence.md")
-        for relative, document in (("docs/roadmap/M26_EXECUTION.md", execution),
-                                   ("docs/adr/0034-partial-runtime-observations-with-explicit-static-correlation.md", adr),
+        for relative, document in (("docs/project/roadmap/M26_EXECUTION.md", execution),
+                                   ("docs/architecture/adr/0034-partial-runtime-observations-with-explicit-static-correlation.md", adr),
                                    ("docs/user/runtime-intelligence.md", user),
                                    ("docs/developer/runtime-dynamic-intelligence.md", developer)):
             require_facts(relative, document, "minos-runtime-observation-v1", "PARTIAL",
                           "OBSERVED_PARTIAL", "snapshot", "borné", "absence")
-        require_facts("docs/roadmap/M26_EXECUTION.md", execution,
+        require_facts("docs/project/roadmap/M26_EXECUTION.md", execution,
                       "#87", "#88", BASE, "M26-S9",
                       "M21-S2 / GitHub Actions reste **strictement en pause jusqu’en août 2026**")
-        require_facts("docs/adr/0034-partial-runtime-observations-with-explicit-static-correlation.md", adr,
+        require_facts("docs/architecture/adr/0034-partial-runtime-observations-with-explicit-static-correlation.md", adr,
                       "Partial runtime observations with explicit static correlation",
                       "NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS")
 

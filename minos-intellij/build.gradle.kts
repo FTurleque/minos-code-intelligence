@@ -26,7 +26,7 @@ plugins {
     // AUD-TST-05: the coverage of the plugin is measured by Gradle's own JaCoCo plugin (no third-party plugin).
     jacoco
     id("org.jetbrains.intellij.platform") version "2.19.0"
-    // Audit only (MINOS-AUD-H09, docs/quality/code-audit.md): their tasks run when called by name, never in
+    // Audit only (MINOS-AUD-H09, docs/developer/quality/code-audit.md): their tasks run when called by name, never in
     // `test buildPlugin`. Versions and settings mirror the reactor's audit profiles. Dependency-Check is left out
     // until it can refresh its database (H04): its Gradle task does not reuse the Maven one.
     id("com.github.spotbugs") version "6.5.12"
@@ -138,7 +138,7 @@ tasks {
         // protocol/ line 459/922 (0.498), branch 238/568 (0.419). Windows measures more (0.390 / 0.381, protocol/
         // 0.557 / 0.458: the strong process launcher runs there). Floor = Linux measure minus 2 points, rounded down to the
         // hundredth (0.339 -> 0.33, 0.337 -> 0.33, 0.478 -> 0.47, 0.399 -> 0.39), raised with the coverage, never
-        // lowered without a reason written in docs/audit/2026-10-10/SUIVI.md.
+        // lowered without a reason written in docs/project/audits/2026-10-10/SUIVI.md.
         violationRules {
             rule {
                 limit { counter = "LINE"; minimum = "0.33".toBigDecimal() }

@@ -90,8 +90,8 @@ def validate_runtime_contracts() -> None:
 
 
 def validate_documentation() -> None:
-    status_path = "docs/STATUS.md"
-    roadmap_path = "docs/ROADMAP.md"
+    status_path = "docs/project/governance/STATUS.md"
+    roadmap_path = "docs/project/governance/ROADMAP.md"
     risks_path = "docs/architecture/risks/register.md"
     status = read(status_path)
     roadmap = read(roadmap_path)

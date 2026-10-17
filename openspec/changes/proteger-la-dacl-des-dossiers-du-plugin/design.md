@@ -2,7 +2,7 @@
 
 ## Context
 
-Suite de l'incident MINOS-AUD-H23 (audit outillé du 8 octobre 2026, reproduit le 15 octobre ; `docs/quality/code-audit-couverture.md` § 7.1 sur la branche `docs/completer-la-mutation-et-son-document`). HEAD analysé : `74d85e4f` (`develop`). `L` = `minos-intellij/src/main/java/com/minos/intellij/protocol/MinosStrongProcessLauncher.java`.
+Suite de l'incident MINOS-AUD-H23 (audit outillé du 8 octobre 2026, reproduit le 15 octobre ; `docs/developer/quality/code-audit-couverture.md` § 7.1 sur la branche `docs/completer-la-mutation-et-son-document`). HEAD analysé : `74d85e4f` (`develop`). `L` = `minos-intellij/src/main/java/com/minos/intellij/protocol/MinosStrongProcessLauncher.java`.
 
 ## État vérifié au HEAD
 

@@ -15,6 +15,6 @@ Ordre : rouge, correction, preuve. Le plugin se construit par son wrapper (`mino
 ## 3. Clôture
 
 - [x] 3.1 `docs/user/intellij-plugin.md` : le dossier MINOS doit être dédié et appartenir à l'utilisateur ; message d'erreur et remède. `python scripts/docs/check-current-docs.py` vert. — fait (« Ownership OS des commandes CLI »).
-- [x] 3.2 `docs/audit/2026-10-10/SUIVI.md` : cause de H23 traitée côté plugin ; défaut analogue du moteur en reste. — fait.
+- [x] 3.2 `docs/project/audits/2026-10-10/SUIVI.md` : cause de H23 traitée côté plugin ; défaut analogue du moteur en reste. — fait.
 - [ ] 3.3 **(manuelle)** À la PR : `IntelliJ plugin (gate)` vert, job Windows exécuté ; noter les run ids.
 - [x] 3.4 `openspec validate --all --strict`. — 63 passés, 0 échec.

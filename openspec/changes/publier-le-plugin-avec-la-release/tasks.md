@@ -21,5 +21,5 @@ Ordre : rouge, correction, preuve. Les workflows de release ne tournent pas sur 
 ## 4. Clôture
 
 - [x] 4.1 Documentation de release (`docs/developer/`, skill `minos-release-promotion`) : le plugin est publié par le workflow de release ; une release créée à la main demande un rejeu ; note sur les releases immuables. Rejouer `check-current-docs.py`.
-- [x] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-DEP-07 : statut, preuve empirique des deux releases sans plugin, décision D3, run ids). — fait (2026-10-16) : ligne AUD-DEP-07 du sprint 5 (PR #468, D3 = A, pas de rattrapage, preuves de release en attente).
-- [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, documentation de release.
+- [x] 4.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-DEP-07 : statut, preuve empirique des deux releases sans plugin, décision D3, run ids). — fait (2026-10-16) : ligne AUD-DEP-07 du sprint 5 (PR #468, D3 = A, pas de rattrapage, preuves de release en attente).
+- [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, documentation de release.

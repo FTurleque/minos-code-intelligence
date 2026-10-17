@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when a toolchain baseline (Gradle of the plugin, Java of the product) is written with two versions.
 
-docs/TOOLCHAIN_POLICY.md says a baseline change is deliberate. The Gradle wrapper of `minos-intellij` is
+docs/developer/TOOLCHAIN_POLICY.md says a baseline change is deliberate. The Gradle wrapper of `minos-intellij` is
 what the pull-request CI builds the plugin with, and Dependabot raises it; the policy and AGENTS.md write
 the version again. The release workflows used to install Gradle explicitly (`gradle-version:`): two raises
 of the wrapper (9.6.1 to 9.8.0, then 9.8.1) left the policy and those workflows on 9.6.1, and a release
@@ -10,7 +10,7 @@ was built with a version the pull-request CI no longer qualified.
 The wrapper is the reference. Rules:
 
 1. `minos-intellij/gradle/wrapper/gradle-wrapper.properties` names one Gradle distribution version.
-2. `docs/TOOLCHAIN_POLICY.md` states that version (`Gradle: **X**`), and so does `AGENTS.md`
+2. `docs/developer/TOOLCHAIN_POLICY.md` states that version (`Gradle: **X**`), and so does `AGENTS.md`
    (`Gradle **X**`).
 3. No workflow holds a `gradle-version:`, whatever its value: the release builds the plugin with the
    wrapper (`./gradlew` or `gradlew.bat` in `minos-intellij`), like the pull-request CI, so it has no
@@ -31,7 +31,7 @@ reference `N`. Rules:
    names the jobs that qualify an upgrade from a candidate built for the previous baseline: they install that
    JDK too, once, and it is the only other version accepted there.
 6. Every `FROM eclipse-temurin:` of a Dockerfile of the repository has the major `N`.
-7. `docs/TOOLCHAIN_POLICY.md` states `Java: **N**, enforced as `[N,N+1)`` and dates the end of support of
+7. `docs/developer/TOOLCHAIN_POLICY.md` states `Java: **N**, enforced as `[N,N+1)`` and dates the end of support of
    that JDK (`Java support: ... **N** ... until [at least] **YYYY-MM**`); `AGENTS.md` and
    `openspec/config.yaml` state `N` for the product.
 
@@ -69,7 +69,7 @@ import gate_cli  # noqa: E402 - après l'ajout du dossier du script au chemin
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 WRAPPER = "minos-intellij/gradle/wrapper/gradle-wrapper.properties"
-POLICY = "docs/TOOLCHAIN_POLICY.md"
+POLICY = "docs/developer/TOOLCHAIN_POLICY.md"
 AGENTS = "AGENTS.md"
 WORKFLOWS = ".github/workflows"
 

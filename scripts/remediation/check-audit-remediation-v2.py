@@ -68,7 +68,7 @@ def main() -> int:
             'package-ecosystem: "github-actions"',
         )
         require(
-            "docs/TOOLCHAIN_POLICY.md",
+            "docs/developer/TOOLCHAIN_POLICY.md",
             "Java: **25**",
             "Java: **21**",
             "Gradle: **9.8.1**",
@@ -77,7 +77,7 @@ def main() -> int:
         )
 
         require(
-            "docs/STATUS.md",
+            "docs/project/governance/STATUS.md",
             "28 août 2026",
             "PR Validation",
             "gate statique ciblé Ubuntu",
@@ -86,16 +86,16 @@ def main() -> int:
             "main` doit être ancêtre",
         )
         require(
-            "docs/ROADMAP.md",
+            "docs/project/governance/ROADMAP.md",
             "28 août 2026",
             "Post-228 — invariants statiques ciblés",
             "Docker release et upgrade réel",
             "deux commits/JAR distincts",
             "main ⊆ develop",
         )
-        forbid("docs/ROADMAP.md", "Vérification manuelle encore ouverte")
+        forbid("docs/project/governance/ROADMAP.md", "Vérification manuelle encore ouverte")
 
-        # Post-228 hardening was its own workflow file; C1 (docs/adr/0043) folded it into pr-ci.yml
+        # Post-228 hardening was its own workflow file; C1 (docs/architecture/adr/0043) folded it into pr-ci.yml
         # as the dedicated "invariants" job so it runs once instead of in a separate parallel
         # workflow. The property this protects is unchanged: these are fast, ubuntu-only, non-Maven
         # checks that must never grow into (or duplicate) the OS-matrixed Maven verify job.

@@ -2,12 +2,12 @@
 
 ## 1. Configuration d'audit (faite pendant l'audit du 8 octobre 2026)
 
-- [x] 1.1 PIT : `targetClasses`/`targetTests` à `com.minos.*` dans le profil `audit-mutation`, propriété `pit.crossModule`. Preuve : exécution E20 de `docs/quality/code-audit-couverture.md`.
+- [x] 1.1 PIT : `targetClasses`/`targetTests` à `com.minos.*` dans le profil `audit-mutation`, propriété `pit.crossModule`. Preuve : exécution E20 de `docs/developer/quality/code-audit-couverture.md`.
 - [x] 1.2 ArchUnit 1.5.1 en test de `minos-app`, `ModuleArchitectureTest` (garde d'import, six règles établies, mesure stricte opt-in). Preuve : E14 (vert), E15 (mesure rouge, attendue). Gates : `check-module-boundaries.py`, `check-current-docs.py`, `check-minos-01.py`.
 - [x] 1.3 Profils `audit-dependency-check` et `audit-dependency-check-tests` (13.0.0). Preuve : E17, E18.
 - [x] 1.4 `audit-report-summary.py` : `spotbugs --reports-dir/--strict`, `pit --all`, `dependency-check`. Preuve : E13.
 - [x] 1.5 `code-audit.yml` : PIT par module, job Dependency-Check. Gates : `check-workflow-pins.py`, `check-single-execution.py` (verts).
-- [x] 1.6 Documentation : `docs/quality/code-audit.md`, `code-audit-couverture.md`, `code-audit-constats.md` § 5 à § 8.
+- [x] 1.6 Documentation : `docs/developer/quality/code-audit.md`, `code-audit-couverture.md`, `code-audit-constats.md` § 5 à § 8.
 
 ## 2. À faire
 

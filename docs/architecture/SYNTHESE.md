@@ -51,7 +51,7 @@ La direction de dépendances est imposée par Maven comme garde-fou de compilati
 
 ## ADR à créer (manquants)
 
-Les ADR suivants couvrent des comportements observés dans le code mais ne possèdent pas encore d'ADR dans `docs/adr/` :
+Les ADR suivants couvrent des comportements observés dans le code mais ne possèdent pas encore d'ADR dans `docs/architecture/adr/` :
 
 | Proposition | Justification | Priorité |
 |------------|--------------|---------|

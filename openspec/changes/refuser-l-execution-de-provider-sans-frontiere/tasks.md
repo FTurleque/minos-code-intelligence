@@ -20,6 +20,6 @@ Ordre dans chaque section : rouge, correction, preuve. Tout `-pl` s'accompagne d
 
 ## 4. Clôture
 
-- [ ] 4.1 Ajouter une note de mise en œuvre à l'ADR qui porte la frontière de confiance de l'exécution des providers (l'identifier dans `docs/adr/README.md`) ; `docs/developer/remote-worker-sandbox-disposition.md` si elle décrit le backend natif. Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-ARC-09 : statut, décision D2, écarts avec l'action de l'audit, run id de 3.3).
+- [ ] 4.1 Ajouter une note de mise en œuvre à l'ADR qui porte la frontière de confiance de l'exécution des providers (l'identifier dans `docs/architecture/adr/README.md`) ; `docs/developer/remote-worker-sandbox-disposition.md` si elle décrit le backend natif. Rejouer `python scripts/docs/check-current-docs.py`.
+- [ ] 4.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-ARC-09 : statut, décision D2, écarts avec l'action de l'audit, run id de 3.3).
 - [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : ADR concerné, `docs/developer/remote-worker-sandbox-disposition.md`, `docs/developer/testing.md` (aide de test).

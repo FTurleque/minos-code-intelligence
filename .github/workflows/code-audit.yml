@@ -2,7 +2,7 @@ name: Code audit (SpotBugs, PIT and Dependency-Check)
 
 on:
   # Politique du dépôt : aucun déclenchement automatique. SpotBugs et PIT ne sont pas des contrôles de
-  # fusion ; ce workflow ne sert qu'à produire leurs rapports à la demande (docs/quality/code-audit.md).
+  # fusion ; ce workflow ne sert qu'à produire leurs rapports à la demande (docs/developer/quality/code-audit.md).
   workflow_dispatch:
     inputs:
       run_spotbugs:

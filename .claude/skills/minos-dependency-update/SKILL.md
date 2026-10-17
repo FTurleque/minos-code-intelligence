@@ -5,7 +5,7 @@ description: Traiter une montée de dépendance ou d'image MINOS (PR Dependabot 
 
 # Montée de dépendance
 
-Dependabot couvre Maven (`/`), le build Gradle du plugin (`/minos-intellij`), GitHub Actions et les images Docker (deux écosystèmes : `docker` et `docker-compose`). Il ne doit **jamais** changer en silence la baseline : Java 25, Maven `[3.9,4.0)`, Java 21 / Gradle 9.8.1 / IntelliJ Platform 2026.1 pour le plugin (`docs/TOOLCHAIN_POLICY.md`). Une montée de baseline est une décision, à qualifier sur Linux et Windows.
+Dependabot couvre Maven (`/`), le build Gradle du plugin (`/minos-intellij`), GitHub Actions et les images Docker (deux écosystèmes : `docker` et `docker-compose`). Il ne doit **jamais** changer en silence la baseline : Java 25, Maven `[3.9,4.0)`, Java 21 / Gradle 9.8.1 / IntelliJ Platform 2026.1 pour le plugin (`docs/developer/TOOLCHAIN_POLICY.md`). Une montée de baseline est une décision, à qualifier sur Linux et Windows.
 
 ## Tri d'une PR de dépendance
 1. Lire le diff : une seule dépendance ? un groupe ? le tag **et** le digest d'une image bougent-ils ensemble ?

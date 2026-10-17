@@ -23,5 +23,5 @@ Ordre : mesure, décision d'abandon ou de poursuite, puis rouge, correction, pre
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-09 : confiance requalifiée, mesure 1.1, décisions D1 et D2, issue « abandon » ou « borné » avec les mesures 3.4).
-- [ ] 4.2 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/user/mcp.md`, `docs/user/cli.md` (seulement si le plafond est appliqué).
+- [ ] 4.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-PERF-09 : confiance requalifiée, mesure 1.1, décisions D1 et D2, issue « abandon » ou « borné » avec les mesures 3.4).
+- [ ] 4.2 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/user/mcp.md`, `docs/user/cli.md` (seulement si le plafond est appliqué).

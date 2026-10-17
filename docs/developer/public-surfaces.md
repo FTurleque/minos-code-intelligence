@@ -2,7 +2,7 @@
 
 MINOS expose un même cœur métier par plusieurs adapters. Une capacité n’est jamais réimplémentée différemment pour chaque transport.
 
-Les facts mécaniquement calculables — version, catalogue MCP, commandes CLI, formats et providers — sont générés depuis le code dans [`../generated/product-facts.md`](../generated/product-facts.md). Cette page décrit les responsabilités et invariants.
+Les facts mécaniquement calculables — version, catalogue MCP, commandes CLI, formats et providers — sont générés depuis le code dans [`generated/product-facts.md`](generated/product-facts.md). Cette page décrit les responsabilités et invariants.
 
 ## Composition partagée
 
@@ -321,4 +321,4 @@ Un backend remplaçant `FileSemanticVectorStore` doit implémenter `SemanticVect
 - architecture : `scripts/architecture/check-module-boundaries.py` ;
 - qualité : `scripts/quality/check-jacoco.py`.
 
-Voir aussi [Intelligence sémantique et hybride — M20](semantic-hybrid-intelligence.md), [Plugin IntelliJ](../user/intellij-plugin.md), [Team / Hosted](team-hosted-mode.md) et [ADR-0029](../adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md).
+Voir aussi [Intelligence sémantique et hybride — M20](semantic-hybrid-intelligence.md), [Plugin IntelliJ](../user/intellij-plugin.md), [Team / Hosted](team-hosted-mode.md) et [ADR-0029](../architecture/adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md).

@@ -11,6 +11,6 @@ Ordre : rouge, correction, preuve. Tout `-pl` s'accompagne de `-am`. Aucun test 
 ## 2. Clôture
 
 - [x] 2.1 `docs/developer/` (stockage privé) ou `docs/user/troubleshooting.md` : message et remède. `python scripts/docs/check-current-docs.py` vert. — fait (`docs/user/troubleshooting.md`).
-- [x] 2.2 `docs/audit/2026-10-10/SUIVI.md` : reste « moteur » de H23 traité. — fait.
+- [x] 2.2 `docs/project/audits/2026-10-10/SUIVI.md` : reste « moteur » de H23 traité. — fait.
 - [ ] 2.3 **(manuelle)** À la PR : `Verify (windows-2022)` et `Verify (ubuntu-24.04)` verts, image Docker qualifiée (`Provider-complete image exact-head gate`) ; noter les run ids.
 - [x] 2.4 `openspec validate --all --strict`. — 64 passés, 0 échec.

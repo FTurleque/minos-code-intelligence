@@ -14,5 +14,5 @@ Ordre dans chaque section : rouge, correction, preuve. Tout `-pl` s'accompagne d
 
 ## 3. Clôture
 
-- [ ] 3.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-QUA-10 : statut ; Q15 : partie crochet close, partie E/S du record close selon l'audit et relue à cette occasion). Ne pas modifier `docs/audit/archive/2026-09/AUDIT-2026-09.md`.
+- [ ] 3.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-QUA-10 : statut ; Q15 : partie crochet close, partie E/S du record close selon l'audit et relue à cette occasion). Ne pas modifier `docs/project/audits/archive/2026-09/AUDIT-2026-09.md`.
 - [ ] 3.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : aucune page utilisateur ; `docs/developer/testing.md` si elle décrit le point d'injection.

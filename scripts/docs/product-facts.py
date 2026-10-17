@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "docs" / "generated" / "product-facts.md"
+OUTPUT = ROOT / "docs" / "developer" / "generated" / "product-facts.md"
 
 
 def read(relative: str) -> str:
@@ -107,8 +107,8 @@ def provider_facts(source: str) -> list[tuple[str, str, str, list[str], list[str
 
 def check_authoritative_documentation() -> None:
     """Reject stale mutable prose that contradicts authoritative release/security facts."""
-    status = read("docs/STATUS.md")
-    roadmap = read("docs/ROADMAP.md")
+    status = read("docs/project/governance/STATUS.md")
+    roadmap = read("docs/project/governance/ROADMAP.md")
     risk_register = read("docs/architecture/risks/register.md")
     readme = read("README.md")
     production = read("docs/user/production-installation.md")
@@ -131,14 +131,14 @@ def check_authoritative_documentation() -> None:
             or "qualification code non fiable **refusée**" not in status):
         raise RuntimeError("STATUS no longer exposes the authoritative #98 sandbox qualification fact")
     if "IMPLÉMENTÉE + QUALIFIÉE" in status:
-        raise RuntimeError("stale #98 qualification claim in docs/STATUS.md (audit 2026-09, A1)")
+        raise RuntimeError("stale #98 qualification claim in docs/project/governance/STATUS.md (audit 2026-09, A1)")
     if "ADR 0041" not in status:
         raise RuntimeError("STATUS must cite ADR 0041: the #98 refusal is a decision, not a pending defect")
     check_sandbox_claims_match_the_code()
 
     current_docs = {
-        "docs/STATUS.md": status,
-        "docs/ROADMAP.md": roadmap,
+        "docs/project/governance/STATUS.md": status,
+        "docs/project/governance/ROADMAP.md": roadmap,
         "docs/architecture/risks/register.md": risk_register,
     }
     for path, text in current_docs.items():

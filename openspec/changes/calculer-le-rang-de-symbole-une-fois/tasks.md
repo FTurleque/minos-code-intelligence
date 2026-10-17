@@ -20,5 +20,5 @@ Ordre dans chaque section : rouge, correction, preuve. Tout `-pl` s'accompagne d
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-10 : statut, mesures 3.1, décisions D2 et D3, écart sur le rang 6).
-- [ ] 4.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md` seulement si une mesure y est citée ; aucune page utilisateur (aucune sortie ne change).
+- [ ] 4.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-PERF-10 : statut, mesures 3.1, décisions D2 et D3, écart sur le rang 6).
+- [ ] 4.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md` seulement si une mesure y est citée ; aucune page utilisateur (aucune sortie ne change).

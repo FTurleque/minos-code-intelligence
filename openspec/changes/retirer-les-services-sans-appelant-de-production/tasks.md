@@ -26,5 +26,5 @@ Ordre : relevé et décision, puis une section par sort de classe (rouge, correc
 ## 5. Clôture
 
 - [ ] 5.1 Documents qui nomment une classe retirée ou déplacée : `docs/developer/semantic-hybrid-intelligence.md`, `docs/developer/java-advanced-provider.md`, `docs/developer/public-surfaces.md`, `docs/user/java-api.md` selon D1 ; note de « Mise en œuvre » de l'ADR 0026 si `IndexerProviderRegistry` est supprimé ; `docs/developer/quality-gates.md` (règle nouvelle et façon de réduire la liste). Rejouer `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check`.
-- [ ] 5.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-QUA-02 : décision par classe, taille initiale de la liste, faux positifs relevés sur `NexusSemanticSignalService` et `IndexerProviderRegistry`).
-- [ ] 5.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/developer/quality-gates.md`, ADR 0026.
+- [ ] 5.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-QUA-02 : décision par classe, taille initiale de la liste, faux positifs relevés sur `NexusSemanticSignalService` et `IndexerProviderRegistry`).
+- [ ] 5.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/developer/quality-gates.md`, ADR 0026.
