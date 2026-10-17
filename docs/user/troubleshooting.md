@@ -307,6 +307,14 @@ Une liste vide signifie qu’aucune relation `CALLS` correspondante n’est pré
 
 Limites possibles : dispatch dynamique, réflexion, configuration runtime ou capacités incomplètes du provider.
 
+## La recherche sémantique refuse `minos-ollama` hors de Docker
+
+Symptôme : `Ollama configuration error: the semantic endpoint (minos.semantic.endpoint) designates the managed Docker service minos-ollama` et, dans le statut sémantique, la limite `OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER`.
+
+Cause : le `MINOS_HOME` a été configuré pour le backend Docker (l'installation y écrit `http://minos-ollama:11434/api/embed`) et il est ouvert par un lanceur natif. Ce nom n'est joignable que sur le réseau Docker géré ; MINOS ne l'essaie jamais depuis le poste, car il pourrait être résolu par une autre machine du réseau.
+
+Remède : utiliser la recherche sémantique par le backend Docker, ou, pour un usage natif, fixer `minos.semantic.endpoint` (ou `MINOS_SEMANTIC_ENDPOINT`) sur un endpoint de bouclage, par exemple `http://127.0.0.1:11434/api/embed`. Les autres commandes ne sont pas concernées. Détail : `docs/user/docker-runtime.md`, « `minos-ollama` : réservé au runtime Docker ».
+
 ## `impact` retourne des limitations
 
 Normal : l’impact est volontairement conservateur et décrit une estimation du graphe observé, pas une preuve d’exhaustivité runtime.

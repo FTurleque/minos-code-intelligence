@@ -17,7 +17,7 @@ Sprint 7 de l'audit du 10 octobre 2026 : **AUD-SEC-07**. HEAD analysé : `949e15
 - `minos-application/src/test/java/com/minos/application/semantic/OllamaEmbeddingProviderTest.java:28-42` encode le comportement actuel (l'endpoint géré est accepté sans emplacement).
 - ADR 0031 (`docs/architecture/adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md:16`) : « loopback endpoints only » ; `:27` ne liste que les hôtes de bouclage.
 
-**Non vérifié** : aucun build ni test lancé. **Non tracé** : le chemin par lequel un lanceur natif ouvre `MinosApplication` sur un `MINOS_HOME` dont `minos.properties` a été écrit pour Docker, et donc l'effet réel d'un refus au constructeur (tâche 1.1). Non relevé : la façon dont `MinosRuntimeSettings` expose l'environnement et les propriétés à passer à `resolveRuntimeLocation`.
+**Non vérifié au moment de la spécification** : aucun build ni test lancé ; chemin d'ouverture native et exposition de l'environnement par `MinosRuntimeSettings` non tracés. Relevé fait par la tâche 1.1, ci-dessous.
 
 ### Écarts avec l'action proposée par l'audit
 
@@ -25,6 +25,13 @@ Sprint 7 de l'audit du 10 octobre 2026 : **AUD-SEC-07**. HEAD analysé : `949e15
 2. **Refuser au constructeur peut casser l'ouverture.** Vu `MinosApplicationRuntimeConfiguration.java:53` et `configure-runtime-settings.ps1:298-299`, un lanceur natif sur un `MINOS_HOME` configuré pour Docker échouerait dès l'ouverture, y compris pour des commandes qui n'utilisent pas la recherche sémantique (D1).
 3. **L'ADR 0031 ne prévoit pas `minos-ollama`.** Le code accepte déjà une exception que la décision n'énonce pas : l'ADR est à amender, pas seulement le code.
 4. **Tronquer à l'affichage ne suffit pas.** Le corps d'erreur est d'abord lu en mémoire jusqu'à 16 Mio ; la borne doit porter sur la lecture.
+
+## Relevé de la tâche 1.1 (17 octobre 2026, HEAD `396e301f`)
+
+- **Qui ouvre `MinosApplication`** : la CLI (`MinosCliRunner.java:67`, ouverture paresseuse), `LocalProjectOperations.java:47`, `LocalAutonomousIndexOperations.java:66`, le serveur MCP (`MinosMcpServer.java:45`, `MinosMcpTools.java:65`) et `McpBackendRouter` (`minos-app`) pour son seul chemin natif. Avec `McpBackend=docker`, `minos mcp` part vers `DockerMcpTransport` et n'ouvre **aucune** application native ; en revanche les commandes de la CLI (`project list`, `index`, `semantic …`) s'ouvrent en natif sur le même `MINOS_HOME` : c'est le cas qui aurait cassé sous l'option B.
+- **Ce que fait la configuration** : `MinosApplicationRuntimeConfiguration.configureSemanticProvider` construit le fournisseur à chaque ouverture dès que `minos.semantic.provider=ollama` ; au HEAD le constructeur acceptait `minos-ollama` partout, donc l'ouverture réussissait et `embed` tentait la résolution du nom (`UnknownHostException` mesurée par le test rouge de la tâche 2.1). Un refus au constructeur aurait fait échouer `MinosApplication.open` pour toute commande. Ce chemin d'ouverture native sur un `MINOS_HOME` écrit par `configure-runtime-settings.ps1` a été **tracé par lecture et rejoué par un test d'ouverture** (`M23SemanticProviderConfigurationTest`) ; il n'a pas été rejoué sur une installation réelle.
+- **Lanceurs Docker et emplacement** : `docker/Dockerfile.mcp.release` pose `MINOS_RUNTIME_LOCATION=docker` en `ENV` dans les deux cibles (`:44`, `:97`) ; `docker/compose-mcp.connected.yaml` (`:54`, `:113`, `:162`, `:269`) et `docker/compose-mcp.prod.yaml` (`:38`, `:79`, `:127`, `:262`) le posent pour `minos-mcp`, `minos-admin` et `minos-bootstrap`, les services qui lisent la configuration sémantique. **Écart relevé, non corrigé** : `docker/Dockerfile.mcp` (non `release`) ne pose pas l'`ENV` ; aucun compose du dépôt ne l'utilise (les services lisent `MINOS_QUERY_IMAGE` et `MINOS_IMAGE`), mais une image construite par lui et lancée hors compose perdrait la recherche sémantique vers `minos-ollama`. Les `docker run` de `scripts/ci/qualify-docker-release.sh` sont sans réseau et sans Ollama.
+- **Environnement et propriétés** : `MinosRuntimeSettings` garde en privé un instantané de `System.getenv()` et de `System.getProperties()` ; `value()` lit propriété système, puis variable, puis fichier. Les registres lisent `System.getenv()` et `System.getProperties()` directement (`LocalProjectRegistry.java:58,73`, `PostgresProjectRegistry.java:49`) et **jamais** le fichier. Le fournisseur suit la même règle : `MinosRuntimeSettings.runtimeLocation()` appelle `resolveRuntimeLocation` sur l'instantané, sans le fichier, parce que `minos.properties` est partagé par tous les lanceurs d'un `MINOS_HOME` et qu'un emplacement qui s'y lirait permettrait à une installation Docker de déclarer « docker » à un lanceur natif.
 
 ## Goals / Non-Goals
 
@@ -34,11 +41,11 @@ Sprint 7 de l'audit du 10 octobre 2026 : **AUD-SEC-07**. HEAD analysé : `949e15
 
 ## Decisions
 
-### D1. Moment du refus hors Docker — **décision en attente du propriétaire**
+### D1. Moment du refus hors Docker — **décision du propriétaire : option A, refus à l'usage (17 octobre 2026)**
 
-**Option A (recommandée) : refuser à l'usage.** Le fournisseur est construit avec l'emplacement résolu ; s'il vise `minos-ollama` hors Docker, chaque `embed` échoue immédiatement, avant toute résolution de nom, par une erreur de configuration qui nomme le paramètre d'endpoint et l'emplacement attendu. L'ouverture de l'application réussit ; les commandes sans recherche sémantique fonctionnent. Fail-closed sur ce qui compte : aucun octet ne sort.
+**Option A (retenue) : refuser à l'usage.** Le fournisseur est construit avec l'emplacement résolu ; s'il vise `minos-ollama` hors Docker, chaque `embed` échoue immédiatement, avant toute résolution de nom, par une erreur de configuration qui nomme le paramètre d'endpoint et l'emplacement attendu. L'ouverture de l'application réussit ; les commandes sans recherche sémantique fonctionnent. Fail-closed sur ce qui compte : aucun octet ne sort.
 
-**Option B : refuser à l'ouverture** (constructeur). Plus simple et plus visible, mais rend inutilisable par un lanceur natif tout `MINOS_HOME` configuré pour Docker — à ne retenir que si la tâche 1.1 montre que ce cas n'existe pas.
+**Option B : refuser à l'ouverture** (constructeur). Plus simple et plus visible, mais rend inutilisable par un lanceur natif tout `MINOS_HOME` configuré pour Docker. Écartée : la tâche 1.1 montre que ce cas existe (relevé ci-dessous).
 
 **Option C : désactiver en silence** le fournisseur hors Docker. Écartée : une capacité configurée qui disparaît sans le dire contredit le principe capability-honest.
 
