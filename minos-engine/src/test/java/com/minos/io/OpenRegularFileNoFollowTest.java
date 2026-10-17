@@ -1,6 +1,5 @@
 package com.minos.io;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -23,11 +22,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * by racing a timer.
  */
 class OpenRegularFileNoFollowTest {
-
-    @AfterEach
-    void clearSeam() {
-        ConfinedFileOpener.beforeOpenForTests = () -> { };
-    }
 
     @Test
     void readsARegularFile(@TempDir Path root) throws Exception {
@@ -70,7 +64,7 @@ class OpenRegularFileNoFollowTest {
         assumeTrue(canLink(probe, secret), "this platform/account cannot create symbolic links");
         Files.delete(probe);
 
-        ConfinedFileOpener.beforeOpenForTests = () -> {
+        Runnable beforeOpen = () -> {
             try {
                 Files.delete(file);
                 Files.createSymbolicLink(file, secret);
@@ -79,12 +73,12 @@ class OpenRegularFileNoFollowTest {
             }
         };
 
-        IOException failure = assertThrows(IOException.class, () -> assertNothingExposed(file));
+        IOException failure = assertThrows(IOException.class, () -> assertNothingExposed(file, beforeOpen));
         assertFalse(String.valueOf(failure.getMessage()).contains(root.toString()));
     }
 
-    private static void assertNothingExposed(Path file) throws IOException {
-        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
+    private static void assertNothingExposed(Path file, Runnable beforeOpen) throws IOException {
+        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file, beforeOpen)) {
             String read = new String(input.readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(read.isEmpty(), "the swapped-in link was followed and exposed: " + read.length());
         }
