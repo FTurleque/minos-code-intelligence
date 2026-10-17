@@ -9,6 +9,8 @@ import com.minos.orchestration.IndexerCapability;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerQualification;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
+import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedArtifactManifest;
 import com.minos.remote.DistributedIndexing.Worker;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
@@ -19,8 +21,6 @@ import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;
 import com.minos.runtime.local.distributed.DistributedArtifactBundleStore;
-import com.minos.runtime.local.process.IndexerProcessPlan;
-import com.minos.runtime.local.process.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 import org.junit.jupiter.api.Test;
@@ -36,10 +36,8 @@ import java.io.OutputStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -207,37 +205,28 @@ class LocalRemoteIndexOperationsIntegrationTest {
                 Optional.of(temp.resolve("fixture-provider")), List.of(), true);
         Path fixtureArtifact = temp.resolve("fixture-provider-output.scip");
         writeIndex(fixtureArtifact);
-        Path windowsCopyScript = temp.resolve("fixture-provider-copy.ps1");
-        Files.writeString(windowsCopyScript, """
-                param([string] $Source, [string] $Target)
-                $ErrorActionPreference = 'Stop'
-                [System.IO.File]::Copy($Source, $Target, $true)
-                """, java.nio.charset.StandardCharsets.US_ASCII);
-        IndexerExecutor executor = new ProcessIndexerExecutor(
-                descriptor.id(), temp.resolve("provider-runtime-home"),
-                (request, runDirectory) -> {
-                    Path artifact = runDirectory.resolve("fixture-" + request.runId() + ".scip");
-                    return new IndexerProcessPlan(
-                            copyCommand(fixtureArtifact, artifact, windowsCopyScript),
-                            request.projectRoot(), Map.of(), artifact, Duration.ofSeconds(20));
-                });
+        // The transport and staging are under test here, not the provider process: the executor hands out the
+        // fixture index from a run directory without starting anything (a bare process executor refuses to run).
+        Path runsRoot = temp.resolve("provider-runtime-home").resolve("runs");
+        IndexerExecutor executor = new IndexerExecutor() {
+            @Override public String indexerId() { return descriptor.id(); }
+
+            @Override
+            public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                Path runDirectory = Files.createDirectories(
+                        runsRoot.resolve(request.runId().toString()).resolve(descriptor.id()));
+                Path artifact = runDirectory.resolve("fixture-" + request.runId() + ".scip");
+                Files.copy(fixtureArtifact, artifact);
+                return new IndexingArtifact(
+                        request.selection().language(), descriptor.id(), artifact, request.projectRelativeRoot());
+            }
+        };
         return new ProviderRuntimeManager() {
             @Override public List<ProviderRuntimeStatus> list() { return List.of(ready); }
             @Override public ProviderRuntimeStatus inspect(String providerId) { return ready; }
             @Override public ProviderRuntimeStatus install(String providerId) { return ready; }
             @Override public IndexerExecutor executor(String providerId) { return executor; }
         };
-    }
-
-    private static List<String> copyCommand(Path source, Path target, Path windowsScript) {
-        if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")) {
-            String systemRoot = System.getenv("SystemRoot");
-            Path powershell = Path.of(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-                    .toAbsolutePath().normalize();
-            return List.of(powershell.toString(), "-NoLogo", "-NoProfile", "-NonInteractive",
-                    "-ExecutionPolicy", "Bypass", "-File", windowsScript.toString(), source.toString(), target.toString());
-        }
-        return List.of("/bin/cp", source.toString(), target.toString());
     }
 
     private static void writeIndex(Path file) throws Exception {

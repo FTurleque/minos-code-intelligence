@@ -65,9 +65,15 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         return indexerId;
     }
 
+    /**
+     * Refuses: a provider process started here would have no ownership or sandbox boundary behind it.
+     * Every execution goes through {@link #executeSandboxed}, with the transformer a boundary supplies.
+     *
+     * @throws IllegalStateException always, before any run directory exists
+     */
     @Override
     public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
-        return executeSandboxed(request, (plan, runDirectory) -> plan);
+        throw new IllegalStateException("provider process requires an ownership or sandbox boundary");
     }
 
     @Override

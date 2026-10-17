@@ -57,7 +57,7 @@ class ProcessIndexerExecutorPartialCleanupTest {
         IndexingExecutionRequest request = new IndexingExecutionRequest(runId, UUID.randomUUID(), project,
                 new IndexerSelection(Language.JAVA, descriptor), IndexingMode.FULL, List.of());
 
-        IndexingArtifact artifact = executor.execute(request);
+        IndexingArtifact artifact = UnboundedProcessForTests.run(executor, request);
 
         assertEquals("fresh-scip", Files.readString(artifact.finalArtifact()));
         assertFalse(Files.exists(partial));

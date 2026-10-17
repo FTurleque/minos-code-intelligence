@@ -1,5 +1,6 @@
 package com.minos.runtime.local.sandbox;
 
+import com.minos.runtime.local.OwnershipOnlyExecutorsForTests;
 import com.minos.runtime.local.StrongProcessOwnershipIndexerExecutor;
 import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.local.process.IndexerProcessPlan;
@@ -75,7 +76,7 @@ class LinuxStrongProcessOwnershipContainmentTest {
                             generated,
                             Duration.ofSeconds(30));
                 });
-        StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(delegate, home);
+        StrongProcessOwnershipIndexerExecutor executor = OwnershipOnlyExecutorsForTests.ownershipOnly(delegate, home);
         SandboxTestSupport.requireStrongCapability(executor.capability().strong(), executor.capability().diagnostics());
         IndexingExecutionRequest request = request(project);
         Path jobDirectory = LinuxCgroupJob.delegatedRoot().orElseThrow()
