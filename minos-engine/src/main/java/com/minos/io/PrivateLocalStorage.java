@@ -787,14 +787,15 @@ public final class PrivateLocalStorage {
 
         /**
          * The file {@code icacls /save} writes: in the temporary directory of the current Windows account ({@code
-         * TEMP}, then {@code TMP}), which is per account, not in a directory shared by all. Beside or inside the
-         * object itself does not work: its parent may deny the write (the case this class exists for) and
+         * TEMP}, then {@code TMP}), else in the profile of the account ({@code user.home}); never in a directory
+         * shared by all. A process started with a sanitized environment has neither variable. Beside or inside
+         * the object itself does not work: its parent may deny the write (the case this class exists for) and
          * {@code icacls} refuses a save file inside the tree it saves (measured: exit 87). Nothing is kept: the
          * caller deletes it.
          */
         private static Path createSddlFile() throws IOException {
-            for (String variable : new String[]{"TEMP", "TMP"}) {
-                String value = System.getenv(variable);
+            String[] candidates = {System.getenv("TEMP"), System.getenv("TMP"), System.getProperty("user.home")};
+            for (String value : candidates) {
                 if (value == null || value.isBlank()) continue;
                 Path directory = Path.of(value);
                 if (directory.isAbsolute() && Files.isDirectory(directory)) {
