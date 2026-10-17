@@ -22,10 +22,12 @@ import java.util.regex.Pattern;
  */
 final class WindowsAclGrants {
 
-    static final Duration TIMEOUT = Duration.ofSeconds(10);
+    static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
 
-    private static final Pattern SID = Pattern.compile("S-1-\\d+(?:-\\d+)+");
-    private static final Pattern RIGHTS = Pattern.compile("(?:\\((?:OI|CI|IO|NP|I)\\))*(?:\\([A-Z,]+\\)|[A-Z]+)");
+    // Bounded character classes, no nested repetition: a SID is digits and dashes after "S-1-", and rights are
+    // letters, commas and parentheses ("(OI)(CI)F", "(RX)"). Neither can carry a space, a slash or a quote.
+    private static final Pattern SID = Pattern.compile("S-1-\\d[\\d-]{0,79}");
+    private static final Pattern RIGHTS = Pattern.compile("[A-Z(),]{1,32}");
 
     /** Starts a process; a seam so the refusals can be tested on any system. */
     @FunctionalInterface
@@ -39,7 +41,7 @@ final class WindowsAclGrants {
                     .redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .start(),
-            TIMEOUT);
+            DEFAULT_TIMEOUT);
 
     private final Supplier<String> systemRoot;
     private final Launcher launcher;
@@ -78,7 +80,7 @@ final class WindowsAclGrants {
         Process process;
         try {
             process = launcher.start(command);
-        } catch (IOException cannotStart) {
+        } catch (IOException _) {
             return false;
         }
         try {
@@ -86,7 +88,7 @@ final class WindowsAclGrants {
                 process.destroyForcibly();
                 return false;
             }
-        } catch (InterruptedException interrupted) {
+        } catch (InterruptedException _) {
             process.destroyForcibly();
             Thread.currentThread().interrupt();
             return false;

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -209,7 +210,7 @@ class WindowsAclGrantsTest {
         @Override public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException { return true; }
         @Override public int exitValue() { return exit; }
         @Override public boolean isAlive() { return false; }
-        @Override public void destroy() { }
+        @Override public void destroy() { /* the fake process is already finished */ }
     }
 
     private static final class NeverEndingProcess extends FinishedProcess {
@@ -220,7 +221,7 @@ class WindowsAclGrantsTest {
         }
 
         @Override public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException {
-            unit.sleep(Math.min(timeout, 50));
+            LockSupport.parkNanos(unit.toNanos(Math.min(timeout, 50)));
             return killed.get();
         }
         @Override public boolean isAlive() { return !killed.get(); }

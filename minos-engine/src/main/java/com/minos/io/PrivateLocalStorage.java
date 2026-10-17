@@ -749,7 +749,7 @@ public final class PrivateLocalStorage {
             if (systemRoot == null || systemRoot.isBlank()) {
                 throw new IOException("cannot read the access rules of private storage: Windows directory unknown");
             }
-            Path saved = Files.createTempFile("minos-dacl-", ".sddl");
+            Path saved = createSddlFile();
             try {
                 Process process = new ProcessBuilder(
                         Path.of(systemRoot, "System32", "icacls.exe").toString(), path, "/save", saved.toString(),
@@ -762,7 +762,7 @@ public final class PrivateLocalStorage {
                         process.destroyForcibly();
                         throw new IOException("cannot read the access rules of private storage: timed out");
                     }
-                } catch (InterruptedException interrupted) {
+                } catch (InterruptedException _) {
                     process.destroyForcibly();
                     Thread.currentThread().interrupt();
                     throw new IOException("cannot read the access rules of private storage: interrupted");
@@ -772,7 +772,8 @@ public final class PrivateLocalStorage {
                             + process.exitValue() + ")");
                 }
                 String text = new String(Files.readAllBytes(saved), java.nio.charset.StandardCharsets.UTF_16LE);
-                if (text.lines().map(line -> line.replace("﻿", "")).noneMatch(line -> line.startsWith("D:"))) {
+                String byteOrderMark = String.valueOf((char) 0xFEFF);
+                if (text.lines().map(line -> line.replace(byteOrderMark, "")).noneMatch(line -> line.startsWith("D:"))) {
                     throw new IOException("cannot read the access rules of private storage: no DACL in the answer");
                 }
                 if (text.contains("(XD;")) {
@@ -782,6 +783,25 @@ public final class PrivateLocalStorage {
             } finally {
                 Files.deleteIfExists(saved);
             }
+        }
+
+        /**
+         * The file {@code icacls /save} writes: in the temporary directory of the current Windows account ({@code
+         * TEMP}, then {@code TMP}), which is per account, not in a directory shared by all. Beside or inside the
+         * object itself does not work: its parent may deny the write (the case this class exists for) and
+         * {@code icacls} refuses a save file inside the tree it saves (measured: exit 87). Nothing is kept: the
+         * caller deletes it.
+         */
+        private static Path createSddlFile() throws IOException {
+            for (String variable : new String[]{"TEMP", "TMP"}) {
+                String value = System.getenv(variable);
+                if (value == null || value.isBlank()) continue;
+                Path directory = Path.of(value);
+                if (directory.isAbsolute() && Files.isDirectory(directory)) {
+                    return Files.createTempFile(directory, "minos-dacl-", ".sddl");
+                }
+            }
+            throw new IOException("cannot read the access rules of private storage: no place to save them");
         }
     }
 
