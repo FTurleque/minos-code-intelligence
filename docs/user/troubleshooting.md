@@ -188,6 +188,12 @@ Un `.gitignore` ou un `.minosignore` enregistré avec un BOM UTF-8 (Windows Powe
 
 Windows PowerShell 5.1 (`Out-File -Encoding utf8`) et d'anciens éditeurs enregistrent un fichier UTF-8 avec un BOM (octets `EF BB BF`) en tête. MINOS le retire, **une seule fois**, à la lecture de `config/minos.properties`, des autres fichiers de propriétés que MINOS lit (registre, état d'index…) et des fichiers de secret lus par `MinosRuntimeSettings` (par exemple le fichier de mot de passe PostgreSQL désigné par `minos.postgres.passwordFile`) : la première propriété est lue sous son vrai nom et le secret ne contient pas le BOM. Un fichier qui commence par **deux** BOM est refusé avec le message `starts with a repeated UTF-8 byte order mark` : réenregistrez-le en UTF-8 sans BOM. Un BOM ailleurs qu'en tête reste une donnée. Un fichier UTF-16 (autre encodage proposé par ces outils) n'est pas du UTF-8 valide et reste refusé.
 
+## `MINOS runtime configuration must be a regular non-symlink file: minos.properties`
+
+`config/minos.properties` existe dans `MINOS_HOME`, mais ce n'est pas un fichier régulier : c'est un répertoire, un lien symbolique ou un lien cassé. MINOS refuse de démarrer plutôt que d'ignorer la configuration et d'appliquer les valeurs par défaut (stockage compris). Le message ne contient pas le chemin absolu.
+
+Remplacez l'entrée par un vrai fichier de propriétés, ou supprimez-la : l'absence de `config/minos.properties` reste valide et donne une configuration vide.
+
 ## Windows : le bac à sable est indisponible, `minos-launchers` refusé
 
 Les scripts des lanceurs du bac à sable vivent sous `%LOCALAPPDATA%\minos-launchers\<sha256>\` et sont contrôlés avant chaque
