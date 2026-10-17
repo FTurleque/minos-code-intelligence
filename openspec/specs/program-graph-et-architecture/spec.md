@@ -178,3 +178,70 @@ Quand le snapshot actif n'a pas d'empreinte exacte et que des sources Java sont 
 - **GIVEN** un snapshot sans empreinte exacte qui ne référence aucun fichier Java
 - **WHEN** le graphe de programme est demandé
 - **THEN** la réponse ne contient pas cet identifiant
+
+### Requirement: Les libellés Mermaid du graphe d'architecture échappent les chevrons
+Le rendu Mermaid du graphe d'architecture SHALL échapper `<` et `>` dans tout texte issu du dépôt analysé (nom de module, chemin relatif). Le seul balisage HTML d'un libellé SHALL être le saut de ligne `<br/>` que MINOS insère après l'échappement. Un texte sans chevron SHALL être rendu comme avant.
+
+#### Scenario: Nom de module hostile
+- **GIVEN** une vue d'architecture dont un module se nomme `<img src=x onerror=alert(1)>`
+- **WHEN** le graphe est rendu au format Mermaid
+- **THEN** la sortie ne contient pas `<img` et le libellé porte le nom échappé
+
+#### Scenario: Module nominal avec chemin
+- **GIVEN** un module `core` de chemin relatif `packages/core`
+- **WHEN** le graphe est rendu au format Mermaid
+- **THEN** son libellé est `core<br/>packages/core`, identique au golden existant
+
+#### Scenario: Esperluette et chevron ensemble
+- **GIVEN** un module nommé `a&b<c`
+- **WHEN** le graphe est rendu au format Mermaid
+- **THEN** l'esperluette est échappée une seule fois et le chevron est échappé
+
+### Requirement: Une ligne de commentaire Mermaid ne porte pas de directive issue de la vue
+Dans une ligne de commentaire du rendu Mermaid, un texte issu de la vue (nom du projet, identifiant de snapshot, limitation) SHALL NOT produire la séquence `%%{`. La sortie SHALL rester un commentaire d'une seule ligne.
+
+#### Scenario: Nom de projet contenant une directive
+- **GIVEN** une vue dont le nom de projet est `demo %%{init: {"theme":"dark"}}%%`
+- **WHEN** le graphe est rendu au format Mermaid
+- **THEN** aucune ligne de la sortie ne contient `%%{`
+
+#### Scenario: Nom de projet nominal
+- **GIVEN** une vue dont le nom de projet ne contient ni `%` ni accolade
+- **WHEN** le graphe est rendu au format Mermaid
+- **THEN** la ligne de commentaire du projet est identique à celle produite au HEAD
+
+### Requirement: Les règles de sécurité fournies par le dépôt analysé sont déclarées
+Quand les règles source, puits et assainisseur de l'analyse Java sont lues dans le dépôt analysé, le graphe de programme et les réponses de `minos_program_graph`, `minos_impact_v2` et `minos_security_paths` SHALL porter la limitation `SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY`. Elle SHALL être additive et SHALL NOT apparaître quand le dépôt ne fournit aucun fichier de règles.
+
+#### Scenario: Dépôt qui fournit ses règles
+- **GIVEN** un projet Java dont la racine contient `.minos/java-advanced-provider.properties`
+- **WHEN** `minos_security_paths` est appelé
+- **THEN** la réponse contient la limitation `SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY`
+
+#### Scenario: Dépôt hostile qui omet ses sources
+- **GIVEN** un projet Java dont le fichier de règles ne déclare aucune source
+- **WHEN** `minos_security_paths` est appelé
+- **THEN** la réponse ne rapporte aucun chemin et contient cette limitation
+
+#### Scenario: Dépôt sans fichier de règles
+- **GIVEN** un projet Java sans fichier de règles
+- **WHEN** le graphe de programme est demandé
+- **THEN** la limitation est absente et `JAVA_SECURITY_RULES_NOT_CONFIGURED` est présente
+
+#### Scenario: Même limitation sur les trois outils
+- **GIVEN** un projet Java qui fournit ses règles
+- **WHEN** les trois outils sont appelés par le MCP et par la CLI
+- **THEN** chacun rend la limitation avec le même identifiant, sans autre changement de champ
+
+### Requirement: Un chemin assaini reste rapporté et marqué
+Un chemin source-puits qui traverse un assainisseur déclaré SHALL être rapporté par l'analyse de sécurité, avec la liste des assainisseurs traversés et l'indicateur d'assainissement à vrai. Un assainisseur déclaré SHALL NOT retirer un chemin de la réponse.
+
+#### Scenario: Chemin traversant un assainisseur
+- **GIVEN** un projet Java dont les règles déclarent une source, un puits et un assainisseur placé entre les deux
+- **WHEN** `minos_security_paths` est appelé
+- **THEN** le chemin figure dans la réponse avec l'indicateur d'assainissement à vrai
+
+#### Scenario: Assainisseur déclaré mais non traversé
+- **GIVEN** un projet Java dont les règles déclarent un assainisseur qui n'est sur aucun chemin entre la source et le puits
+- **WHEN** `minos_security_paths` est appelé
+- **THEN** le chemin figure dans la réponse avec l'indicateur d'assainissement à faux

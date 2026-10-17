@@ -82,6 +82,18 @@ Les six changements du sprint 6 (« couverture réelle et plugin IntelliJ ») so
 
 Reste hors de ce sprint : aligner la construction de ligne de commande du moteur sur le mode strict du plugin (`raw-cmd-mode`). Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 
+## Audit 2026-10-10 — sprint 7 (2026-10-17)
+
+Cinq des six changements du sprint 7 (« sorties publiques : messages, MCP, rendus ») sont **fusionnés dans `develop` et archivés** (PR #485, #487, #488) ; le sixième, `reserver-minos-ollama-au-runtime-docker` (PR #486), est fusionné et reste actif jusqu'à sa preuve manuelle :
+
+- **Chemins absolus dans les erreurs** : `PublicErrorMessages` retire les séquences ANSI complètes avant d'analyser, de sorte qu'un chemin absolu masqué par une séquence est détecté ; les refus de cible des primitives d'E/S privées nomment l'entrée, jamais le chemin. Limite : un chemin POSIX accolé à un identifiant, sans séquence de contrôle, reste non détecté. Une vingtaine de messages de même famille restent à nommer (liste dans le suivi).
+- **MCP** : les arguments hors schéma sont refusés par `MinosMcpTools`, nom borné, jamais la valeur ; `minos_project_structure` ne rend plus que le nom du répertoire racine dans `rootPath` (la CLI lue par le plugin garde le chemin absolu) ; `authorEmail` vaut `[masked]` par défaut, l'adresse réelle n'étant rendue que sur `--include-author-emails` (CLI `git-activity`) ou par le composant `includeAuthorEmails` de la requête Java — **changement de la sortie par défaut** de ces deux surfaces.
+- **Graphe de programme** : les règles de sécurité Java viennent du dépôt analysé, qui n'est pas de confiance ; la réponse le dit par la limitation `SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY`. Les règles d'opérateur hors du dépôt ne sont pas faites.
+- **Rendu Mermaid** : les chevrons des libellés sont échappés (`&lt;`, `&gt;`) et la séquence `%%{` est neutralisée dans les lignes de commentaire ; forme vérifiée sur Mermaid 11.4.1.
+- **`minos-ollama`** : le nom réservé n'est joignable que dans le runtime Docker ; hors Docker, chaque `embed` échoue avant toute résolution de nom (limite `OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER`), et l'ouverture réussit. Le corps d'erreur HTTP est borné.
+
+Reste : la preuve sur une installation Docker réelle du refus et de l'absence de requête DNS depuis un poste natif (tâche manuelle 4.2). Les tests Gradle du plugin n'ont pas été rejoués sur le poste, seulement en CI. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
+
 ## État produit
 
 - **C0 → M30** : terminés et intégrés.
@@ -92,7 +104,7 @@ Reste hors de ce sprint : aligner la construction de ligne de commande du moteur
 - **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement **intégrés**.
 - **#224–#248** : campagne de confinement provider/filesystem, provenance, egress, installateur et Windows non-admin intégrée.
 - **#258/#260** : audit du 28 août 2026 — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.
-- **Audit du 10 octobre 2026, sprints 1 et 2** : 9 puis 7 constats corrigés et intégrés dans `develop` (voir les sections dédiées ci-dessus).
+- **Audit du 10 octobre 2026, sprints 1 à 7** : constats corrigés et intégrés dans `develop` (voir les sections dédiées ci-dessus).
 - Ligne de développement : **1.3.0-SNAPSHOT**.
 
 ## Release 1.0.1
