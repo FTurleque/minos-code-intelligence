@@ -119,6 +119,15 @@ aujourd'hui échouer **même les commandes de lecture** (`project list`, `doctor
 `icacls "<MINOS_HOME>" /remove:d <compte> /T` (un refus hérité d'un parent est devenu explicite sur les objets que MINOS a durcis,
 d'où `/T`).
 
+## Windows : « a conditional deny entry on private storage prevents MINOS from making it private »
+
+Une règle d'accès **conditionnelle** de refus (type `XD` dans le SDDL, posée par stratégie de groupe ou par un administrateur) figure sur
+`MINOS_HOME` ou sur un de ses sous-répertoires. MINOS ne sait ni la lire ni la réécrire : plutôt que de la supprimer sans le dire, il
+**refuse**, sans rien modifier, et le message ne contient pas de chemin. Deux issues : demandez à l'administrateur de retirer la
+restriction (`icacls "<MINOS_HOME>" /save acl.txt` puis lisez la ligne `D:` pour la repérer), ou choisissez un `MINOS_HOME` qui n'en
+hérite pas. Le message « cannot read the access rules of private storage » signifie que MINOS n'a pas pu lire la DACL (`icacls` absent,
+délai dépassé, accès refusé) : il échoue de la même façon, par prudence.
+
 ## Windows : « MINOS AppContainer recovery journal … has no provable owner »
 
 Le lanceur AppContainer note, dans `MINOS_HOME\sandbox\appcontainer-recovery-v2\`, le profil et les droits temporaires de chaque

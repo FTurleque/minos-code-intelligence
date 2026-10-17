@@ -41,13 +41,20 @@ Sprint 8 de l'audit du 10 octobre 2026 : **AUD-SEC-06**. HEAD analysé : `949e15
 
 Un refus conditionnel (XD) n'est jamais retiré. XA hérité : toujours retiré, le test `:229` reste vert sans modification.
 
-### D2. Lecture de la DACL complète — **décision en attente du propriétaire**
+### Mesures et constats de mise en œuvre (2026-10-17, Windows 10)
+
+- `icacls /save` coûte **11 ms** en moyenne (8 à 31 ms, 20 essais) sur un répertoire temporaire. Le nombre d'objets durcis au premier contact pendant une indexation de ce dépôt **n'a pas été mesuré**.
+- Le fichier temporaire de la lecture est créé par `Files.createTempFile` dans `PrivateLocalStorage`, dont les appels bruts sont des entrées de liste (décision D2 d'`etendre-le-garde-d-e-s-privees-aux-ecritures-brutes`) : le maximum de l'entrée passe de 3 à 4. Le gate étendu a refusé l'appel avant l'inscription, ce qui est son rôle.
+- `icacls /grant` d'une identité sur un répertoire porteur d'un `XD` **conserve le `XD`** ; `/remove:g` restitue la DACL telle qu'elle était (mesuré par `WindowsAclGrantsTest`).
+- Le test qui échoue au HEAD échoue parce que rien n'est refusé ; la survie ou la disparition de l'`XD` au HEAD n'a pas été observée directement.
+
+### D2. Lecture de la DACL complète — **tranchée par le propriétaire le 2026-10-17 : option A**
 
 Option A (recommandée) : `icacls <objet> /save <fichier>` lancé depuis la classe imbriquée `WindowsDacl`, qui lance déjà `icacls` ; recherche d'une entrée de type `XD` dans le texte SDDL, sans l'analyser davantage. Coût : un processus de plus par objet et par JVM, au premier contact seulement (même mémoire que la protection d'héritage) ; un fichier temporaire à créer par une primitive (sous le gate étendu). Aucune classe lanceuse nouvelle : la liste A12 ne change pas. Texte illisible, code de sortie non nul ou délai dépassé : échec.
 
 Option B : appel natif (`GetNamedSecurityInfoW` puis conversion SDDL) par l'API FFM. Aucun processus, aucun fichier, et la protection d'héritage pourrait suivre (ce qui servirait AUD-ARC-05). Mais : première utilisation de FFM dans le dépôt, `--enable-native-access` à ajouter à tous les lanceurs (CLI, MCP, image Docker, installateur Windows), et un ADR. À évaluer avec les décisions du sprint 10.
 
-### D3. En présence d'un refus conditionnel — **décision en attente du propriétaire**
+### D3. En présence d'un refus conditionnel — **tranchée par le propriétaire le 2026-10-17 : option A (refuser)**
 
 Option A (recommandée) : **refuser**. Le durcissement échoue avant `setAcl`, par une erreur d'usage sans chemin absolu, qui dit qu'une restriction conditionnelle posée sur l'emplacement de données empêche MINOS de le rendre privé et qu'un administrateur doit la retirer ou déplacer `MINOS_HOME`. Fail-closed, simple, sans écriture de DACL hors de Java.
 
