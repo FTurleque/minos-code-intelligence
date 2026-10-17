@@ -5,8 +5,8 @@ argument-hint: "<titre de la décision | NNNN pour compléter un ADR existant>"
 
 Rédige ou complète un ADR pour : `$ARGUMENTS`. Un ADR documente un choix **structurant et durable** (frontière de modules, modèle de confiance, format persistant, protocole public, politique de sécurité, toolchain), pas un correctif local. Pendant la **spécification** OpenSpec, un ADR est seulement nommé et planifié en tâche : il s'écrit à l'implémentation.
 
-1. Lire `docs/adr/README.md` : dernier numéro (l'index fait foi), statuts (`Proposed | Accepted | Superseded | Rejected`), ADR voisins à citer ; réunir les faits à l'appui (code relu `fichier:ligne`, mesures, gates).
-2. **Nouvel ADR** → `docs/adr/NNNN-titre-en-kebab-case.md`, en français, statut `Proposed` :
+1. Lire `docs/architecture/adr/README.md` : dernier numéro (l'index fait foi), statuts (`Proposed | Accepted | Superseded | Rejected`), ADR voisins à citer ; réunir les faits à l'appui (code relu `fichier:ligne`, mesures, gates).
+2. **Nouvel ADR** → `docs/architecture/adr/NNNN-titre-en-kebab-case.md`, en français, statut `Proposed` :
    ```markdown
    # NNNN — Titre qui énonce la décision
 

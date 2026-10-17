@@ -27,5 +27,5 @@ Ordre : lot 1 (détecteur, AUD-SEC-05) puis lot 2 (messages, AUD-SEC-04). Dans c
 ## 5. Clôture
 
 - [ ] 5.1 `docs/user/troubleshooting.md` : erreur « configuration présente mais non régulière ». Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 5.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-SEC-05 et AUD-SEC-04 : statuts, écarts, limite D2, site `InterProcessLocalProjectRegistry` cité à tort, sites supplémentaires de 3.1).
-- [ ] 5.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/user/troubleshooting.md`.
+- [ ] 5.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-SEC-05 et AUD-SEC-04 : statuts, écarts, limite D2, site `InterProcessLocalProjectRegistry` cité à tort, sites supplémentaires de 3.1).
+- [ ] 5.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/user/troubleshooting.md`.

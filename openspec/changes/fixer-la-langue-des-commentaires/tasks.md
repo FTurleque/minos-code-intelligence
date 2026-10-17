@@ -21,5 +21,5 @@ Ordre dans chaque section : rouge, correction, preuve. Commentaires seulement : 
 ## 4. Clôture
 
 - [ ] 4.1 `docs/developer/quality-gates.md` : le gate, son critère (D2) et sa liste. Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-QUA-11 : décomptes au HEAD, décision D1, entrées restantes, résultat de 1.2) ; noter Q18 comme traité ou partiellement traité.
+- [ ] 4.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-QUA-11 : décomptes au HEAD, décision D1, entrées restantes, résultat de 1.2) ; noter Q18 comme traité ou partiellement traité.
 - [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `CONTRIBUTING.md`, `AGENTS.md`, `docs/developer/quality-gates.md`.

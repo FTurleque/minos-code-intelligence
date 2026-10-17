@@ -140,8 +140,8 @@ function Invoke-McpBenchmark {
 
 function Assert-Structure {
     $required = @(
-        'docs\roadmap\M16_EXECUTION.md',
-        'docs\adr\0025-measurement-gated-storage-backend-evolution.md',
+        'docs\project\roadmap\M16_EXECUTION.md',
+        'docs\architecture\adr\0025-measurement-gated-storage-backend-evolution.md',
         'scripts\m16\datasets.json',
         'scripts\m16\M16ScaleBenchmark.java',
         'scripts\m16\com\minos\mcp\M16McpSustainedBenchmark.java',

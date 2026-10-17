@@ -51,7 +51,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Sources** : `minos-domain/src/main/java/com/minos/domain/`, `com/minos/program/`, `com/minos/semantic/`.
 
 ### minos-engine
-- **Responsabilité** : définit les ports (interfaces) du moteur et les services provider-indépendants : requêtes, découverte de projet, planification incrémentale et orchestration de l'indexation (cycle de vie, exécution des runs, reprise) — [ADR 0044](../../adr/0044-un-package-un-module.md).
+- **Responsabilité** : définit les ports (interfaces) du moteur et les services provider-indépendants : requêtes, découverte de projet, planification incrémentale et orchestration de l'indexation (cycle de vie, exécution des runs, reprise) — [ADR 0044](../adr/0044-un-package-un-module.md).
 - **Types clés** : `CodeKnowledgeStore` (port), `InMemoryCodeKnowledgeStore` (`com.minos.store`), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`, `ProjectDiscoveryService`, `IncrementalIndexingCoordinator`, `IndexingLifecycleService`, `IndexingRunExecutor`.
 - **Interfaces** : `CodeKnowledgeStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…).
 - **Dépendances** : `minos-domain`.
@@ -116,13 +116,13 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Sources** : `minos-mcp/src/main/java/com/minos/mcp/`.
 
 ### minos-bootstrap
-- **Responsabilité** : racine de composition ([ADR 0042](../../adr/0042-racine-de-composition.md)) : seul module non adaptateur qui connaît des classes concrètes d'adaptateur ; découvert par `ServiceLoader` derrière `MinosApplication.open(home)` / `Builder.build()`.
+- **Responsabilité** : racine de composition ([ADR 0042](../adr/0042-racine-de-composition.md)) : seul module non adaptateur qui connaît des classes concrètes d'adaptateur ; découvert par `ServiceLoader` derrière `MinosApplication.open(home)` / `Builder.build()`.
 - **Types clés** : `DefaultMinosApplicationComposer`, `StorageBackendSelection`, `LocalRemoteIndexingRuntime`, `LocalWorkerSandboxProbe`.
 - **Dépendances** : `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
 - **Sources** : `minos-bootstrap/src/main/java/com/minos/bootstrap/`.
 
 ### minos-app
-- **Responsabilité** : assemblage final (shaded JAR), point d'entrée NEXUS (`NexusExportBridgeMain`), route `minos mcp` (`McpLaunchRouteProvider` → router backend natif/Docker, `com.minos.app`) fournie à `MinosLauncher` par `META-INF/services` ([ADR 0044](../../adr/0044-un-package-un-module.md)).
+- **Responsabilité** : assemblage final (shaded JAR), point d'entrée NEXUS (`NexusExportBridgeMain`), route `minos mcp` (`McpLaunchRouteProvider` → router backend natif/Docker, `com.minos.app`) fournie à `MinosLauncher` par `META-INF/services` ([ADR 0044](../adr/0044-un-package-un-module.md)).
 - **Dépendances** : tous les modules.
 - **Sources** : `minos-app/src/main/java/`.
 

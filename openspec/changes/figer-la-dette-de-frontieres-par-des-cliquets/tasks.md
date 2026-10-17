@@ -34,5 +34,5 @@ Ordre dans chaque section : rouge (cas d'auto-test sur arbres temporaires et cop
 ## 7. Clôture
 
 - [ ] 7.1 Notes de mise en œuvre des ADR 0058 (§ 3 gardé par A11) et 0022 (A12) ; `docs/developer/quality-gates.md` : les quatre règles et la façon de réduire une liste. Rejouer `python .claude/scripts/run_gates.py`.
-- [ ] 7.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-ARC-01, -05, -08, -11, -12 : dette **figée**, décomptes, chantiers restants et leurs prérequis).
-- [ ] 7.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/developer/quality-gates.md`.
+- [ ] 7.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-ARC-01, -05, -08, -11, -12 : dette **figée**, décomptes, chantiers restants et leurs prérequis).
+- [ ] 7.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/developer/quality-gates.md`.

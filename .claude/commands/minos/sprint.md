@@ -3,7 +3,7 @@ description: Préparer en OpenSpec un sprint de l'audit en cours (preuves revér
 argument-hint: "<numéro de sprint>"
 ---
 
-Prépare le sprint `$ARGUMENTS` de l'audit `docs/audit/2026-10-10/` (produit par le skill général `audit-application` ; cette commande en est la suite : de l'audit aux changements OpenSpec). Les skills `openspec-*` fournissent la mécanique ; ce qui suit est ce que MINOS y ajoute.
+Prépare le sprint `$ARGUMENTS` de l'audit `docs/project/audits/2026-10-10/` (produit par le skill général `audit-application` ; cette commande en est la suite : de l'audit aux changements OpenSpec). Les skills `openspec-*` fournissent la mécanique ; ce qui suit est ce que MINOS y ajoute.
 
 **Cadre** : tout en français ; **aucun** code, test, workflow ni gate modifié ; ni push, ni PR, ni CI sans demande ; aucun ADR créé (nommé dans le design, planifié en tâche) ; ne pas traiter les constats d'autres sprints (les citer comme bénéficiaires) ; respecter `.claude/rules/openspec.md`. Le dossier de l'audit ne se modifie pas, sauf `SUIVI.md`.
 

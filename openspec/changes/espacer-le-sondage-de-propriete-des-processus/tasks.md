@@ -22,5 +22,5 @@ Ordre : mesure et décision (1), puis dans chaque section rouge, correction, pre
 ## 4. Clôture
 
 - [ ] 4.1 [AUD-PERF-08] Refaire la mesure de 1.1 après correction et consigner l'avant/après ; si la mesure n'a pu être faite que sur un système, le dire.
-- [ ] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-08 : statut, décision D2, mesures, écarts avec l'action de l'audit — pas de factorisation, sondage conservé).
+- [ ] 4.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-PERF-08 : statut, décision D2, mesures, écarts avec l'action de l'audit — pas de factorisation, sondage conservé).
 - [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/user/intellij-plugin.md` (phrase sur le sondage, si la cadence y est donnée), `docs/developer/remote-worker-sandbox-disposition.md` si elle cite la période.

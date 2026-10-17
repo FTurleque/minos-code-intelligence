@@ -24,6 +24,6 @@ Ordre : relevé et décision, puis dans chaque section rouge, correction, preuve
 
 ## 5. Clôture
 
-- [ ] 5.1 Amender l'ADR 0042 par une note de « Mise en œuvre » (résidu de chargeur de contexte fermé aux deux sites, règle des doublons, extensions par chargeur de contexte non supportées, injection reportée) ; cocher dans `docs/roadmap/storage-hexagonal-2026-10/TASKS.md` les actions de SH-10 réalisées et laisser ouvertes celles qui ne le sont pas. Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 5.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-ARC-04 : statut, décision D3, résultat du relevé 1.1, précision sur l'identifiant « A8 »).
-- [ ] 5.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, ADR 0042, `docs/developer/quality-gates.md`.
+- [ ] 5.1 Amender l'ADR 0042 par une note de « Mise en œuvre » (résidu de chargeur de contexte fermé aux deux sites, règle des doublons, extensions par chargeur de contexte non supportées, injection reportée) ; cocher dans `docs/project/roadmap/storage-hexagonal-2026-10/TASKS.md` les actions de SH-10 réalisées et laisser ouvertes celles qui ne le sont pas. Rejouer `python scripts/docs/check-current-docs.py`.
+- [ ] 5.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-ARC-04 : statut, décision D3, résultat du relevé 1.1, précision sur l'identifiant « A8 »).
+- [ ] 5.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, ADR 0042, `docs/developer/quality-gates.md`.

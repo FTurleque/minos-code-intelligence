@@ -1,6 +1,6 @@
 # Runtime Docker autonome MINOS
 
-> **État courant : M29 est terminé et intégré.** Les références S3/S4/S5 ci-dessous sont des checkpoints historiques de qualification, pas l'état produit actuel. Le runtime Docker fait partie du routage `native|docker` décrit par [`STATUS.md`](../STATUS.md). Les claims de sécurité et de supply-chain restent capability-honest : MINOS ne revendique pas une reproductibilité bit-à-bit du bootstrap Coursier `scip-java` tant que son graphe transitif n'est pas verrouillé par un lockfile possédé par le dépôt.
+> **État courant : M29 est terminé et intégré.** Les références S3/S4/S5 ci-dessous sont des checkpoints historiques de qualification, pas l'état produit actuel. Le runtime Docker fait partie du routage `native|docker` décrit par [`STATUS.md`](../project/governance/STATUS.md). Les claims de sécurité et de supply-chain restent capability-honest : MINOS ne revendique pas une reproductibilité bit-à-bit du bootstrap Coursier `scip-java` tant que son graphe transitif n'est pas verrouillé par un lockfile possédé par le dépôt.
 
 M29 sépare volontairement le runtime Docker en plusieurs plans afin que l'administration et l'indexation puissent écrire l'état MINOS et les artefacts de build sans rendre le serveur MCP mutable.
 
@@ -344,7 +344,7 @@ Prouvé en local avec l'image épinglée dans le compose : volume neuf (téléch
 
 ## Qualification et historique M29
 
-L'état produit courant est celui de [`STATUS.md`](../STATUS.md) : **M29 terminé et intégré**. Les lignes suivantes sont conservées uniquement comme checkpoints historiques de la montée en qualification :
+L'état produit courant est celui de [`STATUS.md`](../project/governance/STATUS.md) : **M29 terminé et intégré**. Les lignes suivantes sont conservées uniquement comme checkpoints historiques de la montée en qualification :
 
 ```text
 3df1b40ca0daf50779596f6e955d966ed5eb4973

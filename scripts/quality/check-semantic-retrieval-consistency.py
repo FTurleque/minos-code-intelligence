@@ -186,7 +186,7 @@ def main() -> int:
             '"semantic-hybrid-retrieval"',
         )
 
-        roadmap_path = "docs/roadmap/M23_EXECUTION.md"
+        roadmap_path = "docs/project/roadmap/M23_EXECUTION.md"
         roadmap = read(roadmap_path)
         require_pattern(roadmap_path, roadmap, r"(?im)^\s*Statut\b[^\n]*9\s*/\s*9\b", "M23 9/9 completion")
         require_pattern(roadmap_path, roadmap, r"(?im)^\s*Issue\b[^\n#]*#\s*78\b[^\n]*\bCLOSED\b[^\n]*\bcompleted\b", "issue #78 closed/completed")
@@ -207,7 +207,7 @@ def main() -> int:
             "M21-S2/CI reste en pause jusqu’en août 2026",
         )
 
-        adr_path = "docs/adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md"
+        adr_path = "docs/architecture/adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md"
         adr = read(adr_path)
         require(
             adr_path,

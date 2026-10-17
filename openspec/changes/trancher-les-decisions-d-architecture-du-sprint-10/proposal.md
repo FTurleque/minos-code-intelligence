@@ -6,7 +6,7 @@ Les six constats du sprint 10 de l'audit du 10 octobre 2026 (AUD-ARC-01, -05, -0
 
 - trois dépendent de prérequis **non implémentés** : AUD-ARC-01 attend AUD-ARC-02 (sprint 9), AUD-ARC-05 attend AUD-SEC-06 (sprint 8), AUD-ARC-07 attend AUD-PERF-03 (sprint 4, spécifié) ;
 - quatre actions proposées **contredisent un ADR accepté** (0044 pour `hosted`, `minos-app` et le nommage des packages ; 0022 pour une arête `minos-mcp → minos-cli`) ou supposent une décision qui n'est pas prise (ADR 0047, encore « Proposed ») ;
-- les chantiers qui les résorbent (SH-01 à SH-12 de `docs/roadmap/storage-hexagonal-2026-10/TASKS.md`, ADR 0055 à 0057) sont tous « À faire », et chacun déplace des classes.
+- les chantiers qui les résorbent (SH-01 à SH-12 de `docs/project/roadmap/storage-hexagonal-2026-10/TASKS.md`, ADR 0055 à 0057) sont tous « À faire », et chacun déplace des classes.
 
 Spécifier ces chantiers maintenant reviendrait à écrire des tâches sur du code que les sprints 4, 8 et 9 vont modifier, et à trancher en passant des décisions qui reviennent au propriétaire. Le changement `figer-la-dette-de-frontieres-par-des-cliquets` empêche déjà la dette de croître. Celui-ci fait le reste de ce qui est possible aujourd'hui : **poser les décisions, les faire trancher, et les consigner**, pour que chaque chantier puisse être spécifié dès que son prérequis est livré.
 
@@ -41,7 +41,7 @@ Et un **ordre de spécification** des chantiers restants, avec leurs prérequis,
 
 - **Modules du reactor** : aucun.
 - **Surfaces publiques** : aucune.
-- **ADR** : selon les décisions, l'ADR 0047 change de statut, et un ADR (prochain numéro libre de `docs/adr/README.md`) amende ou confirme l'ADR 0044 sur les points 2 à 4. Rédigés en tâche, pas pendant cette spécification.
+- **ADR** : selon les décisions, l'ADR 0047 change de statut, et un ADR (prochain numéro libre de `docs/architecture/adr/README.md`) amende ou confirme l'ADR 0044 sur les points 2 à 4. Rédigés en tâche, pas pendant cette spécification.
 - **Gates à rejouer** : `python scripts/docs/check-current-docs.py` (index des ADR), `python .claude/scripts/run_gates.py --fast`.
 - **Plateformes** : sans objet.
 - **Constats concernés** : AUD-ARC-01, -05, -07, -08, -11, -12 restent **ouverts** ; ce changement ne les ferme pas.

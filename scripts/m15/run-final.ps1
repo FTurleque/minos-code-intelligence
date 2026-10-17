@@ -103,7 +103,7 @@ function Assert-FinalShape {
         '.github\workflows\pr-ci.yml',
         'scripts\quality\check-jacoco.py',
         'scripts\docs\product-facts.py',
-        'docs\generated\product-facts.md',
+        'docs\developer\generated\product-facts.md',
         'docs\developer\quality-gates.md'
     )) {
         if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot $required) -PathType Leaf)) { throw "Missing M15 quality/CI/docs artifact: $required" }

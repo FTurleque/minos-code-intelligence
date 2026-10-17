@@ -7,7 +7,7 @@
 - `minos-engine/src/main/java/com/minos/orchestration/IncrementalIndexingCoordinator.java` (220 lignes, classe publique en `:24`) : **0 appelant de production**, 4 classes de test, 7 tests.
 - `minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java` (`:144-225`, préparation en `:311-353`) : le chemin que le produit emprunte réellement.
 
-Les deux ne font pas la même chose. Des tests d'intégration réels (fixture, rédaction des diagnostics) valident donc un chemin que personne n'exécute, et le correctif D06 (empreinte capturée avant la découverte) a dû être écrit deux fois (coordinateur `:86-90`, CLI `:314-316`). Le chantier SH-05 (`docs/roadmap/storage-hexagonal-2026-10/TASKS.md`, ADR 0057 § 2) risque d'en créer une troisième.
+Les deux ne font pas la même chose. Des tests d'intégration réels (fixture, rédaction des diagnostics) valident donc un chemin que personne n'exécute, et le correctif D06 (empreinte capturée avant la découverte) a dû être écrit deux fois (coordinateur `:86-90`, CLI `:314-316`). Le chantier SH-05 (`docs/project/roadmap/storage-hexagonal-2026-10/TASKS.md`, ADR 0057 § 2) risque d'en créer une troisième.
 
 ## What Changes
 

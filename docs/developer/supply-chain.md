@@ -267,7 +267,7 @@ python scripts/quality/check-reproducible-build.py twice --work <dossier vide>
 2. Régénérer les verrous : `./gradlew --no-configuration-cache dependencies buildEnvironment --write-locks`.
 3. Régénérer les sommes **sous Linux puis sous Windows** (WSL convient) avec les tâches des jobs du plugin : `./gradlew --no-configuration-cache --write-verification-metadata sha256 buildEnvironment dependencies test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure verifyPlugin spotbugsMain`.
 4. Relire le diff : une nouvelle somme pour une version qui ne change pas, ou une `<trust>` ajoutée, se justifie par écrit ou s'annule.
-5. Rejouer `python scripts/quality/check-toolchain-baseline.py` et la qualification du plugin de `docs/TOOLCHAIN_POLICY.md`.
+5. Rejouer `python scripts/quality/check-toolchain-baseline.py` et la qualification du plugin de `docs/developer/TOOLCHAIN_POLICY.md`.
 
 ## Publication du plugin IntelliJ avec la release (AUD-DEP-07)
 

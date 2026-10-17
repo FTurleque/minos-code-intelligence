@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarise the reports of the audit profiles (docs/quality/code-audit.md).
+"""Summarise the reports of the audit profiles (docs/developer/quality/code-audit.md).
 
     python scripts/quality/audit-report-summary.py spotbugs
     python scripts/quality/audit-report-summary.py pit --module minos-engine
@@ -103,7 +103,7 @@ def spotbugs(root: Path, top: int, reports_dir: Path | None, strict: bool, basel
         print(f"  {count:4}  {priority:6} {pattern}")
     if unproven:
         print(f"UNPROVEN: no class statistics in the report of {', '.join(unproven)}; the analysed scope is not "
-              "shown by these reports (replay with the SpotBugs command line, docs/quality/code-audit.md)",
+              "shown by these reports (replay with the SpotBugs command line, docs/developer/quality/code-audit.md)",
               file=sys.stderr)
         if strict:
             problems.append("analysed scope unproven")

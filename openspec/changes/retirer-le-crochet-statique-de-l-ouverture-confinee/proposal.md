@@ -26,7 +26,7 @@ Au HEAD `949e1569` : 13 occurrences du nom, 4 en production (la déclaration et 
 ## Hors périmètre
 
 - La partie « E/S dans le constructeur de `IndexingExecutionRequest` » de Q15 : l'audit la dit absente au HEAD ; elle est seulement consignée comme close dans le suivi.
-- Le fichier archivé `docs/audit/archive/2026-09/AUDIT-2026-09.md` (Q15 en `:531`) : historique figé, non modifié.
+- Le fichier archivé `docs/project/audits/archive/2026-09/AUDIT-2026-09.md` (Q15 en `:531`) : historique figé, non modifié.
 - Tout changement de comportement de l'ouverture confinée (ordre des contrôles, classification des erreurs, repli sans `SecureDirectoryStream`).
 - Les autres points d'injection de test du dépôt.
 

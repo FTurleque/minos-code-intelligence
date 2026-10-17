@@ -8,7 +8,7 @@ Ce fichier est la source commune pour tout agent (Claude Code, Codex, etc.). `CL
 
 Artefacts du dépôt (docs, ADR, OpenSpec, messages de commit, PR, commentaires de gouvernance) **en français**. Identifiants, noms de classes et messages de code suivent la convention du module touché (Javadoc sans mélange de langues dans un même fichier).
 
-## Toolchain (`docs/TOOLCHAIN_POLICY.md`)
+## Toolchain (`docs/developer/TOOLCHAIN_POLICY.md`)
 
 | Partie | Baseline |
 |---|---|
@@ -38,7 +38,7 @@ openspec validate --all --strict              # spécifications
 - Racine de composition : `minos-bootstrap`, découverte par `ServiceLoader` (ADR 0042) ; `minos-app` est l'assemblage final distribué. `application ↛ adaptateurs`, `surfaces ↛ adaptateurs`.
 - Aucun cycle de packages (règle A8 de `check-module-boundaries.py`, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris).
 - MCP en STDIO **lecture seule** (ADR 0017) : stdout est réservé au protocole, les journaux vont sur stderr. Surfaces publiques (CLI, API Java, MCP) **versionnées et additives**.
-- **Fail-closed** : le code non fiable est refusé par le bac à sable OS, jamais exécuté en mode dégradé. Une décision d'architecture structurante donne un ADR numéroté (`docs/adr/`, prochain numéro : lire l'index).
+- **Fail-closed** : le code non fiable est refusé par le bac à sable OS, jamais exécuté en mode dégradé. Une décision d'architecture structurante donne un ADR numéroté (`docs/architecture/adr/`, prochain numéro : lire l'index).
 - Le plugin IntelliJ est un client externe du protocole CLI : aucune dépendance `com.minos:*`.
 
 ## Gouvernance Git et CI
@@ -63,4 +63,4 @@ Aucun secret versionné (Gitleaks) ; environnement des processus externes issu d
 
 ## Documentation
 
-État produit : `docs/STATUS.md`, `docs/ROADMAP.md` (gardés par `check-current-docs.py` et `product-facts.py --check`). Historique figé : `docs/history/`, `docs/audit/archive/`, `openspec/changes/archive/`. Audit en cours : `docs/audit/2026-10-10/` (suivi dans `SUIVI.md`).
+État produit : `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md` (gardés par `check-current-docs.py` et `product-facts.py --check`). Historique figé : `docs/project/history/`, `docs/project/audits/archive/`, `openspec/changes/archive/`. Audit en cours : `docs/project/audits/2026-10-10/` (suivi dans `SUIVI.md`).

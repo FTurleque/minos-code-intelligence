@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail if a versioned script under scripts/ has no live reference anywhere.
 
-Policy: docs/adr/0043-retrait-des-artefacts-de-jalon.md. A script counts as
+Policy: docs/architecture/adr/0043-retrait-des-artefacts-de-jalon.md. A script counts as
 referenced when its repository-relative path (forward- or backslash form)
 appears as a substring in some OTHER tracked file: a GitHub Actions workflow
 (direct invocation or path filter), another script (direct execution or a

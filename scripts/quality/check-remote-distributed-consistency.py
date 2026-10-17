@@ -198,20 +198,20 @@ def main() -> int:
                       "WorkerTransportStagingAndAtomicLocalSnapshot", "loadActiveKnowledge",
                       "projectRelativeRoot")
 
-        execution = read("docs/roadmap/M25_EXECUTION.md")
-        adr = read("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md")
+        execution = read("docs/project/roadmap/M25_EXECUTION.md")
+        adr = read("docs/architecture/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md")
         user = read("docs/user/remote-indexing.md")
         developer = read("docs/developer/remote-distributed-indexing.md")
         for relative, document in (
-            ("docs/roadmap/M25_EXECUTION.md", execution),
-            ("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", adr),
+            ("docs/project/roadmap/M25_EXECUTION.md", execution),
+            ("docs/architecture/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", adr),
             ("docs/user/remote-indexing.md", user),
             ("docs/developer/remote-distributed-indexing.md", developer),
         ):
             require_facts(relative, document, "github.com", "gitlab.com", "SHA", "DENY", "fail-closed",
                           "minos-distributed-artifact-v1", "minos-distributed-artifact-v2",
                           "projectRelativeRoot", "provenance", "borné")
-        require_facts("docs/roadmap/M25_EXECUTION.md", execution,
+        require_facts("docs/project/roadmap/M25_EXECUTION.md", execution,
                       "#84", "CLOSED", "completed", "#85", "MERGED",
                       "b17631de59871848351a4139b12be6e0354989bc",
                       "fc395d189cf7fc5a0e06130210a3dc763fc48637",
@@ -219,7 +219,7 @@ def main() -> int:
                       "M25 FINAL REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS",
                       "M25 LINUX REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS",
                       "M21-S2 / GitHub Actions reste strictement en pause jusqu’en août 2026")
-        require_facts("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", adr,
+        require_facts("docs/architecture/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", adr,
                       "Status: Accepted — final M25 dispositions recorded from exact-head Windows + Linux evidence.",
                       "PROCESS_EPHEMERAL_WORKSPACE", "ScipSymbolSnapshotImporter",
                       "QUALIFIED_WITH_CONSTRAINTS", "BLOCKED/NOT_RUN")

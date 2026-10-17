@@ -19,5 +19,5 @@ Ordre dans chaque section : rouge, correction, preuve. Aucun fichier Java n'est 
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-SEC-03 : statut « garde posé, migration à lotir », décomptes corrigés, décision D2, liste des lots de migration à ouvrir avec leurs fichiers).
-- [ ] 4.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/developer/quality-gates.md`, `.claude/rules/java-production.md`, `docs/STATUS.md` si le garde y est cité.
+- [ ] 4.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-SEC-03 : statut « garde posé, migration à lotir », décomptes corrigés, décision D2, liste des lots de migration à ouvrir avec leurs fichiers).
+- [ ] 4.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/developer/quality-gates.md`, `.claude/rules/java-production.md`, `docs/project/governance/STATUS.md` si le garde y est cité.

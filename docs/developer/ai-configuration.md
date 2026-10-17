@@ -26,7 +26,7 @@ Python 3, bibliothèque standard seule ; ils n'échouent jamais par accident (en
 | Hook | Événement | Effet |
 |---|---|---|
 | `guard_bash.py` | PreToolUse (Bash) | **Refuse** : push forcé, push direct vers `main` ou `develop`, `--no-verify`, signature désactivée, `gh pr merge --admin`, suppression ou déplacement d'un tag `vX.Y.Z`, modification d'une release. **Demande confirmation** : `git reset --hard`, `git clean -f`, restauration de tout l'arbre, `--force-with-lease` |
-| `guard_paths.py` | PreToolUse (Edit, Write) | **Refuse** : fichiers générés (`target/`, `build/`, `.intellijPlatform/`, `docs/generated/`), secret apparent dans le contenu. **Demande confirmation** : archives OpenSpec, audits archivés, `docs/history/`, `openspec/specs/`, goldens de caractérisation, workflows, `required-checks.json`, liste de tolérance de `check-private-io`, ADR existants, `LICENSE`/`SECURITY.md`/`CONTRIBUTING.md`/`.gitleaks.toml` |
+| `guard_paths.py` | PreToolUse (Edit, Write) | **Refuse** : fichiers générés (`target/`, `build/`, `.intellijPlatform/`, `docs/developer/generated/`), secret apparent dans le contenu. **Demande confirmation** : archives OpenSpec, audits archivés, `docs/project/history/`, `openspec/specs/`, goldens de caractérisation, workflows, `required-checks.json`, liste de tolérance de `check-private-io`, ADR existants, `LICENSE`/`SECURITY.md`/`CONTRIBUTING.md`/`.gitleaks.toml` |
 | `post_edit.py` | PostToolUse (Edit, Write) | Rappelle les gates qui citent le fichier modifié, valide le YAML d'un workflow, signale un `.ps1` en LF, rappelle le câblage d'un nouveau gate |
 | `session_start.py` | SessionStart | Branche, état local, changements OpenSpec actifs, avancement de l'audit |
 

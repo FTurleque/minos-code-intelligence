@@ -20,5 +20,5 @@ Ordre : vérification, puis rouge, correction, preuve. Tout `-pl` s'accompagne d
 ## 4. Clôture
 
 - [ ] 4.1 `docs/user/architecture-graph.md` : dire que les textes issus du dépôt sont échappés dans le rendu Mermaid et que l'assainissement final reste à la charge du moteur de rendu. Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-SEC-08 : statut, confiance requalifiée, résultats de 1.1 et 1.2, site des commentaires ajouté).
-- [ ] 4.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/user/architecture-graph.md`.
+- [ ] 4.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-SEC-08 : statut, confiance requalifiée, résultats de 1.1 et 1.2, site des commentaires ajouté).
+- [ ] 4.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/user/architecture-graph.md`.

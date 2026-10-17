@@ -1,9 +1,9 @@
-# Gitleaks configuration (MINOS-AUD-H06, docs/quality/code-audit.md).
+# Gitleaks configuration (MINOS-AUD-H06, docs/developer/quality/code-audit.md).
 #
 # The default rules stay in force. Each allowlist below is bound to ONE default rule and to the SHAPE of a known
 # false positive, never to a whole file or directory, so a real secret written next to one of them is still
 # reported. The audit of 2026-10-08 traced every default-rule alert of the history to one of these shapes
-# (docs/quality/code-audit-couverture.md, section 3.6).
+# (docs/developer/quality/code-audit-couverture.md, section 3.6).
 
 title = "MINOS"
 

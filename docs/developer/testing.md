@@ -231,7 +231,7 @@ Ne pas mélanger une refactorisation sans rapport avec un jalon fonctionnel. Pr�
 
 ## Audit de code à la demande
 
-SpotBugs (analyse statique) et PIT (tests de mutation) sont disponibles dans les profils Maven `audit-spotbugs` et `audit-mutation`. Ils ne font pas partie de `clean verify` ni de la CI de PR. Voir [Audit de code : SpotBugs et PIT](../quality/code-audit.md).
+SpotBugs (analyse statique) et PIT (tests de mutation) sont disponibles dans les profils Maven `audit-spotbugs` et `audit-mutation`. Ils ne font pas partie de `clean verify` ni de la CI de PR. Voir [Audit de code : SpotBugs et PIT](quality/code-audit.md).
 
 ## Documentation
 

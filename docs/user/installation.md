@@ -54,7 +54,7 @@ java -jar $minos doctor
 
 ## Parcours autonome
 
-Depuis le checkout, `tools install` télécharge le provider et ses dépendances (Coursier/Maven, Node.js/npm…) et nécessite un accès réseau. La **distribution Windows complète**, elle, embarque les indexeurs scip-java et scip-typescript et les amorce sans réseau (voir [l'installation de production](production-installation.md), §2 bis, et l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md)) : la commande ci-dessous n'est alors qu'une mise à jour explicite.
+Depuis le checkout, `tools install` télécharge le provider et ses dépendances (Coursier/Maven, Node.js/npm…) et nécessite un accès réseau. La **distribution Windows complète**, elle, embarque les indexeurs scip-java et scip-typescript et les amorce sans réseau (voir [l'installation de production](production-installation.md), §2 bis, et l'[ADR 0040](../architecture/adr/0040-distribution-auto-portante-indexeurs-embarques.md)) : la commande ci-dessous n'est alors qu'une mise à jour explicite.
 
 ```powershell
 java -jar $minos tools install scip-java

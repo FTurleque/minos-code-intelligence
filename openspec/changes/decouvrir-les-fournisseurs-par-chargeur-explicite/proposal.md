@@ -2,7 +2,7 @@
 
 ## Why
 
-**AUD-ARC-04** (moyenne, sprint 9 de l'audit du 10 octobre 2026 ; résidu connu de l'audit de septembre et tâche SH-10 de `docs/roadmap/storage-hexagonal-2026-10/TASKS.md`). Le code de production fait **4** découvertes `ServiceLoader`. Deux appliquent le bon motif — chargeur de classes explicite, échec si zéro ou plusieurs fournisseurs : `minos-application/src/main/java/com/minos/application/MinosApplicationComposers.java:36` et `minos-cli/src/main/java/com/minos/cli/McpLaunchRoutes.java:31`. Les deux autres utilisent le chargeur de contexte du thread et prennent le premier fournisseur qui convient :
+**AUD-ARC-04** (moyenne, sprint 9 de l'audit du 10 octobre 2026 ; résidu connu de l'audit de septembre et tâche SH-10 de `docs/project/roadmap/storage-hexagonal-2026-10/TASKS.md`). Le code de production fait **4** découvertes `ServiceLoader`. Deux appliquent le bon motif — chargeur de classes explicite, échec si zéro ou plusieurs fournisseurs : `minos-application/src/main/java/com/minos/application/MinosApplicationComposers.java:36` et `minos-cli/src/main/java/com/minos/cli/McpLaunchRoutes.java:31`. Les deux autres utilisent le chargeur de contexte du thread et prennent le premier fournisseur qui convient :
 
 - `minos-bootstrap/src/main/java/com/minos/bootstrap/StorageBackendSelection.java:23` (backend de stockage optionnel, PostgreSQL) ;
 - `minos-engine/src/main/java/com/minos/orchestration/StableFileSystemIdentity.java:46` (identité physique d'un chemin, fournie sous Windows par `com.minos.runtime.local.sandbox.WindowsExecutionPathIdentityProvider`).

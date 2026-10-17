@@ -10,9 +10,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 README = "README.md"
-STATUS = "docs/STATUS.md"
-ROADMAP = "docs/ROADMAP.md"
-RELEASE_101 = "docs/releases/1.0.1.md"
+STATUS = "docs/project/governance/STATUS.md"
+ROADMAP = "docs/project/governance/ROADMAP.md"
+RELEASE_101 = "docs/user/release-notes/1.0.1.md"
 PRODUCTION_INSTALL = "docs/user/production-installation.md"
 POM = "pom.xml"
 POSTGRES_POM = "minos-storage-postgresql/pom.xml"

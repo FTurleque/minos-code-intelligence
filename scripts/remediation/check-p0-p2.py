@@ -159,7 +159,7 @@ def main() -> int:
             "minos-api/src/test/java/com/minos/api/AdvancedCodeIntelligenceApiContractTest.java"
         )
         product_facts = read("scripts/docs/product-facts.py")
-        generated_facts = read("docs/generated/product-facts.md")
+        generated_facts = read("docs/developer/generated/product-facts.md")
         architecture = read("scripts/architecture/check-module-boundaries.py")
         public_surfaces = read("docs/developer/public-surfaces.md")
         worker = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java")
@@ -173,7 +173,7 @@ def main() -> int:
         hosted_test = read(
             "minos-engine/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"
         )
-        c0_research = read("docs/research/code-intelligence-architecture-analysis.md")
+        c0_research = read("docs/project/research/code-intelligence-architecture-analysis.md")
 
         docker_transport = read("minos-app/src/main/java/com/minos/app/DockerMcpTransport.java")
         pg_connections = read(

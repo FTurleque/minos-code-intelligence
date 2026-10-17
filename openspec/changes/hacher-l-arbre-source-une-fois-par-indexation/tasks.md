@@ -16,10 +16,10 @@ Ordre : mesure et décision, puis rouge, correction, preuve. Tout `-pl` s'accomp
 
 - [ ] 3.1 [AUD-PERF-04] Rouge : test « service d'empreinte de l'orchestration différent de celui de l'exécuteur » — l'empreinte du scope racine est recalculée ; test « contenu modifié pendant le run, taille et date restaurées » — la baseline n'est pas promue. **Preuve du rouge pour le premier : sans garde, la valeur transmise serait persistée.**
 - [ ] 3.2 [AUD-PERF-04] Garde de D2 (tant que le service n'est pas commun partout) ; aucun raccourci sur l'empreinte « après ». Preuve : tests verts ; `./mvnw -B -ntp -pl minos-app -am verify` (goldens inchangés, tests de reprise et de crash verts).
-- [ ] 3.3 [AUD-PERF-04] Refaire la mesure de 1.1 ; consigner avant / après dans `docs/audit/2026-10-10/SUIVI.md`.
+- [ ] 3.3 [AUD-PERF-04] Refaire la mesure de 1.1 ; consigner avant / après dans `docs/project/audits/2026-10-10/SUIVI.md`.
 
 ## 4. Clôture
 
 - [ ] 4.1 Note de « Mise en œuvre » de l'ADR 0039 (empreinte du scope racine fournie par l'orchestration ; raccourci taille / date écarté, D3) ; rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-PERF-04 : statut, mesures, décision D3, manques du constat sur la reprise et les scopes non racine).
-- [ ] 4.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, ADR 0039.
+- [ ] 4.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-PERF-04 : statut, mesures, décision D3, manques du constat sur la reprise et les scopes non racine).
+- [ ] 4.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, ADR 0039.

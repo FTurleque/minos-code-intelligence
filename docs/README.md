@@ -1,68 +1,59 @@
 # Documentation MINOS
 
-Ce répertoire est le point d’entrée de la documentation **utilisateur**, **développeur**, **architecturale** et **historique** de MINOS Code Intelligence.
+MINOS Code Intelligence est un moteur de code intelligence **local-first**, multi-langages et indépendant des fournisseurs d'IA. L'état livré se lit dans [l'état opérationnel](project/governance/STATUS.md).
 
-MINOS est un moteur local de Code Intelligence. M14 ajoute un parcours d’indexation autonome et une distribution Windows native : l’utilisateur peut installer MINOS, gérer ses providers, enregistrer un projet puis exécuter `minos index <project>` sans préparer manuellement `index.scip`.
+La documentation est rangée en trois espaces, un par lecteur, plus le dossier d'architecture, qui porte le registre des ADR. Chaque page n'appartient qu'à un seul endroit.
 
-## Choisir son parcours
+| Vous voulez… | Espace | Entrée |
+|---|---|---|
+| installer, configurer et utiliser MINOS | [`user/`](user/) | [Guide utilisateur](user/README.md) |
+| compiler, modifier, intégrer ou étendre MINOS | [`developer/`](developer/) | [Guide développeur](developer/README.md) |
+| suivre le projet : état, plans, audits, historique | [`project/`](project/) | [Suivi du projet](project/README.md) |
+| lire le dossier d'architecture (arc42) | [`architecture/`](architecture/) | [Dossier d'architecture](architecture/README.md) |
+| retrouver une décision d'architecture | [`architecture/adr/`](architecture/adr/) | [Registre des ADR](architecture/adr/README.md) |
 
-```mermaid
-flowchart LR
-    A[Documentation MINOS] --> U[Utiliser]
-    A --> D[Développer]
-    A --> ADR[Comprendre les décisions]
-    A --> H[Consulter l'historique]
-    U --> U1[user/]
-    D --> D1[developer/]
-    ADR --> A1[adr/]
-    H --> H1[history/]
-```
+## Utilisateur — [`user/`](user/)
 
-## Documentation utilisateur
+| Besoin | Document |
+|---|---|
+| installer MINOS sous Windows | [Installation PROD Windows](user/production-installation.md) |
+| installer depuis les sources | [Installation](user/installation.md) |
+| indexer un projet sans préparer d'index | [Indexation autonome](user/autonomous-indexing.md) |
+| trouver une commande | [Référence CLI](user/cli.md) |
+| connecter un client MCP | [MCP](user/mcp.md) |
+| utiliser l'API Java locale | [API Java](user/java-api.md) |
+| utiliser le plugin IntelliJ | [Plugin IntelliJ](user/intellij-plugin.md) |
+| exporter vers NEXUS | [Intégration NEXUS](user/nexus.md) |
+| résoudre un problème | [Dépannage](user/troubleshooting.md) |
+| lire ce qui change dans une version | [Notes de version](user/release-notes/) |
 
-- [Guide utilisateur](user/README.md)
-- [Installation PROD Windows](user/production-installation.md)
-- [Indexation autonome](user/autonomous-indexing.md)
-- [Installation depuis les sources](user/installation.md)
-- [Référence CLI](user/cli.md)
-- [API Java locale](user/java-api.md)
-- [Utiliser MINOS via MCP](user/mcp.md)
-- [Intégration MINOS → NEXUS](user/nexus.md)
-- [Dépannage](user/troubleshooting.md)
+## Développeur — [`developer/`](developer/)
 
-## Documentation développeur
+| Besoin | Document |
+|---|---|
+| comprendre les modules et les invariants | [Guide développeur](developer/README.md) · [Architecture interne](developer/architecture.md) |
+| connaître la toolchain de référence | [Politique de toolchain](developer/TOOLCHAIN_POLICY.md) |
+| tester et valider | [Tests et validation](developer/testing.md) · [Gates qualité](developer/quality-gates.md) |
+| analyse statique et mutation | [Audit de code : SpotBugs et PIT](developer/quality/code-audit.md) |
+| surfaces publiques (CLI, API Java, MCP) | [Surfaces publiques](developer/public-surfaces.md) · [Faits produit générés](developer/generated/product-facts.md) |
+| configurer les agents IA du dépôt | [Configuration IA](developer/ai-configuration.md) |
 
-- [Guide développeur](developer/README.md)
-- [Architecture interne](developer/architecture.md)
-- [Modèle de domaine](developer/domain-model.md)
-- [Indexation, lifecycle et stockage](developer/indexing-and-storage.md)
-- [CLI, API Java, MCP et export NEXUS](developer/public-surfaces.md)
-- [Multi-dépôts et intelligence Git](developer/multi-repo-git.md)
-- [Tests, validation et contribution](developer/testing.md)
-- [Audit de code : SpotBugs et PIT](quality/code-audit.md)
+## Architecture — [`architecture/`](architecture/)
 
-## Décisions architecturales
+| Besoin | Document |
+|---|---|
+| retrouver ou écrire une décision | [Registre des ADR](architecture/adr/README.md) · [gabarit](architecture/adr/template.md) |
+| vue d'ensemble du système | [Vue d'ensemble](architecture/overview.md) |
+| dossier arc42 complet | [Index arc42](architecture/README.md) |
 
-Les choix techniques durables sont documentés sous forme d’[Architecture Decision Records](adr/README.md).
+## Projet — [`project/`](project/)
 
-## Historique
+| Besoin | Document |
+|---|---|
+| connaître l'état livré et la progression | [État opérationnel](project/governance/STATUS.md) · [Roadmap](project/governance/ROADMAP.md) |
+| lire le plan d'un jalon ou d'un chantier | [Plans d'exécution](project/roadmap/) |
+| lire un audit | [Audits](project/audits/README.md) |
+| études et expériences | [Études](project/research/) |
+| consulter un relevé historique (C0, M0 → M13, validations) | [Historique](project/history/README.md) |
 
-- [Index historique](history/README.md)
-- [Cadrage C0](history/c0/README.md)
-- [Validations transverses historiques](history/validation/README.md)
-- [Historique des jalons livrés](history/milestones/README.md)
-
-Les archives conservent volontairement leurs anciens SHA, mesures, limitations fournisseur et états intermédiaires.
-
-## Documents courants à la racine
-
-- [État opérationnel](STATUS.md)
-- [Roadmap produit](ROADMAP.md)
-- [Roadmap opérationnelle M14](roadmap/M14_EXECUTION.md)
-- [ADR](adr/README.md)
-
-> Pour installer ou utiliser MINOS, privilégier `user/`. Pour modifier le code, privilégier `developer/`. Pour comprendre une décision durable, privilégier `adr/`. Pour auditer une livraison passée, utiliser `history/`.
-
-## Chantier storage/hexagonal
-
-[Décisions, backlog et démarrage](roadmap/storage-hexagonal-2026-10/README.md) · [Tâches](roadmap/storage-hexagonal-2026-10/TASKS.md).
+Les plans, audits et relevés historiques sont datés : ils ne sont pas réécrits pour leur faire revendiquer un résultat postérieur. Les pages de `user/` et `developer/` décrivent la baseline courante.

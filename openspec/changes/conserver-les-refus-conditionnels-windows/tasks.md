@@ -21,6 +21,6 @@ Ordre : relevé et décisions (1), puis dans chaque section rouge, correction, p
 
 ## 4. Clôture
 
-- [ ] 4.1 [AUD-SEC-06] `docs/user/troubleshooting.md` : l'erreur nouvelle et sa résolution (si D3 = refuser) ; `docs/developer/indexing-and-storage.md` si elle décrit le durcissement Windows. Si D2 = FFM : ADR au prochain numéro libre de `docs/adr/README.md` et `docs/TOOLCHAIN_POLICY.md`. Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 4.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-SEC-06 : statut, décisions D2 et D3, mesures de 1.1, run id ; signaler AUD-ARC-05 comme débloqué et ce qu'il devra reprendre : les deux lancements d'`icacls` de `WindowsDacl`).
-- [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/user/troubleshooting.md`, `.claude/rules/securite.md` (points 6 et 9, si le texte cite la limite).
+- [ ] 4.1 [AUD-SEC-06] `docs/user/troubleshooting.md` : l'erreur nouvelle et sa résolution (si D3 = refuser) ; `docs/developer/indexing-and-storage.md` si elle décrit le durcissement Windows. Si D2 = FFM : ADR au prochain numéro libre de `docs/architecture/adr/README.md` et `docs/developer/TOOLCHAIN_POLICY.md`. Rejouer `python scripts/docs/check-current-docs.py`.
+- [ ] 4.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-SEC-06 : statut, décisions D2 et D3, mesures de 1.1, run id ; signaler AUD-ARC-05 comme débloqué et ce qu'il devra reprendre : les deux lancements d'`icacls` de `WindowsDacl`).
+- [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/user/troubleshooting.md`, `.claude/rules/securite.md` (points 6 et 9, si le texte cite la limite).

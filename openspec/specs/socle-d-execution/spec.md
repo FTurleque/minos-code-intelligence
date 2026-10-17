@@ -60,7 +60,7 @@ Le noyau, la CLI, le MCP, le stockage et les providers SHALL être compilés pou
 - **THEN** la version affichée est une version 25
 
 ### Requirement: La version de Java est énoncée une seule fois et contrôlée partout
-La propriété `maven.compiler.release` du POM racine SHALL être la source de vérité. Le gate `check-toolchain-baseline.py` SHALL échouer quand la borne de l'enforcer, un `java-version:` de workflow, une image `eclipse-temurin`, `docs/TOOLCHAIN_POLICY.md`, `AGENTS.md` ou `openspec/config.yaml` énonce une autre version. Les étapes du plugin IntelliJ SHALL être reconnues par une liste fermée.
+La propriété `maven.compiler.release` du POM racine SHALL être la source de vérité. Le gate `check-toolchain-baseline.py` SHALL échouer quand la borne de l'enforcer, un `java-version:` de workflow, une image `eclipse-temurin`, `docs/developer/TOOLCHAIN_POLICY.md`, `AGENTS.md` ou `openspec/config.yaml` énonce une autre version. Les étapes du plugin IntelliJ SHALL être reconnues par une liste fermée.
 
 #### Scenario: Workflow resté sur l'ancienne version
 - **GIVEN** une copie du dépôt où un workflow du produit déclare `java-version: '24'`
@@ -83,7 +83,7 @@ La propriété `maven.compiler.release` du POM racine SHALL être la source de v
 - **THEN** le gate échoue
 
 ### Requirement: La politique de toolchain nomme la fin de support de chaque baseline
-`docs/TOOLCHAIN_POLICY.md` SHALL indiquer, pour le JDK du produit, la date de fin de correctifs connue et le délai avant cette date auquel un changement de baseline est ouvert. Une baseline hors support SHALL figurer au registre des risques avec une échéance tant qu'elle n'est pas remplacée.
+`docs/developer/TOOLCHAIN_POLICY.md` SHALL indiquer, pour le JDK du produit, la date de fin de correctifs connue et le délai avant cette date auquel un changement de baseline est ouvert. Une baseline hors support SHALL figurer au registre des risques avec une échéance tant qu'elle n'est pas remplacée.
 
 #### Scenario: Politique sans date de fin de support
 - **GIVEN** une copie du dépôt où la section Java de la politique ne contient aucune date de fin de support

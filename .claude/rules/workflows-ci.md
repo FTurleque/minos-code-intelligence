@@ -14,5 +14,5 @@ paths:
 - **Auto-tests** : tout `test_*.py` / `--self-test` d'un gate est exécuté par une étape du job `invariants`.
 - **Permissions** : `permissions:` minimales par job, aucun secret exposé aux PR de forks, `GITHUB_TOKEN` en lecture sauf besoin nommé.
 - **Releases** : tags immuables, candidat construit depuis `develop` contenant l'ascendance de `main` (vérifié par CI), preuve Docker/Windows avant promotion (`release-promotion-gate.yml`). Voir le skill `minos-release-promotion`.
-- **Dependabot** couvre Maven, `/minos-intellij` (Gradle), GitHub Actions et les images ; il ne change jamais silencieusement la baseline Java/Maven/Gradle/IntelliJ (`docs/TOOLCHAIN_POLICY.md`).
+- **Dependabot** couvre Maven, `/minos-intellij` (Gradle), GitHub Actions et les images ; il ne change jamais silencieusement la baseline Java/Maven/Gradle/IntelliJ (`docs/developer/TOOLCHAIN_POLICY.md`).
 - Toute modification de workflow est une modification de **gouvernance** : la présenter comme telle dans la PR, et rejouer `check-workflow-pins`, `check-single-execution`, `check-ci-wiring`.

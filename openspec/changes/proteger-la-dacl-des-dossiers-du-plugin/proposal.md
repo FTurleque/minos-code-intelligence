@@ -28,7 +28,7 @@ Le défaut existe **sans mutation** : un `minosHome` configuré sur le profil, u
 ## Hors périmètre
 
 - Le défaut analogue du moteur (`PrivateLocalStorage.ensurePrivateDirectory` durcit un dossier existant sans vérifier son propriétaire) : relevé dans `design.md`, à instruire dans un changement de `confinement-code-non-fiable` ou des E/S privées.
-- Le PIT du plugin : il ne tourne plus sur un poste (`docs/quality/code-audit.md`) ; ce changement retire le danger, il ne rend pas ce PIT sûr sur un poste.
+- Le PIT du plugin : il ne tourne plus sur un poste (`docs/developer/quality/code-audit.md`) ; ce changement retire le danger, il ne rend pas ce PIT sûr sur un poste.
 - Linux : le lanceur n'y touche aucun droit de dossier (portée systemd).
 
 ## Impact

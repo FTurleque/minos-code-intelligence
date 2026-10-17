@@ -29,7 +29,7 @@
         <dependency><groupId>com.minos</groupId><artifactId>minos-mcp</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-jdk14</artifactId></dependency>
         <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>${junit.version}</version><scope>test</scope></dependency>
-        <!-- Architecture tests over the compiled classes of every module (com.minos.app.architecture, docs/quality/code-audit.md). -->
+        <!-- Architecture tests over the compiled classes of every module (com.minos.app.architecture, docs/developer/quality/code-audit.md). -->
         <dependency><groupId>com.tngtech.archunit</groupId><artifactId>archunit</artifactId><version>${archunit.version}</version><scope>test</scope></dependency>
     </dependencies>
 

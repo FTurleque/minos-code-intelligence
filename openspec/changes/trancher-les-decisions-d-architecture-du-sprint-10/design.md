@@ -6,7 +6,7 @@ Sprint 10 de l'audit du 10 octobre 2026. HEAD analysé : `949e1569` (`develop`).
 
 ## État vérifié au HEAD
 
-### Statut des ADR concernés (index `docs/adr/README.md`)
+### Statut des ADR concernés (index `docs/architecture/adr/README.md`)
 
 | ADR | Statut | Portée pour le sprint |
 |---|---|---|

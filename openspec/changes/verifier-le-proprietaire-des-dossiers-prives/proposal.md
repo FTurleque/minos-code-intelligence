@@ -32,7 +32,7 @@ Le probe d'identité, aujourd'hui créé dans le dossier parent, se replie sur l
 
 - Les fichiers préexistants (`hardenExistingFile`) : appelés par des chemins que MINOS a créés ; non relevés ici.
 - POSIX : aucune modification (voir What Changes).
-- Le PIT local : déjà proscrit (`docs/quality/code-audit.md`).
+- Le PIT local : déjà proscrit (`docs/developer/quality/code-audit.md`).
 
 ## Impact
 

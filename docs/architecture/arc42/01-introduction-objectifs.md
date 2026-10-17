@@ -1,7 +1,7 @@
 # Section 1 — Introduction et objectifs
 
-> Preuves : `pom.xml` racine, `docs/adr/README.md`, `docs/adr/0001-*.md`,
-> `docs/research/COMPARATIF_FONDATIONS_CODE_INTELLIGENCE.md`,
+> Preuves : `pom.xml` racine, `docs/architecture/adr/README.md`, `docs/architecture/adr/0001-*.md`,
+> `docs/project/research/COMPARATIF_FONDATIONS_CODE_INTELLIGENCE.md`,
 > `minos-cli/src/main/java/com/minos/cli/MinosCli.java` (USAGE)
 
 ---

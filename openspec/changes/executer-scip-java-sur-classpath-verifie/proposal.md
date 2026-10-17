@@ -2,7 +2,7 @@
 
 ## Why
 
-**AUD-SEC-02** (moyenne, sprint 2 de l'audit du 10 octobre 2026) reste **partiel** dans l'état revérifié du 13 octobre (`docs/audit/2026-10-10/ETAT-2026-10-13.md`) : le changement archivé `epingler-et-isoler-l-installation-des-providers` vérifie le classpath de scip-java **à l'installation**, mais laissait hors périmètre le plan d'**indexation** (sa décision D2, « changement séparé de confinement à ouvrir »). Au HEAD `90c24fd0` :
+**AUD-SEC-02** (moyenne, sprint 2 de l'audit du 10 octobre 2026) reste **partiel** dans l'état revérifié du 13 octobre (`docs/project/audits/2026-10-10/ETAT-2026-10-13.md`) : le changement archivé `epingler-et-isoler-l-installation-des-providers` vérifie le classpath de scip-java **à l'installation**, mais laissait hors périmètre le plan d'**indexation** (sa décision D2, « changement séparé de confinement à ouvrir »). Au HEAD `90c24fd0` :
 
 - `ScipJavaProcessPlanFactory.java:150-165` : sous Linux, sans lanceur autonome `scip-java` dans le `PATH`, le plan relance `coursier launch org.scip-code:scip-java:0.13.1 --jvm system --main …` : résolution **par coordonnée**, sans empreinte, au moment de l'indexation. C'est le défaut d'origine du constat.
 - `ScipJavaProcessPlanFactory.java:119-122` et `scip-java-windows-runner.ps1:379-384` : sous Windows, quand `classpath.txt` est absent, le runner appelle `coursier fetch --classpath <coordonnée>` puis exécute le résultat, sans vérification.

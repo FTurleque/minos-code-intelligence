@@ -37,4 +37,4 @@ Jamais `--admin`. PR empilées : fusionner dans l'ordre, re-cibler ou mettre à 
 Branches distantes fusionnées : `git push origin --delete <b>` ; locales : `git branch -d <b>` (jamais `-D` sans demande). Ne pas toucher `stash` ni les branches d'autres personnes.
 
 ## 7. Après fusion
-Mettre à jour `docs/audit/…/SUIVI.md`, `docs/STATUS.md`, `docs/ROADMAP.md` si le changement est visible (skill `minos-doc-sync`) ; archiver le changement OpenSpec terminé (`/opsx:archive`).
+Mettre à jour `docs/project/audits/…/SUIVI.md`, `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md` si le changement est visible (skill `minos-doc-sync`) ; archiver le changement OpenSpec terminé (`/opsx:archive`).

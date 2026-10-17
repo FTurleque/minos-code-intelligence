@@ -55,8 +55,8 @@ function Require-Pattern {
 
 function Assert-M19Structure {
     $required = @(
-        'docs\roadmap\M19_EXECUTION.md',
-        'docs\adr\0028-capability-honest-program-graph-and-bounded-advanced-analysis.md',
+        'docs\project\roadmap\M19_EXECUTION.md',
+        'docs\architecture\adr\0028-capability-honest-program-graph-and-bounded-advanced-analysis.md',
         'minos-domain\src\main\java\com\minos\program\ProgramGraph.java',
         'minos-domain\src\main\java\com\minos\program\ProgramGraphCapability.java',
         'minos-domain\src\main\java\com\minos\program\ProgramGraphNode.java',

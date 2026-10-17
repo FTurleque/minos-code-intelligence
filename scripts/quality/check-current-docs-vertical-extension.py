@@ -37,10 +37,10 @@ def main() -> int:
         if result != 0:
             return result
 
-        require("docs/roadmap/M28_EXECUTION.md", "Statut final")
-        require("docs/roadmap/M28_EXECUTION.md", "#93 CLOSED / completed")
-        require("docs/roadmap/M28_EXECUTION.md", "PR #102 MERGED")
-        require("docs/roadmap/M28_EXECUTION.md", "#98 OPEN")
+        require("docs/project/roadmap/M28_EXECUTION.md", "Statut final")
+        require("docs/project/roadmap/M28_EXECUTION.md", "#93 CLOSED / completed")
+        require("docs/project/roadmap/M28_EXECUTION.md", "PR #102 MERGED")
+        require("docs/project/roadmap/M28_EXECUTION.md", "#98 OPEN")
         require("docs/developer/remote-worker-sandbox-disposition.md", "WORKER_SANDBOX_CLAIM_PROHIBITED")
         require("docs/developer/remote-worker-sandbox-disposition.md", "BLOCKED_NO_NAMESPACE_SECCOMP_BACKEND")
         require("docs/developer/hosted-production-boundaries.md", "HOSTED_SAAS_OPERATION_NOT_CLAIMED")

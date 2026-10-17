@@ -15,7 +15,7 @@ Ordre dans chaque section : rouge, correction, preuve. Chaque workflow modifié 
 ## 3. Runner et wrapper Gradle (AUD-DEP-05)
 
 - [x] 3.1 [AUD-DEP-05] Rouge : cas d'auto-test « `runs-on` en `-latest` » (gate des workflows) et « `gradle-version:` dans un workflow » (`test_check_toolchain_baseline.py`, cas `:36` inversé). **Preuve du rouge sur `intellij-plugin-release.yml:24,144` et sur les deux `gradle-version:`.**
-- [x] 3.2 [AUD-DEP-05] `intellij-plugin-release.yml` et `release-windows.yml` : `./gradlew` (ou `gradlew.bat`) à la place de `gradle-version:` + `gradle` ; `ubuntu-24.04` ; règle 3 de `check-toolchain-baseline.py` réécrite (D2) ; `docs/TOOLCHAIN_POLICY.md` et `AGENTS.md` alignés si le texte cite `gradle-version:`. Preuve : les deux gates et leurs auto-tests verts ; `check-current-docs.py` vert (chaînes exigées de `release-windows.yml` conservées).
+- [x] 3.2 [AUD-DEP-05] `intellij-plugin-release.yml` et `release-windows.yml` : `./gradlew` (ou `gradlew.bat`) à la place de `gradle-version:` + `gradle` ; `ubuntu-24.04` ; règle 3 de `check-toolchain-baseline.py` réécrite (D2) ; `docs/developer/TOOLCHAIN_POLICY.md` et `AGENTS.md` alignés si le texte cite `gradle-version:`. Preuve : les deux gates et leurs auto-tests verts ; `check-current-docs.py` vert (chaînes exigées de `release-windows.yml` conservées).
 
 ## 4. Identifiants Docker Hub (AUD-DEP-13)
 
@@ -31,5 +31,5 @@ Ordre dans chaque section : rouge, correction, preuve. Chaque workflow modifié 
 ## 6. Clôture
 
 - [x] 6.1 `docs/developer/supply-chain.md` et `docs/developer/quality-gates.md` : règles nouvelles du gate, hypothèse « dépôt public » pour `persist-credentials`, liste fermée Docker Hub. Rejouer `check-current-docs.py`.
-- [x] 6.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-DEP-12, AUD-DEP-05, AUD-DEP-13 : statuts, décomptes corrigés, décision D4, run ids). — fait (2026-10-16) : lignes AUD-DEP-12, AUD-DEP-05, AUD-DEP-13 du sprint 5 (PR #467, décomptes corrigés, D4 = A avec l'écart de la liste fermée, run ids).
-- [ ] 6.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/developer/supply-chain.md`, `docs/TOOLCHAIN_POLICY.md`.
+- [x] 6.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-DEP-12, AUD-DEP-05, AUD-DEP-13 : statuts, décomptes corrigés, décision D4, run ids). — fait (2026-10-16) : lignes AUD-DEP-12, AUD-DEP-05, AUD-DEP-13 du sprint 5 (PR #467, décomptes corrigés, D4 = A avec l'écart de la liste fermée, run ids).
+- [ ] 6.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/developer/supply-chain.md`, `docs/developer/TOOLCHAIN_POLICY.md`.

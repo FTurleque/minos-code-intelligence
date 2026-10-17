@@ -24,5 +24,5 @@ Ordre : relevé, puis rouge, correction, preuve. Tout `-pl` s'accompagne de `-am
 ## 5. Clôture
 
 - [ ] 5.1 `docs/developer/java-advanced-provider.md` : la nouvelle limitation, sa condition d'émission, et la phrase « les règles viennent du dépôt analysé » ; `docs/user/mcp.md` si les limitations y sont listées. Compléter la « Mise en œuvre » de l'ADR 0028 (décision 9). Rejouer `python scripts/docs/check-current-docs.py`.
-- [ ] 5.2 Mettre à jour `docs/audit/2026-10-10/SUIVI.md` (AUD-SEC-11 : limitation livrée ; impact corrigé — un assainisseur ne masque pas un chemin ; **reste ouvert** : règles d'opérateur hors dépôt et traitement des assainisseurs du dépôt, à porter par un changement ultérieur, avec la contrainte « clé de cache »).
-- [ ] 5.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/STATUS.md`, `docs/developer/java-advanced-provider.md`, ADR 0028.
+- [ ] 5.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-SEC-11 : limitation livrée ; impact corrigé — un assainisseur ne masque pas un chemin ; **reste ouvert** : règles d'opérateur hors dépôt et traitement des assainisseurs du dépôt, à porter par un changement ultérieur, avec la contrainte « clé de cache »).
+- [ ] 5.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/developer/java-advanced-provider.md`, ADR 0028.

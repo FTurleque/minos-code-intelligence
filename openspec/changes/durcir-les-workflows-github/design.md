@@ -14,7 +14,7 @@ Sprint 5 de l'audit du 10 octobre 2026 : **AUD-DEP-12**, le reste d'**AUD-DEP-05
 
 ### AUD-DEP-05 — partiellement corrigé par la PR #427
 
-- **Corrigé** : `gradle-version: '9.8.1'` aux deux sites (`intellij-plugin-release.yml:92`, `release-windows.yml:101`), égal au wrapper ; `docs/TOOLCHAIN_POLICY.md:19` à jour ; `check-toolchain-baseline.py` (règle 3) impose l'égalité.
+- **Corrigé** : `gradle-version: '9.8.1'` aux deux sites (`intellij-plugin-release.yml:92`, `release-windows.yml:101`), égal au wrapper ; `docs/developer/TOOLCHAIN_POLICY.md:19` à jour ; `check-toolchain-baseline.py` (règle 3) impose l'égalité.
 - **Reste** : 2 `gradle-version:` et 3 appels `gradle --no-daemon` (`intellij-plugin-release.yml:113`, `release-windows.yml:107,112`) : la release n'utilise pas `./gradlew`. 2 `runs-on: ubuntu-latest` (`intellij-plugin-release.yml:24,144`), seules occurrences de `*-latest` du dépôt.
 
 ### AUD-DEP-13 — confirmé, 5 jobs et non 3

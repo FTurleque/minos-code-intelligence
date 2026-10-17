@@ -77,7 +77,7 @@
         <maven.dependency.plugin.version>3.11.0</maven.dependency.plugin.version>
 
         <!--
-          Audit tooling (docs/quality/code-audit.md). Both tools live in opt-in profiles only
+          Audit tooling (docs/developer/quality/code-audit.md). Both tools live in opt-in profiles only
           (audit-spotbugs, audit-mutation): the default clean verify never loads them.
           spotbugs-maven-plugin 4.10.4.1 is the wrapper release built around SpotBugs 4.10.4; the engine
           version is pinned separately below so that upgrading one is a visible decision.
@@ -105,13 +105,13 @@
         <!--
           PIT mutates every production class of the module it runs in (com.minos.*), with every test of that
           module. crossModule=true also mutates upstream reactor classes against the tests of the current module
-          (much more expensive; used for the cross-module pass of docs/quality/code-audit.md).
+          (much more expensive; used for the cross-module pass of docs/developer/quality/code-audit.md).
         -->
         <pit.crossModule>false</pit.crossModule>
 
         <!--
           ArchUnit: test-scope library of minos-app (architecture tests over the compiled classes of every module,
-          docs/quality/code-audit.md). Same version as the MORPHEUS architecture tests.
+          docs/developer/quality/code-audit.md). Same version as the MORPHEUS architecture tests.
         -->
         <archunit.version>1.5.1</archunit.version>
         <!--
@@ -369,7 +369,7 @@
 
     <profiles>
         <!--
-          audit-spotbugs: static bug-pattern analysis (docs/quality/code-audit.md).
+          audit-spotbugs: static bug-pattern analysis (docs/developer/quality/code-audit.md).
           Off by default. Reports: target/spotbugsXml.xml, target/spotbugs.html, target/spotbugsSarif.json per module.
           The blocking gate is the explicit goal spotbugs:check, never part of the default lifecycle.
         -->
@@ -394,7 +394,7 @@
         </profile>
 
         <!--
-          audit-mutation: PIT mutation testing (docs/quality/code-audit.md).
+          audit-mutation: PIT mutation testing (docs/developer/quality/code-audit.md).
           Off by default and never bound to a phase: it runs only through pitest:mutationCoverage.
           Default scope: every production class of each module (com.minos.*), with every test of the same module.
           The initial three-class scope of minos-engine (2026-10-07) is no longer the default; narrow a run without
@@ -424,7 +424,7 @@
                  org.owasp:dependency-check-maven:aggregate
           Not covered by this Maven scan: Maven plugins and their dependencies (build tooling), the Gradle-built
           IntelliJ plugin (minos-intellij), Docker base images, embedded SCIP tools, Python scripts. See
-          docs/quality/code-audit.md.
+          docs/developer/quality/code-audit.md.
           OSS Index requires Sonatype credentials since 2025; it is disabled rather than left to fail silently.
         -->
         <profile>

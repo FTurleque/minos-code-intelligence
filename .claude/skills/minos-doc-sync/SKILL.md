@@ -1,6 +1,6 @@
 ---
 name: minos-doc-sync
-description: Mettre à jour la documentation courante de MINOS après un changement fusionné ou prêt à l'être — docs/STATUS.md, docs/ROADMAP.md, documentation utilisateur et développeur, index des ADR, suivi d'audit — sans toucher à l'historique figé, puis rejouer les gates documentaires. À utiliser après la fusion d'une PR visible pour l'utilisateur, à la clôture d'un changement OpenSpec, ou quand l'utilisateur dit « mets à jour STATUS/ROADMAP » ou « synchronise la doc ».
+description: Mettre à jour la documentation courante de MINOS après un changement fusionné ou prêt à l'être — docs/project/governance/STATUS.md, docs/project/governance/ROADMAP.md, documentation utilisateur et développeur, index des ADR, suivi d'audit — sans toucher à l'historique figé, puis rejouer les gates documentaires. À utiliser après la fusion d'une PR visible pour l'utilisateur, à la clôture d'un changement OpenSpec, ou quand l'utilisateur dit « mets à jour STATUS/ROADMAP » ou « synchronise la doc ».
 ---
 
 # Synchronisation documentaire
@@ -8,13 +8,13 @@ description: Mettre à jour la documentation courante de MINOS après un changem
 ## Où écrire quoi
 | Information | Document |
 |---|---|
-| Ce qui est **livré** et garanti | `docs/STATUS.md` |
-| Progression, travaux ouverts, prochains sprints | `docs/ROADMAP.md` |
+| Ce qui est **livré** et garanti | `docs/project/governance/STATUS.md` |
+| Progression, travaux ouverts, prochains sprints | `docs/project/governance/ROADMAP.md` |
 | Utilisation (CLI, MCP, installation, plugin, diagnostics) | `docs/user/` |
 | Architecture, gates, tests, supply-chain | `docs/developer/` (gates : `quality-gates.md`) |
-| Décisions durables | `docs/adr/` (commande `/minos:adr`) |
-| Avancement d'un audit | `docs/audit/<date>/SUIVI.md` |
-| Preuves d'époque | **ne pas modifier** : `docs/history/`, `docs/audit/archive/`, `openspec/changes/archive/` |
+| Décisions durables | `docs/architecture/adr/` (commande `/minos:adr`) |
+| Avancement d'un audit | `docs/project/audits/<date>/SUIVI.md` |
+| Preuves d'époque | **ne pas modifier** : `docs/project/history/`, `docs/project/audits/archive/`, `openspec/changes/archive/` |
 
 ## Étapes
 1. Relever ce qui a changé (`git log`, `git diff`, PR fusionnées) et **vérifier chaque affirmation** contre le code ou la CI (commande, run id) avant de l'écrire. Le statut d'un check, une version, un nombre : lus, pas supposés.

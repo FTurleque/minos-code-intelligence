@@ -2,7 +2,7 @@
 
 ## Context
 
-Sprint 8 de l'audit du 10 octobre 2026 : **AUD-PERF-08**. HEAD analysé : `949e1569` (`develop`). Le prérequis AUD-TST-03 (confinement exigé en CI) est fermé (`docs/audit/2026-10-10/SUIVI.md:10`). Changement indépendant des autres du sprint.
+Sprint 8 de l'audit du 10 octobre 2026 : **AUD-PERF-08**. HEAD analysé : `949e1569` (`develop`). Le prérequis AUD-TST-03 (confinement exigé en CI) est fermé (`docs/project/audits/2026-10-10/SUIVI.md:10`). Changement indépendant des autres du sprint.
 
 ## État vérifié au HEAD
 
