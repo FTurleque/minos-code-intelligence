@@ -2,7 +2,9 @@ package com.minos.application.semantic;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.output.json.DeterministicJson;
+import com.minos.registry.ProjectPathMapping.RuntimeLocation;
 import com.minos.semantic.SemanticVector;
 
 import java.io.IOException;
@@ -25,6 +27,13 @@ import static com.minos.domain.Preconditions.requireText;
  * <p>MINOS permits loopback endpoints for native execution and the fixed {@code minos-ollama}
  * service name used by the managed internal Docker network. Arbitrary remote hosts remain
  * rejected. MINOS never downloads a model from this Java provider.</p>
+ *
+ * <p>The {@code minos-ollama} name is a single-label host: outside the Docker network it would be
+ * resolved by the local DNS suffix list, LLMNR or NBT-NS, and any machine answering could receive the
+ * source code sent for embedding. It is therefore only joined from the Docker runtime. A provider built
+ * for another runtime location is still constructed -- a {@code MINOS_HOME} written for Docker must stay
+ * openable by a native launcher -- but every {@link #embed} refuses before any name resolution, and
+ * {@link #limitations()} declares it.</p>
  */
 public final class OllamaEmbeddingProvider implements EmbeddingProvider {
 
@@ -34,18 +43,30 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
     private static final String MANAGED_DOCKER_HOST = "minos-ollama";
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final int MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+    private static final int MAX_ERROR_BODY_BYTES = 4 * 1024;
+    private static final int MAX_ERROR_EXCERPT_CHARS = 512;
+    public static final String MANAGED_SERVICE_OUTSIDE_DOCKER_LIMITATION = "OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER";
 
     private final URI endpoint;
     private final String model;
     private final int dimensions;
     private final int timeoutMillis;
+    private final boolean managedServiceOutsideDocker;
 
     public OllamaEmbeddingProvider(String model, int dimensions) {
         this(DEFAULT_ENDPOINT, model, dimensions, DEFAULT_TIMEOUT);
     }
 
+    /** Built for the native runtime location, the strictest one. */
     public OllamaEmbeddingProvider(URI endpoint, String model, int dimensions, Duration timeout) {
+        this(endpoint, model, dimensions, timeout, RuntimeLocation.NATIVE);
+    }
+
+    public OllamaEmbeddingProvider(
+            URI endpoint, String model, int dimensions, Duration timeout, RuntimeLocation runtimeLocation) {
         this.endpoint = validateEndpoint(Objects.requireNonNull(endpoint, "endpoint"));
+        this.managedServiceOutsideDocker = MANAGED_DOCKER_HOST.equalsIgnoreCase(this.endpoint.getHost())
+                && Objects.requireNonNull(runtimeLocation, "runtimeLocation") != RuntimeLocation.DOCKER;
         this.model = requireText(model, "model").trim();
         if (dimensions < 32 || dimensions > 16_384) {
             throw new IllegalArgumentException("dimensions must be between 32 and 16384");
@@ -61,7 +82,10 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
 
     @Override public String id() { return "minos-local-ollama"; }
     @Override public List<String> limitations() {
-        return List.of("LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC", "SEMANTIC_RESULTS_REMAIN_HEURISTIC");
+        return managedServiceOutsideDocker
+                ? List.of("LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC", "SEMANTIC_RESULTS_REMAIN_HEURISTIC",
+                        MANAGED_SERVICE_OUTSIDE_DOCKER_LIMITATION)
+                : List.of("LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC", "SEMANTIC_RESULTS_REMAIN_HEURISTIC");
     }
     @Override public String modelId() { return model; }
     @Override public int dimensions() { return dimensions; }
@@ -71,6 +95,12 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
     public SemanticVector embed(String stableKey, String text) throws IOException {
         requireText(stableKey, "stableKey");
         Objects.requireNonNull(text, "text");
+        if (managedServiceOutsideDocker) {
+            throw new IOException("Ollama configuration error: the semantic endpoint (minos.semantic.endpoint) "
+                    + "designates the managed Docker service " + MANAGED_DOCKER_HOST + ", which is only reachable "
+                    + "from the Docker runtime (MINOS_RUNTIME_LOCATION=docker); use a loopback endpoint such as "
+                    + "127.0.0.1 for native execution");
+        }
 
         HttpURLConnection connection = (HttpURLConnection) endpoint.toURL().openConnection(Proxy.NO_PROXY);
         connection.setInstanceFollowRedirects(false);
@@ -87,11 +117,12 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
             try (OutputStream output = connection.getOutputStream()) { output.write(request); }
             int status = connection.getResponseCode();
             InputStream stream = status >= 200 && status < 300 ? connection.getInputStream() : connection.getErrorStream();
-            String response = readBounded(stream);
             if (status < 200 || status >= 300) {
+                String excerpt = readErrorExcerpt(stream);
                 throw new IOException("local Ollama embedding request failed with HTTP " + status
-                        + (response.isBlank() ? "" : ": " + response));
+                        + (excerpt.isEmpty() ? "" : ": " + excerpt));
             }
+            String response = readBounded(stream);
             double[] values = parseEmbeddingResponse(response, dimensions);
             return SemanticVector.fromArray(stableKey, values);
         } finally {
@@ -168,6 +199,20 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
             if (numeric < 0 || numeric > 255) return false;
         }
         return Integer.parseInt(octets[0]) == 127;
+    }
+
+    /**
+     * What an error response says, safe to put in a message: at most {@value #MAX_ERROR_BODY_BYTES} bytes are
+     * read -- the body is not trusted to be small -- reduced to {@value #MAX_ERROR_EXCERPT_CHARS} characters on
+     * one line, and left out altogether when it looks sensitive (a path, a credential).
+     */
+    static String readErrorExcerpt(InputStream stream) throws IOException {
+        if (stream == null) return "";
+        try (InputStream input = stream) {
+            String body = new String(input.readNBytes(MAX_ERROR_BODY_BYTES), StandardCharsets.UTF_8);
+            String excerpt = body.length() > MAX_ERROR_EXCERPT_CHARS ? body.substring(0, MAX_ERROR_EXCERPT_CHARS) : body;
+            return PublicErrorMessages.sanitize(excerpt, "");
+        }
     }
 
     private static String readBounded(InputStream stream) throws IOException {

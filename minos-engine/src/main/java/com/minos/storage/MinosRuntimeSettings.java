@@ -2,6 +2,7 @@ package com.minos.storage;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.ConfinedFileOpener;
+import com.minos.registry.ProjectPathMapping;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -94,6 +95,18 @@ public final class MinosRuntimeSettings {
         if (blank(value)) value = environment.get(environmentVariable);
         if (blank(value)) value = fileProperties.getProperty(property);
         return blank(value) ? null : value.trim();
+    }
+
+    /**
+     * Where this process runs: {@code minos.runtime.location} system property, then {@code MINOS_RUNTIME_LOCATION},
+     * as {@link ProjectPathMapping#resolveRuntimeLocation} reads them for the registries. The configuration file
+     * is deliberately <em>not</em> consulted: it is shared by every launcher of one MINOS home, and the location
+     * of a launcher is a fact about that process, not a setting a Docker installation could write for a native one.
+     *
+     * @throws IllegalArgumentException when the configured value is not a known location
+     */
+    public ProjectPathMapping.RuntimeLocation runtimeLocation() {
+        return ProjectPathMapping.resolveRuntimeLocation(environment, systemProperties);
     }
 
     public String secret(
