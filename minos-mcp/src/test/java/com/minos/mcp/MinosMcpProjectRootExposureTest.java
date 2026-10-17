@@ -78,11 +78,11 @@ class MinosMcpProjectRootExposureTest {
         return McpToolCalls.text(result);
     }
 
-    private static void assertNoAbsolutePath(String text, Path temp) {
-        String raw = temp.toString();
+    private static void assertNoAbsolutePath(String text, Path tempRoot) {
+        String raw = tempRoot.toString();
         String escaped = raw.replace("\\", "\\\\");
         assertFalse(text.contains(raw), text);
         assertFalse(text.contains(escaped), text);
-        assertFalse(text.contains(temp.getFileName().toString()), text);
+        assertFalse(text.contains(tempRoot.getFileName().toString()), text);
     }
 }

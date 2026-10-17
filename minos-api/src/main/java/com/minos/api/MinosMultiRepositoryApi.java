@@ -90,11 +90,11 @@ public interface MinosMultiRepositoryApi extends MinosApi {
     ) throws MinosApiException;
 
     /**
-     * @param includeAuthorEmails vrai seulement sur demande explicite : {@link GitCommitDto#authorEmail()} porte alors
-     *                            l'adresse réelle ; sinon un masque fixe (le composant reste présent, AUD-SEC-10)
+     * @param includeAuthorEmails true only on explicit request: {@link GitCommitDto#authorEmail()} then carries the
+     *                            real address; otherwise a fixed mask (the component stays present, AUD-SEC-10)
      */
     record GitActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth, boolean includeAuthorEmails) {
-        /** Requête sans adresses d'auteurs (le défaut, signature d'origine conservée). */
+        /** A query without author addresses (the default; the original signature is kept). */
         public GitActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth) {
             this(since, maxCommits, maxFiles, zoneDepth, false);
         }
