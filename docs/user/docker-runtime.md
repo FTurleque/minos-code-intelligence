@@ -215,6 +215,14 @@ Exemple d'installation :
 
 `local-hash` expose le provider `minos-local-hash`, 384 dimensions. C'est un provider déterministe zéro-réseau destiné à valider le plumbing provider/store/search. **Ce n'est pas un modèle appris et il ne remplace pas la qualification de qualité M23.**
 
+## `minos-ollama` : réservé au runtime Docker
+
+Le nom `minos-ollama` n'existe que sur le réseau Docker géré par MINOS. Le fournisseur d'embeddings ne l'utilise que si l'emplacement d'exécution est Docker : `MINOS_RUNTIME_LOCATION=docker`, posé par les images (`ENV`) et par les services `minos-mcp`, `minos-admin` et `minos-bootstrap` des fichiers `docker/compose-mcp.*.yaml`. Hors Docker, ce nom serait résolu par le DNS du réseau local, LLMNR ou NBT-NS : une autre machine pourrait y répondre et recevoir en clair le code envoyé pour l'embedding.
+
+Le `MINOS_HOME` d'une installation Docker avec Ollama contient `minos.semantic.endpoint=http://minos-ollama:11434/api/embed`. Si un lanceur **natif** ouvre ce même dossier, l'ouverture réussit et les commandes qui n'utilisent pas la recherche sémantique fonctionnent. Seule la recherche sémantique est refusée, avant toute résolution de nom, par une erreur qui nomme `minos.semantic.endpoint` et `MINOS_RUNTIME_LOCATION=docker`, et le statut de l'index sémantique porte la limite `OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER`. Aucun autre endpoint n'est essayé à la place. La valeur de `MINOS_RUNTIME_LOCATION` est `native` ou `docker` ; toute autre valeur est refusée en la nommant. Elle est lue dans la propriété système `minos.runtime.location` puis la variable d'environnement, jamais dans `minos.properties`.
+
+Un conteneur lancé hors des fichiers compose fournis doit exporter `MINOS_RUNTIME_LOCATION=docker` pour garder la recherche sémantique.
+
 ## Vector store
 
 Le store existant est conservé :
