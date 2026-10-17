@@ -37,7 +37,11 @@ Sprint 8 de l'audit du 10 octobre 2026 : **AUD-PERF-08**. HEAD analysé : `949e1
 
 Tâche 1 : durée moyenne d'une énumération et cadence réelle de la boucle, sous Windows et sous Linux, sur un hôte de quelques centaines de processus ; relecture des tests du plugin qui dépendent d'une observation. Les valeurs de D2 sont arrêtées sur ces mesures et consignées ici.
 
-### D2. Sondage adaptatif — **décision en attente du propriétaire**
+### Mesures (tâche 1.1 puis 4.1, 2026-10-17, Windows 10, JDK 25, 595 à 598 processus sur l'hôte)
+
+Une énumération `descendants().toList()` d'un processus vivant coûte **30 à 34 ms** (moyenne de 500 appels) : plus que la période de 10 ms. La boucle du HEAD ne tourne donc pas à 100 appels par seconde mais à **22 à 23 appels par seconde** (énumération puis `sleep(10)`, réel 10,8 ms), soit environ 70 % d'un cœur occupé par provider. Avec la période de régime de 100 ms : **7,7 appels par seconde** (environ 23 % d'un cœur). Le gain réel sous Windows est donc de **trois fois** en énumérations et d'un facteur trois en occupation, non de dix : l'objectif « au moins cinq fois moins d'énumérations » ne vaut que pour un hôte dont l'énumération est rapide, et le test de cadence (processus factice, énumération instantanée) le prouve pour la boucle, pas pour le coût réel. **Non mesuré** : Linux (aucun hôte Linux sur ce poste). Le test factice voit 178 à 179 énumérations en 2 s au HEAD et un maximum de 30 après correction.
+
+### D2. Sondage adaptatif — **tranchée par le propriétaire le 2026-10-17 : option A** (10 ms pendant la première seconde, puis 100 ms ; fenêtre de 250 ms après la sortie de la racine conservée)
 
 Option A (recommandée) : 10 ms pendant la première seconde de vie du processus (là où un lanceur crée et abandonne le plus souvent ses intermédiaires), puis **100 ms**. Régime établi : dix énumérations par seconde au lieu de cent. Le test `:179` garde au moins neuf observations dans sa fenêtre d'une seconde.
 
