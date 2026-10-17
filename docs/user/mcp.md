@@ -486,6 +486,10 @@ Le MCP reste **read-only** : `project add`, `tools install`, `index`, `runtime i
 
 Par conséquence, `minos_index_status` et `minos_project_structure` n'inspectent **pas** les runtimes des providers (inspecter un runtime peut extraire des fichiers, calculer l'empreinte d'un arbre ou lancer une sonde de sandbox) : dans `providerProfiles`, `runtimeState` vaut `NOT_INSPECTED` et `runtimeDiagnostics` renvoie vers les commandes d'inspection. L'état réel (installé, prêt, bloqué…) se lit par `minos providers` et `minos doctor`. Une erreur de référence de projet (`unknown project`, ambiguïté) reste actionnable : si la valeur ressemble à un chemin ou à un secret, elle n'est pas répétée et le message demande un nom enregistré ou un UUID (`minos project list`).
 
+**Arguments inconnus.** Chaque tool publie `additionalProperties:false` : un argument qui n'est pas une propriété de son schéma est refusé et l'opération n'est pas exécutée (une faute de frappe comme `limt` pour `limit` n'est donc jamais servie avec la valeur par défaut). La réponse est une erreur d'outil `error: unknown MCP argument: limt` ; seul le premier nom inconnu (ordre alphabétique), borné à 64 caractères, y figure, jamais la valeur d'un argument. Un nom qui a la forme d'un chemin absolu ou d'un secret n'est pas répété : la réponse est l'erreur générique `error: MINOS tool execution failed`. Ni la réponse ni le journal du serveur (stderr) ne reprennent une valeur d'argument.
+
+**Racine du projet.** `minos_project_structure` ne rend jamais le chemin absolu de la racine d'un projet (il révélerait le nom du compte local et l'arborescence du poste au modèle connecté) : `rootPath` reste présent, mais ne porte que le **nom du répertoire racine** (dernier segment, par exemple `typescript-modules`), ou `(filesystem root)` pour une racine de volume ; `rootAvailable` est inchangé. Limite : un client qui utilisait `rootPath` comme chemin obtient une valeur inutilisable, sans erreur ; il doit lire la racine par la CLI (`minos project inspect <projet> --format json`, qui garde le chemin absolu) ou par l'API Java. Cette limite figure aussi dans les notes de la prochaine version.
+
 ### Analyses avancées
 
 Les tools avancés ne fabriquent pas de données lorsqu'une capability provider manque.
@@ -506,6 +510,8 @@ Les limites de requête sont explicites et les résultats restent bornés.
 `minos_impact_v2` conserve l'impact structuré historique comme baseline et expose séparément les ajouts prouvés par les signaux avancés.
 
 `minos_security_paths` est une recherche bornée de chemins observés. **L'absence de chemin n'est pas une preuve de sûreté et un chemin observé n'est pas présenté comme une preuve runtime exhaustive de vulnérabilité.**
+
+Pour un projet Java, les règles source, puits et assainisseur de l'analyse de sécurité viennent du fichier `.minos/java-advanced-provider.properties` **du dépôt analysé** (non fiable) : quand ce fichier existe, les `limitations` de `minos_program_graph`, `minos_impact_v2` et `minos_security_paths` contiennent `SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY`. Un dépôt qui omet ses sources ou ses puits fait rapporter « aucun chemin » : ce n'est pas une preuve de sûreté. Un assainisseur déclaré ne masque pas un chemin, il le marque (`sanitizedPathObserved`).
 
 #### Projet Java indexé pendant qu'un fichier changeait
 

@@ -37,7 +37,20 @@ Sprint 7 de l'audit du 10 octobre 2026 : **AUD-SEC-09**. HEAD analysé : `949e15
 
 `MinosMcpServerIntegrationTest` gagne un cas : appel d'un outil à argument `limit` avec `limt`, par le transport STDIO réel. Il relève trois faits : refus ou non ; forme du refus ; contenu de stderr. Le résultat est consigné ici et dans `SUIVI.md`, et requalifie le constat.
 
-### D2. Défense dans `MinosMcpTools` — **décision en attente du propriétaire**
+### Résultat de D1 (relevé le 2026-10-17, `MinosMcpServerIntegrationTest`, STDIO réel, SDK 2.0.1)
+
+Au HEAD `396e301f`, avant tout code : le constat est **non reproduit pour l'exécution** et **confirmé pour la forme du refus**.
+
+- **Refus : oui.** Le validateur du SDK (`io.modelcontextprotocol.util.ToolInputValidator`) est résolu et actif dans le classpath de test (même résolution que le jar distribué : aucune configuration ne le désactive) ; `limt` ne s'exécute pas.
+- **Forme : un résultat d'outil en erreur** (`isError=true`), pas une erreur de protocole. Le message est celui du validateur, **dans la langue de la JVM** (en français sur ce poste), et il **reprend le nom de la propriété inconnue sans borne ni détecteur** : une clé de 10 000 caractères donne une réponse de 10 205 caractères ; une clé à forme de chemin absolu (`C:/Users/…`) est renvoyée telle quelle.
+- **Journal : le même message est écrit en WARNING sur stderr** (`ToolInputValidator.validate`), donc le nom non borné y figure aussi. **La valeur d'un argument n'est reprise ni dans la réponse ni dans le journal** (cas `unknownOption` à valeur de chemin).
+- **Test rouge** : `unknownArgumentIsRefusedOverStdioWithoutEchoingCallerValues` échoue au HEAD sur « réponse bornée » (longueur 10 205) ; le refus lui-même est déjà vrai.
+
+**Non mesuré** : le jar ombré distribué n'a pas été lancé ; la résolution du validateur est établie sur le classpath de test de `minos-app`. Sans objet pour la suite : la validation du SDK est désormais désactivée explicitement, le refus ne dépend plus de sa résolution à l'exécution.
+
+Requalification : AUD-SEC-09 passe de « confirmé hors SDK, probablement non reproductible » à **non reproduit en exécution (SDK), confirmé en exposition du nom d'argument** (exigence « Le refus d'un argument inconnu n'expose aucune valeur d'argument » : le nom doit être borné et soumis au détecteur, ce que le SDK ne fait pas).
+
+### D2. Défense dans `MinosMcpTools` — **décision du propriétaire : option A** (2026-10-17)
 
 **Option A (recommandée) : validation du SDK conservée et rejet des clés inconnues dans `MinosMcpTools`.** Chaque outil refuse une clé absente des propriétés de son schéma, par `clientError`, avec la clé bornée. Cohérent avec le précédent `:383-387` ; la garantie ne dépend plus du SDK ni de sa configuration ; un appel direct hors SDK est couvert. Coût : la liste des propriétés doit venir du schéma lui-même, sans seconde liste à maintenir.
 
@@ -45,9 +58,11 @@ Sprint 7 de l'audit du 10 octobre 2026 : **AUD-SEC-09**. HEAD analysé : `949e15
 
 **Option C : désactiver la validation du SDK et valider dans MINOS seul.** À ne retenir que si D1 montre que le journal du SDK contient une valeur d'argument et qu'il ne peut pas être maîtrisé autrement (D3).
 
+**Mise en œuvre retenue** : option A, complétée par la désactivation de la validation du SDK (`validateToolInputs(false)` dans `MinosMcpServer`), seule façon de borner le nom rendu et journalisé (D3 : le message du SDK n'est pas maîtrisable ; réglage du niveau du journal écarté car le client reçoit aussi le message). `MinosMcpTools` refuse, avant l'opération, toute clé absente des propriétés du schéma de l'outil (`Tool.inputSchema().get("properties")`, calculé une fois à la construction du catalogue), par `IllegalArgumentException` rendue par `clientError` : nom borné à 64 caractères, premier nom inconnu en ordre naturel, détecteur `PublicErrorMessages.looksSensitive` appliqué. Les autres mots-clés du schéma (types, bornes, énumération, UUID) restent revérifiés par les extracteurs et le backend (`MinosMcpTools.java` extracteurs, `parseUuid`) : aucune règle du schéma n'est perdue par la désactivation (`required` : `required(...)`).
+
 Si D1 est **rouge** (argument servi avec la valeur par défaut), l'option B disparaît.
 
-### D3. Journal du refus
+### D3. Journal du refus — déclenché (voir résultat de D1)
 
 Si D1 montre un WARN du SDK contenant une valeur d'argument, la correction est, dans l'ordre de préférence : régler le niveau ou le contenu de ce journal ; sinon l'option C. Le nom de l'argument refusé peut être journalisé, borné ; jamais sa valeur.
 

@@ -25,6 +25,7 @@ Advanced program analysis follows these rules:
 7. Interprocedural analysis is bounded by request depth/result limits and reports cycles/truncation.
 8. The CPG is a composed query view, not a second source of truth.
 9. Security analysis reports observed source→sink paths and sanitizers; it does not claim exhaustive vulnerability presence or absence.
+   *Implementation note (2026-10-17, AUD-SEC-11):* the Java provider reads its source/sink/sanitizer rules only from the analysed repository (`.minos/java-advanced-provider.properties`), which is untrusted; every response built on such rules carries the additive limitation `SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY`, relayed by `minos_program_graph`, `minos_impact_v2` and `minos_security_paths`. A declared sanitizer never removes a path: it is reported with `sanitizedPathObserved=true`. Operator-supplied rules outside the repository are not supported and remain a later, separately decided change.
 10. Public API/MCP exposure is additive and versioned independently from the stable `MinosApi` v1 contract.
 
 ## Consequences

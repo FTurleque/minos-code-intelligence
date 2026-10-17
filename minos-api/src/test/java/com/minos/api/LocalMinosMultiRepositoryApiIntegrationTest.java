@@ -59,6 +59,14 @@ class LocalMinosMultiRepositoryApiIntegrationTest {
         assertFalse(activity.historyTruncated());
         assertFalse(activity.filesTruncated());
         assertEquals("src/Main.java", activity.files().getFirst().path());
+        // AUD-SEC-10: the author's address is masked unless the caller asks for it.
+        assertEquals("[masked]", activity.recentCommits().getFirst().authorEmail());
+        assertEquals("MINOS", activity.recentCommits().getFirst().authorName());
+        MinosMultiRepositoryApi.GitActivityDto withEmails = api.analyzeGitActivity(
+                project.id(),
+                new MinosMultiRepositoryApi.GitActivityQuery(Instant.EPOCH, 100, 100, 2, true)
+        );
+        assertEquals("minos@example.com", withEmails.recentCommits().getFirst().authorEmail());
 
         MinosMultiRepositoryApi.WorkspaceIntelligenceDto multiRepo = api.analyzeWorkspace(
                 workspace.id(),

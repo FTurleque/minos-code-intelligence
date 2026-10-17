@@ -40,6 +40,8 @@ localhost
 ::1
 ```
 
+À cette liste s'ajoute le service géré `minos-ollama`, **joint seulement depuis le runtime Docker** (`MINOS_RUNTIME_LOCATION=docker`) : hors Docker, le provider est construit (un `MINOS_HOME` écrit pour Docker reste ouvrable) mais `embed` échoue avant toute résolution de nom et la limite `OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER` est déclarée (ADR 0031, « Mise en œuvre »).
+
 Les redirects HTTP sont désactivés. Un endpoint distant est une erreur de configuration. M23 ne fournit aucun provider cloud implicite.
 
 ## Qualité learned
@@ -150,6 +152,7 @@ Un provider Ollama actif expose notamment :
 LOCAL_LEARNED_EMBEDDING_LOOPBACK_ONLY
 LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC
 SEMANTIC_RESULTS_REMAIN_HEURISTIC
+OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER   # seulement si minos-ollama est visé hors Docker
 ```
 
 Ces diagnostics empêchent de confondre « endpoint accessible » et « modèle qualifié ».

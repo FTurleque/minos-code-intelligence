@@ -122,6 +122,14 @@ JAVA_SECURITY_RULES_NOT_CONFIGURED
 
 et `SECURITY_TAINT` n’est jamais publié.
 
+Avec un fichier, quel que soit son contenu (même vide de sources) :
+
+```text
+SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY
+```
+
+Les règles `sources`, `sinks` et `sanitizers` viennent **exclusivement du dépôt analysé**, qui n'est pas de confiance : un dépôt qui omet ses sources ou ses puits fait rapporter « aucun chemin » (`SECURITY_SOURCE_OR_SINK_ANNOTATIONS_UNAVAILABLE`, `ABSENCE_OF_PATH_IS_NOT_PROOF_OF_SAFETY`). Cette limitation, exclusive de `JAVA_SECURITY_RULES_NOT_CONFIGURED`, est portée par le graphe de programme et relayée telle quelle par `minos_program_graph`, `minos_impact_v2` et `minos_security_paths` (MCP, CLI, API Java). Un assainisseur déclaré ne retire jamais un chemin : le chemin traversant un assainisseur est rapporté avec `sanitizedPathObserved=true` et la liste des assainisseurs traversés. Des règles fournies par l'opérateur hors du dépôt ne sont pas supportées.
+
 La propagation M22 v1 est intraprocédurale. Un appel inconnu stoppe le taint plutôt que de supposer qu’il préserve la valeur.
 
 ## Nature, confiance et provenance
@@ -190,6 +198,7 @@ JAVA_INTERPROCEDURAL_UNIQUE_NAME_ARITY_ONLY
 JAVA_INTERPROCEDURAL_EXTERNAL_OR_AMBIGUOUS_CALLS_SKIPPED
 JAVA_SECURITY_FLOW_INTRAPROCEDURAL_CONFIGURED_RULES_ONLY
 JAVA_SECURITY_UNKNOWN_CALL_STOPS_FLOW
+SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY
 ```
 
 Elles peuvent apparaître uniquement lorsque le cas correspondant est rencontré.

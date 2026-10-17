@@ -156,7 +156,7 @@ public final class GitIntelligenceService implements GitIntelligence {
                             commit.getName(),
                             committedAt,
                             commit.getAuthorIdent().getName(),
-                            commit.getAuthorIdent().getEmailAddress(),
+                            query.includeAuthorEmails() ? commit.getAuthorIdent().getEmailAddress() : MASKED_AUTHOR_EMAIL,
                             commit.getShortMessage(),
                             retained
                     ));

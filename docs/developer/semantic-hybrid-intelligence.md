@@ -67,7 +67,7 @@ MINOS_SEMANTIC_DIMENSIONS=<dimensions>
 MINOS_SEMANTIC_ENDPOINT=http://127.0.0.1:11434/api/embed   # optionnel
 ```
 
-`OllamaEmbeddingProvider` accepte uniquement un endpoint loopback, ne suit pas les redirects, borne timeout/réponse et vérifie les dimensions retournées. MINOS ne télécharge aucun modèle. La qualité du modèle est validée séparément par Recall@3/MRR/nDCG@3 ; un endpoint fonctionnel ne suffit pas à qualifier un modèle.
+`OllamaEmbeddingProvider` accepte uniquement un endpoint loopback (ou, depuis le runtime Docker seulement, le service géré `minos-ollama` ; hors Docker, `embed` le refuse avant toute résolution de nom, ADR 0031), ne suit pas les redirects, borne timeout/réponse et vérifie les dimensions retournées. MINOS ne télécharge aucun modèle. La qualité du modèle est validée séparément par Recall@3/MRR/nDCG@3 ; un endpoint fonctionnel ne suffit pas à qualifier un modèle.
 
 Un provider inconnu doit échouer explicitement ; il ne peut pas provoquer un fallback silencieux vers un service distant.
 

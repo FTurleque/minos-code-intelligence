@@ -236,6 +236,19 @@ analyzeGitActivity
 analyzeWorkspace
 ```
 
+### Adresses e-mail des auteurs Git
+
+`analyzeGitActivity` ne rend plus l'adresse e-mail d'un auteur par défaut : `GitCommitDto.authorEmail()` vaut le masque fixe `[masked]` (le composant reste présent, `authorName` est inchangé, le décompte `uniqueAuthorCount` s'appuie toujours sur l'adresse réelle). L'adresse n'est rendue que sur demande explicite, par le cinquième composant de la requête :
+
+```java
+// Défaut : authorEmail() == "[masked]" (la signature à quatre composants est conservée)
+new MinosMultiRepositoryApi.GitActivityQuery(since, 100, 100, 2);
+// Demande explicite : authorEmail() rend l'adresse du commit
+new MinosMultiRepositoryApi.GitActivityQuery(since, 100, 100, 2, true);
+```
+
+Un appelant qui lisait l'adresse sans le demander doit passer `true`. `workTree` et `originRemote` ne sont pas concernés par ce masquage.
+
 ### Registre abîmé : lister et résoudre un espace de travail sans rien taire
 
 `listWorkspaces` et `getWorkspace` sont **stricts** : une seule entrée de registre illisible les fait échouer, comme avant. Leur
