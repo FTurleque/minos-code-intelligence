@@ -64,6 +64,12 @@ class OllamaEmbeddingProviderRuntimeLocationTest {
     }
 
     @Test
+    void aMissingLocationIsRefusedWhateverTheEndpoint() {
+        assertThrows(NullPointerException.class, () -> new OllamaEmbeddingProvider(
+                URI.create("http://127.0.0.1:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2), null));
+    }
+
+    @Test
     void aHostThatIsNotRecognisedIsStillRefusedWhateverTheLocation() {
         assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
                 URI.create("http://minos-ollama.example.com:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2),

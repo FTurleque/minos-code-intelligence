@@ -65,8 +65,9 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
     public OllamaEmbeddingProvider(
             URI endpoint, String model, int dimensions, Duration timeout, RuntimeLocation runtimeLocation) {
         this.endpoint = validateEndpoint(Objects.requireNonNull(endpoint, "endpoint"));
+        Objects.requireNonNull(runtimeLocation, "runtimeLocation");
         this.managedServiceOutsideDocker = MANAGED_DOCKER_HOST.equalsIgnoreCase(this.endpoint.getHost())
-                && Objects.requireNonNull(runtimeLocation, "runtimeLocation") != RuntimeLocation.DOCKER;
+                && runtimeLocation != RuntimeLocation.DOCKER;
         this.model = requireText(model, "model").trim();
         if (dimensions < 32 || dimensions > 16_384) {
             throw new IllegalArgumentException("dimensions must be between 32 and 16384");
