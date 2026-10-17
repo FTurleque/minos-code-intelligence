@@ -56,7 +56,11 @@ Une règle de redirection, `ProcessBuilder.redirect(file)` : `Redirect.to(`, `Re
 
 `Files.createDirectory` ne doit pas être confondu avec `Files.createDirectories` (déjà compté) : le motif est borné par `\(`, comme aujourd'hui.
 
-### D2. Statut de `PrivateLocalStorage` — **décision en attente du propriétaire**
+### Relevé réel du gate (tâche 1.1, 2026-10-17)
+
+Règles ajoutées, le gate rend 44 violations au HEAD : les 43 couples (fichier, API) du relevé `grep` plus la redirection de `WindowsAppContainerWorkerSandboxBackend.java:424`. Aucun écart avec le relevé. Après inscription : `sources=531, allowlisted-occurrences=106, forbidden=20, primitives=4` (62 entrées, dont les 18 antérieures inchangées).
+
+### D2. Statut de `PrivateLocalStorage` — **tranchée par le propriétaire le 2026-10-17 : option B**
 
 Option B (recommandée) : cinq entrées de liste (`Files.createFile` 1, `Files.createTempFile` 2, `Files.createTempDirectory` 1, `Files.newOutputStream` 1, `Files.createDirectory` 1), justifiées par « primitive de création à droits privés ». Le gate garde `primitives=4`, ses deux cas d'auto-test et sa docstring (une phrase à corriger : « they need nothing raw » devient faux). Un appel brut de plus dans `PrivateLocalStorage` échoue, ce que l'option A ne garantit pas. C'est le traitement déjà appliqué à `SharedCacheLeaseRegistry`.
 
