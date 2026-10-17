@@ -486,6 +486,8 @@ Le MCP reste **read-only** : `project add`, `tools install`, `index`, `runtime i
 
 Par conséquence, `minos_index_status` et `minos_project_structure` n'inspectent **pas** les runtimes des providers (inspecter un runtime peut extraire des fichiers, calculer l'empreinte d'un arbre ou lancer une sonde de sandbox) : dans `providerProfiles`, `runtimeState` vaut `NOT_INSPECTED` et `runtimeDiagnostics` renvoie vers les commandes d'inspection. L'état réel (installé, prêt, bloqué…) se lit par `minos providers` et `minos doctor`. Une erreur de référence de projet (`unknown project`, ambiguïté) reste actionnable : si la valeur ressemble à un chemin ou à un secret, elle n'est pas répétée et le message demande un nom enregistré ou un UUID (`minos project list`).
 
+**Arguments inconnus.** Chaque tool publie `additionalProperties:false` : un argument qui n'est pas une propriété de son schéma est refusé et l'opération n'est pas exécutée (une faute de frappe comme `limt` pour `limit` n'est donc jamais servie avec la valeur par défaut). La réponse est une erreur d'outil `error: unknown MCP argument: limt` ; seul le premier nom inconnu (ordre alphabétique), borné à 64 caractères, y figure, jamais la valeur d'un argument. Un nom qui a la forme d'un chemin absolu ou d'un secret n'est pas répété : la réponse est l'erreur générique `error: MINOS tool execution failed`. Ni la réponse ni le journal du serveur (stderr) ne reprennent une valeur d'argument.
+
 ### Analyses avancées
 
 Les tools avancés ne fabriquent pas de données lorsqu'une capability provider manque.
