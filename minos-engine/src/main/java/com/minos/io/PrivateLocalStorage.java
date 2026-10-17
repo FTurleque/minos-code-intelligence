@@ -19,6 +19,7 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.nio.file.attribute.UserPrincipal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -696,7 +697,7 @@ public final class PrivateLocalStorage {
      * reads back as equal to the expected one; {@code :r} would drop it and leave an empty DACL (measured),
      * {@code :d} turns it into an explicit entry.
      */
-    private static final class WindowsDacl {
+    static final class WindowsDacl {
         private static final long TIMEOUT_SECONDS = 10L;
 
         private WindowsDacl() {
@@ -741,22 +742,34 @@ public final class PrivateLocalStorage {
          */
         static void requireNoConditionalDeny(Path target) throws IOException {
             if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) return;
+            requireNoConditionalDeny(target, System.getenv("SystemRoot"),
+                    Arrays.asList(System.getenv("TEMP"), System.getenv("TMP"), System.getProperty("user.home")),
+                    command -> new ProcessBuilder(command)
+                            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                            .redirectError(ProcessBuilder.Redirect.DISCARD)
+                            .start());
+        }
+
+        /** Starts the process; a seam so that every refusal can be exercised on any system. */
+        @FunctionalInterface
+        interface Launcher {
+            Process start(List<String> command) throws IOException;
+        }
+
+        static void requireNoConditionalDeny(Path target, String systemRoot, List<String> saveDirectories,
+                                             Launcher launcher) throws IOException {
             String path = target.toString();
             if (!target.isAbsolute() || path.chars().anyMatch(c -> c < 0x20 || "*?\"<>|".indexOf(c) >= 0)) {
                 throw new IOException("cannot read the access rules of private storage: unsupported path");
             }
-            String systemRoot = System.getenv("SystemRoot");
             if (systemRoot == null || systemRoot.isBlank()) {
                 throw new IOException("cannot read the access rules of private storage: Windows directory unknown");
             }
-            Path saved = createSddlFile();
+            Path saved = createSddlFile(saveDirectories);
             try {
-                Process process = new ProcessBuilder(
+                Process process = launcher.start(List.of(
                         Path.of(systemRoot, "System32", "icacls.exe").toString(), path, "/save", saved.toString(),
-                        "/L", "/q")
-                        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                        .redirectError(ProcessBuilder.Redirect.DISCARD)
-                        .start();
+                        "/L", "/q"));
                 try {
                     if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                         process.destroyForcibly();
@@ -786,15 +799,14 @@ public final class PrivateLocalStorage {
         }
 
         /**
-         * The file {@code icacls /save} writes: in the temporary directory of the current Windows account ({@code
-         * TEMP}, then {@code TMP}), else in the profile of the account ({@code user.home}); never in a directory
-         * shared by all. A process started with a sanitized environment has neither variable. Beside or inside
-         * the object itself does not work: its parent may deny the write (the case this class exists for) and
-         * {@code icacls} refuses a save file inside the tree it saves (measured: exit 87). Nothing is kept: the
-         * caller deletes it.
+         * The file {@code icacls /save} writes: in the first usable directory of {@code candidates} -- in practice
+         * the temporary directory of the current Windows account ({@code TEMP}, then {@code TMP}), else the
+         * profile of the account ({@code user.home}) -- never in a directory shared by all. A process started with
+         * a sanitized environment has neither variable. Beside or inside the object itself does not work: its
+         * parent may deny the write (the case this class exists for) and {@code icacls} refuses a save file inside
+         * the tree it saves (measured: exit 87). Nothing is kept: the caller deletes it.
          */
-        private static Path createSddlFile() throws IOException {
-            String[] candidates = {System.getenv("TEMP"), System.getenv("TMP"), System.getProperty("user.home")};
+        private static Path createSddlFile(List<String> candidates) throws IOException {
             for (String value : candidates) {
                 if (value == null || value.isBlank()) continue;
                 Path directory = Path.of(value);
