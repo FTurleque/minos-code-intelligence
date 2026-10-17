@@ -79,3 +79,28 @@ La forme lecteur et les chemins UNC concernent Windows ; `forceDirectory` (`Dura
 - Un message aujourd'hui publié qui contient `X:/` ou `X:\` accolé à un mot devient générique : voulu.
 - Un `MINOS_HOME` où `config/minos.properties` est un répertoire démarrait ; il échouera. Erreur d'usage à rendre actionnable (étiquette « MINOS runtime configuration »), à noter dans `docs/user/troubleshooting.md`.
 - Un test existant peut affirmer le chemin dans un message : relevé en tâche 3.1.
+
+## Relevé d'implémentation (2026-10-17)
+
+### Tâche 2.2 — messages devenus différents
+
+- Aucun message d'appelant n'est devenu générique : `MinosMcpErrorRedactionTest`, `MinosMcpTypedErrorsTest` et le reste de `minos-mcp` et `minos-cli` passent.
+- **Un message rendu autrement** : `IndexCommandRefusalReasonTest` attendait qu'une séquence ANSI soit rendue `_[31mred` ; elle est maintenant retirée en entier (D1), le BEL et le NUL aussi, soit `bell nul bidi_ end red` (seul le caractère de format bidi, que `PublicErrorMessages` ne touche pas, reste remplacé par `_` à l'affichage). Attente du test mise à jour.
+- `sanitize` aplatit aussi `\t` en espace (avant : conservé) ; sans effet sur les tests existants.
+
+### Tâche 3.1 — sites de message qui concatènent un `Path`
+
+Les cinq sites du design sont confirmés au HEAD. **Corrigés en plus**, parce que leur absence rendait le correctif sans effet pour l'appelant ou qu'ils sont le même motif dans le même fichier :
+- `FileProjectFingerprintSnapshotStore` `:376` et `:598` (répertoire de projet non régulier) ;
+- `FileIndexStateStore` `:578` (répertoire), `:173` (« cannot read MINOS project state »), `:636` et `:644` (« cannot read/write MINOS index state ») : le message qui atteint l'appelant est celui de l'`UncheckedIOException`, pas celui de sa cause.
+
+**Relevés et non corrigés** (même famille « fichier refusé » ou contenu invalide, hors du périmètre des cinq sites ; à traiter dans un changement dédié) :
+- refus de type de cible : `InterProcessLocalProjectRegistry:172`, `ProjectPathMappingStore:46` et `:104`, `FileSemanticVectorStore:344`, `:361`, `:366` ;
+- contenu invalide ou illisible : `FileIndexStateStore:401`, `:404`, `:610`, `:615`, `:621`, `:673` ; `LocalProjectRegistry:306`, `:313`, `:317`, `:320`, `:376`, `:381`, `:387`, `:406` ; `FileSemanticVectorStore:105`, `:142`, `:155`, `:173`, `:284` ; `SnapshotRetentionService:196`.
+
+Aucun test existant n'affirme un chemin absolu dans un de ces messages (les tests relevés n'affirment que le libellé : « regular non-symlink », « non-symlink directory »).
+
+### Écarts avec le design
+
+- D3 est réalisé par `BoundedProperties.loadIfPresent` (rend `Optional.empty()` si rien n'existe, test `NOFOLLOW_LINKS`) ; `MinosRuntimeSettings.load` l'appelle sans pré-test. Les littéraux exigés par `check-audit-remediation-v2.py` et `check-post-mne.py` sont conservés ; `check-private-io.py` admet le test d'existence dans la primitive.
+- Le message de durabilité de `DurableAtomicFile` (`:62`, `:227`) n'était pas testable sans couture : `ensureDirectory(Path, String, DirectorySync)` et `unsupportedDirectorySync` sont ajoutés en visibilité de paquet, sans changement de comportement public.
