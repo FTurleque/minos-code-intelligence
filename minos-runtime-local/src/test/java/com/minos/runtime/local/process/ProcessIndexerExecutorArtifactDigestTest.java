@@ -23,6 +23,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** R1 lot 1 : le SHA-256 de l'artefact est calculé à la promotion et écrit durablement à côté (ADR 0039 §1). */
@@ -118,11 +119,10 @@ class ProcessIndexerExecutorArtifactDigestTest {
                         generated, Duration.ofMinutes(1)));
         IndexingExecutionRequest request = request(project);
 
-        try {
-            UnboundedProcessForTests.run(executor, request);
-        } catch (IllegalStateException expected) {
-            // provider exit code 3
-        }
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> UnboundedProcessForTests.run(executor, request));
+        assertTrue(failure.getMessage().startsWith("provider exited with code 3"),
+                "the failure must be the provider's own exit code, not a refusal to run: " + failure.getMessage());
 
         Path runDirectory = home.resolve("runs").resolve(request.runId().toString()).resolve(PROVIDER);
         assertTrue(Files.isDirectory(runDirectory));
