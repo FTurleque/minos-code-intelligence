@@ -89,7 +89,16 @@ public interface MinosMultiRepositoryApi extends MinosApi {
             WorkspaceQuery query
     ) throws MinosApiException;
 
-    record GitActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth) {
+    /**
+     * @param includeAuthorEmails vrai seulement sur demande explicite : {@link GitCommitDto#authorEmail()} porte alors
+     *                            l'adresse réelle ; sinon un masque fixe (le composant reste présent, AUD-SEC-10)
+     */
+    record GitActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth, boolean includeAuthorEmails) {
+        /** Requête sans adresses d'auteurs (le défaut, signature d'origine conservée). */
+        public GitActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth) {
+            this(since, maxCommits, maxFiles, zoneDepth, false);
+        }
+
         public GitActivityQuery {
             if (since == null) {
                 throw new IllegalArgumentException("since must not be null");

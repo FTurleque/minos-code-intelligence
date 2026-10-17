@@ -203,7 +203,8 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
             return gitActivity(gitIntelligence.analyze(
                     Path.of(project.rootPath()),
                     new GitIntelligence.ActivityQuery(
-                            value.since(), value.maxCommits(), value.maxFiles(), value.zoneDepth()
+                            value.since(), value.maxCommits(), value.maxFiles(), value.zoneDepth(),
+                            value.includeAuthorEmails()
                     )
             ));
         });

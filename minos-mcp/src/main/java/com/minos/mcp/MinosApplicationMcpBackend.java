@@ -65,6 +65,8 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     private static final int DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS = 800;
     private static final int DEFAULT_RUNTIME_LIMIT = 20;
 
+    static final String FILESYSTEM_ROOT_NAME = "(filesystem root)";
+
     private final MinosApplication application;
     private final ProjectInspectionService projects;
     private final ProjectQueryService queries;
@@ -87,8 +89,28 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     public String projectStructure(String project) throws Exception {
         ProjectInspectionService.ProjectView view = projects.inspectProject(project);
         Map<String, Object> map = ProjectJson.project(view);
+        // AUD-SEC-10: the key stays (additive surface); only the root directory name leaves, never the absolute path.
+        map.put("rootPath", rootDirectoryName(view.rootPath()));
         map.put("providerProfiles", providerProfiles());
         return DeterministicJson.render(map);
+    }
+
+    /**
+     * The last segment of a project root, whatever separator style it uses (a Windows or UNC path may be registered
+     * from a Linux container): the one form of the root that leaves the machine through MCP (AUD-SEC-10). A
+     * filesystem root has no segment and renders {@link #FILESYSTEM_ROOT_NAME}.
+     */
+    static String rootDirectoryName(String rootPath) {
+        int end = rootPath.length();
+        while (end > 0 && isSeparator(rootPath.charAt(end - 1))) end--;
+        String trimmed = rootPath.substring(0, end);
+        int cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+        String name = trimmed.substring(cut + 1);
+        return name.isEmpty() || name.endsWith(":") ? FILESYSTEM_ROOT_NAME : name;
+    }
+
+    private static boolean isSeparator(char character) {
+        return character == '/' || character == '\\';
     }
 
     @Override

@@ -32,11 +32,13 @@ public final class GitActivityCommand {
               --max-commits <1..10000>  Maximum commits scanned (default: 500)
               --max-files <1..10000>    Maximum files/zones returned (default: 500)
               --zone-depth <1..8>       Directory depth used for zones (default: 2)
+              --include-author-emails   Render the real author e-mail addresses (default: masked)
               --format <text|json>      Output format (default: text)
             """.stripTrailing();
 
     private static final CliOptions.Spec OPTIONS = CliOptions.spec()
             .text("--format")
+            .flag("--include-author-emails")
             .integer("--days", 1, 3650)
             .integer("--max-commits", 1, 10_000)
             .integer("--max-files", 1, 10_000)
@@ -61,7 +63,8 @@ public final class GitActivityCommand {
                                     Instant.now().minus(Duration.ofDays(options.days())),
                                     options.maxCommits(),
                                     options.maxFiles(),
-                                    options.zoneDepth()
+                                    options.zoneDepth(),
+                                    options.includeAuthorEmails()
                             )
                     );
                     output.append(render(report, options.format())).append('\n');
@@ -176,6 +179,7 @@ public final class GitActivityCommand {
             int maxCommits,
             int maxFiles,
             int zoneDepth,
+            boolean includeAuthorEmails,
             SymbolOutputFormat format
     ) {
         private static Options parse(String[] arguments) {
@@ -185,7 +189,8 @@ public final class GitActivityCommand {
             String project = CliCommandSupport.operand(arguments[0], "project");
             CliOptions options = OPTIONS.parse(arguments, 1);
             return new Options(project, options.integer("--days", 30), options.integer("--max-commits", 500),
-                    options.integer("--max-files", 500), options.integer("--zone-depth", 2), options.format());
+                    options.integer("--max-files", 500), options.integer("--zone-depth", 2),
+                    options.has("--include-author-emails"), options.format());
         }
     }
 }

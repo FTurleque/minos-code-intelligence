@@ -488,6 +488,8 @@ Par conséquence, `minos_index_status` et `minos_project_structure` n'inspectent
 
 **Arguments inconnus.** Chaque tool publie `additionalProperties:false` : un argument qui n'est pas une propriété de son schéma est refusé et l'opération n'est pas exécutée (une faute de frappe comme `limt` pour `limit` n'est donc jamais servie avec la valeur par défaut). La réponse est une erreur d'outil `error: unknown MCP argument: limt` ; seul le premier nom inconnu (ordre alphabétique), borné à 64 caractères, y figure, jamais la valeur d'un argument. Un nom qui a la forme d'un chemin absolu ou d'un secret n'est pas répété : la réponse est l'erreur générique `error: MINOS tool execution failed`. Ni la réponse ni le journal du serveur (stderr) ne reprennent une valeur d'argument.
 
+**Racine du projet.** `minos_project_structure` ne rend jamais le chemin absolu de la racine d'un projet (il révélerait le nom du compte local et l'arborescence du poste au modèle connecté) : `rootPath` reste présent, mais ne porte que le **nom du répertoire racine** (dernier segment, par exemple `typescript-modules`), ou `(filesystem root)` pour une racine de volume ; `rootAvailable` est inchangé. Limite : un client qui utilisait `rootPath` comme chemin obtient une valeur inutilisable, sans erreur ; il doit lire la racine par la CLI (`minos project inspect <projet> --format json`, qui garde le chemin absolu) ou par l'API Java. Cette limite figure aussi dans les notes de la prochaine version.
+
 ### Analyses avancées
 
 Les tools avancés ne fabriquent pas de données lorsqu'une capability provider manque.
