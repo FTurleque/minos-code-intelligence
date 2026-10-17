@@ -511,6 +511,8 @@ Les limites de requête sont explicites et les résultats restent bornés.
 
 `minos_security_paths` est une recherche bornée de chemins observés. **L'absence de chemin n'est pas une preuve de sûreté et un chemin observé n'est pas présenté comme une preuve runtime exhaustive de vulnérabilité.**
 
+Pour un projet Java, les règles source, puits et assainisseur de l'analyse de sécurité viennent du fichier `.minos/java-advanced-provider.properties` **du dépôt analysé** (non fiable) : quand ce fichier existe, les `limitations` de `minos_program_graph`, `minos_impact_v2` et `minos_security_paths` contiennent `SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY`. Un dépôt qui omet ses sources ou ses puits fait rapporter « aucun chemin » : ce n'est pas une preuve de sûreté. Un assainisseur déclaré ne masque pas un chemin, il le marque (`sanitizedPathObserved`).
+
 #### Projet Java indexé pendant qu'un fichier changeait
 
 L'analyse Java de ces trois tools lit les fichiers source du disque. Quand le snapshot actif porte l'empreinte exacte de l'arbre source (indexation sur un arbre resté stable), MINOS vérifie que les fichiers sont ceux qui ont été indexés, et refuse l'analyse Java sinon (`JAVA_ADVANCED_PROVIDER_SOURCE_DIFFERS_FROM_SNAPSHOT_FINGERPRINT`).
