@@ -37,6 +37,7 @@ La documentation est rangée en trois espaces, un par lecteur, plus le dossier d
 | analyse statique et mutation | [Audit de code : SpotBugs et PIT](developer/quality/code-audit.md) |
 | surfaces publiques (CLI, API Java, MCP) | [Surfaces publiques](developer/public-surfaces.md) · [Faits produit générés](developer/generated/product-facts.md) |
 | configurer les agents IA du dépôt | [Configuration IA](developer/ai-configuration.md) |
+| exécuter les règles Archgate des ADR | [Archgate](developer/archgate.md) |
 
 ## Architecture — [`architecture/`](architecture/)
 

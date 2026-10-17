@@ -116,6 +116,7 @@ flowchart TB
 18. [Tests et contribution](testing.md)
 19. [Audit de code : SpotBugs et PIT](quality/code-audit.md)
 20. [Configuration des assistants IA](ai-configuration.md)
+21. [Archgate : règles rattachées aux ADR](archgate.md)
 
 ## Build développeur
 
