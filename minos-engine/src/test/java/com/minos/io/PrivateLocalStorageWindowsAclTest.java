@@ -244,6 +244,61 @@ class PrivateLocalStorageWindowsAclTest {
         assertTrue(isDaclProtected(child));
     }
 
+    /** The condition is false for any normal account (BUILTIN\Guests), so the fixture never locks the test out. */
+    private static final String CONDITIONAL_DENY = "(XD;OICI;0x1301bf;;;WD;(Member_of {SID(BG)}))";
+
+    @Test
+    void anExplicitConditionalDenyIsRefusedAndStillThereAfterwards() throws Exception {
+        // Java's getAcl() does not show conditional entries and setAcl cannot write one back: rewriting the DACL
+        // would silently lift an administrator's restriction. MINOS refuses instead and leaves the DACL alone.
+        Path directory = Files.createDirectory(temporary.resolve("conditional-deny"));
+        setSddl(directory, "D:PAI(A;OICI;FA;;;" + currentUserSid() + ")" + CONDITIONAL_DENY);
+        assertTrue(rawSddl(directory).contains("XD;"), "fixture: the directory holds the conditional deny");
+
+        IOException refusal = assertThrows(IOException.class, () -> PrivateLocalStorage.ensurePrivateDirectory(directory));
+
+        assertFalse(String.valueOf(refusal.getMessage()).contains(temporary.toString()),
+                "the refusal must not name the path");
+        assertTrue(rawSddl(directory).contains("XD;"), "the conditional deny must survive: " + rawSddl(directory));
+    }
+
+    @Test
+    void aConditionalDenyInheritedByAFileIsNotDroppedByHardeningTheFile() throws Exception {
+        Path parent = Files.createDirectory(temporary.resolve("conditional-deny-parent"));
+        setSddl(parent, "D:PAI(A;OICI;FA;;;" + currentUserSid() + ")" + CONDITIONAL_DENY);
+        Path file = Files.writeString(parent.resolve("file.txt"), "x");
+        assertTrue(rawSddl(file).contains("XD;"), "fixture: the file inherits the conditional deny");
+
+        assertThrows(IOException.class, () -> PrivateLocalStorage.hardenExistingFile(file));
+
+        assertTrue(rawSddl(file).contains("XD;"), "the inherited conditional deny must survive: " + rawSddl(file));
+    }
+
+    @Test
+    void aDaclThatCannotBeReadFailsTheHardeningBeforeAnyWrite() throws Exception {
+        Path directory = Files.createDirectory(temporary.resolve("unreadable-dacl"));
+        CountingAclProbe probe = new CountingAclProbe();
+        probe.daclFailure = new IOException("cannot read the DACL of private storage");
+        PrivateLocalStorage.useForTesting(probe);
+        try {
+            IOException failure = assertThrows(IOException.class, () -> PrivateLocalStorage.ensurePrivateDirectory(directory));
+            assertEquals("cannot read the DACL of private storage", failure.getMessage());
+        } finally {
+            PrivateLocalStorage.resetCapabilityProbeForTesting();
+        }
+        assertEquals(0, probe.setAclCalls, "a DACL that cannot be read is never overwritten");
+    }
+
+    @Test
+    void anOrdinaryDirectoryIsStillHardenedWhenNoConditionalDenyIsPresent() throws Exception {
+        Path directory = Files.createDirectory(temporary.resolve("ordinary"));
+
+        PrivateLocalStorage.ensurePrivateDirectory(directory);
+
+        assertTrue(isDaclProtected(directory));
+        assertFalse(rawSddl(directory).contains("XD;"));
+    }
+
     // ------------------------------------------------------------------------------ helpers
 
     private static boolean hasWriteDenyForOwner(Path path) throws IOException {
@@ -326,10 +381,17 @@ class PrivateLocalStorageWindowsAclTest {
     /** Real ACL view, counting how many times the DACL is written. */
     private static final class CountingAclProbe implements PrivateLocalStorage.CapabilityProbe {
         int setAclCalls;
+        IOException daclFailure;
 
         @Override
         public boolean supportsPosix(Path target) {
             return false;
+        }
+
+        @Override
+        public void requireNoConditionalDeny(Path target) throws IOException {
+            if (daclFailure != null) throw daclFailure;
+            PrivateLocalStorage.CapabilityProbe.real().requireNoConditionalDeny(target);
         }
 
         @Override

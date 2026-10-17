@@ -146,7 +146,7 @@
   {
     "file": "minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java",
     "method": "Files.createTempFile",
-    "max": 3,
+    "max": 4,
     "justification": "Primitive de création à droits privés : ce fichier crée lui-même les fichiers et répertoires avec les droits du propriétaire seul (D2 du changement etendre-le-garde-d-e-s-privees-aux-ecritures-brutes) ; entrée durable."
   },
   {
