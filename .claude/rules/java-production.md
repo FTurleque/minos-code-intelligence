@@ -22,7 +22,7 @@ Conventions relevées dans les gates, les ADR et les revues du dépôt. La conve
 - Aucun secret, jeton ni mot de passe en clair dans le code, les messages ou les journaux.
 
 ## E/S et processus
-- E/S privées uniquement par les primitives (`ConfinedFileOpener`, `DurableAtomicFile`, `BoundedFileLease`, `BoundedProperties`, `PrivateLocalStorage`, `FileTreeOperations`) : `Files.write`, `Files.createDirectories`, `Files.newInputStream`, `FileChannel.open`/`lock` sont interdits ailleurs (`check-private-io.py`, liste de tolérance en cliquet).
+- E/S privées uniquement par les primitives du gate (`ConfinedFileOpener`, `DurableAtomicFile`, `BoundedFileLease`, `BoundedProperties`) et par `PrivateLocalStorage` (qui crée à droits privés, par entrées de liste nominatives). Sont interdits ailleurs (`check-private-io.py`, liste de tolérance en cliquet) : `Files.write`, `writeString`, `createDirectories`, `createDirectory`, `createFile`, `createTempFile`, `createTempDirectory`, `newInputStream`, `newOutputStream`, `newBufferedWriter`, `newByteChannel`, `copy`, `move`, `FileChannel.open`/`lock` et la redirection de la sortie d'un processus vers un fichier (`redirectOutput(File)`, `Redirect.to`). Une écriture nouvelle ne passe pas par une entrée de liste : elle passe par une primitive.
 - Un processus externe ne reçoit **jamais** l'environnement hérité : liste d'autorisation (`ProviderProcessEnvironment`), motifs de secret exclus.
 - Code non fiable : bac à sable OS ou refus, jamais de mode dégradé silencieux ; une dégradation de confinement doit être observable.
 
