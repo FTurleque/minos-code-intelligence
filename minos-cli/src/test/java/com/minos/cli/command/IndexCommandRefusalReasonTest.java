@@ -39,9 +39,11 @@ class IndexCommandRefusalReasonTest {
 
         assertNoControlCharacter(text.replace("\n", ""));
         assertNoControlCharacter(json.replace("\n", ""));
-        assertTrue(text.contains("refused (checkpoint damaged: bell_ nul_ bidi_ end _[31mred)"), text);
+        // PublicErrorMessages retire la sequence ANSI complete et les caracteres de controle (BEL, NUL) ;
+        // seul le caractere de format bidi, qu'elle ne touche pas, est remplace par "_" a l'affichage.
+        assertTrue(text.contains("refused (checkpoint damaged: bell nul bidi_ end red)"), text);
         JsonNode parsed = new ObjectMapper().readTree(json);
-        assertEquals("checkpoint damaged: bell_ nul_ bidi_ end _[31mred",
+        assertEquals("checkpoint damaged: bell nul bidi_ end red",
                 parsed.path("resumed").path("refusalReason").asText());
     }
 
