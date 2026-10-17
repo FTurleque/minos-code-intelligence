@@ -2,6 +2,7 @@ package com.minos.storage;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.ConfinedFileOpener;
+import com.minos.registry.ProjectPathMapping;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -61,16 +62,16 @@ public final class MinosRuntimeSettings {
         Path normalized = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         Properties file = new Properties();
         Path configuration = normalized.resolve(CONFIG_DIRECTORY).resolve(CONFIG_FILE);
-        if (Files.isRegularFile(configuration)) {
-            file.putAll(BoundedProperties.load(
-                    configuration,
-                    MAX_CONFIGURATION_BYTES,
-                    MAX_CONFIGURATION_ENTRIES,
-                    MAX_CONFIGURATION_KEY_CHARS,
-                    MAX_CONFIGURATION_VALUE_CHARS,
-                    "MINOS runtime configuration"
-            ));
-        }
+        // Absent => empty configuration. Present without being a regular non-symlink file (directory, link,
+        // dangling link) => refused: ignoring it would silently start on the default values (fail-open).
+        BoundedProperties.loadIfPresent(
+                configuration,
+                MAX_CONFIGURATION_BYTES,
+                MAX_CONFIGURATION_ENTRIES,
+                MAX_CONFIGURATION_KEY_CHARS,
+                MAX_CONFIGURATION_VALUE_CHARS,
+                "MINOS runtime configuration"
+        ).ifPresent(file::putAll);
         Properties systemSnapshot = new Properties();
         systemSnapshot.putAll(System.getProperties());
         return new MinosRuntimeSettings(normalized, file, Map.copyOf(System.getenv()), systemSnapshot);
@@ -94,6 +95,18 @@ public final class MinosRuntimeSettings {
         if (blank(value)) value = environment.get(environmentVariable);
         if (blank(value)) value = fileProperties.getProperty(property);
         return blank(value) ? null : value.trim();
+    }
+
+    /**
+     * Where this process runs: {@code minos.runtime.location} system property, then {@code MINOS_RUNTIME_LOCATION},
+     * as {@link ProjectPathMapping#resolveRuntimeLocation} reads them for the registries. The configuration file
+     * is deliberately <em>not</em> consulted: it is shared by every launcher of one MINOS home, and the location
+     * of a launcher is a fact about that process, not a setting a Docker installation could write for a native one.
+     *
+     * @throws IllegalArgumentException when the configured value is not a known location
+     */
+    public ProjectPathMapping.RuntimeLocation runtimeLocation() {
+        return ProjectPathMapping.resolveRuntimeLocation(environment, systemProperties);
     }
 
     public String secret(

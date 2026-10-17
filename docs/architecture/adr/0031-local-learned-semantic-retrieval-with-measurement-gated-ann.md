@@ -13,7 +13,7 @@ M23 must therefore improve semantic quality without rewriting history or convert
 ## Decision
 
 1. MINOS adds a learned embedding provider backed by an operator-managed **local Ollama `/api/embed` endpoint**.
-2. The built-in learned-provider transport accepts **loopback endpoints only**. It never points to a cloud host, follows no redirect, downloads no model and manages no Ollama credentials.
+2. The built-in learned-provider transport accepts **loopback endpoints only**. It never points to a cloud host, follows no redirect, downloads no model and manages no Ollama credentials. *(Précisé en octobre 2026 : le code accepte aussi `minos-ollama`, depuis le runtime Docker seulement ; voir « Mise en œuvre ».)*
 3. The operator must explicitly configure model identity and dimensions. Provider id + model id + dimensions remain part of semantic-index identity; changing any of them invalidates reuse and forces a safe rebuild.
 4. Learned-model promotion is not inferred from successful HTTP calls. M23 contains a controlled corpus and blocking Recall@K/MRR/nDCG gate executed against the model actually configured on the qualification machine.
 5. `local-hash` remains available as an opt-in deterministic reference provider and is never relabeled as learned.
@@ -24,7 +24,7 @@ M23 must therefore improve semantic quality without rewriting history or convert
 
 ## Security and operability
 
-- accepted endpoint hosts: `localhost`, IPv4 loopback (`127.0.0.0/8`) or IPv6 loopback;
+- accepted endpoint hosts: `localhost`, IPv4 loopback (`127.0.0.0/8`) or IPv6 loopback; plus `minos-ollama`, the managed Docker service, joined only from the Docker runtime (see « Mise en œuvre »);
 - request redirects are disabled;
 - response size and timeouts are bounded;
 - missing model/dimensions are configuration errors, not implicit defaults;
@@ -65,3 +65,14 @@ Rejected. The built-in provider is deliberately local-only; remote/cloud provide
 ### Add ANN immediately
 
 Rejected. M21-S8 already measured the backend and returned `KEEP_CURRENT_M20_BACKEND`. Architecture does not outrank measurements.
+
+## Mise en œuvre (AUD-SEC-07, octobre 2026)
+
+Ajout, sans rien retirer à la décision ci-dessus : le § 2 (« loopback endpoints only ») et la liste « accepted endpoint hosts » ne disaient pas que le code accepte aussi le nom `minos-ollama`, le service du réseau Docker géré par MINOS. Cet écart entre la décision et le code est levé ici, et la borne est resserrée.
+
+- **Exception énoncée** : `minos-ollama` est le seul hôte non bouclé accepté, et **seulement depuis le runtime Docker** (`MINOS_RUNTIME_LOCATION=docker`, posé par les images et les services de `docker/compose-mcp.*.yaml`). Ce nom à un seul composant est, hors du réseau Docker, résolu par le domaine de recherche DNS, LLMNR, NBT-NS ou mDNS : une machine du réseau qui y répond recevrait en HTTP clair le code envoyé pour l'embedding.
+- **Refus à l'usage, pas à l'ouverture** (décision du propriétaire, changement `reserver-minos-ollama-au-runtime-docker`) : `scripts/install/configure-runtime-settings.ps1` écrit cet endpoint dans `minos.properties` dès que le backend MCP est Docker, et un lanceur natif peut ouvrir le même `MINOS_HOME`. Le fournisseur est donc construit, l'ouverture réussit, mais chaque `embed` échoue avant toute résolution de nom par une erreur de configuration qui nomme le paramètre `minos.semantic.endpoint` et l'emplacement attendu, et le fournisseur déclare la limite `OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER` aux statuts et rapports sémantiques. Aucun autre endpoint n'est essayé à la place.
+- **Source de l'emplacement** : `MinosRuntimeSettings.runtimeLocation()`, qui lit la propriété système `minos.runtime.location` puis `MINOS_RUNTIME_LOCATION` comme `ProjectPathMapping.resolveRuntimeLocation` pour les registres, **jamais** le fichier `minos.properties` (partagé par tous les lanceurs d'un même `MINOS_HOME`). Une valeur inconnue est refusée en nommant la valeur.
+- **Corps d'erreur** : pour un statut hors 2xx, au plus 4 Kio sont lus, 512 caractères au plus sont retenus sur une ligne et passent par `PublicErrorMessages.sanitize` ; un extrait sensible (chemin, justificatif) est omis, le statut reste. La limite de 16 Mio ne vaut plus que pour les réponses valides.
+- **Inchangé** : HTTP en clair vers Ollama (le contrat reste le bouclage et le réseau Docker interne), pas de redirection, aucun modèle téléchargé.
+- **Limite** : la qualification sur une installation Docker réelle avec le profil Ollama, et l'absence de requête DNS pour `minos-ollama` depuis un poste natif, n'ont pas été rejouées (tâche manuelle 4.2 du changement).

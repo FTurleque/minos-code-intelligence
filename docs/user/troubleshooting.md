@@ -188,6 +188,12 @@ Un `.gitignore` ou un `.minosignore` enregistré avec un BOM UTF-8 (Windows Powe
 
 Windows PowerShell 5.1 (`Out-File -Encoding utf8`) et d'anciens éditeurs enregistrent un fichier UTF-8 avec un BOM (octets `EF BB BF`) en tête. MINOS le retire, **une seule fois**, à la lecture de `config/minos.properties`, des autres fichiers de propriétés que MINOS lit (registre, état d'index…) et des fichiers de secret lus par `MinosRuntimeSettings` (par exemple le fichier de mot de passe PostgreSQL désigné par `minos.postgres.passwordFile`) : la première propriété est lue sous son vrai nom et le secret ne contient pas le BOM. Un fichier qui commence par **deux** BOM est refusé avec le message `starts with a repeated UTF-8 byte order mark` : réenregistrez-le en UTF-8 sans BOM. Un BOM ailleurs qu'en tête reste une donnée. Un fichier UTF-16 (autre encodage proposé par ces outils) n'est pas du UTF-8 valide et reste refusé.
 
+## `MINOS runtime configuration must be a regular non-symlink file: minos.properties`
+
+`config/minos.properties` existe dans `MINOS_HOME`, mais ce n'est pas un fichier régulier : c'est un répertoire, un lien symbolique ou un lien cassé. MINOS refuse de démarrer plutôt que d'ignorer la configuration et d'appliquer les valeurs par défaut (stockage compris). Le message ne contient pas le chemin absolu.
+
+Remplacez l'entrée par un vrai fichier de propriétés, ou supprimez-la : l'absence de `config/minos.properties` reste valide et donne une configuration vide.
+
 ## Windows : le bac à sable est indisponible, `minos-launchers` refusé
 
 Les scripts des lanceurs du bac à sable vivent sous `%LOCALAPPDATA%\minos-launchers\<sha256>\` et sont contrôlés avant chaque
@@ -306,6 +312,14 @@ Si le workspace change pendant l’exécution, le fingerprint baseline n’est p
 Une liste vide signifie qu’aucune relation `CALLS` correspondante n’est présente dans le snapshot observé. Cela ne prouve pas une absence runtime.
 
 Limites possibles : dispatch dynamique, réflexion, configuration runtime ou capacités incomplètes du provider.
+
+## La recherche sémantique refuse `minos-ollama` hors de Docker
+
+Symptôme : `Ollama configuration error: the semantic endpoint (minos.semantic.endpoint) designates the managed Docker service minos-ollama` et, dans le statut sémantique, la limite `OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER`.
+
+Cause : le `MINOS_HOME` a été configuré pour le backend Docker (l'installation y écrit `http://minos-ollama:11434/api/embed`) et il est ouvert par un lanceur natif. Ce nom n'est joignable que sur le réseau Docker géré ; MINOS ne l'essaie jamais depuis le poste, car il pourrait être résolu par une autre machine du réseau.
+
+Remède : utiliser la recherche sémantique par le backend Docker, ou, pour un usage natif, fixer `minos.semantic.endpoint` (ou `MINOS_SEMANTIC_ENDPOINT`) sur un endpoint de bouclage, par exemple `http://127.0.0.1:11434/api/embed`. Les autres commandes ne sont pas concernées. Détail : `docs/user/docker-runtime.md`, « `minos-ollama` : réservé au runtime Docker ».
 
 ## `impact` retourne des limitations
 

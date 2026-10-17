@@ -160,17 +160,18 @@ public final class ArchitectureResultRenderer {
         Map<String, String> aliases = aliases(selection.modules());
         StringBuilder result = new StringBuilder();
         result.append("flowchart LR\n");
-        result.append("  %% MINOS project: ").append(mermaidText(view.projectName()))
-                .append(" | snapshot: ").append(mermaidText(view.snapshotId())).append('\n');
+        result.append("  %% MINOS project: ").append(mermaidComment(view.projectName()))
+                .append(" | snapshot: ").append(mermaidComment(view.snapshotId())).append('\n');
         for (String limitation : view.dependencies().limitations()) {
-            result.append("  %% limitation: ").append(mermaidText(limitation)).append('\n');
+            result.append("  %% limitation: ").append(mermaidComment(limitation)).append('\n');
         }
         for (ArchitectureModule module : selection.modules()) {
+            // Le saut de ligne est du balisage de MINOS : il s'insère après l'échappement des textes du dépôt.
             String label = module.relativePath().isBlank()
-                    ? module.name()
-                    : module.name() + "<br/>" + module.relativePath();
+                    ? mermaidText(module.name())
+                    : mermaidText(module.name()) + "<br/>" + mermaidText(module.relativePath());
             result.append("  ").append(aliases.get(module.id()))
-                    .append("[\"").append(mermaidText(label)).append("\"]\n");
+                    .append("[\"").append(label).append("\"]\n");
         }
         for (ArchitectureModuleDependency edge : selection.edges()) {
             result.append("  ").append(aliases.get(edge.sourceModuleId()))
@@ -271,12 +272,20 @@ public final class ArchitectureResultRenderer {
         return map;
     }
 
+    /** Texte d'un libellé : {@code &} d'abord, sinon les entités produites ensuite seraient échappées à nouveau. */
     private static String mermaidText(String value) {
         return value.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("|", "&#124;")
                 .replace("\r", " ")
                 .replace("\n", " ");
+    }
+
+    /** Texte d'une ligne de commentaire : jamais la séquence {@code %%{}, qui ouvre une directive Mermaid. */
+    private static String mermaidComment(String value) {
+        return mermaidText(value).replace("%{", "% {");
     }
 
     private static String dotText(String value) {
