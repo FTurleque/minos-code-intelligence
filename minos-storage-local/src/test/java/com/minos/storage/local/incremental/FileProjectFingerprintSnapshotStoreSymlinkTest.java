@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,6 +50,19 @@ class FileProjectFingerprintSnapshotStoreSymlinkTest {
         IOException rejected = assertThrows(IOException.class,
                 () -> fixture.store().loadActive(fixture.projectId()));
         assertTrue(rejected.getMessage().contains("regular non-symlink"));
+        assertFalse(rejected.getMessage().contains(temp.toString()), rejected.getMessage());
+    }
+
+    @Test
+    void rejectedSymlinkedProjectDirectoryDoesNotNameTheAbsolutePath(@TempDir Path temp) throws Exception {
+        Path storage = temp.resolve("fingerprints");
+        FileProjectFingerprintSnapshotStore store = new FileProjectFingerprintSnapshotStore(storage);
+        UUID projectId = UUID.randomUUID();
+        Path outside = Files.createDirectories(temp.resolve("outside"));
+        if (!createSymbolicLink(storage.resolve(projectId.toString()), outside)) return;
+
+        IOException rejected = assertThrows(IOException.class, () -> store.loadActive(projectId));
+        assertFalse(rejected.getMessage().contains(temp.toString()), rejected.getMessage());
     }
 
     @Test

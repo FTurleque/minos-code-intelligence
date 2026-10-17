@@ -46,20 +46,24 @@ public final class DurableAtomicFile {
      * policy is hardened in place, and the result is verified before any caller writes into it.</p>
      */
     public static void ensureDirectory(Path directory, String label) throws IOException {
+        ensureDirectory(directory, label, DurableAtomicFile::forceDirectory);
+    }
+
+    static void ensureDirectory(Path directory, String label, DirectorySync sync) throws IOException {
         Path target = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
         String operation = requireText(label, "label");
         boolean existed = Files.isDirectory(target);
         Path parent = target.getParent();
         if (!existed && parent != null && !Files.isDirectory(parent)) {
-            ensureDirectory(parent, operation + " parent");
+            ensureDirectory(parent, operation + " parent", sync);
         }
         PrivateLocalStorage.ensurePrivateDirectory(target);
         if (existed) return;
         try {
-            forceDirectory(parent);
+            sync.force(parent);
         } catch (IOException failure) {
             throw new CommitUncertainException(
-                    operation + " directory is visible but parent durability sync failed: " + target,
+                    operation + " directory is visible but parent durability sync failed: " + leafName(target),
                     failure);
         }
     }
@@ -224,9 +228,19 @@ public final class DurableAtomicFile {
         try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
             channel.force(true);
         } catch (UnsupportedOperationException unsupported) {
-            throw new IOException("filesystem does not support required directory durability sync: " + directory,
-                    unsupported);
+            throw unsupportedDirectorySync(directory, unsupported);
         }
+    }
+
+    static IOException unsupportedDirectorySync(Path directory, UnsupportedOperationException cause) {
+        return new IOException(
+                "filesystem does not support required directory durability sync: " + leafName(directory), cause);
+    }
+
+    /** The entry name only: these messages may reach a public output and must not carry the absolute path. */
+    private static String leafName(Path path) {
+        Path name = path.getFileName();
+        return name == null ? "<root>" : name.toString();
     }
 
     private static boolean windows() {
