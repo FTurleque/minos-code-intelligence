@@ -39,6 +39,16 @@ WITNESSES = {
     "Files.write": ("", "Files.write(file, bytes);"),
     "Files.writeString": ("", "Files.writeString(file, text);"),
     "Files.newInputStream": ("", "try (var in = Files.newInputStream(file)) { }"),
+    "Files.newOutputStream": ("", "try (var out = Files.newOutputStream(file)) { }"),
+    "Files.newBufferedWriter": ("", "try (var out = Files.newBufferedWriter(file)) { }"),
+    "Files.newByteChannel": ("", "try (var channel = Files.newByteChannel(file)) { }"),
+    "Files.createFile": ("", "Files.createFile(file);"),
+    "Files.createDirectory": ("", "Files.createDirectory(dir);"),
+    "Files.createTempFile": ("", 'Files.createTempFile(dir, "p", ".tmp");'),
+    "Files.createTempDirectory": ("", 'Files.createTempDirectory(dir, "p");'),
+    "Files.copy": ("", "Files.copy(source, target);"),
+    "Files.move": ("", "Files.move(source, target);"),
+    "ProcessBuilder.redirect(file)": ("", "builder.redirectOutput(file.toFile());"),
     "Files.*": ("import static java.nio.file.Files.*;\n", "write(file, bytes);"),
     "FileChannel.open": ("", "var c = FileChannel.open(file, StandardOpenOption.WRITE);"),
     "AsynchronousFileChannel.open": ("", "var c = AsynchronousFileChannel.open(file);"),
@@ -123,7 +133,10 @@ class PrivateIoGateTest(unittest.TestCase):
         for method, text in (("Files.write", "BiFunction<Path, byte[], Path> f = Files::write;"),
                              ("Files.newInputStream", "Callable<InputStream> c = Files::newInputStream;"),
                              ("Files.createDirectories", "Function<Path, Path> d = Files::createDirectories;"),
-                             ("Files.writeString", "var f = Files::writeString;")):
+                             ("Files.writeString", "var f = Files::writeString;"),
+                             ("Files.newOutputStream", "Function<Path, OutputStream> o = Files::newOutputStream;"),
+                             ("Files.createDirectory", "Function<Path, Path> d = Files::createDirectory;"),
+                             ("Files.move", "BiFunction<Path, Path, Path> m = Files::move;")):
             with self.subTest(method=method):
                 violations = self.violations(java(text))
                 self.assertEqual(1, len(violations), violations)
@@ -166,8 +179,36 @@ class PrivateIoGateTest(unittest.TestCase):
 
     def test_the_similar_but_allowed_calls_are_not_caught(self):
         self.assertEqual([], self.violations(java(
-            "Files.createDirectory(d); Files.newOutputStream(f); Files.readAllBytes(f); Files.writeFoo(f);"
-            " Function<Path, OutputStream> o = Files::newOutputStream;")))
+            "Files.readAllBytes(f); Files.writeFoo(f); Files.createDirectoriesFoo(d); Files.exists(f);"
+            " Files.delete(f); Files.size(f); Files.isDirectory(d);")))
+
+    def test_a_static_import_of_a_new_api_is_caught(self):
+        violations = self.violations(
+            "package p;\nimport static java.nio.file.Files.newOutputStream;\nclass C { }\n")
+        self.assertEqual(1, len(violations))
+        self.assertIn("Files.newOutputStream", violations[0])
+
+    def test_create_directory_is_not_create_directories_and_each_is_counted_once(self):
+        violations = self.violations(java("Files.createDirectory(d); Files.createDirectories(d);"))
+        self.assertEqual(2, len(violations), violations)
+
+    def test_a_process_output_redirected_to_a_file_is_caught(self):
+        for body in ("builder.redirectOutput(file.toFile());", "builder.redirectError(target);",
+                     "builder.redirectOutput(ProcessBuilder.Redirect.to(file.toFile()));",
+                     "builder.redirectError(Redirect.appendTo(file.toFile()));",
+                     "builder.redirectOutput(\n            file.toFile());"):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("ProcessBuilder.redirect(file)", violations[0])
+
+    def test_a_process_redirection_to_a_constant_or_from_a_file_is_not_caught(self):
+        for body in ("builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);",
+                     "builder.redirectError(Redirect.INHERIT);", "builder.redirectOutput(Redirect.PIPE);",
+                     "builder.redirectInput(file.toFile());", "builder.redirectErrorStream(true);",
+                     "Redirect current = builder.redirectOutput();"):
+            with self.subTest(body=body):
+                self.assertEqual([], self.violations(java(body)))
 
     # ------------------------------------------------------------------------------- what is ignored
 

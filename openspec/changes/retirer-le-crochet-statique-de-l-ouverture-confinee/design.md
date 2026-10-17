@@ -30,6 +30,12 @@ Sprint 8 de l'audit du 10 octobre 2026 : **AUD-QUA-10**. HEAD analysé : `949e15
 
 **Non-Goals** : supprimer le point d'injection (les tests de remplacement entre contrôle et ouverture en dépendent) ; revoir les contrôles de confinement.
 
+### Relevé des sites de test (tâche 1.1, 2026-10-17)
+
+- `ConfinedFileOpenerTest` : les cinq crochets (`:59`, `:86`, `:109`, `:128`, `:235` au HEAD) visent `openConfinedRegularFile` ; le chemin exercé dépend du système — descripteurs de répertoire sous Linux (`SecureDirectoryStream`), vérification sous descripteur tenu sous Windows. `:235` est le test à verrous (substitution par un fil concurrent, synchronisée).
+- `OpenRegularFileNoFollowTest` : un seul crochet (`:73`) vise `openRegularFileNoFollow`.
+- Aucun test sauté sous Windows sur ce poste (les liens symboliques sont créables) : 19 tests, 0 sauté (`ConfinedFileOpener*` et `OpenRegularFileNoFollowTest`).
+
 ## Decisions
 
 ### D1. Deux surcharges package-private, crochet en paramètre

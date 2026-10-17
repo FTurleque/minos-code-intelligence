@@ -5,13 +5,21 @@ MINOS_HOME accumulates material as confidential as the repositories it indexes. 
 it world-readable (Files.createDirectories, Files.write), follow links (Files.newInputStream) and
 wait for a lock without end (FileChannel.lock). The four primitives that must touch the raw API to do
 their job -- ConfinedFileOpener, BoundedFileLease, BoundedProperties, DurableAtomicFile -- are the one
-place that decides what private, confined and bounded mean. PrivateLocalStorage and FileTreeOperations
-are checked like any other file (they need nothing raw); SharedCacheLeaseRegistry holds channels and
-locks per key and is bounded by an allowlist entry.
+place that decides what private, confined and bounded mean. PrivateLocalStorage creates files and
+directories with private rights and is not a primitive of this gate: it is checked like any other file
+and carries its raw calls as allowlist entries, so one more raw call there fails. FileTreeOperations is
+checked like any other file; SharedCacheLeaseRegistry holds channels and locks per key and is bounded
+by an allowlist entry.
 
 Forbidden in src/main/java of every module except minos-intellij, outside those primitives:
 
-  Files.createDirectories   Files.write   Files.writeString   Files.newInputStream   (call or method reference)
+  Files.createDirectories   Files.createDirectory   Files.createFile   Files.createTempFile
+  Files.createTempDirectory   Files.write   Files.writeString   Files.newInputStream
+  Files.newOutputStream   Files.newBufferedWriter   Files.newByteChannel   Files.copy   Files.move
+                            (call, method reference or named static import)
+  ProcessBuilder.redirect(file)   redirectOutput / redirectError given anything but a Redirect constant,
+                            Redirect.to, Redirect.appendTo (a process output written to a file);
+                            Redirect.DISCARD / PIPE / INHERIT and redirectInput are not files written
   import static java.nio.file.Files.*      (a wildcard import hides every call above)
   FileChannel.open          AsynchronousFileChannel.open
   FileChannel.lock          any use of FileChannel, AsynchronousFileChannel, FileLock, RandomAccessFile or
@@ -51,11 +59,23 @@ PRIMITIVES = frozenset({
     "minos-engine/src/main/java/com/minos/io/BoundedProperties.java",
 })
 
+REDIRECT_RULE = "ProcessBuilder.redirect(file)"
+
 FORBIDDEN = (
     "Files.createDirectories",
     "Files.write",
     "Files.writeString",
     "Files.newInputStream",
+    "Files.newOutputStream",
+    "Files.newBufferedWriter",
+    "Files.newByteChannel",
+    "Files.createFile",
+    "Files.createDirectory",
+    "Files.createTempFile",
+    "Files.createTempDirectory",
+    "Files.copy",
+    "Files.move",
+    REDIRECT_RULE,
     "Files.*",
     "FileChannel.open",
     "AsynchronousFileChannel.open",
@@ -82,7 +102,9 @@ _THROWABLE_DECLARATION = re.compile(r"\b(?:\w*Exception|Throwable|\w*Error)\s+(\
 _BARE_IDENTIFIER = re.compile(r"\s*\w+\s*")
 _GET_MESSAGE = re.compile(r"\.\s*getMessage\s*\(")
 
-_FILES_METHODS = ("createDirectories", "write", "writeString", "newInputStream")
+_FILES_METHODS = ("createDirectories", "write", "writeString", "newInputStream", "newOutputStream",
+                  "newBufferedWriter", "newByteChannel", "createFile", "createDirectory", "createTempFile",
+                  "createTempDirectory", "copy", "move")
 _STATIC_IMPORT = re.compile(r"\bimport\s+static\s+java\s*\.\s*nio\s*\.\s*file\s*\.\s*Files\s*\.\s*(\*|\w+)\s*;")
 _IMPORT = re.compile(r"^\s*import\b[^;]*;", re.MULTILINE)
 _NOT_OPEN = r"(?!\s*(?:\.|::)\s*open\b)"
@@ -94,6 +116,13 @@ _PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
         )
         for name in _FILES_METHODS
     },
+    # A process output sent to a file: Redirect.to / appendTo, or redirectOutput / redirectError given anything
+    # but a Redirect constant (DISCARD, PIPE, INHERIT are not files). redirectInput reads, redirectErrorStream
+    # and the no-argument getters are other names or empty calls.
+    REDIRECT_RULE: (
+        re.compile(r"\bRedirect\s*\.\s*(?:to|appendTo)\s*\("),
+        re.compile(r"\bredirect(?:Output|Error)\s*\((?!\s*\))(?!\s*(?:ProcessBuilder\s*\.\s*)?Redirect\s*\.)"),
+    ),
     "FileChannel.open": (re.compile(r"\bFileChannel\s*(?:\.|::)\s*open\b"),),
     "AsynchronousFileChannel.open": (re.compile(r"\bAsynchronousFileChannel\s*(?:\.|::)\s*open\b"),),
     # A channel can only come from the primitives: holding one, or a lock on one, is the finding whatever

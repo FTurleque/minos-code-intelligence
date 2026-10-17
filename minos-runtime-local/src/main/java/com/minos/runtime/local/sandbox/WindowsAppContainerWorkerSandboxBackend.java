@@ -615,14 +615,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         // hardening of that directory would rewrite the ACL and take the sandbox's grants with it.
         if (ownerHoldsInheritableFullControl(writeRoot)) return;
         String sid = ProcessIdentity.sid();
-        boolean granted;
-        try {
-            granted = runIcacls(writeRoot.toString(), "/grant", "*" + sid + ":(OI)(CI)F");
-        } catch (IOException | InterruptedException failure) {
-            if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
-            granted = false;
-        }
-        if (!granted) {
+        if (!WindowsAclGrants.system().grant(writeRoot, sid, "(OI)(CI)F")) {
             throw new IllegalStateException("Unable to secure inheritable owner access on a sandbox write root");
         }
     }
@@ -697,34 +690,11 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
      * losing the current user's Full Control the moment {@code isAclGrantable} ran against it.
      */
     static boolean isAclGrantable(Path path) {
-        String target = path.toString();
-        boolean granted;
-        try {
-            granted = runIcacls(target, "/grant", "*" + PROBE_SID + ":(RX)");
-        } catch (IOException failure) {
-            return false;
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
-        if (!granted) return false;
-        try {
-            runIcacls(target, "/remove:g", "*" + PROBE_SID);
-        } catch (IOException | InterruptedException cleanupFailure) {
-            if (cleanupFailure instanceof InterruptedException) Thread.currentThread().interrupt();
-            // The redundant probe ACE may remain; WRITE_DAC is already proven either way.
-        }
+        WindowsAclGrants grants = WindowsAclGrants.system();
+        if (!grants.grant(path, PROBE_SID, "(RX)")) return false;
+        // The redundant probe ACE may remain if its removal fails; WRITE_DAC is already proven either way.
+        grants.remove(path, PROBE_SID);
         return true;
-    }
-
-    private static boolean runIcacls(String... arguments) throws IOException, InterruptedException {
-        List<String> command = new ArrayList<>();
-        command.add(Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString());
-        command.addAll(List.of(arguments));
-        command.add("/q");
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        process.getInputStream().readAllBytes();
-        return process.waitFor() == 0;
     }
 
     /** Environment keys whose value legitimately names a toolchain root the provider reads. */
