@@ -27,4 +27,4 @@ Ordre : preuve de bout en bout, décision, puis (seulement si nécessaire) rouge
 
 - [x] 5.1 `docs/user/mcp.md` : un argument hors schéma est refusé ; forme de l'erreur. Rejouer `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check`.
 - [x] 5.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-SEC-09 : confiance requalifiée d'après 1.1, validateur du SDK non relevé par l'audit, décision D2, résultat de 1.3).
-- [ ] 5.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/user/mcp.md`.
+- [x] 5.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/user/mcp.md`.
