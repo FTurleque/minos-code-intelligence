@@ -170,7 +170,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         try {
             if (!regularFileExists(file, "project index state")) return Optional.empty();
         } catch (IOException exception) {
-            throw new UncheckedIOException("cannot read MINOS project state: " + file, exception);
+            throw new UncheckedIOException("cannot read MINOS project state: " + file.getFileName(), exception);
         }
         Properties properties = load(file);
         UUID persistedProjectId = UUID.fromString(required(properties, PROJECT_ID_PROPERTY, file));
@@ -575,7 +575,7 @@ public final class FileIndexStateStore implements IndexStateStore {
     private static boolean directoryExists(Path directory, String label) throws IOException {
         if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) return false;
         if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException(label + " must be a non-symlink directory: " + directory);
+            throw new IOException(label + " must be a non-symlink directory: " + directory.getFileName());
         }
         return true;
     }
@@ -583,7 +583,7 @@ public final class FileIndexStateStore implements IndexStateStore {
     private static boolean regularFileExists(Path file, String label) throws IOException {
         if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return false;
         if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException(label + " must be a regular non-symlink file: " + file);
+            throw new IOException(label + " must be a regular non-symlink file: " + file.getFileName());
         }
         return true;
     }
@@ -633,7 +633,7 @@ public final class FileIndexStateStore implements IndexStateStore {
                     MAX_PROPERTY_VALUE_CHARS,
                     "MINOS index state metadata");
         } catch (IOException exception) {
-            throw new UncheckedIOException("cannot read MINOS index state: " + file, exception);
+            throw new UncheckedIOException("cannot read MINOS index state: " + file.getFileName(), exception);
         }
     }
 
@@ -641,7 +641,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         try {
             storeIo(file, properties, comment);
         } catch (IOException exception) {
-            throw new UncheckedIOException("cannot write MINOS index state: " + file, exception);
+            throw new UncheckedIOException("cannot write MINOS index state: " + file.getFileName(), exception);
         }
     }
 

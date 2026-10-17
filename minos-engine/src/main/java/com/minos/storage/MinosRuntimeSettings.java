@@ -61,16 +61,16 @@ public final class MinosRuntimeSettings {
         Path normalized = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         Properties file = new Properties();
         Path configuration = normalized.resolve(CONFIG_DIRECTORY).resolve(CONFIG_FILE);
-        if (Files.isRegularFile(configuration)) {
-            file.putAll(BoundedProperties.load(
-                    configuration,
-                    MAX_CONFIGURATION_BYTES,
-                    MAX_CONFIGURATION_ENTRIES,
-                    MAX_CONFIGURATION_KEY_CHARS,
-                    MAX_CONFIGURATION_VALUE_CHARS,
-                    "MINOS runtime configuration"
-            ));
-        }
+        // Absent => empty configuration. Present without being a regular non-symlink file (directory, link,
+        // dangling link) => refused: ignoring it would silently start on the default values (fail-open).
+        BoundedProperties.loadIfPresent(
+                configuration,
+                MAX_CONFIGURATION_BYTES,
+                MAX_CONFIGURATION_ENTRIES,
+                MAX_CONFIGURATION_KEY_CHARS,
+                MAX_CONFIGURATION_VALUE_CHARS,
+                "MINOS runtime configuration"
+        ).ifPresent(file::putAll);
         Properties systemSnapshot = new Properties();
         systemSnapshot.putAll(System.getProperties());
         return new MinosRuntimeSettings(normalized, file, Map.copyOf(System.getenv()), systemSnapshot);
