@@ -373,7 +373,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         Path directory = projectDirectory(projectId);
         if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) return null;
         if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("fingerprint project entry must be a non-symlink directory: " + directory);
+            throw new IOException("fingerprint project entry must be a non-symlink directory: " + directory.getFileName());
         }
         return directory;
     }
@@ -595,7 +595,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     private static void requireProjectDirectory(Path directory) throws IOException {
         if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("fingerprint project entry must be a non-symlink directory: " + directory);
+            throw new IOException("fingerprint project entry must be a non-symlink directory: " + directory.getFileName());
         }
     }
 
@@ -607,7 +607,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     private static void requireRegularFile(Path file, String label) throws IOException {
         if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException(label + " must be a regular non-symlink file: " + file);
+            throw new IOException(label + " must be a regular non-symlink file: " + file.getFileName());
         }
     }
 

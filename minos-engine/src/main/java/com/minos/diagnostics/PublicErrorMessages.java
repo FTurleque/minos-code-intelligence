@@ -33,6 +33,14 @@ public final class PublicErrorMessages {
     /** {@code api key} / {@code api-key} / {@code api_key} / {@code apikey}, however punctuated. */
     private static final Pattern API_KEY_MENTION = Pattern.compile("api[-_ ]?key");
 
+    /**
+     * A complete ANSI escape sequence: OSC ({@code ESC ] ... BEL|ESC \}) or CSI
+     * ({@code ESC [ params intermediates final}). Removing only the escape character would leave
+     * {@code [31m} behind and its final letter would hide a following path from the detector.
+     */
+    private static final Pattern ANSI_SEQUENCE = Pattern.compile(
+            "\u001b\\][^\u0007\u001b]*(?:\u0007|\u001b\\\\)|\u001b\\[[0-?]*[ -/]*[@-~]");
+
     private PublicErrorMessages() {
     }
 
@@ -44,13 +52,29 @@ public final class PublicErrorMessages {
      */
     public static String sanitize(String message, String fallback) {
         if (message == null || message.isBlank()) return fallback;
-        String flattened = message.replace('\r', ' ').replace('\n', ' ').trim();
+        String flattened = stripControl(message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')).trim();
         if (flattened.length() > MAX_LENGTH) flattened = flattened.substring(0, MAX_LENGTH);
         return looksSensitive(flattened) ? fallback : flattened;
     }
 
+    /**
+     * Removes complete ANSI escape sequences, then every remaining control character, so that what
+     * is analysed and what is published is the same text and no control sequence reaches a public
+     * output.
+     */
+    private static String stripControl(String text) {
+        String withoutSequences = ANSI_SEQUENCE.matcher(text).replaceAll("");
+        StringBuilder kept = new StringBuilder(withoutSequences.length());
+        for (int index = 0; index < withoutSequences.length(); index++) {
+            char value = withoutSequences.charAt(index);
+            if (!Character.isISOControl(value)) kept.append(value);
+        }
+        return kept.toString();
+    }
+
     /** Whether {@code detail} looks like it carries a secret, credential, or private local path. */
-    public static boolean looksSensitive(String detail) {
+    public static boolean looksSensitive(String rawDetail) {
+        String detail = stripControl(rawDetail);
         String lower = detail.toLowerCase(Locale.ROOT);
         if (lower.contains("jdbc:") || lower.contains("password") || lower.contains("secret")
                 || lower.contains("bearer") || lower.contains("authorization") || lower.contains("token=")
@@ -73,17 +97,23 @@ public final class PublicErrorMessages {
      */
     private static boolean containsAbsolutePath(String detail) {
         for (int index = 0; index < detail.length(); index++) {
-            if (index > 0 && isPathIdentifierChar(detail.charAt(index - 1))) continue;
-            char first = detail.charAt(index);
-            if (first == '/') return true;
+            // A Windows drive ("C:\" or "C:/") has no relative homonym, so it needs no boundary:
+            // it is recognised even when glued to a word ("abcC:\Users"). The POSIX form keeps its
+            // boundary because "packages/app/src" is a legitimate relative path (design D2).
             if (index + 2 < detail.length()
-                    && Character.isLetter(first)
+                    && isAsciiLetter(detail.charAt(index))
                     && detail.charAt(index + 1) == ':'
                     && (detail.charAt(index + 2) == '\\' || detail.charAt(index + 2) == '/')) {
                 return true;
             }
+            if (index > 0 && isPathIdentifierChar(detail.charAt(index - 1))) continue;
+            if (detail.charAt(index) == '/') return true;
         }
         return false;
+    }
+
+    private static boolean isAsciiLetter(char value) {
+        return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z');
     }
 
     /** A Windows UNC path such as {@code \\server\share\file}. */

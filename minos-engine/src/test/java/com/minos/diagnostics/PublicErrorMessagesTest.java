@@ -133,6 +133,47 @@ class PublicErrorMessagesTest {
     }
 
     @Test
+    void anAbsolutePathBehindAnAnsiSequenceIsRejected() {
+        String detail = "\u001b[31m/home/u/x";
+        assertTrue(PublicErrorMessages.looksSensitive(detail));
+        assertEquals("fallback", PublicErrorMessages.sanitize(detail, "fallback"));
+    }
+
+    @Test
+    void aWindowsDriveGluedToAWordIsRejected() {
+        assertTrue(PublicErrorMessages.looksSensitive("cannot open abcC:\\Users\\u\\token"));
+        assertTrue(PublicErrorMessages.looksSensitive("cannot open abcC:/Users/u/token"));
+    }
+
+    @Test
+    void anAnsiSequenceWithoutPathLeavesNoControlResidue() {
+        String rendered = PublicErrorMessages.sanitize("\u001b[31mdisk full\u001b[0m", "fallback");
+        assertEquals("disk full", rendered);
+        assertFalse(rendered.indexOf('\u001b') >= 0, "no escape character may remain");
+    }
+
+    @Test
+    void anOscSequenceAndOtherControlCharactersAreStripped() {
+        assertEquals("title done",
+                PublicErrorMessages.sanitize("\u001b]0;evil\u0007title\u0000 done", "fallback"));
+    }
+
+    @Test
+    void aRelativeMultiSegmentPathIsPublishedUnchanged() {
+        assertEquals("module packages/app/src not found",
+                PublicErrorMessages.sanitize("module packages/app/src not found", "fallback"));
+        assertEquals("directory data/db is not writable",
+                PublicErrorMessages.sanitize("directory data/db is not writable", "fallback"));
+    }
+
+    @Test
+    void aPosixPathGluedToAnIdentifierWithoutControlSequenceIsAKnownLimit() {
+        // Limite declaree (design D2) : "v1.2/home/u" est indiscernable du chemin relatif
+        // "packages/home/u" ; la reponse est de ne plus ecrire de chemin absolu a la source.
+        assertFalse(PublicErrorMessages.looksSensitive("v1.2/home/u"));
+    }
+
+    @Test
     void ordinaryMessagesMentioningKeyWithoutApiContextAreNotFlagged() {
         // "key" alone is far too common in this codebase's own vocabulary (symbol/cache/map/primary
         // key) to trigger redaction on -- only "api key" and its punctuation variants should.

@@ -12,6 +12,7 @@ import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class FileIndexStateStoreSymlinkTest {
@@ -37,7 +38,10 @@ class FileIndexStateStoreSymlinkTest {
         Files.move(state, outside, StandardCopyOption.REPLACE_EXISTING);
         if (!createSymbolicLink(state, outside)) return;
 
-        assertThrows(UncheckedIOException.class, () -> store.findProjectState(projectId));
+        UncheckedIOException rejected = assertThrows(UncheckedIOException.class,
+                () -> store.findProjectState(projectId));
+        assertFalse(rejected.getMessage().contains(temp.toString()), rejected.getMessage());
+        assertFalse(rejected.getCause().getMessage().contains(temp.toString()), rejected.getCause().getMessage());
     }
 
     private static boolean createSymbolicLink(Path link, Path target) {
