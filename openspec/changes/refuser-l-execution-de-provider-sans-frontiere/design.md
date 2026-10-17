@@ -45,7 +45,7 @@ Sprint 8 de l'audit du 10 octobre 2026 : **AUD-ARC-09**. HEAD analysé : `949e15
 
 Écartée : supprimer le constructeur — la frontière de propriété seule est précisément ce que ces deux tests qualifient.
 
-### D2. `ProcessIndexerExecutor.execute` refuse — **décision en attente du propriétaire**
+### D2. `ProcessIndexerExecutor.execute` refuse — **tranchée par le propriétaire le 2026-10-17 : option A**
 
 Option A (recommandée) : `execute` lève une `IllegalStateException` au message fixe, sans chemin (« provider process requires an ownership or sandbox boundary »), avant toute création de répertoire de run. Toute exécution passe par `executeSandboxed` avec un transformateur fourni par une frontière. Conséquences : les classes de test de `minos-runtime-local` qui appelaient `execute` sur un exécuteur nu appellent `executeSandboxed` avec un transformateur identité **nommé** dans une aide de test (le contournement devient visible et unique) ; le test de `minos-cli` remplace l'exécuteur de processus par un `IndexerExecutor` de test, puisqu'il éprouve le transport et non le processus (à confirmer en 1.1).
 

@@ -76,6 +76,12 @@ public interface WorkerSandboxBackend {
                 "OS-enforced worker backend must provide an independently qualified platform disposition");
     }
 
+    /**
+     * The backend that confines nothing: it only gives the provider an ephemeral workspace. It is not
+     * qualified for untrusted code and cannot prove network denial. It stays public because the refusal
+     * fixtures of other modules build it; it cannot run a bare {@code ProcessIndexerExecutor}, whose
+     * {@code execute} refuses, only an executor that brings its own boundary.
+     */
     static WorkerSandboxBackend nativeEphemeralWorkspace() {
         return NativeEphemeralWorkspaceBackend.INSTANCE;
     }

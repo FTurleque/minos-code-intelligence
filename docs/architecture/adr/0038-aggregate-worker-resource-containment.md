@@ -62,3 +62,12 @@ Le résidu du provider dans le run est récupéré après succès, erreur, timeo
 - la qualification du processus MINOS déplace celui-ci dans un cgroup enfant dédié afin que la racine déléguée puisse porter `cgroup.subtree_control` ;
 - la supervision d'écriture ajoute un parcours périodique borné des racines accessibles au provider ;
 - le quota filesystem reste une supervision MINOS et doit être documenté comme telle tant qu'aucune primitive de quota par job non privilégiée n'existe.
+
+## Mise en œuvre (AUD-ARC-09, octobre 2026)
+
+Ajout, sans rien retirer à la décision ci-dessus : aucun exécuteur du module `minos-runtime-local` ne lance plus un provider sans frontière.
+
+- **`ProcessIndexerExecutor.execute` refuse** (`IllegalStateException` au message fixe « provider process requires an ownership or sandbox boundary », avant toute création de répertoire de run) : toute exécution passe par `executeSandboxed` avec le transformateur qu'une frontière fournit. Le backend natif (`nativeEphemeralWorkspace()`) ne peut donc plus exécuter un exécuteur de processus nu ; il reste public parce que les fixtures de refus d'autres modules le construisent, et sa Javadoc dit qu'il ne confine rien.
+- **Le constructeur à deux arguments de `StrongProcessOwnershipIndexerExecutor` est package-private** : la frontière de propriété seule (sans bac à sable ni politique réseau) n'est plus constructible hors du package ; les deux tests de confinement de la propriété l'atteignent par une fabrique de test. Le site de production reste le constructeur à trois arguments (politique réseau).
+- **Garde** : `ProcessIndexerExecutorBoundaryRefusalTest` (tout constructeur public prend une politique réseau ; `execute` refuse sans créer de run ; le backend natif refuse un exécuteur nu). La règle A10 ne voit pas le package racine, d'où un test de structure plutôt qu'une règle de gate.
+- **Limite** : un test qui exerce le processus lui-même passe par `UnboundedProcessForTests`, seul contournement nommé ; il ne prouve aucune frontière.
