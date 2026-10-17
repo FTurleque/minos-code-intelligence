@@ -59,7 +59,7 @@ class ProcessIndexerExecutorTest {
 
         IndexingExecutionRequest request = request(project);
 
-        var artifact = executor.execute(request);
+        var artifact = UnboundedProcessForTests.run(executor, request);
 
         assertEquals("previous", Files.readString(generated));
         assertEquals("fresh-scip", Files.readString(artifact.finalArtifact()));
@@ -102,7 +102,7 @@ class ProcessIndexerExecutorTest {
                         generated,
                         Duration.ofMinutes(1)));
 
-        var artifact = executor.execute(request(project));
+        var artifact = UnboundedProcessForTests.run(executor, request(project));
         String metadata = Files.readString(artifact.finalArtifact().getParent().resolve("process.txt"));
 
         assertTrue(metadata.contains("command=<redacted provider command; argumentCount=6>"));
@@ -161,7 +161,7 @@ class ProcessIndexerExecutorTest {
                         runDirectory.resolve("generated.scip"),
                         Duration.ofMinutes(1)));
 
-        var artifact = executor.execute(request(project));
+        var artifact = UnboundedProcessForTests.run(executor, request(project));
         Path runDirectory = artifact.finalArtifact().getParent();
 
         assertEquals("fresh-scip", Files.readString(artifact.finalArtifact()));
@@ -215,7 +215,7 @@ class ProcessIndexerExecutorTest {
                 )
         );
 
-        var artifact = executor.execute(request(project));
+        var artifact = UnboundedProcessForTests.run(executor, request(project));
         long childPid = Long.parseLong(Files.readString(childPidFile).trim());
 
         assertEquals("fresh-scip", Files.readString(artifact.finalArtifact()));

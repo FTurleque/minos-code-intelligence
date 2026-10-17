@@ -57,7 +57,7 @@ class ProcessIndexerExecutorArtifactPreservationTest {
                         project, Map.of(), generated, Duration.ofSeconds(30)));
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> executor.execute(request(project)));
+                () -> UnboundedProcessForTests.run(executor, request(project)));
         assertTrue(failure.getMessage().contains("valid SCIP artifact"), failure.getMessage());
 
         assertEquals("previous", Files.readString(generated),
@@ -80,7 +80,7 @@ class ProcessIndexerExecutorArtifactPreservationTest {
                         directoryReplacingCommand(generated, false, 0, false),
                         project, Map.of(), generated, Duration.ofSeconds(30)));
 
-        assertThrows(IllegalStateException.class, () -> executor.execute(request(project)));
+        assertThrows(IllegalStateException.class, () -> UnboundedProcessForTests.run(executor, request(project)));
 
         assertEquals("previous", Files.readString(generated),
                 "an empty hostile directory must not block restoration either");
@@ -100,7 +100,7 @@ class ProcessIndexerExecutorArtifactPreservationTest {
                         project, Map.of(), generated, Duration.ofSeconds(30)));
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> executor.execute(request(project)));
+                () -> UnboundedProcessForTests.run(executor, request(project)));
         assertTrue(failure.getMessage().contains("exited with code 7"), failure.getMessage());
 
         assertEquals("previous", Files.readString(generated),
@@ -122,7 +122,7 @@ class ProcessIndexerExecutorArtifactPreservationTest {
                         project, Map.of(), generated, Duration.ofMillis(1_500)));
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> executor.execute(request(project)));
+                () -> UnboundedProcessForTests.run(executor, request(project)));
         assertTrue(failure.getMessage().contains("timed out"), failure.getMessage());
 
         assertEquals("previous", Files.readString(generated),
@@ -146,7 +146,7 @@ class ProcessIndexerExecutorArtifactPreservationTest {
                         symlinkReplacingCommand(generated, outsideTarget),
                         project, Map.of(), generated, Duration.ofSeconds(30)));
 
-        assertThrows(IllegalStateException.class, () -> executor.execute(request(project)));
+        assertThrows(IllegalStateException.class, () -> UnboundedProcessForTests.run(executor, request(project)));
 
         assertEquals("previous", Files.readString(generated),
                 "the preexisting artifact must be restored after cleanup unlinks the hostile symlink");

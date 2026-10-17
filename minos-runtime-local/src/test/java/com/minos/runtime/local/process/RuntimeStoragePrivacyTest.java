@@ -91,7 +91,7 @@ class RuntimeStoragePrivacyTest {
                 "fake-provider", "1", "fake", Set.of(Language.JAVA), Set.of(), Set.of(),
                 IndexerQualification.QUALIFIED, 1, List.of());
 
-        var artifact = executor.execute(new IndexingExecutionRequest(
+        var artifact = UnboundedProcessForTests.run(executor, new IndexingExecutionRequest(
                 UUID.randomUUID(), UUID.randomUUID(), project,
                 new IndexerSelection(Language.JAVA, descriptor), IndexingMode.FULL, List.of()));
 

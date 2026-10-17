@@ -44,7 +44,7 @@ class ProcessIndexerExecutorArtifactDigestTest {
                         List.of(java, source.toString(), generated.toString()), project, Map.of(),
                         generated, Duration.ofMinutes(1)));
 
-        IndexingArtifact artifact = executor.execute(request(project));
+        IndexingArtifact artifact = UnboundedProcessForTests.run(executor, request(project));
 
         Path sidecar = artifact.finalArtifact().resolveSibling("index.scip.sha256");
         assertTrue(Files.isRegularFile(sidecar), "index.scip.sha256 must sit next to index.scip");
@@ -63,7 +63,7 @@ class ProcessIndexerExecutorArtifactDigestTest {
                         List.of(java, source.toString(), runDirectory.resolve("index.scip").toString()),
                         project, Map.of(), runDirectory.resolve("index.scip"), Duration.ofMinutes(1)));
 
-        IndexingArtifact artifact = executor.execute(request(project));
+        IndexingArtifact artifact = UnboundedProcessForTests.run(executor, request(project));
 
         Path sidecar = artifact.finalArtifact().resolveSibling("index.scip.sha256");
         assertTrue(Files.isRegularFile(sidecar));
@@ -88,7 +88,7 @@ class ProcessIndexerExecutorArtifactDigestTest {
                             generated, Duration.ofMinutes(1));
                 });
 
-        IndexingArtifact artifact = executor.execute(request(project));
+        IndexingArtifact artifact = UnboundedProcessForTests.run(executor, request(project));
 
         assertEquals("fresh-scip-bytes-for-digest", Files.readString(artifact.finalArtifact()),
                 "the artifact must be promoted even though its digest could not be recorded");
@@ -119,7 +119,7 @@ class ProcessIndexerExecutorArtifactDigestTest {
         IndexingExecutionRequest request = request(project);
 
         try {
-            executor.execute(request);
+            UnboundedProcessForTests.run(executor, request);
         } catch (IllegalStateException expected) {
             // provider exit code 3
         }
