@@ -20,11 +20,20 @@ import java.util.concurrent.atomic.AtomicReference;
  * observed {@link ProcessHandle} only; a bare PID is never treated as sufficient authority to
  * terminate a process.</p>
  *
+ * <p>The tracking is polling, hence a defence in depth and not a guarantee: a descendant is remembered only
+ * if it is enumerated while its parent lives, so an intermediate created and gone between two enumerations
+ * costs the tracker its children. The period is short for the first second of the provider's life and
+ * longer afterwards; the kernel boundary (cgroup, Job Object) is what guarantees ownership.</p>
+ *
  * <p>The MINOS host JVM is an explicit non-ownable process. This invariant is enforced when a
  * handle is observed, when it is resolved again, and immediately before termination.</p>
  */
 final class ProcessOwnershipTracker implements AutoCloseable {
-    private static final long OWNERSHIP_POLL_MILLIS = 10L;
+    /** First second of a provider's life, when a launcher most often creates and abandons intermediates. */
+    private static final long INITIAL_POLL_MILLIS = 10L;
+    private static final long INITIAL_PHASE_MILLIS = 1_000L;
+    /** Steady state: ten enumerations a second at most, so the table walk stays a small share of a core. */
+    private static final long STEADY_POLL_MILLIS = 100L;
     private static final long POST_ROOT_EXIT_TRACK_MILLIS = 250L;
     private static final long GRACEFUL_WAIT_MILLIS = 1_000L;
     private static final long FORCED_WAIT_MILLIS = 5_000L;
@@ -91,6 +100,7 @@ final class ProcessOwnershipTracker implements AutoCloseable {
 
     private void trackOwnership() {
         long rootExitObservedAt = -1L;
+        long startedAt = System.nanoTime();
         try {
             while (!trackerStop.get()) {
                 remember(process.descendants().toList());
@@ -101,7 +111,9 @@ final class ProcessOwnershipTracker implements AutoCloseable {
                         return;
                     }
                 }
-                Thread.sleep(OWNERSHIP_POLL_MILLIS);
+                boolean initialPhase = System.nanoTime() - startedAt
+                        < TimeUnit.MILLISECONDS.toNanos(INITIAL_PHASE_MILLIS);
+                Thread.sleep(initialPhase ? INITIAL_POLL_MILLIS : STEADY_POLL_MILLIS);
             }
         } catch (InterruptedException interrupted) {
             if (!trackerStop.get()) {
