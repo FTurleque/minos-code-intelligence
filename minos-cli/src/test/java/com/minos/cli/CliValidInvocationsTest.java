@@ -212,7 +212,13 @@ class CliValidInvocationsTest {
         assertEquals(1, cli.run("git-activity p --days 3650 --max-commits 10000 --max-files 10000 --zone-depth 8"
                 .split(" "), new StringBuilder(), new StringBuilder()));
 
-        assertEquals(3, queries.size());
+        assertEquals(1, cli.run("git-activity p --include-author-emails".split(" "),
+                new StringBuilder(), new StringBuilder()));
+
+        assertEquals(4, queries.size());
+        assertFalse(queries.get(0).includeAuthorEmails());
+        assertFalse(queries.get(1).includeAuthorEmails());
+        assertTrue(queries.get(3).includeAuthorEmails());
         assertEquals(10, queries.get(0).maxCommits());
         assertEquals(20, queries.get(0).maxFiles());
         assertEquals(3, queries.get(0).zoneDepth());

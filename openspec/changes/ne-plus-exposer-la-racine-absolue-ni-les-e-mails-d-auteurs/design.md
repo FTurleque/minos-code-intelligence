@@ -41,7 +41,15 @@ Sprint 7 de l'audit du 10 octobre 2026 : **AUD-SEC-10**. HEAD analysé : `949e15
 
 ## Decisions
 
-### D1. Forme de `rootPath` dans la réponse MCP — **décision en attente du propriétaire**
+### Relevés (2026-10-17, HEAD `6620f2a4`)
+
+- **Réponses MCP portant un chemin absolu** : dans `mcp.golden` et `mcp-all-tools.golden`, une seule occurrence de `<REPO>` : le `rootPath` de `minos_project_structure`. Les autres réponses rendent des chemins relatifs à la racine.
+- **Numéro de version de contrat dans la réponse de `minos_project_structure`** : aucun (aucune occurrence de `contractVersion` dans `minos-mcp/src/main`).
+- **`ProjectPathMapping`** : sert à l'indexation Docker (`DefaultMinosApplicationComposer`, `DockerRuntimeBootstrap`), pas à la fiche projet ; la variante « racine relative au mapping » est écartée (rien à rendre de plus utile qu'un nom).
+- **NEXUS** : ne lit pas `rootPath` par le MCP (`NexusExportService` lit le registre ; `NexusExportContract.rootPath` est son propre contrat d'export).
+- **Format texte de `git-activity`** : n'affiche aucun commit, donc aucune adresse. `api.golden` ne contient aucune adresse. Le plugin IntelliJ ne lit pas `authorEmail`. Type porteur du paramètre de l'API : `MinosMultiRepositoryApi.GitActivityQuery`.
+
+### D1. Forme de `rootPath` dans la réponse MCP — **décision du propriétaire : option A** (2026-10-17)
 
 **Option A (recommandée) : garder la clé, avec une valeur non absolue.** `rootPath` porte le nom du répertoire racine (dernier segment) ; `rootAvailable` reste. La structure de la réponse ne change pas, aucun client ne casse sur une clé absente, et l'absence de numéro de version de contrat dans cette réponse rend un retrait impossible à annoncer. Limite : un client qui utilisait la valeur comme chemin obtient une valeur inutilisable, sans erreur — à écrire dans `docs/user/mcp.md` et les notes de version. Variante à examiner en tâche 1.1 : la racine relative au mapping hôte/conteneur quand il existe (`ProjectPathMapping`).
 
@@ -49,13 +57,17 @@ Sprint 7 de l'audit du 10 octobre 2026 : **AUD-SEC-10**. HEAD analysé : `949e15
 
 **Option C : ne rien changer et documenter** que le MCP expose la racine. Contredit le point 7 de la règle de sécurité ; non recommandé.
 
-### D2. E-mail masqué par défaut — **décision en attente du propriétaire**
+**Mise en œuvre** : `MinosApplicationMcpBackend.rootDirectoryName` (dernier segment, séparateurs `/` et `\` quelle que soit la plateforme : un chemin Windows ou UNC enregistré depuis un conteneur Linux est aussi traité) ; une racine de volume (`/`, `D:\`, `D:`) rend `(filesystem root)`. Preuve : `MinosMcpProjectRootExposureTest` (rouge au HEAD : la racine absolue figurait dans la réponse), goldens `mcp.golden` et `mcp-all-tools.golden` mis à jour (`"rootPath":"typescript-modules"`), `ProjectJsonTest` et `cli-json.golden` inchangés (la CLI garde le chemin absolu).
+
+### D2. E-mail masqué par défaut — **décision du propriétaire** (2026-10-17)
 
 **Recommandé** : par défaut, `authorEmail` est présent et vaut un masque fixe ; l'adresse réelle n'est rendue que si l'appelant la demande — option nouvelle de `git-activity` et paramètre additif de la requête de l'API Java. C'est un **changement de la sortie par défaut** de deux surfaces versionnées : un consommateur qui lisait l'adresse doit ajouter l'option.
 
 **Alternative** : défaut inchangé et option de masquage. Compatible à l'identique, mais la donnée personnelle continue de sortir sans avoir été demandée.
 
 **Écartée** : empreinte de l'adresse (écart 4).
+
+**Valeurs retenues** : masque `[masked]` (`GitIntelligence.MASKED_AUTHOR_EMAIL`) ; option CLI `--include-author-emails` ; cinquième composant `includeAuthorEmails` de `ActivityQuery` (engine) et de `GitActivityQuery` (API Java), constructeur à quatre composants conservé (compatibilité binaire et source). Preuves : `GitIntelligenceServiceTest` (masque par défaut, adresse sur demande, deux adresses = deux auteurs), `CliValidInvocationsTest` (option transmise), `LocalMinosMultiRepositoryApiIntegrationTest`, `McpAuthorEmailGuardTest` (aucun outil du catalogue ne rend l'adresse), `cli-git.golden` (4 masques par défaut, 2 adresses sur l'invocation explicite ajoutée). Non mesuré : la compilation d'un appelant tiers compilé contre l'ancienne version de l'API (le constructeur à quatre composants est conservé, non rejoué contre un jar tiers).
 
 ### D3. Masquer à la source
 

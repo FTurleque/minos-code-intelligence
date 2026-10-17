@@ -20,6 +20,15 @@ Sprint 7 de l'audit du 10 octobre 2026 : **AUD-SEC-11**, limité à la déclarat
 
 **Non vérifié** : aucun build ni test lancé. Non relevé : le relais des limitations du graphe par `minos_program_graph` et `minos_impact_v2` (seul le service de sécurité a été relu) ; les tests qui comparent une liste **exacte** de limitations ; la tolérance du plugin IntelliJ à une limitation inconnue.
 
+### Relevés (tâche 1.1, 2026-10-17, HEAD `6620f2a4`)
+
+- **Relais des limitations du graphe** : `minos_program_graph` rend `graph.limitations()` ; `minos_impact_v2` reprend celles du graphe dans ses limitations avancées ; `minos_security_paths` part de `graph.limitations()` (`SecurityAnalysisService.java:59`). Les trois lignes de `java-program-graph.golden` (premier cycle) portaient déjà `JAVA_SECURITY_FLOW_INTRAPROCEDURAL_CONFIGURED_RULES_ONLY` : le relais est acquis, aucun code de relais n'est à ajouter (tâche 3.2 : golden seul).
+- **Tests et goldens à liste exacte de limitations** : aucun test ; seul `java-program-graph.golden` (trois lignes MCP, première série d'appels). Les assertions de `JavaSourceProgramGraphProviderTest` (`:114`, `:153`) sont des `contains`.
+- **Gate** : `check-java-ast-provider-consistency.py` exigeait les littéraux de l'implémentation (`:70-95`) ; le nouveau littéral y est ajouté. Aucun gate de `scripts/` ne cite la description de `minos_security_paths`.
+- **Plugin IntelliJ** : aucun fichier de `minos-intellij/src/main` ne lit de limitation de graphe de programme ni ne consomme `JAVA_SECURITY_*` ; tolérance à une limitation inconnue sans objet (non rejoué : plateforme IntelliJ absente du cache hors ligne).
+- **Rouge (2.1)** : `ProgramGraphSecurityRulesProvenanceTest` — 3 tests sur 6 échouent au HEAD (provenance absente avec règles ; dépôt hostile ; fichier vide) ; le cas sans fichier de règles et les deux cas d'assainisseur (4.1) sont verts au HEAD : l'écart 1 est confirmé (aucune requalification nécessaire).
+- **Non mesuré** : la sortie CLI des trois analyses (même rendu que le MCP par `AdvancedAnalysisResultRenderer`, non rejoué commande par commande) ; l'API Java.
+
 ### Écarts avec l'action proposée par l'audit
 
 1. **Un assainisseur déclaré ne fait pas disparaître un chemin** (`SecurityAnalysisService.java:105-112`). Le risque réel est l'**omission** de sources ou de puits, pas la déclaration d'assainisseurs.

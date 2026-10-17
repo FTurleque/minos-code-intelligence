@@ -16,14 +16,31 @@ import java.util.Objects;
  */
 public interface GitIntelligence {
 
+    /**
+     * Valeur rendue à la place de l'adresse e-mail d'un auteur tant que l'appelant ne l'a pas demandée
+     * ({@link ActivityQuery#includeAuthorEmails()}) : le composant {@code authorEmail} reste présent (API
+     * versionnée et additive), seule sa valeur par défaut est masquée (AUD-SEC-10, ADR 0019).
+     */
+    String MASKED_AUTHOR_EMAIL = "[masked]";
+
     RepositoryView inspect(Path projectRoot) throws Exception;
 
     ActivityReport analyze(Path projectRoot, ActivityQuery query) throws Exception;
 
-    record ActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth) {
+    /**
+     * @param includeAuthorEmails vrai seulement sur demande explicite : l'adresse réelle de chaque auteur est alors
+     *                            rendue dans {@link CommitActivity#authorEmail()} ; faux, elle n'entre jamais dans le
+     *                            rapport (le décompte des auteurs distincts, lui, s'appuie toujours sur elle).
+     */
+    record ActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth, boolean includeAuthorEmails) {
         private static final int MAX_COMMITS = 10_000;
         private static final int MAX_FILES = 10_000;
         private static final int MAX_ZONE_DEPTH = 8;
+
+        /** Requête sans adresses d'auteurs (le défaut, signature d'origine conservée). */
+        public ActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth) {
+            this(since, maxCommits, maxFiles, zoneDepth, false);
+        }
 
         public ActivityQuery {
             Objects.requireNonNull(since, "since");

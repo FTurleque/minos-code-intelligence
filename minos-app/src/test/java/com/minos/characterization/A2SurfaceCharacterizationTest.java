@@ -369,6 +369,8 @@ class A2SurfaceCharacterizationTest {
             transcript.cli(home, "git-activity", "a2-git", "--days", "3650", "--zone-depth", "1", "--max-files", "1",
                     "--format", format);
         }
+        // AUD-SEC-10: the address is masked above and rendered only on this explicit request.
+        transcript.cli(home, "git-activity", "a2-git", "--days", "3650", "--include-author-emails", "--format", "json");
         Golden.assertMatches("cli-git.golden", transcript.text());
     }
 

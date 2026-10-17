@@ -94,6 +94,42 @@ class GitIntelligenceServiceTest {
     }
 
     @Test
+    void authorEmailsAreMaskedUnlessRequestedAndStillCountDistinctAuthors(@TempDir Path temp) throws Exception {
+        Path root = temp.resolve("repo");
+        Files.createDirectories(root);
+        try (Git git = Git.init().setDirectory(root.toFile()).call()) {
+            commitAs(git, root, "shared.txt", "first", "Sam", "sam@first.example");
+            commitAs(git, root, "shared.txt", "second", "Sam", "sam@second.example");
+        }
+        GitIntelligenceService service = new GitIntelligenceService();
+        Instant since = Instant.EPOCH;
+
+        GitIntelligenceService.ActivityReport masked = service.analyze(
+                root, new GitIntelligenceService.ActivityQuery(since, 100, 100, 1));
+        GitIntelligenceService.ActivityReport requested = service.analyze(
+                root, new GitIntelligenceService.ActivityQuery(since, 100, 100, 1, true));
+
+        assertEquals(2, masked.recentCommits().size());
+        masked.recentCommits().forEach(commit -> {
+            assertEquals(GitIntelligenceService.MASKED_AUTHOR_EMAIL, commit.authorEmail());
+            assertEquals("Sam", commit.authorName());
+        });
+        assertEquals(2, masked.files().getFirst().uniqueAuthorCount(), "two addresses are still two authors");
+        assertEquals(java.util.List.of("sam@first.example", "sam@second.example"),
+                requested.recentCommits().stream().map(GitIntelligenceService.CommitActivity::authorEmail)
+                        .sorted().toList());
+        assertEquals(2, requested.files().getFirst().uniqueAuthorCount());
+    }
+
+    private static void commitAs(Git git, Path root, String file, String message, String name, String email)
+            throws Exception {
+        Files.writeString(root.resolve(file), message + "\n");
+        git.add().addFilepattern(file).call();
+        org.eclipse.jgit.lib.PersonIdent ident = new org.eclipse.jgit.lib.PersonIdent(name, email);
+        git.commit().setMessage(message).setAuthor(ident).setCommitter(ident).call();
+    }
+
+    @Test
     void rejectsNonGitDirectories(@TempDir Path temp) {
         GitIntelligenceService service = new GitIntelligenceService();
         var exception = org.junit.jupiter.api.Assertions.assertThrows(
