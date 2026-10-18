@@ -98,45 +98,54 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         Path normalizedRunDirectory = runDirectory.toAbsolutePath().normalize();
         Path output = normalizedRunDirectory.resolve("index.scip");
         PrivateLocalStorage.ensurePrivateDirectory(output.getParent());
-        if (CommandLocator.isWindows()) {
-            if (!Files.isRegularFile(coursier)) {
-                throw new IllegalStateException("Coursier executable is missing: " + coursier);
-            }
-            if (!Files.isRegularFile(windowsRunner)) {
-                throw new IllegalStateException("managed scip-java Windows runner is missing: " + windowsRunner);
-            }
-            Path powershell = powerShellExecutable()
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Windows PowerShell 5.1 (System32\\WindowsPowerShell\\v1.0\\powershell.exe) is required "
-                                    + "for scip-java on Windows"));
-            if (windowsManagedMaven == null || !Files.isRegularFile(windowsManagedMaven)) {
-                throw new IllegalStateException(
-                        "MINOS-managed Maven is missing; run `minos tools install scip-java`: " + windowsManagedMaven);
-            }
-            verifiedClasspath(false);
-            Path providerOutput = normalizedRunDirectory.resolve("scip-java-output");
-            Files.createDirectories(providerOutput);
-            List<String> runner = List.of(
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy", "Bypass",
-                    "-File", windowsRunner.toString(),
-                    "-ProjectPath", root.toString(),
-                    "-CoursierCommand", coursier.toString(),
-                    "-Coordinate", coordinate,
-                    "-Language", request.selection().language().name(),
-                    "-OutputDirectory", providerOutput.toString(),
-                    "-MavenCommand", windowsManagedMaven.toString(),
-                    "-ClasspathFile", classpathFile.toString());
-            return new IndexerProcessPlan(
-                    CommandLocator.invocation(powershell, runner.toArray(String[]::new)),
-                    root,
-                    Map.of(),
-                    providerOutput.resolve("index.scip"),
-                    Duration.ofHours(1)
-            );
-        }
+        return CommandLocator.isWindows()
+                ? windowsPlan(request, root, normalizedRunDirectory)
+                : portablePlan(root, normalizedRunDirectory, output);
+    }
 
+    /** Windows: the managed PowerShell runner drives Coursier and the managed Maven against the project in place. */
+    private IndexerProcessPlan windowsPlan(IndexingExecutionRequest request, Path root, Path normalizedRunDirectory)
+            throws IOException {
+        if (!Files.isRegularFile(coursier)) {
+            throw new IllegalStateException("Coursier executable is missing: " + coursier);
+        }
+        if (!Files.isRegularFile(windowsRunner)) {
+            throw new IllegalStateException("managed scip-java Windows runner is missing: " + windowsRunner);
+        }
+        Path powershell = powerShellExecutable()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Windows PowerShell 5.1 (System32\\WindowsPowerShell\\v1.0\\powershell.exe) is required "
+                                + "for scip-java on Windows"));
+        if (windowsManagedMaven == null || !Files.isRegularFile(windowsManagedMaven)) {
+            throw new IllegalStateException(
+                    "MINOS-managed Maven is missing; run `minos tools install scip-java`: " + windowsManagedMaven);
+        }
+        verifiedClasspath(false);
+        Path providerOutput = normalizedRunDirectory.resolve("scip-java-output");
+        Files.createDirectories(providerOutput);
+        List<String> runner = List.of(
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy", "Bypass",
+                "-File", windowsRunner.toString(),
+                "-ProjectPath", root.toString(),
+                "-CoursierCommand", coursier.toString(),
+                "-Coordinate", coordinate,
+                "-Language", request.selection().language().name(),
+                "-OutputDirectory", providerOutput.toString(),
+                "-MavenCommand", windowsManagedMaven.toString(),
+                "-ClasspathFile", classpathFile.toString());
+        return new IndexerProcessPlan(
+                CommandLocator.invocation(powershell, runner.toArray(String[]::new)),
+                root,
+                Map.of(),
+                providerOutput.resolve("index.scip"),
+                Duration.ofHours(1)
+        );
+    }
+
+    /** Linux and macOS: the launcher runs against a writable staging copy of the project. */
+    private IndexerProcessPlan portablePlan(Path root, Path normalizedRunDirectory, Path output) throws IOException {
         // The installed classpath comes first and is verified again, before anything is staged. Only without it
         // does a standalone launcher on the PATH run: the one the Docker image builds, or one the operator chose.
         boolean classpathInstalled = classpathFile != null && Files.isRegularFile(classpathFile, LinkOption.NOFOLLOW_LINKS);
