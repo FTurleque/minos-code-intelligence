@@ -126,7 +126,7 @@ class ManagedRuntimeCommandRunnerTest {
         assertTrue(result.success());
         assertTrue(result.output().contains("version"), result.output());
         try (Stream<Path> remaining = Files.list(directory)) {
-            assertEquals(List.of(), remaining.toList(), "the capture file must be deleted");
+            assertEquals(List.of(), remaining.toList(), "the capture file and its folder must be deleted");
         }
     }
 
