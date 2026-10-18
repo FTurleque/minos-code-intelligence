@@ -298,11 +298,5 @@
     "method": "Files.move",
     "max": 1,
     "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java",
-    "method": "Files.newOutputStream",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage PostgreSQL »."
   }
 ]
