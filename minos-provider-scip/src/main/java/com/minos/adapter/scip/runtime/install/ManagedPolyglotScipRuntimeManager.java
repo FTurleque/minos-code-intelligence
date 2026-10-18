@@ -52,6 +52,8 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     private static final int MAX_MANAGED_TRAVERSAL_ENTRIES = 50_000;
     private static final int MAX_MANAGED_FILES = 20_000;
     static final String COMMAND_LOG_DIRECTORY = ".minos-command-logs";
+    private static final java.util.concurrent.locks.ReentrantLock COMMAND_LOG_LOCK =
+            new java.util.concurrent.locks.ReentrantLock();
     private static final long MAX_MANAGED_BYTES = 512L * 1024L * 1024L;
     private static final String GO_PROXY = "https://proxy.golang.org";
     private static final String GO_SUMDB = "sum.golang.org";
@@ -470,7 +472,26 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             capture.await();
             return new CommandResult(process.exitValue() == 0, readOutput(outputFile));
         } finally {
+            discardCommandLog(outputFile);
+        }
+    }
+
+    /**
+     * Deletes the journal and, when it was the last one, its folder: a status read leaves the layout of
+     * {@code MINOS_HOME} as it found it. Creation and removal share a lock so that a folder is never removed between
+     * its creation and the creation of the journal inside it.
+     */
+    static void discardCommandLog(Path outputFile) throws IOException {
+        COMMAND_LOG_LOCK.lock();
+        try {
             Files.deleteIfExists(outputFile);
+            try {
+                Files.deleteIfExists(outputFile.getParent());
+            } catch (java.nio.file.DirectoryNotEmptyException stillInUse) {
+                // Another command of this process is using it: that one removes the folder when it ends.
+            }
+        } finally {
+            COMMAND_LOG_LOCK.unlock();
         }
     }
 
@@ -487,7 +508,12 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("managed runtime command directory is missing");
         }
-        return PrivateLocalStorage.createPrivateTempFile(directory.resolve(COMMAND_LOG_DIRECTORY), "command-", ".log");
+        COMMAND_LOG_LOCK.lock();
+        try {
+            return PrivateLocalStorage.createPrivateTempFile(directory.resolve(COMMAND_LOG_DIRECTORY), "command-", ".log");
+        } finally {
+            COMMAND_LOG_LOCK.unlock();
+        }
     }
 
     private static void terminate(Process process) throws InterruptedException {

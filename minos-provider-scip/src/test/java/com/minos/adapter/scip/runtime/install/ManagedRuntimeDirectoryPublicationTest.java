@@ -41,6 +41,19 @@ class ManagedRuntimeDirectoryPublicationTest {
     }
 
     @Test
+    void theFolderOfTheJournalsGoesWithTheLastJournal(@TempDir Path home) throws Exception {
+        Path first = ManagedPolyglotScipRuntimeManager.newCommandLog(home);
+        Path second = ManagedPolyglotScipRuntimeManager.newCommandLog(home);
+
+        ManagedPolyglotScipRuntimeManager.discardCommandLog(first);
+        assertTrue(Files.isDirectory(second.getParent()), "another command still uses the folder");
+        assertFalse(Files.exists(first));
+
+        ManagedPolyglotScipRuntimeManager.discardCommandLog(second);
+        assertFalse(Files.exists(second.getParent()), "a status read leaves the layout of the home as it found it");
+    }
+
+    @Test
     void aWorkingDirectoryWhichIsALinkIsRefused(@TempDir Path temporary) throws Exception {
         Path real = Files.createDirectories(temporary.resolve("real"));
         Path link = temporary.resolve("link");
