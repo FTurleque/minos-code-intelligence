@@ -1,0 +1,27 @@
+# Tasks
+
+Ordre dans chaque section : rouge, correction, preuve. Chaque tâche retire son entrée de `scripts/architecture/private-io-allowlist.json` (cliquet) et rejoue `python scripts/architecture/check-private-io.py`. Tests dans `minos-runtime-local`, `@EnabledOnOs(WINDOWS)` pour ce qui dépend de l'ACL ou du lien dur NTFS. Aucun prérequis de série.
+
+## 1. Publication du lanceur (AUD-SEC-03)
+
+- [ ] 1.1 [AUD-SEC-03] Rouge : dans `SandboxLauncherScriptRefusalTest` (ou un test frère), (a) un lanceur publié par un autre processus entre le contrôle et la publication n'est pas remplacé : la publication accepte la cible existante seulement si `verify()` passe, sinon refuse sans écraser ; (b) deux `materialize` concurrents (deux threads, 50 répétitions) laissent un lanceur complet, en lecture seule, privé ; (c) un système de fichiers sans lien dur simulé (injection) fait échouer la publication avec « filesystem does not support required exclusive … » et sans chemin absolu ; (d) la reprise bornée (échecs simulés 4 fois puis succès, 5 fois puis échec, y compris le cas « violation de partage au `createLink` ») est conservée ; aucun test ne la couvre aujourd'hui et `moveWithRetry` est statique sans injection : un point d'injection (éditeur du déplacement) est ajouté avec le test. **Preuve du rouge : (a) le déplacement actuel remplace.**
+- [ ] 1.2 [AUD-SEC-03] `SandboxLauncherScript.moveWithRetry` appelle `DurableAtomicFile.publish(source, target, "sandbox launcher publication")` (D1) ; retirer l'entrée `SandboxLauncherScript` / `Files.move`. Preuve : `./mvnw -B -ntp -pl minos-runtime-local -am test` (Windows), `check-private-io.py` vert.
+
+## 2. Sortie de la sonde (AUD-SEC-03)
+
+- [ ] 2.1 [AUD-SEC-03] Rouge : dans `AppContainerProbeOutputTest`, (a) la sortie de la sonde plus grande que la borne par flux est tronquée avec le marqueur de `BoundedProcessOutput` et la sonde réussit ; (b) le fichier de sortie est privé (ACL propriétaire seul) ; (c) le test H18 existant (sortie supérieure au tampon d'un tube, sonde réussie) reste vert ; (d) une sonde qui ne se termine pas (`aProbeThatDoesNotFinish…`) laisse `probeRoot` supprimable, flux et fichier fermés. **Preuve du rouge : (a) la sortie actuelle n'est pas bornée.**
+- [ ] 2.2 [AUD-SEC-03] `WindowsAppContainerWorkerSandboxBackend.probeSucceeds` : `builder.redirectErrorStream(true).start()` puis `BoundedProcessOutput.capture(process, output, null)` et `capture.await()` avant la lecture de `head(output)` (D2) ; retirer l'entrée `WindowsAppContainerWorkerSandboxBackend` / `ProcessBuilder.redirect(file)`. Preuve : `AppContainerProbeOutputTest` et `WindowsSandboxAclAndProbeRefusalTest` verts, `check-private-io.py` vert, `python scripts/remediation/check-post228-hardening.py` vert.
+
+- [ ] 2.3 [AUD-SEC-03] Réécrire la justification de l'entrée `WindowsAppContainerWorkerSandboxBackend` / `Files.createDirectories` (« à revoir, hors S5 nommé ») comme durable (parent de l'artefact, ACL du conteneur), maximum inchangé.
+
+## 3. Mesures, gates et couverture (AUD-SEC-03)
+
+- [ ] 3.1 [AUD-SEC-03] **(manuelle)** D3 : sur un poste Windows avec antivirus, publier le lanceur 50 fois (effacer le dossier entre les essais) et compter les reprises ; exécuter la sonde réelle de l'AppContainer. Consigner dans `design.md`. Seuils d'abandon : plus d'une reprise sur dix, ou une sonde « indisponible » à tort.
+- [ ] 3.2 [AUD-SEC-03] Rejouer `python scripts/remediation/check-minos-01.py`, `check-mnd.py`, `check-mne.py`, `check-post-mne.py`, `python scripts/architecture/check-module-boundaries.py`, `python scripts/architecture/test_check_private_io.py -v`, `python .claude/scripts/run_gates.py --fast`.
+- [ ] 3.3 [AUD-SEC-03] `./mvnw -B -ntp -pl minos-runtime-local -am verify` puis `python scripts/quality/check-jacoco.py` (scope `provider-sandbox-windows`, `global`) ; aucun plancher abaissé. Le job `Verify (windows-2022)` de la PR fait foi.
+
+## 4. Clôture
+
+- [ ] 4.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « runtime local », partie Windows close ; mesures D3).
+- [ ] 4.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : aucune au-delà du suivi.
+- [ ] 4.3 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-runtime-local.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place.
