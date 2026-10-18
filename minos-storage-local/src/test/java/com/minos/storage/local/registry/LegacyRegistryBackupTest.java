@@ -132,16 +132,23 @@ class LegacyRegistryBackupTest {
 
     @Test
     void aLegacyEntryBeyondTheByteLimitIsNotCopied(@TempDir Path temp) throws Exception {
-        Fixture fixture = legacyEntry(temp);
-        String padding = "#" + "x".repeat(1024 * 1024 + 16) + System.lineSeparator();
-        Files.writeString(fixture.record(), padding + Files.readString(fixture.record()), StandardCharsets.UTF_8);
+        Path entry = Files.writeString(temp.resolve("entry.properties"), "x".repeat(64), StandardCharsets.UTF_8);
+        Path backup = temp.resolve("entry.properties.m29-v1.bak");
 
-        try {
-            fixture.migrated().findProject(fixture.original().id());
-        } catch (IOException | RuntimeException refused) {
-            // The entry is refused as a whole: what matters is that no oversized backup is made.
-        }
+        IOException refusal = org.junit.jupiter.api.Assertions.assertThrows(IOException.class,
+                () -> LocalProjectRegistry.backupOnce(entry, backup, 63));
 
-        assertFalse(Files.exists(fixture.backup()), "an entry beyond the limit is never copied");
+        assertEquals("legacy registry entry exceeds the backup byte limit", refusal.getMessage());
+        assertFalse(Files.exists(backup), "an entry beyond the limit is never copied");
+    }
+
+    @Test
+    void anEntryAtTheByteLimitIsCopied(@TempDir Path temp) throws Exception {
+        Path entry = Files.writeString(temp.resolve("entry.properties"), "x".repeat(64), StandardCharsets.UTF_8);
+        Path backup = temp.resolve("entry.properties.m29-v1.bak");
+
+        LocalProjectRegistry.backupOnce(entry, backup, 64);
+
+        assertEquals("x".repeat(64), Files.readString(backup));
     }
 }

@@ -359,12 +359,17 @@ public final class LocalProjectRegistry implements ProjectRegistry {
      * modification date of the entry is not copied: nothing reads it.
      */
     private static void backupOnce(Path file, Path backup) throws IOException {
+        backupOnce(file, backup, MAX_LEGACY_ENTRY_BYTES);
+    }
+
+    /** The limit is a parameter for the tests: the registry reader refuses a larger entry before it gets here. */
+    static void backupOnce(Path file, Path backup, int maxBytes) throws IOException {
         if (Files.exists(backup, LinkOption.NOFOLLOW_LINKS)) return;
         byte[] content;
         try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
-            content = input.readNBytes(MAX_LEGACY_ENTRY_BYTES + 1);
+            content = input.readNBytes(maxBytes + 1);
         }
-        if (content.length > MAX_LEGACY_ENTRY_BYTES) {
+        if (content.length > maxBytes) {
             throw new IOException("legacy registry entry exceeds the backup byte limit");
         }
         Path temporary = PrivateLocalStorage.createPrivateTempFile(

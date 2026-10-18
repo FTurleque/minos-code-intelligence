@@ -63,6 +63,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     private final int maxSessionsPerProject;
     private final long maxProjectBytes;
     private final long maxSessionBytes;
+    private final java.util.function.BiConsumer<Path, Path> beforePublish;
 
     public FileRuntimeObservationStore(Path root) throws IOException {
         this(root, DEFAULT_MAX_SESSIONS_PER_PROJECT, DEFAULT_MAX_PROJECT_BYTES, DEFAULT_MAX_SESSION_BYTES);
@@ -74,6 +75,18 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
             long maxProjectBytes,
             long maxSessionBytes
     ) throws IOException {
+        this(root, maxSessionsPerProject, maxProjectBytes, maxSessionBytes, (temporary, target) -> { });
+    }
+
+    /** {@code beforePublish(temporary, target)} runs just before the publication: a seam of the tests of a lost race. */
+    FileRuntimeObservationStore(
+            Path root,
+            int maxSessionsPerProject,
+            long maxProjectBytes,
+            long maxSessionBytes,
+            java.util.function.BiConsumer<Path, Path> beforePublish
+    ) throws IOException {
+        this.beforePublish = Objects.requireNonNull(beforePublish, "beforePublish");
         if (maxSessionsPerProject < 1) throw new IllegalArgumentException("maxSessionsPerProject must be positive");
         if (maxProjectBytes < 1 || maxSessionBytes < 1 || maxSessionBytes > maxProjectBytes) {
             throw new IllegalArgumentException("runtime observation storage byte limits are invalid");
@@ -121,6 +134,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
                 String idHash = digest(session.session().sessionId().getBytes(StandardCharsets.UTF_8));
                 Path target = project.resolve("session-" + idHash + "-" + contentSha + EXTENSION);
                 try {
+                    beforePublish.accept(temporary, target);
                     DurableAtomicFile.publish(temporary, target, "runtime session publication");
                 } catch (FileAlreadyExistsException alreadyThere) {
                     // The name carries the digest of the content: a session already published under it is this one. It
