@@ -305,21 +305,31 @@ record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl,
                 publisher.publish(source, target);
                 return;
             } catch (IOException failure) {
-                boolean transientFailure = failure instanceof FileSystemException
-                        || failure.getCause() instanceof FileSystemException;
-                if (!transientFailure) throw failure;
+                if (!isTransient(failure)) throw failure;
                 if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return;
-                if (attempt == MOVE_ATTEMPTS) {
-                    if (failure instanceof FileSystemException) throw new IOException("sandbox launcher could not be published");
-                    throw failure;
-                }
-                try {
-                    Thread.sleep(delayMillis);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("sandbox launcher could not be published");
-                }
+                if (attempt == MOVE_ATTEMPTS) throw exhausted(failure);
+                pause(delayMillis);
             }
+        }
+    }
+
+    private static boolean isTransient(IOException failure) {
+        return failure instanceof FileSystemException || failure.getCause() instanceof FileSystemException;
+    }
+
+    /** The last refusal: a bare file-system failure is reported without its path, a primitive message as it is. */
+    private static IOException exhausted(IOException failure) {
+        return failure instanceof FileSystemException
+                ? new IOException("sandbox launcher could not be published")
+                : failure;
+    }
+
+    private static void pause(long delayMillis) throws IOException {
+        try {
+            Thread.sleep(delayMillis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("sandbox launcher could not be published");
         }
     }
 

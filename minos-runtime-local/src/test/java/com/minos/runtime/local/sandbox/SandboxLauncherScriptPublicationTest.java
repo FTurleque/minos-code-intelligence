@@ -33,7 +33,7 @@ class SandboxLauncherScriptPublicationTest {
             (source, target) -> DurableAtomicFile.publish(source, target, "sandbox launcher publication");
 
     private static Path partial(Path directory, String content) throws IOException {
-        return Files.writeString(directory.resolve(".launcher-" + System.nanoTime() + ".ps1"), content,
+        return Files.writeString(directory.resolve(".launcher-" + java.util.UUID.randomUUID() + ".ps1"), content,
                 StandardCharsets.UTF_8);
     }
 
@@ -95,15 +95,18 @@ class SandboxLauncherScriptPublicationTest {
     }
 
     @Test
-    void aRefusalWhichNeverEndsFailsAfterTheBoundWithAMessageWithoutPath(@TempDir Path directory) {
+    void aRefusalWhichNeverEndsFailsAfterTheBoundWithAMessageWithoutPath(@TempDir Path directory) throws Exception {
         AtomicInteger attempts = new AtomicInteger();
         SandboxLauncherScript.Publisher refusing = (source, to) -> {
             attempts.incrementAndGet();
             throw new FileSystemException(to.toString());
         };
 
-        IOException failure = assertThrows(IOException.class, () -> SandboxLauncherScript.publishWithRetry(
-                partial(directory, "mine"), directory.resolve("launcher.ps1"), refusing, 0L));
+        Path source = partial(directory, "mine");
+        Path target = directory.resolve("launcher.ps1");
+
+        IOException failure = assertThrows(IOException.class,
+                () -> SandboxLauncherScript.publishWithRetry(source, target, refusing, 0L));
 
         assertEquals(5, attempts.get());
         assertEquals("sandbox launcher could not be published", failure.getMessage());
@@ -127,14 +130,17 @@ class SandboxLauncherScriptPublicationTest {
     }
 
     @Test
-    void aFilesystemWithoutHardLinksFailsWithThePrimitiveMessage(@TempDir Path directory) {
+    void aFilesystemWithoutHardLinksFailsWithThePrimitiveMessage(@TempDir Path directory) throws Exception {
         SandboxLauncherScript.Publisher noLinks = (source, to) -> {
             throw new IOException("filesystem does not support required exclusive sandbox launcher publication: "
                     + to.getFileName(), new FileSystemException("no hard link"));
         };
 
-        IOException failure = assertThrows(IOException.class, () -> SandboxLauncherScript.publishWithRetry(
-                partial(directory, "mine"), directory.resolve("launcher.ps1"), noLinks, 0L));
+        Path source = partial(directory, "mine");
+        Path target = directory.resolve("launcher.ps1");
+
+        IOException failure = assertThrows(IOException.class,
+                () -> SandboxLauncherScript.publishWithRetry(source, target, noLinks, 0L));
 
         assertTrue(failure.getMessage().startsWith("filesystem does not support required exclusive"),
                 failure.getMessage());
@@ -142,15 +148,17 @@ class SandboxLauncherScriptPublicationTest {
     }
 
     @Test
-    void anOtherFailureIsNotRetried(@TempDir Path directory) {
+    void anOtherFailureIsNotRetried(@TempDir Path directory) throws Exception {
         AtomicInteger attempts = new AtomicInteger();
         SandboxLauncherScript.Publisher broken = (source, to) -> {
             attempts.incrementAndGet();
             throw new IOException("disk failure");
         };
 
-        assertThrows(IOException.class, () -> SandboxLauncherScript.publishWithRetry(
-                partial(directory, "mine"), directory.resolve("launcher.ps1"), broken, 0L));
+        Path source = partial(directory, "mine");
+        Path target = directory.resolve("launcher.ps1");
+
+        assertThrows(IOException.class, () -> SandboxLauncherScript.publishWithRetry(source, target, broken, 0L));
 
         assertEquals(1, attempts.get());
     }
