@@ -66,6 +66,19 @@ class WindowsSandboxAclAndProbeRefusalTest {
     }
 
     @Test
+    void aRefusedDependencyIsNamedByItsFileNameWithoutItsDirectory() {
+        Path missing = temporary.resolve("no-such-runtime").resolve("pwsh.exe");
+
+        IllegalStateException refusal = assertThrows(IllegalStateException.class,
+                () -> WindowsAppContainerWorkerSandboxBackend.requireAclGrantable(missing));
+
+        assertTrue(refusal.getMessage().contains("pwsh.exe"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(temporary.toString()), refusal.getMessage());
+        assertFalse(com.minos.diagnostics.PublicErrorMessages.looksSensitive(refusal.getMessage()),
+                refusal.getMessage());
+    }
+
+    @Test
     void aWriteRootThatCannotBeSecuredIsRefusedWithoutNamingItsPath() {
         Path missing = temporary.resolve("no-such-write-root");
 

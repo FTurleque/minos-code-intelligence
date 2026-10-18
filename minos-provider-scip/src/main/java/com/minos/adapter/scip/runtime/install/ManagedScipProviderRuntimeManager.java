@@ -239,7 +239,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         boolean classpathInstalled = scipJavaClasspathInstalled();
         if (!classpathInstalled) diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION + " classpath is not installed in MINOS_HOME/tools");
         if (CommandLocator.isWindows()) {
-            if (powerShellExecutable().isEmpty()) diagnostics.add(ExternalPrerequisite.of("PowerShell (powershell.exe or pwsh.exe) is required for scip-java on Windows"));
+            if (powerShellExecutable().isEmpty()) diagnostics.add(ExternalPrerequisite.of("Windows PowerShell 5.1 (System32\\WindowsPowerShell\\v1.0\\powershell.exe) is required for scip-java on Windows"));
             if (!gitBashAvailable()) diagnostics.add(ExternalPrerequisite.of("Git Bash (bash.exe) is required for scip-java on Windows"));
             if (!cSharpCompilerAvailable()) diagnostics.add(ExternalPrerequisite.of("csc.exe is required to build scip-java Windows command shims"));
         }
@@ -867,7 +867,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 && Files.isRegularFile(runtime.resolve(WINDOWS_PATCH_RESOURCE));
     }
 
-    static Optional<Path> powerShellExecutable() { return CommandLocator.find("powershell").or(() -> CommandLocator.find("pwsh")); }
+    /** The PowerShell that will launch the runner: the system one the sandbox trusts, never one found on PATH. */
+    static Optional<Path> powerShellExecutable() { return CommandLocator.windowsPowerShell(); }
 
     private static boolean gitBashAvailable() {
         return CommandLocator.find("git").flatMap(ManagedScipProviderRuntimeManager::gitBashForGit).isPresent();

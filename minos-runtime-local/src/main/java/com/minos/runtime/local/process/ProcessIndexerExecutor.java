@@ -161,7 +161,8 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
                     append(metadataSink, "exitCode=" + exitCode + "\ncompletedAt=" + Instant.now() + "\n");
                     if (exitCode != 0) {
                         archiveFailedArtifact(generatedArtifact, runDirectory);
-                        throw new IllegalStateException("provider exited with code " + exitCode + "; see " + stderr);
+                        throw new IllegalStateException("provider exited with code " + exitCode + "; see "
+                                + homeRelative(stderr) + " under MINOS_HOME");
                     }
                     promoteArtifact(generatedArtifact, finalArtifact, runDirectory);
                     result = new IndexingArtifact(
@@ -281,6 +282,17 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
      * artifact living several levels below one of those entries must have that whole entry exempted
      * or reclamation would delete it again immediately after cleanup restores it.
      */
+    /**
+     * {@code runs/<run>/<provider>/<file>}: a run file named relative to {@code MINOS_HOME}, with {@code /}
+     * separators, so that a failure message never carries the account name or the home layout.
+     */
+    private String homeRelative(Path runFile) {
+        Path relative = runsRoot.relativize(runFile.toAbsolutePath().normalize());
+        StringBuilder name = new StringBuilder("runs");
+        relative.forEach(part -> name.append('/').append(part));
+        return name.toString();
+    }
+
     private static Set<Path> residueReclamationExemptions(Path runDirectory, Path generatedArtifact) {
         Path normalizedRunDirectory = runDirectory.toAbsolutePath().normalize();
         if (!generatedArtifact.startsWith(normalizedRunDirectory) || generatedArtifact.equals(normalizedRunDirectory)) {
