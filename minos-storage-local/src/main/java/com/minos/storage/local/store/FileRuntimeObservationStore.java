@@ -16,6 +16,7 @@ import com.minos.io.BoundedFileLease;
 import com.minos.io.DurableAtomicFile;
 import com.minos.io.Sha256;
 
+import java.nio.file.FileAlreadyExistsException;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -24,12 +25,10 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
@@ -64,6 +63,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     private final int maxSessionsPerProject;
     private final long maxProjectBytes;
     private final long maxSessionBytes;
+    private final java.util.function.BiConsumer<Path, Path> beforePublish;
 
     public FileRuntimeObservationStore(Path root) throws IOException {
         this(root, DEFAULT_MAX_SESSIONS_PER_PROJECT, DEFAULT_MAX_PROJECT_BYTES, DEFAULT_MAX_SESSION_BYTES);
@@ -75,6 +75,18 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
             long maxProjectBytes,
             long maxSessionBytes
     ) throws IOException {
+        this(root, maxSessionsPerProject, maxProjectBytes, maxSessionBytes, (temporary, target) -> { });
+    }
+
+    /** {@code beforePublish(temporary, target)} runs just before the publication: a seam of the tests of a lost race. */
+    FileRuntimeObservationStore(
+            Path root,
+            int maxSessionsPerProject,
+            long maxProjectBytes,
+            long maxSessionBytes,
+            java.util.function.BiConsumer<Path, Path> beforePublish
+    ) throws IOException {
+        this.beforePublish = Objects.requireNonNull(beforePublish, "beforePublish");
         if (maxSessionsPerProject < 1) throw new IllegalArgumentException("maxSessionsPerProject must be positive");
         if (maxProjectBytes < 1 || maxSessionBytes < 1 || maxSessionBytes > maxProjectBytes) {
             throw new IllegalArgumentException("runtime observation storage byte limits are invalid");
@@ -121,7 +133,18 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
                 String contentSha = sha256(temporary);
                 String idHash = digest(session.session().sessionId().getBytes(StandardCharsets.UTF_8));
                 Path target = project.resolve("session-" + idHash + "-" + contentSha + EXTENSION);
-                moveAtomically(temporary, target);
+                try {
+                    beforePublish.accept(temporary, target);
+                    DurableAtomicFile.publish(temporary, target, "runtime session publication");
+                } catch (FileAlreadyExistsException alreadyThere) {
+                    // The name carries the digest of the content: a session already published under it is this one. It
+                    // was not found above only if it appeared meanwhile, which the project lease excludes.
+                    CorrelatedRuntimeSession stored = findUnlocked(project, projectId, session.session().sessionId())
+                            .filter(candidate -> candidate.sourceSha256().equals(session.sourceSha256()))
+                            .orElseThrow(() -> new IOException("runtime session is immutable and already exists with "
+                                    + "different content: " + session.session().sessionId()));
+                    return new SaveResult(stored, true);
+                }
                 return new SaveResult(session, false);
             } finally {
                 Files.deleteIfExists(temporary);
@@ -240,7 +263,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
 
     private static void write(Path file, CorrelatedRuntimeSession correlated) throws IOException {
         RuntimeObservationSession session = correlated.session();
-        try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(file)))) {
+        try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(PrivateLocalStorage.openPrivateOutputStream(file)))) {
             output.writeInt(MAGIC);
             output.writeInt(VERSION);
             writeString(output, session.format());
@@ -465,14 +488,6 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(lockFile.hashCode(), JVM_LOCKS.length)];
         return BoundedFileLease.readShared(
                 lockFile, jvmLock, LOCK_TIMEOUT, "runtime observation project lease", read);
-    }
-
-    private static void moveAtomically(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException exception) {
-            throw new IOException("atomic runtime session publication is not supported", exception);
-        }
     }
 
     private static String sha256(Path file) throws IOException {

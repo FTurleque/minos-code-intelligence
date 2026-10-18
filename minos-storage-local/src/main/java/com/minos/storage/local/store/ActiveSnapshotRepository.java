@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
 import com.minos.store.SnapshotDescriptor;
 import java.io.BufferedInputStream;
@@ -69,7 +70,7 @@ public final class ActiveSnapshotRepository {
 
     private static void writePointer(Path file, SnapshotDescriptor pointer) throws IOException {
         try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(
-                Files.newOutputStream(file)
+                PrivateLocalStorage.openPrivateOutputStream(file)
         ))) {
             output.writeInt(POINTER_MAGIC);
             output.writeInt(pointer.formatVersion());

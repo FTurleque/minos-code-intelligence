@@ -41,6 +41,12 @@ Les `Files.isSymbolicLink` / `isRegularFile` qui précèdent l'ouverture restent
 
 Le fichier est créé privé (`createPrivateFile`, `CREATE_NEW` fail-closed) avant d'être ouvert : l'ouverture rejoue le durcissement (sans effet) et refuse un lien. Option B : `openNewTreeFile` sur un nom jamais créé. Rejetée : elle déplacerait la création.
 
+## Constat de mise en œuvre (2026-10-18)
+
+- **Le lien substitué n'était déjà pas suivi** : `Files.newByteChannel(READ, NOFOLLOW_LINKS)` le refusait. Le gain de la migration est le contrôle de type (fichier spécial, répertoire) fait avec l'ouverture, la classification des échecs sans chemin, et le retrait de trois entrées de liste. Les tests `ScipArtifactOpeningTest` (lien, fichier qui grossit ou se vide après le contrôle, répertoire, fichier figé remplacé) sont des gardes.
+- **La taille qui fait foi est celle du descripteur ouvert** : `ScipIndexReader` la relit sur le canal (vide ou au-dessus de la borne : refus, mêmes messages) ; `freeze` la contrôlait déjà sur son canal source.
+- **Coutures de test** : constructeurs de paquet à état d'instance (`Runnable` avant ouverture ; `Consumer<Path>` après création du fichier figé).
+
 ## Direction des dépendances
 
 `adapters → engine` (ADR 0022) ; `com.minos.io` déjà importé par l'importeur (`:11`). Aucun package nouveau.

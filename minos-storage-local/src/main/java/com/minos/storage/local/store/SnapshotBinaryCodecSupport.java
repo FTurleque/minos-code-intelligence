@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
@@ -100,7 +101,7 @@ final class SnapshotBinaryCodecSupport {
 
     static String writeSymbolSnapshotV1(Path file, SymbolSnapshot snapshot) throws IOException {
         MessageDigest digest = Sha256.newDigest();
-        try (OutputStream fileOutput = Files.newOutputStream(file);
+        try (OutputStream fileOutput = PrivateLocalStorage.openPrivateOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
                      digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, SYMBOL_SNAPSHOT_LABEL);
@@ -153,7 +154,7 @@ final class SnapshotBinaryCodecSupport {
 
     static String writeKnowledgeSnapshotV3(Path file, CodeKnowledgeSnapshot snapshot) throws IOException {
         MessageDigest digest = Sha256.newDigest();
-        try (OutputStream fileOutput = Files.newOutputStream(file);
+        try (OutputStream fileOutput = PrivateLocalStorage.openPrivateOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
                      digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
@@ -301,7 +302,7 @@ final class SnapshotBinaryCodecSupport {
 
     static String writeKnowledgeSnapshotV2(Path file, CodeKnowledgeSnapshot snapshot) throws IOException {
         MessageDigest digest = Sha256.newDigest();
-        try (OutputStream fileOutput = Files.newOutputStream(file);
+        try (OutputStream fileOutput = PrivateLocalStorage.openPrivateOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
                      digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);

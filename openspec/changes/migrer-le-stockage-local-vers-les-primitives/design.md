@@ -61,6 +61,13 @@ Sous le verrou du projet, la session existante est détectée avant l'écriture 
 
 Le changement touche sept fichiers que `lire-le-registre-sans-ecrire` a modifiés. Le faire après limite les conflits ; le cliquet de liste se recalcule à la fusion (le gate le signale dans les deux sens).
 
+## Constat de mise en œuvre (2026-10-18)
+
+- Les trois fichiers `Properties` sont écrits en mémoire puis par `writePrivateFile` (UTF-8 pour le registre et la correspondance de chemins, ISO-8859-1 inchangé pour l'état d'index) ; les huit flux passent par `openPrivateOutputStream` ; la sauvegarde `.m29-v1.bak` est lue sans suivre de lien (borne 1 Mio), écrite dans un temporaire privé et publiée exclusivement (une `FileAlreadyExistsException` vaut « déjà sauvegardé ») ; la session est publiée par `DurableAtomicFile.publish`.
+- `FileRuntimeObservationStore` : le message « atomic runtime session publication is not supported » disparaît au profit de celui de la primitive ; le gate `check-runtime-dynamic-consistency.py` attend `DurableAtomicFile.publish`.
+- **Mesure du coût de `publish`** (300 publications de 64 Kio, fsync compris) : médiane 13,1 ms (p95 27,5) sous Windows, 40,9 ms (p95 50,1) sous Linux en conteneur, contre 0,53 et 0,08 ms pour `Files.move(ATOMIC_MOVE)` ; seuil d'abandon de 50 ms non atteint. Une session est publiée une fois par exécution runtime.
+- Les entrées `LocalProjectRegistry` / `Files.copy` et les neuf autres sont retirées : `allowlisted-occurrences` passe de 106 à 93.
+
 ## Direction des dépendances
 
 `storage → engine` (ADR 0022) : aucune dépendance nouvelle, aucun import hors `com.minos.io`. Aucun package nouveau.

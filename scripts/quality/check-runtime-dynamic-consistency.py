@@ -87,7 +87,7 @@ def main() -> int:
 
         require_facts("FileRuntimeObservationStore.java", store,
                       "DEFAULT_MAX_SESSIONS_PER_PROJECT = 128", "DEFAULT_MAX_PROJECT_BYTES",
-                      "DEFAULT_MAX_SESSION_BYTES", "BoundedFileLease", "LOCK_TIMEOUT", "ATOMIC_MOVE",
+                      "DEFAULT_MAX_SESSION_BYTES", "BoundedFileLease", "LOCK_TIMEOUT", "DurableAtomicFile.publish",
                       "LinkOption.NOFOLLOW_LINKS", "checksum mismatch", "session is immutable",
                       "must not be a symbolic link", "capacity reached")
         require_facts("BoundedFileLease.java", bounded_lease,
