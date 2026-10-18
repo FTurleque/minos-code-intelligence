@@ -42,6 +42,13 @@ Suite d'AUD-SEC-03 (sprint 8) : lot « runtime local », partie Windows. HEAD an
 
 Sur un poste Windows avec antivirus : publier le lanceur 50 fois de suite et mesurer la proportion de reprises ; exécuter la sonde réelle. Seuil d'abandon : plus d'une reprise sur dix, ou une sonde qui rapporte « indisponible » à tort.
 
+## Constat de mise en œuvre (2026-10-18)
+
+- `moveWithRetry` devient `publishWithRetry(source, target, Publisher, délai)` (éditeur injectable, état nul) : `DurableAtomicFile.publish` dans la boucle de reprise existante (5 essais, 50 ms), élargie à l'`IOException` qui a une `FileSystemException` pour cause ; passé la borne, une `FileSystemException` simple garde le message « sandbox launcher could not be published », une exception encapsulée garde le message de la primitive (« filesystem does not support required exclusive … »). La cible existante reste acceptée, `verify()` décide.
+- La sonde lit son tube par `BoundedProcessOutput.capture` vers un fichier privé borné (surcharge `probeSucceeds(…, maxBytes)` de paquet), et attend la fin du drain sur tous les chemins, délai dépassé compris.
+- Mesure D3 : 50 publications, 0 reprise (Defender actif).
+- `allowlisted-occurrences` passe de 107 à 105 ; la justification de `Files.createDirectories` du backend est réécrite comme durable.
+
 ## Direction des dépendances
 
 `runtime → engine` (ADR 0022) ; `com.minos.io` est déjà importé par les deux classes. Le backend importe déjà sept types du package `process` (`WindowsAppContainerWorkerSandboxBackend.java:3-9`) et aucune classe de `process` n'importe `sandbox` : l'ajout de `BoundedProcessOutput` ne crée pas de cycle (règle A8) et ne change pas la liste des types exportés (règle A10 : `BoundedProcessOutput` y figure déjà).

@@ -69,7 +69,7 @@
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java",
     "method": "Files.createDirectories",
     "max": 1,
-    "justification": "Parent de l'artefact dans l'arbre de travail du provider sandboxé : ses droits sont ceux du sandbox (AppContainer), pas une donnée privée MINOS_HOME ; à revoir, hors S5 nommé."
+    "justification": "Parent de l'artefact dans l'arbre de travail du provider sandboxé : l'identité AppContainer y écrit par héritage d'ACL, un dossier privé de MINOS n'hérite pas de son parent ; entrée durable."
   },
   {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend.java",
@@ -280,18 +280,6 @@
     "method": "Files.createDirectory",
     "max": 3,
     "justification": "Crée un cgroup dans cgroupfs, qui n'est pas du stockage privé : entrée définitive, ce site ne sera jamais migré."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/SandboxLauncherScript.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java",
-    "method": "ProcessBuilder.redirect(file)",
-    "max": 1,
-    "justification": "Redirige la sortie du lanceur vers un fichier dont les droits viennent du dossier parent ; à remplacer par un fichier créé par une primitive, lot de migration « runtime local »."
   },
   {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/ProviderWorkspaceFiles.java",
