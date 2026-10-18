@@ -20,7 +20,6 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -61,6 +60,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private final Clock clock;
     private final SharedCacheLeaseRegistry leases;
     private final Duration lockTimeout;
+    private final DirectoryPublisher publisher;
 
     public JGitRemoteRepositoryMaterializer(Path minosHome) throws IOException {
         this(minosHome, RemoteRepositoryCachePolicy.DEFAULT);
@@ -89,6 +89,20 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             Clock clock,
             Duration lockTimeout
     ) throws IOException {
+        this(minosHome, cachePolicy, gitClient, secretResolver, clock, lockTimeout, DirectoryPublisher.ATOMIC);
+    }
+
+    /** Test seam: how the cloned directory becomes the cache entry. Production publishes it atomically. */
+    JGitRemoteRepositoryMaterializer(
+            Path minosHome,
+            RemoteRepositoryCachePolicy cachePolicy,
+            RemoteGitClient gitClient,
+            SecretResolver secretResolver,
+            Clock clock,
+            Duration lockTimeout,
+            DirectoryPublisher publisher
+    ) throws IOException {
+        this.publisher = Objects.requireNonNull(publisher, "publisher");
         this.lockTimeout = Objects.requireNonNull(lockTimeout, "lockTimeout");
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         Path remoteRoot = home.resolve("remote-cache");
@@ -195,7 +209,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             if (entrySize > cachePolicy.maxBytes()) {
                 throw new IOException("remote repository exceeds the configured cache byte limit");
             }
-            moveDirectory(temporary, entry);
+            publishDirectory(temporary, entry);
             try {
                 evict(cacheKey);
             } catch (IOException exception) {
@@ -396,16 +410,28 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         return value;
     }
 
-    private static void moveDirectory(Path source, Path target) throws IOException {
+    private void publishDirectory(Path source, Path target) throws IOException {
         try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException exception) {
-            throw new IOException("remote repository cache requires atomic directory publication", exception);
+            publisher.publish(source, target);
+        } catch (IOException exception) {
+            if (exception.getCause() instanceof AtomicMoveNotSupportedException) {
+                throw new IOException("remote repository cache requires atomic directory publication", exception);
+            }
+            throw exception;
         }
     }
 
     private static void moveFile(Path source, Path target) throws IOException {
         DurableAtomicFile.replace(source, target, "remote repository cache metadata replacement");
+    }
+
+    /** Makes the cloned directory the cache entry; the real one is the exclusive atomic rename of the directory. */
+    @FunctionalInterface
+    interface DirectoryPublisher {
+        DirectoryPublisher ATOMIC = (source, target) ->
+                DurableAtomicFile.moveDirectory(source, target, "remote repository cache entry publication");
+
+        void publish(Path source, Path target) throws IOException;
     }
 
     interface RemoteGitClient {

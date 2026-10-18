@@ -189,7 +189,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                 .sorted(Comparator.comparing(value -> value.document().stableKey()))
                 .toList();
         try {
-            try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temporary)))) {
+            try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(PrivateLocalStorage.openPrivateOutputStream(temporary)))) {
                 output.writeInt(MAGIC);
                 output.writeInt(FORMAT_VERSION);
                 writeString(output, snapshot.projectId());

@@ -25,8 +25,6 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,6 +33,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -273,7 +272,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
             throw new IOException("cannot quarantine provider-controlled directory without a parent: " + directory);
         }
         Path quarantined = parent.resolve(directory.getFileName() + ".quarantined-" + System.nanoTime());
-        Files.move(directory, quarantined, StandardCopyOption.ATOMIC_MOVE);
+        DurableAtomicFile.moveDirectory(directory, quarantined, "provider directory quarantine");
     }
 
     /**
@@ -544,13 +543,16 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         Files.deleteIfExists(target);
         try (InputStream raw = ConfinedFileOpener.openRegularFileNoFollow(source);
              BoundedInputStream input = new BoundedInputStream(
-                     raw, IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES, "SCIP artifact copy");
-             OutputStream output = Files.newOutputStream(
-                     target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
-            input.transferTo(output);
-        } catch (Exception exception) {
-            Files.deleteIfExists(target);
-            throw exception;
+                     raw, IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES, "SCIP artifact copy")) {
+            // Created new and hardened: the copy is read back by MINOS from a folder the provider can write into, so it
+            // can neither pre-exist nor be adopted. A refused creation leaves nothing of ours to delete.
+            OutputStream created = PrivateLocalStorage.createPrivateOutputStream(target);
+            try (OutputStream output = created) {
+                input.transferTo(output);
+            } catch (Exception exception) {
+                Files.deleteIfExists(target);
+                throw exception;
+            }
         }
     }
 
@@ -636,8 +638,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         // Provider plans may place their generated artifact on another filesystem. Never degrade to a
         // non-atomic move: copy under the existing SCIP byte budget into the target filesystem, then
         // publish that copy with the same durable atomic primitive used by authoritative local stores.
-        Path localCopy = Files.createTempFile(normalizedTarget.getParent(), ".artifact-transfer-", ".tmp");
-        Files.deleteIfExists(localCopy);
+        Path localCopy = normalizedTarget.getParent().resolve(".artifact-transfer-" + UUID.randomUUID() + ".tmp");
         try {
             copyArtifactBounded(source, localCopy);
             DurableAtomicFile.replace(localCopy, normalizedTarget, "cross-filesystem provider artifact replacement");

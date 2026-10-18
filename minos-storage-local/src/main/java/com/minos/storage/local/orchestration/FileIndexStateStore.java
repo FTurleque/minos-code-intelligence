@@ -1,5 +1,6 @@
 package com.minos.storage.local.orchestration;
 
+import java.io.ByteArrayOutputStream;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.io.BoundedProperties;
@@ -12,7 +13,6 @@ import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -649,9 +649,9 @@ public final class FileIndexStateStore implements IndexStateStore {
         DurableAtomicFile.ensureDirectory(file.getParent(), "index metadata directory");
         Path temporary = PrivateLocalStorage.createPrivateTempFile(file.getParent(), ".state-", ".tmp");
         try {
-            try (OutputStream output = Files.newOutputStream(temporary)) {
-                properties.store(output, comment);
-            }
+            ByteArrayOutputStream content = new ByteArrayOutputStream();
+            properties.store(content, comment);
+            PrivateLocalStorage.writePrivateFile(temporary, content.toByteArray());
             DurableAtomicFile.replace(temporary, file, "index metadata replacement");
         } finally {
             Files.deleteIfExists(temporary);

@@ -2,6 +2,7 @@ package com.minos.runtime.local.workspace;
 
 import com.minos.io.ConfinedFileOpener;
 import com.minos.io.FileTreeOperations;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
 
@@ -14,7 +15,6 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Objects;
 
@@ -148,8 +148,7 @@ public final class ProviderWorkspaceFiles {
         byte[] buffer = new byte[8192];
         try (InputStream input = Channels.newInputStream(
                     ConfinedFileOpener.openConfinedRegularFile(sourceRoot, relative));
-             OutputStream output = Files.newOutputStream(
-                     target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+             OutputStream output = PrivateLocalStorage.openNewTreeFile(target)) {
             int read;
             while ((read = input.read(buffer)) >= 0) {
                 if (read == 0) continue;
