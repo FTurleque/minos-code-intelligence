@@ -99,6 +99,13 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     // Windows therefore gets its own MINOS-managed, portable Node.js, invoked directly against the
     // package's entry script (bypassing the cmd.exe shim, and cmd.exe entirely) so both the
     // interpreter and the script are ordinary, sandbox-grantable paths under MINOS_HOME/tools.
+    /**
+     * What a Windows installation reports until the scip-java chain is run end to end under the AppContainer sandbox.
+     * The chain has only been run outside it: capability honesty forbids calling it ready.
+     */
+    static final String SANDBOXED_EXECUTION_NOT_QUALIFIED = "scip-java execution under the Windows AppContainer sandbox "
+            + "is not qualified; index Java projects with the Docker runtime (docs/user/docker-runtime.md)";
+
     private static final String WINDOWS_RUNNER_RESOURCE = "scip-java-windows-runner.ps1";
     private static final String WINDOWS_PATCH_RESOURCE = "ScipWriter.java";
 
@@ -242,6 +249,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             if (powerShellExecutable().isEmpty()) diagnostics.add(ExternalPrerequisite.of("Windows PowerShell 5.1 (System32\\WindowsPowerShell\\v1.0\\powershell.exe) is required for scip-java on Windows"));
             if (!gitBashAvailable()) diagnostics.add(ExternalPrerequisite.of("Git Bash (bash.exe) is required for scip-java on Windows"));
             if (!cSharpCompilerAvailable()) diagnostics.add(ExternalPrerequisite.of("csc.exe is required to build scip-java Windows command shims"));
+            diagnostics.add(SANDBOXED_EXECUTION_NOT_QUALIFIED);
         }
         String javaHome = System.getenv("JAVA_HOME");
         if (javaHome == null || javaHome.isBlank()) {

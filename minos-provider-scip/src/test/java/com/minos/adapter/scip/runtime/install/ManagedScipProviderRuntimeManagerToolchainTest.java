@@ -226,4 +226,49 @@ class ManagedScipProviderRuntimeManagerToolchainTest {
         assertFalse(Files.exists(manager().scipJavaClasspathFile()),
                 "the classpath file is written last: its absence proves the verification refused the jars");
     }
+
+    /** The files an installed scip-java leaves under MINOS_HOME on Windows, with an installed Coursier on the PATH. */
+    private void installedScipJavaOnWindows() throws IOException {
+        FakeTools.succeeding(tools, "cs");
+        Path runtime = home.resolve("tools").resolve(JAVA)
+                .resolve(ManagedScipProviderRuntimeManager.SCIP_JAVA_VERSION).resolve("runtime");
+        Files.createDirectories(runtime);
+        Files.writeString(runtime.resolve("scip-java-windows-runner.ps1"), "# runner\n");
+        Files.writeString(runtime.resolve("ScipWriter.java"), "// patch\n");
+        Path maven = manager().mavenExecutable();
+        Files.createDirectories(maven.getParent());
+        Files.writeString(maven, "@echo off\r\n");
+        Path classpath = manager().scipJavaClasspathFile();
+        Files.createDirectories(classpath.getParent());
+        Files.writeString(classpath, "a.jar\n");
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void onWindowsAnInstalledScipJavaIsBlockedUntilItsSandboxedExecutionIsQualified() throws Exception {
+        installedScipJavaOnWindows();
+
+        ChildJvm.Outcome outcome = child(JAVA, "inspect,executor");
+
+        assertEquals("BLOCKED", outcome.get("inspect.state"), outcome.values().toString());
+        assertTrue(outcome.get("inspect.diagnostics").contains(
+                        ManagedScipProviderRuntimeManager.SANDBOXED_EXECUTION_NOT_QUALIFIED),
+                outcome.get("inspect.diagnostics"));
+        assertTrue(outcome.get("inspect.diagnostics").contains("Docker runtime"), outcome.get("inspect.diagnostics"));
+        // Indexing is refused before any provider is launched.
+        assertTrue(outcome.get("executor.failure").contains("provider runtime is not ready"), outcome.get("executor.failure"));
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void onLinuxScipJavaIsNotBlockedByTheWindowsSandboxQualification() throws Exception {
+        FakeTools.succeeding(tools, "cs");
+        FakeTools.succeeding(tools, "scip-java");
+
+        ChildJvm.Outcome outcome = child(JAVA, "inspect");
+
+        assertFalse(outcome.get("inspect.diagnostics").contains(
+                        ManagedScipProviderRuntimeManager.SANDBOXED_EXECUTION_NOT_QUALIFIED),
+                outcome.get("inspect.diagnostics"));
+    }
 }
