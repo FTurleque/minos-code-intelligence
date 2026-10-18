@@ -72,7 +72,7 @@ M24 applique deux modèles :
 - `scip-dotnet` et `scip-go` : installation locale gérée et versionnée ;
 - `scip-clang` et `rust-analyzer` : runtime operator-managed, parce que M24 refuse d'installer implicitement des toolchains compilateur ou de prétendre à une portabilité non prouvée.
 
-Toute installation doit être fail-closed et atomique : préparation dans un répertoire partiel, validation de l'exécutable/version, puis remplacement du répertoire final.
+Toute installation doit être fail-closed et atomique : préparation dans un répertoire partiel, validation de l'exécutable/version, puis remplacement du répertoire final. Le remplacement est un renommage atomique (`DurableAtomicFile.moveDirectory` pour un répertoire, `replace` pour un fichier) : un volume sans renommage atomique fait échouer l'installation au lieu de la dégrader en copie.
 
 ## Opt-in expérimental
 
