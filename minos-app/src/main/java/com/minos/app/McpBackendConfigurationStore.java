@@ -1,5 +1,7 @@
 package com.minos.app;
 
+import java.io.ByteArrayOutputStream;
+import java.io.OutputStreamWriter;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
 import com.minos.io.PrivateLocalStorage;
@@ -10,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Properties;
@@ -87,13 +88,11 @@ public final class McpBackendConfigurationStore {
 
         Path temporary = PrivateLocalStorage.createPrivateTempFile(file.getParent(), FILE_NAME + ".", ".tmp");
         try {
-            try (Writer writer = Files.newBufferedWriter(
-                    temporary,
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING)) {
+            ByteArrayOutputStream content = new ByteArrayOutputStream();
+            try (Writer writer = new OutputStreamWriter(content, StandardCharsets.UTF_8)) {
                 properties.store(writer, "MINOS MCP backend configuration v1");
             }
+            PrivateLocalStorage.writePrivateFile(temporary, content.toByteArray());
             DurableAtomicFile.replace(temporary, file, "MCP backend configuration replacement");
             PrivateLocalStorage.verifyPrivateFile(file);
         } finally {

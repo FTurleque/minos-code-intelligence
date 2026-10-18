@@ -50,3 +50,10 @@ Aucune branche de plateforme. Le test de lien symbolique suit la convention (`as
 
 - **Aucun test de sauvegarde aujourd'hui** : le risque de régression de format est couvert par D2.
 - **Conflit de texte** avec `verifier-le-proprietaire-des-dossiers-prives` : rebase.
+
+## Constat de mise en œuvre
+
+- `McpBackendConfigurationStore.save` rend les propriétés en mémoire (`Properties.store` sur un `Writer` UTF-8) puis écrit par `PrivateLocalStorage.writePrivateFile` sur le temporaire exclusif de `createPrivateTempFile`, et publie par `DurableAtomicFile.replace` ; l'entrée `McpBackendConfigurationStore` / `Files.newBufferedWriter` est retirée de l'allowlist (`allowlisted-occurrences` baisse de 1).
+- `McpBackendConfigurationStoreSaveTest` (4 tests) : contenu identique à celui de `Properties.store` pour les quatre clés (ligne datée écartée ; le nom de conteneur Docker est ASCII par validation de `McpBackendConfiguration`, aucun nom non ASCII n'est constructible), fichier privé `ENFORCED` après création et remplacement, durcissement d'un fichier existant permissif, aucun `.tmp` résiduel.
+- Écart au point 1.1 (b) : le refus d'un lien substitué au temporaire n'a pas de point d'injection propre à `minos-app` ; il est garanti et testé au niveau des primitives (`createPrivateTempFile` crée en exclusif, `writePrivateFile` ouvre sans suivre les liens : `PrivateLocalStorageStreamsTest`). `McpBackendStoreSymlinkTest` couvre le dossier d'exécution substitué.
+- Preuves locales : `./mvnw -pl minos-app -am test -Dtest='McpBackend*'` vert (18 tests), `run_gates.py --fast` 21/21. JaCoCo (`m29-backend-routing`) et la baseline SpotBugs sont jugés par la CI et ne sont pas rejoués localement.
