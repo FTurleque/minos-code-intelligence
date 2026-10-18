@@ -99,13 +99,10 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
     ) throws Exception {
         IndexerProcessPlan plan = preparePlan(request, transformer, runDirectory);
 
-        Path stdout = runDirectory.resolve("provider.stdout.log");
-        Path stderr = runDirectory.resolve("provider.stderr.log");
-        Path metadata = runDirectory.resolve("process.txt");
-        Path finalArtifact = runDirectory.resolve("index.scip").toAbsolutePath().normalize();
-        Path generatedArtifact = plan.generatedArtifact().toAbsolutePath().normalize();
-        Path preservedArtifact = runDirectory.resolve("preexisting-artifact.scip");
-        boolean artifactOutsideRun = !generatedArtifact.equals(finalArtifact);
+        RunFiles files = RunFiles.of(runDirectory, plan);
+        Path generatedArtifact = files.generatedArtifact();
+        Path preservedArtifact = files.preservedArtifact();
+        boolean artifactOutsideRun = !generatedArtifact.equals(files.finalArtifact());
         boolean preserveExisting = artifactOutsideRun && regularFileNoFollow(generatedArtifact);
         Optional<ProviderWriteQuota> writeQuota = transformer.providerWriteQuota();
         ProviderWriteQuotaSupervisor supervisor = null;
@@ -125,9 +122,9 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
             // provider may later replace these pathnames in a shared writable directory, but host
             // writes continue through already-open descriptors and can never be redirected by a
             // symlink race outside the sandbox boundary.
-            try (OutputStream stdoutSink = BoundedProcessOutput.openTarget(stdout);
-                 OutputStream stderrSink = BoundedProcessOutput.openTarget(stderr);
-                 OutputStream metadataSink = BoundedProcessOutput.openTarget(metadata)) {
+            try (OutputStream stdoutSink = BoundedProcessOutput.openTarget(files.stdout());
+                 OutputStream stderrSink = BoundedProcessOutput.openTarget(files.stderr());
+                 OutputStream metadataSink = BoundedProcessOutput.openTarget(files.metadata())) {
                 Instant startedAt = Instant.now();
                 writeMetadata(metadataSink, plan, request, startedAt);
 
@@ -136,36 +133,9 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
                     supervisor = startWriteQuotaSupervisor(writeQuota, plan, runDirectory, transformer, process);
                     BoundedProcessOutput.Capture outputCapture =
                             BoundedProcessOutput.capture(process, stdoutSink, stderrSink);
-                    boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
-                    Optional<String> breach = supervisor == null ? Optional.empty() : supervisor.breach();
-                    if (breach.isPresent()) {
-                        transformer.killContainedJob();
-                        ownership.terminate();
-                        appendQuietly(metadataSink, "status=WRITE_QUOTA_BREACH\ncompletedAt=" + Instant.now() + "\n");
-                        throw new IllegalStateException("provider write containment breached: " + breach.orElseThrow());
-                    }
-                    if (!completed) {
-                        transformer.killContainedJob();
-                        ownership.terminate();
-                        BoundedProcessOutput.Result output = outputCapture.await();
-                        appendOutputMetadata(metadataSink, output);
-                        append(metadataSink, "status=TIMEOUT\ncompletedAt=" + Instant.now() + "\n");
-                        throw new IllegalStateException("provider timed out after " + plan.timeout());
-                    }
-                    int exitCode = process.exitValue();
-                    transformer.killContainedJob();
-                    ownership.terminate();
-                    BoundedProcessOutput.Result output = outputCapture.await();
-                    appendOutputMetadata(metadataSink, output);
-                    append(metadataSink, "exitCode=" + exitCode + "\ncompletedAt=" + Instant.now() + "\n");
-                    if (exitCode != 0) {
-                        archiveFailedArtifact(generatedArtifact, runDirectory);
-                        throw new IllegalStateException("provider exited with code " + exitCode + "; see "
-                                + homeRelative(stderr) + " under MINOS_HOME");
-                    }
-                    promoteArtifact(generatedArtifact, finalArtifact, runDirectory);
-                    result = new IndexingArtifact(
-                            request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
+                    RunningProvider running = new RunningProvider(
+                            process, ownership, supervisor, outputCapture, metadataSink);
+                    result = awaitAndPromote(running, plan, transformer, request, files);
                 }
             }
         } catch (Exception primary) {
@@ -184,6 +154,82 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
             throw failure;
         }
         return result;
+    }
+
+    /** The files of one provider run: its diagnostic sinks and the artifact before and after publication. */
+    private record RunFiles(
+            Path stdout,
+            Path stderr,
+            Path metadata,
+            Path finalArtifact,
+            Path generatedArtifact,
+            Path preservedArtifact,
+            Path runDirectory
+    ) {
+        static RunFiles of(Path runDirectory, IndexerProcessPlan plan) {
+            return new RunFiles(
+                    runDirectory.resolve("provider.stdout.log"),
+                    runDirectory.resolve("provider.stderr.log"),
+                    runDirectory.resolve("process.txt"),
+                    runDirectory.resolve("index.scip").toAbsolutePath().normalize(),
+                    plan.generatedArtifact().toAbsolutePath().normalize(),
+                    runDirectory.resolve("preexisting-artifact.scip"),
+                    runDirectory);
+        }
+    }
+
+    /** A provider process that has started, with what supervises it and where its output goes. */
+    private record RunningProvider(
+            Process process,
+            ProcessOwnershipTracker ownership,
+            ProviderWriteQuotaSupervisor supervisor,
+            BoundedProcessOutput.Capture outputCapture,
+            OutputStream metadataSink
+    ) { }
+
+    /**
+     * Waits for the provider within its timeout, then either publishes the artifact it generated or fails with the
+     * reason recorded in the run metadata: write containment breached, timeout or non-zero exit.
+     */
+    private IndexingArtifact awaitAndPromote(
+            RunningProvider running,
+            IndexerProcessPlan plan,
+            ProcessPlanTransformer transformer,
+            IndexingExecutionRequest request,
+            RunFiles files
+    ) throws Exception {
+        Process process = running.process();
+        OutputStream metadataSink = running.metadataSink();
+        boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
+        Optional<String> breach = running.supervisor() == null ? Optional.empty() : running.supervisor().breach();
+        if (breach.isPresent()) {
+            transformer.killContainedJob();
+            running.ownership().terminate();
+            appendQuietly(metadataSink, "status=WRITE_QUOTA_BREACH\ncompletedAt=" + Instant.now() + "\n");
+            throw new IllegalStateException("provider write containment breached: " + breach.orElseThrow());
+        }
+        if (!completed) {
+            transformer.killContainedJob();
+            running.ownership().terminate();
+            BoundedProcessOutput.Result output = running.outputCapture().await();
+            appendOutputMetadata(metadataSink, output);
+            append(metadataSink, "status=TIMEOUT\ncompletedAt=" + Instant.now() + "\n");
+            throw new IllegalStateException("provider timed out after " + plan.timeout());
+        }
+        int exitCode = process.exitValue();
+        transformer.killContainedJob();
+        running.ownership().terminate();
+        BoundedProcessOutput.Result output = running.outputCapture().await();
+        appendOutputMetadata(metadataSink, output);
+        append(metadataSink, "exitCode=" + exitCode + "\ncompletedAt=" + Instant.now() + "\n");
+        if (exitCode != 0) {
+            archiveFailedArtifact(files.generatedArtifact(), files.runDirectory());
+            throw new IllegalStateException("provider exited with code " + exitCode + "; see "
+                    + homeRelative(files.stderr()) + " under MINOS_HOME");
+        }
+        promoteArtifact(files.generatedArtifact(), files.finalArtifact(), files.runDirectory());
+        return new IndexingArtifact(
+                request.selection().language(), indexerId, files.finalArtifact(), request.projectRelativeRoot());
     }
 
     /**
