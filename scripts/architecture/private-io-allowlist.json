@@ -51,7 +51,7 @@
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend.java",
     "method": "Files.createDirectories",
     "max": 1,
-    "justification": "Parent de l'artefact dans l'arbre de travail du provider sandboxé : ses droits sont ceux du sandbox, pas une donnée privée MINOS_HOME ; à revoir, hors S5 nommé."
+    "justification": "Parent de l'artefact dans l'arbre de travail du provider sandboxé : ses droits sont ceux du bac à sable (le provider y écrit), pas une donnée privée de MINOS_HOME ; entrée durable."
   },
   {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxCgroupJob.java",
@@ -225,49 +225,7 @@
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java",
     "method": "Files.createDirectory",
     "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
-    "method": "Files.createTempFile",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
-    "method": "Files.move",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
-    "method": "Files.newOutputStream",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/BoundedProcessOutput.java",
-    "method": "Files.newByteChannel",
-    "max": 1,
-    "justification": "Lecture par canal (le gate ne lit pas les options d'ouverture) hors ConfinedFileOpener ; à migrer vers ConfinedFileOpener, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java",
-    "method": "Files.createTempFile",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
+    "justification": "Arbre de travail du provider sandboxé, sous un dossier de fournisseur rendu privé : le conteneur le lit et y écrit par héritage d'ACL (un dossier rendu privé par MINOS n'hérite plus de son parent) ; entrée durable, comme ProviderWorkspaceFiles."
   },
   {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxCgroupJob.java",
@@ -286,18 +244,6 @@
     "method": "ProcessBuilder.redirect(file)",
     "max": 1,
     "justification": "Redirige la sortie du lanceur vers un fichier dont les droits viennent du dossier parent ; à remplacer par un fichier créé par une primitive, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/ProviderWorkspaceFiles.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/RunDirectoryRetention.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
   },
   {
     "file": "minos-storage-local/src/main/java/com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java",
