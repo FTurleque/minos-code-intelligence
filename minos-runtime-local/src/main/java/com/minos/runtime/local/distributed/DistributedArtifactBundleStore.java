@@ -1,5 +1,6 @@
 package com.minos.runtime.local.distributed;
 
+import com.minos.io.DurableAtomicFile;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
 import com.minos.io.BoundedProperties;
@@ -20,14 +21,11 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.FileVisitResult;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
@@ -130,14 +128,12 @@ public final class DistributedArtifactBundleStore {
 
         Path target = Objects.requireNonNull(output, "output").toAbsolutePath().normalize();
         Files.createDirectories(target.getParent());
-        Path temporary = Files.createTempFile(target.getParent(), ".bundle-", ".tmp");
+        // The bundle goes to a folder of the caller's, which MINOS does not own and does not harden: a name of its own,
+        // created new, then published over the target.
+        Path temporary = target.getParent().resolve(".bundle-" + UUID.randomUUID() + ".tmp");
         try {
             byte[] manifestBytes = encodeManifest(manifest);
-            try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(
-                    temporary,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING
-            ))) {
+            try (ZipOutputStream zip = new ZipOutputStream(PrivateLocalStorage.openNewTreeFile(temporary))) {
                 zip.putNextEntry(new ZipEntry(MANIFEST_ENTRY));
                 zip.write(manifestBytes);
                 zip.closeEntry();
@@ -147,7 +143,7 @@ public final class DistributedArtifactBundleStore {
                 }
                 zip.closeEntry();
             }
-            move(temporary, target);
+            DurableAtomicFile.replace(temporary, target, "distributed worker bundle publication");
             return target;
         } finally {
             Files.deleteIfExists(temporary);
@@ -216,7 +212,7 @@ public final class DistributedArtifactBundleStore {
                 }
                 PrivateLocalStorage.ensurePrivateDirectory(entry);
                 try {
-                    move(artifact, cachedArtifact);
+                    DurableAtomicFile.replace(artifact, cachedArtifact, "distributed worker artifact cache entry");
                     PrivateLocalStorage.writePrivateFile(cachedManifest, extracted.manifestBytes());
                     evict(cacheKey);
                 } catch (IOException | RuntimeException exception) {
@@ -299,13 +295,9 @@ public final class DistributedArtifactBundleStore {
     }
 
     private static void copyBounded(InputStream input, Path target, long maximum) throws IOException {
-        PrivateLocalStorage.createPrivateFile(target);
-        try (OutputStream output = Files.newOutputStream(
-                target,
-                StandardOpenOption.WRITE,
-                StandardOpenOption.TRUNCATE_EXISTING,
-                LinkOption.NOFOLLOW_LINKS
-        )) {
+        // Created new and hardened: the file is read back by MINOS, so it can neither pre-exist nor be adopted.
+        OutputStream created = PrivateLocalStorage.createPrivateOutputStream(target);
+        try (OutputStream output = created) {
             transferBounded(input, output, maximum);
         } catch (Exception exception) {
             Files.deleteIfExists(target);
@@ -648,14 +640,6 @@ public final class DistributedArtifactBundleStore {
             throw new IllegalArgumentException("boolean manifest values must be true or false");
         }
         return Boolean.parseBoolean(value);
-    }
-
-    private static void move(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-        }
     }
 
     public record VerifiedArtifact(

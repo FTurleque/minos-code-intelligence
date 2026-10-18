@@ -210,48 +210,6 @@
     "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
   },
   {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
-    "method": "Files.createTempFile",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
-    "method": "Files.move",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
-    "method": "Files.newOutputStream",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/BoundedProcessOutput.java",
-    "method": "Files.newByteChannel",
-    "max": 1,
-    "justification": "Lecture par canal (le gate ne lit pas les options d'ouverture) hors ConfinedFileOpener ; à migrer vers ConfinedFileOpener, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java",
-    "method": "Files.createTempFile",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxCgroupJob.java",
     "method": "Files.createDirectory",
     "max": 3,
@@ -268,17 +226,5 @@
     "method": "ProcessBuilder.redirect(file)",
     "max": 1,
     "justification": "Redirige la sortie du lanceur vers un fichier dont les droits viennent du dossier parent ; à remplacer par un fichier créé par une primitive, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/ProviderWorkspaceFiles.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/RunDirectoryRetention.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
   }
 ]
