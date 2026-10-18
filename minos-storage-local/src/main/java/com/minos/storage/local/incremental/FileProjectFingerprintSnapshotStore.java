@@ -381,7 +381,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static String writeSnapshot(Path file, ProjectFingerprintSnapshot snapshot) throws IOException {
         validateSnapshotEncoding(snapshot);
         MessageDigest digest = Sha256.newDigest();
-        try (OutputStream fileOutput = Files.newOutputStream(file);
+        try (OutputStream fileOutput = PrivateLocalStorage.openPrivateOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(digestOutput))) {
             output.writeInt(SNAPSHOT_MAGIC);
@@ -521,7 +521,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static void writePointer(Path file, ActivePointer pointer) throws IOException {
-        try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(file)))) {
+        try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(PrivateLocalStorage.openPrivateOutputStream(file)))) {
             output.writeInt(POINTER_MAGIC);
             output.writeInt(FORMAT_VERSION);
             writeString(output, pointer.indexSnapshotId());
