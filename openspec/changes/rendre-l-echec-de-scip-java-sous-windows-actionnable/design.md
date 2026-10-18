@@ -2,7 +2,7 @@
 
 ## Context
 
-Défaut relevé le 2026-10-16 pendant la clôture des sprints 3, 5 et 6 de l'audit du 10 octobre 2026 (« à instruire à part »). Diagnostic fait le 2026-10-17 sur le poste Windows 10 (19045) de l'auteur, compte standard non élevé. HEAD analysé : `6dd24bd0` (`develop`).
+Défaut relevé le 2026-10-16 pendant la clôture des sprints 3, 5 et 6 de l'audit du 10 octobre 2026 (« à instruire à part »). Diagnostic fait le 2026-10-17 sur le poste Windows 10 (19045) de l'auteur, compte standard non élevé. HEAD analysé : `6dd24bd0` (`develop`). Prémisses du lot 2 revalidées au HEAD `4922f4ac` le 2026-10-18 : `ManagedScipProviderRuntimeManager.java:256` déclare toujours `READY` sans exécution qualifiée, le runner garde `Install-CommandShims` (`:72`, appelé en `:378`) et `Push-Location` (`:257`, `:412`), `WindowsNonElevatedIndexingTest` n'écrit toujours que par `WriteAllText` (`:92`), `STATUS.md:47` porte toujours la limite. Les numéros de ligne cités plus bas datent de `6dd24bd0` ; depuis, `develop` a déplacé du code de `WindowsAppContainerWorkerSandboxBackend` vers `WindowsAclGrants` et durci `PublicErrorMessages` (séquences ANSI) sans changer ces conclusions.
 
 ## Reproduction
 
@@ -47,9 +47,9 @@ ACL relues par `icacls` : `C:\` n'accorde rien à `TOUS LES PACKAGES D'APPLICATI
 
 - Runner : `minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/scip-java-windows-runner.ps1` — compilation des shims à l'exécution (`:208`, `:214`, appelée en `:378`), `Push-Location $Project` (`:257`, `:412`), patch Windows compilé et empaqueté par la JVM du projet (`:355`, `:357`, appelé en `:385`), scip-java lancé par `& $java` (`:419`, `:426`).
 - Le seul test bout en bout du conteneur sous Windows, `minos-runtime-local/src/test/java/com/minos/runtime/local/WindowsNonElevatedIndexingTest.java`, lance un script PowerShell qui écrit par `[System.IO.File]::WriteAllText` (`:94-97`) : aucun appel natif, aucune JVM.
-- `docs/STATUS.md:47` : « aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés … sous Linux, pas sous Windows ».
+- `docs/project/governance/STATUS.md:47` : « aucun contrôle de CI n'exécute un provider géré ; les providers ont été qualifiés … sous Linux, pas sous Windows ».
 - `ManagedScipProviderRuntimeManager.java:215`, `:256` : l'état `READY` ne dépend que de la présence des fichiers et prérequis, pas d'une exécution qualifiée sous le bac à sable.
-- Déjà constaté en septembre : `docs/audit/archive/2026-09/S15-REGRESSION-RUNTIME-GRANT.md:83`, `:88-91` (points 1 et 2).
+- Déjà constaté en septembre : `docs/project/audits/archive/2026-09/S15-REGRESSION-RUNTIME-GRANT.md:83`, `:88-91` (points 1 et 2).
 
 ### Propre au poste ou défaut produit
 
@@ -80,7 +80,7 @@ Le plan et la disponibilité de scip-java sous Windows utilisent `CommandLocator
 
 ### D4. Lot 2 : honnêteté d'abord, qualification par ADR
 
-Sans décision d'architecture, la seule mesure conforme est de ne plus déclarer prêt ce qui n'est pas qualifié : sous Windows, l'état de scip-java devient bloqué avec un prérequis qui dit que l'exécution sous le bac à sable n'est pas qualifiée et nomme le runtime Docker. Les options de qualification, à trancher par l'ADR 0060 : (a) compiler shims et patch à l'installation, hors conteneur, sous empreinte ; emplacement par `PSDrive` ; (b) la JVM du projet ne s'initialise pas sans lister la racine du volume : capacité AppContainer dédiée, JDK géré par MINOS hors profil, ou exécution du provider Java dans le runtime Linux. Aucune n'est retenue ici.
+Sans décision d'architecture, la seule mesure conforme est de ne plus déclarer prêt ce qui n'est pas qualifié : sous Windows, l'état de scip-java devient bloqué avec un prérequis qui dit que l'exécution sous le bac à sable n'est pas qualifiée et nomme le runtime Docker. Les options de qualification, à trancher par l'ADR du lot 2 (prochain numéro libre de l'index) : (a) compiler shims et patch à l'installation, hors conteneur, sous empreinte ; emplacement par `PSDrive` ; (b) la JVM du projet ne s'initialise pas sans lister la racine du volume : capacité AppContainer dédiée, JDK géré par MINOS hors profil, ou exécution du provider Java dans le runtime Linux. Aucune n'est retenue ici.
 
 ## Risques
 
