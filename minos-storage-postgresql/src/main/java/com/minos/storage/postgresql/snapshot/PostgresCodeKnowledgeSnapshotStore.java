@@ -41,7 +41,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 
 import static com.minos.domain.Preconditions.requireText;
 
@@ -64,6 +66,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
 
     private final PostgresConnectionFactory connections;
     private final Path scratchRoot;
+    private final Consumer<Path> afterScratchFileCreated;
     private final PostgresSnapshotPayloadCodec codec = new PostgresSnapshotPayloadCodec();
     private final Object cacheLock = new Object();
     private final LinkedHashMap<CacheKey, WeightedQueryView> queryCache =
@@ -75,6 +78,18 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     private long cacheEvictions;
 
     public PostgresCodeKnowledgeSnapshotStore(PostgresConnectionFactory connections, Path minosHome) throws IOException {
+        this(connections, minosHome, created -> { });
+    }
+
+    /**
+     * Test seam: {@code afterScratchFileCreated} runs on each scratch file the instant after it was created and before
+     * anything is written to it, which is when a hostile process would put a link in its place. Instance state, so
+     * one test cannot leak its step into another.
+     */
+    PostgresCodeKnowledgeSnapshotStore(
+            PostgresConnectionFactory connections, Path minosHome, Consumer<Path> afterScratchFileCreated)
+            throws IOException {
+        this.afterScratchFileCreated = Objects.requireNonNull(afterScratchFileCreated, "afterScratchFileCreated");
         this.connections = Objects.requireNonNull(connections, "connections");
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.scratchRoot = home.resolve(SCRATCH_DIRECTORY).toAbsolutePath().normalize();
@@ -289,7 +304,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                 try (ResultSet result = statement.executeQuery()) {
                     if (!result.next()) throw new IOException("PostgreSQL snapshot identity vanished during publication");
                     try (InputStream input = result.getBinaryStream(1);
-                         OutputStream output = Files.newOutputStream(existing)) {
+                         OutputStream output = PrivateLocalStorage.openPrivateOutputStream(existing)) {
                         copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
                     }
                     existingSha = result.getString(2);
@@ -385,7 +400,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                         // Hashed while it is copied: the payload is not read a second time to check it.
                         MessageDigest digest = Sha256.newDigest();
                         try (InputStream input = new DigestInputStream(result.getBinaryStream(2), digest);
-                             OutputStream output = Files.newOutputStream(payload)) {
+                             OutputStream output = PrivateLocalStorage.openPrivateOutputStream(payload)) {
                             copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
                         } catch (Exception exception) {
                             Files.deleteIfExists(payload);
@@ -409,7 +424,9 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                 throw new IOException("PostgreSQL snapshot scratch file escapes its private directory");
             }
             try {
-                return PrivateLocalStorage.createPrivateFile(candidate);
+                Path created = PrivateLocalStorage.createPrivateFile(candidate);
+                afterScratchFileCreated.accept(created);
+                return created;
             } catch (FileAlreadyExistsException collision) {
                 // UUID collisions are not expected, but CREATE_NEW semantics remain fail-closed.
             }
