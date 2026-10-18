@@ -307,19 +307,43 @@ public final class PrivateLocalStorage {
      */
     public static OutputStream createPrivateOutputStream(Path file) throws IOException {
         Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        createNameOrRefuse(target, () -> createPrivateFile(target), "private storage file already exists");
+        return openOrDelete(target, PrivateLocalStorage::openStreamWithoutFollowingLinks);
+    }
+
+    /** Something that creates a file; the refusal for a name that is taken is decided around it. */
+    @FunctionalInterface
+    interface Creation {
+        void run() throws IOException;
+    }
+
+    /** Opens the stream of a file this call just created, and deletes that file if it cannot be opened. */
+    @FunctionalInterface
+    interface Opener {
+        OutputStream open(Path target) throws IOException;
+    }
+
+    /**
+     * Runs {@code creation}; a name that is taken is refused with {@code message}, which carries no path. Windows
+     * answers "access denied", not "exists", for a file created where a directory is: when the name is there, that
+     * is the same refusal.
+     */
+    static void createNameOrRefuse(Path target, Creation creation, String message) throws IOException {
         try {
-            createPrivateFile(target);
-        } catch (FileAlreadyExistsException taken) {
-            throw new FileAlreadyExistsException(null, null, "private storage file already exists");
+            creation.run();
+        } catch (FileAlreadyExistsException _) {
+            throw new FileAlreadyExistsException(null, null, message);
         } catch (AccessDeniedException denied) {
-            // Windows answers "access denied", not "exists", for a file created where a directory is.
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-                throw new FileAlreadyExistsException(null, null, "private storage file already exists");
+                throw new FileAlreadyExistsException(null, null, message);
             }
             throw denied;
         }
+    }
+
+    static OutputStream openOrDelete(Path target, Opener opener) throws IOException {
         try {
-            return openStreamWithoutFollowingLinks(target);
+            return opener.open(target);
         } catch (IOException failure) {
             try {
                 Files.deleteIfExists(target);
@@ -352,27 +376,9 @@ public final class PrivateLocalStorage {
         if (parentAttributes.isSymbolicLink() || parentAttributes.isOther() || !parentAttributes.isDirectory()) {
             throw new IOException("private storage tree parent must be a real directory");
         }
-        try {
-            createFileExclusively(target, parent);
-        } catch (FileAlreadyExistsException taken) {
-            throw new FileAlreadyExistsException(null, null, "private storage tree file already exists");
-        } catch (AccessDeniedException denied) {
-            // Windows answers "access denied", not "exists", for a file created where a directory is.
-            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-                throw new FileAlreadyExistsException(null, null, "private storage tree file already exists");
-            }
-            throw denied;
-        }
-        try {
-            return openStreamWithoutFollowingLinks(target);
-        } catch (IOException failure) {
-            try {
-                Files.deleteIfExists(target);
-            } catch (IOException cleanupFailure) {
-                failure.addSuppressed(cleanupFailure);
-            }
-            throw failure;
-        }
+        createNameOrRefuse(target, () -> createFileExclusively(target, parent),
+                "private storage tree file already exists");
+        return openOrDelete(target, PrivateLocalStorage::openStreamWithoutFollowingLinks);
     }
 
     /**

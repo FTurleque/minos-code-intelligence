@@ -95,7 +95,7 @@ class DurableAtomicFileMoveDirectoryTest {
         Path link = root.resolve("quarantined");
         try {
             Files.createSymbolicLink(link, outside);
-        } catch (UnsupportedOperationException | IOException unsupported) {
+        } catch (UnsupportedOperationException | IOException _) {
             assumeTrue(false, "this platform/account cannot create symbolic links");
         }
         Path target = root.resolve("moved-link");
