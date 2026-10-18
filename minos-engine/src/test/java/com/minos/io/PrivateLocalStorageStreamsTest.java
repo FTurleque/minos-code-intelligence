@@ -43,7 +43,7 @@ class PrivateLocalStorageStreamsTest {
     private static Path symbolicLinkOrSkip(Path link, Path target) throws IOException {
         try {
             return Files.createSymbolicLink(link, target);
-        } catch (UnsupportedOperationException | IOException unsupported) {
+        } catch (UnsupportedOperationException | IOException _) {
             assumeTrue(false, "this platform/account cannot create symbolic links");
             return link;
         }
@@ -141,7 +141,7 @@ class PrivateLocalStorageStreamsTest {
     }
 
     @Test
-    void aFileWhichCannotBeHardenedIsDeletedAndTheFailureIsReported(@TempDir Path root) throws Exception {
+    void aFileWhichCannotBeHardenedIsDeletedAndTheFailureIsReported(@TempDir Path root) {
         Path file = root.resolve("victim");
         PrivateLocalStorage.CapabilityProbe real = PrivateLocalStorage.CapabilityProbe.real();
         PrivateLocalStorage.useForTesting(new PrivateLocalStorage.CapabilityProbe() {
@@ -223,6 +223,81 @@ class PrivateLocalStorageStreamsTest {
         try (var entries = Files.list(real)) {
             assertEquals(0L, entries.count(), "nothing was written through the link");
         }
+    }
+
+    // -------------------------------------------------------- the refusals around the creation and the opening
+
+    @Test
+    void aNameTakenIsRefusedWithoutAPathWhateverTheCreationThrows(@TempDir Path root) throws Exception {
+        Path taken = Files.createDirectory(root.resolve("taken"));
+
+        FileAlreadyExistsException exists = assertThrows(FileAlreadyExistsException.class, () ->
+                PrivateLocalStorage.createNameOrRefuse(taken, () -> {
+                    throw new FileAlreadyExistsException(taken.toString());
+                }, "the name is taken"));
+        // Windows answers "access denied" for a file created where a directory is.
+        FileAlreadyExistsException denied = assertThrows(FileAlreadyExistsException.class, () ->
+                PrivateLocalStorage.createNameOrRefuse(taken, () -> {
+                    throw new java.nio.file.AccessDeniedException(taken.toString());
+                }, "the name is taken"));
+
+        assertEquals("the name is taken", exists.getMessage());
+        assertEquals("the name is taken", denied.getMessage());
+    }
+
+    @Test
+    void anAccessDeniedOnAFreeNameIsNotAnExistingName(@TempDir Path root) {
+        Path free = root.resolve("free");
+
+        assertThrows(java.nio.file.AccessDeniedException.class, () ->
+                PrivateLocalStorage.createNameOrRefuse(free, () -> {
+                    throw new java.nio.file.AccessDeniedException(free.toString());
+                }, "the name is taken"));
+    }
+
+    @Test
+    void aCreationWhichSucceedsIsLeftAlone(@TempDir Path root) throws Exception {
+        Path free = root.resolve("free");
+
+        PrivateLocalStorage.createNameOrRefuse(free, () -> Files.createFile(free), "the name is taken");
+
+        assertTrue(Files.isRegularFile(free));
+    }
+
+    @Test
+    void aFileWhichCannotBeOpenedIsDeletedAndTheFailureIsReported(@TempDir Path root) throws Exception {
+        Path created = Files.writeString(root.resolve("created"), "x", StandardCharsets.UTF_8);
+
+        IOException failure = assertThrows(IOException.class, () -> PrivateLocalStorage.openOrDelete(created, target -> {
+            throw new IOException("cannot open");
+        }));
+
+        assertEquals("cannot open", failure.getMessage());
+        assertFalse(Files.exists(created));
+    }
+
+    @Test
+    void aDeletionWhichFailsTooIsKeptAsSuppressed(@TempDir Path root) throws Exception {
+        Path notDeletable = Files.createDirectory(root.resolve("full"));
+        Files.writeString(notDeletable.resolve("inside"), "x", StandardCharsets.UTF_8);
+
+        IOException failure = assertThrows(IOException.class, () -> PrivateLocalStorage.openOrDelete(notDeletable, target -> {
+            throw new IOException("cannot open");
+        }));
+
+        assertEquals("cannot open", failure.getMessage());
+        assertEquals(1, failure.getSuppressed().length, "the failed cleanup is not lost");
+    }
+
+    @Test
+    void anOpenedStreamIsReturnedAsIs(@TempDir Path root) throws Exception {
+        Path file = root.resolve("opened");
+
+        try (OutputStream stream = PrivateLocalStorage.openOrDelete(file, Files::newOutputStream)) {
+            stream.write(1);
+        }
+
+        assertTrue(Files.isRegularFile(file));
     }
 
     /** The point of the tree level: no DACL is rewritten per file, the file takes what its folder passes down. */
