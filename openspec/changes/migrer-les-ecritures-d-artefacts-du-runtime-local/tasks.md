@@ -31,6 +31,6 @@ Ordre dans chaque section : rouge, correction, preuve. Chaque tâche retire ses 
 
 ## 6. Clôture
 
-- [ ] 6.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « runtime local », partie artefacts close ; entrée `LocalIsolatedIndexWorker` reclassée). **Faite à la clôture de la série.**
+- [x] 6.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « runtime local », partie artefacts close ; entrée `LocalIsolatedIndexWorker` reclassée). **Faite à la clôture de la série.**
 - [x] 6.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/developer/` (page sur le bac à sable et les arbres de provider si elle décrit les droits) ; `python scripts/docs/check-current-docs.py`.
 - [ ] 6.3 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-runtime-local.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place. **Non rejoué en local ; à relire avec le prochain `code-audit.yml`.**

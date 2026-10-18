@@ -30,6 +30,6 @@ Ordre dans chaque section : rouge, correction, preuve. Chaque tâche retire ses 
 
 ## 6. Clôture
 
-- [ ] 6.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (section « Migration des écritures brutes » : lot « stockage local » clos, entrées restantes). **Faite à la clôture de la série.**
+- [x] 6.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (section « Migration des écritures brutes » : lot « stockage local » clos, entrées restantes). **Faite à la clôture de la série.**
 - [x] 6.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/developer/quality-gates.md` si le décompte du gate y figure.
 - [ ] 6.3 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-storage-local.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place. **Non rejoué en local ; à relire avec le prochain `code-audit.yml`.**
