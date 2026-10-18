@@ -3,6 +3,7 @@ package com.minos.cli.operations;
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectIndexStateReconciler;
 import com.minos.application.resolution.ProjectResolver;
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.incremental.ProjectFingerprint;
 import com.minos.incremental.ProjectFingerprintService;
@@ -183,12 +184,7 @@ public final class LocalAutonomousIndexOperations
                         .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
         run = recoverPromotedRunIfNeeded(run);
         if (run.status() != IndexingRun.Status.SUCCEEDED) {
-            String outcome = run.status() == IndexingRun.Status.INTERRUPTED
-                    ? " was interrupted and can be resumed: "
-                    : " failed: ";
-            IllegalStateException failure = new IllegalStateException(
-                    "indexing run " + run.id() + outcome
-                            + run.message().orElse("provider/staging/promotion failure"));
+            IllegalStateException failure = new IllegalStateException(failureMessage(run));
             try {
                 application.retentionService().compact(prepared.project().id());
             } catch (IOException retentionFailure) {
@@ -221,6 +217,24 @@ public final class LocalAutonomousIndexOperations
         diagnostic = combineDiagnostics(diagnostic, compactAfterSuccess(prepared.project().id()));
         return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
                 run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic, resumeView(run));
+    }
+
+    /**
+     * The public line of a run that did not succeed. It is built from parts that are always safe (the run identity and
+     * phase) and joins the recorded cause only when the shared rule finds it safe: a cause naming an absolute path
+     * would otherwise turn the whole line into the bare exception class name. The withheld cause stays in the run
+     * record, named relative to {@code MINOS_HOME}.
+     */
+    static String failureMessage(IndexingRun run) {
+        String outcome = run.status() == IndexingRun.Status.INTERRUPTED
+                ? " was interrupted and can be resumed"
+                : " failed";
+        String cause = run.message().orElse("provider/staging/promotion failure");
+        String detail = PublicErrorMessages.looksSensitive(cause)
+                ? "its cause names a local path or a credential and is recorded in MINOS_HOME/index-state/runs, "
+                        + "provider logs in MINOS_HOME/runs/" + run.id()
+                : cause;
+        return "indexing run " + run.id() + outcome + " during " + run.phase() + ": " + detail;
     }
 
     private static ResumeView resumeView(IndexingRun run) {

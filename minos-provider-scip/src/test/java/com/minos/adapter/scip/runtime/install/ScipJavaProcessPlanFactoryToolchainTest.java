@@ -222,14 +222,23 @@ class ScipJavaProcessPlanFactoryToolchainTest {
 
     @Test
     @EnabledOnOs(OS.WINDOWS)
-    void onWindowsWithoutPowerShellThePlanIsRefused() throws Exception {
+    void onWindowsAPowerShellOnPathIsNeverTheOneThePlanRuns() throws Exception {
         Path coursier = Files.createFile(temp.resolve("cs.exe"));
         Files.createFile(temp.resolve("runner.ps1"));
+        Path maven = Files.createFile(temp.resolve("mvn.cmd"));
+        Path classpath = Files.writeString(temp.resolve("classpath.txt"), "a.jar\n");
+        // The child PATH holds only these two: neither may be chosen, the sandbox trusts the system one alone.
+        FakeTools.succeeding(tools, "powershell");
+        FakeTools.succeeding(tools, "pwsh");
 
-        ChildJvm.Outcome outcome = plan(coursier, null, null);
+        ChildJvm.Outcome outcome = plan(coursier, maven, classpath);
 
-        assertTrue(outcome.get("plan.failure").contains("PowerShell (powershell.exe or pwsh.exe) is required"),
-                outcome.get("plan.failure"));
+        assertNull(outcome.get("plan.failure"), outcome.get("plan.failure"));
+        String command = outcome.get("plan.command").replace("\"", "");
+        Path system = Path.of(System.getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+                .toRealPath();
+        assertTrue(command.startsWith(system.toString()), command);
+        assertFalse(command.contains(tools.toString()), command);
     }
 
     @Test

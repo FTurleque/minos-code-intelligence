@@ -102,6 +102,11 @@ class ProcessIndexerExecutorArtifactPreservationTest {
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> UnboundedProcessForTests.run(executor, request(project)));
         assertTrue(failure.getMessage().contains("exited with code 7"), failure.getMessage());
+        // The log is named relative to MINOS_HOME, so the public error line can carry it.
+        assertTrue(failure.getMessage().contains("/" + PROVIDER + "/provider.stderr.log"), failure.getMessage());
+        assertFalse(failure.getMessage().contains(home.toString()), failure.getMessage());
+        assertFalse(com.minos.diagnostics.PublicErrorMessages.looksSensitive(failure.getMessage()),
+                failure.getMessage());
 
         assertEquals("previous", Files.readString(generated),
                 "restoration must happen after a non-zero provider exit too, even with a hostile"

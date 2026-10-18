@@ -650,13 +650,16 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
      * an AppContainer ACE on {@code path} without elevation. Granting a temporary ACE always requires
      * WRITE_DAC on the target; a standard user has that on anything MINOS itself created (its own
      * managed tools, working/run directories) but never on a Program Files- or SystemRoot-owned
-     * object it merely reads.
+     * object it merely reads. The refusal names the file only, never its directory: the message reaches
+     * the public error line of an indexing run, which an absolute path would reduce to a class name.
      */
     static void requireAclGrantable(Path path) {
         if (isAclGrantable(path)) return;
+        Path fileName = path.getFileName();
         throw new IllegalStateException(
                 "Provider runtime is not compatible with the non-elevated Windows sandbox: cannot grant "
-                        + "AppContainer read access to " + path + " without administrator privileges. Move this "
+                        + "AppContainer read access to " + (fileName == null ? "a drive root" : fileName)
+                        + " without administrator privileges. Move this "
                         + "dependency under a user-owned location (for example under %LOCALAPPDATA%), point the "
                         + "relevant toolchain variable at a user-owned installation instead, or use a "
                         + "MINOS-managed toolchain.");
