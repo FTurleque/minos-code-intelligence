@@ -102,4 +102,30 @@ class SourceFingerprintLeafNoFollowTest {
         assertThrows(IOException.class, () -> FingerprintConstrainedJavaProgramGraphProvider.sha256Exact(
                 directory, 0L, "Java snapshot source"));
     }
+
+    @Test
+    void theSecurityConfigFingerprintIsAbsentOrTheDigestOfTheFile(@TempDir Path project) throws Exception {
+        assertEquals("absent", FingerprintConstrainedJavaProgramGraphProvider.securityConfigSha256(project));
+
+        Path config = project.resolve(JavaSourceProgramGraphProvider.SECURITY_CONFIG);
+        Files.createDirectories(config.getParent());
+        Files.write(config, CONTENT);
+
+        assertEquals(expectedSha256(), FingerprintConstrainedJavaProgramGraphProvider.securityConfigSha256(project));
+    }
+
+    @Test
+    void aSecurityConfigWhichIsALinkIsRefused(@TempDir Path project) throws Exception {
+        Path target = project.resolve("Target.properties");
+        Files.write(target, CONTENT);
+        Path config = project.resolve(JavaSourceProgramGraphProvider.SECURITY_CONFIG);
+        Files.createDirectories(config.getParent());
+        try {
+            Files.createSymbolicLink(config, target.toAbsolutePath());
+        } catch (UnsupportedOperationException | SecurityException | IOException exception) {
+            Assumptions.abort("symbolic links are unavailable: " + exception.getClass().getSimpleName());
+        }
+
+        assertThrows(IOException.class, () -> FingerprintConstrainedJavaProgramGraphProvider.securityConfigSha256(project));
+    }
 }

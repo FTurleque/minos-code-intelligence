@@ -188,7 +188,7 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
         return true;
     }
 
-    private static String securityConfigSha256(Path projectRoot) throws IOException {
+    static String securityConfigSha256(Path projectRoot) throws IOException {
         Path root = projectRoot.toRealPath();
         Path candidate = root.resolve(JavaSourceProgramGraphProvider.SECURITY_CONFIG).normalize();
         if (!candidate.startsWith(root) || !Files.exists(candidate)) return "absent";
