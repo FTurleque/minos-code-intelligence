@@ -1,17 +1,5 @@
 [
   {
-    "file": "minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java",
-    "method": "Files.newInputStream",
-    "max": 1,
-    "justification": "Lit une source du projet de l'utilisateur (chemin déjà résolu par la découverte confinée), pas une donnée MINOS_HOME ; à migrer vers ConfinedFileOpener, hors S5 nommé."
-  },
-  {
-    "file": "minos-application/src/main/java/com/minos/program/analysis/JavaSourceWorkspace.java",
-    "method": "Files.newInputStream",
-    "max": 1,
-    "justification": "Empreinte des sources du projet de l'utilisateur (options d'ouverture fixées par l'appelant) ; à migrer vers ConfinedFileOpener, hors S5 nommé."
-  },
-  {
     "file": "minos-engine/src/main/java/com/minos/io/SharedCacheLeaseRegistry.java",
     "method": "FileChannel.lock",
     "max": 18,
@@ -110,12 +98,6 @@
   {
     "file": "minos-app/src/main/java/com/minos/app/McpBackendConfigurationStore.java",
     "method": "Files.newBufferedWriter",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « application et registre »."
-  },
-  {
-    "file": "minos-application/src/main/java/com/minos/application/LocalProjectOperations.java",
-    "method": "Files.newOutputStream",
     "max": 1,
     "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « application et registre »."
   },
