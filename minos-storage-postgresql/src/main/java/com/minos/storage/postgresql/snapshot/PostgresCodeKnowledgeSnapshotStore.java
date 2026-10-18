@@ -296,20 +296,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             throws SQLException, IOException {
         Path existing = createScratchFile("snapshot-existing-");
         try {
-            String existingSha;
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT payload, sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
-                statement.setObject(1, snapshot.projectId());
-                statement.setString(2, snapshot.snapshotId());
-                try (ResultSet result = statement.executeQuery()) {
-                    if (!result.next()) throw new IOException("PostgreSQL snapshot identity vanished during publication");
-                    try (InputStream input = result.getBinaryStream(1);
-                         OutputStream output = PrivateLocalStorage.openPrivateOutputStream(existing)) {
-                        copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
-                    }
-                    existingSha = result.getString(2);
-                }
-            }
+            String existingSha = copyStoredPayload(connection, snapshot, existing);
             if (!existingSha.equals(new com.minos.storage.local.store.SnapshotIntegrityService().checksum(existing))) {
                 throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
             }
@@ -320,6 +307,24 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             }
         } finally {
             Files.deleteIfExists(existing);
+        }
+    }
+
+    /** Copies the stored payload of the snapshot identity into {@code target} and returns its recorded checksum. */
+    private static String copyStoredPayload(Connection connection, CodeKnowledgeSnapshot snapshot, Path target)
+            throws SQLException, IOException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT payload, sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
+            statement.setObject(1, snapshot.projectId());
+            statement.setString(2, snapshot.snapshotId());
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) throw new IOException("PostgreSQL snapshot identity vanished during publication");
+                try (InputStream input = result.getBinaryStream(1);
+                     OutputStream output = PrivateLocalStorage.openPrivateOutputStream(target)) {
+                    copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
+                }
+                return result.getString(2);
+            }
         }
     }
 
@@ -387,33 +392,40 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     private Optional<Row> activeRow(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         try {
-            return connections.withConnection(connection -> {
-                try (PreparedStatement statement = connection.prepareStatement(
-                        "SELECT s.snapshot_id,s.payload,s.sha256 FROM knowledge_active a "
-                                + "JOIN knowledge_snapshots s "
-                                + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id "
-                                + "WHERE a.project_id=?")) {
-                    statement.setObject(1, projectId);
-                    try (ResultSet result = statement.executeQuery()) {
-                        if (!result.next()) return Optional.empty();
-                        Path payload = createScratchFile("snapshot-read-");
-                        // Hashed while it is copied: the payload is not read a second time to check it.
-                        MessageDigest digest = Sha256.newDigest();
-                        try (InputStream input = new DigestInputStream(result.getBinaryStream(2), digest);
-                             OutputStream output = PrivateLocalStorage.openPrivateOutputStream(payload)) {
-                            copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
-                        } catch (Exception exception) {
-                            Files.deleteIfExists(payload);
-                            throw exception;
-                        }
-                        return Optional.of(new Row(result.getString(1), payload, result.getString(3),
-                                HexFormat.of().formatHex(digest.digest())));
-                    }
-                }
-            });
+            return connections.withConnection(connection -> readActiveRow(connection, projectId));
         } catch (SQLException exception) {
             throw new IOException("unable to load PostgreSQL knowledge snapshot", exception);
         }
+    }
+
+    private Optional<Row> readActiveRow(Connection connection, UUID projectId) throws SQLException, IOException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT s.snapshot_id,s.payload,s.sha256 FROM knowledge_active a "
+                        + "JOIN knowledge_snapshots s "
+                        + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id "
+                        + "WHERE a.project_id=?")) {
+            statement.setObject(1, projectId);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) return Optional.empty();
+                return Optional.of(copyActivePayload(result));
+            }
+        }
+    }
+
+    /** Copies the payload of the current result row to a scratch file; it is hashed while it is copied. */
+    private Row copyActivePayload(ResultSet result) throws SQLException, IOException {
+        Path payload = createScratchFile("snapshot-read-");
+        // Hashed while it is copied: the payload is not read a second time to check it.
+        MessageDigest digest = Sha256.newDigest();
+        try (InputStream input = new DigestInputStream(result.getBinaryStream(2), digest);
+             OutputStream output = PrivateLocalStorage.openPrivateOutputStream(payload)) {
+            copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
+        } catch (Exception exception) {
+            Files.deleteIfExists(payload);
+            throw exception;
+        }
+        return new Row(result.getString(1), payload, result.getString(3),
+                HexFormat.of().formatHex(digest.digest()));
     }
 
     private Path createScratchFile(String prefix) throws IOException {
