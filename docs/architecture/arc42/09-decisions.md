@@ -67,3 +67,4 @@
 | [ADR-0056](../adr/0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — implémentation à réaliser | 2026-10-05 | — |
 | [ADR-0057](../adr/0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels planifiés | 2026-10-05 | — |
 | [ADR-0059](../adr/0059-migrer-le-socle-vers-java-25-lts.md) | Migrer le socle vers Java 25 LTS et garder la baseline par un gate | Accepted | 2026-10-13 | Remplace ADR-0005 |
+| [ADR-0061](../adr/0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité | Proposed | 2026-10-18 | — |

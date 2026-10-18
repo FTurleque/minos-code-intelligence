@@ -134,12 +134,7 @@ public final class ConfinedFileOpener {
 
     /** Same as the public overload, with the per-call step described on {@code openConfinedRegularFile}. */
     static InputStream openRegularFileNoFollow(Path file, Runnable beforeOpen) throws IOException {
-        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
-        BasicFileAttributes attributes =
-                Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-        if (attributes.isSymbolicLink() || attributes.isOther() || !attributes.isRegularFile()) {
-            throw new ConfinementException("source is not a regular physical file");
-        }
+        Path target = requireRegularLeaf(file);
         beforeOpen.run();
         try {
             return Files.newInputStream(target, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
@@ -150,6 +145,45 @@ public final class ConfinedFileOpener {
                     () -> Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS),
                     failure);
         }
+    }
+
+    /**
+     * Same single, link-free open as {@link #openRegularFileNoFollow(Path)}, handing back the channel instead of a
+     * stream, for the callers that need {@code size()} and {@code position(0)} on the one descriptor (a digest that
+     * checks the size again afterwards, a reader that rewinds after a preflight). Read only: the channel cannot write.
+     *
+     * @throws ConfinementException if the leaf is a link, a special object or not a regular file;
+     *                              never carries the path
+     * @throws NoSuchFileException  if the file is absent
+     */
+    public static SeekableByteChannel openRegularFileNoFollowChannel(Path file) throws IOException {
+        return openRegularFileNoFollowChannel(file, NO_STEP);
+    }
+
+    /** Same as the public overload, with the per-call step described on {@code openConfinedRegularFile}. */
+    static SeekableByteChannel openRegularFileNoFollowChannel(Path file, Runnable beforeOpen) throws IOException {
+        Path target = requireRegularLeaf(file);
+        beforeOpen.run();
+        try {
+            return Files.newByteChannel(target, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS));
+        } catch (NoSuchFileException | AccessDeniedException propagated) {
+            throw propagated;
+        } catch (IOException failure) {
+            throw classifyOpenFailure(
+                    () -> Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS),
+                    failure);
+        }
+    }
+
+    /** The type look before a single-open read: it only keeps the open from blocking, it never picks the file. */
+    private static Path requireRegularLeaf(Path file) throws IOException {
+        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        BasicFileAttributes attributes =
+                Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (attributes.isSymbolicLink() || attributes.isOther() || !attributes.isRegularFile()) {
+            throw new ConfinementException("source is not a regular physical file");
+        }
+        return target;
     }
 
     /** Whether this platform can offer the {@code openat}-style guarantee at all. */

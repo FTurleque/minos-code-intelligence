@@ -102,12 +102,6 @@
     "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « application et registre »."
   },
   {
-    "file": "minos-engine/src/main/java/com/minos/io/BoundedFileDigest.java",
-    "method": "Files.newByteChannel",
-    "max": 1,
-    "justification": "Lecture par canal (le gate ne lit pas les options d'ouverture) hors ConfinedFileOpener ; à migrer vers ConfinedFileOpener, lot de migration « moteur »."
-  },
-  {
     "file": "minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java",
     "method": "Files.createDirectory",
     "max": 1,

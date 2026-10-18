@@ -8,6 +8,8 @@ import java.nio.file.CopyOption;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -32,6 +34,8 @@ public final class DurableAtomicFile {
     /** Attempts of one replacement on Windows; the pauses grow linearly, about one second in all. */
     static final int REPLACE_ATTEMPTS_ON_WINDOWS = 20;
     private static final long REPLACE_PAUSE_STEP_NANOS = TimeUnit.MILLISECONDS.toNanos(5);
+
+    private static final String TARGET = "target";
 
     private DurableAtomicFile() {
     }
@@ -84,7 +88,7 @@ public final class DurableAtomicFile {
     }
 
     static boolean deleteIfExists(Path target, String label, DirectorySync sync) throws IOException {
-        Path normalized = Objects.requireNonNull(target, "target").toAbsolutePath().normalize();
+        Path normalized = Objects.requireNonNull(target, TARGET).toAbsolutePath().normalize();
         String operation = requireText(label, "label");
         boolean deleted = Files.deleteIfExists(normalized);
         if (!deleted) return false;
@@ -117,7 +121,7 @@ public final class DurableAtomicFile {
             Platform platform
     ) throws IOException {
         Path from = Objects.requireNonNull(source, "source").toAbsolutePath().normalize();
-        Path to = Objects.requireNonNull(target, "target").toAbsolutePath().normalize();
+        Path to = Objects.requireNonNull(target, TARGET).toAbsolutePath().normalize();
         Objects.requireNonNull(directorySync, "directorySync");
         Objects.requireNonNull(platform, "platform");
         forceFile(from);
@@ -135,10 +139,62 @@ public final class DurableAtomicFile {
         }
     }
 
+    /**
+     * Moves a directory entry to a name that does not exist yet, atomically, and makes the rename durable where Java
+     * can. The entry itself is renamed, whatever it is now: a link or a file that replaced the directory (a provider
+     * can do that to a directory it writes into) is moved as an entry and never followed. A target that exists is
+     * refused, an empty directory included, which {@code rename(2)} would replace. There is no copy: a file system
+     * without an atomic rename fails the call. On Windows a rename refused because a reader holds the directory open
+     * is retried a bounded number of times, as for a replacement.
+     *
+     * <p>Limit: the exclusivity is a check followed by a rename, not one atomic operation, since a directory has no
+     * hard link. Two writers racing for the same name can both pass the check; the rename of the second then replaces
+     * an empty directory on POSIX or fails on Windows. Callers publish under names only they create.</p>
+     *
+     * @throws FileAlreadyExistsException if {@code target} exists; the message carries no path
+     * @throws java.nio.file.NoSuchFileException if {@code source} is absent
+     */
+    public static void moveDirectory(Path source, Path target, String label) throws IOException {
+        moveDirectory(source, target, label, DurableAtomicFile::forceDirectory, Platform.SYSTEM);
+    }
+
+    static void moveDirectory(
+            Path source,
+            Path target,
+            String label,
+            DirectorySync directorySync,
+            Platform platform
+    ) throws IOException {
+        Path from = Objects.requireNonNull(source, "source").toAbsolutePath().normalize();
+        Path to = Objects.requireNonNull(target, TARGET).toAbsolutePath().normalize();
+        String operation = requireText(label, "label");
+        Objects.requireNonNull(directorySync, "directorySync");
+        Objects.requireNonNull(platform, "platform");
+        if (!Files.exists(from, LinkOption.NOFOLLOW_LINKS)) {
+            throw new NoSuchFileException(null, null, operation + " source is absent: " + leafName(from));
+        }
+        if (Files.exists(to, LinkOption.NOFOLLOW_LINKS)) {
+            throw new FileAlreadyExistsException(null, null, operation + " target already exists: " + leafName(to));
+        }
+        atomicMove(from, to, operation, platform, StandardCopyOption.ATOMIC_MOVE);
+        try {
+            directorySync.force(to.getParent());
+        } catch (IOException failure) {
+            throw new CommitUncertainException(
+                    operation + " committed but directory durability acknowledgement failed: " + leafName(to),
+                    failure);
+        }
+    }
+
     private static void atomicMove(Path from, Path to, String label, Platform platform) throws IOException {
+        atomicMove(from, to, label, platform, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private static void atomicMove(
+            Path from, Path to, String label, Platform platform, CopyOption... options) throws IOException {
         for (int attempt = 1; ; attempt++) {
             try {
-                platform.mover().move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                platform.mover().move(from, to, options);
                 return;
             } catch (AtomicMoveNotSupportedException unsupported) {
                 throw new IOException("filesystem does not support required atomic " + label + ": " + leafName(to), unsupported);
