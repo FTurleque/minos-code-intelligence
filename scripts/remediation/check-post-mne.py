@@ -267,11 +267,11 @@ def main() -> int:
         require("PostgresStorageBackend.java", postgres_storage,
                 "new PostgresStorageRetentionService", "retentionService()")
         require("LocalAutonomousIndexOperations.java", indexing,
-                "application.retentionService().compact(prepared.project().id())",
                 "application.retentionService().compact(projectId)")
-        # Two failure paths compact directly; the two success paths go through compactAfterSuccess, whose
-        # timeout must not turn a successful index into a failure (S6).
-        if (indexing.count("application.retentionService().compact(prepared.project().id())")
+        # Two failure paths compact through compactSuppressingFailure; the two success paths go through
+        # compactAfterSuccess, whose timeout must not turn a successful index into a failure (S6).
+        if (indexing.count("compactSuppressingFailure(prepared.project().id(), ")
+                + indexing.count("compactSuppressingFailure(projectId, ")
                 + indexing.count("compactAfterSuccess(prepared.project().id())")) < 4:
             raise RuntimeError("LocalAutonomousIndexOperations.java: retention is not applied on every terminal path")
 

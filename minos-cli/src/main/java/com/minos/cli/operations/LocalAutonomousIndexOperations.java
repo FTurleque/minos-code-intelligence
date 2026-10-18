@@ -142,22 +142,42 @@ public final class LocalAutonomousIndexOperations
             IndexingResumePolicy resumePolicy
     ) throws Exception {
         Prepared prepared = prepare(projectIdentifier, providerOverride, forceFull, true);
+        requireProviderRuntimesReady(prepared);
+        if (prepared.view().mode() == IndexingMode.NONE && !forceFull) {
+            return unchangedProject(prepared, resumePolicy);
+        }
+        IndexingRun run = recoverPromotedRunIfNeeded(runLifecycle(prepared, forceFull, resumePolicy));
+        if (run.status() != IndexingRun.Status.SUCCEEDED) {
+            IllegalStateException failure = new IllegalStateException(failureMessage(run));
+            compactSuppressingFailure(prepared.project().id(), failure);
+            throw failure;
+        }
+        return succeededRun(prepared, run);
+    }
+
+    private static void requireProviderRuntimesReady(Prepared prepared) {
         for (ProviderView runtime : prepared.view().providerRuntimes()) {
             if (!"READY".equals(runtime.state())) {
                 throw new IllegalStateException("provider runtime is not ready: " + runtime.id()
                         + (runtime.diagnostics().isEmpty() ? "" : " — " + String.join("; ", runtime.diagnostics())));
             }
         }
-        if (prepared.view().mode() == IndexingMode.NONE && !forceFull) {
-            if (resumePolicy == IndexingResumePolicy.RESUME_ONLY) {
-                throw new IllegalStateException("resume-only indexing refused: no changes to index");
-            }
-            String semanticDiagnostic = synchronizeSemanticIfConfigured(prepared.project().id());
-            String retentionDiagnostic = compactAfterSuccess(prepared.project().id());
-            return new IndexExecutionView(prepared.view(), null, "NO_CHANGES",
-                    prepared.indexState().activeSnapshotId().orElse(null), true,
-                    combineDiagnostics(semanticDiagnostic, retentionDiagnostic));
+    }
+
+    /** Nothing changed since the active snapshot: no run, only the post-success maintenance. */
+    private IndexExecutionView unchangedProject(Prepared prepared, IndexingResumePolicy resumePolicy) {
+        if (resumePolicy == IndexingResumePolicy.RESUME_ONLY) {
+            throw new IllegalStateException("resume-only indexing refused: no changes to index");
         }
+        String semanticDiagnostic = synchronizeSemanticIfConfigured(prepared.project().id());
+        String retentionDiagnostic = compactAfterSuccess(prepared.project().id());
+        return new IndexExecutionView(prepared.view(), null, "NO_CHANGES",
+                prepared.indexState().activeSnapshotId().orElse(null), true,
+                combineDiagnostics(semanticDiagnostic, retentionDiagnostic));
+    }
+
+    private IndexingRun runLifecycle(Prepared prepared, boolean forceFull, IndexingResumePolicy resumePolicy)
+            throws IOException {
         var executors = prepared.negotiation().selections().stream()
                 .map(selection -> runtimeManager.executor(selection.indexer().id()))
                 .map(executorDecorator)
@@ -165,51 +185,33 @@ public final class LocalAutonomousIndexOperations
                 .toList();
         IndexingLifecycleService lifecycle = new IndexingLifecycleService(
                 executors, snapshotStager, snapshotPromoter, stateStore, resumableRunMarkers);
-        IndexingRun run = forceFull
-                ? lifecycle.execute(
+        if (forceFull) {
+            return lifecycle.execute(
+                    prepared.project().id(),
+                    prepared.project().rootPath(),
+                    prepared.discovery(),
+                    prepared.negotiation(),
+                    resumePolicy
+            );
+        }
+        return lifecycle.executePlanned(
                         prepared.project().id(),
                         prepared.project().rootPath(),
                         prepared.discovery(),
                         prepared.negotiation(),
+                        prepared.plan(),
                         resumePolicy
                 )
-                : lifecycle.executePlanned(
-                                prepared.project().id(),
-                                prepared.project().rootPath(),
-                                prepared.discovery(),
-                                prepared.negotiation(),
-                                prepared.plan(),
-                                resumePolicy
-                        )
-                        .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
-        run = recoverPromotedRunIfNeeded(run);
-        if (run.status() != IndexingRun.Status.SUCCEEDED) {
-            IllegalStateException failure = new IllegalStateException(failureMessage(run));
-            try {
-                application.retentionService().compact(prepared.project().id());
-            } catch (IOException retentionFailure) {
-                failure.addSuppressed(retentionFailure);
-            }
-            throw failure;
-        }
+                .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
+    }
+
+    /** The fingerprint baseline moves to the new snapshot only when the workspace did not change meanwhile. */
+    private IndexExecutionView succeededRun(Prepared prepared, IndexingRun run) throws IOException {
         ProjectFingerprint after = fingerprintService.capture(prepared.project().rootPath());
-        boolean stable = prepared.fingerprintBefore().equals(after);
-        boolean fingerprintPromoted = false;
+        boolean fingerprintPromoted = prepared.fingerprintBefore().equals(after);
         String diagnostic = null;
-        if (stable) {
-            String activeSnapshotId = run.activeSnapshotAfter().orElseThrow();
-            try {
-                fingerprintStore.publish(prepared.project().id(), activeSnapshotId, after);
-                fingerprintStore.promote(prepared.project().id(), activeSnapshotId);
-            } catch (IOException fingerprintFailure) {
-                try {
-                    application.retentionService().compact(prepared.project().id());
-                } catch (IOException retentionFailure) {
-                    fingerprintFailure.addSuppressed(retentionFailure);
-                }
-                throw fingerprintFailure;
-            }
-            fingerprintPromoted = true;
+        if (fingerprintPromoted) {
+            promoteFingerprint(prepared.project().id(), run.activeSnapshotAfter().orElseThrow(), after);
         } else {
             diagnostic = "workspace changed during indexing; fingerprint baseline was not promoted";
         }
@@ -217,6 +219,26 @@ public final class LocalAutonomousIndexOperations
         diagnostic = combineDiagnostics(diagnostic, compactAfterSuccess(prepared.project().id()));
         return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
                 run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic, resumeView(run));
+    }
+
+    private void promoteFingerprint(UUID projectId, String activeSnapshotId, ProjectFingerprint after)
+            throws IOException {
+        try {
+            fingerprintStore.publish(projectId, activeSnapshotId, after);
+            fingerprintStore.promote(projectId, activeSnapshotId);
+        } catch (IOException fingerprintFailure) {
+            compactSuppressingFailure(projectId, fingerprintFailure);
+            throw fingerprintFailure;
+        }
+    }
+
+    /** Retention still runs after a failure; its own failure is attached to the one being reported. */
+    private void compactSuppressingFailure(UUID projectId, Throwable failure) {
+        try {
+            application.retentionService().compact(projectId);
+        } catch (IOException retentionFailure) {
+            failure.addSuppressed(retentionFailure);
+        }
     }
 
     /**
