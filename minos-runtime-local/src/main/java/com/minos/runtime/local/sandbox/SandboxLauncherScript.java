@@ -2,6 +2,7 @@ package com.minos.runtime.local.sandbox;
 
 import com.minos.runtime.local.process.ProcessIdentity;
 import com.minos.io.ConfinedFileOpener;
+import com.minos.io.DurableAtomicFile;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 
@@ -12,7 +13,6 @@ import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.AclEntry;
 import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -277,27 +277,59 @@ record SandboxLauncherScript(Path file, String sha256, List<AclEntry> parentAcl,
         }
     }
 
+    /** Publishes the partial launcher over the target; replaceable so that the retry policy is testable anywhere. */
+    @FunctionalInterface
+    interface Publisher {
+        void publish(Path source, Path target) throws IOException;
+    }
+
+    private static void moveWithRetry(Path source, Path target) throws IOException {
+        publishWithRetry(source, target,
+                (from, to) -> DurableAtomicFile.publish(from, to, "sandbox launcher publication"),
+                MOVE_RETRY_DELAY_MILLIS);
+    }
+
     /**
      * Bounded tolerance for a transient failure while publishing the launcher (a real-time antivirus
      * scan briefly holding the just-written file). The content is MINOS' own, not attacker-controlled,
-     * so retrying a plain move carries none of the implications a provider-controlled path would. A
-     * target another process published meanwhile is accepted only if {@link #verify()} then passes.
+     * so retrying a plain move carries none of the implications a provider-controlled path would. The
+     * publication never replaces: a target another process published meanwhile is accepted only if
+     * {@link #verify()} then passes. The primitive turns a generic file-system failure of the hard link (a sharing
+     * violation, for instance) into an {@code IOException} that keeps it as its cause: that one is retried as
+     * well, and if it persists the message of the primitive is the one reported (a file system without hard links
+     * says so), never a path.
      */
-    private static void moveWithRetry(Path source, Path target) throws IOException {
+    static void publishWithRetry(Path source, Path target, Publisher publisher, long delayMillis) throws IOException {
         for (int attempt = 1; ; attempt++) {
             try {
-                Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+                publisher.publish(source, target);
                 return;
-            } catch (FileSystemException failure) {
+            } catch (IOException failure) {
+                if (!isTransient(failure)) throw failure;
                 if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return;
-                if (attempt == MOVE_ATTEMPTS) throw new IOException("sandbox launcher could not be published");
-                try {
-                    Thread.sleep(MOVE_RETRY_DELAY_MILLIS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("sandbox launcher could not be published");
-                }
+                if (attempt == MOVE_ATTEMPTS) throw exhausted(failure);
+                pause(delayMillis);
             }
+        }
+    }
+
+    private static boolean isTransient(IOException failure) {
+        return failure instanceof FileSystemException || failure.getCause() instanceof FileSystemException;
+    }
+
+    /** The last refusal: a bare file-system failure is reported without its path, a primitive message as it is. */
+    private static IOException exhausted(IOException failure) {
+        return failure instanceof FileSystemException
+                ? new IOException("sandbox launcher could not be published")
+                : failure;
+    }
+
+    private static void pause(long delayMillis) throws IOException {
+        try {
+            Thread.sleep(delayMillis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("sandbox launcher could not be published");
         }
     }
 

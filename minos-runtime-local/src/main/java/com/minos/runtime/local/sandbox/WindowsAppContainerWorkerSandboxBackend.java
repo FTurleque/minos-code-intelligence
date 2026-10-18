@@ -1,5 +1,6 @@
 package com.minos.runtime.local.sandbox;
 
+import com.minos.runtime.local.process.BoundedProcessOutput;
 import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.local.process.IndexerProcessPlan;
 import com.minos.runtime.local.process.ProcessIdentity;
@@ -421,11 +422,26 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
      * and the probe timed out and reported the sandbox unavailable although it worked.
      */
     static boolean probeSucceeds(ProcessBuilder builder, Path output, Duration timeout) throws IOException, InterruptedException {
-        Process process = builder.redirectErrorStream(true).redirectOutput(output.toFile()).start();
-        if (!awaitProbeCompletion(process, timeout)) {
-            ProcessTreeTermination.terminateTree(process, Duration.ZERO, Duration.ofSeconds(5));
-            LOGGER.log(System.Logger.Level.WARNING, "MINOS Windows AppContainer capability probe timed out");
-            return false;
+        return probeSucceeds(builder, output, timeout, BoundedProcessOutput.DEFAULT_MAX_BYTES_PER_STREAM);
+    }
+
+    /**
+     * The pipe is drained at once into a private file that is bounded ({@code maxBytes}, truncation marked), so the
+     * launcher can neither block on a full pipe nor write without limit, and the file is not one a child process
+     * created. The drain is awaited on every path, so that nothing is left open when the probe folder is deleted.
+     */
+    static boolean probeSucceeds(ProcessBuilder builder, Path output, Duration timeout, long maxBytes)
+            throws IOException, InterruptedException {
+        Process process = builder.redirectErrorStream(true).start();
+        BoundedProcessOutput.Capture capture = BoundedProcessOutput.capture(process, output, null, maxBytes);
+        try {
+            if (!awaitProbeCompletion(process, timeout)) {
+                ProcessTreeTermination.terminateTree(process, Duration.ZERO, Duration.ofSeconds(5));
+                LOGGER.log(System.Logger.Level.WARNING, "MINOS Windows AppContainer capability probe timed out");
+                return false;
+            }
+        } finally {
+            capture.await();
         }
         if (process.exitValue() == 0) return true;
         LOGGER.log(System.Logger.Level.WARNING,

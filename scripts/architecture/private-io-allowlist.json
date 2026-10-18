@@ -214,17 +214,5 @@
     "method": "Files.createDirectory",
     "max": 3,
     "justification": "Crée un cgroup dans cgroupfs, qui n'est pas du stockage privé : entrée définitive, ce site ne sera jamais migré."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/SandboxLauncherScript.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java",
-    "method": "ProcessBuilder.redirect(file)",
-    "max": 1,
-    "justification": "Redirige la sortie du lanceur vers un fichier dont les droits viennent du dossier parent ; à remplacer par un fichier créé par une primitive, lot de migration « runtime local »."
   }
 ]
