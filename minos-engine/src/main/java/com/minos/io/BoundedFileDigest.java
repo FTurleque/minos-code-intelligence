@@ -7,11 +7,9 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.util.Objects;
-import java.util.Set;
 
 /** Exact streaming digests for files that cross a trust boundary. */
 public final class BoundedFileDigest {
@@ -24,8 +22,7 @@ public final class BoundedFileDigest {
         if (Files.isSymbolicLink(value) || !Files.isRegularFile(value, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException(label(boundary) + " must be a regular non-symbolic-link file");
         }
-        try (SeekableByteChannel channel = Files.newByteChannel(
-                value, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS))) {
+        try (SeekableByteChannel channel = ConfinedFileOpener.openRegularFileNoFollowChannel(value)) {
             long expectedBytes = channel.size();
             if (expectedBytes < 1L || expectedBytes > maximumBytes) {
                 throw new IOException(label(boundary) + " size is outside the allowed range: "

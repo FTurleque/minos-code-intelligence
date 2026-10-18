@@ -185,14 +185,29 @@ public final class PrivateLocalStorage {
         Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
         Path parent = target.getParent();
         if (parent != null) ensurePrivateDirectory(parent);
+        createFileExclusively(target, parent);
+        forgetProtected(target);
+        hardenOrDeleteAndThrow(target);
+        return target;
+    }
+
+    /** The one creation of a new file by this class: owner-only at creation where the platform allows it. */
+    private static void createFileExclusively(Path target, Path parent) throws IOException {
         try {
             Files.createFile(target, privateFileAttributes(target));
         } catch (AccessDeniedException denied) {
             throw explainDenied(denied, parent);
         }
-        forgetProtected(target);
-        hardenOrDeleteAndThrow(target);
-        return target;
+    }
+
+    /** The one opening of a stream by this class: never through a link, whatever the name became meanwhile. */
+    private static OutputStream openStreamWithoutFollowingLinks(Path target) throws IOException {
+        try {
+            return Files.newOutputStream(target,
+                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS);
+        } catch (AccessDeniedException denied) {
+            throw explainDenied(denied, target, target.getParent());
+        }
     }
 
     /**
@@ -247,6 +262,22 @@ public final class PrivateLocalStorage {
     public static Path writePrivateFile(Path file, byte[] content) throws IOException {
         Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
         Objects.requireNonNull(content, "content");
+        try (OutputStream output = openPrivateOutputStream(target)) {
+            output.write(content);
+        }
+        return target;
+    }
+
+    /**
+     * Opens {@code file} for writing, as the whole content of an owner-only file: created private when absent,
+     * hardened in place when it already exists, then truncated; never through a link (a symbolic link, a directory or
+     * a special object in its place is refused, and the stream itself is opened with {@link
+     * LinkOption#NOFOLLOW_LINKS}). This is the stream form of {@link #writePrivateFile}, for content too large to hold
+     * in memory (a snapshot, a vector index). The caller closes the stream; a failure while writing leaves the file as
+     * far as it got.
+     */
+    public static OutputStream openPrivateOutputStream(Path file) throws IOException {
+        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             hardenExistingFile(target);
         } else {
@@ -261,13 +292,93 @@ public final class PrivateLocalStorage {
                 }
             }
         }
-        try (OutputStream output = Files.newOutputStream(target,
-                StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS)) {
-            output.write(content);
+        return openStreamWithoutFollowingLinks(target);
+    }
+
+    /**
+     * Creates {@code file} exclusively and opens it for writing: the name must be free, whatever could take it (a file,
+     * a directory, a link), and the file is owner-only and verified before the stream is handed out, as {@link
+     * #createPrivateFile} guarantees. For the files MINOS writes and reads back in a folder the provider can also write
+     * into (process logs, a kept copy of an artifact): the file can neither pre-exist nor be adopted, and a name that
+     * reappeared between a deletion and this creation fails the call. A file whose opening fails is deleted. The
+     * refusal for a taken name carries no path.
+     *
+     * @throws FileAlreadyExistsException if the name is taken; the message names no path
+     */
+    public static OutputStream createPrivateOutputStream(Path file) throws IOException {
+        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        createNameOrRefuse(target, () -> createPrivateFile(target), "private storage file already exists");
+        return openOrDelete(target, PrivateLocalStorage::openStreamWithoutFollowingLinks);
+    }
+
+    /** Something that creates a file; the refusal for a name that is taken is decided around it. */
+    @FunctionalInterface
+    interface Creation {
+        void run() throws IOException;
+    }
+
+    /** Opens the stream of a file this call just created, and deletes that file if it cannot be opened. */
+    @FunctionalInterface
+    interface Opener {
+        OutputStream open(Path target) throws IOException;
+    }
+
+    /**
+     * Runs {@code creation}; a name that is taken is refused with {@code message}, which carries no path. Windows
+     * answers "access denied", not "exists", for a file created where a directory is: when the name is there, that
+     * is the same refusal.
+     */
+    static void createNameOrRefuse(Path target, Creation creation, String message) throws IOException {
+        try {
+            creation.run();
+        } catch (FileAlreadyExistsException _) {
+            throw new FileAlreadyExistsException(null, null, message);
         } catch (AccessDeniedException denied) {
-            throw explainDenied(denied, target, target.getParent());
+            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                throw new FileAlreadyExistsException(null, null, message);
+            }
+            throw denied;
         }
-        return target;
+    }
+
+    static OutputStream openOrDelete(Path target, Opener opener) throws IOException {
+        try {
+            return opener.open(target);
+        } catch (IOException failure) {
+            try {
+                Files.deleteIfExists(target);
+            } catch (IOException cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
+    }
+
+    /**
+     * Creates a new file in a tree that is private because of its root, and opens it for writing. The file is requested
+     * owner-only at creation where the platform allows it (POSIX {@code 0600}); on Windows it takes the ACL its folder
+     * passes down. <b>No DACL is rewritten and the privacy of the file is not checked again</b>: it is the
+     * confidentiality of the root, made private by {@link #ensurePrivateDirectory} or, for a tree a provider reads,
+     * acquired by inheritance. This is the partial level on purpose, for the extraction of an archive or the copy of
+     * thousands of files, where hardening each file would rewrite thousands of DACLs and, on Windows, take away the
+     * access the sandbox identity gets by inheritance. The name must be free and is never followed; the immediate parent
+     * must be a real directory (neither a link nor a special object), its ancestors are not checked. An existing name
+     * is refused with a message that carries no path.
+     *
+     * @throws FileAlreadyExistsException if the name is taken
+     * @throws IOException if the parent is absent, is a link or is not a directory
+     */
+    public static OutputStream openNewTreeFile(Path file) throws IOException {
+        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        Path parent = target.getParent();
+        if (parent == null) throw new IOException("private storage tree file has no parent directory");
+        BasicFileAttributes parentAttributes = readAttributesNoFollow(parent);
+        if (parentAttributes.isSymbolicLink() || parentAttributes.isOther() || !parentAttributes.isDirectory()) {
+            throw new IOException("private storage tree parent must be a real directory");
+        }
+        createNameOrRefuse(target, () -> createFileExclusively(target, parent),
+                "private storage tree file already exists");
+        return openOrDelete(target, PrivateLocalStorage::openStreamWithoutFollowingLinks);
     }
 
     /**
