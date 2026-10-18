@@ -20,7 +20,6 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.List;
@@ -310,7 +309,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         return workspace;
     }
 
-    private static void copyRegularFileBounded(
+    static void copyRegularFileBounded(
             Path sourceRoot,
             Path source,
             Path target,
@@ -320,8 +319,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         Path relative = sourceRoot.relativize(source);
         try (InputStream input = Channels.newInputStream(
                     ConfinedFileOpener.openConfinedRegularFile(sourceRoot, relative));
-             OutputStream output = Files.newOutputStream(
-                     target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+             OutputStream output = PrivateLocalStorage.openNewTreeFile(target)) {
             byte[] buffer = new byte[8192];
             int read;
             while ((read = input.read(buffer)) != -1) {
