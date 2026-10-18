@@ -40,6 +40,12 @@ Le sprint 8 renvoie la migration à « `PrivateLocalStorage` / `DurableAtomicFil
 - **Niveau arbre privé** `PrivateLocalStorage.openNewTreeFile(Path file)` : `CREATE_NEW`, sans suivre de lien, droits POSIX `0600` demandés à la création, ACL Windows **héritée** du dossier, aucune réécriture de DACL. Refuse un parent immédiat qui n'est pas un répertoire réel (ni lien ni objet spécial) ; les ancêtres ne sont pas vérifiés. La confidentialité d'un tel fichier est celle de sa racine, déjà rendue privée par `ensurePrivateDirectory` ou, pour un arbre de provider, acquise par héritage : la primitive ne la **revérifie pas** par fichier (capacité « partielle », déclarée dans la Javadoc et `docs/developer/quality-gates.md`). Sert les extractions d'archive, les copies de JAR et d'artefacts, et la copie du projet dans l'arbre que le provider lit.
 - Option B : un seul niveau durci partout. Rejetée : écart 2. Option C : retirer la création exclusive durcie (deux ouvertures). Rejetée : `BoundedProcessOutput.openTarget` (`:80-93`) et `DistributedArtifactBundleStore.copyBounded` (`:301-313`) refont exactement cette séquence à la main et la liste de tolérance les range sous deux rubriques différentes.
 
+### Mesures et constats de mise en œuvre (2026-10-18, Windows 10)
+
+- 2 000 fichiers d'1 Kio : `openNewTreeFile` 0,46 ms par fichier ; `openPrivateOutputStream` 60,98 ms par fichier créé et durci (133 fois) et 0,95 ms sur un fichier déjà durci (2,1 fois). Le seuil d'abandon de la tâche 2.3 (dix fois sur un fichier déjà durci) n'est pas atteint ; le coût de la création durcie impose de réserver le niveau durci aux fichiers de plan de contrôle.
+- Sous Windows, créer un fichier là où un répertoire existe répond « accès refusé », pas « existe déjà » : les deux ouvertures exclusives rendent `FileAlreadyExistsException` dans les deux cas.
+- `moveDirectory` signale une source absente par un `NoSuchFileException` sans chemin, au lieu de celui du JDK qui le porte.
+
 ### D2. Noms et signatures — recommandation : ceux ci-dessus
 
 `openPrivateOutputStream(Path)`, `createPrivateOutputStream(Path)` et `openNewTreeFile(Path)` rendent un `OutputStream` (l'appelant l'enveloppe dans un `BufferedOutputStream`). `ConfinedFileOpener.openRegularFileNoFollowChannel(Path)` rend un `SeekableByteChannel` en lecture seule, avec les mêmes contrôles que `openRegularFileNoFollow` et la même `ConfinementException` sans chemin. `DurableAtomicFile.moveDirectory(Path source, Path target, String label)`. Les noms se figent à l'implémentation ; aucun site existant n'est renommé.

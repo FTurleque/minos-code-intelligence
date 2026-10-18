@@ -82,6 +82,7 @@ Les numéros 0048–0054 sont utilisés par l'étude proposée dans la PR #333, 
 | [0058](0058-declarer-les-usages-de-modules.md) | Tout module utilisé est déclaré ; la règle ArchUnit stricte devient obligatoire | Accepted |
 | [0059](0059-migrer-le-socle-vers-java-25-lts.md) | Socle en Java 25 LTS, version énoncée une fois et gardée par un gate ; plugin en Java 21 | Accepted |
 | [0060](0060-qualifier-scip-java-sous-le-bac-a-sable-windows.md) | scip-java sous Windows : non prêt tant que son exécution sous AppContainer n'est pas qualifiée | Proposed |
+| [0061](0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité : durci, ou hérité de la racine | Proposed |
 
 [Backlog, tâches et démarrage Claude](../../project/roadmap/storage-hexagonal-2026-10/README.md).
 
