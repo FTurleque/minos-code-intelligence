@@ -31,6 +31,10 @@ Aucun : « vers `PrivateLocalStorage` / `DurableAtomicFile` » est exact, avec l
 
 Le fichier existe déjà, privé, créé par `createPrivateFile` ; l'ouverture durcit (sans effet) puis ouvre `NOFOLLOW`. Option B : `openNewTreeFile` (`CREATE_NEW`) après avoir supprimé le fichier. Rejetée : elle déplacerait la création, aujourd'hui testée.
 
+### Constat de mise en œuvre (2026-10-18)
+
+Les tests PostgreSQL (Testcontainers) s'exécutent sur le poste Windows avec Docker Desktop : 357 tests du module et de ses amonts, 0 échec. Le fichier de travail qui reçoit le **payload encodé d'une publication** (`snapshot-write-`) est écrit par le codec de snapshot du stockage local (`SnapshotBinaryCodecSupport`, 3 `Files.newOutputStream`), non par ce magasin : sa migration est celle du changement `migrer-le-stockage-local-vers-les-primitives`. Le test de lien de ce changement ne vise donc que les fichiers `snapshot-read-` et `snapshot-existing-`. La couture de test est un constructeur de paquet qui reçoit un observateur de création de fichier de travail (état d'instance).
+
 ### D2. Un seul changement avec le magasin local ? — recommandation : non
 
 Le module est distinct, ses tests exigent Docker et son scope JaCoCo est Linux seul ; un échec de la CI PostgreSQL ne doit pas bloquer le stockage local.
