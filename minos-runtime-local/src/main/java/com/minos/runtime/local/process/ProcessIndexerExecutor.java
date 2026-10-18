@@ -277,12 +277,6 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
     }
 
     /**
-     * The direct child of {@code runDirectory} that contains {@code generatedArtifact}, if any.
-     * Reclamation only inspects top-level entries of the run directory, so a restored preexisting
-     * artifact living several levels below one of those entries must have that whole entry exempted
-     * or reclamation would delete it again immediately after cleanup restores it.
-     */
-    /**
      * {@code runs/<run>/<provider>/<file>}: a run file named relative to {@code MINOS_HOME}, with {@code /}
      * separators, so that a failure message never carries the account name or the home layout.
      */
@@ -293,6 +287,12 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         return name.toString();
     }
 
+    /**
+     * The direct child of {@code runDirectory} that contains {@code generatedArtifact}, if any.
+     * Reclamation only inspects top-level entries of the run directory, so a restored preexisting
+     * artifact living several levels below one of those entries must have that whole entry exempted
+     * or reclamation would delete it again immediately after cleanup restores it.
+     */
     private static Set<Path> residueReclamationExemptions(Path runDirectory, Path generatedArtifact) {
         Path normalizedRunDirectory = runDirectory.toAbsolutePath().normalize();
         if (!generatedArtifact.startsWith(normalizedRunDirectory) || generatedArtifact.equals(normalizedRunDirectory)) {
