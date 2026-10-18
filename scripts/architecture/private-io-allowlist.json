@@ -27,19 +27,19 @@
     "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java",
     "method": "Files.createDirectories",
     "max": 2,
-    "justification": "Sous-répertoires d'extraction d'une archive d'outil vérifiée, sous une racine d'installation déjà rendue privée (ensurePrivateDirectory) ; durcir chaque entrée coûterait des milliers d'ACL, à migrer si besoin."
+    "justification": "Sous-répertoires d'extraction d'une archive d'outil vérifiée, sous une racine d'installation déjà rendue privée (ensurePrivateDirectory) : entrée durable, les dossiers héritent de l'ACL de la racine et durcir chaque entrée d'une extraction en masse réécrirait des milliers d'ACL."
   },
   {
     "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/RustAnalyzerScipProcessPlanFactory.java",
     "method": "Files.createDirectories",
     "max": 1,
-    "justification": "Répertoire de travail cargo du provider, sous le répertoire de run privé ; sur Windows le conteneur du sandbox y écrit par héritage d'ACL, un ACL propriétaire seul casserait cet accès."
+    "justification": "Répertoire de travail cargo du provider, sous le répertoire de run privé ; sur Windows le conteneur du sandbox y écrit par héritage d'ACL, une ACL propriétaire seul casserait cet accès : entrée durable."
   },
   {
     "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java",
     "method": "Files.createDirectories",
     "max": 4,
-    "justification": "Sortie du provider et arbre de travail (copie du projet) sous le répertoire de run privé : écrits par le provider sandboxé qui y accède par héritage d'ACL, un ACL propriétaire seul casserait cet accès."
+    "justification": "Sortie du provider et arbre de travail (copie du projet) sous le répertoire de run privé : écrits par le provider sandboxé qui y accède par héritage d'ACL, une ACL propriétaire seul casserait cet accès : entrée durable."
   },
   {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
@@ -166,60 +166,6 @@
     "method": "Files.newByteChannel",
     "max": 2,
     "justification": "Lecture par canal (le gate ne lit pas les options d'ouverture) hors ConfinedFileOpener ; à migrer vers ConfinedFileOpener, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/LockedNpmPackage.java",
-    "method": "Files.copy",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java",
-    "method": "Files.createTempFile",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java",
-    "method": "Files.move",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java",
-    "method": "Files.copy",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java",
-    "method": "Files.move",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java",
-    "method": "Files.newOutputStream",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipPythonRuntimeManager.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/PinnedArtifactSource.java",
-    "method": "Files.newOutputStream",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
   },
   {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java",

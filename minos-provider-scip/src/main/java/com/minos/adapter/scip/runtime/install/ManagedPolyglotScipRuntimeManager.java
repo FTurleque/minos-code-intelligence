@@ -6,6 +6,7 @@ import com.minos.adapter.scip.runtime.plan.ScipDotnetProcessPlanFactory;
 import com.minos.adapter.scip.runtime.plan.ScipGoProcessPlanFactory;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
+import com.minos.io.DurableAtomicFile;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.FileTreeOperations;
@@ -24,8 +25,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -52,6 +51,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     private static final long MAX_DOTNET_PACKAGE_BYTES = 256L * 1024L * 1024L;
     private static final int MAX_MANAGED_TRAVERSAL_ENTRIES = 50_000;
     private static final int MAX_MANAGED_FILES = 20_000;
+    static final String COMMAND_LOG_DIRECTORY = ".minos-command-logs";
     private static final long MAX_MANAGED_BYTES = 512L * 1024L * 1024L;
     private static final String GO_PROXY = "https://proxy.golang.org";
     private static final String GO_SUMDB = "sum.golang.org";
@@ -452,12 +452,13 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             Duration timeout,
             Map<String, String> environmentOverrides
     ) throws Exception {
-        Path outputFile = Files.createTempFile(workingDirectory.toAbsolutePath().normalize(), "minos-m24-command-", ".log");
+        Objects.requireNonNull(environmentOverrides, "environmentOverrides");
+        Path outputFile = newCommandLog(workingDirectory);
         try {
             ProcessBuilder builder = new ProcessBuilder(command);
             builder.directory(workingDirectory.toAbsolutePath().normalize().toFile());
             builder.redirectErrorStream(true);
-            InstallationProcessEnvironment.apply(builder, Objects.requireNonNull(environmentOverrides, "environmentOverrides"));
+            InstallationProcessEnvironment.apply(builder, environmentOverrides);
             Process process = builder.start();
             BoundedProcessOutput.Capture capture = BoundedProcessOutput.capture(process, outputFile, null);
             boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -471,6 +472,22 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         } finally {
             Files.deleteIfExists(outputFile);
         }
+    }
+
+    /**
+     * A private journal for one command, in a dedicated folder of the working directory (never the working directory
+     * itself: it is {@code MINOS_HOME} for the probes of the read paths, which must not be created or hardened by
+     * a status read). A working directory which is a link, or which is absent, is refused.
+     */
+    static Path newCommandLog(Path workingDirectory) throws IOException {
+        Path directory = Objects.requireNonNull(workingDirectory, "workingDirectory").toAbsolutePath().normalize();
+        if (Files.isSymbolicLink(directory)) {
+            throw new IOException("managed runtime command directory must not be a link");
+        }
+        if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("managed runtime command directory is missing");
+        }
+        return PrivateLocalStorage.createPrivateTempFile(directory.resolve(COMMAND_LOG_DIRECTORY), "command-", ".log");
     }
 
     private static void terminate(Process process) throws InterruptedException {
@@ -494,13 +511,10 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         }
     }
 
-    private static void replaceDirectory(Path source, Path destination) throws IOException {
+    static void replaceDirectory(Path source, Path destination) throws IOException {
         deleteRecursively(destination);
         PrivateLocalStorage.ensurePrivateDirectory(destination.getParent());
-        try { Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE); }
-        catch (java.nio.file.AtomicMoveNotSupportedException exception) {
-            Files.move(source, destination, StandardCopyOption.REPLACE_EXISTING);
-        }
+        DurableAtomicFile.moveDirectory(source, destination, "managed runtime directory installation");
     }
 
     private static void deleteRecursively(Path root) throws IOException {

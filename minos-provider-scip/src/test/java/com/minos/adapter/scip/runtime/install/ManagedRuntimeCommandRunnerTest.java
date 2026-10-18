@@ -125,7 +125,7 @@ class ManagedRuntimeCommandRunnerTest {
 
         assertTrue(result.success());
         assertTrue(result.output().contains("version"), result.output());
-        try (Stream<Path> remaining = Files.list(directory)) {
+        try (Stream<Path> remaining = Files.list(directory.resolve(ManagedPolyglotScipRuntimeManager.COMMAND_LOG_DIRECTORY))) {
             assertEquals(List.of(), remaining.toList(), "the capture file must be deleted");
         }
     }
