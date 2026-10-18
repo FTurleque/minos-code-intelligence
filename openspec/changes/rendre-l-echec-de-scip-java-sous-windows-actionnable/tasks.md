@@ -19,16 +19,16 @@ Ordre : lot 1 (sections 1 à 3) puis lot 2 (sections 4 et 5). Dans chaque sectio
 
 ## 4. Lot 2 : scip-java Windows non déclaré prêt (D4)
 
-- [ ] 4.1 Rouge : `ManagedScipProviderRuntimeManagerTest` — sous Windows, scip-java installé n'est pas `READY` et son diagnostic nomme le runtime Docker ; sous Linux, inchangé ; l'indexation Java Windows est refusée avant tout lancement. **Preuve du rouge : `READY` au HEAD (`ManagedScipProviderRuntimeManager.java:256`).**
-- [ ] 4.2 Prérequis « exécution sous le bac à sable non qualifiée » sous Windows. Preuve : tests verts ; goldens de `minos-app` inchangés ou mis à jour avec justification ; `./mvnw -B -ntp -pl minos-app -am verify`.
+- [x] 4.1 Rouge : `ManagedScipProviderRuntimeManagerToolchainTest` (`onWindowsAnInstalledScipJavaIsBlockedUntilItsSandboxedExecutionIsQualified`, `onLinuxScipJavaIsNotBlockedByTheWindowsSandboxQualification`) — sous Windows, scip-java installé n'est pas `READY` et son diagnostic nomme le runtime Docker ; sous Linux, inchangé ; l'indexation Java Windows est refusée avant tout lancement. **Preuve du rouge : `READY` au HEAD (`ManagedScipProviderRuntimeManager.java:256`).**
+- [x] 4.2 Diagnostic `SANDBOXED_EXECUTION_NOT_QUALIFIED` sous Windows (état `BLOCKED`, l'exécuteur refuse « provider runtime is not ready » avant tout lancement) ; `scripts/release/qualify-offline-install.ps1` l'accepte parmi les causes attendues. Rouge prouvé par mutation (diagnostic retiré : le test Windows échoue). Preuve : tests verts ; goldens de `minos-app` inchangés ou mis à jour avec justification ; `./mvnw -B -ntp -pl minos-app -am verify`.
 
 ## 5. Lot 2 : décision de qualification
 
-- [ ] 5.1 ADR (prochain numéro libre de l'index ; 0060 au HEAD du 2026-10-18) : options (a) et (b) de D4, critères (confinement inchangé, sans élévation, Windows et Linux), décision et conséquences ; index `docs/architecture/adr/README.md`.
+- [x] 5.1 ADR 0060 (statut **Proposed** : la voie de qualification reste à valider par le propriétaire) : options (a) et (b) de D4, critères (confinement inchangé, sans élévation, Windows et Linux), décision et conséquences ; index `docs/architecture/adr/README.md`.
 - [ ] 5.2 Selon l'ADR : test bout en bout sous le conteneur qui exécute un appel natif depuis PowerShell 5.1 **et** une JVM (`File.createTempFile`, initialisation de `java.security`), rouge au HEAD ; puis lever le prérequis de 4.2.
 
 ## 6. Clôture
 
-- [ ] 6.1 `docs/user/troubleshooting.md` : lire la cause d'un run en échec dans `MINOS_HOME/index-state/runs` ; scip-java sous Windows. Rejouer `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check`.
-- [ ] 6.2 `docs/project/governance/STATUS.md` et `docs/project/audits/2026-10-10/SUIVI.md` : remplacer « à instruire à part » par le diagnostic et l'état des lots ; marquer les points 1 et 2 de `S15-REGRESSION-RUNTIME-GRANT.md` comme repris ici.
-- [ ] 6.3 `openspec validate --all --strict` ; `python .claude/scripts/run_gates.py`.
+- [x] 6.1 `docs/user/troubleshooting.md` : lire la cause d'un run en échec dans `MINOS_HOME/index-state/runs` ; scip-java sous Windows. Rejouer `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check`.
+- [x] 6.2 `docs/project/governance/STATUS.md` et `docs/project/audits/2026-10-10/SUIVI.md` : remplacer « à instruire à part » par le diagnostic et l'état des lots ; marquer les points 1 et 2 de `S15-REGRESSION-RUNTIME-GRANT.md` comme repris ici.
+- [x] 6.3 `openspec validate --all --strict` ; `python .claude/scripts/run_gates.py`.
