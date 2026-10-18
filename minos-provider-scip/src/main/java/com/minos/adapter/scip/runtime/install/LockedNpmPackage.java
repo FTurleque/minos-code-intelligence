@@ -6,11 +6,11 @@ import com.minos.io.BoundedInputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Objects;
 
 import static com.minos.domain.Preconditions.requireText;
@@ -44,7 +44,9 @@ final class LockedNpmPackage {
         Path lock = installRoot.resolve("package-lock.json");
         try (InputStream input = resourceOwner.getResourceAsStream(lockResource)) {
             if (input == null) throw new IOException("packaged npm lockfile is missing: " + lockResource);
-            Files.copy(input, lock, StandardCopyOption.REPLACE_EXISTING);
+            try (OutputStream output = PrivateLocalStorage.openPrivateOutputStream(lock)) {
+                input.transferTo(output);
+            }
         }
         verify(lock, packageName, version, expectedIntegrity);
     }
