@@ -107,7 +107,8 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             }
             Path powershell = powerShellExecutable()
                     .orElseThrow(() -> new IllegalStateException(
-                            "PowerShell (powershell.exe or pwsh.exe) is required for scip-java on Windows"));
+                            "Windows PowerShell 5.1 (System32\\WindowsPowerShell\\v1.0\\powershell.exe) is required "
+                                    + "for scip-java on Windows"));
             if (windowsManagedMaven == null || !Files.isRegularFile(windowsManagedMaven)) {
                 throw new IllegalStateException(
                         "MINOS-managed Maven is missing; run `minos tools install scip-java`: " + windowsManagedMaven);
@@ -348,7 +349,12 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             throw new IllegalStateException("JAVA_HOME does not point to a JDK containing javac: " + javaHome);
         }
     }
-    private static java.util.Optional<Path> powerShellExecutable() {
-        return CommandLocator.find("powershell").or(() -> CommandLocator.find("pwsh"));
+    /**
+     * The Windows PowerShell of the system directory, the one the AppContainer sandbox trusts. PATH is not a source:
+     * a PowerShell 7 found there lives under Program Files, which the sandbox refuses to grant, and the runner targets
+     * Windows PowerShell 5.1.
+     */
+    static java.util.Optional<Path> powerShellExecutable() {
+        return CommandLocator.windowsPowerShell();
     }
 }
