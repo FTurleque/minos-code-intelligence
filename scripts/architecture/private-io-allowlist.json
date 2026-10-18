@@ -156,18 +156,6 @@
     "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « application et registre (intégration Git) »."
   },
   {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/ingestion/ScipIndexReader.java",
-    "method": "Files.newByteChannel",
-    "max": 1,
-    "justification": "Lecture par canal (le gate ne lit pas les options d'ouverture) hors ConfinedFileOpener ; à migrer vers ConfinedFileOpener, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/ingestion/ScipSymbolSnapshotImporter.java",
-    "method": "Files.newByteChannel",
-    "max": 2,
-    "justification": "Lecture par canal (le gate ne lit pas les options d'ouverture) hors ConfinedFileOpener ; à migrer vers ConfinedFileOpener, lot de migration « providers SCIP »."
-  },
-  {
     "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/LockedNpmPackage.java",
     "method": "Files.copy",
     "max": 1,
