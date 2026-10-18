@@ -1,0 +1,36 @@
+# Tasks
+
+Ordre dans chaque section : rouge, correction, preuve. Chaque tâche retire ses entrées de `scripts/architecture/private-io-allowlist.json` (cliquet) et rejoue `python scripts/architecture/check-private-io.py`. Tests dans `minos-runtime-local`, dans la même tâche que le code. Exige `completer-les-primitives-d-e-s-privees`.
+
+## 1. Journaux et copies que MINOS relit (AUD-SEC-03)
+
+- [ ] 1.1 [AUD-SEC-03] Rouge : (a) `BoundedProcessOutputTest` : `openTarget` sur un nom qui réapparaît entre la suppression et la création (point d'injection package-private) échoue sans adopter le fichier ; sur un lien, échoue ; le fichier créé est privé (`0600` / ACL propriétaire seul). (b) `ProcessIndexerExecutorArtifactPreservationTest` : `copyArtifactBounded` ne remplace pas un fichier réapparu et rend un fichier privé ; `@EnabledOnOs(WINDOWS)` : la copie ne porte **pas** l'entrée héritable posée sur le dossier de run (aucune entrée pour une identité tierce). (c) `DistributedArtifactBundleStoreTest` : l'artefact extrait dans le cache est privé et un lien à son emplacement est refusé. **Preuve du rouge : (b) la copie hérite aujourd'hui l'entrée du dossier ; (a) le nom réapparu n'est pas testé aujourd'hui.**
+- [ ] 1.2 [AUD-SEC-03] `BoundedProcessOutput.openTarget`, `ProcessIndexerExecutor.copyArtifactBounded` et `DistributedArtifactBundleStore.copyBounded` écrivent par `createPrivateOutputStream` (D3). Retirer les entrées `BoundedProcessOutput` / `Files.newByteChannel`, `ProcessIndexerExecutor` / `Files.newOutputStream`, et abaisser `DistributedArtifactBundleStore` / `Files.newOutputStream` de 2 à 1. Preuve : `./mvnw -B -ntp -pl minos-runtime-local -am test`, `check-private-io.py` vert.
+
+## 2. Copie du projet dans l'arbre du provider et paquet distribué (AUD-SEC-03)
+
+- [ ] 2.1 [AUD-SEC-03] Rouge : (a) `ProviderWorkspaceFilesTest` : un fichier copié dans un dossier portant une entrée héritable supplémentaire la porte (Windows) ; un fichier de destination déjà présent ou un lien est refusé ; le mode POSIX est `0600`. (b) `DistributedArtifactBundleStoreTest` : `createBundle` ne modifie ni le mode ni l'ACL du dossier de sortie, n'écrase pas une cible par un paquet partiel en cas d'échec, et laisse un paquet complet et valide. **Preuve du rouge : (a) lien suivi et fichier existant écrasé aujourd'hui (`CREATE_NEW` brut les refuse déjà : le rouge est alors l'absence de test, consigné) ; (b) caractérise l'existant.**
+- [ ] 2.2 [AUD-SEC-03] `ProviderWorkspaceFiles.copyBounded` : `openNewTreeFile` ; `DistributedArtifactBundleStore.createBundle` : nom `.bundle-<uuid>.tmp` par `openNewTreeFile` puis `DurableAtomicFile.replace` (D2). Retirer les entrées `ProviderWorkspaceFiles` / `Files.newOutputStream`, `DistributedArtifactBundleStore` / `Files.createTempFile` et la dernière occurrence de `Files.newOutputStream`. Preuve : tests verts, `check-private-io.py` vert.
+
+## 3. Déplacements (AUD-SEC-03)
+
+- [ ] 3.1 [AUD-SEC-03] Rouge : (a) `DistributedArtifactBundleStoreTest` : un déplacement refusé comme non atomique fait échouer `createBundle` et `accept`, sans repli (déplaceur injecté, point d'injection package-private ajouté avec le test) ; (b) `ProcessIndexerExecutorPartialCleanupTest` : la quarantaine d'un répertoire hostile est atomique, son contenu n'est pas parcouru, une destination existante est refusée ; (c) `RunDirectoryRetentionTest` : la mise en quarantaine d'un run est atomique, un échec laisse le run en place, et une entrée remplacée par un fichier ou un lien (provider hostile) est mise de côté elle-même sans être suivie ; (d) `ProcessIndexerExecutor.move` n'appelle plus `createTempFile` (le nom de la copie inter-systèmes est unique et la copie n'écrase rien). **Preuve du rouge : (a) le repli non atomique réussit aujourd'hui.**
+- [ ] 3.2 [AUD-SEC-03] `DistributedArtifactBundleStore.move` → `DurableAtomicFile.replace` (D5) ; `quarantineHostileDirectory` et `RunDirectoryRetention.quarantine` → `DurableAtomicFile.moveDirectory` ; `ProcessIndexerExecutor.move` : nom unique (D4). Retirer les entrées `DistributedArtifactBundleStore` / `Files.move` (2), `ProcessIndexerExecutor` / `Files.move` et `Files.createTempFile`, `RunDirectoryRetention` / `Files.move`. Preuve : tests verts, `check-private-io.py` vert, `python scripts/remediation/check-minos-01.py` et `check-post-mne.py` verts.
+
+## 4. Arbre de travail du provider (AUD-SEC-03)
+
+- [ ] 4.1 [AUD-SEC-03] Réécrire la justification de l'entrée `LocalIsolatedIndexWorker` / `Files.createDirectory` dans `private-io-allowlist.json` (D1) : motif durable, héritage d'ACL du conteneur ; aucune modification de code. Preuve : `check-private-io.py` vert, maximum inchangé.
+
+- [ ] 4.2 [AUD-SEC-03] Réécrire les justifications des entrées `Files.createDirectories` de `LinuxBubblewrapWorkerSandboxBackend` (« à revoir, hors S5 nommé ») comme durables (parent de l'artefact dans l'arbre du provider sandboxé), maxima inchangés.
+
+## 5. Mesures, gates et couverture (AUD-SEC-03)
+
+- [ ] 5.1 [AUD-SEC-03] **(manuelle)** Sous Windows (AppContainer) : indexer un projet réel par un provider sandboxé et lire l'ACL de `index.partial.scip`, `failed-index.scip`, `stdout`/`stderr`/métadonnées et de la copie du projet (`icacls`) avant et après ; sous Linux (bubblewrap) : mêmes modes. Consigner dans `design.md` ; si la copie conservée portait l'entrée du conteneur avant, le noter comme resserrement ; si l'accès du conteneur au dossier de travail vient d'une entrée posée sur `workspace`, rouvrir D1.
+- [ ] 5.2 [AUD-SEC-03] Rejouer `python scripts/architecture/check-module-boundaries.py`, `python scripts/quality/check-remote-distributed-consistency.py`, `python scripts/remediation/check-minos-01.py`, `check-post-mne.py`, `check-mnd.py`, `python scripts/architecture/test_check_private_io.py -v`, `python .claude/scripts/run_gates.py --fast`.
+- [ ] 5.3 [AUD-SEC-03] `./mvnw -B -ntp -pl minos-runtime-local -am verify` puis `python scripts/quality/check-jacoco.py` (scopes `m25-remote-distributed-indexing`, `provider-execution-trust-boundary`, `run-directory-retention`, `global`) ; aucun plancher abaissé.
+
+## 6. Clôture
+
+- [ ] 6.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « runtime local », partie artefacts close ; entrée `LocalIsolatedIndexWorker` reclassée).
+- [ ] 6.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/developer/` (page sur le bac à sable et les arbres de provider si elle décrit les droits) ; `python scripts/docs/check-current-docs.py`.
+- [ ] 6.3 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-runtime-local.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place.

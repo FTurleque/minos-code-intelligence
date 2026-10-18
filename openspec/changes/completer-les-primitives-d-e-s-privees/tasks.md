@@ -1,0 +1,41 @@
+# Tasks
+
+Ordre dans chaque section : rouge, correction, preuve. Les tests vivent dans `minos-engine`, dans la même tâche que le code. À faire **avant** les neuf autres changements de la série. Rejouer à chaque section `python scripts/architecture/check-private-io.py` (les maxima de `PrivateLocalStorage` ne bougent pas, D4).
+
+## 1. Écriture en flux, niveau durci (AUD-SEC-03)
+
+- [ ] 1.1 [AUD-SEC-03] Rouge : dans `PrivateLocalStorageWritesTest`, des tests de `openPrivateOutputStream` — fichier absent (créé privé, mode `0600` sous POSIX, ACL propriétaire seul sous Windows), fichier existant et large ouvert (durci puis tronqué), lien symbolique à la place du fichier (refusé, cible du lien intacte), répertoire à la place du fichier (refusé), message d'erreur sans chemin absolu. **Preuve du rouge : la compilation des tests échoue, méthode absente.**
+- [ ] 1.2 [AUD-SEC-03] `PrivateLocalStorage.openPrivateOutputStream(Path)` ; `writePrivateFile` réécrit au-dessus, comportement inchangé. Preuve : `./mvnw -B -ntp -pl minos-engine -am test`, tests existants de `writePrivateFile` verts sans modification ; `check-private-io.py` vert sans toucher à `PrivateLocalStorage` dans la liste.
+
+- [ ] 1.3 [AUD-SEC-03] Rouge : dans `PrivateLocalStorageWritesTest`, des tests de `createPrivateOutputStream` — nom libre (créé privé, flux ouvert), nom déjà pris par un fichier, un lien ou un répertoire (refusé, `FileAlreadyExistsException` sans chemin, contenu intact), parent non privé durci comme `createPrivateFile`, fichier supprimé si le durcissement échoue (comportement de `createPrivateFile`). **Preuve du rouge : compilation.**
+- [ ] 1.4 [AUD-SEC-03] `PrivateLocalStorage.createPrivateOutputStream(Path)` : `createPrivateFile` puis ouverture `NOFOLLOW_LINKS`, sans site brut nouveau (D4). Preuve : tests du module verts, `check-private-io.py` vert.
+
+## 2. Écriture en flux, niveau arbre privé (AUD-SEC-03)
+
+- [ ] 2.1 [AUD-SEC-03] Rouge : tests de `openNewTreeFile` — fichier nouveau (mode POSIX `0600`), fichier existant (refusé, contenu intact), lien symbolique à la place du fichier (refusé), parent absent ou lien (refusé), **aucune réécriture de DACL** sous Windows (l'ACL du fichier est celle héritée du dossier : test avec un dossier portant une entrée héritable supplémentaire, qui doit se retrouver sur le fichier). **Preuve du rouge : compilation.**
+- [ ] 2.2 [AUD-SEC-03] `PrivateLocalStorage.openNewTreeFile(Path)`, réutilisant les sites bruts `Files.createFile` et `Files.newOutputStream` de la classe (D4). Javadoc : la confidentialité est celle de la racine, non revérifiée par fichier.
+- [ ] 2.3 [AUD-SEC-03] **(manuelle)** Mesurer, sous Windows, 2 000 fichiers écrits par `openNewTreeFile` et par `openPrivateOutputStream` ; consigner les durées dans `design.md`. Seuil d'abandon : si le niveau durci coûte plus de dix fois le niveau arbre sur un fichier déjà durci, signaler aux lots appelants de ne l'utiliser que pour les fichiers de plan de contrôle.
+
+## 3. Lecture par canal (AUD-SEC-03)
+
+- [ ] 3.1 [AUD-SEC-03] Rouge : dans `ConfinedFileOpenerTest`, des tests de `openRegularFileNoFollowChannel` — fichier régulier (`size()` et `position(0)` sur le même descripteur), lien symbolique et fichier spécial (refusés par `ConfinementException` sans chemin), fichier absent (`NoSuchFileException`), remplacement par un lien entre le contrôle de type et l'ouverture (hook `beforeOpen` de la surcharge package-private). **Preuve du rouge : compilation.**
+- [ ] 3.2 [AUD-SEC-03] `ConfinedFileOpener.openRegularFileNoFollowChannel(Path)` ; `BoundedFileDigest.sha256Exact` l'utilise ; l'entrée `minos-engine/…/BoundedFileDigest.java` / `Files.newByteChannel` est retirée de `private-io-allowlist.json`. Preuve : `BoundedFileDigestTest` vert sans modification, `check-private-io.py` vert (`allowlisted-occurrences` baisse de 1).
+
+## 4. Publication de répertoire (AUD-SEC-03)
+
+- [ ] 4.1 [AUD-SEC-03] Rouge : dans `DurableAtomicFileTest`, des tests de `moveDirectory` — répertoire vers un nom libre (contenu conservé), cible existante (refusée, source intacte ; sous POSIX, cible **vide** comprise, que `rename(2)` remplacerait), entrée source remplacée par un lien ou un fichier (renommée elle-même, jamais suivie), système sans rename atomique simulé par `Platform` (échec fermé, aucune copie), reprise bornée sous Windows simulée (n tentatives puis succès, n+1 puis échec), erreur sans chemin absolu. **Preuve du rouge : compilation.**
+- [ ] 4.2 [AUD-SEC-03] `DurableAtomicFile.moveDirectory(Path, Path, String)` selon D3, la boucle de reprise de `atomicMove` partagée. Preuve : `./mvnw -B -ntp -pl minos-engine -am test`, `DurableAtomicFileTest` entier vert ; `check-private-io.py` vert (la classe est une primitive du gate, aucune entrée).
+
+## 5. Documentation et gates (AUD-SEC-03)
+
+- [ ] 5.1 [AUD-SEC-03] Décrire les trois ouvertures en flux, la lecture par canal et la publication de répertoire dans `docs/developer/quality-gates.md` (section du gate) et la liste « E/S privées » de `.claude/rules/java-production.md`. Selon D5, proposer l'ADR des deux niveaux de confidentialité (statut `Proposed`, index et `arc42/09-decisions.md`) ; **(manuelle)** acceptation par le propriétaire.
+- [ ] 5.2 [AUD-SEC-03] Preuve : `python scripts/architecture/check-private-io.py`, `python scripts/architecture/test_check_private_io.py -v`, `python scripts/architecture/check-module-boundaries.py`, `python scripts/remediation/check-p0-p2.py`, `python scripts/quality/check-runtime-dynamic-consistency.py`, `python scripts/docs/check-current-docs.py`, `python scripts/quality/check-ci-wiring.py`, `python .claude/scripts/run_gates.py --fast`.
+- [ ] 5.3 [AUD-SEC-03] Couverture : `python scripts/quality/check-jacoco.py` sur les scopes `confined-io-primitives` et `global` après `./mvnw -B -ntp -pl minos-engine -am verify` ; aucun seuil abaissé.
+
+## 6. Clôture
+
+- [ ] 6.1 Relire les maxima de `PrivateLocalStorage` dans `private-io-allowlist.json` : inchangés (D4). Sinon, consigner la décision dans `design.md` avant de fusionner.
+- [ ] 6.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (section « Migration des écritures brutes » : primitives livrées, lot « moteur » clos, 43 entrées restantes).
+- [ ] 6.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/developer/quality-gates.md`, `.claude/rules/java-production.md`.
+- [ ] 6.4 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-engine.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place.
+- [ ] 6.5 Le hook `.claude/hooks/guard_paths.py` (règle `ASK_RULES`) demande une confirmation pour toute modification de `scripts/architecture/private-io-allowlist.json` : à prévoir à chaque tâche qui retire une entrée, dans ce changement comme dans les neuf autres.
