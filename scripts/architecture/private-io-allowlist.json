@@ -150,12 +150,6 @@
     "justification": "Primitive de création à droits privés : ce fichier crée lui-même les fichiers et répertoires avec les droits du propriétaire seul (D2 du changement etendre-le-garde-d-e-s-privees-aux-ecritures-brutes) ; entrée durable."
   },
   {
-    "file": "minos-integration-git/src/main/java/com/minos/integration/git/JGitRemoteRepositoryMaterializer.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « application et registre (intégration Git) »."
-  },
-  {
     "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/ingestion/ScipIndexReader.java",
     "method": "Files.newByteChannel",
     "max": 1,

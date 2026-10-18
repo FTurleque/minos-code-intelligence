@@ -41,6 +41,10 @@ L'entrée est supprimée avant le clone (`:170`) sous le verrou du cache : la ci
 
 `check-remote-distributed-consistency.py:81` : `ATOMIC_MOVE` remplacé par `DurableAtomicFile.moveDirectory`, dans la tâche qui modifie le fichier ; son auto-test, s'il couvre cette liste, est ajusté.
 
+## Constat de mise en œuvre (2026-10-18)
+
+La couture de test est un constructeur de paquet qui reçoit un `DirectoryPublisher` (interface fonctionnelle, `ATOMIC` par défaut) : instance, non statique. Les assistants de `JGitRemoteRepositoryMaterializerTest` sont devenus visibles du paquet pour le nouveau test. Vingt matérialisations successives sous Windows avec la protection en temps réel de Defender : 0 échec.
+
 ## Direction des dépendances
 
 `adapters → engine` (ADR 0022) ; `com.minos.io` est déjà importé (`DurableAtomicFile`, `PrivateLocalStorage`, `BoundedFileLease`, `StaleScratchReclamation`). Aucun package nouveau.
