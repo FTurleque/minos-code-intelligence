@@ -129,4 +129,19 @@ class LegacyRegistryBackupTest {
 
         assertFalse(Files.exists(fixture.backup()), "no backup is made from a link");
     }
+
+    @Test
+    void aLegacyEntryBeyondTheByteLimitIsNotCopied(@TempDir Path temp) throws Exception {
+        Fixture fixture = legacyEntry(temp);
+        String padding = "#" + "x".repeat(1024 * 1024 + 16) + System.lineSeparator();
+        Files.writeString(fixture.record(), padding + Files.readString(fixture.record()), StandardCharsets.UTF_8);
+
+        try {
+            fixture.migrated().findProject(fixture.original().id());
+        } catch (IOException | RuntimeException refused) {
+            // The entry is refused as a whole: what matters is that no oversized backup is made.
+        }
+
+        assertFalse(Files.exists(fixture.backup()), "an entry beyond the limit is never copied");
+    }
 }
