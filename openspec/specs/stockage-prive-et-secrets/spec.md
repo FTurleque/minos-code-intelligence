@@ -195,3 +195,108 @@ Le chargement de la configuration d'exécution SHALL tester l'existence de `conf
 - **GIVEN** un `MINOS_HOME` où `config/minos.properties` est un lien symbolique vers une cible absente, sur un système où le lien a pu être créé
 - **WHEN** `MinosRuntimeSettings.load` est appelé
 - **THEN** le chargement échoue au lieu de rendre une configuration vide
+
+### Requirement: Une écriture brute nouvelle hors des primitives est refusée par le gate
+Le gate `check-private-io.py` SHALL refuser, dans le code de production du reactor et hors des primitives d'E/S, tout appel, référence de méthode ou import statique de `Files.newOutputStream`, `newBufferedWriter`, `newByteChannel`, `createFile`, `createDirectory`, `createTempFile`, `createTempDirectory`, `copy` ou `move`, et toute redirection de la sortie d'un processus vers un fichier, sauf occurrence inscrite nominativement dans la liste de tolérance.
+
+#### Scenario: Appel brut ajouté dans un fichier non listé
+- **GIVEN** un arbre où un fichier de `src/main/java` hors primitives appelle `Files.newOutputStream`, sans entrée de liste
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté sur cet arbre
+- **THEN** le gate échoue et nomme le fichier et l'API
+
+#### Scenario: Chaque API nouvelle est refusée seule
+- **GIVEN** l'auto-test du gate, avec un témoin par règle
+- **WHEN** `python scripts/architecture/test_check_private_io.py -v` est exécuté
+- **THEN** chaque témoin produit exactement une violation qui nomme sa règle, y compris par référence de méthode et par import statique
+
+#### Scenario: Redirection d'un processus vers un fichier
+- **GIVEN** un fichier de production qui redirige la sortie d'un processus vers un fichier
+- **WHEN** le gate est exécuté
+- **THEN** il échoue ; la même source redirigée vers `Redirect.DISCARD` passe
+
+#### Scenario: Appels permis non signalés
+- **GIVEN** un fichier de production qui n'appelle que `Files.readAllBytes` et les primitives d'E/S
+- **WHEN** le gate est exécuté
+- **THEN** il réussit
+
+### Requirement: La liste de tolérance des écritures brutes ne fait que se resserrer
+Chaque occurrence existante d'une API refusée SHALL être inscrite par une entrée nominative (fichier, API, maximum, justification écrite). Le gate SHALL échouer quand un fichier listé compte une occurrence de plus que son maximum, quand un maximum dépasse le décompte réel, et quand la liste est illisible ou contient un dossier, un joker ou une justification vide : il SHALL NOT se replier sur une liste vide ou ignorée.
+
+#### Scenario: Une occurrence de plus dans un fichier listé
+- **GIVEN** un fichier listé pour deux `Files.move` qui en contient trois
+- **WHEN** le gate est exécuté
+- **THEN** il échoue et cite le maximum de l'entrée
+
+#### Scenario: Entrée périmée après migration
+- **GIVEN** une entrée dont le fichier ne contient plus l'API listée
+- **WHEN** le gate est exécuté
+- **THEN** il échoue et demande de retirer ou d'abaisser l'entrée
+
+#### Scenario: Liste illisible
+- **GIVEN** une liste de tolérance qui n'est pas un tableau JSON d'entrées complètes
+- **WHEN** le gate est exécuté
+- **THEN** il échoue sans examiner les sources comme si la liste était vide
+
+#### Scenario: Dépôt réel
+- **GIVEN** le dépôt après ce changement, sans aucun fichier Java modifié
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit et son décompte de règles a augmenté de dix
+
+### Requirement: L'ouverture confinée ne dépend d'aucun état statique modifiable
+La primitive d'ouverture confinée (`ConfinedFileOpener`) SHALL NOT déclarer de champ statique non `final`. Un traitement inséré entre la dernière validation et l'ouverture SHALL n'être fourni que par l'appelant, pour son seul appel, par une entrée non publique ; les entrées publiques SHALL n'en exécuter aucun. Un fichier remplacé par un lien entre la validation et l'ouverture SHALL rester refusé.
+
+#### Scenario: Aucun champ statique modifiable
+- **GIVEN** la classe `ConfinedFileOpener` chargée par un test de `minos-engine`
+- **WHEN** ses champs déclarés sont énumérés par réflexion
+- **THEN** aucun n'est à la fois `static` et non `final`
+
+#### Scenario: Remplacement par un lien juste avant l'ouverture
+- **GIVEN** un fichier régulier validé, et un traitement passé par l'appelant qui le remplace par un lien symbolique
+- **WHEN** l'ouverture confinée est appelée avec ce traitement
+- **THEN** l'ouverture échoue par un refus de confinement et aucun octet de la cible du lien n'est lu
+
+#### Scenario: Un appel n'influence pas le suivant
+- **GIVEN** une ouverture qui vient d'être faite avec un traitement de remplacement
+- **WHEN** une entrée publique ouvre ensuite un autre fichier régulier, sans aucune remise à zéro
+- **THEN** le traitement n'est pas exécuté et le fichier est ouvert
+
+### Requirement: Un refus conditionnel n'est jamais retiré par le durcissement
+Sous Windows, le durcissement d'un emplacement privé SHALL NOT retirer une entrée de refus conditionnel, explicite ou héritée : après l'appel, elle SHALL être encore présente dans la DACL, que le durcissement ait réussi ou qu'il ait échoué avant d'écrire. Une autorisation conditionnelle héritée SHALL continuer d'être retirée. Si la DACL complète ne peut pas être lue, le durcissement SHALL échouer sans écrire, par une erreur sans chemin absolu.
+
+#### Scenario: Refus conditionnel explicite
+- **GIVEN** sous Windows, un répertoire dont la DACL porte un refus conditionnel posé par un administrateur
+- **WHEN** le durcissement d'emplacement privé est appelé sur ce répertoire
+- **THEN** le SDDL relu contient toujours l'entrée de refus conditionnel
+
+#### Scenario: Refus conditionnel hérité du parent
+- **GIVEN** un fichier qui hérite un refus conditionnel de son répertoire parent
+- **WHEN** le durcissement est appelé sur ce fichier
+- **THEN** le refus conditionnel s'applique toujours au fichier
+
+#### Scenario: Autorisation conditionnelle héritée
+- **GIVEN** un répertoire qui hérite une autorisation conditionnelle de son parent
+- **WHEN** le durcissement est appelé
+- **THEN** l'autorisation conditionnelle n'est plus dans sa DACL et l'héritage est coupé
+
+#### Scenario: DACL illisible
+- **GIVEN** une lecture de la DACL complète qui échoue ou dépasse son délai (échec injecté)
+- **WHEN** le durcissement est appelé
+- **THEN** il échoue, la DACL n'a pas été réécrite et le message ne contient pas le chemin absolu
+
+### Requirement: Un octroi d'ACL du bac à sable est additif, borné et fail-closed
+Le code Java du bac à sable Windows SHALL accorder ou retirer un droit par une primitive unique qui ajoute ou retire l'entrée d'une seule identité désignée par SID, sans réécrire la DACL, avec un délai borné et un répertoire Windows vérifié. Un octroi qui échoue, dépasse son délai ou ne trouve pas le répertoire Windows SHALL être rapporté comme non accordé et SHALL faire échouer l'opération qui en dépend.
+
+#### Scenario: Octroi sur un répertoire porteur d'un refus
+- **GIVEN** sous Windows, une racine d'écriture dont la DACL porte un refus posé par un administrateur
+- **WHEN** la primitive accorde un droit à une identité
+- **THEN** l'entrée de l'identité est ajoutée et toutes les autres entrées, dont le refus, sont inchangées
+
+#### Scenario: Répertoire Windows inconnu
+- **GIVEN** un environnement sans `SystemRoot`
+- **WHEN** la primitive est appelée
+- **THEN** elle rapporte un octroi non accordé sans lancer de processus ni lever d'erreur non contrôlée
+
+#### Scenario: Délai dépassé
+- **GIVEN** un lanceur injecté qui ne se termine pas
+- **WHEN** la primitive est appelée
+- **THEN** le processus est tué au terme du délai et l'octroi est rapporté comme non accordé

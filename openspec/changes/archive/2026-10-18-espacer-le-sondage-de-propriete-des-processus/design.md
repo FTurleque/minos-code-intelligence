@@ -41,6 +41,15 @@ Tâche 1 : durée moyenne d'une énumération et cadence réelle de la boucle, s
 
 Une énumération `descendants().toList()` d'un processus vivant coûte **30 à 34 ms** (moyenne de 500 appels) : plus que la période de 10 ms. La boucle du HEAD ne tourne donc pas à 100 appels par seconde mais à **22 à 23 appels par seconde** (énumération puis `sleep(10)`, réel 10,8 ms), soit environ 70 % d'un cœur occupé par provider. Avec la période de régime de 100 ms : **7,7 appels par seconde** (environ 23 % d'un cœur). Le gain réel sous Windows est donc de **trois fois** en énumérations et d'un facteur trois en occupation, non de dix : l'objectif « au moins cinq fois moins d'énumérations » ne vaut que pour un hôte dont l'énumération est rapide, et le test de cadence (processus factice, énumération instantanée) le prouve pour la boucle, pas pour le coût réel. **Non mesuré** : Linux (aucun hôte Linux sur ce poste). Le test factice voit 178 à 179 énumérations en 2 s au HEAD et un maximum de 30 après correction.
 
+**Linux (2026-10-18, conteneur `eclipse-temurin:25-jdk-noble` sous Docker Desktop / WSL2, 604 processus dans le conteneur)** : une énumération coûte **14 ms** ; la boucle du HEAD tournait à **41 appels par seconde**, la nouvelle (période de régime de 100 ms) à **9**, soit **4,6 fois moins**. Sous Windows le gain est de 2,9 fois (22 puis 7,7 appels par seconde). L'objectif « au moins cinq fois moins » vaut donc pour une énumération instantanée (test de cadence), non pour une énumération de 14 à 34 ms où le temps d'énumération entre dans la période. Le conteneur n'est pas un hôte Linux nu : mesure indicative.
+
+### Fenêtres d'observation des tests (tâche 1.2, 2026-10-18)
+
+- `ProcessIndexerExecutorTest.normalProviderExitCleansAPreviouslyObservedDetachedChild` : le provider factice dort 1 000 ms après avoir lancé son enfant ; fenêtre d'observation 1 s, entièrement dans la phase initiale à 10 ms.
+- `ProcessOwnershipTrackerCleanupFailureTest` : observations injectées par `remember`, aucune fenêtre ; le cas d'observation défaillante attend la première énumération du fil de suivi (verrou, 30 s), faite dès le démarrage de la boucle.
+- `MinosProcessSupervisorOrphanTest` : le shell racine lance `sleep 300` puis `sleep 1` avant de sortir ; fenêtre d'observation 1 s, dans la phase initiale (le chemin Windows passe par le Job Object, le suivi n'y est qu'une défense en profondeur).
+- `MinosProcessSupervisorTest` : les petits-enfants vivent 300 s et les marqueurs sont attendus 10 à 15 s ; aucune borne serrée.
+
 ### D2. Sondage adaptatif — **tranchée par le propriétaire le 2026-10-17 : option A** (10 ms pendant la première seconde, puis 100 ms ; fenêtre de 250 ms après la sortie de la racine conservée)
 
 Option A (recommandée) : 10 ms pendant la première seconde de vie du processus (là où un lanceur crée et abandonne le plus souvent ses intermédiaires), puis **100 ms**. Régime établi : dix énumérations par seconde au lieu de cent. Le test `:179` garde au moins neuf observations dans sa fenêtre d'une seconde.

@@ -43,7 +43,7 @@ Un refus conditionnel (XD) n'est jamais retiré. XA hérité : toujours retiré,
 
 ### Mesures et constats de mise en œuvre (2026-10-17, Windows 10)
 
-- `icacls /save` coûte **11 ms** en moyenne (8 à 31 ms, 20 essais) sur un répertoire temporaire. Le nombre d'objets durcis au premier contact pendant une indexation de ce dépôt **n'a pas été mesuré**.
+- `icacls /save` coûte **11 ms** en moyenne (8 à 31 ms, 20 essais) sur un répertoire temporaire. Le nombre d'objets durcis au premier contact pendant une indexation de ce dépôt **n'a pas été relevé** : aucun index réel ne se produit sur le poste Windows (scip-java s'y arrête sous Git Bash) ; à relever lors d'une indexation réelle sous Linux en conteneur, hors de ce changement.
 - Le fichier temporaire de la lecture est créé par `Files.createTempFile` dans `PrivateLocalStorage`, dont les appels bruts sont des entrées de liste (décision D2 d'`etendre-le-garde-d-e-s-privees-aux-ecritures-brutes`) : le maximum de l'entrée passe de 3 à 4. Le gate étendu a refusé l'appel avant l'inscription, ce qui est son rôle.
 - `icacls /grant` d'une identité sur un répertoire porteur d'un `XD` **conserve le `XD`** ; `/remove:g` restitue la DACL telle qu'elle était (mesuré par `WindowsAclGrantsTest`).
 - Le test qui échoue au HEAD échoue parce que rien n'est refusé ; la survie ou la disparition de l'`XD` au HEAD n'a pas été observée directement.
