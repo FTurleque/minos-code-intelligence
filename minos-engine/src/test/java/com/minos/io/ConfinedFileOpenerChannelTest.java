@@ -75,7 +75,7 @@ class ConfinedFileOpenerChannelTest {
         Path link = root.resolve("link.bin");
         try {
             Files.createSymbolicLink(link, secret);
-        } catch (UnsupportedOperationException | IOException unsupported) {
+        } catch (UnsupportedOperationException | IOException _) {
             assumeTrue(false, "this platform/account cannot create symbolic links");
         }
 
@@ -93,7 +93,7 @@ class ConfinedFileOpenerChannelTest {
         try {
             Files.createSymbolicLink(probe, secret);
             Files.delete(probe);
-        } catch (UnsupportedOperationException | IOException unsupported) {
+        } catch (UnsupportedOperationException | IOException _) {
             assumeTrue(false, "this platform/account cannot create symbolic links");
         }
         AtomicBoolean swapped = new AtomicBoolean();
@@ -107,11 +107,28 @@ class ConfinedFileOpenerChannelTest {
             }
         };
 
-        assertThrows(IOException.class, () -> {
-            try (SeekableByteChannel channel = ConfinedFileOpener.openRegularFileNoFollowChannel(file, beforeOpen)) {
-                assertTrue(readAll(channel).isEmpty(), "the swapped-in link was followed and exposed its target");
-            }
-        });
+        assertThrows(IOException.class, () -> readThrough(file, beforeOpen));
         assertTrue(swapped.get(), "the step between the look and the open ran");
+    }
+
+    @Test
+    void aFileDeletedBetweenTheLookAndTheOpenIsReportedAsAbsent(@TempDir Path root) throws Exception {
+        Path file = Files.writeString(root.resolve("data.bin"), "payload", StandardCharsets.UTF_8);
+        Runnable beforeOpen = () -> {
+            try {
+                Files.delete(file);
+            } catch (IOException failure) {
+                throw new IllegalStateException(failure);
+            }
+        };
+
+        assertThrows(NoSuchFileException.class, () -> readThrough(file, beforeOpen));
+    }
+
+    /** Opens through the seam and reads: one call can throw, so a refusal is attributed to the right step. */
+    private static String readThrough(Path file, Runnable beforeOpen) throws IOException {
+        try (SeekableByteChannel channel = ConfinedFileOpener.openRegularFileNoFollowChannel(file, beforeOpen)) {
+            return readAll(channel);
+        }
     }
 }

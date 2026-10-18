@@ -35,6 +35,8 @@ public final class DurableAtomicFile {
     static final int REPLACE_ATTEMPTS_ON_WINDOWS = 20;
     private static final long REPLACE_PAUSE_STEP_NANOS = TimeUnit.MILLISECONDS.toNanos(5);
 
+    private static final String TARGET = "target";
+
     private DurableAtomicFile() {
     }
 
@@ -86,7 +88,7 @@ public final class DurableAtomicFile {
     }
 
     static boolean deleteIfExists(Path target, String label, DirectorySync sync) throws IOException {
-        Path normalized = Objects.requireNonNull(target, "target").toAbsolutePath().normalize();
+        Path normalized = Objects.requireNonNull(target, TARGET).toAbsolutePath().normalize();
         String operation = requireText(label, "label");
         boolean deleted = Files.deleteIfExists(normalized);
         if (!deleted) return false;
@@ -119,7 +121,7 @@ public final class DurableAtomicFile {
             Platform platform
     ) throws IOException {
         Path from = Objects.requireNonNull(source, "source").toAbsolutePath().normalize();
-        Path to = Objects.requireNonNull(target, "target").toAbsolutePath().normalize();
+        Path to = Objects.requireNonNull(target, TARGET).toAbsolutePath().normalize();
         Objects.requireNonNull(directorySync, "directorySync");
         Objects.requireNonNull(platform, "platform");
         forceFile(from);
@@ -164,7 +166,7 @@ public final class DurableAtomicFile {
             Platform platform
     ) throws IOException {
         Path from = Objects.requireNonNull(source, "source").toAbsolutePath().normalize();
-        Path to = Objects.requireNonNull(target, "target").toAbsolutePath().normalize();
+        Path to = Objects.requireNonNull(target, TARGET).toAbsolutePath().normalize();
         String operation = requireText(label, "label");
         Objects.requireNonNull(directorySync, "directorySync");
         Objects.requireNonNull(platform, "platform");
