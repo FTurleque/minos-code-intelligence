@@ -206,9 +206,10 @@ try {
     $TsReady = ($null -ne $Typescript) -and ($Typescript.state -eq 'READY')
     $TsOrigin = ($null -ne $Typescript) -and (@($Typescript.diagnostics | Where-Object { $_ -like 'tools origin:*embedded*' }).Count -gt 0)
     Add-Result 'scip-typescript READY from the embedded tools' ($TsReady -and $TsOrigin) $(if ($null -eq $Typescript) { 'provider missing from tools verify' } else { "state=$($Typescript.state); " + (($Typescript.diagnostics | ForEach-Object { $_ }) -join ' | ') })
-    # scip-java: its MINOS-owned parts must be embedded; whatever else blocks it must be a named machine prerequisite.
+    # scip-java: its MINOS-owned parts must be embedded; whatever else blocks it must be a named machine prerequisite
+    # or the declared absence of a qualified execution under the sandbox.
     $JavaOrigin = ($null -ne $Java) -and (@($Java.diagnostics | Where-Object { $_ -like 'tools origin:*coursier=embedded*maven=embedded*' -or $_ -like 'tools origin:*' }).Count -gt 0)
-    $JavaOnlyExternal = ($null -ne $Java) -and (@($Java.diagnostics | Where-Object { $_ -notlike 'tools origin:*' -and $_ -notlike 'machine prerequisite (not shipped by MINOS):*' }).Count -eq 0)
+    $JavaOnlyExternal = ($null -ne $Java) -and (@($Java.diagnostics | Where-Object { $_ -notlike 'tools origin:*' -and $_ -notlike 'machine prerequisite (not shipped by MINOS):*' -and $_ -notlike 'scip-java execution under the Windows AppContainer sandbox is not qualified*' }).Count -eq 0)
     Add-Result 'scip-java embedded tools present, only machine prerequisites missing (if any)' ($JavaOrigin -and $JavaOnlyExternal) $(if ($null -eq $Java) { 'provider missing' } else { "state=$($Java.state); " + (($Java.diagnostics | ForEach-Object { $_ }) -join ' | ') })
 
     # ---- 4. index a TypeScript project --------------------------------------------------------------------
