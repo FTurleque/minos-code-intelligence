@@ -1,7 +1,10 @@
 package com.minos.storage.local.registry;
 
+import java.io.OutputStreamWriter;
+import java.io.ByteArrayOutputStream;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.BoundedProperties;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.DurableAtomicFile;
 import com.minos.registry.DegradedEntry;
 import com.minos.registry.ProjectPathMapping;
@@ -11,12 +14,13 @@ import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -42,6 +46,9 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     private static final String PORTABLE_ROOT_PATH = "rootRelativePath";
     private static final long MAX_METADATA_BYTES = 128L * 1024L;
     private static final int MAX_METADATA_ENTRIES = 16;
+
+    /** A registry entry is a few lines of properties: a legacy one this large is not one. */
+    private static final int MAX_LEGACY_ENTRY_BYTES = 1024 * 1024;
 
     private final Path storageRoot;
     private final Path projectsDirectory;
@@ -345,9 +352,36 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         return project;
     }
 
+    /**
+     * Saves the legacy entry beside itself, once: read without following a link, written to a private temporary of the
+     * same folder and published exclusively, so the backup is complete or absent, private, and a copy that exists is
+     * never replaced. A lost race (another process saved it first) is the same outcome as finding it saved. The
+     * modification date of the entry is not copied: nothing reads it.
+     */
+    private static void backupOnce(Path file, Path backup) throws IOException {
+        if (Files.exists(backup, LinkOption.NOFOLLOW_LINKS)) return;
+        byte[] content;
+        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
+            content = input.readNBytes(MAX_LEGACY_ENTRY_BYTES + 1);
+        }
+        if (content.length > MAX_LEGACY_ENTRY_BYTES) {
+            throw new IOException("legacy registry entry exceeds the backup byte limit");
+        }
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(
+                backup.getParent(), backup.getFileName().toString() + ".", ".tmp");
+        try {
+            PrivateLocalStorage.writePrivateFile(temporary, content);
+            DurableAtomicFile.publish(temporary, backup, "legacy registry entry backup");
+        } catch (FileAlreadyExistsException alreadySaved) {
+            // Another process saved it first: the backup exists, which is all that is asked.
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
     private void migrateLegacyProject(Path file, RegisteredProject project, String relativeRoot) throws IOException {
         Path backup = file.resolveSibling(file.getFileName().toString() + ".m29-v1.bak");
-        if (!Files.exists(backup)) Files.copy(file, backup, StandardCopyOption.COPY_ATTRIBUTES);
+        backupOnce(file, backup);
         Properties properties = new Properties();
         properties.setProperty("id", project.id().toString());
         properties.setProperty(PORTABLE_ROOT_PATH, relativeRoot);
@@ -450,11 +484,11 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         DurableAtomicFile.ensureDirectory(target.getParent(), "local registry metadata directory");
         Path temporary = PrivateLocalStorage.createPrivateTempFile(target.getParent(), target.getFileName().toString() + ".", ".tmp");
         try {
-            try (Writer writer = Files.newBufferedWriter(
-                    temporary, StandardCharsets.UTF_8,
-                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            ByteArrayOutputStream content = new ByteArrayOutputStream();
+            try (Writer writer = new OutputStreamWriter(content, StandardCharsets.UTF_8)) {
                 properties.store(writer, "MINOS local registry");
             }
+            PrivateLocalStorage.writePrivateFile(temporary, content.toByteArray());
             DurableAtomicFile.replace(temporary, target, "local registry metadata replacement");
         } finally {
             Files.deleteIfExists(temporary);
