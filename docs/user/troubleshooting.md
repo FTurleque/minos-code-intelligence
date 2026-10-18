@@ -2,6 +2,14 @@
 
 Ce guide couvre l’installation native M14, les providers, l’indexation autonome, les snapshots, MCP et NEXUS.
 
+## Échec d'indexation : lire la cause d'un run
+
+La ligne `error: index failed: …` (code de sortie 1) nomme le run, sa phase et, quand elle est sûre, la cause. Quand la cause cite un chemin local ou un secret, la ligne renvoie à `MINOS_HOME/index-state/runs` : la cause complète est la clé `message` du fichier `<projet>/<run>.properties`, et les journaux du provider sont sous `MINOS_HOME/runs/<run>` (`provider.stderr.log`). Aucun chemin absolu n'apparaît dans la ligne publique.
+
+## Windows : « scip-java execution under the Windows AppContainer sandbox is not qualified »
+
+scip-java est `BLOCKED` sous Windows (`minos doctor`, `minos tools verify`, `minos providers scip-java`), `minos tools install scip-java` échoue et l'indexation d'un projet Java est refusée avant tout lancement : la chaîne scip-java Windows n'a pas été exécutée de bout en bout sous le bac à sable AppContainer, et MINOS ne déclare pas prêt ce qui n'est pas qualifié ([ADR 0060](../architecture/adr/0060-qualifier-scip-java-sous-le-bac-a-sable-windows.md)). Les autres providers (TypeScript) ne sont pas touchés. Remède : indexer les projets Java par le [runtime Docker](docker-runtime.md). Sous Windows, le runner scip-java n'utilise que le Windows PowerShell 5.1 du répertoire système (`System32\WindowsPowerShell\v1.0`), jamais un PowerShell du `PATH`.
+
 ## Commencer par `doctor`
 
 Pour une installation utilisateur :
