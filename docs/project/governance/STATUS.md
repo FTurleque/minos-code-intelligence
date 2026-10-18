@@ -94,6 +94,18 @@ Cinq des six changements du sprint 7 (« sorties publiques : messages, MCP, rend
 
 Reste : la preuve sur une installation Docker réelle du refus et de l'absence de requête DNS depuis un poste natif (tâche manuelle 4.2). Les tests Gradle du plugin n'ont pas été rejoués sur le poste, seulement en CI. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 
+## Audit 2026-10-10 — sprint 8 (2026-10-18)
+
+Les cinq changements du sprint 8 (« confinement et E/S privées ») sont **fusionnés dans `develop` et archivés** (PR #490 à #494) :
+
+- **Garde d'E/S privées** : neuf API de `Files` (`newOutputStream`, `newBufferedWriter`, `newByteChannel`, `createFile`, `createDirectory`, `createTempFile`, `createTempDirectory`, `copy`, `move`) et la redirection de la sortie d'un processus vers un fichier rejoignent les règles de `check-private-io.py` (20 règles). Les 44 occurrences existantes sont inscrites dans la liste de tolérance, chacune avec son lot de migration ; **la migration elle-même n'est pas faite**. `PrivateLocalStorage` porte ses appels par entrées de liste.
+- **Windows, refus conditionnels** : avant de réécrire une DACL, `PrivateLocalStorage` la lit (`icacls /save`) et **refuse**, sans rien modifier, si elle porte un refus conditionnel (`XD`) ou si elle est illisible ; une autorisation conditionnelle héritée reste retirée. Les octrois Java du bac à sable AppContainer passent par une primitive unique, additive et bornée.
+- **Exécution de provider** : `ProcessIndexerExecutor.execute` refuse de lancer un provider sans frontière de propriété ni bac à sable ; le constructeur « propriété seule » de `StrongProcessOwnershipIndexerExecutor` n'est plus public (ADR 0038, « Mise en œuvre »).
+- **Ouverture confinée** : `ConfinedFileOpener` ne garde plus de crochet de test statique ; l'étape est un paramètre de surcharges de paquet.
+- **Suivi des descendants** : sondage toutes les 10 ms pendant la première seconde, puis toutes les 100 ms, dans le runtime local et le plugin IntelliJ. Gain mesuré : 4,6 fois moins d'énumérations sous Linux (conteneur), 2,9 fois sous Windows, l'énumération coûtant 14 à 34 ms.
+
+Reste : la migration des écritures brutes inscrites (lots à ouvrir) et le nombre d'objets durcis pendant une indexation réelle. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
+
 ## État produit
 
 - **C0 → M30** : terminés et intégrés.
@@ -104,7 +116,7 @@ Reste : la preuve sur une installation Docker réelle du refus et de l'absence d
 - **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement **intégrés**.
 - **#224–#248** : campagne de confinement provider/filesystem, provenance, egress, installateur et Windows non-admin intégrée.
 - **#258/#260** : audit du 28 août 2026 — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.
-- **Audit du 10 octobre 2026, sprints 1 à 7** : constats corrigés et intégrés dans `develop` (voir les sections dédiées ci-dessus).
+- **Audit du 10 octobre 2026, sprints 1 à 8** : constats corrigés et intégrés dans `develop` (voir les sections dédiées ci-dessus).
 - Ligne de développement : **1.3.0-SNAPSHOT**.
 
 ## Release 1.0.1

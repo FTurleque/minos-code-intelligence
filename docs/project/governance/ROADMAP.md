@@ -158,7 +158,7 @@ Les releases 1.1.0 et 1.2.0 ont été publiées depuis (voir [`STATUS.md`](STATU
 | 5 | Chaîne de release et d'approvisionnement |
 | 6 | Couverture réelle et plugin IntelliJ |
 | 7 | Sorties publiques : messages, MCP, rendus |
-| 8 | Confinement et E/S privées |
+| 8 | Confinement et E/S privées — **fait**, sauf la migration des 44 écritures brutes inscrites (lots à ouvrir) |
 | 9 | Une seule orchestration d'indexation |
 | 10 | Frontières d'architecture |
 | 11 | Hygiène de fond |
