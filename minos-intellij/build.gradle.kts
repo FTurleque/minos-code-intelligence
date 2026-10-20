@@ -14,7 +14,7 @@ buildscript {
     // (osv-scan). Not shipped by MINOS, but run by the build: raised to their first fixed versions until the plugins
     // bring them. undertow-core has no fixed version: its exception is minos-intellij/osv-scanner.toml.
     dependencies {
-        classpath(platform("com.fasterxml.jackson:jackson-bom:2.21.7"))
+        classpath(platform("com.fasterxml.jackson:jackson-bom:2.22.3"))
         constraints {
             classpath("org.jsoup:jsoup:1.23.2")
         }
@@ -29,7 +29,7 @@ plugins {
     // Audit only (MINOS-AUD-H09, docs/developer/quality/code-audit.md): their tasks run when called by name, never in
     // `test buildPlugin`. Versions and settings mirror the reactor's audit profiles. Dependency-Check is left out
     // until it can refresh its database (H04): its Gradle task does not reuse the Maven one.
-    id("com.github.spotbugs") version "6.5.12"
+    id("com.github.spotbugs") version "6.5.13"
     id("info.solidsoft.pitest") version "1.19.0"
 }
 
