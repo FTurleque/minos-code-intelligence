@@ -238,29 +238,69 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         Optional<Path> coursier = coursierExecutable();
         boolean windowsRuntimeInstalled = !CommandLocator.isWindows() || windowsRuntimeInstalled();
         boolean mavenInstalled = !CommandLocator.isWindows() || Files.isRegularFile(mavenExecutable());
-        if (coursier.isEmpty()) diagnostics.add("Coursier is not installed in MINOS_HOME/tools and was not found in PATH");
-        if (!windowsRuntimeInstalled) diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION + " Windows compatibility runtime is not installed");
-        if (!mavenInstalled) diagnostics.add("managed Maven " + mavenArtifact().version() + " is not installed in MINOS_HOME/tools");
         boolean classpathInstalled = scipJavaClasspathInstalled();
-        if (!classpathInstalled) diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION + " classpath is not installed in MINOS_HOME/tools");
+        addMissingJavaToolDiagnostics(
+                diagnostics, coursier.isPresent(), windowsRuntimeInstalled, mavenInstalled, classpathInstalled);
         if (CommandLocator.isWindows()) {
-            if (powerShellExecutable().isEmpty()) diagnostics.add(ExternalPrerequisite.of("Windows PowerShell 5.1 (System32\\WindowsPowerShell\\v1.0\\powershell.exe) is required for scip-java on Windows"));
-            if (!gitBashAvailable()) diagnostics.add(ExternalPrerequisite.of("Git Bash (bash.exe) is required for scip-java on Windows"));
-            if (!cSharpCompilerAvailable()) diagnostics.add(ExternalPrerequisite.of("csc.exe is required to build scip-java Windows command shims"));
-            diagnostics.add(SANDBOXED_EXECUTION_NOT_QUALIFIED);
+            addJavaWindowsPrerequisiteDiagnostics(diagnostics);
         }
-        String javaHome = System.getenv("JAVA_HOME");
-        if (javaHome == null || javaHome.isBlank()) {
-            diagnostics.add(ExternalPrerequisite.of("JAVA_HOME is not set to the project JDK"));
-        } else {
-            Path javac = Path.of(javaHome).resolve("bin").resolve(CommandLocator.isWindows() ? "javac.exe" : "javac");
-            if (!Files.isRegularFile(javac)) diagnostics.add(ExternalPrerequisite.of("JAVA_HOME does not contain javac: " + javaHome));
-        }
+        addProjectJdkDiagnostics(diagnostics);
         boolean installed = coursier.isPresent() && windowsRuntimeInstalled && mavenInstalled && classpathInstalled;
         ProviderRuntimeStatus.State state = !installed
                 ? ProviderRuntimeStatus.State.NOT_INSTALLED
                 : diagnostics.isEmpty() ? ProviderRuntimeStatus.State.READY : ProviderRuntimeStatus.State.BLOCKED;
         return new ProviderRuntimeStatus(SCIP_JAVA_ID, SCIP_JAVA_VERSION, state, coursier, diagnostics);
+    }
+
+    /** The MINOS-owned parts of scip-java that are not installed, each named with where it is expected. */
+    private void addMissingJavaToolDiagnostics(
+            List<String> diagnostics,
+            boolean coursierInstalled,
+            boolean windowsRuntimeInstalled,
+            boolean mavenInstalled,
+            boolean classpathInstalled
+    ) {
+        if (!coursierInstalled) {
+            diagnostics.add("Coursier is not installed in MINOS_HOME/tools and was not found in PATH");
+        }
+        if (!windowsRuntimeInstalled) {
+            diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION
+                    + " Windows compatibility runtime is not installed");
+        }
+        if (!mavenInstalled) {
+            diagnostics.add("managed Maven " + mavenArtifact().version() + " is not installed in MINOS_HOME/tools");
+        }
+        if (!classpathInstalled) {
+            diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION
+                    + " classpath is not installed in MINOS_HOME/tools");
+        }
+    }
+
+    /** Machine prerequisites of scip-java on Windows, plus the declared absence of a qualified sandboxed run. */
+    private void addJavaWindowsPrerequisiteDiagnostics(List<String> diagnostics) {
+        if (powerShellExecutable().isEmpty()) {
+            diagnostics.add(ExternalPrerequisite.of("Windows PowerShell 5.1 "
+                    + "(System32\\WindowsPowerShell\\v1.0\\powershell.exe) is required for scip-java on Windows"));
+        }
+        if (!gitBashAvailable()) {
+            diagnostics.add(ExternalPrerequisite.of("Git Bash (bash.exe) is required for scip-java on Windows"));
+        }
+        if (!cSharpCompilerAvailable()) {
+            diagnostics.add(ExternalPrerequisite.of("csc.exe is required to build scip-java Windows command shims"));
+        }
+        diagnostics.add(SANDBOXED_EXECUTION_NOT_QUALIFIED);
+    }
+
+    private static void addProjectJdkDiagnostics(List<String> diagnostics) {
+        String javaHome = System.getenv("JAVA_HOME");
+        if (javaHome == null || javaHome.isBlank()) {
+            diagnostics.add(ExternalPrerequisite.of("JAVA_HOME is not set to the project JDK"));
+            return;
+        }
+        Path javac = Path.of(javaHome).resolve("bin").resolve(CommandLocator.isWindows() ? "javac.exe" : "javac");
+        if (!Files.isRegularFile(javac)) {
+            diagnostics.add(ExternalPrerequisite.of("JAVA_HOME does not contain javac: " + javaHome));
+        }
     }
 
     private ProviderRuntimeStatus installTypeScript() throws Exception {
