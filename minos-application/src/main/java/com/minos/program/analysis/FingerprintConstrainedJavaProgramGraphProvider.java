@@ -4,6 +4,7 @@ import com.minos.domain.Symbol;
 import com.minos.incremental.FileFingerprint;
 import com.minos.incremental.ProjectFingerprintSnapshot;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.Sha256;
 import com.minos.program.ProgramGraph;
 import com.minos.registry.RegisteredProject;
@@ -13,7 +14,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
-import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
@@ -188,7 +188,7 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
         return true;
     }
 
-    private static String securityConfigSha256(Path projectRoot) throws IOException {
+    static String securityConfigSha256(Path projectRoot) throws IOException {
         Path root = projectRoot.toRealPath();
         Path candidate = root.resolve(JavaSourceProgramGraphProvider.SECURITY_CONFIG).normalize();
         if (!candidate.startsWith(root) || !Files.exists(candidate)) return "absent";
@@ -203,15 +203,15 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
         if (size > MAX_SECURITY_CONFIG_BYTES) {
             throw new IOException("Java advanced provider security config exceeds byte limit: " + size);
         }
-        return sha256Exact(real, size, "Java advanced provider security config", LinkOption.NOFOLLOW_LINKS);
+        return sha256Exact(real, size, "Java advanced provider security config");
     }
 
-    private static String sha256Exact(Path file, long expectedBytes, String label, OpenOption... options)
-            throws IOException {
+    /** Package-private for tests: the leaf is opened without following a link (it is never a link after resolution). */
+    static String sha256Exact(Path file, long expectedBytes, String label) throws IOException {
         if (expectedBytes < 0L) throw new IOException(label + " has a negative expected size");
         MessageDigest digest = Sha256.newDigest();
         long total = 0L;
-        try (InputStream input = Files.newInputStream(file, options)) {
+        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = input.read(buffer)) >= 0) {
