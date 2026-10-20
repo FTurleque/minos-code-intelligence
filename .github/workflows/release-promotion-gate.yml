@@ -74,13 +74,13 @@ jobs:
       # the JDK its POM names and finds this one through JAVA_HOME_24_X64. The step after it selects Java 25.
       # Remove this step, and its entry in check-toolchain-baseline.py, once no candidate A is built for Java 24.
       - name: Set up the previous Java baseline for candidate A
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '24'
 
       - name: Set up Java 25
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '25'
