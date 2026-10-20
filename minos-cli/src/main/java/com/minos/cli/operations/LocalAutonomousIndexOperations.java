@@ -154,7 +154,7 @@ public final class LocalAutonomousIndexOperations
         boolean fingerprintPromoted = prepared.fingerprintBefore().equals(after);
         String diagnostic = null;
         if (fingerprintPromoted) {
-            promoteFingerprint(prepared, run, after);
+            promoteFingerprint(prepared.project().id(), run.activeSnapshotAfter().orElseThrow(), after);
         } else {
             diagnostic = "workspace changed during indexing; fingerprint baseline was not promoted";
         }
@@ -213,25 +213,24 @@ public final class LocalAutonomousIndexOperations
 
     private IllegalStateException failedRun(Prepared prepared, IndexingRun run) {
         IllegalStateException failure = new IllegalStateException(failureMessage(run));
-        compactAfterFailure(prepared, failure);
+        compactAfterFailure(prepared.project().id(), failure);
         return failure;
     }
 
-    private void promoteFingerprint(Prepared prepared, IndexingRun run, ProjectFingerprint after) throws IOException {
-        String activeSnapshotId = run.activeSnapshotAfter().orElseThrow();
+    void promoteFingerprint(UUID projectId, String activeSnapshotId, ProjectFingerprint after) throws IOException {
         try {
-            fingerprintStore.publish(prepared.project().id(), activeSnapshotId, after);
-            fingerprintStore.promote(prepared.project().id(), activeSnapshotId);
+            fingerprintStore.publish(projectId, activeSnapshotId, after);
+            fingerprintStore.promote(projectId, activeSnapshotId);
         } catch (IOException fingerprintFailure) {
-            compactAfterFailure(prepared, fingerprintFailure);
+            compactAfterFailure(projectId, fingerprintFailure);
             throw fingerprintFailure;
         }
     }
 
     /** Releases what the failed run retained; a retention error is attached to the failure, never replaces it. */
-    private void compactAfterFailure(Prepared prepared, Exception failure) {
+    void compactAfterFailure(UUID projectId, Exception failure) {
         try {
-            application.retentionService().compact(prepared.project().id());
+            application.retentionService().compact(projectId);
         } catch (IOException retentionFailure) {
             failure.addSuppressed(retentionFailure);
         }
