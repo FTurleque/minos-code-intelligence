@@ -66,6 +66,9 @@ dependencies {
 
     intellijPlatform {
         intellijIdea("2026.1")
+        // The plugin verifier is pinned: left to itself the plugin resolves the latest release, whose checksums
+        // gradle/verification-metadata.xml cannot know in advance.
+        pluginVerifier("1.410")
     }
 }
 
