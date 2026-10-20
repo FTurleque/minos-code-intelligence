@@ -162,8 +162,9 @@ class IndexFailurePathsTest {
                     new LocalAutonomousIndexOperations(application, UnaryOperator.identity());
 
             // Not forced and not complete: the run is the planned one, not the full one.
+            String projectId = project.id().toString();
             IllegalStateException failure = assertThrows(IllegalStateException.class, () -> operations.execute(
-                    project.id().toString(), null, false, IndexingResumePolicy.RESUME));
+                    projectId, null, false, IndexingResumePolicy.RESUME));
 
             assertTrue(failure.getMessage().startsWith("indexing run "), failure.getMessage());
             assertEquals(1, executed.get(), "the changed project reached the provider");

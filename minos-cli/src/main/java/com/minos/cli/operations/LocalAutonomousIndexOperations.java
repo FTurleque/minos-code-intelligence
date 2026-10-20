@@ -184,8 +184,7 @@ public final class LocalAutonomousIndexOperations
                 combineDiagnostics(semanticDiagnostic, retentionDiagnostic));
     }
 
-    private IndexingRun runLifecycle(Prepared prepared, boolean forceFull, IndexingResumePolicy resumePolicy)
-            throws Exception {
+    private IndexingRun runLifecycle(Prepared prepared, boolean forceFull, IndexingResumePolicy resumePolicy) {
         var executors = prepared.negotiation().selections().stream()
                 .map(selection -> runtimeManager.executor(selection.indexer().id()))
                 .map(executorDecorator)
