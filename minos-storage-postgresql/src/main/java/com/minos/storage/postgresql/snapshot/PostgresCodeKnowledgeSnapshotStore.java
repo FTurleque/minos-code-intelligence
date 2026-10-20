@@ -367,14 +367,16 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         return activeMetadata(projectId).map(ActiveMetadata::snapshotId);
     }
 
+    /** The rows of the active snapshot of one project: {@code knowledge_active} joined to its snapshot. */
+    private static final String ACTIVE_SNAPSHOT_FROM = "FROM knowledge_active a JOIN knowledge_snapshots s "
+            + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id WHERE a.project_id=?";
+
     private Optional<ActiveMetadata> activeMetadata(UUID projectId) throws IOException {
         try {
             return connections.withConnection(connection -> {
                 try (PreparedStatement statement = connection.prepareStatement(
                         "SELECT s.snapshot_id,s.sha256,s.symbol_count,s.occurrence_count,s.relationship_count "
-                                + "FROM knowledge_active a JOIN knowledge_snapshots s "
-                                + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id "
-                                + "WHERE a.project_id=?")) {
+                                + ACTIVE_SNAPSHOT_FROM)) {
                     statement.setObject(1, projectId);
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) return Optional.empty();
@@ -394,10 +396,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         try {
             return connections.withConnection(connection -> {
                 try (PreparedStatement statement = connection.prepareStatement(
-                        "SELECT s.snapshot_id,s.payload,s.sha256 FROM knowledge_active a "
-                                + "JOIN knowledge_snapshots s "
-                                + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id "
-                                + "WHERE a.project_id=?")) {
+                        "SELECT s.snapshot_id,s.payload,s.sha256 " + ACTIVE_SNAPSHOT_FROM)) {
                     statement.setObject(1, projectId);
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) return Optional.empty();

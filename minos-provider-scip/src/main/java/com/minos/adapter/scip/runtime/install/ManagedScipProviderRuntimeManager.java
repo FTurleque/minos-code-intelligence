@@ -598,22 +598,44 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 .resolve(CommandLocator.isWindows() ? "mvn.cmd" : "mvn");
     }
 
-    private Path ensureMaven(boolean allowNetwork) throws Exception {
-        Path existing = mavenExecutable();
-        if (Files.isRegularFile(existing)) return existing;
-        Path root = mavenRoot();
-        PrivateLocalStorage.ensurePrivateDirectory(root);
-        String archiveName = "apache-maven-" + mavenArtifact().version() + "-bin";
+    /**
+     * Acquires a pinned zip archive through its {@code .partial.zip} name, publishes it under its final name and
+     * extracts the distribution it holds (all entries under {@code topLevelDirectory}) under {@code root} within the
+     * given bounds.
+     *
+     * @return where the archive came from (embedded payload or network)
+     */
+    private PinnedArtifactSource.Origin acquireAndExtractZip(
+            EmbeddedToolsCatalog.Artifact artifact,
+            Path root,
+            String archiveName,
+            String topLevelDirectory,
+            long maxArchiveBytes,
+            long maxExtractedBytes,
+            long maxEntries,
+            boolean allowNetwork
+    ) throws IOException, InterruptedException {
         Path archive = root.resolve(archiveName + ".zip");
         Path archivePartial = root.resolve(archiveName + ".partial.zip");
         Files.deleteIfExists(archivePartial);
 
         PinnedArtifactSource.Origin origin = source().acquire(
-                mavenArtifact(), archivePartial, MAX_MAVEN_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
+                artifact, archivePartial, maxArchiveBytes, MINOS_USER_AGENT, allowNetwork);
         moveFile(archivePartial, archive);
 
-        extractDistribution(archive, root, "apache-maven-" + mavenArtifact().version(),
-                MAX_MAVEN_EXTRACTED_BYTES, MAX_MAVEN_ARCHIVE_ENTRIES);
+        extractDistribution(archive, root, topLevelDirectory, maxExtractedBytes, maxEntries);
+        return origin;
+    }
+
+    private Path ensureMaven(boolean allowNetwork) throws Exception {
+        Path existing = mavenExecutable();
+        if (Files.isRegularFile(existing)) return existing;
+        Path root = mavenRoot();
+        PrivateLocalStorage.ensurePrivateDirectory(root);
+        String distribution = "apache-maven-" + mavenArtifact().version();
+        PinnedArtifactSource.Origin origin = acquireAndExtractZip(
+                mavenArtifact(), root, distribution + "-bin", distribution,
+                MAX_MAVEN_ARCHIVE_BYTES, MAX_MAVEN_EXTRACTED_BYTES, MAX_MAVEN_ARCHIVE_ENTRIES, allowNetwork);
         Path mvn = mavenExecutable();
         if (!Files.isRegularFile(mvn)) {
             throw new IllegalStateException("Maven distribution archive did not contain " + mvn);
@@ -642,15 +664,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         if (Files.isRegularFile(existing)) return existing;
         Path root = nodeRoot();
         PrivateLocalStorage.ensurePrivateDirectory(root);
-        Path archive = root.resolve(nodeDistributionId() + ".zip");
-        Path archivePartial = root.resolve(nodeDistributionId() + ".partial.zip");
-        Files.deleteIfExists(archivePartial);
-
-        PinnedArtifactSource.Origin origin = source().acquire(
-                nodeArtifact(), archivePartial, MAX_NODE_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
-        moveFile(archivePartial, archive);
-
-        extractDistribution(archive, root, nodeDistributionId(), MAX_NODE_EXTRACTED_BYTES, MAX_NODE_ARCHIVE_ENTRIES);
+        PinnedArtifactSource.Origin origin = acquireAndExtractZip(
+                nodeArtifact(), root, nodeDistributionId(), nodeDistributionId(),
+                MAX_NODE_ARCHIVE_BYTES, MAX_NODE_EXTRACTED_BYTES, MAX_NODE_ARCHIVE_ENTRIES, allowNetwork);
         Path node = nodeExecutable();
         if (!Files.isRegularFile(node)) {
             throw new IllegalStateException("Node.js distribution archive did not contain " + node);
