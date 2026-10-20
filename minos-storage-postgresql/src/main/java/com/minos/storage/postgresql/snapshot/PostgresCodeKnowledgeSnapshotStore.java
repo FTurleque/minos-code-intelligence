@@ -41,7 +41,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 
 import static com.minos.domain.Preconditions.requireText;
 
@@ -64,6 +66,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
 
     private final PostgresConnectionFactory connections;
     private final Path scratchRoot;
+    private final Consumer<Path> afterScratchFileCreated;
     private final PostgresSnapshotPayloadCodec codec = new PostgresSnapshotPayloadCodec();
     private final Object cacheLock = new Object();
     private final LinkedHashMap<CacheKey, WeightedQueryView> queryCache =
@@ -75,6 +78,18 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     private long cacheEvictions;
 
     public PostgresCodeKnowledgeSnapshotStore(PostgresConnectionFactory connections, Path minosHome) throws IOException {
+        this(connections, minosHome, created -> { });
+    }
+
+    /**
+     * Test seam: {@code afterScratchFileCreated} runs on each scratch file the instant after it was created and before
+     * anything is written to it, which is when a hostile process would put a link in its place. Instance state, so
+     * one test cannot leak its step into another.
+     */
+    PostgresCodeKnowledgeSnapshotStore(
+            PostgresConnectionFactory connections, Path minosHome, Consumer<Path> afterScratchFileCreated)
+            throws IOException {
+        this.afterScratchFileCreated = Objects.requireNonNull(afterScratchFileCreated, "afterScratchFileCreated");
         this.connections = Objects.requireNonNull(connections, "connections");
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.scratchRoot = home.resolve(SCRATCH_DIRECTORY).toAbsolutePath().normalize();
@@ -281,20 +296,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             throws SQLException, IOException {
         Path existing = createScratchFile("snapshot-existing-");
         try {
-            String existingSha;
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT payload, sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
-                statement.setObject(1, snapshot.projectId());
-                statement.setString(2, snapshot.snapshotId());
-                try (ResultSet result = statement.executeQuery()) {
-                    if (!result.next()) throw new IOException("PostgreSQL snapshot identity vanished during publication");
-                    try (InputStream input = result.getBinaryStream(1);
-                         OutputStream output = Files.newOutputStream(existing)) {
-                        copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
-                    }
-                    existingSha = result.getString(2);
-                }
-            }
+            String existingSha = copyExistingPayload(connection, snapshot, existing);
             if (!existingSha.equals(new com.minos.storage.local.store.SnapshotIntegrityService().checksum(existing))) {
                 throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
             }
@@ -305,6 +307,24 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             }
         } finally {
             Files.deleteIfExists(existing);
+        }
+    }
+
+    /** Copies the stored payload of the snapshot identity into {@code target} and returns its recorded SHA-256. */
+    private static String copyExistingPayload(Connection connection, CodeKnowledgeSnapshot snapshot, Path target)
+            throws SQLException, IOException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT payload, sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
+            statement.setObject(1, snapshot.projectId());
+            statement.setString(2, snapshot.snapshotId());
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) throw new IOException("PostgreSQL snapshot identity vanished during publication");
+                try (InputStream input = result.getBinaryStream(1);
+                     OutputStream output = PrivateLocalStorage.openPrivateOutputStream(target)) {
+                    copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
+                }
+                return result.getString(2);
+            }
         }
     }
 
@@ -381,24 +401,28 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                     statement.setObject(1, projectId);
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) return Optional.empty();
-                        Path payload = createScratchFile("snapshot-read-");
-                        // Hashed while it is copied: the payload is not read a second time to check it.
-                        MessageDigest digest = Sha256.newDigest();
-                        try (InputStream input = new DigestInputStream(result.getBinaryStream(2), digest);
-                             OutputStream output = Files.newOutputStream(payload)) {
-                            copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
-                        } catch (Exception exception) {
-                            Files.deleteIfExists(payload);
-                            throw exception;
-                        }
-                        return Optional.of(new Row(result.getString(1), payload, result.getString(3),
-                                HexFormat.of().formatHex(digest.digest())));
+                        return Optional.of(readRow(result));
                     }
                 }
             });
         } catch (SQLException exception) {
             throw new IOException("unable to load PostgreSQL knowledge snapshot", exception);
         }
+    }
+
+    /** Copies the payload of the current row to a private scratch file, hashing it while it is copied. */
+    private Row readRow(ResultSet result) throws SQLException, IOException {
+        Path payload = createScratchFile("snapshot-read-");
+        // Hashed while it is copied: the payload is not read a second time to check it.
+        MessageDigest digest = Sha256.newDigest();
+        try (InputStream input = new DigestInputStream(result.getBinaryStream(2), digest);
+             OutputStream output = PrivateLocalStorage.openPrivateOutputStream(payload)) {
+            copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
+        } catch (Exception exception) {
+            Files.deleteIfExists(payload);
+            throw exception;
+        }
+        return new Row(result.getString(1), payload, result.getString(3), HexFormat.of().formatHex(digest.digest()));
     }
 
     private Path createScratchFile(String prefix) throws IOException {
@@ -409,7 +433,9 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                 throw new IOException("PostgreSQL snapshot scratch file escapes its private directory");
             }
             try {
-                return PrivateLocalStorage.createPrivateFile(candidate);
+                Path created = PrivateLocalStorage.createPrivateFile(candidate);
+                afterScratchFileCreated.accept(created);
+                return created;
             } catch (FileAlreadyExistsException collision) {
                 // UUID collisions are not expected, but CREATE_NEW semantics remain fail-closed.
             }

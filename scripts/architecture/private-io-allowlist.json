@@ -27,19 +27,19 @@
     "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java",
     "method": "Files.createDirectories",
     "max": 2,
-    "justification": "Sous-répertoires d'extraction d'une archive d'outil vérifiée, sous une racine d'installation déjà rendue privée (ensurePrivateDirectory) ; durcir chaque entrée coûterait des milliers d'ACL, à migrer si besoin."
+    "justification": "Sous-répertoires d'extraction d'une archive d'outil vérifiée, sous une racine d'installation déjà rendue privée (ensurePrivateDirectory) : entrée durable, les dossiers héritent de l'ACL de la racine et durcir chaque entrée d'une extraction en masse réécrirait des milliers d'ACL."
   },
   {
     "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/RustAnalyzerScipProcessPlanFactory.java",
     "method": "Files.createDirectories",
     "max": 1,
-    "justification": "Répertoire de travail cargo du provider, sous le répertoire de run privé ; sur Windows le conteneur du sandbox y écrit par héritage d'ACL, un ACL propriétaire seul casserait cet accès."
+    "justification": "Répertoire de travail cargo du provider, sous le répertoire de run privé ; sur Windows le conteneur du sandbox y écrit par héritage d'ACL, une ACL propriétaire seul casserait cet accès : entrée durable."
   },
   {
     "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java",
     "method": "Files.createDirectories",
     "max": 4,
-    "justification": "Sortie du provider et arbre de travail (copie du projet) sous le répertoire de run privé : écrits par le provider sandboxé qui y accède par héritage d'ACL, un ACL propriétaire seul casserait cet accès."
+    "justification": "Sortie du provider et arbre de travail (copie du projet) sous le répertoire de run privé : écrits par le provider sandboxé qui y accède par héritage d'ACL, une ACL propriétaire seul casserait cet accès : entrée durable."
   },
   {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
@@ -144,122 +144,8 @@
     "justification": "Primitive de création à droits privés : ce fichier crée lui-même les fichiers et répertoires avec les droits du propriétaire seul (D2 du changement etendre-le-garde-d-e-s-privees-aux-ecritures-brutes) ; entrée durable."
   },
   {
-    "file": "minos-integration-git/src/main/java/com/minos/integration/git/JGitRemoteRepositoryMaterializer.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « application et registre (intégration Git) »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/ingestion/ScipIndexReader.java",
-    "method": "Files.newByteChannel",
-    "max": 1,
-    "justification": "Lecture par canal (le gate ne lit pas les options d'ouverture) hors ConfinedFileOpener ; à migrer vers ConfinedFileOpener, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/ingestion/ScipSymbolSnapshotImporter.java",
-    "method": "Files.newByteChannel",
-    "max": 2,
-    "justification": "Lecture par canal (le gate ne lit pas les options d'ouverture) hors ConfinedFileOpener ; à migrer vers ConfinedFileOpener, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/LockedNpmPackage.java",
-    "method": "Files.copy",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java",
-    "method": "Files.createTempFile",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java",
-    "method": "Files.move",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java",
-    "method": "Files.copy",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java",
-    "method": "Files.move",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java",
-    "method": "Files.newOutputStream",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipPythonRuntimeManager.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/PinnedArtifactSource.java",
-    "method": "Files.newOutputStream",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « providers SCIP »."
-  },
-  {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java",
     "method": "Files.createDirectory",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
-    "method": "Files.createTempFile",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
-    "method": "Files.move",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java",
-    "method": "Files.newOutputStream",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/BoundedProcessOutput.java",
-    "method": "Files.newByteChannel",
-    "max": 1,
-    "justification": "Lecture par canal (le gate ne lit pas les options d'ouverture) hors ConfinedFileOpener ; à migrer vers ConfinedFileOpener, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java",
-    "method": "Files.createTempFile",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java",
-    "method": "Files.newOutputStream",
     "max": 1,
     "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
   },
@@ -268,95 +154,5 @@
     "method": "Files.createDirectory",
     "max": 3,
     "justification": "Crée un cgroup dans cgroupfs, qui n'est pas du stockage privé : entrée définitive, ce site ne sera jamais migré."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/SandboxLauncherScript.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java",
-    "method": "ProcessBuilder.redirect(file)",
-    "max": 1,
-    "justification": "Redirige la sortie du lanceur vers un fichier dont les droits viennent du dossier parent ; à remplacer par un fichier créé par une primitive, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/ProviderWorkspaceFiles.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/RunDirectoryRetention.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « runtime local »."
-  },
-  {
-    "file": "minos-storage-local/src/main/java/com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore.java",
-    "method": "Files.newOutputStream",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage local »."
-  },
-  {
-    "file": "minos-storage-local/src/main/java/com/minos/storage/local/orchestration/FileIndexStateStore.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage local »."
-  },
-  {
-    "file": "minos-storage-local/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java",
-    "method": "Files.copy",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage local »."
-  },
-  {
-    "file": "minos-storage-local/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java",
-    "method": "Files.newBufferedWriter",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage local »."
-  },
-  {
-    "file": "minos-storage-local/src/main/java/com/minos/storage/local/registry/ProjectPathMappingStore.java",
-    "method": "Files.newBufferedWriter",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage local »."
-  },
-  {
-    "file": "minos-storage-local/src/main/java/com/minos/storage/local/store/ActiveSnapshotRepository.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage local »."
-  },
-  {
-    "file": "minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java",
-    "method": "Files.move",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage local »."
-  },
-  {
-    "file": "minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage local »."
-  },
-  {
-    "file": "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java",
-    "method": "Files.newOutputStream",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage local »."
-  },
-  {
-    "file": "minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotBinaryCodecSupport.java",
-    "method": "Files.newOutputStream",
-    "max": 3,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage local »."
-  },
-  {
-    "file": "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java",
-    "method": "Files.newOutputStream",
-    "max": 2,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « stockage PostgreSQL »."
   }
 ]

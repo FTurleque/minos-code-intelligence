@@ -172,6 +172,24 @@ class PinnedArtifactSourceTest {
     }
 
     @Test
+    void aPartialFileReplacedByALinkIsRefusedAndTheLinkTargetIsLeftIntact() throws Exception {
+        Path sentinel = directory.resolve("sentinel.bin");
+        Files.writeString(sentinel, "untouched");
+        Path partial = directory.resolve("tool.partial");
+        try {
+            Files.createSymbolicLink(partial, sentinel);
+        } catch (UnsupportedOperationException | SecurityException | IOException exception) {
+            org.junit.jupiter.api.Assumptions.abort("symbolic links are unavailable: " + exception.getClass().getSimpleName());
+        }
+        PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payloadWith(TOOL));
+
+        assertThrows(EmbeddedToolIntegrityException.class, () -> source.acquire(artifact(TOOL), partial, 1024, "test", true));
+
+        assertEquals("untouched", Files.readString(sentinel));
+        assertEquals(0, attempts.get());
+    }
+
+    @Test
     void aPayloadWhoseManifestIsMalformedRefusesWhatItShouldHaveCarried() throws Exception {
         Path payload = payloadWith(TOOL);
         Files.writeString(payload.resolve(EmbeddedToolsPayload.MANIFEST_FILE), "{ not json");

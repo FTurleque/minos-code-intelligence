@@ -80,7 +80,7 @@ Le plan et la disponibilité de scip-java sous Windows utilisent `CommandLocator
 
 ### D4. Lot 2 : honnêteté d'abord, qualification par ADR
 
-Sans décision d'architecture, la seule mesure conforme est de ne plus déclarer prêt ce qui n'est pas qualifié : sous Windows, l'état de scip-java devient bloqué avec un prérequis qui dit que l'exécution sous le bac à sable n'est pas qualifiée et nomme le runtime Docker. Les options de qualification, à trancher par l'ADR du lot 2 (prochain numéro libre de l'index) : (a) compiler shims et patch à l'installation, hors conteneur, sous empreinte ; emplacement par `PSDrive` ; (b) la JVM du projet ne s'initialise pas sans lister la racine du volume : capacité AppContainer dédiée, JDK géré par MINOS hors profil, ou exécution du provider Java dans le runtime Linux. Aucune n'est retenue ici.
+La mesure conforme est de ne plus déclarer prêt ce qui n'est pas qualifié : sous Windows, l'état de scip-java devient bloqué avec un prérequis qui dit que l'exécution sous le bac à sable n'est pas qualifiée et nomme le runtime Docker. L'ADR 0060 retient la voie Docker et écarte les options natives : (a) compiler shims et patch à l'installation, hors conteneur, sous empreinte ; emplacement par `PSDrive` ; (b) la JVM du projet ne s'initialise pas sans lister la racine du volume : capacité AppContainer dédiée, JDK géré par MINOS hors profil, ou exécution du provider Java dans le runtime Linux. Aucune option native n'est retenue ; l'indexation Java d'un poste Windows passe par le runtime Docker.
 
 ## Risques
 

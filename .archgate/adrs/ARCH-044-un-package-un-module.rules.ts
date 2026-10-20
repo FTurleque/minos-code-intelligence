@@ -7,9 +7,9 @@
 const SCRIPT = "scripts/architecture/check-module-boundaries.py";
 const ROOT_POM = "pom.xml";
 
-function governedModules(script: string): string[] | null {
+function governedModules(script: string): string[] {
   const block = /^MODULES\s*=\s*\(([^)]*)\)/m.exec(script);
-  if (!block) return null;
+  if (!block) return [];
   return [...block[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
 }
 
@@ -30,7 +30,7 @@ export default {
         const script = await ctx.readFile(SCRIPT);
         const pom = await ctx.readFile(ROOT_POM);
         const governed = governedModules(script);
-        if (governed === null || governed.length === 0) {
+        if (governed.length === 0) {
           ctx.report.violation({
             message: `Le tuple MODULES est introuvable dans ${SCRIPT} : l'invariant A7 ne peut pas être vérifié.`,
             file: SCRIPT,

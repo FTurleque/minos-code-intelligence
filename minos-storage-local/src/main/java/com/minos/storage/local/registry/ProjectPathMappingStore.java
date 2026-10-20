@@ -1,5 +1,7 @@
 package com.minos.storage.local.registry;
 
+import java.io.OutputStreamWriter;
+import java.io.ByteArrayOutputStream;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
@@ -12,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -83,11 +84,11 @@ public final class ProjectPathMappingStore implements ProjectPathMappings {
         properties.setProperty("containerRoot", mapping.containerRoot());
         Path temporary = PrivateLocalStorage.createPrivateTempFile(runtimeDirectory, FILE_NAME + ".", ".tmp");
         try {
-            try (Writer writer = Files.newBufferedWriter(
-                    temporary, StandardCharsets.UTF_8,
-                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            ByteArrayOutputStream content = new ByteArrayOutputStream();
+            try (Writer writer = new OutputStreamWriter(content, StandardCharsets.UTF_8)) {
                 properties.store(writer, "MINOS project path mapping v1");
             }
+            PrivateLocalStorage.writePrivateFile(temporary, content.toByteArray());
             DurableAtomicFile.replace(temporary, file, "project path mapping replacement");
         } finally {
             Files.deleteIfExists(temporary);

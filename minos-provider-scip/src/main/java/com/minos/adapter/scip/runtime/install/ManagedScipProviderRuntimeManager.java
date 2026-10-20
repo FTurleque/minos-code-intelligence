@@ -5,6 +5,7 @@ import com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory;
 import com.minos.adapter.scip.runtime.plan.ScipTypeScriptProcessPlanFactory;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
+import com.minos.io.DurableAtomicFile;
 import com.minos.io.BoundedFileLease;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedLineReader;
@@ -21,12 +22,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -296,7 +294,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     .resolve(CommandLocator.isWindows() ? "scip-typescript.cmd" : "scip-typescript");
             if (!Files.isRegularFile(installed)) throw new IllegalStateException("scip-typescript executable was not created: " + installed);
             deleteRecursively(destination);
-            move(partial, destination);
+            moveDirectory(partial, destination);
         } finally {
             deleteRecursively(partial);
         }
@@ -439,22 +437,32 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     }
 
     /** Replaces {@code destination} by {@code partial}, keeping the previous tree aside until the swap is done. */
-    private static void swapIn(Path partial, Path destination, Path previous) throws IOException {
+    static void swapIn(Path partial, Path destination, Path previous) throws IOException {
+        swapIn(partial, destination, previous, ManagedScipProviderRuntimeManager::moveDirectory);
+    }
+
+    /** The publication of a directory, a seam of the tests of {@link #swapIn}. */
+    @FunctionalInterface
+    interface DirectoryMover {
+        void move(Path source, Path target) throws IOException;
+    }
+
+    static void swapIn(Path partial, Path destination, Path previous, DirectoryMover mover) throws IOException {
         deleteRecursively(previous);
         boolean replacing = Files.exists(destination, LinkOption.NOFOLLOW_LINKS);
-        if (replacing) move(destination, previous);
+        if (replacing) mover.move(destination, previous);
         try {
-            move(partial, destination);
+            mover.move(partial, destination);
         } catch (IOException swapFailure) {
-            if (replacing) restore(previous, destination, swapFailure);
+            if (replacing) restore(previous, destination, swapFailure, mover);
             throw swapFailure;
         }
         deleteRecursively(previous);
     }
 
-    private static void restore(Path previous, Path destination, IOException swapFailure) {
+    private static void restore(Path previous, Path destination, IOException swapFailure, DirectoryMover mover) {
         try {
-            move(previous, destination);
+            mover.move(previous, destination);
         } catch (IOException restoreFailure) {
             swapFailure.addSuppressed(restoreFailure);
         }
@@ -469,8 +477,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     /** A new file in a private directory, never through a link, whose access is inherited from the directory. */
     private static void writeNewFile(Path target, InputStream content) throws IOException {
-        try (OutputStream output = Files.newOutputStream(
-                target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+        try (OutputStream output = PrivateLocalStorage.openNewTreeFile(target)) {
             content.transferTo(output);
         }
     }
@@ -501,8 +508,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             if (input == null) throw new IllegalStateException("packaged scip-java runtime resource is missing: " + name);
             Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
             Files.deleteIfExists(partial);
-            Files.copy(input, partial, StandardCopyOption.REPLACE_EXISTING);
-            move(partial, destination);
+            writeNewFile(partial, input);
+            moveFile(partial, destination);
         }
     }
 
@@ -523,7 +530,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
         PinnedArtifactSource.Origin origin = source().acquire(
                 coursierArtifact(), archivePartial, MAX_COURSIER_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
-        move(archivePartial, archive);
+        moveFile(archivePartial, archive);
 
         int executableEntries = 0;
         try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(archive); ZipInputStream zip = new ZipInputStream(input)) {
@@ -531,7 +538,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             while ((entry = zip.getNextEntry()) != null) {
                 if (!entry.isDirectory() && entry.getName().toLowerCase(Locale.ROOT).endsWith(".exe")) {
                     executableEntries++;
-                    if (executableEntries == 1) Files.copy(zip, executablePartial, StandardCopyOption.REPLACE_EXISTING);
+                    if (executableEntries == 1) writeNewFile(executablePartial, zip);
                 }
             }
         }
@@ -539,7 +546,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             Files.deleteIfExists(executablePartial);
             throw new IllegalStateException("Coursier launcher ZIP did not contain a Windows executable");
         }
-        move(executablePartial, destination);
+        moveFile(executablePartial, destination);
         origins.record(COURSIER_ID, origin);
         return destination;
     }
@@ -563,9 +570,10 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
         PinnedArtifactSource.Origin origin = source().acquire(
                 mavenArtifact(), archivePartial, MAX_MAVEN_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
-        move(archivePartial, archive);
+        moveFile(archivePartial, archive);
 
-        extractZipBounded(archive, root, MAX_MAVEN_EXTRACTED_BYTES, MAX_MAVEN_ARCHIVE_ENTRIES);
+        extractDistribution(archive, root, "apache-maven-" + mavenArtifact().version(),
+                MAX_MAVEN_EXTRACTED_BYTES, MAX_MAVEN_ARCHIVE_ENTRIES);
         Path mvn = mavenExecutable();
         if (!Files.isRegularFile(mvn)) {
             throw new IllegalStateException("Maven distribution archive did not contain " + mvn);
@@ -600,9 +608,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
         PinnedArtifactSource.Origin origin = source().acquire(
                 nodeArtifact(), archivePartial, MAX_NODE_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
-        move(archivePartial, archive);
+        moveFile(archivePartial, archive);
 
-        extractZipBounded(archive, root, MAX_NODE_EXTRACTED_BYTES, MAX_NODE_ARCHIVE_ENTRIES);
+        extractDistribution(archive, root, nodeDistributionId(), MAX_NODE_EXTRACTED_BYTES, MAX_NODE_ARCHIVE_ENTRIES);
         Path node = nodeExecutable();
         if (!Files.isRegularFile(node)) {
             throw new IllegalStateException("Node.js distribution archive did not contain " + node);
@@ -725,7 +733,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             extractZipBounded(archivePartial, partial, MAX_ASSEMBLED_EXTRACTED_BYTES, MAX_ASSEMBLED_ENTRIES);
             ManagedPolyglotScipRuntimeManager.writeManagedMarkers(partial, version, EMBEDDED_TREE_SOURCE);
             deleteRecursively(destination);
-            move(partial, destination);
+            moveDirectory(partial, destination);
             origins.record(component.id(), PinnedArtifactSource.Origin.EMBEDDED);
         } finally {
             Files.deleteIfExists(archivePartial);
@@ -828,8 +836,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     continue;
                 }
                 Files.createDirectories(target.getParent());
-                try (OutputStream output = Files.newOutputStream(
-                        target, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                try (OutputStream output = openExtractedFile(target)) {
                     byte[] buffer = new byte[64 * 1024];
                     int read;
                     while ((read = zip.read(buffer)) >= 0) {
@@ -842,6 +849,26 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Extracts a distribution archive whose entries all live under {@code topLevelDirectory}. An earlier extraction
+     * may have been interrupted: its tree is removed first, so that every entry is created new and a relaunch succeeds.
+     */
+    static void extractDistribution(
+            Path archive, Path root, String topLevelDirectory, long maxTotalBytes, long maxEntries
+    ) throws IOException {
+        deleteRecursively(root.resolve(topLevelDirectory));
+        extractZipBounded(archive, root, maxTotalBytes, maxEntries);
+    }
+
+    /** A file of an archive is new: a name met twice (or twice under case folding) is a defect of the archive. */
+    private static OutputStream openExtractedFile(Path target) throws IOException {
+        try {
+            return PrivateLocalStorage.openNewTreeFile(target);
+        } catch (java.nio.file.FileAlreadyExistsException duplicate) {
+            throw new IOException("archive has a duplicate entry", duplicate);
         }
     }
 
@@ -924,9 +951,14 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         FileTreeOperations.deleteRecursively(path);
     }
 
-    private static void move(Path source, Path target) throws IOException {
+    /** The parent is made private before every publication, so that a new tool folder exists and is owner-only. */
+    private static void moveFile(Path source, Path target) throws IOException {
         PrivateLocalStorage.ensurePrivateDirectory(target.toAbsolutePath().normalize().getParent());
-        try { Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
-        catch (AtomicMoveNotSupportedException exception) { Files.move(source, target, StandardCopyOption.REPLACE_EXISTING); }
+        DurableAtomicFile.replace(source, target, "managed tool file installation");
+    }
+
+    private static void moveDirectory(Path source, Path target) throws IOException {
+        PrivateLocalStorage.ensurePrivateDirectory(target.toAbsolutePath().normalize().getParent());
+        DurableAtomicFile.moveDirectory(source, target, "managed tool directory installation");
     }
 }
