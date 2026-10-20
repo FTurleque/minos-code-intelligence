@@ -372,8 +372,9 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         if (content.length > maxBytes) {
             throw new IOException("legacy registry entry exceeds the backup byte limit");
         }
-        Path temporary = PrivateLocalStorage.createPrivateTempFile(
-                backup.getParent(), backup.getFileName().toString() + ".", ".tmp");
+        Path backupFolder = Objects.requireNonNull(backup.getParent(), "backup folder");
+        String backupName = Objects.requireNonNull(backup.getFileName(), "backup name").toString();
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(backupFolder, backupName + ".", ".tmp");
         try {
             PrivateLocalStorage.writePrivateFile(temporary, content);
             DurableAtomicFile.publish(temporary, backup, "legacy registry entry backup");

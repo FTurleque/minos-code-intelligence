@@ -300,3 +300,145 @@ Le code Java du bac à sable Windows SHALL accorder ou retirer un droit par une 
 - **GIVEN** un lanceur injecté qui ne se termine pas
 - **WHEN** la primitive est appelée
 - **THEN** le processus est tué au terme du délai et l'octroi est rapporté comme non accordé
+
+### Requirement: Une écriture en flux dans le stockage privé ne suit jamais un lien
+Le moteur SHALL offrir trois écritures en flux : créer ou durcir un fichier privé, créer exclusivement un fichier privé durci, créer un fichier nouveau dans un arbre déjà privé sans réécrire de DACL. Toutes SHALL refuser un lien et un objet spécial, les deux dernières un fichier existant, sans nommer de chemin absolu.
+
+#### Scenario: Lien à la place du fichier
+- **GIVEN** un lien symbolique à l'emplacement d'un fichier à écrire
+- **WHEN** `./mvnw -B -ntp -pl minos-engine -am test` exécute `PrivateLocalStorageWritesTest`
+- **THEN** l'ouverture échoue et la cible du lien est inchangée
+
+#### Scenario: Création exclusive d'un nom déjà pris
+- **GIVEN** un fichier existant au nom d'un fichier à créer exclusivement
+- **WHEN** le test de `createPrivateOutputStream` s'exécute
+- **THEN** la création échoue et le contenu existant est intact
+
+#### Scenario: Fichier d'arbre déjà présent
+- **GIVEN** un fichier existant à l'emplacement d'un fichier d'arbre à créer
+- **WHEN** le test de l'ouverture « arbre privé » s'exécute
+- **THEN** l'ouverture échoue et le contenu existant est intact
+
+#### Scenario: Aucune entrée de liste nouvelle
+- **GIVEN** le dépôt après ce changement
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit sans qu'aucun maximum d'une entrée de `PrivateLocalStorage` ait augmenté
+
+### Requirement: La lecture par canal et la publication de répertoire échouent fermées
+Le moteur SHALL offrir une lecture par canal d'un fichier régulier qui refuse lien et objet spécial, et une publication de répertoire par rename atomique vers un nom inexistant. Un système de fichiers sans rename atomique SHALL faire échouer la publication, sans repli par copie.
+
+#### Scenario: Canal sur un lien
+- **GIVEN** un lien symbolique à la place du fichier à lire
+- **WHEN** `ConfinedFileOpenerTest` ouvre le canal
+- **THEN** une `ConfinementException` sans chemin est levée
+
+#### Scenario: Répertoire vers une cible existante
+- **GIVEN** un répertoire source et une cible qui existe déjà
+- **WHEN** `DurableAtomicFileTest` publie le répertoire
+- **THEN** la publication échoue et la source est intacte
+
+#### Scenario: Rename atomique non supporté
+- **GIVEN** une plateforme simulée où `ATOMIC_MOVE` est refusé
+- **WHEN** le répertoire est publié
+- **THEN** une `IOException` est levée et aucune copie n'est faite
+
+### Requirement: Le magasin PostgreSQL n'écrit pas ses fichiers de travail par un appel brut
+Le magasin de snapshots PostgreSQL SHALL écrire ses fichiers de travail par les primitives d'E/S privées. Un fichier de travail remplacé par un lien symbolique SHALL faire échouer l'opération sans modifier la cible du lien et sans laisser de fichier de travail.
+
+#### Scenario: Lien substitué au fichier de travail
+- **GIVEN** un fichier de travail remplacé par un lien symbolique vers un fichier sentinelle
+- **WHEN** `./mvnw -B -ntp -pl minos-storage-postgresql -am test` exécute le test du magasin
+- **THEN** l'opération échoue, la sentinelle est intacte et le fichier de travail est supprimé
+
+#### Scenario: Plus d'entrée de liste pour le magasin
+- **GIVEN** le dépôt après ce changement
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit et la liste ne contient plus d'entrée sous `minos-storage-postgresql/`
+
+### Requirement: Une entrée de cache de dépôt distant est publiée par un déplacement atomique de répertoire
+Le matérialiseur de dépôts distants SHALL publier une entrée de cache par un déplacement atomique de répertoire, sans repli par copie et sans remplacer une entrée existante. Un système de fichiers sans rename atomique SHALL faire échouer la matérialisation avec le message public existant.
+
+#### Scenario: Rename atomique non supporté
+- **GIVEN** un déplaceur de répertoire qui signale l'absence de rename atomique
+- **WHEN** `./mvnw -B -ntp -pl minos-integration-git -am test` exécute le test de matérialisation
+- **THEN** la matérialisation échoue avec « remote repository cache requires atomic directory publication » et aucune entrée n'est créée
+
+#### Scenario: Entrée apparue avant le déplacement
+- **GIVEN** une entrée de cache créée entre la suppression de l'ancienne et le déplacement
+- **WHEN** le répertoire temporaire est publié
+- **THEN** la publication échoue et l'entrée présente n'est pas remplacée
+
+#### Scenario: Plus d'entrée de liste pour le matérialiseur
+- **GIVEN** le dépôt après ce changement
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit et la liste ne contient plus d'entrée pour `JGitRemoteRepositoryMaterializer.java`
+
+### Requirement: L'artefact d'un provider est lu sans suivre de lien et l'index figé est écrit par une primitive privée
+L'ingestion SCIP SHALL ouvrir l'artefact d'index par un canal qui refuse lien symbolique et objet spécial, et SHALL écrire le fichier figé par une primitive d'E/S privée. Un artefact remplacé par un lien entre le contrôle et l'ouverture SHALL être refusé.
+
+#### Scenario: Index remplacé par un lien
+- **GIVEN** un index SCIP remplacé par un lien symbolique entre le contrôle de chemin et l'ouverture
+- **WHEN** `./mvnw -B -ntp -pl minos-provider-scip -am test` exécute les tests de l'ingestion
+- **THEN** l'ingestion est refusée et le contenu visé par le lien n'est pas lu
+
+#### Scenario: Plus d'entrée de liste pour l'ingestion
+- **GIVEN** le dépôt après ce changement
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit et la liste ne contient plus d'entrée pour `ScipIndexReader.java` ni `ScipSymbolSnapshotImporter.java`
+
+### Requirement: Le stockage local écrit ses fichiers par les primitives d'E/S privées
+Le code de production de `minos-storage-local` SHALL écrire ses snapshots, pointeurs, empreintes, vecteurs, sessions d'observation, fichiers de propriétés et sauvegardes par les primitives d'E/S privées, sans appel brut de `Files` listé dans la liste de tolérance. Une écriture dont la cible est un lien symbolique SHALL échouer sans modifier la cible du lien.
+
+#### Scenario: Lien substitué au fichier d'un snapshot
+- **GIVEN** un lien symbolique vers un fichier sentinelle à l'emplacement du fichier de snapshot à écrire
+- **WHEN** `./mvnw -B -ntp -pl minos-storage-local -am test` exécute les tests de lien du module
+- **THEN** l'écriture échoue et la sentinelle est intacte
+
+#### Scenario: Plus aucune entrée de liste pour le module
+- **GIVEN** le dépôt après ce changement
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit et la liste ne contient plus d'entrée sous `minos-storage-local/`
+
+### Requirement: Une sauvegarde de migration et une session publiée ne sont jamais écrasées
+La sauvegarde `.m29-v1.bak` d'une entrée de registre et le fichier d'une session d'observation SHALL être publiés sans remplacer une cible existante. Un système de fichiers qui ne peut pas garantir cette exclusivité SHALL faire échouer la publication.
+
+#### Scenario: Sauvegarde déjà présente
+- **GIVEN** une sauvegarde `.m29-v1.bak` au contenu sentinelle
+- **WHEN** une entrée de registre au format hérité est migrée
+- **THEN** la sauvegarde garde son contenu et l'entrée migrée est écrite
+
+#### Scenario: Session déjà publiée avec un contenu différent
+- **GIVEN** une session stockée sous un identifiant
+- **WHEN** une session de même identifiant et de contenu différent est enregistrée
+- **THEN** l'enregistrement échoue et le fichier existant est inchangé
+
+### Requirement: L'historique d'indexation et les empreintes de sources ne suivent pas de lien
+L'historique d'indexation de la CLI SHALL être écrit par une primitive d'E/S privée avec un contenu identique à l'octet près, et les sources du projet et le fichier de configuration de sécurité SHALL être lus pour l'empreinte par une ouverture qui refuse un lien au dernier composant. Une source remplacée par un lien SHALL faire échouer l'empreinte.
+
+#### Scenario: Source remplacée par un lien
+- **GIVEN** une source Java dont le dernier composant devient un lien symbolique entre la résolution et la lecture
+- **WHEN** `./mvnw -B -ntp -pl minos-application -am test` exécute le test d'empreinte
+- **THEN** l'empreinte échoue et le contenu visé par le lien n'est pas haché
+
+#### Scenario: Lien substitué au temporaire de l'historique
+- **GIVEN** un lien symbolique vers un fichier sentinelle à l'emplacement du temporaire de l'historique
+- **WHEN** l'historique est écrit
+- **THEN** l'écriture échoue et la sentinelle est intacte
+
+#### Scenario: Plus d'entrée de liste pour le module
+- **GIVEN** le dépôt après ce changement
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit et la liste ne contient plus d'entrée sous `minos-application/`
+
+### Requirement: La configuration du backend MCP est écrite par une primitive privée
+Le fichier de configuration du backend MCP SHALL être écrit par une primitive d'E/S privée, sans appel brut de `Files` listé dans la liste de tolérance, avec un contenu identique à l'octet près. Un fichier temporaire remplacé par un lien symbolique SHALL faire échouer la sauvegarde sans modifier la cible du lien.
+
+#### Scenario: Lien substitué au temporaire
+- **GIVEN** un lien symbolique vers un fichier sentinelle à l'emplacement du fichier temporaire
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am test` exécute le test de sauvegarde
+- **THEN** la sauvegarde échoue et la sentinelle est intacte
+
+#### Scenario: Plus d'entrée de liste pour le magasin
+- **GIVEN** le dépôt après ce changement
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit et la liste ne contient plus d'entrée pour `McpBackendConfigurationStore.java`
