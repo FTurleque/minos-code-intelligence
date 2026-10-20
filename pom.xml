@@ -50,7 +50,7 @@
         <minos.sandbox.tests.required>false</minos.sandbox.tests.required>
 
         <scip.java.bindings.version>0.10.0</scip.java.bindings.version>
-        <mcp.sdk.version>2.0.1</mcp.sdk.version>
+        <mcp.sdk.version>2.1.0</mcp.sdk.version>
         <!--
           Keep both Jackson generations centrally pinned. MINOS' PostgreSQL codec uses
           Jackson 2 while MCP SDK 2.0.0 brings Jackson 3 through mcp-json-jackson3.
@@ -82,9 +82,9 @@
           spotbugs-maven-plugin 4.10.4.1 is the wrapper release built around SpotBugs 4.10.4; the engine
           version is pinned separately below so that upgrading one is a visible decision.
         -->
-        <spotbugs.maven.plugin.version>4.10.4.1</spotbugs.maven.plugin.version>
-        <spotbugs.version>4.10.4</spotbugs.version>
-        <pitest.maven.plugin.version>1.30.0</pitest.maven.plugin.version>
+        <spotbugs.maven.plugin.version>4.10.5.0</spotbugs.maven.plugin.version>
+        <spotbugs.version>4.10.5</spotbugs.version>
+        <pitest.maven.plugin.version>1.30.1</pitest.maven.plugin.version>
         <pitest.junit5.plugin.version>1.2.3</pitest.junit5.plugin.version>
         <!--
           Defaults of the audit settings, so that a direct goal call without a profile (spotbugs:check,

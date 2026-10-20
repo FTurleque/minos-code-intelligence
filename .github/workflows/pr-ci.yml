@@ -18,7 +18,7 @@ concurrency:
 jobs:
   vulnerability-scan:
     name: Dependency vulnerability gate
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@8ac9e5ce44cc7178e0e04229a91bdcc003166e57 # commit sans tag, appelle osv-scanner-action v2.6.0
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a96bc4d2b09685b6142bcfe25a3dc17cb2d7347 # commit sans tag, appelle osv-scanner-action v2.6.0
     with:
       # The scanner recognises an npm lockfile by its file name (package-lock.json). The two lockfiles shipped
       # with the product are prefixed with the name of their tool, so --recursive does not see them: each is
@@ -290,7 +290,7 @@ jobs:
           fi
 
       - name: Set up Java 25
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '25'
@@ -410,7 +410,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Java 25
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '25'
