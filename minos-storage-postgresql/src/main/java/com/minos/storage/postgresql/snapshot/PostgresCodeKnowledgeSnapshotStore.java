@@ -296,7 +296,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             throws SQLException, IOException {
         Path existing = createScratchFile("snapshot-existing-");
         try {
-            String existingSha = copyStoredPayload(connection, snapshot, existing);
+            String existingSha = copyExistingPayload(connection, snapshot, existing);
             if (!existingSha.equals(new com.minos.storage.local.store.SnapshotIntegrityService().checksum(existing))) {
                 throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
             }
@@ -310,8 +310,8 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         }
     }
 
-    /** Copies the stored payload of the snapshot identity into {@code target} and returns its recorded checksum. */
-    private static String copyStoredPayload(Connection connection, CodeKnowledgeSnapshot snapshot, Path target)
+    /** Copies the stored payload of the snapshot identity into {@code target} and returns its recorded SHA-256. */
+    private static String copyExistingPayload(Connection connection, CodeKnowledgeSnapshot snapshot, Path target)
             throws SQLException, IOException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT payload, sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
@@ -392,28 +392,26 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     private Optional<Row> activeRow(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         try {
-            return connections.withConnection(connection -> readActiveRow(connection, projectId));
+            return connections.withConnection(connection -> {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT s.snapshot_id,s.payload,s.sha256 FROM knowledge_active a "
+                                + "JOIN knowledge_snapshots s "
+                                + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id "
+                                + "WHERE a.project_id=?")) {
+                    statement.setObject(1, projectId);
+                    try (ResultSet result = statement.executeQuery()) {
+                        if (!result.next()) return Optional.empty();
+                        return Optional.of(readRow(result));
+                    }
+                }
+            });
         } catch (SQLException exception) {
             throw new IOException("unable to load PostgreSQL knowledge snapshot", exception);
         }
     }
 
-    private Optional<Row> readActiveRow(Connection connection, UUID projectId) throws SQLException, IOException {
-        try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT s.snapshot_id,s.payload,s.sha256 FROM knowledge_active a "
-                        + "JOIN knowledge_snapshots s "
-                        + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id "
-                        + "WHERE a.project_id=?")) {
-            statement.setObject(1, projectId);
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) return Optional.empty();
-                return Optional.of(copyActivePayload(result));
-            }
-        }
-    }
-
-    /** Copies the payload of the current result row to a scratch file; it is hashed while it is copied. */
-    private Row copyActivePayload(ResultSet result) throws SQLException, IOException {
+    /** Copies the payload of the current row to a private scratch file, hashing it while it is copied. */
+    private Row readRow(ResultSet result) throws SQLException, IOException {
         Path payload = createScratchFile("snapshot-read-");
         // Hashed while it is copied: the payload is not read a second time to check it.
         MessageDigest digest = Sha256.newDigest();
@@ -424,8 +422,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             Files.deleteIfExists(payload);
             throw exception;
         }
-        return new Row(result.getString(1), payload, result.getString(3),
-                HexFormat.of().formatHex(digest.digest()));
+        return new Row(result.getString(1), payload, result.getString(3), HexFormat.of().formatHex(digest.digest()));
     }
 
     private Path createScratchFile(String prefix) throws IOException {

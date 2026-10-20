@@ -268,11 +268,13 @@ def main() -> int:
                 "new PostgresStorageRetentionService", "retentionService()")
         require("LocalAutonomousIndexOperations.java", indexing,
                 "application.retentionService().compact(projectId)")
-        # Two failure paths compact through compactSuppressingFailure; the two success paths go through
-        # compactAfterSuccess, whose timeout must not turn a successful index into a failure (S6).
-        if (indexing.count("compactSuppressingFailure(prepared.project().id(), ")
-                + indexing.count("compactSuppressingFailure(projectId, ")
-                + indexing.count("compactAfterSuccess(prepared.project().id())")) < 4:
+        # Two failure paths compact through compactAfterFailure (the failed run and the fingerprint publication);
+        # the two success paths go through compactAfterSuccess, whose timeout must not turn a successful index
+        # into a failure (S6).
+        # compactAfterFailure( appears once in its definition and once at each of the two failure paths.
+        if (indexing.count("void compactAfterFailure(UUID projectId, Exception failure)") != 1
+                or indexing.count("compactAfterFailure(") - 1
+                + indexing.count("compactAfterSuccess(prepared.project().id())") < 4):
             raise RuntimeError("LocalAutonomousIndexOperations.java: retention is not applied on every terminal path")
 
         # MINOS-07: no production metadata parser may bypass the bounded primitive.

@@ -142,20 +142,29 @@ public final class LocalAutonomousIndexOperations
             IndexingResumePolicy resumePolicy
     ) throws Exception {
         Prepared prepared = prepare(projectIdentifier, providerOverride, forceFull, true);
-        requireProviderRuntimesReady(prepared);
+        requireReadyRuntimes(prepared);
         if (prepared.view().mode() == IndexingMode.NONE && !forceFull) {
-            return unchangedProject(prepared, resumePolicy);
+            return noChangesView(prepared, resumePolicy);
         }
         IndexingRun run = recoverPromotedRunIfNeeded(runLifecycle(prepared, forceFull, resumePolicy));
         if (run.status() != IndexingRun.Status.SUCCEEDED) {
-            IllegalStateException failure = new IllegalStateException(failureMessage(run));
-            compactSuppressingFailure(prepared.project().id(), failure);
-            throw failure;
+            throw failedRun(prepared, run);
         }
-        return succeededRun(prepared, run);
+        ProjectFingerprint after = fingerprintService.capture(prepared.project().rootPath());
+        boolean fingerprintPromoted = prepared.fingerprintBefore().equals(after);
+        String diagnostic = null;
+        if (fingerprintPromoted) {
+            promoteFingerprint(prepared.project().id(), run.activeSnapshotAfter().orElseThrow(), after);
+        } else {
+            diagnostic = "workspace changed during indexing; fingerprint baseline was not promoted";
+        }
+        diagnostic = combineDiagnostics(diagnostic, synchronizeSemanticIfConfigured(prepared.project().id()));
+        diagnostic = combineDiagnostics(diagnostic, compactAfterSuccess(prepared.project().id()));
+        return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
+                run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic, resumeView(run));
     }
 
-    private static void requireProviderRuntimesReady(Prepared prepared) {
+    private static void requireReadyRuntimes(Prepared prepared) {
         for (ProviderView runtime : prepared.view().providerRuntimes()) {
             if (!"READY".equals(runtime.state())) {
                 throw new IllegalStateException("provider runtime is not ready: " + runtime.id()
@@ -164,8 +173,7 @@ public final class LocalAutonomousIndexOperations
         }
     }
 
-    /** Nothing changed since the active snapshot: no run, only the post-success maintenance. */
-    private IndexExecutionView unchangedProject(Prepared prepared, IndexingResumePolicy resumePolicy) {
+    private IndexExecutionView noChangesView(Prepared prepared, IndexingResumePolicy resumePolicy) {
         if (resumePolicy == IndexingResumePolicy.RESUME_ONLY) {
             throw new IllegalStateException("resume-only indexing refused: no changes to index");
         }
@@ -190,8 +198,7 @@ public final class LocalAutonomousIndexOperations
                     prepared.project().rootPath(),
                     prepared.discovery(),
                     prepared.negotiation(),
-                    resumePolicy
-            );
+                    resumePolicy);
         }
         return lifecycle.executePlanned(
                         prepared.project().id(),
@@ -199,40 +206,28 @@ public final class LocalAutonomousIndexOperations
                         prepared.discovery(),
                         prepared.negotiation(),
                         prepared.plan(),
-                        resumePolicy
-                )
+                        resumePolicy)
                 .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
     }
 
-    /** The fingerprint baseline moves to the new snapshot only when the workspace did not change meanwhile. */
-    private IndexExecutionView succeededRun(Prepared prepared, IndexingRun run) throws IOException {
-        ProjectFingerprint after = fingerprintService.capture(prepared.project().rootPath());
-        boolean fingerprintPromoted = prepared.fingerprintBefore().equals(after);
-        String diagnostic = null;
-        if (fingerprintPromoted) {
-            promoteFingerprint(prepared.project().id(), run.activeSnapshotAfter().orElseThrow(), after);
-        } else {
-            diagnostic = "workspace changed during indexing; fingerprint baseline was not promoted";
-        }
-        diagnostic = combineDiagnostics(diagnostic, synchronizeSemanticIfConfigured(prepared.project().id()));
-        diagnostic = combineDiagnostics(diagnostic, compactAfterSuccess(prepared.project().id()));
-        return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
-                run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic, resumeView(run));
+    private IllegalStateException failedRun(Prepared prepared, IndexingRun run) {
+        IllegalStateException failure = new IllegalStateException(failureMessage(run));
+        compactAfterFailure(prepared.project().id(), failure);
+        return failure;
     }
 
-    private void promoteFingerprint(UUID projectId, String activeSnapshotId, ProjectFingerprint after)
-            throws IOException {
+    void promoteFingerprint(UUID projectId, String activeSnapshotId, ProjectFingerprint after) throws IOException {
         try {
             fingerprintStore.publish(projectId, activeSnapshotId, after);
             fingerprintStore.promote(projectId, activeSnapshotId);
         } catch (IOException fingerprintFailure) {
-            compactSuppressingFailure(projectId, fingerprintFailure);
+            compactAfterFailure(projectId, fingerprintFailure);
             throw fingerprintFailure;
         }
     }
 
-    /** Retention still runs after a failure; its own failure is attached to the one being reported. */
-    private void compactSuppressingFailure(UUID projectId, Throwable failure) {
+    /** Releases what the failed run retained; a retention error is attached to the failure, never replaces it. */
+    void compactAfterFailure(UUID projectId, Exception failure) {
         try {
             application.retentionService().compact(projectId);
         } catch (IOException retentionFailure) {
