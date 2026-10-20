@@ -1,6 +1,7 @@
 package com.minos.adapter.scip.runtime.install;
 
 import com.minos.io.BoundedInputStream;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 
 import java.io.IOException;
@@ -13,7 +14,6 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Optional;
@@ -162,7 +162,7 @@ final class PinnedArtifactSource {
         MessageDigest digest = Sha256.newDigest();
         try (InputStream raw = EmbeddedToolsPayload.openNoFollow(source);
              BoundedInputStream input = new BoundedInputStream(raw, limit, "embedded tool " + label);
-             OutputStream output = Files.newOutputStream(partial, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+             OutputStream output = PrivateLocalStorage.openNewTreeFile(partial)) {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = input.read(buffer)) >= 0) {
@@ -201,7 +201,7 @@ final class PinnedArtifactSource {
         MessageDigest digest = Sha256.newDigest();
         try (InputStream body = response.body();
              BoundedInputStream bounded = new BoundedInputStream(body, maxBytes, artifact.id() + " archive");
-             OutputStream output = Files.newOutputStream(partial, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+             OutputStream output = PrivateLocalStorage.openNewTreeFile(partial)) {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = bounded.read(buffer)) >= 0) {

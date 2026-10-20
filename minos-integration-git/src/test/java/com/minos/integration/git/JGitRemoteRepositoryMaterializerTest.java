@@ -299,6 +299,18 @@ class JGitRemoteRepositoryMaterializerTest {
             AtomicInteger clones,
             JGitRemoteRepositoryMaterializer.SecretResolver secrets
     ) throws Exception {
+        return materializer(home, policy, source, clones, secrets, JGitRemoteRepositoryMaterializer.DirectoryPublisher.ATOMIC);
+    }
+
+    /** The same materializer with the publication of the cache entry replaced, to prove how it fails. */
+    static JGitRemoteRepositoryMaterializer materializer(
+            Path home,
+            RemoteRepositoryCachePolicy policy,
+            Path source,
+            AtomicInteger clones,
+            JGitRemoteRepositoryMaterializer.SecretResolver secrets,
+            JGitRemoteRepositoryMaterializer.DirectoryPublisher publisher
+    ) throws Exception {
         return new JGitRemoteRepositoryMaterializer(
                 home,
                 policy,
@@ -316,10 +328,12 @@ class JGitRemoteRepositoryMaterializerTest {
                     budget.checkpoint();
                 },
                 secrets,
-                Clock.fixed(Instant.parse("2026-07-29T00:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-07-29T00:00:00Z"), ZoneOffset.UTC),
+                JGitRemoteRepositoryMaterializer.LOCK_ACQUIRE_TIMEOUT,
+                publisher);
     }
 
-    private static Path createRepository(Path root) throws Exception {
+    static Path createRepository(Path root) throws Exception {
         Files.createDirectories(root.resolve("fixtures/java"));
         Files.writeString(root.resolve("fixtures/java/pom.xml"), "<project/>", StandardCharsets.UTF_8);
         try (Git git = Git.init().setDirectory(root.toFile()).setInitialBranch("main").call()) {
@@ -336,13 +350,13 @@ class JGitRemoteRepositoryMaterializerTest {
                 java.util.TimeZone.getTimeZone("UTC"));
     }
 
-    private static String head(Path repository) throws Exception {
+    static String head(Path repository) throws Exception {
         try (Git git = Git.open(repository.toFile())) {
             return git.getRepository().resolve("HEAD").getName();
         }
     }
 
-    private static RemoteRepositoryRequest request(String commit, String credential) {
+    static RemoteRepositoryRequest request(String commit, String credential) {
         return RemoteRepositoryRequest.of(
                 "https://github.com/acme/demo", "main", commit, "fixtures/java", credential);
     }

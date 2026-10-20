@@ -8,6 +8,7 @@ import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.CommitUncertainException;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 import com.minos.orchestration.ScipSymbolSnapshotReport;
@@ -24,7 +25,6 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.util.Collection;
@@ -35,6 +35,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /** Pont explicite entre un artefact SCIP et le snapshot persistant MINOS. */
@@ -46,6 +47,8 @@ public final class ScipSymbolSnapshotImporter {
 
     private final ScipIngestionLimits limits;
     private final Path scratchRoot;
+    private final Runnable beforeSourceOpen;
+    private final Consumer<Path> afterFrozenCreated;
 
     public ScipSymbolSnapshotImporter() {
         this(ScipIngestionLimits.DEFAULT, defaultScratchRoot());
@@ -56,8 +59,24 @@ public final class ScipSymbolSnapshotImporter {
     }
 
     ScipSymbolSnapshotImporter(ScipIngestionLimits limits, Path scratchRoot) {
+        this(limits, scratchRoot, () -> { }, created -> { });
+    }
+
+    /**
+     * Test seam, instance state: {@code beforeSourceOpen} runs after the path checks and right before the artifact is
+     * opened; {@code afterFrozenCreated} runs on the frozen file the instant after it was created and before it is
+     * written. Those are the instants a hostile process would put a link in place.
+     */
+    ScipSymbolSnapshotImporter(
+            ScipIngestionLimits limits,
+            Path scratchRoot,
+            Runnable beforeSourceOpen,
+            Consumer<Path> afterFrozenCreated
+    ) {
         this.limits = Objects.requireNonNull(limits, "limits");
         this.scratchRoot = Objects.requireNonNull(scratchRoot, "scratchRoot").toAbsolutePath().normalize();
+        this.beforeSourceOpen = Objects.requireNonNull(beforeSourceOpen, "beforeSourceOpen");
+        this.afterFrozenCreated = Objects.requireNonNull(afterFrozenCreated, "afterFrozenCreated");
     }
 
     public ScipSymbolSnapshotReport importSnapshot(
@@ -132,11 +151,10 @@ public final class ScipSymbolSnapshotImporter {
         try {
             long expectedBytes;
             String sha256;
-            try (SeekableByteChannel sourceChannel = Files.newByteChannel(
-                         source, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS));
-                 SeekableByteChannel frozenChannel = Files.newByteChannel(
-                         frozen, Set.of(StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS));
-                 OutputStream output = Channels.newOutputStream(frozenChannel)) {
+            afterFrozenCreated.accept(frozen);
+            beforeSourceOpen.run();
+            try (SeekableByteChannel sourceChannel = ConfinedFileOpener.openRegularFileNoFollowChannel(source);
+                 OutputStream output = PrivateLocalStorage.openPrivateOutputStream(frozen)) {
                 expectedBytes = sourceChannel.size();
                 if (expectedBytes < 1L || expectedBytes > limits.maxArtifactBytes()) {
                     throw new IOException("SCIP artifact size is outside configured byte limit: "

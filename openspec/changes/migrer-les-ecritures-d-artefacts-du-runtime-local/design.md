@@ -68,6 +68,13 @@ Suppression préalable conservée (`BoundedProcessOutput.java:89`, `ProcessIndex
 
 Les deux appels sont dans `MINOS_HOME` (cache) ou le dossier de sortie de l'appelant ; un déplacement non atomique d'un paquet que d'autres processus peuvent lire est un défaut. Conséquence nommée : un système de fichiers sans rename atomique fait échouer `createBundle` et `accept` (jamais observé pour un dossier sous `MINOS_HOME`).
 
+## Constat de mise en œuvre (2026-10-18)
+
+- Les journaux du provider et la copie conservée d'artefact passent par `createPrivateOutputStream` (création exclusive durcie, après suppression du nom) ; la copie du projet dans l'arbre du provider par `openNewTreeFile` ; le paquet distribué est écrit sous un nom `.bundle-<uuid>.tmp` du dossier de l'appelant par `openNewTreeFile` puis publié par `DurableAtomicFile.replace` ; l'artefact extrait du cache et le paquet n'ont plus de repli non atomique (D5) ; les deux quarantaines de répertoire (`ProcessIndexerExecutor`, `RunDirectoryRetention`) passent par `DurableAtomicFile.moveDirectory` ; le nom de la copie inter-systèmes est un UUID sans fichier temporaire.
+- Une surcharge `BoundedProcessOutput.openTarget(Path, Runnable)` (le `Runnable` s'exécute entre la suppression du nom et sa création) sert de couture de test ; elle ne garde aucun état.
+- `allowlisted-occurrences` passe de 106 à 95 : neuf entrées retirées, une reclassée (`LocalIsolatedIndexWorker`, durable), deux justifications réécrites (D1, `LinuxBubblewrapWorkerSandboxBackend`).
+- **Non fait** : la mesure 5.1 (provider sandboxé réel) ; le resserrement des copies conservées sous Windows n'est donc pas confirmé par une lecture d'ACL.
+
 ## Direction des dépendances
 
 `runtime → engine` (ADR 0022) ; `com.minos.io` est déjà importé par `DistributedArtifactBundleStore`, `ProcessIndexerExecutor` et `RunDirectoryRetention`, et le sera par `BoundedProcessOutput` (déjà : `PrivateLocalStorage`) et `ProviderWorkspaceFiles` (déjà : `ConfinedFileOpener`). Aucun package nouveau.

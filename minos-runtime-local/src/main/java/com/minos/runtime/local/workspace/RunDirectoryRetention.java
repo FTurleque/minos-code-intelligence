@@ -1,5 +1,6 @@
 package com.minos.runtime.local.workspace;
 
+import com.minos.io.DurableAtomicFile;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.FileTreeOperations;
 
@@ -11,7 +12,6 @@ import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
@@ -191,7 +191,7 @@ public final class RunDirectoryRetention {
         Path quarantine = runsRoot.resolve(QUARANTINE_DIRECTORY);
         PrivateLocalStorage.ensurePrivateDirectory(quarantine);
         Path destination = quarantine.resolve("run-" + UUID.randomUUID());
-        Files.move(target, destination, StandardCopyOption.ATOMIC_MOVE);
+        DurableAtomicFile.moveDirectory(target, destination, "run directory quarantine");
     }
 
     private static void drainQuarantine(Path runsRoot, DeletionBudget budget) {

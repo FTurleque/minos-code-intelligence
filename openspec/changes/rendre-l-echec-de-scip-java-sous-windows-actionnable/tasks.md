@@ -24,8 +24,8 @@ Ordre : lot 1 (sections 1 à 3) puis lot 2 (sections 4 et 5). Dans chaque sectio
 
 ## 5. Lot 2 : décision de qualification
 
-- [x] 5.1 ADR 0060 (statut **Proposed** : la voie de qualification reste à valider par le propriétaire) : options (a) et (b) de D4, critères (confinement inchangé, sans élévation, Windows et Linux), décision et conséquences ; index `docs/architecture/adr/README.md`.
-- [ ] 5.2 Selon l'ADR : test bout en bout sous le conteneur qui exécute un appel natif depuis PowerShell 5.1 **et** une JVM (`File.createTempFile`, initialisation de `java.security`), rouge au HEAD ; puis lever le prérequis de 4.2.
+- [x] 5.1 ADR 0060 (statut **Accepted**, voie Docker retenue) : options (a) et (b) de D4, critères (confinement inchangé, sans élévation, Windows et Linux), décision et conséquences ; index `docs/architecture/adr/README.md`.
+- [ ] 5.2 Preuve du chemin retenu : indexer un projet Java depuis un poste Windows par le runtime Docker (qualification manuelle, Docker requis), puis consigner le résultat dans `docs/user/docker-runtime.md`. Le blocage natif reste tant qu'aucun test sous AppContainer n'exécute un appel natif PowerShell 5.1 et une JVM (ADR 0060, décision 3).
 
 ## 6. Clôture
 

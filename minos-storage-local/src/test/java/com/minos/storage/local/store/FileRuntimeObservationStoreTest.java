@@ -45,6 +45,41 @@ class FileRuntimeObservationStoreTest {
                 .map(value -> value.session().sessionId()).toList());
     }
 
+    @Test
+    void aSessionPublishedMeanwhileByTheSameContentIsAnIdempotentSave(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        CorrelatedRuntimeSession session = session(projectId, "run-race", "a".repeat(64));
+        FileRuntimeObservationStore store = new FileRuntimeObservationStore(root, 10, 1_000_000L, 100_000L,
+                (temporary, target) -> {
+                    try {
+                        Files.copy(temporary, target);
+                    } catch (IOException failure) {
+                        throw new java.io.UncheckedIOException(failure);
+                    }
+                });
+
+        FileRuntimeObservationStore.SaveResult result = store.save(session);
+
+        assertTrue(result.alreadyPresent(), "the copy published first is this session");
+        assertEquals(session, result.session());
+    }
+
+    @Test
+    void aNameTakenMeanwhileByAnotherContentIsRefused(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        CorrelatedRuntimeSession session = session(projectId, "run-race", "a".repeat(64));
+        FileRuntimeObservationStore store = new FileRuntimeObservationStore(root, 10, 1_000_000L, 100_000L,
+                (temporary, target) -> {
+                    try {
+                        Files.writeString(target, "not a runtime session");
+                    } catch (IOException failure) {
+                        throw new java.io.UncheckedIOException(failure);
+                    }
+                });
+
+        assertThrows(IOException.class, () -> store.save(session));
+    }
+
     /** Le plan de requête lit les sessions sur un support qu'il ne peut pas écrire : une lecture n'écrit rien. */
     @Test
     void readsAnswerOnAWriteProtectedStoreAndLeaveItUntouched(@TempDir Path root) throws Exception {

@@ -7,12 +7,9 @@ import java.io.OutputStream;
 import java.nio.channels.Channels;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Drains child-process output completely while retaining only a bounded diagnostic prefix. */
@@ -78,6 +75,11 @@ public final class BoundedProcessOutput {
 
     /** Opens one diagnostic file without ever following an existing symbolic link. */
     static OutputStream openTarget(Path target) throws IOException {
+        return openTarget(target, () -> { });
+    }
+
+    /** {@code afterDeletion} is a test seam: it runs between the deletion of the name and its creation. */
+    static OutputStream openTarget(Path target, Runnable afterDeletion) throws IOException {
         if (target == null) return OutputStream.nullOutputStream();
         Path normalized = target.toAbsolutePath().normalize();
         Path parent = normalized.getParent();
@@ -85,12 +87,10 @@ public final class BoundedProcessOutput {
         // deleteIfExists removes a symlink entry itself rather than its target. createPrivateFile then
         // creates the file owner-only and fails if anything re-appeared under the name, which closes
         // the replacement race before an untrusted process is started by ProcessIndexerExecutor; the
-        // channel is opened NOFOLLOW so a link swapped in after the creation is refused too.
+        // stream is opened NOFOLLOW so a link swapped in after the creation is refused too.
         Files.deleteIfExists(normalized);
-        PrivateLocalStorage.createPrivateFile(normalized);
-        return Channels.newOutputStream(Files.newByteChannel(
-                normalized,
-                Set.of(StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS)));
+        afterDeletion.run();
+        return PrivateLocalStorage.createPrivateOutputStream(normalized);
     }
 
     private static void requireLimit(long maxBytesPerStream) {
