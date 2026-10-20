@@ -12,6 +12,6 @@ Ordre : rouge, correction, preuve. Exige `completer-les-primitives-d-e-s-privees
 
 ## 2. Clôture
 
-- [ ] 2.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « application et registre », partie Git close). **Faite à la clôture de la série.**
+- [x] 2.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « application et registre », partie Git close). **Faite à la clôture de la série.**
 - [x] 2.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : aucune au-delà du suivi.
 - [ ] 2.3 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-integration-git.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place. **Non rejoué en local ; à relire avec le prochain `code-audit.yml`.**
