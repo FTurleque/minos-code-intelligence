@@ -486,7 +486,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         try {
             Files.deleteIfExists(outputFile);
             try {
-                Files.deleteIfExists(outputFile.getParent());
+                Files.deleteIfExists(Objects.requireNonNull(outputFile.getParent(), "journal folder"));
             } catch (java.nio.file.DirectoryNotEmptyException stillInUse) {
                 // Another command of this process is using it: that one removes the folder when it ends.
             }

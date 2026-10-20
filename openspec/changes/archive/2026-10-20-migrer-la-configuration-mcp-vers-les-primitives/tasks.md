@@ -10,6 +10,6 @@ Ordre : rouge, correction, preuve. Aucun prérequis de série.
 
 ## 2. Clôture
 
-- [ ] 2.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « application et registre », partie `minos-app` close).
-- [ ] 2.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : aucune au-delà du suivi.
-- [ ] 2.3 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-app.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place.
+- [x] 2.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « application et registre », partie `minos-app` close). **Faite dans la PR de clôture de la migration.**
+- [x] 2.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : aucune au-delà du suivi. **Vérifié : `openspec validate --all --strict` vert.**
+- [x] 2.3 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-app.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place. **Relevé (2026-10-20) : `code-audit.yml` (SpotBugs seul) sur `develop` (run 39483649606) comparé au commit d'avant la migration (run 39484725127) : la série ajoute 2 alertes `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` (`ManagedPolyglotScipRuntimeManager`, `LocalProjectRegistry`), corrigées dans la PR de clôture, en retire 1 (`REC_CATCH_EXCEPTION` de `ProcessIndexerExecutor`) et décale 1 `ENV_USE_PROPERTY_INSTEAD_OF_ENV`. La base figée n'est pas modifiée : le reste de l'écart de `develop` à la base (22 nouvelles, 3 disparues) précède la série ou vient d'autres changements (`InMemoryIndexStateStore` `UL_UNRELEASED_LOCK`, `PostgresConnectionFactory` ×3), à traiter à part.**

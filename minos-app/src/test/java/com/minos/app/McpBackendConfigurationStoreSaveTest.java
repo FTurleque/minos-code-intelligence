@@ -1,6 +1,7 @@
 package com.minos.app;
 
 import com.minos.io.PrivateLocalStorage;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -10,6 +11,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
@@ -76,8 +78,11 @@ class McpBackendConfigurationStoreSaveTest {
     void anExistingPermissiveFileIsHardenedByTheReplacement(@TempDir Path home) throws Exception {
         McpBackendConfigurationStore store = new McpBackendConfigurationStore(home);
         store.save(configuration("first"));
-        // A file made by an older MINOS, readable beyond its owner: saving makes it owner-only again.
-        PrivateLocalStorage.hardenExistingFile(store.file());
+        // A file made by an older MINOS, readable beyond its owner (POSIX: 0644).
+        Assumptions.assumeTrue(Files.getFileStore(store.file()).supportsFileAttributeView("posix"),
+                "widening the access of a file needs POSIX permissions");
+        Files.setPosixFilePermissions(store.file(), PosixFilePermissions.fromString("rw-r--r--"));
+        assertEquals(PrivateLocalStorage.Privacy.EXPOSED, PrivateLocalStorage.privacyOf(store.file()));
 
         store.save(configuration("second"));
 
