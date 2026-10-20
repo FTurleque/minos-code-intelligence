@@ -104,7 +104,7 @@ Les cinq changements du sprint 8 (« confinement et E/S privées ») sont **fusi
 - **Ouverture confinée** : `ConfinedFileOpener` ne garde plus de crochet de test statique ; l'étape est un paramètre de surcharges de paquet.
 - **Suivi des descendants** : sondage toutes les 10 ms pendant la première seconde, puis toutes les 100 ms, dans le runtime local et le plugin IntelliJ. Gain mesuré : 4,6 fois moins d'énumérations sous Linux (conteneur), 2,9 fois sous Windows, l'énumération coûtant 14 à 34 ms.
 
-Reste : la migration des écritures brutes inscrites (lots à ouvrir) et le nombre d'objets durcis pendant une indexation réelle. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
+Reste : deux PR de la migration des écritures brutes (#508 et #509, décisions en attente) et le nombre d'objets durcis pendant une indexation réelle. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 
 ## État produit
 
