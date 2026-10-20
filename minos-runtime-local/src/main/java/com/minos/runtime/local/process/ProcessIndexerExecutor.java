@@ -197,7 +197,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
             ProcessPlanTransformer transformer,
             IndexingExecutionRequest request,
             RunFiles files
-    ) throws Exception {
+    ) throws IOException, InterruptedException {
         Process process = running.process();
         OutputStream metadataSink = running.metadataSink();
         boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
