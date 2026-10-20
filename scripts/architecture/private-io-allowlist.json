@@ -108,12 +108,6 @@
     "justification": "Journal serveur du plan de contrôle hébergé : l'échec de chaînage d'un refus garde sa cause pour l'opérateur ; à revoir avec le lot hébergé."
   },
   {
-    "file": "minos-app/src/main/java/com/minos/app/McpBackendConfigurationStore.java",
-    "method": "Files.newBufferedWriter",
-    "max": 1,
-    "justification": "Écriture, copie ou déplacement brut de fichier hors des primitives ; à migrer vers PrivateLocalStorage / DurableAtomicFile, lot de migration « application et registre »."
-  },
-  {
     "file": "minos-application/src/main/java/com/minos/application/LocalProjectOperations.java",
     "method": "Files.newOutputStream",
     "max": 1,

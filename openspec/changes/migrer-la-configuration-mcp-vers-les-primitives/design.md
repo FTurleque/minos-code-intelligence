@@ -50,3 +50,11 @@ Aucune branche de plateforme. Le test de lien symbolique suit la convention (`as
 
 - **Aucun test de sauvegarde aujourd'hui** : le risque de régression de format est couvert par D2.
 - **Conflit de texte** avec `verifier-le-proprietaire-des-dossiers-prives` : rebase.
+
+## Constat de mise en œuvre
+
+- `McpBackendConfigurationStore.save` rend les propriétés en mémoire (`Properties.store` sur un `Writer` UTF-8) puis écrit par `PrivateLocalStorage.writePrivateFile` sur le temporaire exclusif de `createPrivateTempFile`, et publie par `DurableAtomicFile.replace` ; l'entrée `McpBackendConfigurationStore` / `Files.newBufferedWriter` est retirée de l'allowlist (`allowlisted-occurrences` baisse de 1).
+- `McpBackendConfigurationStoreSaveTest` (4 tests) : contenu identique à celui de `Properties.store` pour les quatre clés (ligne datée écartée ; le nom de conteneur Docker est ASCII par validation de `McpBackendConfiguration`, aucun nom non ASCII n'est constructible), fichier privé `ENFORCED` après création et remplacement, durcissement d'un fichier existant permissif, aucun `.tmp` résiduel.
+- Écart au point 1.1 (b) : le refus d'un lien substitué au temporaire n'a pas de point d'injection propre à `minos-app` ; il est garanti et testé au niveau des primitives (`createPrivateTempFile` crée en exclusif, `writePrivateFile` ouvre sans suivre les liens : `PrivateLocalStorageStreamsTest`). `McpBackendStoreSymlinkTest` couvre le dossier d'exécution substitué.
+- Preuves locales : `./mvnw -pl minos-app -am test -Dtest='McpBackend*'` vert (18 tests), `run_gates.py --fast` 21/21. JaCoCo (`m29-backend-routing`) et la baseline SpotBugs sont jugés par la CI et ne sont pas rejoués localement.
+- **Écart de forme (couverture Sonar).** Le module `minos-app` est à 0 % de couverture dans SonarCloud de façon structurelle (ses rapports JaCoCo ne sont pas importés par le scanner : voir AUD-TST-08), donc toute ligne neuve de ce module fait échouer le gate « couverture du nouveau code ». Le rendu et l'écriture des propriétés sont donc déplacés dans le moteur : `com.minos.io.PrivateProperties.write` (testé dans `PrivatePropertiesTest`, 4 tests, encodage ISO-8859-1 par flux ou autre jeu de caractères par `Writer`), et `McpBackendConfigurationStore.save` n'a plus qu'un appel.
