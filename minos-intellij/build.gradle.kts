@@ -66,6 +66,9 @@ dependencies {
 
     intellijPlatform {
         intellijIdea("2026.1")
+        // Pinned: the verifier is otherwise resolved to the latest release, which the dependency verification
+        // metadata does not know until it is reviewed (1.411 appeared on Maven Central on 2026-10-19).
+        pluginVerifier("1.410")
     }
 }
 

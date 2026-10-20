@@ -22,6 +22,6 @@ Ordre dans chaque section : rouge, correction, preuve. Chaque tâche retire son 
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « runtime local », partie Windows close ; mesures D3). **Faite à la clôture de la série.**
+- [x] 4.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « runtime local », partie Windows close ; mesures D3). **Faite à la clôture de la série.**
 - [x] 4.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : aucune au-delà du suivi.
 - [ ] 4.3 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-runtime-local.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place. **Non rejoué en local ; à relire avec le prochain `code-audit.yml`.**

@@ -829,19 +829,26 @@ public final class PrivateLocalStorage {
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start();
+            awaitSuccess(process, "cannot protect private storage from inheritance");
+        }
+
+        /**
+         * Waits a bounded time for an {@code icacls} child to end and fails the call unless it exits with 0. The
+         * child is killed on a timeout or an interruption; the refusal names the operation, never the child output.
+         */
+        private static void awaitSuccess(Process process, String refusal) throws IOException {
             try {
                 if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                     process.destroyForcibly();
-                    throw new IOException("cannot protect private storage from inheritance: timed out");
+                    throw new IOException(refusal + ": timed out");
                 }
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 process.destroyForcibly();
                 Thread.currentThread().interrupt();
-                throw new IOException("cannot protect private storage from inheritance: interrupted");
+                throw new IOException(refusal + ": interrupted");
             }
             if (process.exitValue() != 0) {
-                throw new IOException("cannot protect private storage from inheritance (exit "
-                        + process.exitValue() + ")");
+                throw new IOException(refusal + " (exit " + process.exitValue() + ")");
             }
         }
 
@@ -881,20 +888,7 @@ public final class PrivateLocalStorage {
                 Process process = launcher.start(List.of(
                         Path.of(systemRoot, "System32", "icacls.exe").toString(), path, "/save", saved.toString(),
                         "/L", "/q"));
-                try {
-                    if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                        process.destroyForcibly();
-                        throw new IOException("cannot read the access rules of private storage: timed out");
-                    }
-                } catch (InterruptedException _) {
-                    process.destroyForcibly();
-                    Thread.currentThread().interrupt();
-                    throw new IOException("cannot read the access rules of private storage: interrupted");
-                }
-                if (process.exitValue() != 0) {
-                    throw new IOException("cannot read the access rules of private storage (exit "
-                            + process.exitValue() + ")");
-                }
+                awaitSuccess(process, "cannot read the access rules of private storage");
                 String text = new String(Files.readAllBytes(saved), java.nio.charset.StandardCharsets.UTF_16LE);
                 String byteOrderMark = String.valueOf((char) 0xFEFF);
                 if (text.lines().map(line -> line.replace(byteOrderMark, "")).noneMatch(line -> line.startsWith("D:"))) {
