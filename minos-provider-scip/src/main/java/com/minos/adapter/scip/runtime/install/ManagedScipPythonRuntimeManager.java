@@ -1,6 +1,7 @@
 package com.minos.adapter.scip.runtime.install;
 
 import com.minos.adapter.scip.runtime.plan.ScipPythonProcessPlanFactory;
+import com.minos.io.DurableAtomicFile;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.io.FileTreeOperations;
@@ -17,7 +18,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -147,7 +147,7 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
                         WINDOWS_COMPATIBILITY_SOURCE.getBytes(StandardCharsets.UTF_8));
             }
             deleteRecursively(destination);
-            move(partial, destination);
+            moveDirectory(partial, destination);
         } finally {
             deleteRecursively(partial);
         }
@@ -279,8 +279,8 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         FileTreeOperations.deleteRecursively(path);
     }
 
-    private static void move(Path source, Path target) throws IOException {
+    static void moveDirectory(Path source, Path target) throws IOException {
         PrivateLocalStorage.ensurePrivateDirectory(target.toAbsolutePath().normalize().getParent());
-        Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+        DurableAtomicFile.moveDirectory(source, target, "managed Python runtime installation");
     }
 }
