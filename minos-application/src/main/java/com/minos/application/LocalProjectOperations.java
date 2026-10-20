@@ -17,12 +17,11 @@ import com.minos.registry.RegisteredProject;
 import com.minos.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -132,7 +131,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         CommitOutcome commitOutcome = saveCommittedState(
                 committedState, snapshotDurabilityPending, report.commitDiagnostic());
         try {
-            writeHistory(project.id(), new IndexHistory(
+            writeHistory(historyDirectory, project.id(), new IndexHistory(
                     effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
         } catch (IOException failure) {
             // CLI history is secondary evidence. The active snapshot remains authoritative, so the import
@@ -198,7 +197,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                 view.lastSuccessfulIndexAt(), view.providerId(), view.providerVersion());
     }
 
-    private void writeHistory(UUID projectId, IndexHistory history) throws IOException {
+    static void writeHistory(Path historyDirectory, UUID projectId, IndexHistory history) throws IOException {
         DurableAtomicFile.ensureDirectory(historyDirectory, "CLI import history directory");
         Path target = historyDirectory.resolve(projectId + ".properties");
         Path temporary = PrivateLocalStorage.createPrivateTempFile(historyDirectory, projectId + ".", ".tmp");
@@ -208,10 +207,9 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         properties.setProperty("providerVersion", history.providerVersion() == null ? "" : history.providerVersion());
         properties.setProperty("completedAt", history.completedAt().toString());
         try {
-            try (OutputStream output = Files.newOutputStream(
-                    temporary, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
-                properties.store(output, "MINOS project index history");
-            }
+            ByteArrayOutputStream content = new ByteArrayOutputStream();
+            properties.store(content, "MINOS project index history");
+            PrivateLocalStorage.writePrivateFile(temporary, content.toByteArray());
             DurableAtomicFile.replace(temporary, target, "CLI import history replacement");
         } finally {
             Files.deleteIfExists(temporary);
@@ -226,8 +224,8 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         }
     }
 
-    private record IndexHistory(String snapshotId, String providerId, String providerVersion, Instant completedAt) {
-        private IndexHistory {
+    record IndexHistory(String snapshotId, String providerId, String providerVersion, Instant completedAt) {
+        IndexHistory {
             if (snapshotId == null || snapshotId.isBlank()) throw new IllegalArgumentException("snapshotId must not be blank");
             ProviderId.require(providerId);
             Objects.requireNonNull(completedAt, "completedAt");

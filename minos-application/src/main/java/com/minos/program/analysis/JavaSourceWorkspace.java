@@ -1,6 +1,7 @@
 package com.minos.program.analysis;
 
 import com.minos.io.BoundedInputStream;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.domain.Symbol;
 import com.minos.io.Sha256;
 import com.minos.registry.RegisteredProject;
@@ -11,7 +12,6 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
-import java.nio.file.OpenOption;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -113,7 +113,7 @@ final class JavaSourceWorkspace {
         if (config.isPresent()) {
             update(digest, JavaSourceProgramGraphProvider.SECURITY_CONFIG);
             updateBounded(digest, config.orElseThrow(), MAX_SECURITY_CONFIG_BYTES,
-                    "Java security config fingerprint", LinkOption.NOFOLLOW_LINKS);
+                    "Java security config fingerprint");
         }
         return Sha256.hex(digest);
     }
@@ -140,14 +140,10 @@ final class JavaSourceWorkspace {
         return Optional.of(real);
     }
 
-    private static void updateBounded(
-            MessageDigest digest,
-            Path file,
-            long maximum,
-            String boundary,
-            OpenOption... options
-    ) throws IOException {
-        try (InputStream input = new BoundedInputStream(Files.newInputStream(file, options), maximum, boundary)) {
+    /** Package-private for tests: the leaf is opened without following a link (it is never a link after resolution). */
+    static void updateBounded(MessageDigest digest, Path file, long maximum, String boundary) throws IOException {
+        try (InputStream input = new BoundedInputStream(
+                ConfinedFileOpener.openRegularFileNoFollow(file), maximum, boundary)) {
             byte[] buffer = new byte[8192];
             int read;
             while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
