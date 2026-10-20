@@ -19,6 +19,6 @@ Ordre : rouge, correction, preuve. Exige `completer-les-primitives-d-e-s-privees
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « providers SCIP », partie ingestion close). **Faite à la clôture de la série.**
+- [x] 4.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (lot « providers SCIP », partie ingestion close). **Faite à la clôture de la série.**
 - [x] 4.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : aucune au-delà du suivi.
 - [ ] 4.3 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-provider-scip.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place. **Non rejoué en local ; à relire avec le prochain `code-audit.yml`.**

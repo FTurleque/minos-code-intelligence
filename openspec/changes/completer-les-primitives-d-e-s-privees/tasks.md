@@ -35,7 +35,7 @@ Ordre dans chaque section : rouge, correction, preuve. Les tests vivent dans `mi
 ## 6. Clôture
 
 - [x] 6.1 Relire les maxima de `PrivateLocalStorage` dans `private-io-allowlist.json` : inchangés (D4). Sinon, consigner la décision dans `design.md` avant de fusionner.
-- [ ] 6.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (section « Migration des écritures brutes » : primitives livrées, lot « moteur » clos, 43 entrées restantes). **Faite à la clôture de la série.**
+- [x] 6.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (section « Migration des écritures brutes » : primitives livrées, lot « moteur » clos, 43 entrées restantes). **Faite à la clôture de la série.**
 - [x] 6.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/developer/quality-gates.md`, `.claude/rules/java-production.md`.
 - [ ] 6.4 Baseline SpotBugs : relire `quality/spotbugs-baseline/minos-engine.xml` pour les méthodes réécrites (comparaison par `instanceHash` dans `code-audit.yml`, qui n'est pas un check exigé) ; régénérer la baseline si une entrée disparaît ou change de place. **Non rejoué en local : `BoundedFileDigest.sha256Exact` change (sa seule instruction de lecture) ; à relire avec le prochain `code-audit.yml`.**
 - [x] 6.5 Le hook `.claude/hooks/guard_paths.py` (règle `ASK_RULES`) demande une confirmation pour toute modification de `scripts/architecture/private-io-allowlist.json` : à prévoir à chaque tâche qui retire une entrée, dans ce changement comme dans les neuf autres.

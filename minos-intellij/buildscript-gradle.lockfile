@@ -1,15 +1,15 @@
 # This is a Gradle generated file for dependency locking.
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
-com.fasterxml.jackson.core:jackson-annotations:2.21=classpath
-com.fasterxml.jackson.core:jackson-core:2.21.7=classpath
-com.fasterxml.jackson.core:jackson-databind:2.21.7=classpath
-com.fasterxml.jackson.module:jackson-module-kotlin:2.21.7=classpath
-com.fasterxml.jackson:jackson-bom:2.21.7=classpath
+com.fasterxml.jackson.core:jackson-annotations:2.22=classpath
+com.fasterxml.jackson.core:jackson-core:2.22.3=classpath
+com.fasterxml.jackson.core:jackson-databind:2.22.3=classpath
+com.fasterxml.jackson.module:jackson-module-kotlin:2.22.3=classpath
+com.fasterxml.jackson:jackson-bom:2.22.3=classpath
 com.fasterxml.woodstox:woodstox-core:7.1.0=classpath
 com.github.ben-manes.caffeine:caffeine:3.2.4=classpath
-com.github.spotbugs.snom:spotbugs-gradle-plugin:6.5.12=classpath
-com.github.spotbugs:com.github.spotbugs.gradle.plugin:6.5.12=classpath
+com.github.spotbugs.snom:spotbugs-gradle-plugin:6.5.13=classpath
+com.github.spotbugs:com.github.spotbugs.gradle.plugin:6.5.13=classpath
 com.google.errorprone:error_prone_annotations:2.49.0=classpath
 com.googlecode.plist:dd-plist:1.30=classpath
 com.squareup.okhttp3:okhttp:4.12.0=classpath
