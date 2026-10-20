@@ -35,8 +35,8 @@ Remaniement **à comportement constant**, par extraction de classes de premier n
 
 ## Hors périmètre
 
-- Tout seuil de taille de fichier ou de méthode dans un gate, un Checkstyle ou SonarCloud : l'audit du 10 octobre 2026 exclut les seuils bloquants (AUD-QUA-07), et ajouter un gate de taille est une décision séparée (voir `design.md`, question ouverte Q1).
-- L'extraction de l'acquisition épinglée de Coursier, Maven et Node (~125 lignes), couverte à 11 % : elle commence par des tests et fait l'objet d'un changement ultérieur (`design.md` D7). L'extraction de l'amorçage depuis la charge utile embarquée (~190 lignes, couverte à 81 %) est une option soumise au propriétaire (`design.md` Q2), non retenue par défaut.
+- Tout seuil de taille de fichier ou de méthode dans un gate, un Checkstyle ou SonarCloud : l'audit du 10 octobre 2026 exclut les seuils bloquants (AUD-QUA-07), et ajouter un gate de taille est une décision séparée (voir `design.md`, décision Q1 : non).
+- L'extraction de l'acquisition épinglée de Coursier, Maven et Node (~125 lignes), couverte à 11 % : elle commence par des tests et fait l'objet d'un changement ultérieur (`design.md` D7). L'extraction de l'amorçage depuis la charge utile embarquée (~190 lignes, couverte à 81 %) est une option soumise au propriétaire (`design.md`, décision Q2 : dans un changement suivant).
 - `ManagedPolyglotScipRuntimeManager` (564 lignes) et `ManagedScipPythonRuntimeManager` (286 lignes), qui dupliquent `run` et `moveDirectory` : aucune unification ici.
 - Toute modification de comportement, de message d'erreur, d'ordre d'effets, de format de fichier ou de surface publique.
 - La résolution du conflit de fusion entre les deux branches `refactor/*` du superviseur et `develop` : elle est une condition préalable (voir ci-dessous), pas un livrable.

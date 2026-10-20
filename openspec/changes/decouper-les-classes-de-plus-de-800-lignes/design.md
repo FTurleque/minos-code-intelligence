@@ -119,7 +119,7 @@ Toutes dans le package et le module actuels :
 
 `list`, `inspect`, `install`, `executor`, les constantes publiques (`SCIP_*`), `SANDBOXED_EXECUTION_NOT_QUALIFIED` et les diagnostics de prérequis restent sur le manager. Les trois classes sont `final`, de visibilité de package, à constructeur privé ; ce sont des regroupements de fonctions, pas des surfaces au sens de l'ADR 0045.
 
-### D4. `CapabilityProbe` devient un type de premier niveau (question Q3)
+### D4. `CapabilityProbe` devient un type de premier niveau (décidé : oui)
 
 C'est le seul déplacement qui touche des fichiers d'un autre module (`MinosApplicationTest` dans `minos-bootstrap`) : un changement de nom de type dans des tests, pas dans la surface de production. Recommandation : le faire, parce qu'il ôte du code **de test** d'une classe **de production** et fait descendre `PRIVATE` à ~715 lignes. Sans lui : ~775, au-dessus de la marge utile.
 
@@ -167,8 +167,8 @@ Sans objet : aucune capacité ajoutée, modifiée ni requalifiée. `PrivateLocal
 - **Conflit avec la série de migration des écritures brutes** : voir « Recouvrements » ; un conflit sur `private-io-allowlist.json` se résout en gardant les deux effets.
 - **Gain** : si, à la lecture sur le `develop` réel (1.1), une extraction ne retire pas les lignes annoncées, le dire et ne pas la faire.
 
-## Questions ouvertes (décisions du propriétaire)
+## Décisions du propriétaire (2026-10-20)
 
-- **Q1.** Ajouter un cliquet de taille de fichier (liste nominative, `max` par fichier) pour que le seuil de 800 lignes cesse d'être celui du seul superviseur ? Recommandation : non dans ce changement. L'audit du 10 octobre 2026 exclut les seuils bloquants ; si le propriétaire le veut, c'est un changement à part qui commence par mesurer tous les fichiers au-dessus du seuil.
-- **Q2.** L'amorçage depuis la charge utile (D7, −191 lignes, 81 % de couverture mesurée) entre-t-il dans ce changement ou dans un suivant ? Recommandation : dans un suivant, avec l'acquisition. `MANAGER` à ~765 lignes est conforme au seuil, mais avec une marge mince (~35 lignes) : si le propriétaire tient à une marge confortable, l'amorçage est la seule coupe restante à ce prix. Elle est la plus couplée, et sa couverture, juste au-dessus de 80 %, laisse peu de marge à la PR.
-- **Q3.** Extraire `CapabilityProbe` en type public de premier niveau (D4) ? Recommandation : oui.
+- **Q1 — cliquet de taille de fichier : non.** Aucun gate de taille n'est ajouté ; le seuil de 800 lignes reste celui du superviseur. Un tel gate serait un changement à part, qui commencerait par mesurer tous les fichiers au-dessus du seuil.
+- **Q2 — amorçage depuis la charge utile : dans un changement suivant**, avec l'acquisition de Coursier, Maven et Node (qui commence par des tests). Ce changement-ci laisse `MANAGER` à ~765 lignes (marge ~35 lignes).
+- **Q3 — `CapabilityProbe` en type public de premier niveau : oui** (D4).
