@@ -497,9 +497,9 @@ def check_runtime_local_exports(root: Path = ROOT, group_id: str | None = None,
     return len(exported)
 
 
-# A16 / AUD-QUA-02 — a public production type is used by production, or declared. Numbered after A11-A14 (reserved
-# by figer-la-dette-de-frontieres-par-des-cliquets) and A15 (two-argument ServiceLoader rule of
-# decouvrir-les-fournisseurs-par-chargeur-explicite). Each entry names one top-level public type of a reactor
+# A15 / AUD-QUA-02 — a public production type is used by production, or declared. Numbered after A11-A14 (reserved
+# by figer-la-dette-de-frontieres-par-des-cliquets); A15 is the two-argument ServiceLoader rule of
+# decouvrir-les-fournisseurs-par-chargeur-explicite. Each entry names one top-level public type of a reactor
 # src/main (module/package.Type) with the reason it has no production caller. The list is a ratchet: an entry whose
 # type is gone, or is now named by production, fails the guard.
 UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
@@ -609,14 +609,14 @@ def unreferenced_production_types(root: Path = ROOT) -> dict[str, str]:
 
 def check_unreferenced_production_types(root: Path = ROOT,
                                         declared: dict[str, str] = UNREFERENCED_PRODUCTION_TYPES) -> int:
-    """A16 — every top-level public type of a reactor src/main is named by production, or listed with a reason."""
+    """A15 — every top-level public type of a reactor src/main is named by production, or listed with a reason."""
     unreasoned = sorted(entry for entry, reason in declared.items() if not reason.strip())
     if unreasoned:
-        fail("A16 UNREFERENCED_PRODUCTION_TYPES entries need a written reason: " + ", ".join(unreasoned))
+        fail("A15 UNREFERENCED_PRODUCTION_TYPES entries need a written reason: " + ", ".join(unreasoned))
     found = unreferenced_production_types(root)
     undeclared = sorted(entry for entry in found if entry not in declared)
     if undeclared:
-        fail("A16 public production types without a production caller (delete them, move them to tests, or list "
+        fail("A15 public production types without a production caller (delete them, move them to tests, or list "
              "them in UNREFERENCED_PRODUCTION_TYPES with a reason): " + ", ".join(undeclared))
     existing = set()
     for module, source in production_sources(root):
@@ -624,11 +624,11 @@ def check_unreferenced_production_types(root: Path = ROOT,
         existing.add(f"{module}/{match.group(1) if match else ''}.{source.stem}")
     stale = sorted(entry for entry in declared if entry not in existing)
     if stale:
-        fail("A16 UNREFERENCED_PRODUCTION_TYPES is a ratchet: these types no longer exist, remove the entries: "
+        fail("A15 UNREFERENCED_PRODUCTION_TYPES is a ratchet: these types no longer exist, remove the entries: "
              + ", ".join(stale))
     useless = sorted(entry for entry in declared if entry in existing and entry not in found)
     if useless:
-        fail("A16 UNREFERENCED_PRODUCTION_TYPES is a ratchet: production now names these types, remove the "
+        fail("A15 UNREFERENCED_PRODUCTION_TYPES is a ratchet: production now names these types, remove the "
              "entries: " + ", ".join(useless))
     return len(declared)
 
@@ -1058,7 +1058,7 @@ def main() -> int:
         print(f"A9 architecture document: {documented} module sections match the POM dependencies")
         print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
               f"modules, none other is")
-        print(f"A16 unreferenced production types: {unreferenced} listed in UNREFERENCED_PRODUCTION_TYPES, "
+        print(f"A15 unreferenced production types: {unreferenced} listed in UNREFERENCED_PRODUCTION_TYPES, "
               f"every other public type is named by production")
         print(
             f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "

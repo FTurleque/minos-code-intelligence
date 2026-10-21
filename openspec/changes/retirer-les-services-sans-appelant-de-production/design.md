@@ -72,7 +72,7 @@ Le tableau de recommandations est retenu tel quel :
 - **`InterproceduralFlowService`** : un seul test (parcours borné, cycle signalé) ; aucune surface ne l'expose.
 - **`ProgramGraphEvaluator`**, **`SemanticSearchEvaluator`** : outils de mesure de vérité terrain des tests ; **`NexusSemanticSignalService`** : un test de contrat dans `minos-nexus`.
 
-#### Relevé 1.2 (règle A16 appliquée au HEAD après les suppressions)
+#### Relevé 1.2 (règle A15 appliquée au HEAD après les suppressions)
 
 Types publics de premier niveau sans référence de production : **12** avec les exemptions par règle (`minos-api` 4, `minos-application` 2, `minos-engine` 4, `minos-nexus` 1, `minos-storage-local` 1), **20** sans elles (8 de plus, tous exemptés par une méthode `main` ou un fichier `META-INF/services` : `minos-app` 2, `minos-bootstrap` 1, `minos-cli` 1, `minos-mcp` 1, `minos-provider-scip` 1, `minos-runtime-local` 1, `minos-storage-postgresql` 1). Hors D1 : les quatre façades `Local*Api` de `minos-api` (points d'entrée publics, inscrits un par un : la liste reste courte, pas d'exemption par module), `StorageBackends` (façade d'ADR 0042), `InMemoryIndexStateStore` (utilisée par les seuls tests de cinq modules ; la déplacer demanderait un test-jar, hors lot). `CodeKnowledgeSnapshotBinaryCodec`, `HostedAvailabilityPort`, `HostedTransportSecurityPort` sont bien dans le cas.
 
@@ -85,7 +85,7 @@ Une règle du garde de frontières (`scripts/architecture/check-module-boundarie
 
 La liste est un **cliquet**, comme A8 et A10 : une entrée dont la classe a disparu ou a gagné un appelant fait échouer le garde, de sorte qu'elle ne peut que rétrécir. Les types publics de `minos-api` y entrent en bloc par leur module seulement si la tâche 1.2 montre qu'une liste nominative serait trop longue pour être relue ; ce choix est consigné.
 
-**Numéro retenu : A16.** A11 à A14 sont réservés par `figer-la-dette-de-frontieres-par-des-cliquets` ; la règle « `ServiceLoader.load` à deux arguments » de `decouvrir-les-fournisseurs-par-chargeur-explicite`, écrite en parallèle, prend vraisemblablement A15. Si elle prend un autre numéro, renuméroter à la fusion (littéraux `A16` du script, de son auto-test et de `docs/developer/quality-gates.md`).
+**Numéro retenu : A15.** A11 à A14 sont réservés par `figer-la-dette-de-frontieres-par-des-cliquets` ; A15 est la règle « `ServiceLoader.load` à deux arguments » de `decouvrir-les-fournisseurs-par-chargeur-explicite`.
 
 ### D3. Les gates suivent dans la même tâche
 

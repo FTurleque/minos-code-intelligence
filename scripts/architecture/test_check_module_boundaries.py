@@ -974,7 +974,7 @@ class MainWiringTest(unittest.TestCase):
 
 
 class UnreferencedProductionTypeRuleTest(unittest.TestCase):
-    """A16: a public production type is named by production, exempted by rule, or listed with a reason."""
+    """A15: a public production type is named by production, exempted by rule, or listed with a reason."""
 
     def setUp(self):
         self.root = Path(tempfile.mkdtemp(prefix="minos-a16-"))
@@ -996,20 +996,20 @@ class UnreferencedProductionTypeRuleTest(unittest.TestCase):
 
     def test_public_class_without_caller_is_refused(self):
         self.write("minos-engine", "main", "com.minos.a", "Orphan", "public final class Orphan { }")
-        with self.assertRaisesRegex(RuntimeError, r"A16 .*minos-engine/com\.minos\.a\.Orphan"):
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*minos-engine/com\.minos\.a\.Orphan"):
             self.check()
 
     def test_class_named_only_by_a_test_is_refused(self):
         self.write("minos-engine", "main", "com.minos.a", "Orphan", "public final class Orphan { }")
         self.write("minos-engine", "test", "com.minos.a", "OrphanTest", "class OrphanTest { Orphan orphan; }")
-        with self.assertRaisesRegex(RuntimeError, r"A16 .*Orphan"):
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*Orphan"):
             self.check()
 
     def test_name_in_a_comment_or_string_does_not_count(self):
         self.write("minos-engine", "main", "com.minos.a", "Orphan", "public final class Orphan { }")
         self.write("minos-engine", "main", "com.minos.a", "Talker",
                    "final class Talker { // Orphan\n String s = \"Orphan\"; }")
-        with self.assertRaisesRegex(RuntimeError, r"A16 .*Orphan"):
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*Orphan"):
             self.check()
 
     def test_service_registered_class_is_accepted(self):
@@ -1029,16 +1029,16 @@ class UnreferencedProductionTypeRuleTest(unittest.TestCase):
         self.assertEqual(1, self.check({"minos-nexus/com.minos.n.Surface": "public surface"}))
 
     def test_stale_entry_is_refused(self):
-        with self.assertRaisesRegex(RuntimeError, r"A16 .*no longer exist.*com\.minos\.a\.Gone"):
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*no longer exist.*com\.minos\.a\.Gone"):
             self.check({"minos-engine/com.minos.a.Gone": "deleted class"})
 
     def test_entry_whose_type_gained_a_caller_is_refused(self):
-        with self.assertRaisesRegex(RuntimeError, r"A16 .*production now names.*com\.minos\.a\.Used"):
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*production now names.*com\.minos\.a\.Used"):
             self.check({"minos-engine/com.minos.a.Used": "was unused"})
 
     def test_entry_without_reason_is_refused(self):
         self.write("minos-nexus", "main", "com.minos.n", "Surface", "public final class Surface { }")
-        with self.assertRaisesRegex(RuntimeError, r"A16 .*reason.*com\.minos\.n\.Surface"):
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*reason.*com\.minos\.n\.Surface"):
             self.check({"minos-nexus/com.minos.n.Surface": "  "})
 
     def test_repository_list_matches_the_head(self):
