@@ -72,3 +72,15 @@ Le fournisseur d'identité n'est consulté que lorsque ni `fileKey()` ni `unix:d
 - Tests cassés par le refus des doublons : établi en 1.1 ; le correctif attendu est de test (un seul fournisseur `postgresql` visible par module), pas d'assouplir la règle.
 - Un hôte qui comptait, sans le savoir, sur le chargeur de contexte pour **ajouter** un fournisseur ne le verra plus : non supporté, à écrire dans l'ADR 0042.
 - Le message de doublon est nouveau pour un client strict : il n'apparaît que dans une configuration aujourd'hui arbitraire.
+
+## Relevé d'exécution (tâche 1.1, 2026-10-21)
+
+`mvnw dependency:list -DincludeArtifactIds=minos-storage-postgresql` sur `minos-api`, `minos-cli`, `minos-mcp`, `minos-bootstrap`, `minos-app` :
+
+- `minos-api`, `minos-cli`, `minos-mcp` : **aucun** artefact `minos-storage-postgresql` (la dépendance de `minos-bootstrap` vers lui est de portée `test`, non transitive) ; seul le double `CloseCountingStorageProvider` y est déclaré.
+- `minos-bootstrap` : `minos-storage-postgresql` en portée `test` (jar et test-jar) ; aucun fichier de service de test, donc seul le vrai fournisseur.
+- `minos-app` : `minos-storage-postgresql` en portée `compile` ; aucun fichier de service de test.
+
+Aucun module ne voit deux fournisseurs `postgresql` : aucun test ne dépendait de « le premier gagne », aucun correctif de test n'a été nécessaire. Le fournisseur d'identité de chemin n'est déclaré que par `minos-runtime-local`.
+
+JAR ombré (`target/minos-code-intelligence-1.3.0-SNAPSHOT-all.jar`, produit par `mvnw -pl minos-app -am verify`) : `META-INF/services/com.minos.storage.StorageBackendProvider` contient `com.minos.storage.postgresql.PostgresStorageBackendProvider` et `META-INF/services/com.minos.orchestration.ExecutionPathIdentityProvider` contient `com.minos.runtime.local.sandbox.WindowsExecutionPathIdentityProvider`, un fournisseur chacun. La découverte dans un hôte qui exécute ce JAR n'a pas été observée.
