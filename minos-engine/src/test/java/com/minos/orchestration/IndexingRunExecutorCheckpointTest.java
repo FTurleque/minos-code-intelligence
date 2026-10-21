@@ -140,6 +140,34 @@ class IndexingRunExecutorCheckpointTest {
     }
 
     @Test
+    void theRootScopeHoldsTheReferenceFingerprintWhenItsCaptureRulesAreProvedEqual(@TempDir Path temp)
+            throws Exception {
+        Path root = project(temp);
+        Path artifact = Files.writeString(temp.resolve("root.scip"), "root");
+        UUID projectId = UUID.randomUUID();
+        InMemoryIndexStateStore store = new InMemoryIndexStateStore();
+        store.saveProjectState(new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
+                Optional.of("snapshot-old"), Optional.empty(), Instant.EPOCH, Optional.of("baseline")));
+        IndexingLifecycleService lifecycle = lifecycle(store, rootExecutor(artifact));
+        IndexerNegotiationResult negotiation = negotiation(true);
+        IncrementalIndexingPlan plan = new IncrementalIndexingPlanner().plan(partial(projectId), negotiation);
+        String reference = "d".repeat(64);
+        ProjectDiscovery rootOnly = new ProjectDiscovery(root, "root", Set.of(Language.TYPESCRIPT),
+                Set.of(BuildSystem.NPM), List.of(new DiscoveredModule(Path.of(""), "root",
+                        EnumSet.of(BuildSystem.NPM),
+                        List.of(new SourceRoot(Path.of("ui/app/src"), SourceRootKind.SOURCE, Language.TYPESCRIPT)))));
+
+        IndexingRun run = lifecycle.executePlanned(projectId, root, rootOnly, negotiation, plan,
+                IndexingResumePolicy.RESUME, new ReferenceFingerprint(
+                        new com.minos.incremental.ProjectFingerprint(reference, reference, List.of()),
+                        new ProjectFingerprintService())).orElseThrow();
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
+        assertEquals(Path.of(""), checkpoint(run, 0).projectRelativeRoot());
+        assertEquals(reference, checkpoint(run, 0).scopeFingerprint(), "the root scope is not hashed a second time");
+    }
+
+    @Test
     void matchingDigestSidecarIsAcceptedAndMismatchingSidecarWithholdsTheCheckpoint(@TempDir Path temp)
             throws Exception {
         Path root = project(temp);

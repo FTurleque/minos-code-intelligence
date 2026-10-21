@@ -117,7 +117,7 @@ class IndexingBaselineAndLeaseTest {
     }
 
     /** Observes the caller parked on the lease instead of assuming it after a delay. */
-    private static void awaitWaiting(Thread thread, Duration timeout) throws InterruptedException {
+    private static void awaitWaiting(Thread thread, Duration timeout) {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (System.nanoTime() < deadline) {
             Thread.State state = thread.getState();
