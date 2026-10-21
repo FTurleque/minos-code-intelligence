@@ -157,7 +157,7 @@ Avec index READY, le mode devient `LEXICAL_GRAPH_SEMANTIC`. La combinaison reste
 
 ## Mesures de pertinence
 
-`SemanticSearchEvaluator` fournit :
+`SemanticSearchEvaluator`, outil de test des sources de test de `minos-bootstrap` (`com.minos.bootstrap.semantic`, hors de la production depuis le changement `retirer-les-services-sans-appelant-de-production`), fournit :
 
 - Recall@K ;
 - MRR ;

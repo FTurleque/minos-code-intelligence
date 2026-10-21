@@ -3,15 +3,11 @@ package com.minos.bootstrap.incremental;
 import com.minos.incremental.ProjectFingerprint;
 import com.minos.incremental.ProjectFingerprintService;
 import com.minos.incremental.ProjectFingerprintSnapshot;
-import com.minos.orchestration.ProjectFingerprintSnapshotAlignmentService;
-import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
-import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,17 +26,7 @@ class ProjectFingerprintSnapshotRealFixtureTest {
         writer.promote(projectId, indexSnapshotId);
 
         FileProjectFingerprintSnapshotStore reader = new FileProjectFingerprintSnapshotStore(storage);
-        ProjectIndexState indexState = new ProjectIndexState(
-                projectId,
-                ProjectIndexState.Availability.READY,
-                Optional.of(indexSnapshotId),
-                Optional.empty(),
-                Instant.parse("2026-07-23T00:00:00Z"),
-                Optional.of("fixture index active")
-        );
-        ProjectFingerprintSnapshot reopened = new ProjectFingerprintSnapshotAlignmentService(reader)
-                .loadAlignedWithActiveIndex(indexState)
-                .orElseThrow();
+        ProjectFingerprintSnapshot reopened = reader.loadActive(projectId).orElseThrow();
 
         assertEquals(indexSnapshotId, reopened.indexSnapshotId());
         assertEquals(fingerprint, reopened.fingerprint());
