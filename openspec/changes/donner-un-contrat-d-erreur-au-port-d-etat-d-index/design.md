@@ -36,7 +36,7 @@ Sprint 9 de l'audit du 10 octobre 2026 : **AUD-QUA-03**. HEAD analysé : `949e15
 
 ## Decisions
 
-### D1. Exception dédiée non vérifiée ou exception vérifiée — **décision en attente du propriétaire**
+### D1. Exception dédiée non vérifiée ou exception vérifiée — **décidé : option A (propriétaire, 2026-10-21)**
 
 Recommandation (option A) : une exception **non vérifiée dédiée**, déclarée à côté du port dans `com.minos.orchestration`, documentée dans la Javadoc de chaque méthode, levée par les quatre implémentations pour toute panne de stockage (E/S, SQL, contenu illisible, bail non obtenu ou non rendu). Les appelants attrapent ce type et lui seul. Raisons : aucune signature ne change (ni le SPI, ni les lambdas, ni le `try`-avec-ressources) ; le correctif est local à chaque `catch` ; le but du constat — distinguer une panne d'un bogue — est atteint.
 
@@ -56,9 +56,18 @@ Les `catch (RuntimeException)` qui entourent un appel du port sont remplacés pa
 
 Les messages de `FileIndexStateStore` nomment la nature de l'état (projet, run), l'identifiant quand il est connu, et au plus le nom de fichier relatif à la racine gérée ; jamais le chemin absolu. La cause technique reste chaînée pour l'opérateur. Si le changement du sprint 7 introduit une primitive commune de message, elle est réutilisée.
 
-### D5. Refus métier — **décision en attente du propriétaire**
+### D5. Refus métier — **décidé : reporté (propriétaire, 2026-10-21)**
 
 Recommandation : **reporter**. `resume-only indexing refused` est levé en `IllegalStateException` dans le moteur et dans la CLI ; lui donner un type touche la correspondance des codes de sortie de `minos index`. À traiter avec l'unification de l'orchestration (`unifier-l-orchestration-d-indexation`) ou par un changement propre. Alternative : l'inclure ici, avec les goldens et la référence CLI.
+
+## Décisions du propriétaire et relevé d'implémentation (2026-10-21)
+
+- **D1 = A** : `IndexStateStoreException` (non vérifiée, `com.minos.orchestration`, à côté du port), cause conservée. Elle n'étend pas `IllegalStateException`, pour qu'un `catch` d'invariant ne la confonde pas. **D5 reporté** : `resume-only indexing refused` reste une `IllegalStateException` (moteur et cas d'usage d'indexation).
+- **Relevé 1.1 (relu au HEAD de la branche)** : les lignes du design ont dérivé. `FileIndexStateStore` : pannes `UncheckedIOException` aux sites bail (acquisition, libération), lecture d'état, `findRun`, `listRuns`, locator de run, `load`, `store` (8 sites) ; contenus illisibles en `IllegalStateException` (compteur invalide ou hors borne, locator invalide, nom de fichier inattendu ou non UUID, identité, propriété manquante : 7 sites) ; s'y ajoutent les `IllegalArgumentException` / `DateTimeException` de `UUID.fromString`, `valueOf`, `Instant.parse` sur un contenu corrompu, désormais enveloppées. **Écart** : les messages « cannot read/write MINOS … state » utilisaient déjà `getFileName()` ; les chemins absolus venaient des 6 `IllegalStateException` de contenu. Invariants conservés : propriétaire du bail (2), profondeur négative. `PostgresIndexStateStore` : `failure()` (5 opérations). `ProjectMutationIndexStateStore` : pannes = délai du bail, connexion dédiée, délai et interruption de la porte locale, interruption de l'attente, SQL d'acquisition et de libération, bail non possédé à la libération, mutation (9 sites) ; invariants = second bail d'un autre projet sur le thread, propriétaire, profondeur, sous-dépassement de la porte. `InMemoryIndexStateStore` : invariants seulement.
+- **Appelants restreints** : `ProjectIndexStateReconciler` (bail, lecture d'état, liste des runs, écriture : 4 `catch`), `IndexingRunExecutor.persist`, `LocalProjectOperations.saveCommittedState`. **Hors périmètre, conservés** : `ProjectIndexStateReconciler` sur le store de snapshots (2 `catch`), `AuthoritativeProjectStateReconciler.observe` (entoure le promoteur, pas le port), les nettoyages internes de `ProjectMutationIndexStateStore` et la migration des runs hérités de `FileIndexStateStore` (internes à une implémentation).
+- **Doubles de test** : aucun double n'a eu à changer pour compiler (type non vérifié) ; les tests qui affirmaient `UncheckedIOException` / `IllegalStateException` pour une panne sont repointés (stores fichier et PostgreSQL, journal de migration).
+- **Primitive de message du sprint 7** (`ne-plus-laisser-fuir-de-chemin-absolu-dans-les-erreurs`) : changement absent de `openspec/changes/` au HEAD, aucune primitive réutilisée.
+- **PostgreSQL** : les tests à base réelle (Testcontainers, `pgvector/pgvector:0.8.7-pg17`) ont tourné **localement** sous Windows avec Docker : 357 tests, 0 sauté.
 
 ## Direction des dépendances
 

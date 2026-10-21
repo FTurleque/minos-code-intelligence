@@ -84,6 +84,15 @@ Voir [domain-model.md](domain-model.md).
 
 Les stores persistent les snapshots et permettent de retrouver le snapshot actif. Une requête de haut niveau doit lire une vue cohérente et ne pas dépendre d’un artefact fournisseur brut.
 
+### Contrat d'erreur du port d'état d'index
+
+Le port `IndexStateStore` (`minos-engine`, `com.minos.orchestration`) a un type d'échec unique, `IndexStateStoreException` (non vérifiée, cause toujours conservée), levé par ses quatre implémentations (`InMemoryIndexStateStore`, `FileIndexStateStore`, `PostgresIndexStateStore`, `ProjectMutationIndexStateStore`) :
+
+- **panne de stockage** (type du port) : échec d'E/S ou SQL, contenu d'état illisible ou incohérent (propriété manquante, identité ou nom de fichier inattendus, compteur invalide), bail de cycle de vie non obtenu (délai, interruption, connexion) ou non rendu ;
+- **violation d'invariant** (`IllegalStateException`, inchangée) : bail libéré par un autre thread, profondeur négative, second bail d'un autre projet sur le même thread, store sans bail qualifié.
+
+Les appelants (`ProjectIndexStateReconciler`, `IndexingRunExecutor`, `LocalProjectOperations`) n'attrapent que le type du port : un défaut de programmation remonte tel quel. Un message du port ne contient jamais de chemin absolu (au plus le nom du fichier d'état).
+
 ## Intelligence
 
 ### Query

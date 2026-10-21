@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql.project;
 
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.storage.postgresql.support.PostgresConnectionFactory;
 import com.minos.storage.postgresql.support.PostgresJsonCodec;
 import com.minos.orchestration.IndexStateStore;
@@ -106,7 +107,7 @@ public final class PostgresIndexStateStore implements IndexStateStore {
         } catch (SQLException | IOException e) { throw failure("save indexing run", e); }
     }
 
-    private static IllegalStateException failure(String action, Exception cause) {
-        return new IllegalStateException("PostgreSQL index state store failed to " + action, cause);
+    private static IndexStateStoreException failure(String action, Exception cause) {
+        return new IndexStateStoreException("PostgreSQL index state store failed to " + action, cause);
     }
 }

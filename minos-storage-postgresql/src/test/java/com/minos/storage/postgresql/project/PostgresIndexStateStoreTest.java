@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql.project;
 
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
@@ -123,18 +124,18 @@ class PostgresIndexStateStoreTest extends PostgresTestSupport {
         ProjectIndexState state = ProjectIndexState.neverIndexed(projectId, CREATED_AT);
         IndexingRun run = running(UUID.randomUUID(), projectId, CREATED_AT);
 
-        IllegalStateException findState = assertThrows(IllegalStateException.class, () -> store.findProjectState(projectId));
-        IllegalStateException findRun = assertThrows(IllegalStateException.class, () -> store.findRun(projectId));
-        IllegalStateException listRuns = assertThrows(IllegalStateException.class, () -> store.listRuns(projectId));
-        IllegalStateException saveState = assertThrows(IllegalStateException.class, () -> store.saveProjectState(state));
-        IllegalStateException saveRun = assertThrows(IllegalStateException.class, () -> store.saveRun(run));
+        IndexStateStoreException findState = assertThrows(IndexStateStoreException.class, () -> store.findProjectState(projectId));
+        IndexStateStoreException findRun = assertThrows(IndexStateStoreException.class, () -> store.findRun(projectId));
+        IndexStateStoreException listRuns = assertThrows(IndexStateStoreException.class, () -> store.listRuns(projectId));
+        IndexStateStoreException saveState = assertThrows(IndexStateStoreException.class, () -> store.saveProjectState(state));
+        IndexStateStoreException saveRun = assertThrows(IndexStateStoreException.class, () -> store.saveRun(run));
 
         assertEquals("PostgreSQL index state store failed to find project state", findState.getMessage());
         assertEquals("PostgreSQL index state store failed to find indexing run", findRun.getMessage());
         assertEquals("PostgreSQL index state store failed to list indexing runs", listRuns.getMessage());
         assertEquals("PostgreSQL index state store failed to save project state", saveState.getMessage());
         assertEquals("PostgreSQL index state store failed to save indexing run", saveRun.getMessage());
-        for (IllegalStateException failure : List.of(findState, findRun, listRuns, saveState, saveRun)) {
+        for (IndexStateStoreException failure : List.of(findState, findRun, listRuns, saveState, saveRun)) {
             assertInstanceOf(SQLException.class, failure.getCause());
         }
         assertEquals(Optional.empty(), store().findProjectState(projectId), "nothing may be written through a closed pool");
@@ -155,8 +156,8 @@ class PostgresIndexStateStoreTest extends PostgresTestSupport {
             }
         });
 
-        IllegalStateException find = assertThrows(IllegalStateException.class, () -> store.findRun(runId));
-        IllegalStateException list = assertThrows(IllegalStateException.class, () -> store.listRuns(projectId));
+        IndexStateStoreException find = assertThrows(IndexStateStoreException.class, () -> store.findRun(runId));
+        IndexStateStoreException list = assertThrows(IndexStateStoreException.class, () -> store.listRuns(projectId));
 
         assertEquals("PostgreSQL index state store failed to find indexing run", find.getMessage());
         assertEquals("PostgreSQL index state store failed to list indexing runs", list.getMessage());

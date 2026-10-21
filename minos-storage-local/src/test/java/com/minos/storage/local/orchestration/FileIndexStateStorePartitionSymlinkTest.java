@@ -1,5 +1,6 @@
 package com.minos.storage.local.orchestration;
 
+import com.minos.orchestration.IndexStateStoreException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -21,7 +22,7 @@ class FileIndexStateStorePartitionSymlinkTest {
         Path outside = Files.createDirectories(temp.resolve("outside"));
         if (!createSymbolicLink(stateRoot.resolve("runs").resolve(projectId.toString()), outside)) return;
 
-        assertThrows(UncheckedIOException.class, () -> store.listRuns(projectId));
+        assertThrows(IndexStateStoreException.class, () -> store.listRuns(projectId));
     }
 
     @Test
