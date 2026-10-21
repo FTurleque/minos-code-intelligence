@@ -38,6 +38,41 @@ class SnapshotCodecV3Test {
         assertEquals(".knowledge", codec.fileExtension());
     }
 
+    /**
+     * AUD-PERF-09 : un snapshot écrit avant le plafond des preuves de tests liés, dont une relation porte plus
+     * d'emplacements que le plafond, reste lisible et rend toutes ses preuves (le codec ne borne rien).
+     */
+    @Test
+    void readsBackEveryEvidenceOfARelatedTestBeyondTheDerivationCap() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        CodeKnowledgeSnapshot base = CodecFixtures.everyBranch(projectId, "related-test-uncapped");
+        com.minos.domain.CodeEntityRef test = new com.minos.domain.CodeEntityRef(
+                com.minos.domain.CodeEntityType.SYMBOL, "method-string");
+        com.minos.domain.CodeEntityRef production = new com.minos.domain.CodeEntityRef(
+                com.minos.domain.CodeEntityType.SYMBOL, "method-int");
+        List<com.minos.domain.Evidence> evidence = new java.util.ArrayList<>();
+        for (int line = 10; line < 10 + 12; line++) {
+            evidence.add(new com.minos.domain.Evidence(com.minos.domain.EvidenceType.DIRECT_REFERENCE,
+                    "Resolved reference from test file to Converter", test, production,
+                    CodecFixtures.location("file-caller", line), 0.65));
+        }
+        List<com.minos.domain.Relationship> relationships = new java.util.ArrayList<>(base.relationships());
+        relationships.add(new com.minos.domain.Relationship("rel-related-test", projectId.toString(), test, production,
+                null, com.minos.domain.RelationshipKind.RELATED_TEST, null, com.minos.domain.ResolutionStatus.RESOLVED,
+                com.minos.domain.InformationNature.DERIVED, 0.65, CodecFixtures.origin(), evidence));
+        CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(projectId, base.snapshotId(), base.symbols(),
+                base.occurrences(), relationships);
+        Path file = temporary.resolve("related-test.knowledge");
+
+        KnowledgeSnapshotCodecs.select(snapshot).codec().write(file, snapshot);
+        CodeKnowledgeSnapshot read = KnowledgeSnapshotCodecs.read(file);
+
+        assertEquals(snapshot, read);
+        assertEquals(12, read.relationships().stream()
+                .filter(relationship -> relationship.id().equals("rel-related-test"))
+                .findFirst().orElseThrow().evidence().size());
+    }
+
     @Test
     void asciiContentTakesAboutHalfTheV2Size() throws Exception {
         CodeKnowledgeSnapshot ascii = PersistedSizeFixtures.withTail(UUID.randomUUID(), "ascii", 1, 1_000);

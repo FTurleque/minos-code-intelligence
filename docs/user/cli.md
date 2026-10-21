@@ -263,6 +263,8 @@ Une liste vide n'est donc pas une réponse « rien n'appelle ce symbole » quand
 
 `find-implementations` et `related-tests` gardent leur sortie historique.
 
+Les preuves d'une relation `related-tests` sont bornées depuis les indexations postérieures à AUD-PERF-09 : au plus 5 emplacements par type de preuve (les premiers dans l'ordre fichier, ligne, colonne) ; au-delà, une preuve de synthèse du même type, sans emplacement, annonce le nombre d'emplacements omis (description `…: N additional locations omitted`). La confiance, l'ordre et l'ensemble des tests liés n'en dépendent pas ; un snapshot antérieur reste lu tel quel, preuves complètes.
+
 ## Architecture et graphe
 
 ```text

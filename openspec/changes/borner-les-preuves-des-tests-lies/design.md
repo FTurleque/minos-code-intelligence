@@ -25,6 +25,29 @@ Sprint 9 de l'audit du 10 octobre 2026 : **AUD-PERF-09**. HEAD analysé : `949e1
 4. **L'ordre doit être celui de la persistance.** « Les N premiers » n'a de sens que dans un ordre total et stable : celui du parcours (`:205-208`), indépendant de l'hôte.
 5. **Les snapshots existants ne sont pas réécrits** : le gain n'apparaît qu'après réindexation ; un snapshot antérieur reste lisible tel quel.
 
+### Mesure du 2026-10-21 (tâches 1.1, 1.2, 3.4)
+
+Corpus : `benchmarks/scalability/prepare-corpus.ps1` lancé depuis PowerShell 7 sur `1492113e` (`develop`), scip-java 0.13.1 géré, SCIP de 37 919 098 octets (sha256 `c927268f…`), 214 s. Import par `scipArtifactImporter` dans le magasin de capture du banc (`SnapshotScalabilityBenchmark.InMemorySnapshotStore`), tailles par `SnapshotCodecV3.encodedSize`. Programme de mesure hors dépôt.
+
+| Mesure | Avant plafond | Après plafond (N = 5) |
+|---|---|---|
+| Relations `RELATED_TEST` / total | 10 979 / 22 277 | 10 979 / 22 277 |
+| Preuves `RELATED_TEST` | 42 054 (dont `DIRECT_REFERENCE` 26 434) | 37 394 (`DIRECT_REFERENCE` 21 774, synthèses comprises) |
+| Preuves par relation : médiane / p95 / max | 3 / 10 / 80 | 3 / 7 / 9 |
+| Relations > 5 preuves / > 100 preuves | 1 609 / 0 | — / 0 |
+| Taille V3 du snapshot | 306 661 262 octets | 304 817 599 octets (−1 843 663, −0,60 %) |
+| Relations `RELATED_TEST` entières / taille | 7,41 % | 6,84 % |
+| Preuves au-delà de la première / taille | 4,04 % | 3,46 % |
+
+Requalification : constat **confirmé** (les preuves au-delà de la première pèsent 4,04 % > 2 %), d'**ampleur faible** (aucune relation au-delà de 100 preuves ; gain du plafond 0,6 %). **Constat annexe, hors périmètre** : le snapshot de ce dépôt (306,7 Mo encodés) dépasse la limite de persistance de 256 Mio et est refusé par `FileSymbolSnapshotStore.publish` avant comme après ; il relève d'AUD-PERF-03 / ADR 0047, le plafond ne suffit pas à le rendre persistable.
+
+Tâche 1.2 : la confiance (`confidence(signalWeights)`, produit sur les poids maximaux par type) et la sélection (`candidates.values()`) ne lisent jamais le nombre de preuves ; l'ordre des relations non plus. Les preuves sortent par la CLI (`related-tests`), le MCP (`minos_related_tests`) et l'API Java (`Relationship.evidence()`). Les trois goldens portent au total 5, 5 et 4 preuves `DIRECT_REFERENCE` : aucune relation n'y dépasse 5.
+
+### Décisions du propriétaire (2026-10-21)
+
+- **D1** : seuil retenu tel que proposé (abandon si < 2 % **et** aucune relation > 100 preuves). Mesure : 4,04 % → **seuil non atteint, poursuite**.
+- **D2** : **option A**, **N = 5** (point de départ confirmé par la distribution : médiane 3, p95 10 ; les goldens restent sous le plafond).
+
 ## Goals / Non-Goals
 
 **Goals** : connaître le coût réel ; s'il est notable, borner les preuves sans changer le score, l'ordre, ni les sorties des relations sous le plafond ; déclarer ce qui est omis.
