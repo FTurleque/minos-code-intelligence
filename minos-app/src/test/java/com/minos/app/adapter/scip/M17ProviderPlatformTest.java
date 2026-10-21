@@ -9,7 +9,7 @@ import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.orchestration.IndexerCapability;
 import com.minos.orchestration.IndexerNegotiationResult;
 import com.minos.orchestration.IndexerProvider;
-import com.minos.orchestration.IndexerProviderRegistry;
+import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingRequirements;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,8 +40,7 @@ class M17ProviderPlatformTest {
 
     @Test
     void negotiatesKotlinMavenPythonAndPnpmTypeScript() throws Exception {
-        IndexerProviderRegistry providers = new IndexerProviderRegistry();
-        providers.registerAll(ScipIndexerCatalog.qualifiedM17Providers());
+        IndexerRegistry providers = negotiationRegistry();
 
         assertSelected(providers, Path.of("fixtures/kotlin/kotlin-maven-simple"), Language.KOTLIN, "scip-java");
         assertSelected(providers, Path.of("fixtures/python/python-simple"), Language.PYTHON, "scip-python");
@@ -51,10 +50,9 @@ class M17ProviderPlatformTest {
 
     @Test
     void doesNotInventGradleRuntimeSupport() throws Exception {
-        IndexerProviderRegistry providers = new IndexerProviderRegistry();
-        providers.registerAll(ScipIndexerCatalog.qualifiedM17Providers());
+        IndexerRegistry providers = negotiationRegistry();
         ProjectDiscovery gradleKotlin = discovery.discover(Path.of("fixtures/gradle/gradle-kotlin-multi"));
-        IndexerNegotiationResult result = providers.negotiationRegistry()
+        IndexerNegotiationResult result = providers
                 .negotiate(gradleKotlin, IndexingRequirements.baseline());
         assertFalse(result.complete());
         assertEquals(Set.of(Language.KOTLIN), result.uncoveredLanguages());
@@ -72,14 +70,20 @@ class M17ProviderPlatformTest {
                 .anyMatch(value -> value.contains("Python")));
     }
 
+    private static IndexerRegistry negotiationRegistry() {
+        IndexerRegistry registry = new IndexerRegistry();
+        registry.registerAll(ScipIndexerCatalog.qualifiedM17Providers().stream().map(IndexerProvider::descriptor).toList());
+        return registry;
+    }
+
     private void assertSelected(
-            IndexerProviderRegistry providers,
+            IndexerRegistry providers,
             Path fixture,
             Language language,
             String expectedProvider
     ) throws Exception {
         ProjectDiscovery project = discovery.discover(fixture);
-        IndexerNegotiationResult result = providers.negotiationRegistry()
+        IndexerNegotiationResult result = providers
                 .negotiate(project, IndexingRequirements.baseline());
         assertTrue(result.complete());
         assertEquals(language, result.selections().getFirst().language());
