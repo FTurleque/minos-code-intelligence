@@ -6,7 +6,6 @@ import com.minos.storage.StorageBackendConfiguration;
 import com.minos.storage.StorageBackendProvider;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.ServiceLoader;
@@ -42,12 +41,10 @@ final class StorageBackendSelection {
     /** L'unique fournisseur de l'identifiant demandé (sans casse, {@link Locale#ROOT}), sinon un refus. */
     static StorageBackendProvider provider(String backend, ClassLoader loader) throws IOException {
         String requested = backend.toLowerCase(Locale.ROOT);
-        List<StorageBackendProvider> matching = new ArrayList<>();
-        for (StorageBackendProvider provider : ServiceLoader.load(StorageBackendProvider.class, loader)) {
-            if (requested.equals(provider.id().toLowerCase(Locale.ROOT))) {
-                matching.add(provider);
-            }
-        }
+        List<StorageBackendProvider> matching = ServiceLoader.load(StorageBackendProvider.class, loader).stream()
+                .map(ServiceLoader.Provider::get)
+                .filter(provider -> requested.equals(provider.id().toLowerCase(Locale.ROOT)))
+                .toList();
         if (matching.isEmpty()) {
             throw new IOException("MINOS storage backend provider is not available: " + backend);
         }
