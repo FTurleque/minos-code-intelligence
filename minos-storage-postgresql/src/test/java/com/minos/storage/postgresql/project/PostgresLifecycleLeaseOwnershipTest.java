@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql.project;
 
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.storage.postgresql.PostgresTestSupport;
 import com.minos.storage.postgresql.support.PostgresConnectionFactory;
 import com.minos.storage.postgresql.support.PostgresJsonCodec;
@@ -93,7 +94,7 @@ class PostgresLifecycleLeaseOwnershipTest extends PostgresTestSupport {
                         competitorFailure.get());
             }
 
-            assertThrows(IllegalStateException.class, () -> first.saveProjectState(state(
+            assertThrows(IndexStateStoreException.class, () -> first.saveProjectState(state(
                     projectId, ProjectIndexState.Availability.FAILED,
                     Optional.of("snapshot-stale-writer"), "stale writer must not persist")));
 
@@ -106,7 +107,7 @@ class PostgresLifecycleLeaseOwnershipTest extends PostgresTestSupport {
             competingConnections.close();
         }
 
-        assertThrows(IllegalStateException.class, firstLease::close,
+        assertThrows(IndexStateStoreException.class, firstLease::close,
                 "releasing a lifecycle lease whose session died must report lost ownership");
     }
 

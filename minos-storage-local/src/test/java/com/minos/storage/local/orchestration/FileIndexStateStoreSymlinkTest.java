@@ -1,5 +1,6 @@
 package com.minos.storage.local.orchestration;
 
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.orchestration.ProjectIndexState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -38,7 +39,7 @@ class FileIndexStateStoreSymlinkTest {
         Files.move(state, outside, StandardCopyOption.REPLACE_EXISTING);
         if (!createSymbolicLink(state, outside)) return;
 
-        UncheckedIOException rejected = assertThrows(UncheckedIOException.class,
+        IndexStateStoreException rejected = assertThrows(IndexStateStoreException.class,
                 () -> store.findProjectState(projectId));
         assertFalse(rejected.getMessage().contains(temp.toString()), rejected.getMessage());
         assertFalse(rejected.getCause().getMessage().contains(temp.toString()), rejected.getCause().getMessage());

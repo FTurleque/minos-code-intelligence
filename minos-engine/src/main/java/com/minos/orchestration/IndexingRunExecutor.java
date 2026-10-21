@@ -826,7 +826,9 @@ final class IndexingRunExecutor {
             try {
                 action.run();
                 return true;
-            } catch (RuntimeException failure) {
+            } catch (IndexStateStoreException failure) {
+                // AUD-QUA-03: only a storage failure of the index state is retried or kept as suppressed; a
+                // programming error goes up as it is.
                 if (attempt >= PERSISTENCE_ATTEMPTS_UNDER_INTERRUPTION || !isInterruption(failure)) {
                     original.addSuppressed(failure);
                     return false;

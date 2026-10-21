@@ -1,5 +1,6 @@
 package com.minos.storage.local.orchestration;
 
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexingRun;
@@ -149,8 +150,8 @@ class FileIndexStateStoreTest {
         Files.writeString(corruptFile, "not-a-valid-run");
 
         assertEquals(List.of(healthyRun), store.listRuns(healthyProject).stream().map(IndexingRun::id).toList());
-        assertThrows(IllegalStateException.class, () -> store.listRuns(corruptProject));
-        assertThrows(IllegalStateException.class, () -> store.findRun(corruptRun));
+        assertThrows(IndexStateStoreException.class, () -> store.listRuns(corruptProject));
+        assertThrows(IndexStateStoreException.class, () -> store.findRun(corruptRun));
     }
 
     @Test
@@ -166,8 +167,8 @@ class FileIndexStateStoreTest {
                 "projectId=" + projectId,
                 "projectId=" + otherProjectId));
 
-        IllegalStateException failure = assertThrows(
-                IllegalStateException.class,
+        IndexStateStoreException failure = assertThrows(
+                IndexStateStoreException.class,
                 () -> store.findProjectState(projectId));
         assertTrue(failure.getMessage().contains("identity mismatch"));
     }
@@ -187,8 +188,8 @@ class FileIndexStateStoreTest {
                 "id=" + runId,
                 "id=" + otherRunId));
 
-        assertThrows(IllegalStateException.class, () -> store.findRun(runId));
-        assertThrows(IllegalStateException.class, () -> store.listRuns(projectId));
+        assertThrows(IndexStateStoreException.class, () -> store.findRun(runId));
+        assertThrows(IndexStateStoreException.class, () -> store.listRuns(projectId));
     }
 
     @Test
@@ -199,7 +200,7 @@ class FileIndexStateStoreTest {
         Files.write(stateRoot.resolve("projects").resolve(projectId + ".properties"),
                 new byte[4 * 1024 * 1024 + 1]);
 
-        assertThrows(UncheckedIOException.class, () -> store.findProjectState(projectId));
+        assertThrows(IndexStateStoreException.class, () -> store.findProjectState(projectId));
     }
 
     private static IndexingRun run(

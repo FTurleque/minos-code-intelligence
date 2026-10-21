@@ -50,7 +50,8 @@ class LegacyRunMigrationDiagnosticsTest {
             String all = String.join("\n", warnings);
             assertTrue(all.contains("'" + corruptRun + ".properties'"), all);
             assertTrue(all.contains("'notes.properties'"), all);
-            assertTrue(all.contains("IllegalStateException"), all);
+            // AUD-QUA-03: a corrupt legacy file is a store failure, journaled by its class name.
+            assertTrue(all.contains("IndexStateStoreException"), all);
             assertFalse(all.contains(root.toString()), "aucun chemin absolu : " + all);
             assertFalse(all.contains(validRun.toString()), "le run valide, migré, ne produit aucune trace : " + all);
         }

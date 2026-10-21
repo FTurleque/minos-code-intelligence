@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql.project;
 
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.orchestration.InMemoryIndexStateStore;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
@@ -115,9 +116,9 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
         ProjectIndexState state = ProjectIndexState.neverIndexed(projectId, NOW);
         IndexingRun run = running(projectId);
 
-        IllegalStateException lease = assertThrows(IllegalStateException.class, () -> store.acquireProjectLease(projectId));
-        IllegalStateException saveState = assertThrows(IllegalStateException.class, () -> store.saveProjectState(state));
-        IllegalStateException saveRun = assertThrows(IllegalStateException.class, () -> store.saveRun(run));
+        IndexStateStoreException lease = assertThrows(IndexStateStoreException.class, () -> store.acquireProjectLease(projectId));
+        IndexStateStoreException saveState = assertThrows(IndexStateStoreException.class, () -> store.saveProjectState(state));
+        IndexStateStoreException saveRun = assertThrows(IndexStateStoreException.class, () -> store.saveRun(run));
 
         assertEquals("PostgreSQL lifecycle lease could not reserve a dedicated connection", lease.getMessage());
         assertEquals("PostgreSQL index state mutation failed to save project state", saveState.getMessage());
@@ -135,7 +136,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
             ProjectMutationIndexStateStore store = new ProjectMutationIndexStateStore(pool, new InMemoryIndexStateStore());
             assertTrue(advisory(competitor.connection(), "pg_try_advisory_lock", projectId));
 
-            IllegalStateException refusal = assertThrows(IllegalStateException.class,
+            IndexStateStoreException refusal = assertThrows(IndexStateStoreException.class,
                     () -> store.acquireProjectLease(projectId));
 
             assertEquals("timed out waiting for PostgreSQL project lifecycle lease after "
@@ -158,7 +159,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
             ProjectMutationIndexStateStore store = new ProjectMutationIndexStateStore(pool, new InMemoryIndexStateStore());
             PostgresConnectionFactory.DedicatedConnectionLease onlySlot = pool.openDedicatedConnection();
 
-            IllegalStateException refusal = assertThrows(IllegalStateException.class,
+            IndexStateStoreException refusal = assertThrows(IndexStateStoreException.class,
                     () -> store.acquireProjectLease(projectId));
 
             assertEquals("PostgreSQL lifecycle lease could not reserve a dedicated connection", refusal.getMessage());
@@ -224,7 +225,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
         });
         interrupted.join();
 
-        IllegalStateException refusal = assertInstanceOf(IllegalStateException.class, failure.get());
+        IndexStateStoreException refusal = assertInstanceOf(IndexStateStoreException.class, failure.get());
         assertEquals("interrupted while waiting for local PostgreSQL lifecycle gate: " + projectId, refusal.getMessage());
         assertInstanceOf(InterruptedException.class, refusal.getCause());
         assertTrue(stillInterrupted.get(), "the interrupt flag must be restored for the caller");
@@ -254,7 +255,7 @@ class ProjectMutationIndexStateStoreRefusalTest extends PostgresTestSupport {
             try {
                 assertTrue(held.await(30, TimeUnit.SECONDS));
 
-                IllegalStateException refusal = assertThrows(IllegalStateException.class,
+                IndexStateStoreException refusal = assertThrows(IndexStateStoreException.class,
                         () -> store.acquireProjectLease(projectId));
 
                 assertEquals("timed out waiting for local PostgreSQL lifecycle gate after "
