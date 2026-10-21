@@ -21,7 +21,7 @@ L'analyse de conversation portait sur `main@730b760`. L'inspection de préparati
 | Ports de snapshots dans le cœur | Déjà dans minos-engine | SH-04 traite le type concret exposé, pas un déplacement déjà fait |
 | Un package par module | ADR 0044 et checker en place | Maintenir pendant la fusion |
 | Stockage local/PostgreSQL | Deux modules, codec local utilisé par PostgreSQL | SH-02/03 |
-| Workflow d'indexation en CLI | LocalAutonomousIndexOperations existe encore | SH-05 |
+| Workflow d'indexation en CLI | Résolu le 2026-10-21 : cas d'usage `ProjectIndexingUseCase` (minos-application), la CLI délègue | SH-05 |
 | Ollama dans application | Adaptateur et construction encore présents | SH-07 |
 | I/O dans engine | Mécanismes concrets, protections existantes | SH-08, relié à A5 |
 | Chargement SPI contextuel | Résidu signalé ADR 0042 / ARCHI-SUIVI | SH-10, relié à A8 |
@@ -121,7 +121,7 @@ Chantier parent : [#334](https://github.com/FTurleque/minos-code-intelligence/is
 | SH-02 | [#336](https://github.com/FTurleque/minos-code-intelligence/issues/336) | À faire |
 | SH-03 | [#337](https://github.com/FTurleque/minos-code-intelligence/issues/337) | À faire |
 | SH-04 | [#338](https://github.com/FTurleque/minos-code-intelligence/issues/338) | À faire |
-| SH-05 | [#339](https://github.com/FTurleque/minos-code-intelligence/issues/339) | À faire |
+| SH-05 | [#339](https://github.com/FTurleque/minos-code-intelligence/issues/339) | Fait (2026-10-21) |
 | SH-06 | [#340](https://github.com/FTurleque/minos-code-intelligence/issues/340) | À faire |
 | SH-07 | [#341](https://github.com/FTurleque/minos-code-intelligence/issues/341) | À faire |
 | SH-08 | [#342](https://github.com/FTurleque/minos-code-intelligence/issues/342) | À faire |

@@ -324,6 +324,10 @@ MINOS compare un fingerprint avant/après le run.
 
 Si le workspace change pendant l’exécution, le fingerprint baseline n’est pas promu. Le prochain `index` replanifiera conservativement le projet.
 
+## `active fingerprint baseline unreadable`
+
+La baseline d'empreinte active du projet n'a pas pu être lue (fichier endommagé, droits, base indisponible). MINOS ne la traite pas comme absente en silence : il indexe le projet en entier et le dit par ce diagnostic, qui ne cite ni chemin ni cause. Si l'empreinte du run est ensuite publiée, l'exécution suivante redevient incrémentale ; sinon, vérifier les droits de `MINOS_HOME` ou l'accès au stockage.
+
 ## Pas de résultat dans `find-callers` / `find-callees`
 
 Une liste vide signifie qu’aucune relation `CALLS` correspondante n’est présente dans le snapshot observé. Cela ne prouve pas une absence runtime.

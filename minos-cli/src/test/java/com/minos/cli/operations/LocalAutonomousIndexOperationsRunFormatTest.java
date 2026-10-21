@@ -1,6 +1,7 @@
 package com.minos.cli.operations;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRun;
@@ -20,11 +21,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** R1 (V6) : la récupération CLI d'un run promu conserve le format du run et ses points de contrôle. */
+/** R1 (V6) : la récupération d'un run promu conserve le format du run et ses points de contrôle. */
 class LocalAutonomousIndexOperationsRunFormatTest {
 
     @Test
@@ -52,11 +54,13 @@ class LocalAutonomousIndexOperationsRunFormatTest {
                     ProjectIndexState.Availability.FAILED, Optional.empty(), Optional.of(failed.id()),
                     Instant.parse("2026-09-26T10:01:00Z"), Optional.of("crashed after promotion")));
 
-            try (LocalAutonomousIndexOperations operations = new LocalAutonomousIndexOperations(application)) {
-                Method recover = LocalAutonomousIndexOperations.class
+            {
+                // AUD-ARC-02: the recovery moved with the orchestration into the application use case.
+                ProjectIndexingUseCase indexing = ProjectIndexingUseCase.of(application, UnaryOperator.identity());
+                Method recover = ProjectIndexingUseCase.class
                         .getDeclaredMethod("recoverPromotedRunIfNeeded", IndexingRun.class);
                 recover.setAccessible(true);
-                IndexingRun recovered = (IndexingRun) recover.invoke(operations, failed);
+                IndexingRun recovered = (IndexingRun) recover.invoke(indexing, failed);
 
                 assertEquals(IndexingRun.Status.SUCCEEDED, recovered.status());
                 assertEquals(IndexingRun.CURRENT_FORMAT_VERSION, recovered.runFormatVersion(),

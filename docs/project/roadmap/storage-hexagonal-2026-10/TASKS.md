@@ -2,7 +2,7 @@
 
 Date : 2026-10-05. Base d'observation : `develop` à `c9a339088f81b6b31c65c7ad12bc718be2a98a7b`.
 
-Toutes les tâches sont **À faire**. P1/P2 indiquent un ordre de travail architectural, pas une nouvelle sévérité de vulnérabilité. Les chemins désignent la base observée ; appliquer la table de migration de SH-01 après déplacement.
+Toutes les tâches sont **À faire**, sauf SH-05 (fait le 2026-10-21). P1/P2 indiquent un ordre de travail architectural, pas une nouvelle sévérité de vulnérabilité. Les chemins désignent la base observée ; appliquer la table de migration de SH-01 après déplacement.
 
 [Backlog et démarrage](README.md) · [ADR 0055](../../../architecture/adr/0055-unifier-les-adaptateurs-de-stockage.md) · [ADR 0056](../../../architecture/adr/0056-ports-de-lecture-des-snapshots.md) · [ADR 0057](../../../architecture/adr/0057-finaliser-les-frontieres-hexagonales.md)
 
@@ -23,6 +23,7 @@ Toutes les tâches sont **À faire**. P1/P2 indiquent un ordre de travail archit
 ### Critères d'acceptation
 
 - [ ] La cartographie nomme chaque consommateur et son action ; aucune classe/ressource de service oubliée.
+- Note (2026-10-21, AUD-ARC-02) : `IncrementalIndexingCoordinator` et `IncrementalIndexingResult` (`minos-engine`, `com.minos.orchestration`) ont été supprimés par SH-05 ; la cartographie n'a pas à les reprendre.
 - [ ] La baseline et les limites d'environnement sont consignées ; pas de régénération des golden ni de clôture automatique de l'audit.
 
 ### Vérification
@@ -102,22 +103,22 @@ Tests query/context/architecture/impact, tests de cohérence snapshot concurrent
 
 ## SH-05 — Déplacer le workflow d'indexation de la CLI dans un cas d'usage
 
-- État : À faire
+- État : Fait (2026-10-21, changement OpenSpec `unifier-l-orchestration-d-indexation`) — cas d'usage `ProjectIndexingUseCase` dans `minos-application` ; le coordinateur sans appelant `IncrementalIndexingCoordinator` est supprimé (à noter dans la cartographie SH-01)
 - Priorité : P1
 - Dépendances : SH-01
 - Point d'entrée : `minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java`, `minos-application/src/main/java/com/minos/application`, `minos-bootstrap/src/main/java/com/minos/bootstrap`
 
 ### Actions
 
-- [ ] Extraire coordination préparation/exécution/reprise/empreintes/sémantique/rétention dans un cas d'usage applicatif injecté.
-- [ ] La CLI conserve arguments, DTO de surface, formats et codes de sortie ; aucune nouvelle exposition d'écriture MCP.
-- [ ] Préserver portée des baux, ordre des effets, traitement d'un commit incertain, NO_CHANGES et arrêt/interruption.
-- [ ] Réutiliser les ports et bootstrap existants ; ne pas réintroduire un adaptateur dans application.
+- [x] Extraire coordination préparation/exécution/reprise/empreintes/sémantique/rétention dans un cas d'usage applicatif injecté.
+- [x] La CLI conserve arguments, DTO de surface, formats et codes de sortie ; aucune nouvelle exposition d'écriture MCP.
+- [x] Préserver portée des baux, ordre des effets, traitement d'un commit incertain, NO_CHANGES et arrêt/interruption.
+- [x] Réutiliser les ports et bootstrap existants ; ne pas réintroduire un adaptateur dans application.
 
 ### Critères d'acceptation
 
-- [ ] Le workflow est invocable dans un test sans CLI ; la CLI délègue au même chemin de production.
-- [ ] Les golden restent byte-identiques et les tests reprise/crash/empreintes/verrous passent ; aucune double exécution.
+- [x] Le workflow est invocable dans un test sans CLI ; la CLI délègue au même chemin de production.
+- [x] Les golden restent byte-identiques et les tests reprise/crash/empreintes/verrous passent ; aucune double exécution.
 
 ### Vérification
 

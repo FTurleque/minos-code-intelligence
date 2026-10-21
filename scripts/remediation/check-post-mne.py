@@ -105,7 +105,8 @@ def main() -> int:
         postgres_storage = read(
             "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresStorageBackend.java")
         retention_policy = read("minos-engine/src/main/java/com/minos/storage/PersistentRetentionPolicy.java")
-        indexing = read("minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java")
+        # AUD-ARC-02: the indexing orchestration moved from the CLI to the application use case.
+        indexing = read("minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java")
         distributed = read("minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java")
         shared_cache_leases = read("minos-engine/src/main/java/com/minos/io/SharedCacheLeaseRegistry.java")
         file_tree = read("minos-engine/src/main/java/com/minos/io/FileTreeOperations.java")
@@ -266,8 +267,8 @@ def main() -> int:
                 "compactWithActiveSnapshot", "CompactionResult::activeSnapshotId")
         require("PostgresStorageBackend.java", postgres_storage,
                 "new PostgresStorageRetentionService", "retentionService()")
-        require("LocalAutonomousIndexOperations.java", indexing,
-                "application.retentionService().compact(projectId)")
+        require("ProjectIndexingUseCase.java", indexing,
+                "retentionService.compact(projectId)")
         # Two failure paths compact through compactAfterFailure (the failed run and the fingerprint publication);
         # the two success paths go through compactAfterSuccess, whose timeout must not turn a successful index
         # into a failure (S6).
@@ -275,7 +276,7 @@ def main() -> int:
         if (indexing.count("void compactAfterFailure(UUID projectId, Exception failure)") != 1
                 or indexing.count("compactAfterFailure(") - 1
                 + indexing.count("compactAfterSuccess(prepared.project().id())") < 4):
-            raise RuntimeError("LocalAutonomousIndexOperations.java: retention is not applied on every terminal path")
+            raise RuntimeError("ProjectIndexingUseCase.java: retention is not applied on every terminal path")
 
         # MINOS-07: no production metadata parser may bypass the bounded primitive.
         forbid_unbounded_production_properties_loads()
