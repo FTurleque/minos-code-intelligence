@@ -98,6 +98,13 @@ class FileIndexStateStoreErrorContractTest {
                 () -> store.listRuns(projectId));
         assertNoRoot(invalidCount);
 
+        Files.writeString(partition.resolve(runId + ".properties"),
+                "id=" + runId + "\nprojectId=" + projectId + "\nexecution.count=-1\n");
+        IndexStateStoreException unsafeCount = assertThrows(IndexStateStoreException.class,
+                () -> store.listRuns(projectId));
+        assertTrue(unsafeCount.getMessage().contains("unsafe execution count"), unsafeCount.getMessage());
+        assertNoRoot(unsafeCount);
+
         Files.delete(partition.resolve(runId + ".properties"));
         Files.writeString(partition.resolve("not-a-run.properties"), "id=x\n");
         IndexStateStoreException unexpectedName = assertThrows(IndexStateStoreException.class,
