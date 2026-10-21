@@ -95,8 +95,9 @@ class ProjectIndexingUseCaseTest {
         fixture.qualifiedProvider = false;
 
         ProjectIndexingUseCase useCase = fixture.useCase();
+        String projectId = fixture.id();
         IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> useCase.execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
+                () -> useCase.execute(projectId, null, false, IndexingResumePolicy.RESUME));
 
         assertEquals("no qualified provider covers languages: [JAVA]", refusal.getMessage());
         assertEquals(0, fixture.executor.calls.get());
@@ -109,8 +110,9 @@ class ProjectIndexingUseCaseTest {
         fixture.runtimeState = ProviderRuntimeStatus.State.NOT_INSTALLED;
 
         ProjectIndexingUseCase useCase = fixture.useCase();
+        String projectId = fixture.id();
         IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> useCase.execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
+                () -> useCase.execute(projectId, null, false, IndexingResumePolicy.RESUME));
 
         assertEquals("provider runtime is not ready: java-indexer — not installed", refusal.getMessage());
         assertEquals(0, fixture.executor.calls.get());
@@ -120,10 +122,11 @@ class ProjectIndexingUseCaseTest {
     void aResumeOnlyIndexingOfAnUnchangedProjectIsRefused() throws Exception {
         IndexingFixture fixture = new IndexingFixture(temp);
         ProjectIndexingUseCase useCase = fixture.useCase();
+        String projectId = fixture.id();
         useCase.execute(fixture.id(), null, false, IndexingResumePolicy.RESUME);
 
         IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> useCase.execute(fixture.id(), null, false, IndexingResumePolicy.RESUME_ONLY));
+                () -> useCase.execute(projectId, null, false, IndexingResumePolicy.RESUME_ONLY));
 
         assertEquals("resume-only indexing refused: no changes to index", refusal.getMessage());
     }
@@ -135,8 +138,9 @@ class ProjectIndexingUseCaseTest {
         fixture.retentionFailure = new IOException("retention lock timed out");
 
         ProjectIndexingUseCase useCase = fixture.useCase();
+        String projectId = fixture.id();
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> useCase.execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
+                () -> useCase.execute(projectId, null, false, IndexingResumePolicy.RESUME));
 
         assertTrue(failure.getMessage().startsWith("indexing run "), failure.getMessage());
         assertFalse(failure.getMessage().contains(temp.toAbsolutePath().toString()), failure.getMessage());
@@ -158,8 +162,9 @@ class ProjectIndexingUseCaseTest {
         fixture.retentionFailure = new IOException("retention lock timed out");
 
         ProjectIndexingUseCase useCase = fixture.useCase();
+        String projectId = fixture.id();
         IOException failure = assertThrows(IOException.class,
-                () -> useCase.execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
+                () -> useCase.execute(projectId, null, false, IndexingResumePolicy.RESUME));
 
         assertEquals("fingerprint publication refused", failure.getMessage(),
                 "D3 (b): the publication failure stays a failure of the indexing");
@@ -205,8 +210,9 @@ class ProjectIndexingUseCaseTest {
 
         assertEquals(1, decorated.get());
         ProjectIndexingUseCase refusingUseCase = fixture.useCase(executor -> null);
+        String projectId = fixture.id();
         assertThrows(NullPointerException.class, () -> refusingUseCase
-                .execute(fixture.id(), null, true, IndexingResumePolicy.RESUME));
+                .execute(projectId, null, true, IndexingResumePolicy.RESUME));
     }
 
     @Test
