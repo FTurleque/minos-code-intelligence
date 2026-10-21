@@ -497,6 +497,140 @@ def check_runtime_local_exports(root: Path = ROOT, group_id: str | None = None,
     return len(exported)
 
 
+# A15 / AUD-QUA-02 — a public production type is used by production, or declared. Numbered after A11-A14 (reserved
+# by figer-la-dette-de-frontieres-par-des-cliquets); A16 is the two-argument ServiceLoader rule of
+# decouvrir-les-fournisseurs-par-chargeur-explicite. Each entry names one top-level public type of a reactor
+# src/main (module/package.Type) with the reason it has no production caller. The list is a ratchet: an entry whose
+# type is gone, or is now named by production, fails the guard.
+UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
+    "minos-api/com.minos.api.LocalAdvancedCodeIntelligenceApi":
+        "public Java API entry point (docs/user/java-api.md): its callers are outside the reactor",
+    "minos-api/com.minos.api.LocalMinosMultiRepositoryApi":
+        "public Java API entry point (docs/user/java-api.md, ADR 0042): its callers are outside the reactor",
+    "minos-api/com.minos.api.LocalProviderPlatformApi":
+        "public Java API entry point (docs/user/java-api.md, ADR 0042): its callers are outside the reactor",
+    "minos-api/com.minos.api.LocalSemanticCodeIntelligenceApi":
+        "public Java API entry point (docs/user/java-api.md): its callers are outside the reactor",
+    "minos-application/com.minos.application.StorageBackends":
+        "public storage facade kept by ADR 0042 and ADR 0044 (signature unchanged for external callers)",
+    "minos-application/com.minos.program.analysis.ProgramGraphEvaluator":
+        "ground-truth evaluation tool of the program-graph tests of two modules and of "
+        "check-java-ast-provider-consistency.py; a test-jar would cost more (retirer-les-services-sans-appelant, D1)",
+    "minos-engine/com.minos.hosted.HostedAvailabilityPort":
+        "declared hosted boundary, not qualified: implemented by the operator of a hosted deployment",
+    "minos-engine/com.minos.hosted.HostedTransportSecurityPort":
+        "declared hosted boundary, not qualified: implemented by the operator of a hosted deployment",
+    "minos-engine/com.minos.orchestration.InMemoryIndexStateStore":
+        "in-memory state store used only by the tests of five modules; moving it needs a test-jar, not done here",
+    "minos-nexus/com.minos.nexus.NexusSemanticSignalService":
+        "public NEXUS semantic signal v2 surface (docs/developer/public-surfaces.md), not qualified by a client",
+    "minos-storage-local/com.minos.storage.local.store.CodeKnowledgeSnapshotBinaryCodec":
+        "declared snapshot codec boundary, excluded by AUD-QUA-02 itself",
+}
+TOP_LEVEL_PUBLIC_TYPE = re.compile(
+    r"^public\s+(?:(?:abstract|final|sealed|non-sealed|static|strictfp)\s+)*"
+    r"(?:class|interface|enum|record|@interface)\s+([A-Z]\w*)", re.MULTILINE)
+MAIN_METHOD = re.compile(r"\bpublic\s+static\s+void\s+main\s*\(")
+
+
+def production_sources(root: Path = ROOT) -> list[tuple[str, Path]]:
+    """(module, file) of every Java source of a reactor src/main."""
+    sources: list[tuple[str, Path]] = []
+    for module in MODULES:
+        source_root = root / module / "src" / "main" / "java"
+        if source_root.is_dir():
+            sources.extend((module, source) for source in sorted(source_root.rglob("*.java")))
+    return sources
+
+
+def service_registered_types(root: Path = ROOT) -> set[str]:
+    """Qualified names that a production META-INF/services file names (service interface or implementation)."""
+    names: set[str] = set()
+    for module in MODULES:
+        services = root / module / "src" / "main" / "resources" / "META-INF" / "services"
+        if not services.is_dir():
+            continue
+        for descriptor in sorted(path for path in services.iterdir() if path.is_file()):
+            names.add(descriptor.name.strip())
+            for line in descriptor.read_text(encoding="utf-8").splitlines():
+                entry = line.split("#", 1)[0].strip()
+                if entry:
+                    names.add(entry)
+    return names
+
+
+def unreferenced_production_types(root: Path = ROOT) -> dict[str, str]:
+    """'module/package.Type' -> source path, for every top-level public type of a reactor src/main that no other
+    production source names and that neither a production META-INF/services file nor a main method exempts.
+
+    A source names a type when the simple name appears in its code (comments and string literals removed) and the
+    source is in the same package, imports the type, a member of it or its package, or writes its qualified name.
+    Test sources do not count. Known blind spots, assumed: reflection, a reference from a type that is itself
+    unreferenced, and a homonym imported from another package (counted as a reference)."""
+    services = service_registered_types(root)
+    parsed: list[tuple[str, Path, str, str]] = []
+    for module, source in production_sources(root):
+        if source.name in ("package-info.java", "module-info.java"):
+            continue
+        text = source.read_text(encoding="utf-8")
+        match = PACKAGE.search(text)
+        parsed.append((module, source, match.group(1) if match else "", COMMENTS_AND_LITERALS.sub(" ", text)))
+    declared: list[tuple[str, str, str, Path, str]] = []
+    for module, source, package, code in parsed:
+        type_match = TOP_LEVEL_PUBLIC_TYPE.search(code)
+        if type_match is None or type_match.group(1) != source.stem:
+            continue
+        declared.append((module, package, source.stem, source, code))
+    result: dict[str, str] = {}
+    for module, package, name, source, code in declared:
+        qualified = f"{package}.{name}"
+        if qualified in services or MAIN_METHOD.search(code):
+            continue
+        word = re.compile(r"\b" + re.escape(name) + r"\b")
+        referenced = False
+        for _other_module, other, other_package, other_code in parsed:
+            if other == source or not word.search(other_code):
+                continue
+            if other_package == package or qualified in other_code:
+                referenced = True
+                break
+            for _static, imported, wildcard in SOURCE_IMPORT.findall(other_code):
+                if imported == qualified or imported.startswith(qualified + ".") or (wildcard and imported == package):
+                    referenced = True
+                    break
+            if referenced:
+                break
+        if not referenced:
+            result[f"{module}/{qualified}"] = source.relative_to(root).as_posix()
+    return result
+
+
+def check_unreferenced_production_types(root: Path = ROOT,
+                                        declared: dict[str, str] = UNREFERENCED_PRODUCTION_TYPES) -> int:
+    """A15 — every top-level public type of a reactor src/main is named by production, or listed with a reason."""
+    unreasoned = sorted(entry for entry, reason in declared.items() if not reason.strip())
+    if unreasoned:
+        fail("A15 UNREFERENCED_PRODUCTION_TYPES entries need a written reason: " + ", ".join(unreasoned))
+    found = unreferenced_production_types(root)
+    undeclared = sorted(entry for entry in found if entry not in declared)
+    if undeclared:
+        fail("A15 public production types without a production caller (delete them, move them to tests, or list "
+             "them in UNREFERENCED_PRODUCTION_TYPES with a reason): " + ", ".join(undeclared))
+    existing = set()
+    for module, source in production_sources(root):
+        match = PACKAGE.search(source.read_text(encoding="utf-8"))
+        existing.add(f"{module}/{match.group(1) if match else ''}.{source.stem}")
+    stale = sorted(entry for entry in declared if entry not in existing)
+    if stale:
+        fail("A15 UNREFERENCED_PRODUCTION_TYPES is a ratchet: these types no longer exist, remove the entries: "
+             + ", ".join(stale))
+    useless = sorted(entry for entry in declared if entry in existing and entry not in found)
+    if useless:
+        fail("A15 UNREFERENCED_PRODUCTION_TYPES is a ratchet: production now names these types, remove the "
+             "entries: " + ", ".join(useless))
+    return len(declared)
+
+
 def check_java_layout(root: Path = ROOT) -> tuple[int, dict[str, int]]:
     owners: dict[str, str] = {}
     counts: dict[str, int] = {}
@@ -907,6 +1041,7 @@ def main() -> int:
         total, counts = check_java_layout()
         check_source_boundaries()
         exported = check_runtime_local_exports()
+        unreferenced = check_unreferenced_production_types()
         packages = check_package_ownership()
         cycles, cycle_packages = check_package_cycles()
         documented = check_architecture_documentation(graph)
@@ -921,6 +1056,8 @@ def main() -> int:
         print(f"A9 architecture document: {documented} module sections match the POM dependencies")
         print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
               f"modules, none other is")
+        print(f"A15 unreferenced production types: {unreferenced} listed in UNREFERENCED_PRODUCTION_TYPES, "
+              f"every other public type is named by production")
         print(
             f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "
             f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042, "

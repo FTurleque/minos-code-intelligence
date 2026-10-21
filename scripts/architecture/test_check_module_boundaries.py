@@ -965,5 +965,85 @@ class MainWiringTest(unittest.TestCase):
         self.assertEqual(calls, ["exports"])
         self.assertIn("spy exports failed", error)
 
+    def test_main_runs_the_unreferenced_production_type_rule(self):
+        calls: list[str] = []
+        code, error = self.run_main_with(check_unreferenced_production_types=self.spy(calls, "unreferenced"))
+        self.assertEqual(code, 1)
+        self.assertEqual(calls, ["unreferenced"])
+        self.assertIn("spy unreferenced failed", error)
+
+
+class UnreferencedProductionTypeRuleTest(unittest.TestCase):
+    """A15: a public production type is named by production, exempted by rule, or listed with a reason."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="minos-a16-"))
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.write("minos-engine", "main", "com.minos.a", "Used", "public final class Used { }")
+        self.write("minos-application", "main", "com.minos.b", "Caller",
+                   "import com.minos.a.Used;\n\nfinal class Caller { Used used; }")
+
+    def write(self, module, scope, package, name, body):
+        directory = self.root / module / "src" / scope / "java" / Path(*package.split("."))
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / f"{name}.java").write_text(f"package {package};\n\n{body}\n", encoding="utf-8")
+
+    def check(self, declared=None):
+        return _MODULE.check_unreferenced_production_types(self.root, {} if declared is None else declared)
+
+    def test_clean_tree_is_accepted(self):
+        self.assertEqual(0, self.check())
+
+    def test_public_class_without_caller_is_refused(self):
+        self.write("minos-engine", "main", "com.minos.a", "Orphan", "public final class Orphan { }")
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*minos-engine/com\.minos\.a\.Orphan"):
+            self.check()
+
+    def test_class_named_only_by_a_test_is_refused(self):
+        self.write("minos-engine", "main", "com.minos.a", "Orphan", "public final class Orphan { }")
+        self.write("minos-engine", "test", "com.minos.a", "OrphanTest", "class OrphanTest { Orphan orphan; }")
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*Orphan"):
+            self.check()
+
+    def test_name_in_a_comment_or_string_does_not_count(self):
+        self.write("minos-engine", "main", "com.minos.a", "Orphan", "public final class Orphan { }")
+        self.write("minos-engine", "main", "com.minos.a", "Talker",
+                   "final class Talker { // Orphan\n String s = \"Orphan\"; }")
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*Orphan"):
+            self.check()
+
+    def test_service_registered_class_is_accepted(self):
+        self.write("minos-engine", "main", "com.minos.a", "Plugin", "public final class Plugin { }")
+        services = self.root / "minos-engine" / "src" / "main" / "resources" / "META-INF" / "services"
+        services.mkdir(parents=True)
+        (services / "com.minos.a.Spi").write_text("# provider\ncom.minos.a.Plugin\n", encoding="utf-8")
+        self.assertEqual(0, self.check())
+
+    def test_main_class_is_accepted(self):
+        self.write("minos-cli", "main", "com.minos.c", "Launcher",
+                   "public final class Launcher { public static void main(String[] args) { } }")
+        self.assertEqual(0, self.check())
+
+    def test_listed_class_is_accepted(self):
+        self.write("minos-nexus", "main", "com.minos.n", "Surface", "public final class Surface { }")
+        self.assertEqual(1, self.check({"minos-nexus/com.minos.n.Surface": "public surface"}))
+
+    def test_stale_entry_is_refused(self):
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*no longer exist.*com\.minos\.a\.Gone"):
+            self.check({"minos-engine/com.minos.a.Gone": "deleted class"})
+
+    def test_entry_whose_type_gained_a_caller_is_refused(self):
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*production now names.*com\.minos\.a\.Used"):
+            self.check({"minos-engine/com.minos.a.Used": "was unused"})
+
+    def test_entry_without_reason_is_refused(self):
+        self.write("minos-nexus", "main", "com.minos.n", "Surface", "public final class Surface { }")
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*reason.*com\.minos\.n\.Surface"):
+            self.check({"minos-nexus/com.minos.n.Surface": "  "})
+
+    def test_repository_list_matches_the_head(self):
+        self.assertEqual(len(_MODULE.UNREFERENCED_PRODUCTION_TYPES), _MODULE.check_unreferenced_production_types())
+
+
 if __name__ == "__main__":
     unittest.main()

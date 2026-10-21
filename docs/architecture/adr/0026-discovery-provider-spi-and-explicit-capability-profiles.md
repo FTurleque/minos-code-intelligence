@@ -85,3 +85,7 @@ M17 FINAL PROVIDER PLATFORM VALIDATION SUCCESS
 ## Suivi (2026-10-10, audit AUD-ARC-06)
 
 Les quatre interfaces SPI de découverte (`ProjectDetector`, `BuildSystemDetector`, `SourceRootDetector`, `LanguageDetector`) résidaient dans le package `com.minos.discovery.spi`, qui importait le modèle de `com.minos.discovery` tandis que `ProjectDiscoveryService` importait l'SPI : un cycle de packages. Elles vivent désormais dans `com.minos.discovery`, avec le modèle et le service ; le package `spi` n'existe plus. La décision de cet ADR (découverte par extensions composables, conventions intégrées dans `DefaultDiscoveryPlugins`) est inchangée ; aucun implémenteur ne vit hors de `minos-engine`.
+
+## Mise en œuvre (2026-10-21, audit AUD-QUA-02)
+
+`IndexerProviderRegistry`, présenté au § 2 comme catalogue d'extensions, n'avait aucun appelant de production : aucune extension tierce de provider n'est supportée, et le produit négocie par `IndexerRegistry` à partir des descriptors. La classe est supprimée (changement `retirer-les-services-sans-appelant-de-production`) ; ses tests sont réécrits sur `IndexerRegistry`. Le contrôle propre au catalogue (identifiant du descriptor égal à celui du profil) disparaît avec lui ; `ProviderCapabilityProfile` reste exhaustif et `ProviderConformanceKit` inchangé. Le reste de la décision (SPI de découverte, `IndexerProvider`, modèle de capacités v2) est inchangé ; un catalogue d'extensions reviendrait par une nouvelle décision.
