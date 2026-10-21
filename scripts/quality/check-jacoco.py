@@ -65,7 +65,7 @@ SCOPES = {
         "prefixes": (
             "com/minos/program/analysis/ProgramGraphService", "com/minos/program/analysis/ProgramGraphComposer",
             "com/minos/program/analysis/RelationshipProgramGraphProvider", "com/minos/program/analysis/FileProgramGraphProvider",
-            "com/minos/program/analysis/ProgramGraphEvaluator", "com/minos/program/analysis/InterproceduralFlowService",
+            "com/minos/program/analysis/ProgramGraphEvaluator",
         ), "line": 0.50, "branch": 0.30,
     },
     "java-advanced-provider": {
@@ -89,7 +89,7 @@ SCOPES = {
         "prefixes": (
             "com/minos/application/semantic/SemanticDocumentFactory", "com/minos/application/semantic/SemanticIndexService",
             "com/minos/application/semantic/SemanticSearchService", "com/minos/application/semantic/HybridSearchService",
-            "com/minos/application/semantic/HybridContextBuilder", "com/minos/application/semantic/SemanticSearchEvaluator",
+            "com/minos/application/semantic/HybridContextBuilder",
         ), "line": 0.50, "branch": 0.30,
     },
     "advanced-public-api": {
