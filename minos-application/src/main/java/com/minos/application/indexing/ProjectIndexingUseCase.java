@@ -251,7 +251,7 @@ public final class ProjectIndexingUseCase {
                            IndexingResumePolicy resumePolicy) throws IOException {
         Objects.requireNonNull(resumePolicy, "resumePolicy");
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
+        try (IndexStateStore.ProjectLease _ = stateStore.acquireProjectLease(project.id())) {
             // ADR 0039 sec. 6: --no-resume forces a complete run (it supersedes the interrupted run and indexes
             // everything), it is not only a resume policy: on an unchanged project it must not answer NO_CHANGES.
             boolean complete = forceFull || resumePolicy == IndexingResumePolicy.NO_RESUME;
@@ -431,7 +431,7 @@ public final class ProjectIndexingUseCase {
         try {
             retentionService.compact(projectId);
             return null;
-        } catch (IOException retentionFailure) {
+        } catch (IOException _) {
             return "storage retention did not run (its lock was busy or unavailable); it runs after the next indexing";
         }
     }
@@ -457,7 +457,7 @@ public final class ProjectIndexingUseCase {
         try {
             baseline = fingerprintStore.loadActive(project.id());
             invalidation = invalidationService.assess(indexState, baseline, current, discovery);
-        } catch (IOException exception) {
+        } catch (IOException _) {
             // D3 (a): the unreadable baseline is declared, never treated as absent in silence; the cause may name a
             // path and is not carried.
             baselineDiagnostic = Optional.of(BASELINE_UNREADABLE_DIAGNOSTIC);
