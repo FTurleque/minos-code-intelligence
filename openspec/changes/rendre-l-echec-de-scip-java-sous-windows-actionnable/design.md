@@ -86,3 +86,7 @@ La mesure conforme est de ne plus déclarer prêt ce qui n'est pas qualifié : s
 
 - Un script ou un client qui analyse le texte `index failed: IllegalStateException` : le texte change, le code de sortie non. Aucun usage dans le plugin IntelliJ (il lit la sortie JSON des commandes de lecture).
 - Lot 2 : un utilisateur Windows pour qui scip-java fonctionnerait (non observé) le verrait bloqué ; réversible par l'ADR.
+
+## Note de dérive (2026-10-21)
+
+Le changement `unifier-l-orchestration-d-indexation` a déplacé l'orchestration de `minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java` vers `minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java` : les références `fichier:ligne` de ce document vers la CLI ont dérivé et sont à relire au HEAD avant implémentation.

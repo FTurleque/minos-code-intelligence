@@ -124,7 +124,8 @@ def check_distributed_worker_sources() -> None:
 
 def check_remote_indexing_wiring() -> None:
     """The CLI, the composition root and the final-validation runners that expose remote indexing."""
-    autonomous = read("minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java")
+    # AUD-ARC-02: the executor decorator is a parameter of the application indexing use case.
+    autonomous = read("minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java")
     remote_operations = read("minos-cli/src/main/java/com/minos/cli/operations/LocalRemoteIndexOperations.java")
     # A2 / ADR 0042: the concrete M25 wiring moved verbatim to the composition root (minos-bootstrap).
     remote_runtime = read("minos-bootstrap/src/main/java/com/minos/bootstrap/LocalRemoteIndexingRuntime.java")
@@ -135,7 +136,7 @@ def check_remote_indexing_wiring() -> None:
     windows_runner = read("scripts/m25/run-final.ps1")
     linux_runner = read("scripts/m25/run-final.sh")
 
-    require_facts("LocalAutonomousIndexOperations.java", autonomous, "executorDecorator", "UnaryOperator<IndexerExecutor>")
+    require_facts("ProjectIndexingUseCase.java", autonomous, "executorDecorator", "UnaryOperator<IndexerExecutor>")
     require_facts("LocalRemoteIndexOperations.java", remote_operations,
                   "RemoteIndexingRuntime", "compositionRoot.remoteRepositoryMaterializer(",
                   "compositionRoot.remoteIndexingRuntime(", "force", "verified artifact evidence")

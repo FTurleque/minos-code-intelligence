@@ -1,9 +1,6 @@
 package com.minos.cli.operations;
 
 import com.minos.application.MinosApplication;
-import com.minos.incremental.ProjectFingerprint;
-import com.minos.incremental.ProjectFingerprintSnapshot;
-import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.orchestration.IndexingResumePolicy;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
@@ -22,7 +19,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.UnaryOperator;
 
@@ -32,8 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The failure paths of an indexing run: a fingerprint that cannot be published, and a provider failure on an
- * incremental run. In both, the retention pass that follows may fail without hiding the original failure.
+ * A provider failure on an incremental run through the command: the retention pass that follows may fail without
+ * hiding the original failure. The other failure paths (fingerprint publication, retention after a failure) are
+ * proved on the indexing use case of minos-application ({@code ProjectIndexingUseCaseTest}).
  */
 class IndexFailurePathsTest {
 
@@ -61,28 +58,6 @@ class IndexFailurePathsTest {
         };
     }
 
-    /** A fingerprint store whose publication is refused; nothing else is reached. */
-    private static ProjectFingerprintSnapshotStore refusingFingerprintStore() {
-        return new ProjectFingerprintSnapshotStore() {
-            @Override public ProjectFingerprintSnapshot publish(UUID projectId, String indexSnapshotId,
-                                                                ProjectFingerprint fingerprint) throws IOException {
-                throw new IOException("fingerprint publication refused");
-            }
-            @Override public void promote(UUID projectId, String indexSnapshotId) {
-                throw new UnsupportedOperationException("promotion is not reached");
-            }
-            @Override public Optional<ProjectFingerprintSnapshot> load(UUID projectId, String indexSnapshotId) {
-                return Optional.empty();
-            }
-            @Override public Optional<ProjectFingerprintSnapshot> loadActive(UUID projectId) {
-                return Optional.empty();
-            }
-            @Override public List<String> listIndexSnapshotIds(UUID projectId) {
-                return List.of();
-            }
-        };
-    }
-
     private RegisteredProject indexedProject(MinosApplication application) throws IOException {
         Path root = Files.createDirectories(temp.resolve("project"));
         Files.writeString(root.resolve("pom.xml"), """
@@ -101,48 +76,6 @@ class IndexFailurePathsTest {
         application.fingerprintStore().publish(project.id(), snapshot.snapshotId(), fingerprint);
         application.fingerprintStore().promote(project.id(), snapshot.snapshotId());
         return project;
-    }
-
-    @Test
-    void aFingerprintThatCannotBePublishedFailsTheRunAndKeepsARetentionFailureSuppressed() throws Exception {
-        IOException retentionFailure = new IOException("retention lock timed out");
-        try (MinosApplication application = MinosApplication.builder(temp.resolve("home"))
-                .fingerprintStore(refusingFingerprintStore())
-                .retentionService((projectId, policy) -> {
-                    compactions.incrementAndGet();
-                    throw retentionFailure;
-                })
-                .build()) {
-            LocalAutonomousIndexOperations operations =
-                    new LocalAutonomousIndexOperations(application, UnaryOperator.identity());
-
-            IOException failure = assertThrows(IOException.class,
-                    () -> operations.promoteFingerprint(UUID.randomUUID(), "snapshot-2", null));
-
-            assertEquals("fingerprint publication refused", failure.getMessage());
-            assertEquals(1, compactions.get(), "the failed promotion releases what the run retained");
-            assertSame(retentionFailure, failure.getSuppressed()[0],
-                    "the retention failure is attached to the original failure, never replaces it");
-        }
-    }
-
-    @Test
-    void aSuccessfulRetentionPassAfterAFailureAddsNothingToIt() throws Exception {
-        try (MinosApplication application = MinosApplication.builder(temp.resolve("home"))
-                .retentionService((projectId, policy) -> {
-                    compactions.incrementAndGet();
-                    return null;
-                })
-                .build()) {
-            LocalAutonomousIndexOperations operations =
-                    new LocalAutonomousIndexOperations(application, UnaryOperator.identity());
-            IllegalStateException failure = new IllegalStateException("run failed");
-
-            operations.compactAfterFailure(UUID.randomUUID(), failure);
-
-            assertEquals(1, compactions.get());
-            assertEquals(0, failure.getSuppressed().length);
-        }
     }
 
     @Test
