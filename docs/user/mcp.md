@@ -458,7 +458,7 @@ Attention : un succès avec le JDK complet du checkout ne suffit pas à qualifie
 | `minos_find_callees` | appels sortants disponibles |
 | `minos_dependencies` | dépendances sortantes |
 | `minos_dependents` | dépendances entrantes |
-| `minos_related_tests` | tests liés avec explications |
+| `minos_related_tests` | tests liés avec explications (au plus 5 emplacements par type de preuve, le reste déclaré par une preuve de synthèse sans emplacement) |
 | `minos_symbol_context` | contexte compact d'un symbole |
 | `minos_module_context` | contexte architectural d'un module |
 | `minos_architecture` | vue d'architecture projet + arêtes du graphe en JSON |
