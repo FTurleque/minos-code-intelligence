@@ -68,6 +68,7 @@ final class IndexingFixture {
     IOException retentionFailure;
     boolean qualifiedProvider = true;
     List<SourceRootDetector> extraDetectors = List.of();
+    ProjectFingerprintService fingerprintService = new ProjectFingerprintService();
 
     IndexingFixture(Path temp) throws IOException {
         this.root = javaProject(temp.resolve("project"));
@@ -115,7 +116,7 @@ final class IndexingFixture {
                 (projectId, runId, stagedSnapshotId) -> snapshots.active.put(projectId, stagedSnapshotId),
                 ResumableRunMarkers.none(),
                 discovery,
-                new ProjectFingerprintService(),
+                fingerprintService,
                 new ProjectInvalidationService(),
                 new IncrementalIndexingPlanner(),
                 override -> registry(),
