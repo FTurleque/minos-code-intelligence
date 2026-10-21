@@ -498,7 +498,7 @@ def check_runtime_local_exports(root: Path = ROOT, group_id: str | None = None,
 
 
 # A15 / AUD-QUA-02 — a public production type is used by production, or declared. Numbered after A11-A14 (reserved
-# by figer-la-dette-de-frontieres-par-des-cliquets); A15 is the two-argument ServiceLoader rule of
+# by figer-la-dette-de-frontieres-par-des-cliquets); A16 is the two-argument ServiceLoader rule of
 # decouvrir-les-fournisseurs-par-chargeur-explicite. Each entry names one top-level public type of a reactor
 # src/main (module/package.Type) with the reason it has no production caller. The list is a ratchet: an entry whose
 # type is gone, or is now named by production, fails the guard.
@@ -522,8 +522,6 @@ UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
         "declared hosted boundary, not qualified: implemented by the operator of a hosted deployment",
     "minos-engine/com.minos.orchestration.InMemoryIndexStateStore":
         "in-memory state store used only by the tests of five modules; moving it needs a test-jar, not done here",
-    "minos-engine/com.minos.orchestration.IncrementalIndexingCoordinator":
-        "temporary: its fate belongs to unifier-l-orchestration-d-indexation, which removes this entry",
     "minos-nexus/com.minos.nexus.NexusSemanticSignalService":
         "public NEXUS semantic signal v2 surface (docs/developer/public-surfaces.md), not qualified by a client",
     "minos-storage-local/com.minos.storage.local.store.CodeKnowledgeSnapshotBinaryCodec":

@@ -1,33 +1,40 @@
 package com.minos.app.incremental;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
+import com.minos.application.MinosApplication;
+import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.discovery.ProjectDiscovery.Language;
-import com.minos.orchestration.InMemoryIndexStateStore;
-import com.minos.orchestration.IncrementalIndexingCoordinator;
-import com.minos.orchestration.IncrementalIndexingResult;
-import com.minos.orchestration.IndexerRegistry;
-import com.minos.orchestration.IndexingLifecycleService;
+import com.minos.orchestration.IndexerCapability;
 import com.minos.orchestration.IndexingMode;
-import com.minos.orchestration.IndexingRequirements;
+import com.minos.orchestration.IndexingResumePolicy;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
-import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
+import com.minos.registry.RegisteredProject;
+import com.minos.runtime.ProviderRuntimeManager;
+import com.minos.runtime.ProviderRuntimeStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
-import java.util.UUID;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * The real TypeScript fixture through the single indexing orchestration of the product (AUD-ARC-02): an unchanged
+ * project answers NO_CHANGES, a source change falls back to a complete run because scip-typescript does not declare
+ * incremental indexing, and the fingerprint baseline follows the promoted snapshot.
+ */
 class IncrementalIndexingRealFixtureTest {
 
     @Test
@@ -35,59 +42,51 @@ class IncrementalIndexingRealFixtureTest {
         Path project = temp.resolve("typescript-modules");
         copyTree(Path.of("fixtures/typescript/typescript-modules"), project);
         Path artifact = Files.writeString(temp.resolve("typescript.scip"), "fixture-index");
-
-        IndexerRegistry registry = new IndexerRegistry();
-        ScipIndexerCatalog.registerQualifiedM1(registry);
         RecordingExecutor executor = new RecordingExecutor(artifact);
         AtomicInteger snapshots = new AtomicInteger();
-        IndexingLifecycleService lifecycle = new IndexingLifecycleService(
-                List.of(executor),
-                request -> "snapshot-" + snapshots.incrementAndGet(),
-                (projectId, runId, stagedSnapshotId) -> { },
-                new InMemoryIndexStateStore()
-        );
-        FileProjectFingerprintSnapshotStore fingerprintStore =
-                new FileProjectFingerprintSnapshotStore(temp.resolve("fingerprints"));
-        IncrementalIndexingCoordinator coordinator = new IncrementalIndexingCoordinator(
-                fingerprintStore,
-                registry,
-                lifecycle
-        );
-        UUID projectId = UUID.randomUUID();
+        AtomicReference<MinosApplication> self = new AtomicReference<>();
 
-        IncrementalIndexingResult first = coordinator.refresh(projectId, project, IndexingRequirements.baseline());
-        IncrementalIndexingResult unchanged = coordinator.refresh(projectId, project, IndexingRequirements.baseline());
+        try (MinosApplication application = MinosApplication.builder(temp.resolve("home"))
+                .indexerDescriptors(ScipIndexerCatalog.qualifiedM1Descriptors())
+                .providerRuntimeManager(new ReadyRuntime(executor))
+                .snapshotLifecycle(
+                        request -> "snapshot-" + snapshots.incrementAndGet(),
+                        (projectId, runId, stagedSnapshotId) -> {
+                            try {
+                                self.get().snapshotStore().publish(projectId, stagedSnapshotId, List.of(), List.of(), List.of());
+                            } catch (java.io.IOException exception) {
+                                throw new UncheckedIOException(exception);
+                            }
+                        })
+                .build()) {
+            self.set(application);
+            RegisteredProject registered = application.projectRegistry().registerProject(project, "typescript-modules");
+            ProjectIndexingUseCase indexing = ProjectIndexingUseCase.of(application, UnaryOperator.identity());
+            String id = registered.id().toString();
 
-        Path changedSource = project.resolve("packages/app/src/greeting-service.ts");
-        Files.writeString(changedSource, Files.readString(changedSource) + System.lineSeparator() + "// M7.4 change");
-        IncrementalIndexingResult sourceChanged = coordinator.refresh(
-                projectId,
-                project,
-                IndexingRequirements.baseline()
-        );
+            var first = indexing.execute(id, null, false, IndexingResumePolicy.RESUME);
+            var unchanged = indexing.execute(id, null, false, IndexingResumePolicy.RESUME);
+            Path changedSource = project.resolve("packages/app/src/greeting-service.ts");
+            Files.writeString(changedSource, Files.readString(changedSource) + System.lineSeparator() + "// M7.4 change");
+            var sourceChanged = indexing.execute(id, null, false, IndexingResumePolicy.RESUME);
 
-        assertEquals(IndexingMode.FULL, first.plan().mode());
-        assertTrue(first.fingerprintBaselineAdvanced());
-        assertEquals(IndexingMode.NONE, unchanged.plan().mode());
-        assertTrue(unchanged.run().isEmpty());
-        assertEquals(IndexingMode.FULL, sourceChanged.plan().mode());
-        assertEquals(List.of("scip-typescript"), sourceChanged.plan().missingIncrementalCapabilityIndexerIds());
-        assertTrue(sourceChanged.fingerprintBaselineAdvanced());
-        assertEquals(2, executor.calls.get());
-        assertEquals(IndexingMode.FULL, executor.lastRequest.get().mode());
-        assertEquals(List.of(), executor.lastRequest.get().changedFiles());
-        assertFalse(ScipIndexerCatalog.scipTypeScript().capabilities()
-                .contains(com.minos.orchestration.IndexerCapability.INCREMENTAL_INDEXING));
-        assertEquals("snapshot-2", fingerprintStore.loadActive(projectId).orElseThrow().indexSnapshotId());
-
-        System.out.printf(
-                "M7.4 typescript-modules planning: initial=%s, unchanged=%s, source=%s, missing-capability=%s, baseline=%s%n",
-                first.plan().mode(),
-                unchanged.plan().mode(),
-                sourceChanged.plan().mode(),
-                sourceChanged.plan().missingIncrementalCapabilityIndexerIds(),
-                fingerprintStore.loadActive(projectId).orElseThrow().indexSnapshotId()
-        );
+            assertEquals(IndexingMode.FULL, first.preparation().effectiveMode());
+            assertTrue(first.fingerprintPromoted());
+            assertEquals(IndexingMode.NONE, unchanged.preparation().effectiveMode());
+            assertTrue(unchanged.run().isEmpty());
+            assertEquals(IndexingMode.FULL, sourceChanged.preparation().effectiveMode());
+            assertEquals(List.of("scip-typescript"),
+                    sourceChanged.preparation().plan().missingIncrementalCapabilityIndexerIds());
+            assertTrue(sourceChanged.fingerprintPromoted());
+            // The product path executes once per discovered scope; what the coordinator counted was runs.
+            assertEquals(2, executor.runIds.size(), "two provider runs: the initial one and the source change");
+            assertEquals(IndexingMode.FULL, executor.lastRequest.get().mode());
+            assertEquals(List.of(), executor.lastRequest.get().changedFiles());
+            assertFalse(ScipIndexerCatalog.scipTypeScript().capabilities()
+                    .contains(IndexerCapability.INCREMENTAL_INDEXING));
+            assertEquals("snapshot-2",
+                    application.fingerprintStore().loadActive(registered.id()).orElseThrow().indexSnapshotId());
+        }
     }
 
     private static void copyTree(Path source, Path target) throws Exception {
@@ -105,10 +104,23 @@ class IncrementalIndexingRealFixtureTest {
         }
     }
 
+    private record ReadyRuntime(RecordingExecutor executor) implements ProviderRuntimeManager {
+        private static ProviderRuntimeStatus ready(String providerId) {
+            return new ProviderRuntimeStatus(providerId, "fixture", ProviderRuntimeStatus.State.READY,
+                    Optional.empty(), List.of(), true);
+        }
+
+        @Override public List<ProviderRuntimeStatus> list() { return List.of(ready("scip-typescript")); }
+        @Override public ProviderRuntimeStatus inspect(String providerId) { return ready(providerId); }
+        @Override public ProviderRuntimeStatus install(String providerId) { return ready(providerId); }
+        @Override public IndexerExecutor executor(String providerId) { return executor; }
+    }
+
     private static final class RecordingExecutor implements IndexerExecutor {
         private final Path artifact;
         private final AtomicInteger calls = new AtomicInteger();
         private final AtomicReference<IndexingExecutionRequest> lastRequest = new AtomicReference<>();
+        private final java.util.Set<java.util.UUID> runIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
         private RecordingExecutor(Path artifact) {
             this.artifact = artifact;
@@ -119,11 +131,19 @@ class IncrementalIndexingRealFixtureTest {
             return "scip-typescript";
         }
 
+        /** The fixture artifact is a file of the test, not the output of a provider run. */
+        @Override
+        public boolean artifactsLiveInRunDirectory() {
+            return false;
+        }
+
         @Override
         public IndexingArtifact execute(IndexingExecutionRequest request) {
             calls.incrementAndGet();
             lastRequest.set(request);
-            return new IndexingArtifact(Language.TYPESCRIPT, indexerId(), artifact);
+            runIds.add(request.runId());
+            // The product path runs one execution per discovered scope: the artifact answers for that scope.
+            return new IndexingArtifact(Language.TYPESCRIPT, indexerId(), artifact, request.projectRelativeRoot());
         }
     }
 }

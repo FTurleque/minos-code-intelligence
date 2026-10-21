@@ -1,6 +1,6 @@
 # Section 6 — Vue d'exécution
 
-> Preuves : `MinosCliRunner`, `LocalAutonomousIndexOperations`, `IndexingLifecycleService`, `DoctorCommand`,
+> Preuves : `MinosCliRunner`, `LocalAutonomousIndexOperations`, `ProjectIndexingUseCase`, `IndexingLifecycleService`, `DoctorCommand`,
 > `McpBackendRouter`, `DockerMcpTransport`, `MinosMcpServer`, ADR-0006, ADR-0014, ADR-0037, ADR-0039.
 
 Relu contre le code le 2026-10-07 : les noms exacts des classes sont dans les tableaux sous chaque diagramme, et les mêmes diagrammes sont dans [`diagrams/`](../diagrams/README.md), qui fait foi en cas d'écart.
@@ -49,7 +49,7 @@ sequenceDiagram
 | Participant | Classes (module) |
 |---|---|
 | CLI | `MinosLauncher`, `MinosCliRunner`, `IndexCommand` (`minos-cli`) ; l'application est ouverte par `MinosApplication.open(home)` |
-| Orchestration de l'indexation | `LocalAutonomousIndexOperations` (`minos-cli`) |
+| Orchestration de l'indexation | `ProjectIndexingUseCase` (`minos-application`), appelé par `LocalAutonomousIndexOperations` (`minos-cli`) |
 | Moteur | `ProjectFingerprintService`, `ProjectDiscoveryService`, `ProjectInvalidationService`, `IndexerRegistry`, `IncrementalIndexingPlanner`, `IndexingLifecycleService` / `IndexingRunExecutor` (`minos-engine`) |
 | Provider SCIP | `ProviderRuntimeManager` (port) et `IndexerExecutor` (`IndexingRuntimePorts`), réalisés par `minos-provider-scip` |
 | Stockage | `IndexStateStore`, `SnapshotStager`, `SnapshotPromoter`, `ProjectFingerprintSnapshotStore` (ports d'`minos-engine`, réalisés par `minos-storage-local`) |
@@ -117,7 +117,7 @@ sequenceDiagram
 | Participant | Classes (module) |
 |---|---|
 | CLI | `IndexCommand`, `CliCommandSupport.run` : message `error: …`, code `FindSymbolCommand.EXECUTION_ERROR` (= 1) |
-| Orchestration de l'indexation | `LocalAutonomousIndexOperations.prepare` / `executeLocked` (`minos-cli`) |
+| Orchestration de l'indexation | `ProjectIndexingUseCase.prepare` / `executeLocked` (`minos-application`) |
 | Registre d'indexeurs | `IndexerRegistry.negotiate` (`minos-engine`) |
 | Provider SCIP | `ManagedScipProviderRuntimeManager.inspect` (`minos-provider-scip`) : états `READY`, `BLOCKED`, `NOT_INSTALLED` |
 

@@ -52,7 +52,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 
 ### minos-engine
 - **Responsabilité** : définit les ports (interfaces) du moteur et les services provider-indépendants : requêtes, découverte de projet, planification incrémentale et orchestration de l'indexation (cycle de vie, exécution des runs, reprise) — [ADR 0044](../adr/0044-un-package-un-module.md).
-- **Types clés** : `CodeKnowledgeStore` (port), `InMemoryCodeKnowledgeStore` (`com.minos.store`), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`, `ProjectDiscoveryService`, `IncrementalIndexingCoordinator`, `IndexingLifecycleService`, `IndexingRunExecutor`.
+- **Types clés** : `CodeKnowledgeStore` (port), `InMemoryCodeKnowledgeStore` (`com.minos.store`), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`, `ProjectDiscoveryService`, `IndexingLifecycleService`, `IndexingRunExecutor`.
 - **Interfaces** : `CodeKnowledgeStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…).
 - **Dépendances** : `minos-domain`.
 - **Sources** : `minos-engine/src/main/java/com/minos/store/`, `com/minos/orchestration/`, `com/minos/query/`, `com/minos/discovery/`, `com/minos/incremental/`, `com/minos/hosted/` (modèle, ports et services du plan de contrôle d'équipe), `com/minos/dynamic/` (modèle et port des observations runtime).
@@ -144,11 +144,13 @@ flowchart TB
 
     queries["<b>Requêtes</b><br/>ProjectQueryService · ProjectArchitectureQuery<br/>ProjectImpactQuery · ProgramGraphService<br/>WorkspaceIntelligenceService · RuntimeIntelligenceService"]
     semantic["<b>Sémantique</b><br/>SemanticIndexService · SemanticSearchService<br/>HybridSearchService · HybridContextBuilder"]
-    engine["<b>Exposés depuis minos-engine</b><br/>ProjectDiscoveryService · IncrementalIndexingCoordinator<br/>HostedControlPlaneService"]
+    engine["<b>Exposés depuis minos-engine</b><br/>ProjectDiscoveryService · HostedControlPlaneService"]
+    indexing["<b>Cas d'usage d'indexation</b><br/>ProjectIndexingUseCase (com.minos.application.indexing)"]
 
     facade --> queries
     facade --> semantic
     facade --> engine
+    facade --> indexing
 ```
 
 Dépendances internes relevées dans le code : `ProjectQueryService` → `CodeSearchService` ;

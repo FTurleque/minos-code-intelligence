@@ -1,5 +1,6 @@
 package com.minos.cli.operations;
 
+import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.orchestration.IndexingRun;
@@ -28,7 +29,7 @@ class IndexRunFailureMessageTest {
     void uneCauseQuiCiteUnCheminAbsoluEstRemplaceeParLEmplacementDuRun() {
         IndexingRun run = run(IndexingRun.Status.FAILED, IndexingRun.Phase.PROVIDER_EXECUTION, ABSOLUTE_CAUSE);
 
-        String line = LocalAutonomousIndexOperations.failureMessage(run);
+        String line = ProjectIndexingUseCase.failureMessage(run);
 
         assertTrue(line.contains(run.id().toString()), line);
         assertTrue(line.contains("PROVIDER_EXECUTION"), line);
@@ -45,7 +46,7 @@ class IndexRunFailureMessageTest {
                 + "runs/r/scip-java/provider.stderr.log under MINOS_HOME";
         IndexingRun run = run(IndexingRun.Status.FAILED, IndexingRun.Phase.PROVIDER_EXECUTION, cause);
 
-        String line = LocalAutonomousIndexOperations.failureMessage(run);
+        String line = ProjectIndexingUseCase.failureMessage(run);
 
         assertTrue(line.endsWith(cause), line);
         assertEquals(line, CliCommandSupport.failureMessage(new IllegalStateException(line)));
@@ -56,7 +57,7 @@ class IndexRunFailureMessageTest {
         IndexingRun run = run(IndexingRun.Status.FAILED, IndexingRun.Phase.PROMOTION,
                 "IOException: connection refused with password=hunter2");
 
-        String line = LocalAutonomousIndexOperations.failureMessage(run);
+        String line = ProjectIndexingUseCase.failureMessage(run);
 
         assertFalse(line.contains("hunter2"), line);
         assertTrue(line.contains("MINOS_HOME/index-state/runs"), line);
@@ -67,7 +68,7 @@ class IndexRunFailureMessageTest {
     void unRunInterrompuResteAnnonceCommeRepriseable() {
         IndexingRun run = run(IndexingRun.Status.INTERRUPTED, IndexingRun.Phase.PROVIDER_EXECUTION, ABSOLUTE_CAUSE);
 
-        String line = LocalAutonomousIndexOperations.failureMessage(run);
+        String line = ProjectIndexingUseCase.failureMessage(run);
 
         assertTrue(line.contains("was interrupted and can be resumed"), line);
         assertFalse(PublicErrorMessages.looksSensitive(line), line);

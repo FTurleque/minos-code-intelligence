@@ -84,3 +84,7 @@ Le refus est identique sur les deux. Le risque de résolution d'un nom à un seu
 - Option A : l'erreur n'apparaît qu'au premier usage sémantique ; le statut de l'index sémantique doit la rendre visible (tâche 2.3).
 - Un déploiement Docker qui n'exporterait pas `MINOS_RUNTIME_LOCATION` perdrait la recherche sémantique : les services relus le posent (`docker/compose-mcp.connected.yaml:53,111,159,263`, `docker/compose-mcp.prod.yaml:37,77,124,256`) ; à vérifier pour tout autre lanceur (tâche 1.1).
 - `OllamaEmbeddingProviderTest` change dans la même tâche que le code ; le scope `semantic-learned-provider` a un seuil bas (0,52 / 0,32) mais SonarCloud juge le code neuf à 80 %.
+
+## Note de dérive (2026-10-21)
+
+Le changement `unifier-l-orchestration-d-indexation` a déplacé l'orchestration de `minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java` vers `minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java` : les références `fichier:ligne` de ce document vers la CLI ont dérivé et sont à relire au HEAD avant implémentation.

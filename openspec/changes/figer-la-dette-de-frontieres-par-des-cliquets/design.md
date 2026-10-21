@@ -96,3 +96,7 @@ Garde Python pur ; chemins construits par `pathlib` ; fichiers lus en UTF-8. Ex�
 - **Listes longues** (52 types pour la CLI) : générées, triées, une par ligne ; leur diff rend la dette lisible.
 - **Faux positifs** au grain du mot : mesurés en tâche 1.1 avant de figer la méthode de reconnaissance.
 - Les chantiers à venir (SH-05, SH-08, SH-03/06) **réduiront** ces listes : chaque réduction est une ligne supprimée, pas une règle à réécrire.
+
+## Note de dérive (2026-10-21)
+
+Le changement `unifier-l-orchestration-d-indexation` a déplacé l'orchestration de `minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java` vers `minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java` : les références `fichier:ligne` de ce document vers la CLI ont dérivé et sont à relire au HEAD avant implémentation.
