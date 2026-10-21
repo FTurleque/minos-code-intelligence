@@ -44,7 +44,8 @@ class ProviderConformanceKitTest {
         IndexerProvider provider = provider("fixture", exhaustive(CapabilitySupportLevel.FULL));
         registry.register(provider.descriptor());
         assertEquals(List.of("fixture"), registry.list().stream().map(IndexerDescriptor::id).toList());
-        assertThrows(IllegalArgumentException.class, () -> registry.register(provider.descriptor()));
+        IndexerDescriptor duplicate = provider.descriptor();
+        assertThrows(IllegalArgumentException.class, () -> registry.register(duplicate));
     }
 
     private static IndexerProvider provider(String id, Map<IndexerCapability, CapabilitySupportLevel> support) {

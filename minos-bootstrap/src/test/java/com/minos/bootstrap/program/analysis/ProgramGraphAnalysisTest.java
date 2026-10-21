@@ -282,10 +282,6 @@ class ProgramGraphAnalysisTest {
         return new ProgramGraphNode(id, projectId, symbolId, kind, label, null, InformationNature.FACTUAL, null, ORIGIN, List.of());
     }
 
-    private static ProgramGraphEdge edge(String id, String source, String target, ProgramEdgeKind kind) {
-        return edge("p", id, source, target, kind);
-    }
-
     private static ProgramGraphEdge edge(String projectId, String id, String source, String target, ProgramEdgeKind kind) {
         return new ProgramGraphEdge(id, projectId, source, target, kind, InformationNature.FACTUAL, null, ORIGIN, List.of());
     }
