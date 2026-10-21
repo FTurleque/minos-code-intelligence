@@ -94,8 +94,9 @@ class ProjectIndexingUseCaseTest {
         IndexingFixture fixture = new IndexingFixture(temp);
         fixture.qualifiedProvider = false;
 
+        ProjectIndexingUseCase useCase = fixture.useCase();
         IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> fixture.useCase().execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
+                () -> useCase.execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
 
         assertEquals("no qualified provider covers languages: [JAVA]", refusal.getMessage());
         assertEquals(0, fixture.executor.calls.get());
@@ -107,8 +108,9 @@ class ProjectIndexingUseCaseTest {
         IndexingFixture fixture = new IndexingFixture(temp);
         fixture.runtimeState = ProviderRuntimeStatus.State.NOT_INSTALLED;
 
+        ProjectIndexingUseCase useCase = fixture.useCase();
         IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> fixture.useCase().execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
+                () -> useCase.execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
 
         assertEquals("provider runtime is not ready: java-indexer — not installed", refusal.getMessage());
         assertEquals(0, fixture.executor.calls.get());
@@ -132,8 +134,9 @@ class ProjectIndexingUseCaseTest {
         fixture.executor.failure = new IllegalStateException("provider crashed in " + temp.toAbsolutePath());
         fixture.retentionFailure = new IOException("retention lock timed out");
 
+        ProjectIndexingUseCase useCase = fixture.useCase();
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> fixture.useCase().execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
+                () -> useCase.execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
 
         assertTrue(failure.getMessage().startsWith("indexing run "), failure.getMessage());
         assertFalse(failure.getMessage().contains(temp.toAbsolutePath().toString()), failure.getMessage());
@@ -154,8 +157,9 @@ class ProjectIndexingUseCaseTest {
         };
         fixture.retentionFailure = new IOException("retention lock timed out");
 
+        ProjectIndexingUseCase useCase = fixture.useCase();
         IOException failure = assertThrows(IOException.class,
-                () -> fixture.useCase().execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
+                () -> useCase.execute(fixture.id(), null, false, IndexingResumePolicy.RESUME));
 
         assertEquals("fingerprint publication refused", failure.getMessage(),
                 "D3 (b): the publication failure stays a failure of the indexing");
@@ -200,7 +204,8 @@ class ProjectIndexingUseCaseTest {
         }).execute(fixture.id(), null, false, IndexingResumePolicy.RESUME);
 
         assertEquals(1, decorated.get());
-        assertThrows(NullPointerException.class, () -> fixture.useCase(executor -> null)
+        ProjectIndexingUseCase refusingUseCase = fixture.useCase(executor -> null);
+        assertThrows(NullPointerException.class, () -> refusingUseCase
                 .execute(fixture.id(), null, true, IndexingResumePolicy.RESUME));
     }
 

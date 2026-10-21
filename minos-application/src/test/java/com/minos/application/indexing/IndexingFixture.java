@@ -66,6 +66,7 @@ final class IndexingFixture {
     final AtomicInteger snapshotIds = new AtomicInteger();
     ProviderRuntimeStatus.State runtimeState = ProviderRuntimeStatus.State.READY;
     IOException retentionFailure;
+    RuntimeException promotionFailure;
     boolean qualifiedProvider = true;
     List<SourceRootDetector> extraDetectors = List.of();
     ProjectFingerprintService fingerprintService = new ProjectFingerprintService();
@@ -113,7 +114,10 @@ final class IndexingFixture {
                 fingerprints,
                 new Runtime(),
                 request -> "snapshot-" + snapshotIds.incrementAndGet(),
-                (projectId, runId, stagedSnapshotId) -> snapshots.active.put(projectId, stagedSnapshotId),
+                (projectId, runId, stagedSnapshotId) -> {
+                    snapshots.active.put(projectId, stagedSnapshotId);
+                    if (promotionFailure != null) throw promotionFailure;
+                },
                 ResumableRunMarkers.none(),
                 discovery,
                 fingerprintService,
