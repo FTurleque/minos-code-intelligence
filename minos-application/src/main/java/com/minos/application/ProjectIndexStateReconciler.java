@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
@@ -223,7 +224,7 @@ public final class ProjectIndexStateReconciler {
     private ReconciledState reconcileUnderLease(UUID projectId) throws IOException {
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(projectId)) {
             return reconcile(projectId, true, Mode.PERSIST);
-        } catch (RuntimeException failure) {
+        } catch (IndexStateStoreException failure) {
             throw new IOException("failed to acquire project lifecycle lease for metadata reconciliation: "
                     + projectId, failure);
         }
@@ -268,7 +269,7 @@ public final class ProjectIndexStateReconciler {
     private Optional<ProjectIndexState> loadProjectState(UUID projectId) throws IOException {
         try {
             return stateStore.findProjectState(projectId);
-        } catch (RuntimeException failure) {
+        } catch (IndexStateStoreException failure) {
             throw new IOException("failed to read project index state for project " + projectId, failure);
         }
     }
@@ -276,7 +277,7 @@ public final class ProjectIndexStateReconciler {
     private List<IndexingRun> loadRuns(UUID projectId) throws IOException {
         try {
             return stateStore.listRuns(projectId);
-        } catch (RuntimeException failure) {
+        } catch (IndexStateStoreException failure) {
             throw new IOException("failed to read indexing runs for project " + projectId, failure);
         }
     }
@@ -284,7 +285,7 @@ public final class ProjectIndexStateReconciler {
     private void saveProjectState(ProjectIndexState state, UUID projectId) throws IOException {
         try {
             stateStore.saveProjectState(state);
-        } catch (RuntimeException failure) {
+        } catch (IndexStateStoreException failure) {
             throw new IOException("active snapshot metadata reconciliation failed for project " + projectId, failure);
         }
     }

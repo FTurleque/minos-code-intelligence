@@ -50,10 +50,11 @@ final class IndexingRunExecutor {
                                SnapshotPromoter promoter, IndexStateStore stateStore,
                                ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy,
                                IndexingResumePolicy resumePolicy, ModuleAssignmentRule moduleAssignment,
-                               Clock clock) {
+                               Clock clock, Optional<String> rootScopeFingerprint) {
         Objects.requireNonNull(resumePolicy, "resumePolicy");
         ValidatedProjectRoot root = validateExecutionRoot(projectRoot, targets, mode);
-        Ports ports = new Ports(executors, stager, promoter, stateStore, markers, moduleAssignment, clock);
+        Ports ports = new Ports(executors, stager, promoter, stateStore, markers, moduleAssignment, clock,
+                rootScopeFingerprint);
         Instant createdAt = clock.instant();
         ProjectIndexState previous = reconcilePreviousState(projectId, ports, createdAt);
 
@@ -317,8 +318,12 @@ final class IndexingRunExecutor {
         // capture differs from the recorded fingerprint, so a later resume can never reuse an artifact
         // built from sources it did not fingerprint (fail-closed, ADR 0039 §3). Beyond the source
         // budget (100 000 files / 2 GiB) the capture fails and no checkpoint is persisted.
+        // AUD-PERF-04: the root scope reuses the reference fingerprint of the orchestration when its rules are proved
+        // equal (ReferenceFingerprint); every other scope, and an unproved one, is captured as before.
         CheckpointMaterial material = context.scopeFingerprints.computeIfAbsent(
-                relative.normalize(), scope -> captureScopeFingerprint(root.lexicalRoot(), scope));
+                relative.normalize(), scope -> scope.toString().isEmpty() && context.ports.rootScopeFingerprint().isPresent()
+                        ? new CheckpointMaterial(context.ports.rootScopeFingerprint(), Optional.empty())
+                        : captureScopeFingerprint(root.lexicalRoot(), scope));
         IndexingArtifact artifact = Objects.requireNonNull(executor.execute(new IndexingExecutionRequest(
                 context.runId,
                 context.projectId,
@@ -821,7 +826,9 @@ final class IndexingRunExecutor {
             try {
                 action.run();
                 return true;
-            } catch (RuntimeException failure) {
+            } catch (IndexStateStoreException failure) {
+                // AUD-QUA-03: only a storage failure of the index state is retried or kept as suppressed; a
+                // programming error goes up as it is.
                 if (attempt >= PERSISTENCE_ATTEMPTS_UNDER_INTERRUPTION || !isInterruption(failure)) {
                     original.addSuppressed(failure);
                     return false;
@@ -851,9 +858,11 @@ final class IndexingRunExecutor {
             IndexStateStore stateStore,
             ResumableRunMarkers markers,
             ModuleAssignmentRule moduleAssignment,
-            Clock clock
+            Clock clock,
+            Optional<String> rootScopeFingerprint
     ) {
         private Ports {
+            Objects.requireNonNull(rootScopeFingerprint, "rootScopeFingerprint");
             Objects.requireNonNull(executors, "executors");
             Objects.requireNonNull(stager, "stager");
             Objects.requireNonNull(promoter, "promoter");

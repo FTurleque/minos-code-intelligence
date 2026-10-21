@@ -105,7 +105,7 @@ public final class IndexingLifecycleService {
     public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
         return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of(), null, policy,
-                ModuleAssignmentRule.none());
+                ModuleAssignmentRule.none(), null);
     }
 
     public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
@@ -115,9 +115,16 @@ public final class IndexingLifecycleService {
 
     public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
                                IndexerNegotiationResult negotiation, IndexingResumePolicy policy) {
+        return execute(id, root, discovery, negotiation, policy, null);
+    }
+
+    /** Like the scoped run, reusing {@code reference} for the root scope when allowed (AUD-PERF-04). */
+    public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
+                               IndexerNegotiationResult negotiation, IndexingResumePolicy policy,
+                               ReferenceFingerprint reference) {
         plans.validate(id, root, negotiation);
         return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of(),
-                null, policy, ModuleAssignmentRule.of(id.toString(), discovery));
+                null, policy, ModuleAssignmentRule.of(id.toString(), discovery), reference);
     }
 
     public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
@@ -128,7 +135,7 @@ public final class IndexingLifecycleService {
     public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
                                                 IncrementalIndexingPlan plan, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
-        return planned(id, root, negotiation, plans.rootTargets(negotiation), plan, policy, ModuleAssignmentRule.none());
+        return planned(id, root, negotiation, plans.rootTargets(negotiation), plan, policy, ModuleAssignmentRule.none(), null);
     }
 
     public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
@@ -139,14 +146,22 @@ public final class IndexingLifecycleService {
     public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
                                                 IndexerNegotiationResult negotiation, IncrementalIndexingPlan plan,
                                                 IndexingResumePolicy policy) {
+        return executePlanned(id, root, discovery, negotiation, plan, policy, null);
+    }
+
+    /** Like the scoped planned run, reusing {@code reference} for the root scope when allowed (AUD-PERF-04). */
+    public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
+                                                IndexerNegotiationResult negotiation, IncrementalIndexingPlan plan,
+                                                IndexingResumePolicy policy, ReferenceFingerprint reference) {
         plans.validate(id, root, negotiation);
         return planned(id, root, negotiation, plans.scopedTargets(root, discovery, negotiation), plan, policy,
-                ModuleAssignmentRule.of(id.toString(), discovery));
+                ModuleAssignmentRule.of(id.toString(), discovery), reference);
     }
 
     private Optional<IndexingRun> planned(UUID id, Path root, IndexerNegotiationResult negotiation,
                                           List<IndexingExecutionTarget> targets, IncrementalIndexingPlan plan,
-                                          IndexingResumePolicy policy, ModuleAssignmentRule moduleAssignment) {
+                                          IndexingResumePolicy policy, ModuleAssignmentRule moduleAssignment,
+                                          ReferenceFingerprint reference) {
         Objects.requireNonNull(plan, "plan");
         if (!id.equals(plan.projectId())) throw new IllegalArgumentException("plan belongs to another project");
         plans.validatePlan(plan, negotiation);
@@ -158,18 +173,20 @@ public final class IndexingLifecycleService {
         }
         return Optional.of(run(id, root, targets, plan.mode(),
                 plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of(), plan, policy,
-                moduleAssignment));
+                moduleAssignment, reference));
     }
 
     private IndexingRun run(UUID id, Path root, List<IndexingExecutionTarget> targets,
                             IndexingMode mode, List<String> changedFiles, IncrementalIndexingPlan plan,
-                            IndexingResumePolicy policy, ModuleAssignmentRule moduleAssignment) {
+                            IndexingResumePolicy policy, ModuleAssignmentRule moduleAssignment,
+                            ReferenceFingerprint reference) {
         if (targets.isEmpty()) throw new IllegalArgumentException("indexing execution must contain at least one provider scope");
         Objects.requireNonNull(policy, "policy");
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
             if (plan != null) validatePlanStillCurrent(id, plan);
             return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
-                    executors, stager, promoter, stateStore, markers, artifactPolicy, policy, moduleAssignment, clock);
+                    executors, stager, promoter, stateStore, markers, artifactPolicy, policy, moduleAssignment, clock,
+                    reference == null ? Optional.empty() : reference.reusableRootScopeFingerprint());
         }
     }
 

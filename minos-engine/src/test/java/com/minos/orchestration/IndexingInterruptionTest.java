@@ -217,7 +217,7 @@ class IndexingInterruptionTest {
 
         private static void failWhenInterrupted() {
             if (Thread.currentThread().isInterrupted()) {
-                throw new UncheckedIOException("write interrupted", new ClosedByInterruptException());
+                throw new IndexStateStoreException("write interrupted", new ClosedByInterruptException());
             }
         }
     }

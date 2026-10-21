@@ -29,6 +29,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.orchestration.ProjectInvalidationService;
+import com.minos.orchestration.ReferenceFingerprint;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
@@ -318,13 +319,17 @@ public final class ProjectIndexingUseCase {
                 .toList();
         IndexingLifecycleService lifecycle = new IndexingLifecycleService(
                 executors, snapshotStager, snapshotPromoter, stateStore, resumableRunMarkers);
+        // AUD-PERF-04: the reference fingerprint is the root-scope fingerprint of the run when its rules are proved
+        // equal to those of the checkpoints; the tree is then hashed twice (before, after), not three times.
+        ReferenceFingerprint reference = new ReferenceFingerprint(prepared.fingerprintBefore(), fingerprintService);
         if (forceFull) {
             return lifecycle.execute(
                     prepared.project().id(),
                     prepared.project().rootPath(),
                     prepared.discovery(),
                     prepared.negotiation(),
-                    resumePolicy);
+                    resumePolicy,
+                    reference);
         }
         return lifecycle.executePlanned(
                         prepared.project().id(),
@@ -332,7 +337,8 @@ public final class ProjectIndexingUseCase {
                         prepared.discovery(),
                         prepared.negotiation(),
                         prepared.plan(),
-                        resumePolicy)
+                        resumePolicy,
+                        reference)
                 .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
     }
 

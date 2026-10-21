@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.io.BoundedFileDigest;
@@ -153,7 +154,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
             boolean snapshotDurabilityPending,
             String snapshotDiagnostic
     ) {
-        RuntimeException firstFailure = null;
+        IndexStateStoreException firstFailure = null;
         for (int attempt = 0; attempt < 2; attempt++) {
             try {
                 stateStore.saveProjectState(state);
@@ -164,7 +165,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                                     "active snapshot is authoritative; durable commit acknowledgement remains pending"));
                 }
                 return new CommitOutcome(IndexImportCommitStatus.COMMITTED, null);
-            } catch (RuntimeException failure) {
+            } catch (IndexStateStoreException failure) {
                 if (firstFailure == null) firstFailure = failure;
                 else firstFailure.addSuppressed(failure);
             }

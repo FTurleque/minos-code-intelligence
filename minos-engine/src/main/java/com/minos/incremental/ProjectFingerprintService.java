@@ -358,4 +358,14 @@ public final class ProjectFingerprintService {
     }
 
     private record HashedFile(String sha256, long sizeBytes) { }
+
+    /**
+     * True when this service captures exactly like {@code other}: same build descriptors, same source budget. The
+     * ignore policy and the walk are not configurable, so these two policies are the whole of the capture rules.
+     */
+    public boolean capturesLike(ProjectFingerprintService other) {
+        Objects.requireNonNull(other, "other");
+        return buildDescriptorPolicy.fileNames().equals(other.buildDescriptorPolicy.fileNames())
+                && sourceBudgetPolicy.equals(other.sourceBudgetPolicy);
+    }
 }

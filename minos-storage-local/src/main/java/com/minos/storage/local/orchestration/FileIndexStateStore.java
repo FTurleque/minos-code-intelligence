@@ -6,6 +6,7 @@ import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
 import com.minos.orchestration.IndexStateStore;
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRun.ExecutionCheckpoint;
 import com.minos.orchestration.IndexingRun.IndexerExecution;
@@ -13,7 +14,6 @@ import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.time.DateTimeException;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -103,7 +104,7 @@ public final class FileIndexStateStore implements IndexStateStore {
             return logicalProjectLease(id, held, heldByProject);
         } catch (IOException exception) {
             if (heldByProject.isEmpty()) heldProjectLeases.remove();
-            throw new UncheckedIOException("cannot acquire project indexing lifecycle lease", exception);
+            throw new IndexStateStoreException("cannot acquire project indexing lifecycle lease", exception);
         }
     }
 
@@ -156,7 +157,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         try {
             held.physical.close();
         } catch (IOException exception) {
-            throw new UncheckedIOException("cannot release project indexing lifecycle lease", exception);
+            throw new IndexStateStoreException("cannot release project indexing lifecycle lease", exception);
         } finally {
             heldByProject.remove(projectId, held);
             if (heldByProject.isEmpty()) heldProjectLeases.remove();
@@ -170,12 +171,20 @@ public final class FileIndexStateStore implements IndexStateStore {
         try {
             if (!regularFileExists(file, "project index state")) return Optional.empty();
         } catch (IOException exception) {
-            throw new UncheckedIOException("cannot read MINOS project state: " + file.getFileName(), exception);
+            throw new IndexStateStoreException("cannot read MINOS project state: " + file.getFileName(), exception);
         }
         Properties properties = load(file);
+        try {
+            return Optional.of(projectState(projectId, properties, file));
+        } catch (IllegalArgumentException | DateTimeException unreadable) {
+            throw new IndexStateStoreException("unreadable project index state file " + file.getFileName(), unreadable);
+        }
+    }
+
+    private static ProjectIndexState projectState(UUID projectId, Properties properties, Path file) {
         UUID persistedProjectId = UUID.fromString(required(properties, PROJECT_ID_PROPERTY, file));
         requireIdentity(projectId, persistedProjectId, file, "project state");
-        return Optional.of(new ProjectIndexState(
+        return new ProjectIndexState(
                 persistedProjectId,
                 ProjectIndexState.Availability.valueOf(required(properties, "availability", file)),
                 optional(properties, "activeSnapshotId"),
@@ -183,7 +192,7 @@ public final class FileIndexStateStore implements IndexStateStore {
                 Instant.parse(required(properties, "updatedAt", file)),
                 optional(properties, "detail"),
                 optional(properties, RESUMABLE_RUN_ID_PROPERTY).flatMap(FileIndexStateStore::parseUuid)
-        ));
+        );
     }
 
     /** An absent (previous format) or invalid resumable reference means: nothing to resume. */
@@ -219,7 +228,7 @@ public final class FileIndexStateStore implements IndexStateStore {
             migrateLegacyRun(legacy, run);
             return Optional.of(run);
         } catch (IOException exception) {
-            throw new UncheckedIOException("cannot find MINOS indexing run", exception);
+            throw new IndexStateStoreException("cannot find MINOS indexing run", exception);
         }
     }
 
@@ -237,7 +246,7 @@ public final class FileIndexStateStore implements IndexStateStore {
             runs.sort(Comparator.comparing(IndexingRun::createdAt).thenComparing(IndexingRun::id));
             return List.copyOf(runs);
         } catch (IOException exception) {
-            throw new UncheckedIOException("cannot list MINOS indexing runs", exception);
+            throw new IndexStateStoreException("cannot list MINOS indexing runs", exception);
         }
     }
 
@@ -266,7 +275,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         try {
             ensureRunLocator(run.id(), run.projectId());
         } catch (IOException exception) {
-            throw new UncheckedIOException("cannot index MINOS run identity: " + run.id(), exception);
+            throw new IndexStateStoreException("cannot index MINOS run identity: " + run.id(), exception);
         }
         store(runFile(run.projectId(), run.id()), properties(run), "MINOS indexing run");
     }
@@ -392,16 +401,25 @@ public final class FileIndexStateStore implements IndexStateStore {
 
     private IndexingRun readRun(Path file, UUID expectedRunId) {
         Properties properties = load(file);
+        try {
+            return parseRun(file, expectedRunId, properties);
+        } catch (IllegalArgumentException | DateTimeException unreadable) {
+            throw new IndexStateStoreException("unreadable indexing run file " + file.getFileName(), unreadable);
+        }
+    }
+
+    private static IndexingRun parseRun(Path file, UUID expectedRunId, Properties properties) {
         UUID persistedRunId = UUID.fromString(required(properties, "id", file));
         requireIdentity(expectedRunId, persistedRunId, file, "indexing run");
         int executionCount;
         try {
             executionCount = Integer.parseInt(required(properties, "execution.count", file));
         } catch (NumberFormatException exception) {
-            throw new IllegalStateException("invalid execution count in " + file, exception);
+            throw new IndexStateStoreException("invalid execution count in index state file " + file.getFileName(), exception);
         }
         if (executionCount < 0 || executionCount > MAX_READABLE_EXECUTIONS) {
-            throw new IllegalStateException("unsafe execution count in " + file + ": " + executionCount);
+            throw new IndexStateStoreException("unsafe execution count in index state file " + file.getFileName() + ": "
+                    + executionCount);
         }
         List<IndexerExecution> executions = new ArrayList<>(executionCount);
         for (int index = 0; index < executionCount; index++) {
@@ -459,7 +477,7 @@ public final class FileIndexStateStore implements IndexStateStore {
             final UUID runId;
             try {
                 runId = idFromPropertiesFile(legacy);
-            } catch (IllegalStateException notARunId) {
+            } catch (IndexStateStoreException notARunId) {
                 reportSkippedLegacyRun(legacy, "its name is not a run id", notARunId, ++skipped);
                 continue;
             }
@@ -518,7 +536,7 @@ public final class FileIndexStateStore implements IndexStateStore {
                 for (Path runFile : propertyFiles(projectDirectory, "index run project partition")) {
                     try {
                         ensureRunLocator(idFromPropertiesFile(runFile), projectId);
-                    } catch (IllegalStateException corruptName) {
+                    } catch (IndexStateStoreException corruptName) {
                         // A malformed filename remains visible to project-scoped listing but does
                         // not prevent independent valid histories from receiving O(1) locators.
                     }
@@ -556,7 +574,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         try {
             return Optional.of(UUID.fromString(required(properties, PROJECT_ID_PROPERTY, locator)));
         } catch (IllegalArgumentException invalid) {
-            throw new IllegalStateException("invalid project id in run locator: " + locator, invalid);
+            throw new IndexStateStoreException("invalid project id in run locator " + locator.getFileName(), invalid);
         }
     }
 
@@ -607,18 +625,18 @@ public final class FileIndexStateStore implements IndexStateStore {
         String name = file.getFileName().toString();
         String suffix = ".properties";
         if (!name.endsWith(suffix)) {
-            throw new IllegalStateException("unexpected index-state metadata filename: " + file);
+            throw new IndexStateStoreException("unexpected index-state metadata filename: " + file.getFileName());
         }
         try {
             return UUID.fromString(name.substring(0, name.length() - suffix.length()));
         } catch (IllegalArgumentException exception) {
-            throw new IllegalStateException("index-state metadata filename is not a UUID: " + file, exception);
+            throw new IndexStateStoreException("index-state metadata filename is not a UUID: " + file.getFileName(), exception);
         }
     }
 
     private static void requireIdentity(UUID expected, UUID actual, Path file, String label) {
         if (!expected.equals(actual)) {
-            throw new IllegalStateException(label + " identity mismatch in " + file
+            throw new IndexStateStoreException(label + " identity mismatch in index state file " + file.getFileName()
                     + ": expected=" + expected + " persisted=" + actual);
         }
     }
@@ -633,7 +651,7 @@ public final class FileIndexStateStore implements IndexStateStore {
                     MAX_PROPERTY_VALUE_CHARS,
                     "MINOS index state metadata");
         } catch (IOException exception) {
-            throw new UncheckedIOException("cannot read MINOS index state: " + file.getFileName(), exception);
+            throw new IndexStateStoreException("cannot read MINOS index state: " + file.getFileName(), exception);
         }
     }
 
@@ -641,7 +659,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         try {
             storeIo(file, properties, comment);
         } catch (IOException exception) {
-            throw new UncheckedIOException("cannot write MINOS index state: " + file.getFileName(), exception);
+            throw new IndexStateStoreException("cannot write MINOS index state: " + file.getFileName(), exception);
         }
     }
 
@@ -670,7 +688,7 @@ public final class FileIndexStateStore implements IndexStateStore {
     private static String required(Properties properties, String key, Path file) {
         String value = properties.getProperty(key);
         if (value == null || value.isBlank()) {
-            throw new IllegalStateException("missing property '" + key + "' in " + file);
+            throw new IndexStateStoreException("missing property '" + key + "' in index state file " + file.getFileName());
         }
         return value;
     }

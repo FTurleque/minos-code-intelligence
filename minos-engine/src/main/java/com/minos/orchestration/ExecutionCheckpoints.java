@@ -42,6 +42,14 @@ final class ExecutionCheckpoints {
         }
     }
 
+    /**
+     * Vrai si {@code service} capture comme les points de contrôle et la vérification de reprise : une empreinte
+     * qu'il a produite peut alors être persistée comme empreinte du scope racine (AUD-PERF-04).
+     */
+    static boolean capturesLikeCheckpoints(ProjectFingerprintService service) {
+        return service == FINGERPRINTS || FINGERPRINTS.capturesLike(service);
+    }
+
     /** Taille et SHA-256 de l'artefact final, lu sans suivre de lien symbolique et sous le budget SCIP. */
     static ArtifactDigest artifactDigest(Path artifact) throws Unavailable {
         Path path = Objects.requireNonNull(artifact, "artifact");

@@ -69,6 +69,7 @@ final class IndexingFixture {
     RuntimeException promotionFailure;
     boolean qualifiedProvider = true;
     List<SourceRootDetector> extraDetectors = List.of();
+    ProjectFingerprintService fingerprintService = new ProjectFingerprintService();
 
     IndexingFixture(Path temp) throws IOException {
         this.root = javaProject(temp.resolve("project"));
@@ -119,7 +120,7 @@ final class IndexingFixture {
                 },
                 ResumableRunMarkers.none(),
                 discovery,
-                new ProjectFingerprintService(),
+                fingerprintService,
                 new ProjectInvalidationService(),
                 new IncrementalIndexingPlanner(),
                 override -> registry(),
