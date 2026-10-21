@@ -225,14 +225,14 @@ Tests de contrat existants API/NEXUS/MCP/CLI ; compilation et vérification plug
 
 ### Actions
 
-- [ ] Reprendre le résidu de chargeur contextuel documenté dans ADR 0042 et ARCHI-SUIVI (A8), sans le déclarer corrigé par la fusion.
-- [ ] Choisir un chargeur explicite cohérent avec la composition et les extensions supportées ; qualifier hôte avec TCCL différent.
-- [ ] Définir diagnostics provider absent/ID dupliqué et maintien du backend local ; préserver le refus fermé.
+- [x] Reprendre le résidu de chargeur contextuel documenté dans ADR 0042 et ARCHI-SUIVI (A8), sans le déclarer corrigé par la fusion.
+- [x] Choisir un chargeur explicite cohérent avec la composition et les extensions supportées ; qualifier hôte avec TCCL différent. (2026-10-21, `decouvrir-les-fournisseurs-par-chargeur-explicite` : chargeur du port, tests à chargeur de contexte vide ; hôte embarqué de bout en bout non qualifié.)
+- [x] Définir diagnostics provider absent/ID dupliqué et maintien du backend local ; préserver le refus fermé.
 - [ ] Tester les services dans le JAR ombré, pas seulement dans le classpath Maven.
 
 ### Critères d'acceptation
 
-- [ ] Composer et backend visibles de façon déterministe sous le chargeur supporté ; pas de sélection arbitraire en cas de doublon.
+- [x] Composer et backend visibles de façon déterministe sous le chargeur supporté ; pas de sélection arbitraire en cas de doublon.
 - [ ] Tests hôte embarqué et SPI packagé couvrent absence, doublon et sélection local/PostgreSQL.
 
 ### Vérification

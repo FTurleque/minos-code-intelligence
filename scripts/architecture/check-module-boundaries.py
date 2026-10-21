@@ -497,6 +497,61 @@ def check_runtime_local_exports(root: Path = ROOT, group_id: str | None = None,
     return len(exported)
 
 
+SERVICE_LOADER_LOAD = re.compile(r"\bServiceLoader\s*\.\s*load\s*\(")
+
+
+def blank_comments_and_literals(code: str) -> str:
+    """Blanks comments and string literals but keeps every newline, so that line numbers stay exact."""
+    return COMMENTS_AND_LITERALS.sub(lambda match: re.sub(r"[^\n]", " ", match.group(0)), code)
+
+
+def call_argument_count(code: str, open_parenthesis: int) -> int:
+    """Top-level arguments of the call whose opening parenthesis is at the given index (0 for an empty call)."""
+    depth = 0
+    commas = 0
+    empty = True
+    for character in code[open_parenthesis + 1:]:
+        if character in "([{":
+            depth += 1
+        elif character in ")]}":
+            if depth == 0:
+                return 0 if empty else commas + 1
+            depth -= 1
+        elif character == "," and depth == 0:
+            commas += 1
+        if not character.isspace():
+            empty = False
+    fail("A16 unbalanced ServiceLoader.load call")
+    return 0
+
+
+def check_service_loader_class_loaders(root: Path = ROOT, modules: tuple[str, ...] = MODULES) -> int:
+    """A16 / ADR 0042 — every production ServiceLoader.load call passes an explicit class loader.
+
+    The one-argument form uses the thread context class loader: in a Java host that embeds MINOS with another
+    context loader, an optional provider silently disappears (AUD-ARC-04). Production sources of the reactor
+    must call ServiceLoader.load(Service.class, loader). Comments and string literals are ignored. Returns the
+    number of production discovery sites.
+    """
+    violations: list[str] = []
+    sites = 0
+    for module in modules:
+        source_root = root / module / "src" / "main" / "java"
+        if not source_root.is_dir():
+            continue
+        for source in sorted(source_root.rglob("*.java")):
+            code = blank_comments_and_literals(source.read_text(encoding="utf-8"))
+            for match in SERVICE_LOADER_LOAD.finditer(code):
+                sites += 1
+                if call_argument_count(code, match.end() - 1) < 2:
+                    line = code.count("\n", 0, match.start()) + 1
+                    violations.append(f"{source.relative_to(root).as_posix()}:{line}")
+    if violations:
+        fail("A16 ServiceLoader.load without an explicit class loader (the thread context class loader must not "
+             "drive production discovery; pass the loader of the service port): " + "; ".join(violations))
+    return sites
+
+
 # A15 / AUD-QUA-02 — a public production type is used by production, or declared. Numbered after A11-A14 (reserved
 # by figer-la-dette-de-frontieres-par-des-cliquets); A16 is the two-argument ServiceLoader rule of
 # decouvrir-les-fournisseurs-par-chargeur-explicite. Each entry names one top-level public type of a reactor
@@ -1041,6 +1096,7 @@ def main() -> int:
         total, counts = check_java_layout()
         check_source_boundaries()
         exported = check_runtime_local_exports()
+        service_loaders = check_service_loader_class_loaders()
         unreferenced = check_unreferenced_production_types()
         packages = check_package_ownership()
         cycles, cycle_packages = check_package_cycles()
@@ -1056,6 +1112,8 @@ def main() -> int:
         print(f"A9 architecture document: {documented} module sections match the POM dependencies")
         print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
               f"modules, none other is")
+        print(f"A16 service discovery: {service_loaders} production ServiceLoader.load calls, each with an "
+              f"explicit class loader")
         print(f"A15 unreferenced production types: {unreferenced} listed in UNREFERENCED_PRODUCTION_TYPES, "
               f"every other public type is named by production")
         print(

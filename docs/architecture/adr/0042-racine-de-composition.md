@@ -340,3 +340,24 @@ minos-integration-git/minos-runtime-local [compile]`, 13 violations de source au
 auto-test de chaque règle (import, import statique, joker, nom pleinement qualifié, nom simple d'un
 package partagé → refus ; commentaire, littéral, port d'un package partagé, `minos-bootstrap` → accepté ;
 surface → adaptateur refusé en `compile`, `runtime`, `test` et `provided`).
+
+## 9. Mise en œuvre : découverte par chargeur explicite (AUD-ARC-04, 2026-10-21)
+
+Changement OpenSpec `decouvrir-les-fournisseurs-par-chargeur-explicite`. Le résidu de chargeur de contexte
+noté au § 6 est fermé aux deux sites qui le portaient :
+
+- `StorageBackendSelection` découvre `StorageBackendProvider` par le chargeur du port
+  (`StorageBackendProvider.class.getClassLoader()`), comme `MinosApplicationComposers` ; deux fournisseurs
+  de l'identifiant **demandé** (comparé sans casse, `Locale.ROOT`) font échouer l'ouverture avec un message
+  qui nomme leurs classes. Le backend `local` ne passe pas par la découverte et n'est pas affecté.
+- `StableFileSystemIdentity` découvre `ExecutionPathIdentityProvider` par le chargeur du port ; plus d'un
+  fournisseur enregistré rend l'identité indisponible (lancement local refusé), avec un journal qui nomme
+  les classes. Le contrat du port est resserré à « au plus un fournisseur ».
+- Règle **A16** de `check-module-boundaries.py` : tout `ServiceLoader.load` d'un `src/main` du reactor
+  passe un chargeur explicite.
+- Un hôte qui comptait sur le chargeur de contexte pour **ajouter** un fournisseur ne le verra plus : les
+  extensions chargées par un autre chargeur ne sont pas supportées.
+- **Reporté** (décision du propriétaire du 2026-10-21) : l'injection du fournisseur d'identité depuis la
+  racine de composition, qui changerait le constructeur public de `IndexingExecutionRequest` ; l'arête
+  implicite `minos-engine` → `minos-runtime-local` par SPI subsiste. Non qualifié : hôte embarqué de bout
+  en bout et JAR ombré au-delà de la présence des fichiers de service.

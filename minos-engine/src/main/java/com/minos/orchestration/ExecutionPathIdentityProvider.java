@@ -11,7 +11,11 @@ import java.util.Optional;
  * <p>Implementations are application runtime components, not provider plugins. They are consulted
  * only when the standard Java filesystem provider cannot expose a stable identity. Returning empty
  * means the implementation does not support the current platform/filesystem; a local process launch
- * then remains fail-closed unless another trusted implementation can establish the identity.</p>
+ * then remains fail-closed.</p>
+ *
+ * <p>At most one implementation may be registered. It is discovered through the class loader that loaded
+ * MINOS, never the thread context class loader; when more than one is registered, no identity is established
+ * and local launches are refused (AUD-ARC-04).</p>
  */
 public interface ExecutionPathIdentityProvider {
 
