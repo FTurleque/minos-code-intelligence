@@ -15,7 +15,7 @@ Ordre : relevé et décision, puis dans chaque section rouge, correction, preuve
 ## 3. Identité de chemin (AUD-ARC-04)
 
 - [x] 3.1 [AUD-ARC-04] Rouge : dans `minos-runtime-local` (où le fournisseur est enregistré), test Windows — chargeur de contexte vide : identité capturée ; dans `minos-engine`, test à chargeur isolé — deux fournisseurs : identité indisponible, `ExecutionPathAuthorization.tryCapture` rend vide. **Preuve du rouge : sous Windows, identité vide avec un chargeur de contexte vide au HEAD.** Dire si le test Windows a été exécuté localement ou seulement en CI.
-- [ ] 3.2 [AUD-ARC-04] `StableFileSystemIdentity` : chargeur du port, refus de plus d'un fournisseur avec un journal qui nomme les classes ; Javadoc de `ExecutionPathIdentityProvider` alignée (« au plus un fournisseur »). Preuve : tests verts ; `./mvnw -B -ntp -pl minos-runtime-local -am verify` ; tests de confinement existants verts sur les deux systèmes (CI).
+- [x] 3.2 [AUD-ARC-04] `StableFileSystemIdentity` : chargeur du port, refus de plus d'un fournisseur avec un journal qui nomme les classes ; Javadoc de `ExecutionPathIdentityProvider` alignée (« au plus un fournisseur »). Preuve : tests verts ; `./mvnw -B -ntp -pl minos-runtime-local -am verify` ; tests de confinement existants verts sur les deux systèmes (CI). **Fait (2026-10-22)** : `Verify (ubuntu-24.04)` et `Verify (windows-2022)` verts sur la PR #529 (`-Dminos.sandbox.tests.required=true`, un confinement indisponible fait échouer le job), avant sa fusion.
 
 ## 4. Garde (AUD-ARC-04)
 
@@ -26,4 +26,4 @@ Ordre : relevé et décision, puis dans chaque section rouge, correction, preuve
 
 - [x] 5.1 Amender l'ADR 0042 par une note de « Mise en œuvre » (résidu de chargeur de contexte fermé aux deux sites, règle des doublons, extensions par chargeur de contexte non supportées, injection reportée) ; cocher dans `docs/project/roadmap/storage-hexagonal-2026-10/TASKS.md` les actions de SH-10 réalisées et laisser ouvertes celles qui ne le sont pas. Rejouer `python scripts/docs/check-current-docs.py`.
 - [x] 5.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-ARC-04 : statut, décision D3, résultat du relevé 1.1, précision sur l'identifiant « A8 »).
-- [ ] 5.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, ADR 0042, `docs/developer/quality-gates.md`.
+- [x] 5.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, ADR 0042, `docs/developer/quality-gates.md`. **Fait (2026-10-22)** : `run_gates.py` 46/46, `openspec validate --all --strict`, `check-current-docs.py` et `product-facts.py --check` verts sur `develop` après fusion ; STATUS, ROADMAP et SUIVI mis à jour par la PR d'archivage.

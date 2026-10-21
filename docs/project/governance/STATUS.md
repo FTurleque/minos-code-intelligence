@@ -106,6 +106,19 @@ Les cinq changements du sprint 8 (« confinement et E/S privées ») sont **fusi
 
 Reste : deux tâches manuelles de la migration des écritures brutes (indexation réelle sous AppContainer et lecture de l'ACL des artefacts) et le nombre d'objets durcis pendant une indexation réelle. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 
+## Audit 2026-10-10 — sprint 9 (2026-10-22)
+
+Les six changements du sprint 9 (« une seule orchestration d'indexation ») sont **fusionnés dans `develop`** (PR #526 à #531) ; quatre sont archivés, `hacher-l-arbre-source-une-fois-par-indexation` et `borner-les-preuves-des-tests-lies` restent actifs pour une tâche chacun :
+
+- **Orchestration unique** : `ProjectIndexingUseCase` (`minos-application`, `com.minos.application.indexing`) porte la préparation, l'exécution sous bail, la reprise d'un run promu, l'empreinte, la synchronisation sémantique et la rétention ; la CLI ne fait que projeter son résultat. `IncrementalIndexingCoordinator` et `IncrementalIndexingResult` sont supprimés, leurs tests reportés sur le cas d'usage (ADR 0057, « Mise en œuvre »). Une empreinte de référence illisible donne le diagnostic `active fingerprint baseline unreadable; a full indexing was required` ; l'échec de publication de l'empreinte reste une erreur de `minos index`. Le diagnostic d'échec du rafraîchissement sémantique ne recopie pas un message qui peut nommer un chemin.
+- **Hachage de l'arbre source** : le scope racine réutilise l'empreinte de référence quand `ProjectFingerprintService.capturesLike` prouve les mêmes règles de capture (2 hachages complets au lieu de 3). Pas de raccourci par taille et date.
+- **Port d'état d'index** : `IndexStateStoreException` (non vérifiée) est le seul type d'échec des stores fichier et PostgreSQL, bail compris ; les appelants n'attrapent que lui ; les messages du store fichier ne contiennent pas de chemin absolu.
+- **Découverte des fournisseurs** : backends de stockage et fournisseur d'identité de chemin chargés par le chargeur du port, doublons refusés (ADR 0042 § 9) ; règle **A16** du garde de frontières (tout `ServiceLoader.load` de production a deux arguments).
+- **Types sans appelant** : `ProjectFingerprintSnapshotAlignmentService`, `IndexerProviderRegistry` et `InterproceduralFlowService` supprimés, `SemanticSearchEvaluator` déplacé dans les tests de `minos-bootstrap` ; règle **A15** (liste à cliquet `UNREFERENCED_PRODUCTION_TYPES`, 11 entrées avec leur raison).
+- **Preuves des tests liés** : au plus 5 emplacements par type de preuve et par relation, puis une preuve de synthèse qui compte les emplacements omis ; confiances, ordre et ensemble des tests liés inchangés. Mesuré sur ce dépôt : 42 054 → 37 394 preuves, maximum par relation 80 → 9.
+
+Reste : la vérification, par les tests du plugin IntelliJ et de `minos-nexus`, qu'une preuve sans emplacement est tolérée (tâche 3.3 des tests liés) ; l'injection du service d'empreinte jusqu'à `IndexingResumePlanner` (tâche 2.2 du hachage ; la réutilisation reste gardée par `capturesLike`) et l'injection du fournisseur d'identité depuis la racine de composition (reportée par décision). Constat hors sprint : le snapshot de ce dépôt (306,7 Mo) dépasse la limite de persistance de 256 Mio (AUD-PERF-03). Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
+
 ## État produit
 
 - **C0 → M30** : terminés et intégrés.
@@ -116,7 +129,7 @@ Reste : deux tâches manuelles de la migration des écritures brutes (indexation
 - **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement **intégrés**.
 - **#224–#248** : campagne de confinement provider/filesystem, provenance, egress, installateur et Windows non-admin intégrée.
 - **#258/#260** : audit du 28 août 2026 — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.
-- **Audit du 10 octobre 2026, sprints 1 à 8** : constats corrigés et intégrés dans `develop` (voir les sections dédiées ci-dessus).
+- **Audit du 10 octobre 2026, sprints 1 à 9** : constats corrigés et intégrés dans `develop` (voir les sections dédiées ci-dessus).
 - Ligne de développement : **1.3.0-SNAPSHOT**.
 
 ## Release 1.0.1
