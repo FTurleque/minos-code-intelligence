@@ -110,3 +110,7 @@ Aucun comportement propre à une plateforme ; tests unitaires sans E/S de platef
 
 - Les méthodes dépréciées n'ont plus d'appelant de production : elles restent pour la compatibilité, couvertes par un test ; leur retrait est une décision versionnée ultérieure.
 - La perte de la vérification d'intégrité au statut (voir plus haut) est le prix du gain ; elle ne touche pas les requêtes.
+
+## Note de dérive (2026-10-21)
+
+Le changement `unifier-l-orchestration-d-indexation` a déplacé l'orchestration de `minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java` vers `minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java` : les références `fichier:ligne` de ce document vers la CLI ont dérivé et sont à relire au HEAD avant implémentation.

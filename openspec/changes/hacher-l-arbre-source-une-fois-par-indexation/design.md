@@ -42,7 +42,7 @@ Recommandation : l'exécuteur de run et la vérification de reprise utilisent **
 
 Alternative écartée : comparer les deux politiques champ par champ ; fragile dès qu'une politique gagne un paramètre.
 
-### D3. L'empreinte « après » reste un hachage complet — **décision en attente du propriétaire**
+### D3. L'empreinte « après » reste un hachage complet — **décidé : pas de raccourci taille / date (propriétaire, 2026-10-21)**
 
 Recommandation : **ne pas adopter** le raccourci taille / date / clé de fichier. La promotion de la baseline atteste que l'arbre indexé est celui de l'empreinte ; une heuristique peut manquer une modification qui conserve taille et date observable, et la baseline promue ferait ensuite conclure à tort « rien n'a changé ». Le gain de ce changement (un hachage sur trois) est obtenu sans ce risque.
 
@@ -51,6 +51,17 @@ Alternative : adopter le raccourci avec relecture complète en cas de doute, par
 ### D4. Les sous-scopes ne sont pas dérivés
 
 Le filtrage de l'empreinte du projet pour un scope non racine est reporté : il faut d'abord prouver l'égalité octet pour octet avec `captureScope` sur les ancêtres (écart 4).
+
+## Décision du propriétaire, mesure et relevé d'implémentation (2026-10-21)
+
+- **D3** : pas de raccourci taille / date / clé de fichier ; l'empreinte de fin de run reste un hachage complet (test `aContentChangeThatKeepsSizeAndDateIsStillAChangeOfTheWorkspace`).
+- **Mesure (1.1)** : une capture complète de l'empreinte de ce dépôt (2 625 fichiers retenus, disque `N:` sous Windows, JDK 25) prend 7,8 à 9,4 s (5 captures successives, programme jetable hors dépôt). Avant : 3 captures complètes par indexation à cible racine (avant, scope racine, après) ; après : 2. Gain attendu : une capture, soit environ 8 s sur ce dépôt pour une cible racine ; **non mesuré** sur un `minos index` réel (aucun provider exécutable dans la session), ni en reprise ni en incrémental.
+- **Tests de reprise existants qui comparent `scopeFingerprint`** : `minos-engine` `IndexingResumeTest`, `InterruptedRunRecoveryTest`, `minos-bootstrap` `orchestration/*` (reprise après arrêt brutal) ; verts.
+- **D1 réalisé** : `ReferenceFingerprint` (nouveau, `com.minos.orchestration`) porte l'empreinte « avant » et le service qui l'a capturée ; `IndexingLifecycleService.execute/executePlanned` (variantes à découverte) l'acceptent ; `IndexingRunExecutor` la place dans ses `Ports` et l'emploie pour le scope racine uniquement.
+- **D2 réalisé sous la forme « garde »**, pas sous la forme « service injecté partout » : `ExecutionCheckpoints` garde son service statique, et l'empreinte n'est réutilisée que si `ProjectFingerprintService.capturesLike` prouve des règles identiques (descripteurs de build, budget source ; la politique d'ignore et le parcours ne sont pas paramétrables). Sinon le scope racine est recapturé. **Écart avec la tâche 2.2** : le champ statique de `ExecutionCheckpoints` n'a pas disparu ; l'injection du service jusqu'à `IndexingResumePlanner` demande un paramètre de plus dans les constructeurs de `IndexingLifecycleService` (règle A4, pas de constructeurs télescopiques) et relève d'une décision de forme non prise ici.
+- **Fenêtre assumée** : l'empreinte réutilisée est capturée avant la découverte, alors que l'ancienne l'était juste avant le provider. Une source modifiée entre les deux donne un point de reprise qui ne correspond pas à l'arbre courant : la reprise est alors refusée (fail-closed) et la baseline n'est pas promue (empreinte de fin différente).
+- **Reprise d'un run antérieur** : pas de fixture écrite par le code du HEAD ; la preuve est l'égalité `capture(root) == captureScope(root, "")` et l'égalité de la valeur persistée avec la capture du scope sur un arbre inchangé (`theReusedValueIsExactlyTheCaptureOfTheRootScopeSoAResumeAcceptsIt`).
+- **SpotBugs** : `capturesLike` est ajoutée en fin de `ProjectFingerprintService` ; seule la borne de fin de classe des 3 entrées de la baseline passe de 357 à 369. Non revérifié par une exécution de SpotBugs.
 
 ## Direction des dépendances
 

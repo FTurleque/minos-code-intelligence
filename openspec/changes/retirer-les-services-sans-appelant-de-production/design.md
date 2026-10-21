@@ -85,7 +85,7 @@ Une règle du garde de frontières (`scripts/architecture/check-module-boundarie
 
 La liste est un **cliquet**, comme A8 et A10 : une entrée dont la classe a disparu ou a gagné un appelant fait échouer le garde, de sorte qu'elle ne peut que rétrécir. Les types publics de `minos-api` y entrent en bloc par leur module seulement si la tâche 1.2 montre qu'une liste nominative serait trop longue pour être relue ; ce choix est consigné.
 
-**Numéro retenu : A15.** A11 à A14 sont réservés par `figer-la-dette-de-frontieres-par-des-cliquets` ; A15 est la règle « `ServiceLoader.load` à deux arguments » de `decouvrir-les-fournisseurs-par-chargeur-explicite`.
+**Numéro retenu : A15.** A11 à A14 sont réservés par `figer-la-dette-de-frontieres-par-des-cliquets` ; A16 est la règle « `ServiceLoader.load` à deux arguments » de `decouvrir-les-fournisseurs-par-chargeur-explicite`.
 
 ### D3. Les gates suivent dans la même tâche
 

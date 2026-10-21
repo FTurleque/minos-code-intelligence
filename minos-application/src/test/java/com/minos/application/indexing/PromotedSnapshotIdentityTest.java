@@ -1,4 +1,4 @@
-package com.minos.cli.operations;
+package com.minos.application.indexing;
 
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
@@ -31,7 +31,7 @@ class PromotedSnapshotIdentityTest {
         CountingSnapshotStore snapshots = new CountingSnapshotStore(Optional.of("snapshot-promoted"));
 
         assertEquals(Optional.of("snapshot-promoted"),
-                LocalAutonomousIndexOperations.promotedSnapshotId(failed("snapshot-promoted"), snapshots));
+                ProjectIndexingUseCase.promotedSnapshotId(failed("snapshot-promoted"), snapshots));
         assertEquals(0, snapshots.loads);
         assertEquals(1, snapshots.identityReads);
     }
@@ -42,9 +42,9 @@ class PromotedSnapshotIdentityTest {
         CountingSnapshotStore noActive = new CountingSnapshotStore(Optional.empty());
 
         assertEquals(Optional.empty(),
-                LocalAutonomousIndexOperations.promotedSnapshotId(failed("snapshot-promoted"), otherActive));
+                ProjectIndexingUseCase.promotedSnapshotId(failed("snapshot-promoted"), otherActive));
         assertEquals(Optional.empty(),
-                LocalAutonomousIndexOperations.promotedSnapshotId(failed("snapshot-promoted"), noActive));
+                ProjectIndexingUseCase.promotedSnapshotId(failed("snapshot-promoted"), noActive));
         assertEquals(0, otherActive.loads + noActive.loads);
     }
 
@@ -59,8 +59,8 @@ class PromotedSnapshotIdentityTest {
                 IndexingRun.Phase.PROVIDER_EXECUTION, at, Optional.of(at), List.of(), Optional.empty(),
                 Optional.empty(), Optional.empty(), Optional.of("provider failed"));
 
-        assertEquals(Optional.empty(), LocalAutonomousIndexOperations.promotedSnapshotId(succeeded, snapshots));
-        assertEquals(Optional.empty(), LocalAutonomousIndexOperations.promotedSnapshotId(unstaged, snapshots));
+        assertEquals(Optional.empty(), ProjectIndexingUseCase.promotedSnapshotId(succeeded, snapshots));
+        assertEquals(Optional.empty(), ProjectIndexingUseCase.promotedSnapshotId(unstaged, snapshots));
         assertEquals(0, snapshots.identityReads + snapshots.loads);
     }
 

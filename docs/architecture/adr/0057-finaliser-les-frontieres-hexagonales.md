@@ -32,6 +32,8 @@ La fermeture de `remote index` non fiable (ADR 0041), MCP read-only, les limites
 
 Cycles de packages (point 7, mis en œuvre le 2026-10-10, audit AUD-ARC-06) : le garde `scripts/architecture/check-module-boundaries.py` (règle A8) refuse tout cycle de packages absent de la table `KNOWN_PACKAGE_CYCLES` et toute entrée de cette table qui ne décrit plus exactement un cycle, de sorte qu'elle ne puisse que rétrécir. Les quatre cycles existants (quinze packages, dont trois dans le plugin IntelliJ, hors reactor) y ont d'abord été gelés, puis **levés** par le changement `casser-les-cycles-de-packages` (13 classes déplacées dans leur module, sans nouvel ADR : ADR 0044 respecté) ; la table est vide et le garde refuse tout cycle futur.
 
+Cas d'usage d'indexation (point 2, mis en œuvre le 2026-10-21, audit AUD-ARC-02, changement `unifier-l-orchestration-d-indexation`, tâche SH-05) : la préparation, l'exécution sous bail, la reprise d'un run promu, la promotion de l'empreinte, la synchronisation sémantique et la rétention vivent dans `ProjectIndexingUseCase` (`minos-application`, package `com.minos.application.indexing`), invocable sans la CLI ; `LocalAutonomousIndexOperations` ne fait plus que projeter son résultat sur les vues de la commande. Le coordinateur sans appelant `IncrementalIndexingCoordinator` et `IncrementalIndexingResult` sont supprimés, leurs tests reportés sur le cas d'usage. Une baseline d'empreinte illisible est désormais déclarée par un diagnostic sans chemin ; l'échec de publication de l'empreinte reste une erreur de la commande (décision du propriétaire du 2026-10-21).
+
 ## Références
 
 - [Cockburn — Ports and Adapters](https://alistair.cockburn.us/hexagonal-architecture)

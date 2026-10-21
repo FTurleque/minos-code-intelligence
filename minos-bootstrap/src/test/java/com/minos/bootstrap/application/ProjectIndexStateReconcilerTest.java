@@ -3,6 +3,7 @@ package com.minos.bootstrap.application;
 import com.minos.application.ProjectIndexStateReconciler;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexStateStore;
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
@@ -178,7 +179,7 @@ class ProjectIndexStateReconcilerTest {
             @Override public Optional<ProjectIndexState> findProjectState(UUID id) { return Optional.of(stale); }
             @Override public Optional<IndexingRun> findRun(UUID id) { return Optional.empty(); }
             @Override public List<IndexingRun> listRuns(UUID id) { return List.of(); }
-            @Override public void saveProjectState(ProjectIndexState state) { throw new IllegalStateException("synthetic disk failure"); }
+            @Override public void saveProjectState(ProjectIndexState state) { throw new IndexStateStoreException("synthetic disk failure"); }
             @Override public void saveRun(IndexingRun run) {
                 // runs are not written by a reconciliation: nothing to record
             }

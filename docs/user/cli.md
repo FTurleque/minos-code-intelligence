@@ -164,6 +164,8 @@ minos.cmd index nexus --force-full --format json
 
 Le plan expose les providers retenus, leurs runtimes, la portée (`NONE`, `INCREMENTAL`, `FULL`) et les raisons.
 
+Quand la baseline d'empreinte active ne peut pas être lue, le plan est `FULL` et le résultat de l'exécution porte le diagnostic `active fingerprint baseline unreadable; a full indexing was required` (sans chemin ni cause). Un échec de publication de l'empreinte après un run réussi reste une erreur de la commande.
+
 Une capacité incrémentale n'est utilisée que si le provider la déclare explicitement et si la planification MINOS l'autorise.
 
 ### Provider explicite

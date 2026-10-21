@@ -6,7 +6,7 @@ M14 relie désormais le lifecycle interne historique à une exécution réelle d
 
 ```mermaid
 sequenceDiagram
-    participant C as LocalAutonomousIndexOperations
+    participant C as ProjectIndexingUseCase
     participant D as ProjectDiscoveryService
     participant N as IndexerRegistry
     participant P as IncrementalIndexingPlanner

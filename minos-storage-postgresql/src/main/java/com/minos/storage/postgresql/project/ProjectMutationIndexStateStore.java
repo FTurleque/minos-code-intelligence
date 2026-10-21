@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql.project;
 
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.storage.postgresql.support.PostgresConnectionFactory;
 import com.minos.storage.postgresql.support.PostgresProjectMutationLock;
 import com.minos.orchestration.IndexStateStore;
@@ -59,7 +60,7 @@ public final class ProjectMutationIndexStateStore implements IndexStateStore {
             long deadline = System.nanoTime() + connections.acquireTimeout().toNanos();
             while (!tryAcquireLifecycleLock(connectionLease, id)) {
                 if (System.nanoTime() >= deadline) {
-                    throw new IllegalStateException(
+                    throw new IndexStateStoreException(
                             "timed out waiting for PostgreSQL project lifecycle lease after "
                                     + connections.acquireTimeout() + ": " + id);
                 }
@@ -79,7 +80,7 @@ public final class ProjectMutationIndexStateStore implements IndexStateStore {
             heldLifecycleLease.set(held);
             return logicalLease(held);
         } catch (SQLException exception) {
-            throw new IllegalStateException("PostgreSQL lifecycle lease could not reserve a dedicated connection", exception);
+            throw new IndexStateStoreException("PostgreSQL lifecycle lease could not reserve a dedicated connection", exception);
         } finally {
             if (heldLifecycleLease.get() == null) {
                 cleanupFailedAcquisition(
@@ -154,14 +155,14 @@ public final class ProjectMutationIndexStateStore implements IndexStateStore {
         try {
             acquired = state.lock.tryLock(connections.acquireTimeout().toMillis(), TimeUnit.MILLISECONDS);
             if (!acquired) {
-                throw new IllegalStateException(
+                throw new IndexStateStoreException(
                         "timed out waiting for local PostgreSQL lifecycle gate after "
                                 + connections.acquireTimeout() + ": " + projectId);
             }
             return new LocalGateLease(projectId, state);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException(
+            throw new IndexStateStoreException(
                     "interrupted while waiting for local PostgreSQL lifecycle gate: " + projectId,
                     interrupted);
         } finally {
@@ -182,7 +183,7 @@ public final class ProjectMutationIndexStateStore implements IndexStateStore {
             Thread.sleep(LEASE_POLL_MILLIS);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException(
+            throw new IndexStateStoreException(
                     "interrupted while waiting for PostgreSQL project lifecycle lease: " + projectId,
                     interrupted);
         }
@@ -201,7 +202,7 @@ public final class ProjectMutationIndexStateStore implements IndexStateStore {
             }
         } catch (SQLException exception) {
             connectionLease.invalidate();
-            throw new IllegalStateException("PostgreSQL lifecycle lease acquisition failed for project " + projectId,
+            throw new IndexStateStoreException("PostgreSQL lifecycle lease acquisition failed for project " + projectId,
                     exception);
         }
     }
@@ -279,13 +280,13 @@ public final class ProjectMutationIndexStateStore implements IndexStateStore {
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next() || !result.getBoolean(1)) {
                     connectionLease.invalidate();
-                    throw new IllegalStateException(
+                    throw new IndexStateStoreException(
                             "PostgreSQL lifecycle lease was not owned while releasing project " + projectId);
                 }
             }
         } catch (SQLException exception) {
             connectionLease.invalidate();
-            throw new IllegalStateException(
+            throw new IndexStateStoreException(
                     "PostgreSQL lifecycle lease release failed for project " + projectId, exception);
         }
     }
@@ -309,7 +310,7 @@ public final class ProjectMutationIndexStateStore implements IndexStateStore {
                 return null;
             });
         } catch (SQLException | IOException exception) {
-            throw new IllegalStateException("PostgreSQL index state mutation failed to " + action, exception);
+            throw new IndexStateStoreException("PostgreSQL index state mutation failed to " + action, exception);
         }
     }
 
