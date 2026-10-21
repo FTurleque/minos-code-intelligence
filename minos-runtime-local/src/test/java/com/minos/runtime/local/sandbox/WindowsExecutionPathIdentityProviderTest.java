@@ -6,6 +6,8 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -32,6 +34,22 @@ class WindowsExecutionPathIdentityProviderTest {
         assertTrue(authorization.registeredProjectFileKey().isPresent());
         assertTrue(authorization.projectFileKey().isPresent());
         authorization.verifyCurrent(project, module);
+    }
+
+    /** AUD-ARC-04 : un hôte au chargeur de contexte vide ne prive pas MINOS de son fournisseur d'identité. */
+    @Test
+    void emptyContextClassLoaderStillEstablishesTheAuthorization() throws Exception {
+        Path project = Files.createDirectories(temporary.resolve("project"));
+        Path module = Files.createDirectories(project.resolve("module"));
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        thread.setContextClassLoader(new URLClassLoader(new URL[0], null));
+        try {
+            assertTrue(ExecutionPathAuthorization.tryCapture(project, module).isPresent(),
+                    "path identity discovery must not depend on the thread context class loader");
+        } finally {
+            thread.setContextClassLoader(previous);
+        }
     }
 
     @Test
