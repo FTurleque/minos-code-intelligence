@@ -232,9 +232,11 @@ public final class ProjectIndexingUseCase {
                         ? null
                         : "semantic index state after structured indexing: " + report.state();
             } catch (Exception exception) {
+                // The diagnostic reaches every surface: a message that may name a path is replaced by its type.
                 String message = exception.getMessage();
+                boolean withheld = message == null || message.isBlank() || PublicErrorMessages.looksSensitive(message);
                 return "semantic index refresh failed without invalidating structured snapshot: "
-                        + (message == null || message.isBlank() ? exception.getClass().getSimpleName() : message);
+                        + (withheld ? exception.getClass().getSimpleName() : message);
             }
         };
     }

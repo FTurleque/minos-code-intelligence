@@ -69,6 +69,17 @@ class ProjectIndexingUseCaseRecoveryTest {
     }
 
     @Test
+    void aSemanticRefreshFailureThatNamesAPathIsWithheld() {
+        IndexingFixture fixture = fixture();
+        var refresh = ProjectIndexingUseCase.semanticRefresh(semanticService(fixture,
+                Optional.of(new LocalHashEmbeddingProvider()),
+                new IOException("cannot read " + temp.toAbsolutePath().resolve("vectors.bin"))));
+
+        assertEquals("semantic index refresh failed without invalidating structured snapshot: IOException",
+                refresh.refresh(fixture.project.id()));
+    }
+
+    @Test
     void theSemanticRefreshNeedsAService() {
         assertThrows(NullPointerException.class, () -> ProjectIndexingUseCase.semanticRefresh(null));
     }
