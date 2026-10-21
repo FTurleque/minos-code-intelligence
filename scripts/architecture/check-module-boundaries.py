@@ -522,8 +522,6 @@ UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
         "declared hosted boundary, not qualified: implemented by the operator of a hosted deployment",
     "minos-engine/com.minos.orchestration.InMemoryIndexStateStore":
         "in-memory state store used only by the tests of five modules; moving it needs a test-jar, not done here",
-    "minos-engine/com.minos.orchestration.IncrementalIndexingCoordinator":
-        "temporary: its fate belongs to unifier-l-orchestration-d-indexation, which removes this entry",
     "minos-nexus/com.minos.nexus.NexusSemanticSignalService":
         "public NEXUS semantic signal v2 surface (docs/developer/public-surfaces.md), not qualified by a client",
     "minos-storage-local/com.minos.storage.local.store.CodeKnowledgeSnapshotBinaryCodec":
