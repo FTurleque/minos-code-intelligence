@@ -904,6 +904,49 @@ class RuntimeLocalExportRuleTest(unittest.TestCase):
         self.assertEqual(len(_MODULE.RUNTIME_LOCAL_EXPORTED_TYPES), _MODULE.check_runtime_local_exports())
 
 
+class ServiceLoaderClassLoaderTest(unittest.TestCase):
+    """A16 — production ServiceLoader.load calls pass an explicit class loader (AUD-ARC-04)."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+
+    def source(self, scope: str, name: str, body: str) -> None:
+        directory = self.root / "minos-a" / "src" / scope / "java" / "com" / "example"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / f"{name}.java").write_text(f"package com.example;\n\nclass {name} {{\n{body}\n}}\n",
+                                                encoding="utf-8")
+
+    def check(self):
+        return _MODULE.check_service_loader_class_loaders(self.root, ("minos-a",))
+
+    def test_a_one_argument_call_in_production_is_refused_with_file_and_line(self):
+        self.source("main", "Implicit", "    Object o = ServiceLoader.load(Port.class);")
+        with self.assertRaises(RuntimeError) as raised:
+            self.check()
+        self.assertIn("A16", str(raised.exception))
+        self.assertIn("minos-a/src/main/java/com/example/Implicit.java:4", str(raised.exception))
+
+    def test_a_two_argument_call_is_accepted(self):
+        self.source("main", "Explicit",
+                    "    Object o = ServiceLoader.load(Port.class,\n            Port.class.getClassLoader());")
+        self.assertEqual(1, self.check())
+
+    def test_nested_arguments_are_not_counted_as_a_loader(self):
+        self.source("main", "Nested", "    Object o = ServiceLoader.load(pick(Port.class, Other.class));")
+        with self.assertRaises(RuntimeError):
+            self.check()
+
+    def test_comments_literals_and_tests_do_not_count(self):
+        self.source("main", "Quiet", "    // ServiceLoader.load(Port.class)\n    String s = \"ServiceLoader.load(X.class)\";")
+        self.source("test", "InTest", "    Object o = ServiceLoader.load(Port.class);")
+        self.assertEqual(0, self.check())
+
+    def test_the_real_tree_passes_a_loader_at_every_site(self):
+        self.assertEqual(4, _MODULE.check_service_loader_class_loaders())
+
+
 class EveryRuleHasATest(unittest.TestCase):
 
     def test_every_check_function_of_the_script_is_referenced_by_a_test(self):
