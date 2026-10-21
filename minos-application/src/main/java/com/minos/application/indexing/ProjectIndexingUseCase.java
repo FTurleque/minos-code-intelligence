@@ -253,7 +253,7 @@ public final class ProjectIndexingUseCase {
                            IndexingResumePolicy resumePolicy) throws IOException {
         Objects.requireNonNull(resumePolicy, "resumePolicy");
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        try (IndexStateStore.ProjectLease _ = stateStore.acquireProjectLease(project.id())) {
+        try (var _ = stateStore.acquireProjectLease(project.id())) {
             // ADR 0039 sec. 6: --no-resume forces a complete run (it supersedes the interrupted run and indexes
             // everything), it is not only a resume policy: on an unchanged project it must not answer NO_CHANGES.
             boolean complete = forceFull || resumePolicy == IndexingResumePolicy.NO_RESUME;
