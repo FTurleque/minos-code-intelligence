@@ -58,6 +58,34 @@ class FileIndexStateStoreErrorContractTest {
     }
 
     @Test
+    void anUnparsableProjectStateValueIsAStoreFailureWithoutTheRoot() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        FileIndexStateStore store = new FileIndexStateStore(temp.resolve("state"));
+        store.saveProjectState(ProjectIndexState.neverIndexed(projectId, Instant.parse("2026-10-21T08:00:00Z")));
+        Path file = temp.resolve("state").resolve("projects").resolve(projectId + ".properties");
+        Files.writeString(file, Files.readString(file).replaceAll("(?m)^availability=.*$", "availability=BOGUS"));
+
+        IndexStateStoreException failure = assertThrows(IndexStateStoreException.class,
+                () -> store.findProjectState(projectId));
+
+        assertInstanceOf(IllegalArgumentException.class, failure.getCause());
+        assertNoRoot(failure);
+    }
+
+    @Test
+    void anInvalidProjectIdInARunLocatorIsAStoreFailureWithoutTheRoot() throws Exception {
+        FileIndexStateStore store = new FileIndexStateStore(temp.resolve("state"));
+        UUID runId = UUID.randomUUID();
+        Files.writeString(temp.resolve("state").resolve("runs").resolve(".by-id").resolve(runId + ".properties"),
+                "projectId=not-a-uuid\n");
+
+        IndexStateStoreException failure = assertThrows(IndexStateStoreException.class, () -> store.findRun(runId));
+
+        assertInstanceOf(IllegalArgumentException.class, failure.getCause());
+        assertNoRoot(failure);
+    }
+
+    @Test
     void anInvalidExecutionCountAndAnUnexpectedFileNameAreStoreFailuresWithoutTheRoot() throws Exception {
         UUID projectId = UUID.randomUUID();
         FileIndexStateStore store = new FileIndexStateStore(temp.resolve("state"));
