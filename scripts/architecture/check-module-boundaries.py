@@ -498,7 +498,7 @@ def check_runtime_local_exports(root: Path = ROOT, group_id: str | None = None,
 
 
 # A15 / AUD-QUA-02 — a public production type is used by production, or declared. Numbered after A11-A14 (reserved
-# by figer-la-dette-de-frontieres-par-des-cliquets); A15 is the two-argument ServiceLoader rule of
+# by figer-la-dette-de-frontieres-par-des-cliquets); A16 is the two-argument ServiceLoader rule of
 # decouvrir-les-fournisseurs-par-chargeur-explicite. Each entry names one top-level public type of a reactor
 # src/main (module/package.Type) with the reason it has no production caller. The list is a ratchet: an entry whose
 # type is gone, or is now named by production, fails the guard.
