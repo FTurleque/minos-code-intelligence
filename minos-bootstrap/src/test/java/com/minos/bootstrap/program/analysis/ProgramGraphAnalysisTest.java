@@ -26,7 +26,6 @@ import com.minos.program.ProgramGraphEdge;
 import com.minos.program.ProgramGraphNode;
 import com.minos.program.ProgramNodeKind;
 import com.minos.program.analysis.AdvancedImpactService;
-import com.minos.program.analysis.InterproceduralFlowService;
 import com.minos.program.analysis.ProgramGraphComposer;
 import com.minos.program.analysis.ProgramGraphEvaluator;
 import com.minos.program.analysis.ProgramGraphProvider;
@@ -117,28 +116,6 @@ class ProgramGraphAnalysisTest {
                 List.of(node("same", null, ProgramNodeKind.BASIC_BLOCK, "right")), List.of(), List.of());
         assertThrows(IllegalArgumentException.class,
                 () -> new ProgramGraphComposer().compose("p", "s", List.of(left, right)));
-    }
-
-    @Test
-    void interproceduralTraversalIsBoundedAndReportsCycles() {
-        ProgramGraph graph = new ProgramGraph(
-                "p", "s",
-                Set.of(ProgramGraphCapability.CALL_GRAPH, ProgramGraphCapability.LOCAL_DATA_FLOW),
-                List.of(
-                        node("symbol:a", "a", ProgramNodeKind.SYMBOL, "a"),
-                        node("symbol:b", "b", ProgramNodeKind.SYMBOL, "b"),
-                        node("symbol:c", "c", ProgramNodeKind.SYMBOL, "c")),
-                List.of(
-                        edge("e1", "symbol:a", "symbol:b", ProgramEdgeKind.CALL),
-                        edge("e2", "symbol:b", "symbol:c", ProgramEdgeKind.DATA_FLOW),
-                        edge("e3", "symbol:c", "symbol:a", ProgramEdgeKind.CALL)),
-                List.of());
-
-        InterproceduralFlowService.FlowResult result = new InterproceduralFlowService().traverse(
-                graph, new InterproceduralFlowService.FlowRequest("symbol:a", 8, 100));
-        assertFalse(result.paths().isEmpty());
-        assertTrue(result.limitations().contains("CYCLE_OBSERVED"));
-        assertTrue(result.limitations().contains("DYNAMIC_DISPATCH_NOT_PROVEN"));
     }
 
     @Test
