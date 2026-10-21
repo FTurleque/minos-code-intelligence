@@ -1,11 +1,11 @@
-package com.minos.application.semantic;
+package com.minos.bootstrap.semantic;
 
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** Controlled relevance metrics used by M20 promotion gates. */
+/** Controlled relevance metrics used by the M20 semantic hybrid tests (test-only tool). */
 public final class SemanticSearchEvaluator {
 
     public Evaluation evaluate(List<String> rankedStableKeys, Set<String> relevantStableKeys, int k) {
