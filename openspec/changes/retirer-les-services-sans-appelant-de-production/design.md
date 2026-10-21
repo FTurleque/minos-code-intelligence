@@ -42,7 +42,7 @@ Recherche `git grep -lw <Classe> -- '*/src/main/*'` hors du fichier de la classe
 
 ## Decisions
 
-### D1. Sort de chaque classe — **décision en attente du propriétaire**
+### D1. Sort de chaque classe — **décidé par le propriétaire le 2026-10-21**
 
 | Classe | Recommandation | Raison | Alternative |
 |---|---|---|---|
@@ -53,6 +53,29 @@ Recherche `git grep -lw <Classe> -- '*/src/main/*'` hors du fichier de la classe
 | `SemanticSearchEvaluator` | **Déplacer** dans les sources de test de `minos-bootstrap`, seul module qui l'utilise, et la retirer de `check-jacoco.py:53` | Outil d'évaluation à un seul utilisateur | La garder inscrite, comme `ProgramGraphEvaluator` |
 | `NexusSemanticSignalService` | **Garder et inscrire** comme point d'entrée public de `minos-nexus` | Surface documentée ; la retirer serait une rupture de surface | Supprimer, par une décision de surface explicite (documents et contrat de signaux à retirer aussi) |
 
+#### Décision du propriétaire (2026-10-21)
+
+Le tableau de recommandations est retenu tel quel :
+
+- `ProjectFingerprintSnapshotAlignmentService` : **supprimée** (condition remplie, voir le relevé 1.1 ci-dessous).
+- `IndexerProviderRegistry` : **supprimée**, tests réécrits sur `IndexerRegistry`, note de « Mise en œuvre » dans l'ADR 0026.
+- `InterproceduralFlowService` : **supprimée** avec le test `interproceduralTraversalIsBoundedAndReportsCycles`.
+- `ProgramGraphEvaluator` : **gardée** et inscrite sur la liste.
+- `SemanticSearchEvaluator` : **déplacée** dans `minos-bootstrap/src/test/java/com/minos/bootstrap/semantic/`.
+- `NexusSemanticSignalService` : **gardée** et inscrite comme surface publique.
+- `IncrementalIndexingCoordinator` : non touché (changement `unifier-l-orchestration-d-indexation`) ; inscrit **temporairement** sur la liste, avec cette raison, pour que la règle passe au HEAD. Le changement qui le traite retire l'entrée (le cliquet l'y oblige).
+
+#### Relevé 1.1 (2026-10-21, `origin/develop` `1492113e`)
+
+- **`ProjectFingerprintSnapshotAlignmentService`** : ses tests (`minos-engine` et `minos-bootstrap`) prouvaient le refus d'une empreinte active non alignée, ou présente sans index actif, et le retour vide sans empreinte. Sur le chemin du produit, `LocalAutonomousIndexOperations.prepare` (`minos-cli/.../LocalAutonomousIndexOperations.java:359-360`) charge l'empreinte active et la passe à `ProjectInvalidationService.assess`, qui compare son `indexSnapshotId` à l'index actif (`ProjectInvalidationService.java:72-81`) et impose une indexation complète (`NO_ACTIVE_INDEX`, `MISSING_FINGERPRINT_BASELINE`, `BASELINE_INDEX_MISMATCH`) ; `FileProjectFingerprintSnapshotStore.loadActive` refuse en outre un pointeur incohérent (`:247`). L'alignement est donc déjà vérifié, en mode conservateur (indexation complète plutôt qu'exception) : suppression. `ProjectFingerprintSnapshotRealFixtureTest` garde sa preuve de persistance par `loadActive`.
+- **`IndexerProviderRegistry`** : `ProviderConformanceKitTest` attendait le refus d'un doublon et d'un descriptor dont l'identifiant diffère du profil ; `M17ProviderPlatformTest` l'utilisait seulement pour obtenir un `IndexerRegistry` de négociation. Le refus du doublon est réécrit sur `IndexerRegistry` ; le contrôle descriptor/profil, propre au catalogue supprimé, disparaît (aucun code de production ne le faisait passer par là).
+- **`InterproceduralFlowService`** : un seul test (parcours borné, cycle signalé) ; aucune surface ne l'expose.
+- **`ProgramGraphEvaluator`**, **`SemanticSearchEvaluator`** : outils de mesure de vérité terrain des tests ; **`NexusSemanticSignalService`** : un test de contrat dans `minos-nexus`.
+
+#### Relevé 1.2 (règle A16 appliquée au HEAD après les suppressions)
+
+Types publics de premier niveau sans référence de production : **12** avec les exemptions par règle (`minos-api` 4, `minos-application` 2, `minos-engine` 4, `minos-nexus` 1, `minos-storage-local` 1), **20** sans elles (8 de plus, tous exemptés par une méthode `main` ou un fichier `META-INF/services` : `minos-app` 2, `minos-bootstrap` 1, `minos-cli` 1, `minos-mcp` 1, `minos-provider-scip` 1, `minos-runtime-local` 1, `minos-storage-postgresql` 1). Hors D1 : les quatre façades `Local*Api` de `minos-api` (points d'entrée publics, inscrits un par un : la liste reste courte, pas d'exemption par module), `StorageBackends` (façade d'ADR 0042), `InMemoryIndexStateStore` (utilisée par les seuls tests de cinq modules ; la déplacer demanderait un test-jar, hors lot). `CodeKnowledgeSnapshotBinaryCodec`, `HostedAvailabilityPort`, `HostedTransportSecurityPort` sont bien dans le cas.
+
 ### D2. Le gate : exemptions par règle, puis liste nominative à cliquet
 
 Une règle du garde de frontières (`scripts/architecture/check-module-boundaries.py`, numéro fixé à l'implémentation, après ceux que réserve `figer-la-dette-de-frontieres-par-des-cliquets`) : toute classe, interface ou record **public de premier niveau** d'un `src/main` du reactor est nommée par au moins un autre fichier de production du reactor, sauf :
@@ -61,6 +84,8 @@ Une règle du garde de frontières (`scripts/architecture/check-module-boundarie
 - liste nominative `UNREFERENCED_PRODUCTION_TYPES` : une entrée par classe, avec sa raison écrite (surface publique, frontière déclarée, outil d'évaluation).
 
 La liste est un **cliquet**, comme A8 et A10 : une entrée dont la classe a disparu ou a gagné un appelant fait échouer le garde, de sorte qu'elle ne peut que rétrécir. Les types publics de `minos-api` y entrent en bloc par leur module seulement si la tâche 1.2 montre qu'une liste nominative serait trop longue pour être relue ; ce choix est consigné.
+
+**Numéro retenu : A16.** A11 à A14 sont réservés par `figer-la-dette-de-frontieres-par-des-cliquets` ; la règle « `ServiceLoader.load` à deux arguments » de `decouvrir-les-fournisseurs-par-chargeur-explicite`, écrite en parallèle, prend vraisemblablement A15. Si elle prend un autre numéro, renuméroter à la fusion (littéraux `A16` du script, de son auto-test et de `docs/developer/quality-gates.md`).
 
 ### D3. Les gates suivent dans la même tâche
 
