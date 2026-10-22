@@ -137,11 +137,17 @@ Dans `minos-application`, `ProjectResolver` SHALL se trouver dans `com.minos.app
 - **THEN** la liste `MODULES` est inchangée (14 modules) et la règle A3 (un package, un module) reste satisfaite
 
 ### Requirement: L'incrémental ne dépend plus de l'orchestration en retour
-Dans `minos-engine`, les classes d'`incremental` qui utilisent l'orchestration (`IncrementalIndexingCoordinator`, `IncrementalIndexingPlan`, `IncrementalIndexingPlanner`, `IncrementalIndexingResult`, `ProjectFingerprintSnapshotAlignmentService`, `ProjectInvalidationService`) SHALL se trouver dans `com.minos.orchestration`, et `com.minos.incremental` SHALL ne plus importer `com.minos.orchestration`.
+Dans `minos-engine`, `com.minos.incremental` SHALL ne pas importer `com.minos.orchestration`. Les classes de planification incrémentale qui utilisent l'orchestration (`IncrementalIndexingPlan`, `IncrementalIndexingPlanner`, `ProjectInvalidationService`) SHALL se trouver dans `com.minos.orchestration`. Une classe retirée du produit SHALL NOT être exigée par cette règle.
 
 #### Scenario: Plus d'arête incremental vers orchestration
-- **WHEN** on recherche `import com.minos.orchestration` dans les sources de production de `com.minos.incremental`
+- **GIVEN** les sources de production de `minos-engine`
+- **WHEN** on recherche `import com.minos.orchestration` dans les sources de `com.minos.incremental`
 - **THEN** la recherche ne retourne aucune ligne
+
+#### Scenario: Classe replacée dans l'incrémental
+- **GIVEN** une copie du dépôt où `IncrementalIndexingPlanner` est replacé dans `com.minos.incremental`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** le garde échoue en nommant le cycle entre `incremental` et `orchestration`
 
 ### Requirement: Le plugin IntelliJ n'a pas de cycle entre `protocol`, `service` et `ui`
 Dans `minos-intellij`, `MinosRegistryNotice` SHALL se trouver dans `com.minos.intellij.protocol` ; `protocol` SHALL ne dépendre ni de `service` ni de `ui`.
@@ -239,3 +245,106 @@ Hors de `minos-runtime-local`, les sources de production et de test SHALL ne nom
 - **GIVEN** une classe de `workspace` qui importerait une classe de `sandbox` ou de `process`
 - **WHEN** `check-module-boundaries.py` est exécuté
 - **THEN** il échoue en nommant le cycle de packages
+
+### Requirement: Les surfaces n'assemblent pas le cycle d'indexation
+Aucune surface (`minos-cli`, `minos-api`, `minos-mcp`, `minos-nexus`) SHALL NOT construire `IndexingLifecycleService` ni enchaîner elle-même découverte, négociation, planification et exécution. Ces étapes SHALL être assemblées dans `minos-application`, qui SHALL NOT nommer de classe d'adaptateur pour le faire.
+
+#### Scenario: Construction du cycle hors des surfaces
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `new IndexingLifecycleService` dans les sources de production des quatre surfaces
+- **THEN** la recherche ne retourne aucune ligne
+
+#### Scenario: Cas d'usage sans adaptateur
+- **GIVEN** le cas d'usage d'indexation de `minos-application`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** le garde réussit et ne signale aucun import d'adaptateur depuis `minos-application`
+
+### Requirement: Une classe publique de production est référencée par la production ou déclarée
+Tout type public de premier niveau des sources de production du reactor SHALL être nommé par un autre fichier de production, ou par un fichier `META-INF/services` de production, ou déclarer un point d'entrée `main`, ou figurer dans la liste nominative du garde avec une raison écrite. Le garde de frontières SHALL échouer sinon, en nommant le type.
+
+#### Scenario: Classe sans appelant ajoutée
+- **GIVEN** une copie du dépôt où une classe publique de `src/main` n'est nommée par aucun autre fichier de production ni inscrite sur la liste
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** le garde échoue en nommant la classe et son module
+
+#### Scenario: Classe nommée seulement par des tests
+- **GIVEN** une copie du dépôt où une classe publique de `src/main` n'est nommée que par des fichiers de `src/test`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue : une référence de test ne compte pas
+
+#### Scenario: Implémentation découverte par service
+- **GIVEN** une classe publique nommée seulement dans un fichier `META-INF/services` de production
+- **WHEN** le garde est exécuté
+- **THEN** la classe est acceptée sans figurer sur la liste
+
+#### Scenario: Dépôt réel
+- **GIVEN** le dépôt après le changement
+- **WHEN** le garde est exécuté
+- **THEN** il réussit et affiche le nombre de types inscrits sur la liste
+
+### Requirement: La liste des classes sans appelant est un cliquet justifié
+Chaque entrée de la liste nominative SHALL nommer un seul type et porter une raison non vide. Une entrée dont le type n'existe plus, ou est désormais nommé par la production, SHALL faire échouer le garde, de sorte que la liste ne peut que rétrécir.
+
+#### Scenario: Entrée périmée
+- **GIVEN** une liste qui nomme une classe supprimée
+- **WHEN** le garde est exécuté
+- **THEN** il échoue en nommant l'entrée périmée
+
+#### Scenario: Entrée devenue inutile
+- **GIVEN** une liste qui nomme une classe qu'un fichier de production référence désormais
+- **WHEN** le garde est exécuté
+- **THEN** il échoue en demandant de retirer l'entrée
+
+#### Scenario: Entrée sans raison
+- **GIVEN** une liste dont une entrée a une raison vide
+- **WHEN** le garde est exécuté
+- **THEN** il échoue en nommant l'entrée
+
+### Requirement: Les fournisseurs optionnels sont découverts par le chargeur de MINOS
+La découverte du backend de stockage optionnel et celle du fournisseur d'identité de chemin SHALL utiliser le chargeur de classes qui a chargé MINOS, et SHALL NOT dépendre du chargeur de contexte du thread. Un fournisseur absent SHALL produire le refus existant, jamais un mode dégradé.
+
+#### Scenario: Chargeur de contexte vide, backend PostgreSQL
+- **GIVEN** un thread dont le chargeur de contexte ne voit aucun service, et le fournisseur PostgreSQL sur le chemin de classes de MINOS
+- **WHEN** le backend `postgresql` est sélectionné
+- **THEN** le fournisseur PostgreSQL est trouvé
+
+#### Scenario: Chargeur de contexte vide, identité de chemin
+- **GIVEN** un thread dont le chargeur de contexte ne voit aucun service, sous Windows
+- **WHEN** l'identité physique d'une racine de projet est capturée
+- **THEN** l'identité est rendue par le fournisseur enregistré
+
+#### Scenario: Fournisseur absent
+- **GIVEN** un chargeur de MINOS sans fournisseur pour le backend demandé
+- **WHEN** ce backend est sélectionné
+- **THEN** l'ouverture échoue en disant que le fournisseur n'est pas disponible, et aucun autre backend n'est ouvert à sa place
+
+### Requirement: Des fournisseurs en double sont refusés
+Deux fournisseurs de stockage de l'identifiant demandé, comparé sans casse avec `Locale.ROOT`, SHALL faire échouer l'ouverture avec un message qui nomme leurs classes. Plus d'un fournisseur d'identité de chemin SHALL rendre l'identité indisponible, donc le lancement refusé. Aucun fournisseur SHALL NOT être choisi par ordre de découverte.
+
+#### Scenario: Deux fournisseurs de stockage de même identifiant
+- **GIVEN** un chargeur qui expose deux fournisseurs d'identifiant `postgresql`
+- **WHEN** le backend `postgresql` est sélectionné
+- **THEN** l'ouverture échoue, le message nomme les deux classes et ne contient aucun chemin absolu
+
+#### Scenario: Doublon sans effet sur le backend local
+- **GIVEN** le même chargeur à deux fournisseurs `postgresql`
+- **WHEN** le backend `local` est sélectionné
+- **THEN** le stockage local est ouvert
+
+#### Scenario: Deux fournisseurs d'identité de chemin
+- **GIVEN** un chargeur qui expose deux fournisseurs d'identité de chemin, sur un système sans identité de fichier native
+- **WHEN** une autorisation de chemin d'exécution est capturée
+- **THEN** aucune autorisation n'est rendue et le lancement d'un provider local est refusé
+
+### Requirement: Aucune découverte de service de production n'omet le chargeur
+Tout appel `ServiceLoader.load` des sources de production du reactor SHALL passer un chargeur de classes explicite. Le garde de frontières SHALL échouer sur un appel à un seul argument, en nommant le fichier et la ligne.
+
+#### Scenario: Appel sans chargeur
+- **GIVEN** une copie du dépôt où une classe de production appelle `ServiceLoader.load(X.class)`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** le garde échoue en nommant le fichier et la ligne
+
+#### Scenario: Dépôt réel
+- **GIVEN** le dépôt après le changement
+- **WHEN** le garde est exécuté
+- **THEN** il réussit et les quatre découvertes de production passent un chargeur

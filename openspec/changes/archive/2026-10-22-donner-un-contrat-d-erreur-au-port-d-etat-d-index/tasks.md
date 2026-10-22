@@ -27,7 +27,7 @@ Ordre : relevé et décisions, puis dans chaque section rouge, correction, preuv
 
 - [x] 5.1 `docs/developer/architecture.md` : contrat d'erreur du port d'état d'index (type, ce qui est une panne, ce qui est un invariant) ; `docs/user/troubleshooting.md` si un message visible change. Rejouer `python scripts/docs/check-current-docs.py`.
 - [x] 5.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-QUA-03 : statut, 4 implémentations, décisions D1 et D5, décompte « 43 » non reproduit, refus métier restant ouvert si D5 reporté).
-- [ ] 5.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/developer/architecture.md`.
+- [x] 5.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/developer/architecture.md`. **Fait (2026-10-22)** : `run_gates.py` 46/46, `openspec validate --all --strict`, `check-current-docs.py` et `product-facts.py --check` verts sur `develop` après fusion ; STATUS, ROADMAP et SUIVI mis à jour par la PR d'archivage.
 
 ## Preuves d'implémentation (2026-10-21)
 

@@ -32,7 +32,7 @@ Ordre : relevé et décisions, puis dans chaque section rouge, correction, preuv
 
 - [x] 6.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-ARC-02 : statut, décisions D1 et D3, tests reportés ; AUD-QUA-02 : coordinateur retiré ; AUD-ARC-01 et AUD-PERF-04 signalés comme débloqués).
 - [x] 6.2 Signaler aux changements actifs qui citent des lignes de `LocalAutonomousIndexOperations` (écart 5 de `design.md`) que leurs références ont dérivé.
-- [ ] 6.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md`, ADR 0057, `docs/architecture/arc42/05-vue-blocs.md`.
+- [x] 6.3 `python .claude/scripts/run_gates.py` ; `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md`, ADR 0057, `docs/architecture/arc42/05-vue-blocs.md`. **Fait (2026-10-22)** : `run_gates.py` 46/46, `openspec validate --all --strict`, `check-current-docs.py` et `product-facts.py --check` verts sur `develop` après fusion ; STATUS, ROADMAP et SUIVI mis à jour par la PR d'archivage.
 
 ## Preuves d'implémentation (2026-10-21)
 
