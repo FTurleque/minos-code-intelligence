@@ -251,6 +251,10 @@ Chaque étape S2 a conservé :
 - chaque futur déplacement de responsabilité doit conserver une justification explicite pour les tests cross-boundary ;
 - la CI automatique de PR reste une dette volontairement affectée à M15-S10.
 
+## Mise en œuvre
+
+**« Moteur → runtime process local concret » au grain de la classe (2026-10-22, audit AUD-ARC-05)** : la règle A12 de `scripts/architecture/check-module-boundaries.py` refuse tout lancement de processus (`ProcessBuilder`, `Runtime.getRuntime().exec`) dans les sources de production de `minos-domain`, `minos-engine` et `minos-application`, hors de la liste fermée `PROCESS_LAUNCHERS`. Elle contient `PrivateLocalStorage` (ACL Windows par `icacls.exe`), qui sortira du moteur par un port de plateforme conçu avec AUD-SEC-06 ([ADR 0062](0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md)).
+
 ## Alternatives rejetées
 
 ### Big-bang vers tous les modules en un seul commit

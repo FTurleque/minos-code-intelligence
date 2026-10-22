@@ -97,6 +97,18 @@ Garde Python pur ; chemins construits par `pathlib` ; fichiers lus en UTF-8. Ex�
 - **Faux positifs** au grain du mot : mesurés en tâche 1.1 avant de figer la méthode de reconnaissance.
 - Les chantiers à venir (SH-05, SH-08, SH-03/06) **réduiront** ces listes : chaque réduction est une ligne supprimée, pas une règle à réécrire.
 
-## Note de dérive (2026-10-21)
+## Relevé et méthode retenus (tâche 1.1, HEAD `7e1faafe`, 2026-10-22)
 
-Le changement `unifier-l-orchestration-d-indexation` a déplacé l'orchestration de `minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java` vers `minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java` : les références `fichier:ligne` de ce document vers la CLI ont dérivé et sont à relire au HEAD avant implémentation.
+Relevé par le garde lui-même (fonctions `types_named_by_module`, `check_process_launchers`, `check_package_roots`, `runtime_service_edges`), sur les sources de **production** ; les tests ne sont pas concernés (ils nomment 45 types du moteur dans `minos-cli`, 18 dans `minos-mcp`, 4 dans `minos-api`).
+
+| Règle | Décompte au HEAD | Écart avec le relevé du `949e1569` |
+|---|---|---|
+| A11 | `minos-cli` 53 imports, 21 fichiers, 33 types ; `minos-api` 16 / 5 / 16 ; `minos-mcp` 4 / 3 / 5 (dont `HostedControlPlaneService` en nom qualifié) ; `minos-nexus` 6 / 1 / 6. Total 79 imports, 30 fichiers, 60 entrées | la CLI passe de 76 imports et 52 types à 53 et 33 : effet d'`unifier-l-orchestration-d-indexation` (AUD-ARC-02). `minos-mcp` compte 5 types, et non 4, en comptant le nom qualifié |
+| A12 | `minos-engine/io.PrivateLocalStorage` (6 occurrences de `ProcessBuilder`) ; aucune dans `minos-domain` ni `minos-application` | inchangé |
+| A13 | `minos-provider-scip` → `minos-runtime-local` 9 types (28 imports, 12 fichiers) ; `minos-provider-scip` → `minos-storage-local` 1 ; `minos-storage-postgresql` → `minos-storage-local` 4, dont `SnapshotIntegrityService` en nom qualifié seulement. Total 14 entrées | le couple vers `minos-runtime-local` est aussi listé : A10 ne tient que les packages `process`, `sandbox`, `workspace`, et `StrongProcessOwnershipIndexerExecutor` (package racine du module) lui échappe |
+| A14 | 37 racines sur 14 modules ; moteur 15, application 7, domaine 3 | inchangé |
+| Arêtes d'exécution | `minos-application` → `minos-bootstrap`, `minos-cli` → `minos-app`, `minos-engine` → `minos-runtime-local`, `minos-engine` → `minos-storage-postgresql` | trois arêtes de plus que celle qu'AUD-ARC-11 cite ; aucune n'était documentée |
+
+**Méthode** : imports simples et statiques, noms qualifiés complets sous le `groupId` lu dans le POM racine, résolus au type de premier niveau (un type imbriqué compte pour son englobant) ; commentaires et littéraux retirés ; import par joker d'un package visé refusé. La reconnaissance au grain du **mot** n'est pas retenue : un même nom court peut exister dans plusieurs packages, et aucun usage par nom simple sans import n'est possible entre packages distincts (A3 interdit le partage d'un package). Aucun faux positif sur le HEAD : les tables ont été écrites depuis le relevé, relues, et le garde les reconnaît à l'identique.
+
+**Preuve du rouge** (copie mutée du dépôt, garde du HEAD contre garde modifié) : un type du moteur hors liste importé par la CLI, le même en nom qualifié, un `ProcessBuilder` dans une seconde classe du moteur, un `Runtime.getRuntime().exec` dans l'application, un type du backend local nommé en nom qualifié par PostgreSQL, une racine `com.minos.nouveau` dans le moteur : code 0 pour le garde du HEAD, code 1 pour le garde modifié, avec la règle, le fichier et le type dans le message. Sur le document versionné du HEAD, le garde modifié échoue en nommant les quatre arêtes manquantes.
