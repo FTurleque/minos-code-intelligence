@@ -73,7 +73,7 @@ Un même sujet a souvent **deux pages** : `user/` dit comment s'en servir, `deve
 - Jamais de retour d'un ancien dossier de premier niveau : `docs/adr/`, `docs/audit/`, `docs/history/`, `docs/roadmap/`, `docs/research/`, `docs/quality/`, `docs/releases/`, `docs/generated/`, `docs/m0/`.
 - Jamais de second registre d'ADR, ni de second dossier d'audits.
 - Jamais de contenu de pilotage (état d'un jalon, priorités, preuve datée) dans `docs/user/` ou `docs/developer/`.
-- Jamais de document versionné sous `docs/rapport-supervisor/` : c'est un dossier local du superviseur de code, hors de cette arborescence.
+- Jamais de document versionné sous `docs/project/rapport-supervisor/` : c'est le dossier local du superviseur de code (rapports et état de session, auto-ignoré), fixé par `log_subdir` dans `.claude/supervisor.config.json`.
 
 ### Déplacer ou renommer un fichier de `docs/`
 

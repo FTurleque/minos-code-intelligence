@@ -1,0 +1,1 @@
+- [Fusion de PR sans suppression anticipée](feedback_fusion_pr.md) — vérifier MERGED avant de supprimer la branche ; auto-merge interdit ; PR fermée non réouvrable

@@ -1,5 +1,6 @@
 {
-  "_doc": "Surcharges du superviseur de code pour MINOS (le reste vient de la configuration globale). quiet_paths : donnees datees ou generees que le superviseur ne relit pas. llm.convention_files remplace la liste globale (3 fichiers lus au maximum, 6000 caracteres chacun).",
+  "_doc": "Surcharges du superviseur de code pour MINOS (le reste vient de la configuration globale). log_subdir : rapports et état de session sous docs/project/rapport-supervisor, à la racine Git (dossier local, auto-ignoré). quiet_paths : donnees datees ou generees que le superviseur ne relit pas. llm.convention_files remplace la liste globale (3 fichiers lus au maximum, 6000 caracteres chacun).",
+  "log_subdir": "docs/project/rapport-supervisor",
   "llm": {
     "convention_files": [
       ".claude/rules/code-review.md",

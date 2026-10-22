@@ -17,6 +17,7 @@ Le dépôt embarque la configuration qui permet à un assistant de code (Claude 
 | `.claude/commands/minos/` | Commandes `/minos:gates`, `verify`, `pr`, `merge`, `sprint` (de l'audit aux changements OpenSpec, après le skill général `audit-application`), `adr`, `docs-sync`, `status`, `audit-archive`, `deps` |
 | `.claude/hooks/` | Garde-fous automatiques (ci-dessous) |
 | `.claude/scripts/run_gates.py` | Rejoue les gates du job `invariants` en lisant la liste dans `pr-ci.yml` (jamais recopiée) |
+| `.claude/agent-memory/<agent>/` | Mémoire persistante partagée d'un agent (aujourd'hui `archgate-developer`, l'agent du plugin Archgate) : `MEMORY.md` est l'index chargé à chaque session de l'agent, un fichier par leçon. N'y écrire que des règles durables et vraies pour tout poste, jamais de donnée personnelle ni d'état de chantier |
 
 Ne sont **pas** versionnés : `.claude/settings.local.json` (réglages personnels), `.claude/worktrees/`.
 
