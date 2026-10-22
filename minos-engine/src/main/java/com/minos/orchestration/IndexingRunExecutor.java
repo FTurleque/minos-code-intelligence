@@ -1,6 +1,7 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ModuleAssignmentRule;
+import com.minos.incremental.ProjectFingerprintService;
 import com.minos.io.CommitUncertainException;
 import com.minos.orchestration.IndexingResumePlanner.Outcome;
 import com.minos.orchestration.IndexingResumePlanner.ReusedTarget;
@@ -50,11 +51,12 @@ final class IndexingRunExecutor {
                                SnapshotPromoter promoter, IndexStateStore stateStore,
                                ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy,
                                IndexingResumePolicy resumePolicy, ModuleAssignmentRule moduleAssignment,
-                               Clock clock, Optional<String> rootScopeFingerprint) {
+                               Clock clock, ProjectFingerprintService fingerprints,
+                               Optional<String> rootScopeFingerprint) {
         Objects.requireNonNull(resumePolicy, "resumePolicy");
         ValidatedProjectRoot root = validateExecutionRoot(projectRoot, targets, mode);
         Ports ports = new Ports(executors, stager, promoter, stateStore, markers, moduleAssignment, clock,
-                rootScopeFingerprint);
+                fingerprints, rootScopeFingerprint);
         Instant createdAt = clock.instant();
         ProjectIndexState previous = reconcilePreviousState(projectId, ports, createdAt);
 
@@ -63,7 +65,7 @@ final class IndexingRunExecutor {
             // The resume plan is requested under the exclusive lease, before any supersession.
             Outcome outcome = IndexingResumePlanner.plan(stateStore, markers, artifactPolicy,
                     new IndexingResumePlanner.Request(previous, root.lexicalRoot(), targets, mode, changedFiles,
-                            createdAt, IndexingResumePlanner.DEFAULT_RESUME_TTL));
+                            createdAt, IndexingResumePlanner.DEFAULT_RESUME_TTL, fingerprints));
             Optional<String> refusal;
             switch (outcome) {
                 case Outcome.Resume resume -> {
@@ -323,7 +325,7 @@ final class IndexingRunExecutor {
         CheckpointMaterial material = context.scopeFingerprints.computeIfAbsent(
                 relative.normalize(), scope -> scope.toString().isEmpty() && context.ports.rootScopeFingerprint().isPresent()
                         ? new CheckpointMaterial(context.ports.rootScopeFingerprint(), Optional.empty())
-                        : captureScopeFingerprint(root.lexicalRoot(), scope));
+                        : captureScopeFingerprint(context.ports.fingerprints(), root.lexicalRoot(), scope));
         IndexingArtifact artifact = Objects.requireNonNull(executor.execute(new IndexingExecutionRequest(
                 context.runId,
                 context.projectId,
@@ -347,9 +349,11 @@ final class IndexingRunExecutor {
                         + checkpoint.withheldReason().map(reason -> ", checkpoint withheld: " + reason).orElse("")));
     }
 
-    private static CheckpointMaterial captureScopeFingerprint(Path projectRoot, Path relative) {
+    private static CheckpointMaterial captureScopeFingerprint(
+            ProjectFingerprintService fingerprints, Path projectRoot, Path relative) {
         try {
-            return new CheckpointMaterial(Optional.of(ExecutionCheckpoints.scopeFingerprint(projectRoot, relative)),
+            return new CheckpointMaterial(
+                    Optional.of(ExecutionCheckpoints.scopeFingerprint(fingerprints, projectRoot, relative)),
                     Optional.empty());
         } catch (ExecutionCheckpoints.Unavailable unavailable) {
             return new CheckpointMaterial(Optional.empty(), Optional.of(unavailable.getMessage()));
@@ -859,9 +863,11 @@ final class IndexingRunExecutor {
             ResumableRunMarkers markers,
             ModuleAssignmentRule moduleAssignment,
             Clock clock,
+            ProjectFingerprintService fingerprints,
             Optional<String> rootScopeFingerprint
     ) {
         private Ports {
+            Objects.requireNonNull(fingerprints, "fingerprints");
             Objects.requireNonNull(rootScopeFingerprint, "rootScopeFingerprint");
             Objects.requireNonNull(executors, "executors");
             Objects.requireNonNull(stager, "stager");

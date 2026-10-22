@@ -140,15 +140,34 @@ class IndexingRunExecutorCheckpointTest {
     }
 
     @Test
-    void theRootScopeHoldsTheReferenceFingerprintWhenItsCaptureRulesAreProvedEqual(@TempDir Path temp)
-            throws Exception {
+    void theRootScopeHoldsTheReferenceFingerprintCapturedByTheServiceOfTheRun(@TempDir Path temp) throws Exception {
+        ProjectFingerprintService runService = new ProjectFingerprintService();
+
+        assertEquals("d".repeat(64), rootScopeCheckpoint(temp, runService, runService),
+                "the root scope is not hashed a second time");
+    }
+
+    @Test
+    void aReferenceCapturedByAnotherInstanceIsNotPersistedForTheRootScope(@TempDir Path temp) throws Exception {
+        ProjectFingerprintService runService = new ProjectFingerprintService();
+
+        String persisted = rootScopeCheckpoint(temp, runService, new ProjectFingerprintService());
+
+        assertEquals(runService.capture(temp.resolve("project")).projectSha256(), persisted,
+                "the run captures the root scope again with its own service (fail-closed)");
+    }
+
+    private static String rootScopeCheckpoint(Path temp, ProjectFingerprintService runService,
+                                              ProjectFingerprintService capturedBy) throws Exception {
         Path root = project(temp);
         Path artifact = Files.writeString(temp.resolve("root.scip"), "root");
         UUID projectId = UUID.randomUUID();
         InMemoryIndexStateStore store = new InMemoryIndexStateStore();
         store.saveProjectState(new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
                 Optional.of("snapshot-old"), Optional.empty(), Instant.EPOCH, Optional.of("baseline")));
-        IndexingLifecycleService lifecycle = lifecycle(store, rootExecutor(artifact));
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(List.of(rootExecutor(artifact)),
+                request -> "snapshot-" + request.runId(), (id, runId, snapshotId) -> { }, store,
+                ResumableRunMarkers.none(), ResumableArtifactPolicy.DEFAULT, CLOCK, runService);
         IndexerNegotiationResult negotiation = negotiation(true);
         IncrementalIndexingPlan plan = new IncrementalIndexingPlanner().plan(partial(projectId), negotiation);
         String reference = "d".repeat(64);
@@ -160,11 +179,11 @@ class IndexingRunExecutorCheckpointTest {
         IndexingRun run = lifecycle.executePlanned(projectId, root, rootOnly, negotiation, plan,
                 IndexingResumePolicy.RESUME, new ReferenceFingerprint(
                         new com.minos.incremental.ProjectFingerprint(reference, reference, List.of()),
-                        new ProjectFingerprintService())).orElseThrow();
+                        capturedBy)).orElseThrow();
 
         assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
         assertEquals(Path.of(""), checkpoint(run, 0).projectRelativeRoot());
-        assertEquals(reference, checkpoint(run, 0).scopeFingerprint(), "the root scope is not hashed a second time");
+        return checkpoint(run, 0).scopeFingerprint();
     }
 
     @Test

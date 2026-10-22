@@ -1,6 +1,7 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.incremental.ProjectFingerprintService;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 import com.minos.orchestration.IndexingRun.ExecutionCheckpoint;
 import com.minos.orchestration.IndexingRun.IndexerExecution;
@@ -196,7 +197,8 @@ class IndexingResumePlannerTest {
             IndexingExecutionTarget target = new IndexingExecutionTarget(
                     new IndexerSelection(Language.JAVA, descriptor), Path.of(""));
             return new IndexingResumePlanner.Request(store.findProjectState(projectId).orElseThrow(), root,
-                    List.of(target), IndexingMode.FULL, List.of(), NOW, IndexingResumePlanner.DEFAULT_RESUME_TTL);
+                    List.of(target), IndexingMode.FULL, List.of(), NOW, IndexingResumePlanner.DEFAULT_RESUME_TTL,
+                    new ProjectFingerprintService());
         }
 
         Outcome plan() {

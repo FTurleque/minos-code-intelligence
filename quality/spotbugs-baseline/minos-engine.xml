@@ -352,8 +352,8 @@
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
     <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.incremental.ProjectFingerprintService.ancestorDescriptors(Path, Path, ProjectIgnorePolicy, SourceBudgetPolicy$Tracker)</LongMessage>
     <Class classname="com.minos.incremental.ProjectFingerprintService" primary="true">
-      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="369" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
-        <Message>At ProjectFingerprintService.java:[lines 32-369]</Message>
+      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="359" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
+        <Message>At ProjectFingerprintService.java:[lines 32-359]</Message>
       </SourceLine>
       <Message>In class com.minos.incremental.ProjectFingerprintService</Message>
     </Class>
@@ -376,8 +376,8 @@
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
     <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.incremental.ProjectFingerprintService.isAncestorDescriptor(Path)</LongMessage>
     <Class classname="com.minos.incremental.ProjectFingerprintService" primary="true">
-      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="369" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
-        <Message>At ProjectFingerprintService.java:[lines 32-369]</Message>
+      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="359" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
+        <Message>At ProjectFingerprintService.java:[lines 32-359]</Message>
       </SourceLine>
       <Message>In class com.minos.incremental.ProjectFingerprintService</Message>
     </Class>
@@ -400,8 +400,8 @@
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
     <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.incremental.ProjectFingerprintService.isRootControlFile(Path)</LongMessage>
     <Class classname="com.minos.incremental.ProjectFingerprintService" primary="true">
-      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="369" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
-        <Message>At ProjectFingerprintService.java:[lines 32-369]</Message>
+      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="359" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
+        <Message>At ProjectFingerprintService.java:[lines 32-359]</Message>
       </SourceLine>
       <Message>In class com.minos.incremental.ProjectFingerprintService</Message>
     </Class>

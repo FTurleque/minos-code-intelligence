@@ -1,5 +1,6 @@
 package com.minos.orchestration;
 
+import com.minos.incremental.ProjectFingerprintService;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 import com.minos.orchestration.IndexingRun.ExecutionCheckpoint;
 import com.minos.orchestration.IndexingRun.IndexerExecution;
@@ -46,7 +47,8 @@ final class IndexingResumePlanner {
             IndexingMode mode,
             List<String> changedFiles,
             Instant now,
-            Duration resumeTtl
+            Duration resumeTtl,
+            ProjectFingerprintService fingerprints
     ) {
         Request {
             Objects.requireNonNull(previous, "previous");
@@ -56,6 +58,7 @@ final class IndexingResumePlanner {
             changedFiles = List.copyOf(Objects.requireNonNull(changedFiles, "changedFiles"));
             Objects.requireNonNull(now, "now");
             Objects.requireNonNull(resumeTtl, "resumeTtl");
+            Objects.requireNonNull(fingerprints, "fingerprints");
             if (resumeTtl.isZero() || resumeTtl.isNegative()) {
                 throw new IllegalArgumentException("resumeTtl must be positive");
             }
@@ -265,7 +268,8 @@ final class IndexingResumePlanner {
 
         String fingerprint;
         try {
-            fingerprint = ExecutionCheckpoints.scopeFingerprint(request.projectRoot(), target.projectRelativeRoot());
+            fingerprint = ExecutionCheckpoints.scopeFingerprint(
+                    request.fingerprints(), request.projectRoot(), target.projectRelativeRoot());
         } catch (ExecutionCheckpoints.Unavailable unavailable) {
             throw new Refusal(unavailable.getMessage());
         }

@@ -28,26 +28,21 @@ final class ExecutionCheckpoints {
 
     private static final int SHA256_HEX_LENGTH = 64;
     private static final long MAX_SIDECAR_BYTES = 1024L;
-    private static final ProjectFingerprintService FINGERPRINTS = new ProjectFingerprintService();
 
     private ExecutionCheckpoints() {
     }
 
-    /** Empreinte des sources d'un scope, à capturer avant de lancer le provider. */
-    static String scopeFingerprint(Path projectRoot, Path projectRelativeRoot) throws Unavailable {
+    /**
+     * Empreinte des sources d'un scope, à capturer avant de lancer le provider. {@code fingerprints} est le service
+     * de l'orchestration (AUD-PERF-04, D2) : le même écrit le point de contrôle et le recalcule à la reprise.
+     */
+    static String scopeFingerprint(ProjectFingerprintService fingerprints, Path projectRoot, Path projectRelativeRoot)
+            throws Unavailable {
         try {
-            return FINGERPRINTS.captureScope(projectRoot, projectRelativeRoot).projectSha256();
+            return fingerprints.captureScope(projectRoot, projectRelativeRoot).projectSha256();
         } catch (IOException | RuntimeException failure) {
             throw new Unavailable("scope fingerprint unavailable: " + failure.getClass().getSimpleName());
         }
-    }
-
-    /**
-     * Vrai si {@code service} capture comme les points de contrôle et la vérification de reprise : une empreinte
-     * qu'il a produite peut alors être persistée comme empreinte du scope racine (AUD-PERF-04).
-     */
-    static boolean capturesLikeCheckpoints(ProjectFingerprintService service) {
-        return service == FINGERPRINTS || FINGERPRINTS.capturesLike(service);
     }
 
     /** Taille et SHA-256 de l'artefact final, lu sans suivre de lien symbolique et sous le budget SCIP. */
