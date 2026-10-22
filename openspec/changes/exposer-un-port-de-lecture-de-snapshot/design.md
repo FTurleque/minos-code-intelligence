@@ -144,9 +144,11 @@ Aucun code propre à une plateforme : types Java du cœur et deux stores déjà 
 - **Double construction d'index** si l'ancien contrat reconstruisait l'index : un test à compteur (`queryViewBuilds`, `symbolEdgeIndexBuilds`) prouve 1 construction pour les deux contrats.
 - **Binaire des services de requête** (D4) : changer le type de paramètre change le descripteur des constructeurs ; seul un appelant précompilé hors du reactor est touché.
 
-## Décisions en attente du propriétaire
+## Décisions du propriétaire (2026-10-22)
 
-| # | Question | Options | Recommandation |
+Le propriétaire a retenu les six recommandations ; la colonne « Décision » donne l'option retenue et sa raison.
+
+| # | Question | Options | Décision |
 |---|---|---|---|
 | D1 | Noms des nouveaux types | `CodeKnowledgeReader`, `SnapshotReadView`, `IncomingRelationships` ; ou autres noms | **Ceux-ci** : `CodeKnowledgeReader` est le nom de travail de l'ADR 0056 ; `SnapshotReadView` dit ce que la vue devient (lecture), sans le mot « query » de l'ancien type |
 | D2 | Forme de la migration du record | (a) nouvelle vue (classe finale) + `loadActiveReadView` `default`, ancien record et ancienne méthode dépréciés ; (b) accesseur neutre ajouté au seul record existant ; (c) rupture versionnée | **(a)** : (b) garde un constructeur canonique qui exige la classe mémoire, donc aucun double non mémoire ne peut produire une vue ; (c) n'est pas nécessaire |
