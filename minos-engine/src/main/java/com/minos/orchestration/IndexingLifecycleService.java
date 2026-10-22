@@ -2,6 +2,7 @@ package com.minos.orchestration;
 
 import com.minos.discovery.ModuleAssignmentRule;
 import com.minos.discovery.ProjectDiscovery;
+import com.minos.incremental.ProjectFingerprintService;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
@@ -27,6 +28,7 @@ public final class IndexingLifecycleService {
     private final ResumableRunMarkers markers;
     private final ResumableArtifactPolicy artifactPolicy;
     private final Clock clock;
+    private final ProjectFingerprintService fingerprints;
     private final IndexingLifecyclePlanSupport plans = new IndexingLifecyclePlanSupport();
 
     /**
@@ -46,6 +48,18 @@ public final class IndexingLifecycleService {
                                     SnapshotPromoter promoter, IndexStateStore stateStore,
                                     ResumableRunMarkers markers) {
         this(executors, stager, promoter, stateStore, markers, ResumableArtifactPolicy.DEFAULT, Clock.systemUTC());
+    }
+
+    /**
+     * Câblage de l'orchestration (AUD-PERF-04, D2) : {@code fingerprints} est le service d'empreinte de
+     * l'orchestration ; il capture l'empreinte de scope des points de contrôle et la recalcule à la vérification
+     * d'une reprise. Les autres constructeurs emploient un {@link ProjectFingerprintService} par défaut.
+     */
+    public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                                    SnapshotPromoter promoter, IndexStateStore stateStore,
+                                    ResumableRunMarkers markers, ProjectFingerprintService fingerprints) {
+        this(executors, stager, promoter, stateStore, markers, ResumableArtifactPolicy.DEFAULT, Clock.systemUTC(),
+                fingerprints);
     }
 
     /** Câblage complet avec une politique explicite des indexeurs dont l'artefact est réutilisable. */
@@ -69,6 +83,14 @@ public final class IndexingLifecycleService {
     IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                              SnapshotPromoter promoter, IndexStateStore stateStore,
                              ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy, Clock clock) {
+        this(executors, stager, promoter, stateStore, markers, artifactPolicy, clock, new ProjectFingerprintService());
+    }
+
+    IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                             SnapshotPromoter promoter, IndexStateStore stateStore,
+                             ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy, Clock clock,
+                             ProjectFingerprintService fingerprints) {
+        this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints");
         this.stager = Objects.requireNonNull(stager, "stager");
         this.promoter = Objects.requireNonNull(promoter, "promoter");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
@@ -186,7 +208,8 @@ public final class IndexingLifecycleService {
             if (plan != null) validatePlanStillCurrent(id, plan);
             return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
                     executors, stager, promoter, stateStore, markers, artifactPolicy, policy, moduleAssignment, clock,
-                    reference == null ? Optional.empty() : reference.reusableRootScopeFingerprint());
+                    fingerprints,
+                    reference == null ? Optional.empty() : reference.reusableRootScopeFingerprint(fingerprints));
         }
     }
 

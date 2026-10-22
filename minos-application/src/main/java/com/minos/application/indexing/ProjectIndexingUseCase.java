@@ -317,10 +317,11 @@ public final class ProjectIndexingUseCase {
                 .map(executorDecorator)
                 .map(executor -> Objects.requireNonNull(executor, "decorated executor"))
                 .toList();
+        // AUD-PERF-04 (D2): the run writes its checkpoints and verifies a resume with the orchestration's own
+        // fingerprint service, so the reference fingerprint it captured is, by construction, the root-scope
+        // fingerprint of the run; the tree is then hashed twice (before, after), not three times.
         IndexingLifecycleService lifecycle = new IndexingLifecycleService(
-                executors, snapshotStager, snapshotPromoter, stateStore, resumableRunMarkers);
-        // AUD-PERF-04: the reference fingerprint is the root-scope fingerprint of the run when its rules are proved
-        // equal to those of the checkpoints; the tree is then hashed twice (before, after), not three times.
+                executors, snapshotStager, snapshotPromoter, stateStore, resumableRunMarkers, fingerprintService);
         ReferenceFingerprint reference = new ReferenceFingerprint(prepared.fingerprintBefore(), fingerprintService);
         if (forceFull) {
             return lifecycle.execute(

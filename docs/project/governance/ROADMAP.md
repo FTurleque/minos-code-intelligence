@@ -159,7 +159,7 @@ Les releases 1.1.0 et 1.2.0 ont été publiées depuis (voir [`STATUS.md`](STATU
 | 6 | Couverture réelle et plugin IntelliJ |
 | 7 | Sorties publiques : messages, MCP, rendus |
 | 8 | Confinement et E/S privées — **fait**, sauf deux tâches manuelles de la migration des écritures brutes (indexation réelle sous AppContainer, ACL des artefacts) |
-| 9 | Une seule orchestration d'indexation — **fait**, sauf l'injection du service d'empreinte jusqu'à la planification de reprise et la vérification du plugin sur une preuve sans emplacement |
+| 9 | Une seule orchestration d'indexation — **fait** |
 | 10 | Frontières d'architecture |
 | 11 | Hygiène de fond |
 

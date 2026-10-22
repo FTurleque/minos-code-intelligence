@@ -1,6 +1,8 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery;
+import com.minos.incremental.BuildDescriptorPolicy;
+import com.minos.incremental.ProjectFingerprintService;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.DiscoveredModule;
 import com.minos.discovery.ProjectDiscovery.Language;
@@ -126,6 +128,29 @@ class IndexingResumeTest {
         assertTrue(run.resume().orElseThrow().refusalReason().orElseThrow().contains("resume aborted"));
         assertEquals(List.of(Path.of("ui/web"), Path.of("ui/app"), Path.of("ui/lib"), Path.of("ui/web")),
                 executor.executed, "the aborted attempt executed the missing target, then the full run everything");
+    }
+
+    @Test
+    void theInjectedFingerprintServiceWritesTheCheckpointsAndVerifiesTheResume(@TempDir Path temp) throws Exception {
+        // AUD-PERF-04 D2: no static service of its own; checkpoint and resume use the one the orchestration gives.
+        Fixture fixture = new Fixture(temp);
+        Files.writeString(fixture.root.resolve("custom.build"), "v1");
+        fixture.fingerprints = new ProjectFingerprintService(new BuildDescriptorPolicy(Set.of("package.json", "custom.build")));
+        IndexingRun interrupted = fixture.interruptAfter(2, T0);
+        assertEquals(fixture.fingerprints.captureScope(fixture.root, Path.of("ui/app")).projectSha256(),
+                interrupted.executions().getFirst().checkpoint().orElseThrow().scopeFingerprint(),
+                "the checkpoint holds the capture of the injected service");
+        assertNotEquals(new ProjectFingerprintService().captureScope(fixture.root, Path.of("ui/app")).projectSha256(),
+                interrupted.executions().getFirst().checkpoint().orElseThrow().scopeFingerprint());
+        Files.writeString(fixture.root.resolve("custom.build"), "v2");
+        Fixture.Executor executor = new Fixture.Executor(fixture, 99);
+
+        IndexingRun run = fixture.lifecycle(executor, T0.plusSeconds(10)).execute(
+                fixture.projectId, fixture.root, fixture.discovery(), negotiation());
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
+        assertEquals(SCOPES, executor.executed,
+                "the resume verification sees the ancestor descriptor only the injected service retains");
     }
 
     @Test
@@ -507,6 +532,7 @@ class IndexingResumeTest {
             }
         };
         final RunDirectoryMarkers markers;
+        ProjectFingerprintService fingerprints;
 
         Fixture(Path temp) throws IOException {
             root = Files.createDirectories(temp.resolve("project"));
@@ -520,8 +546,11 @@ class IndexingResumeTest {
         }
 
         IndexingLifecycleService lifecycle(IndexerExecutor executor, Instant now) {
-            return new IndexingLifecycleService(List.of(executor), stager, promoter, store, markers,
-                    ResumableArtifactPolicy.DEFAULT, Clock.fixed(now, ZoneOffset.UTC));
+            return fingerprints == null
+                    ? new IndexingLifecycleService(List.of(executor), stager, promoter, store, markers,
+                            ResumableArtifactPolicy.DEFAULT, Clock.fixed(now, ZoneOffset.UTC))
+                    : new IndexingLifecycleService(List.of(executor), stager, promoter, store, markers,
+                            ResumableArtifactPolicy.DEFAULT, Clock.fixed(now, ZoneOffset.UTC), fingerprints);
         }
 
         ProjectDiscovery discovery() {

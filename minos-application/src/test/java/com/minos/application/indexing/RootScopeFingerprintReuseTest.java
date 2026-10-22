@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * AUD-PERF-04: an indexing whose target is the project root hashes the source tree twice (reference, end of run),
- * because the root scope reuses the reference fingerprint, and only when the capture rules are proved equal.
+ * because the root scope reuses the reference fingerprint: the run checkpoints with the orchestration's own service.
  *
  * <p>The source changes during the discovery, after the reference capture and before the run: the checkpoint of the
  * root scope then tells which capture it holds. Reused, it is the reference; captured again, it is the changed tree.</p>
@@ -45,7 +45,9 @@ class RootScopeFingerprintReuseTest {
     }
 
     @Test
-    void aServiceWithOtherRulesDoesNotLendItsFingerprintToTheRootScope() throws Exception {
+    void theRunCheckpointsWithTheFingerprintServiceOfTheOrchestrationWhateverItsRules() throws Exception {
+        // D2: the engine keeps no service of its own. A service with other rules than the engine defaults is still
+        // the one the run checkpoints and verifies a resume with, so the reference it captured is reused as is.
         IndexingFixture fixture = new IndexingFixture(temp);
         fixture.fingerprintService = new ProjectFingerprintService(BuildDescriptorPolicy.m17Defaults());
         fixture.extraDetectors = List.of(new SourceChangedAtDiscovery(fixture.root));
@@ -53,9 +55,9 @@ class RootScopeFingerprintReuseTest {
         var outcome = fixture.useCase().execute(fixture.id(), null, false, IndexingResumePolicy.RESUME);
 
         String checkpoint = rootCheckpoint(outcome.run().orElseThrow());
-        assertNotEquals(outcome.preparation().fingerprintBefore().projectSha256(), checkpoint);
-        assertEquals(new ProjectFingerprintService().captureScope(fixture.root, Path.of("")).projectSha256(), checkpoint,
-                "the root scope is captured again, with the rules a resume verification uses");
+        assertEquals(outcome.preparation().fingerprintBefore().projectSha256(), checkpoint);
+        assertNotEquals(fixture.fingerprintService.captureScope(fixture.root, Path.of("")).projectSha256(), checkpoint,
+                "the tree changed after the reference: the value is the reference, not a new capture");
     }
 
     @Test
@@ -64,8 +66,6 @@ class RootScopeFingerprintReuseTest {
         ProjectFingerprintService service = new ProjectFingerprintService();
 
         assertEquals(service.capture(fixture.root), service.captureScope(fixture.root, Path.of("")));
-        assertTrue(service.capturesLike(new ProjectFingerprintService()));
-        assertFalse(service.capturesLike(new ProjectFingerprintService(BuildDescriptorPolicy.m17Defaults())));
 
         var outcome = fixture.useCase().execute(fixture.id(), null, false, IndexingResumePolicy.RESUME);
 
