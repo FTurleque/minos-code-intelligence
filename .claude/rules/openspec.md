@@ -18,4 +18,4 @@ paths:
 - Un ADR n'est ni créé ni amendé pendant la **spécification** : il est nommé dans le design et planifié en tâche.
 - Les changements archivés (`openspec/changes/archive/`) sont de l'historique.
 - Valider avant de commiter : `openspec validate --all --strict`.
-- Skills disponibles : `openspec-explore`, `openspec-propose`, `openspec-apply-change`, `openspec-update-change`, `openspec-sync-specs`, `openspec-archive-change`. Préparer un sprint d'audit : commande `/minos:sprint`.
+- Skills disponibles : `openspec-explore`, `openspec-propose`, `openspec-new-change`, `openspec-continue-change`, `openspec-ff-change`, `openspec-apply-change`, `openspec-update-change`, `openspec-verify-change`, `openspec-sync-specs`, `openspec-archive-change`, `openspec-bulk-archive-change`, `openspec-onboard`. Vérifier un changement implémenté avant archivage : `openspec-verify-change` (`/opsx:verify`). Préparer un sprint d'audit : commande `/minos:sprint`.
