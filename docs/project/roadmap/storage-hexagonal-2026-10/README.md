@@ -65,7 +65,7 @@ Décisions du propriétaire du 2026-10-22 : [ADR 0062](../../../architecture/adr
 
 | Chantier | Constat | Prérequis | État du prérequis | À spécifier |
 |---|---|---|---|---|
-| Surfaces consommant des cas d'usage (suite de SH-05, puis SH-09) | AUD-ARC-01 | AUD-ARC-02 | fait (SH-05, 2026-10-21) | maintenant ; réduit `ENGINE_TYPES_NAMED_BY_SURFACE` (A11) |
+| Surfaces consommant des cas d'usage (suite de SH-05, puis SH-09) | AUD-ARC-01 | AUD-ARC-02 | fait (SH-05, 2026-10-21) | lot 1 spécifié : `faire-consommer-l-indexation-aux-surfaces` (indexation locale et distante, 60 → 39 entrées de `ENGINE_TYPES_NAMED_BY_SURFACE`, A11) ; lots suivants inventoriés dans son design |
 | Port d'ACL de plateforme (SH-08) | AUD-ARC-05 | AUD-SEC-06 | fusionné (PR #491) ; reste la mesure du nombre d'objets durcis pendant une indexation | avec cette mesure ; retire `PrivateLocalStorage` de `PROCESS_LAUNCHERS` (A12) |
 | Port de lecture des snapshots (SH-04) | AUD-ARC-07 | AUD-PERF-03 | fait (ADR 0047, option A mesurée sur corpus réel) | spécifié : changement OpenSpec `exposer-un-port-de-lecture-de-snapshot` |
 | Fusion `minos-storage`, codec commun (SH-02, SH-03), staging injecté (SH-06) | AUD-ARC-08 | SH-05 pour SH-06 | SH-05 fait | après SH-04 ; réduit `ADAPTER_TYPES_NAMED_BY_ADAPTER` (A13) |
