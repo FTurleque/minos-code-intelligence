@@ -74,6 +74,10 @@ flowchart LR
     minos_app --> minos_runtime_local
     minos_app --> minos_storage_local
     minos_app --> minos_storage_postgresql
+    minos_application -.-> minos_bootstrap
+    minos_cli -.-> minos_app
+    minos_engine -.-> minos_runtime_local
+    minos_engine -.-> minos_storage_postgresql
 ```
 
 ## Dépendances MINOS directes
@@ -95,5 +99,20 @@ flowchart LR
 | `minos-mcp` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
 | `minos-app` | `minos-api`, `minos-application`, `minos-bootstrap`, `minos-cli`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-mcp`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |
 
-Le sens d'une flèche est **module → dépendance directe**. Les dépendances transitives ne sont pas répétées.
-Le mode normal du checker échoue si ce fichier n'est plus exactement aligné avec les POMs courants.
+## Arêtes d'exécution par service
+
+Un module déclare un service (`ServiceLoader`) qu'un autre module fournit par un fichier
+`META-INF/services` : le premier charge le second à l'exécution, sans dépendance Maven dans ce sens.
+Ces arêtes sont en pointillés dans le diagramme et ne comptent pas dans la politique de dépendances.
+
+| Module qui déclare | Module qui fournit | Services |
+|---|---|---|
+| `minos-application` | `minos-bootstrap` | `com.minos.application.MinosApplicationComposer` |
+| `minos-cli` | `minos-app` | `com.minos.cli.McpLaunchRoute` |
+| `minos-engine` | `minos-runtime-local` | `com.minos.orchestration.ExecutionPathIdentityProvider` |
+| `minos-engine` | `minos-storage-postgresql` | `com.minos.storage.StorageBackendProvider` |
+
+Le sens d'une flèche pleine est **module → dépendance directe** ; une flèche en pointillés va
+du module qui déclare un service au module qui le fournit. Les dépendances transitives ne sont pas répétées.
+Le mode normal du checker échoue si ce fichier n'est plus exactement aligné avec les POMs et les fichiers
+`META-INF/services` courants.

@@ -30,4 +30,4 @@ La liste `MODULES` de `scripts/architecture/check-module-boundaries.py` est exac
 
 ## Consequences
 
-Une divergence entre le reactor et `MODULES` est détectée par `archgate check` en plus du gate Python. Les règles A2, A3, A8, A9 et A10 de ce même gate ne sont pas portées (voir la fiche d'usage).
+Une divergence entre le reactor et `MODULES` est détectée par `archgate check` en plus du gate Python. Les règles A2, A3 et A8 à A16 de ce même gate ne sont pas portées (voir la fiche d'usage).

@@ -16,7 +16,7 @@ Le sprint 1 de l'audit du 10 octobre 2026 (« remettre les dispositifs de mesure
 - **Auto-tests de gates** : `check-jacoco.py --self-test` et l'auto-test du garde de jalons sont rejoués dans `invariants` ; `check-ci-wiring.py` refuse tout auto-test qui n'y serait pas câblé.
 - **Confinement** : `-Dminos.sandbox.tests.required=true` sur les deux jobs `verify` ; un bubblewrap, un cgroup v2 ou un AppContainer indisponible fait échouer le job de son système au lieu d'être sauté en silence. Les tests propres à une plateforme sont comptés comme sautés ailleurs.
 - **Plugin IntelliJ** : workflow exécuté sur toute PR, portée calculée (`scripts/ci/plugin-gate.py`) et gate agrégatrice toujours rendue ; la portée inclut les rendus JSON de `minos-application`, le domaine et les goldens de caractérisation.
-- **Architecture** : garde de frontières testée règle par règle (104 cas), groupId interne lu dans le POM racine, **aucun cycle de packages** (règle A8, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris), listes de dépendances d'`arc42/05` confrontées aux POM (règle A9), liste fermée des types de `minos-runtime-local` nommables par les autres modules (règle A10). Les quatre cycles existants ont été levés par le déplacement de 13 classes de production (et de leurs tests) dans leur module.
+- **Architecture** : garde de frontières testée règle par règle (154 cas), groupId interne lu dans le POM racine, **aucun cycle de packages** (règle A8, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris), listes de dépendances d'`arc42/05` confrontées aux POM (règle A9), liste fermée des types de `minos-runtime-local` nommables par les autres modules (règle A10), dette d'architecture figée par quatre listes fermées en cliquet (règles A11 à A14 : types du moteur par surface, lanceurs de processus, types entre adaptateurs, racines de packages) et arêtes d'exécution par service écrites dans le document de dépendances généré. Les quatre cycles existants ont été levés par le déplacement de 13 classes de production (et de leurs tests) dans leur module.
 
 Capacités OpenSpec créées ou étendues : `controles-de-fusion`, `frontieres-de-modules`, `confinement-code-non-fiable`.
 
@@ -118,6 +118,15 @@ Les six changements du sprint 9 (« une seule orchestration d'indexation ») son
 - **Preuves des tests liés** : au plus 5 emplacements par type de preuve et par relation, puis une preuve de synthèse qui compte les emplacements omis ; confiances, ordre et ensemble des tests liés inchangés. Mesuré sur ce dépôt : 42 054 → 37 394 preuves, maximum par relation 80 → 9.
 
 Reste : l'injection du fournisseur d'identité de chemin depuis la racine de composition (reportée par décision). Constat hors sprint : le snapshot de ce dépôt (306,7 Mo) dépasse la limite de persistance de 256 Mio (AUD-PERF-03). Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
+
+## Audit 2026-10-10 — sprint 10 (2026-10-22)
+
+Les deux changements du sprint 10 (« frontières d'architecture ») **figent la dette sans déplacer de classe** et consignent les décisions du propriétaire :
+
+- **Cliquets** (`figer-la-dette-de-frontieres-par-des-cliquets`) : règles **A11** (types de `minos-engine` nommés par chaque surface : 60 entrées, dont 33 pour la CLI), **A12** (seul `PrivateLocalStorage` lance un processus dans le domaine, le moteur et l'application), **A13** (14 types d'un adaptateur nommés par un autre) et **A14** (37 racines de packages, aucune nouvelle) de `check-module-boundaries.py` ; chaque table refuse un nom hors liste et une entrée devenue inutile. Le document généré `docs/architecture/diagrams/module-dependencies.md` montre les quatre arêtes d'exécution par service, dont `minos-cli` → `minos-app`.
+- **Décisions** (`trancher-les-decisions-d-architecture-du-sprint-10`) : [ADR 0062](../../architecture/adr/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) (port d'ACL de plateforme conçu avec AUD-SEC-06, `hosted` et `minos-app` inchangés, aucun nouveau package hors des racines de son module) ; ordre de l'ADR 0047 confirmé (option A déjà livrée).
+
+Les six constats (AUD-ARC-01, -05, -07, -08, -11, -12) restent ouverts : leurs chantiers et prérequis sont dans [le plan du chantier hexagonal](../roadmap/storage-hexagonal-2026-10/README.md). Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 
 ## État produit
 

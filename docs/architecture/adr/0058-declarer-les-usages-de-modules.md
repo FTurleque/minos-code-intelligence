@@ -26,3 +26,7 @@ Un usage transitif échappe aux deux contrôles de frontière : un module peut d
 - Une dépendance indirecte ne peut plus servir en silence : la règle nomme la classe et la dépendance.
 - Les arêtes déclarées rendent la dette des surfaces visible dans les POM, là où une relecture la verra.
 - Retirer une de ces arêtes, une fois les usages migrés vers des cas d'usage, se fait dans la même table et le même test.
+
+## Mise en œuvre
+
+**Point 3 gardé (2026-10-22, audit AUD-ARC-01, changement OpenSpec `figer-la-dette-de-frontieres-par-des-cliquets`)** : la règle A11 de `scripts/architecture/check-module-boundaries.py` tient, par surface, la liste fermée des types de `minos-engine` que ses sources de production nomment (import ou nom qualifié ; table `ENGINE_TYPES_NAMED_BY_SURFACE`). Un type hors liste, une entrée que la surface ne nomme plus ou qui ne désigne aucun type font échouer le garde : la « justification » d'un nouvel usage est une ligne ajoutée à la table et relue. Les usages entre adaptateurs sont tenus de la même façon (règle A13, [ADR 0062](0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md)).

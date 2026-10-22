@@ -55,7 +55,7 @@
 | [ADR-0044](../adr/0044-un-package-un-module.md) | Un package, un module | Accepted — mis en œuvre | 2026-09-29 | — |
 | [ADR-0045](../adr/0045-constructeur-unique-et-point-d-entree-nomme.md) | Constructeur unique et point d'entrée nommé ; racine de composition regroupée par domaine | Accepted — mis en œuvre | 2026-09-29 | — |
 | [ADR-0046](../adr/0046-format-de-snapshot-v3-chaines-utf8.md) | Format de snapshot V3 : chaînes UTF-8, lecture de tous les formats antérieurs | Accepted — mis en œuvre | 2026-09-29 | — |
-| [ADR-0047](../adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) | Snapshot en mémoire : dédoublonnage des chaînes, table de chaînes, pagination ou mappage | Proposed | 2026-09-29 | — |
+| [ADR-0047](../adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) | Snapshot en mémoire : dédoublonnage des chaînes, table de chaînes, pagination ou mappage | Accepted — option A mise en œuvre ; B et C conditionnelles | 2026-09-29 | — |
 | [ADR-0048](../adr/0048-evaluation-comparative-reproductible.md) | Évaluer les changements sur un protocole commun | Proposed | 2026-10-04 | — |
 | [ADR-0049](../adr/0049-retrieval-hybride-explicable.md) | Faire évoluer le classement hybride par profils mesurés | Proposed | 2026-10-04 | — |
 | [ADR-0050](../adr/0050-unites-recherche-contexte-budgete.md) | Assembler un contexte cohérent, compact et traçable | Proposed | 2026-10-04 | — |
@@ -66,5 +66,8 @@
 | [ADR-0055](../adr/0055-unifier-les-adaptateurs-de-stockage.md) | Un module minos-storage, packages local/PostgreSQL et codec partagé | Accepted — implémentation à réaliser | 2026-10-05 | — |
 | [ADR-0056](../adr/0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — implémentation à réaliser | 2026-10-05 | — |
 | [ADR-0057](../adr/0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels planifiés | 2026-10-05 | — |
+| [ADR-0058](../adr/0058-declarer-les-usages-de-modules.md) | Déclarer chaque module utilisé | Accepted | 2026-10-09 | — |
 | [ADR-0059](../adr/0059-migrer-le-socle-vers-java-25-lts.md) | Migrer le socle vers Java 25 LTS et garder la baseline par un gate | Accepted | 2026-10-13 | Remplace ADR-0005 |
+| [ADR-0060](../adr/0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Accepted | 2026-10-18 | — |
 | [ADR-0061](../adr/0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité | Proposed | 2026-10-18 | — |
+| [ADR-0062](../adr/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) | Confirmer les emplacements de l'ADR 0044 et ne créer de package que sous les racines de son module | Accepted | 2026-10-22 | — |

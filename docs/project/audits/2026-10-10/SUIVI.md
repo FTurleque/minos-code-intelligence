@@ -548,7 +548,7 @@ Six changements OpenSpec, une PR chacun (#526 à #531), tous fusionnés dans `de
 
 Sprint clos. Plugin IntelliJ : `ArchitectureGraphPanelTest.countsAnEvidenceWithoutLocationLikeAnyOther` vert sur le poste (Gradle lancé sous JDK 25 ; sous le JDK 21 Microsoft, `:instrumentCode` cherche un dossier `Packages` absent) ; `minos-nexus` : 10 tests verts. AUD-ARC-01 (sprint 10) n'a plus l'orchestration dans une surface comme prérequis.
 
-## Sprint 10 — Frontières d'architecture (spécifié le 2026-10-13, en partie)
+## Sprint 10 — Frontières d'architecture (spécifié le 2026-10-13, implémenté le 2026-10-22)
 
 Deux changements OpenSpec, même branche. Les six constats sont confirmés mais **aucun chantier de fond n'est spécifié** : leurs prérequis (sprints 4, 8 et 9) ne sont pas implémentés et quatre actions de l'audit contredisent un ADR accepté.
 
@@ -560,6 +560,21 @@ Deux changements OpenSpec, même branche. Les six constats sont confirmés mais 
 | AUD-ARC-08 | `figer-la-dette-de-frontieres-par-des-cliquets` (règle A13) | **Dette figée** ; chantier non spécifié | Un couplage de plus que l'audit (type utilisé par nom qualifié, sans import). |
 | AUD-ARC-11 | idem (arêtes d'exécution) et décision D3 | **Arête documentée** ; déplacement non retenu | Déplacer le transport créerait une arête interdite ; renommer le pont NEXUS casse un point d'entrée documenté. |
 | AUD-ARC-12 | idem (règle A14) et décision D4 | **Dette figée** | 23 racines, pas 24 ; aucun package partagé entre modules. Renommer contredit l'ADR 0044. |
+
+### Implémentation (2026-10-22, branche `refactor/figer-les-frontieres-du-sprint-10`, worktree `minos-wt-sprint10`)
+
+Les deux changements sont implémentés sur une même branche ; aucun fichier de `src/main` n'est modifié. Décisions du propriétaire du 2026-10-22 : les quatre recommandations (D1 à D4).
+
+| Constat | Statut | Décompte au HEAD `7e1faafe` | Chantier restant et prérequis |
+|---|---|---|---|
+| AUD-ARC-01 | **Ouvert, dette figée** (règle A11) | 79 imports dans 30 fichiers ; 60 entrées (CLI 33, API 16, NEXUS 6, MCP 5). L'audit comptait 103 références et 52 types pour la CLI : AUD-ARC-02 en a retiré 19 | surfaces consommant des cas d'usage (suite de SH-05, SH-09) : prérequis rempli, à spécifier |
+| AUD-ARC-05 | **Ouvert, dette figée** (règle A12, `PrivateLocalStorage` seul) ; D2 : port d'ACL de plateforme fourni par `minos-runtime-local`, `hosted` reste dans le moteur (ADR 0062) | 1 classe, 6 `ProcessBuilder` | SH-08 : avec la mesure du nombre d'objets durcis (reste d'AUD-SEC-06) |
+| AUD-ARC-07 | **Ouvert** ; D1 : ordre de l'ADR 0047 confirmé. L'ADR était déjà **Accepted** pour l'option A, livrée et mesurée sur corpus réel (le design le disait « Proposed », comme le registre arc42, corrigé) | 2 sites de reconstruction complète | SH-04 (port de lecture, ADR 0056) : prérequis rempli, à spécifier |
+| AUD-ARC-08 | **Ouvert, dette figée** (règle A13) | 14 entrées : SCIP → runtime local 9 (dont `StrongProcessOwnershipIndexerExecutor`, hors de la liste A10), SCIP → stockage local 1, PostgreSQL → stockage local 4 (dont `SnapshotIntegrityService` en nom qualifié seul) | SH-02, SH-03, puis SH-06 |
+| AUD-ARC-11 | **Arête documentée** ; D3 : `minos-app` inchangé (ADR 0062) | 4 arêtes d'exécution par service, dont `minos-cli` → `minos-app` ; le dépôt NEXUS local ne nomme pas `NexusExportBridgeMain` | aucun sans nouvelle décision |
+| AUD-ARC-12 | **Dette figée** (règle A14) ; D4 : convention pour les nouveaux packages seulement (ADR 0062, `.claude/rules/java-production.md`) | 37 racines sur 14 modules | aucun sans nouvelle décision |
+
+Preuves : rouge prouvé sur une copie mutée (six mutations : garde du HEAD code 0, garde modifié code 1 ; document versionné du HEAD refusé en nommant les quatre arêtes manquantes) ; `python scripts/architecture/check-module-boundaries.py` vert ; `python scripts/architecture/test_check_module_boundaries.py` 154 tests verts ; `check-current-docs.py` et `product-facts.py --check` verts. ADR : 0062 créé (Accepted), notes de mise en œuvre des ADR 0022 (A12), 0047 (ordre confirmé) et 0058 (A11) ; registre `arc42/09-decisions.md` complété (0047, 0058, 0060, 0062). Ordre des chantiers : `docs/project/roadmap/storage-hexagonal-2026-10/README.md`. **Non fait** : PR, CI.
 
 ## Sprint 11 — Hygiène de fond (spécifié le 2026-10-13)
 

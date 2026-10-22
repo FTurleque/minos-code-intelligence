@@ -59,6 +59,20 @@ Plan d'ensemble : [plan de remédiation](../../audits/archive/2026-10-06/plan-de
 
 Chaque tâche possède actions, fichiers, critères et vérifications dans [TASKS.md](TASKS.md). La clôture SH-11 nécessite les contrôles des lots exécutés, même si sa préparation démarre après SH-01. SH-12 ferme le chantier seulement quand les lots ont leurs preuves ; un lot différé reste explicitement ouvert.
 
+## Ordre de spécification issu du sprint 10 de l'audit du 10 octobre 2026
+
+Décisions du propriétaire du 2026-10-22 : [ADR 0062](../../../architecture/adr/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) et ordre de l'[ADR 0047](../../../architecture/adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md). En attendant chaque chantier, la dette qu'il résorbe est figée par les règles A11 à A14 de `scripts/architecture/check-module-boundaries.py` : chaque lot livré retire des lignes de ces tables.
+
+| Chantier | Constat | Prérequis | État du prérequis | À spécifier |
+|---|---|---|---|---|
+| Surfaces consommant des cas d'usage (suite de SH-05, puis SH-09) | AUD-ARC-01 | AUD-ARC-02 | fait (SH-05, 2026-10-21) | maintenant ; réduit `ENGINE_TYPES_NAMED_BY_SURFACE` (A11) |
+| Port d'ACL de plateforme (SH-08) | AUD-ARC-05 | AUD-SEC-06 | fusionné (PR #491) ; reste la mesure du nombre d'objets durcis pendant une indexation | avec cette mesure ; retire `PrivateLocalStorage` de `PROCESS_LAUNCHERS` (A12) |
+| Port de lecture des snapshots (SH-04) | AUD-ARC-07 | AUD-PERF-03 | fait (ADR 0047, option A mesurée sur corpus réel) | maintenant |
+| Fusion `minos-storage`, codec commun (SH-02, SH-03), staging injecté (SH-06) | AUD-ARC-08 | SH-05 pour SH-06 | SH-05 fait | après SH-04 ; réduit `ADAPTER_TYPES_NAMED_BY_ADAPTER` (A13) |
+| Arête d'exécution et nommage des packages | AUD-ARC-11, AUD-ARC-12 | — | couverts par le document généré et la règle A14 | rien d'autre sans nouvelle décision |
+
+Chaque chantier déplace des classes : sa spécification écrit le coût en couverture du nouveau code par module (SonarCloud, 80 %), en tests déplacés avec leur classe, en portées de `scripts/quality/check-jacoco.py`, en gates littéraux et en baselines SpotBugs.
+
 ## Architecture cible — dépendances de code
 
 ```mermaid
