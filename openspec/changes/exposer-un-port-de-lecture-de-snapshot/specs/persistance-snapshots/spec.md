@@ -11,7 +11,7 @@ Les cas d'usage de lecture (symboles, usages, relations, recherche de code, impa
 #### Scenario: Aucun snapshot actif
 - **GIVEN** un store de snapshots sans snapshot actif pour le projet
 - **WHEN** `./mvnw -B -ntp -pl minos-application -am test` demande une recherche de symboles puis une analyse d'impact
-- **THEN** elle échoue avec la même exception et le même message qu'avant ce changement
+- **THEN** chaque appel échoue avec la même exception et le même message qu'avant ce changement (`IllegalStateException`, « project has no active symbol snapshot » pour la recherche, « project has no active code knowledge snapshot » pour l'impact)
 
 ### Requirement: Les résultats des requêtes sont inchangés
 Les réponses des requêtes de lecture, leur ordre, leurs limites et leurs budgets SHALL rester identiques à ceux d'avant ce changement, sous le store fichier et sous PostgreSQL. Les goldens existants SHALL NOT être régénérés pour ce changement.
@@ -33,6 +33,11 @@ Les réponses des requêtes de lecture, leur ordre, leurs limites et leurs budge
 - **GIVEN** un store fichier à compteurs avec un snapshot actif
 - **WHEN** `./mvnw -B -ntp -pl minos-storage-local -am test` lit la vue neutre puis l'ancienne vue et calcule l'impact par chacune
 - **THEN** le compteur de constructions de vue vaut 1, celui de l'index des arêtes vaut au plus 1, et les deux rapports d'impact sont égaux
+
+#### Scenario: Descripteurs binaires de la version publiée
+- **GIVEN** les méthodes publiques de l'ancien contrat telles que publiées en 1.2.0 (lectures appelées par le port d'écriture, accesseur de la classe mémoire, métriques, ancienne lecture du port de snapshot)
+- **WHEN** `./mvnw -B -ntp -pl minos-engine -am test` les résout par leur nom et leur descripteur exacts, sans recompiler d'appelant
+- **THEN** chacune est trouvée ; une seule absente fait échouer le test
 
 ### Requirement: Une implémentation existante du port de snapshot reste valide
 Une implémentation du port de snapshot qui ne redéfinit que `loadActiveQueryView` SHALL servir la nouvelle lecture par dérivation de l'ancienne. Une implémentation qui ne redéfinit que la nouvelle lecture SHALL obtenir l'ancienne vue par une fabrique dépréciée, sans boucle d'appels.

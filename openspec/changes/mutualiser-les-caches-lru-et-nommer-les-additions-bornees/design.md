@@ -2,90 +2,163 @@
 
 ## Context
 
-Sprint 11 « Hygiène de fond » de l'audit du 10 octobre 2026 : **AUD-QUA-05**. HEAD analysé : `949e1569` (`develop`). Chemins complets des classes citées par leur nom de fichier :
+Sprint 11 « Hygiène de fond » de l'audit du 10 octobre 2026 : **AUD-QUA-05** (voir `proposal.md`, « Why »). Chemins complets des classes citées par leur nom de fichier :
 
-- `minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java` et `FingerprintConstrainedJavaProgramGraphProvider.java` (même dossier) ;
-- `minos-application/src/main/java/com/minos/application/semantic/SemanticSearchService.java`, `HybridSearchService.java`, `SemanticIndexService.java` ;
-- `minos-storage-local/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java`, `FileSymbolSnapshotStore.java` ;
+- `minos-application/src/main/java/com/minos/program/analysis/` : `ProgramGraphService.java`, `FingerprintConstrainedJavaProgramGraphProvider.java`, `SourceStateKeyMemo.java` ;
+- `minos-application/src/main/java/com/minos/application/semantic/` : `SemanticSearchService.java`, `HybridSearchService.java`, `SemanticIndexService.java` ;
+- `minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java`, `minos-application/src/main/java/com/minos/output/json/DeterministicJson.java` ;
+- `minos-storage-local/src/main/java/com/minos/storage/local/store/` : `FileSemanticVectorStore.java`, `FileSymbolSnapshotStore.java` ;
 - `minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java` ;
-- `minos-engine/src/main/java/com/minos/hosted/HostedDenialThrottle.java` ;
-- `minos-integration-git/src/main/java/com/minos/integration/git/RemoteCloneBudget.java`.
+- `minos-engine/src/main/java/com/minos/hosted/HostedDenialThrottle.java`, `minos-engine/src/main/java/com/minos/source/SourceBudgetPolicy.java` ;
+- `minos-integration-git/src/main/java/com/minos/integration/git/` : `RemoteCloneBudget.java`, `JGitRemoteRepositoryMaterializer.java` ;
+- `minos-provider-scip/src/main/java/com/minos/adapter/scip/ingestion/ScipIngestionLimits.java` ;
+- `minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/` : `ProviderWriteQuotaSupervisor.java`, `RunDirectoryRetention.java`.
 
 ## État vérifié au HEAD
 
-### AUD-QUA-05 — confirmé
+HEAD relu : `5ce7b79b` (`develop` du 2026-10-22). La première rédaction (HEAD `949e1569`) est corrigée en place ; chaque écart est signalé « (corrigé) ».
 
-- **Cartes à ordre d'accès** (recherche de `new LinkedHashMap<>(…, true)` dans `minos-*/src/main`) : 8 occurrences. Sept caches pondérés : `ProgramGraphService.java:44`, `FingerprintConstrainedJavaProgramGraphProvider.java:44`, `SemanticSearchService.java:27`, `HybridSearchService.java:42`, `FileSemanticVectorStore.java:61`, `FileSymbolSnapshotStore.java:59`, `PostgresCodeKnowledgeSnapshotStore.java:59`. `HostedDenialThrottle.java:28` porte des `ArrayDeque<Instant>` : fenêtres de refus, sans poids.
-- **Helpers** (déclarations `private static long …`) : `safeAdd` × 8 (`RuntimeIntelligenceService.java:303`, `HybridSearchService.java:234`, `SemanticIndexService.java:204`, `DeterministicJson.java:241`, `FingerprintConstrainedJavaProgramGraphProvider.java:138`, `FileSemanticVectorStore.java:471`, `FileSymbolSnapshotStore.java:371`, `PostgresCodeKnowledgeSnapshotStore.java:456`) ; `saturatingAdd` × 5 ; `checkedAdd` × 3 (`SemanticSearchService.java:129`, `RemoteCloneBudget.java:143`, `FileSemanticVectorStore.java:441`) ; `safeMultiply` × 3 (`SemanticIndexService.java:208`, `FileSymbolSnapshotStore.java:375`, `PostgresCodeKnowledgeSnapshotStore.java:460`) ; `saturatingMultiply` × 2. Total 21.
-- **Comportements relus** : `minos-application/src/main/java/com/minos/output/json/DeterministicJson.java:241-242` lève `OutputBudgetExceededException` ; `minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java:303-307` enveloppe `Math.addExact` dans une `IllegalStateException` ; les deux `checkedAdd` de `RemoteCloneBudget.java:143` et `FileSemanticVectorStore.java:441` déclarent `throws IOException`. La saturation des six autres `safeAdd` et de `SemanticSearchService.java:129` est reprise de la contre-vérification ; les corps des trois `safeMultiply` et des deux `saturatingMultiply` sont **non relus** (tâche 1.1).
+**Non vérifié** : aucun build, test, gate ni rapport JaCoCo exécuté pendant cette relecture ; seules des recherches textuelles (`git grep`), la lecture des sources et des scripts, et la résolution des préfixes JaCoCo par le dictionnaire `SCOPES` de `check-jacoco.py`.
 
-**Non vérifié** : aucun build, test ni gate exécuté pendant cette analyse.
+### Cartes à ordre d'accès
 
-### Gates littéraux concernés (relus)
+Recherche `git grep -nE 'new LinkedHashMap<[^>]*>\([^)]*true\)' -- 'minos-*/src/main/**'` : **9** occurrences (corrigé : 8). Sept caches bornés en poids, deux structures sans poids.
 
-- `scripts/remediation/check-mne.py:86` exige `safeMultiply` dans `FileSymbolSnapshotStore.java`.
-- `scripts/remediation/check-mnd.py:99-106` exige `queryCache`, `MAX_QUERY_CACHE_WEIGHT_BYTES` et `buildLocks` (store PostgreSQL), `WeightedGraph`, `evidenceWeight`, `stringWeight`, `maximumWeight` (`ProgramGraphService.java`), `trimCache`, `fingerprintCacheStats` (`FingerprintConstrainedJavaProgramGraphProvider.java`), `trimCorpusCache` (`HybridSearchService.java`).
-- `scripts/remediation/check-p0-p2.py:221` exige `public CacheStats cacheStats()` ; `:305-312` exigent `ReentrantLock[] buildLocks`, `buildLock.lock()` et `buildLock.unlock()` dans `ProgramGraphService.java` et `FileSymbolSnapshotStore.java`.
+| Classe | Ligne | Borne en entrées | Plafond de poids | Entrée plus lourde que le plafond | Verrou | Évictions comptées |
+|---|---|---|---|---|---|---|
+| `ProgramGraphService` | `:62` (corrigé : `:44`) | 16 (`:36`, paramétrable) | 256 Mio (`:37`, paramétrable) | non mise en cache (`:197`) ; entrées du même projet et du même budget retirées avant (`removeSupersededEntries`, `:210-223`) | `synchronized (cache)` | non |
+| `FingerprintConstrainedJavaProgramGraphProvider` | `:45-46` (corrigé : `:44`) | 64 (`:39`) | 128 Mio (`:40`) | non mise en cache, ancienne valeur de la clé retirée (`:125-132`) | `synchronized (immutableFingerprintCache)` | oui (`trimCache`, `:137-147`) |
+| `SemanticSearchService` | `:27` | 256 (`:20`) | 8 Mio (`:22`) | **aucun test** : insérée, puis l'éviction part de la plus ancienne (`:102-120`) ; chemin inatteignable (requête ≤ 64 Kio, `:21` ; poids d'entrée ≈ 128 o + requête + 8 o par dimension) | `synchronized (queryCache)` | non |
+| `HybridSearchService` | `:42` | 64 (`:33`) | 256 Mio (`:34`) | non mise en cache, ancienne valeur retirée (`:163-170`) | `synchronized (corpusCache)` | oui (`trimCorpusCache`, `:174-184`) |
+| `FileSemanticVectorStore` | `:61` | **aucune** (corrigé : la borne en entrées était supposée partout) | 256 Mio (`:56`, paramétrable) | non mise en cache, ancienne valeur retirée (`:299-313`) | `synchronized (cacheLock)` | oui ; une invalidation peut compter comme éviction (`removeCached(…, eviction)`, `:315-323`) |
+| `FileSymbolSnapshotStore` | `:65-66` (corrigé : `:59`) | 32 (`:40`, paramétrable) | 512 Mio (`:41`, paramétrable) | non mise en cache ; autres entrées du projet retirées avant (`removeProjectEntries`, `:254-266`, `:343-352`) | `synchronized (cacheLock)` | oui (`trimCache`, `:358-365`) |
+| `PostgresCodeKnowledgeSnapshotStore` | `:72-73` (corrigé : `:59`) | 32 (`:61`) | 512 Mio (`:62`) | non mise en cache ; autres entrées du projet retirées avant (`:210-225`) | `synchronized (cacheLock)` | oui (boucle en ligne, `:217-224`) |
+
+Sans poids : `HostedDenialThrottle.java:28` (fenêtres de refus `ArrayDeque<Instant>`) et **`SourceStateKeyMemo.java:35`** (corrigé : absent de la première rédaction ; mémo borné à `MAX_ENTRIES = 64` avec délai de réutilisation sur horloge monotone, arrivé avec `ne-plus-hacher-les-sources-avant-le-cache-du-graphe`).
+
+Trois classes ramènent le poids total à zéro s'il devient négatif (`ProgramGraphService.java:232`, `FingerprintConstrainedJavaProgramGraphProvider.java:146`, `HybridSearchService.java:183`) : une dérive de comptage y est masquée, pas détectée. Les compteurs de succès et d'échecs sont tenus par la classe propriétaire, parfois sur un chemin de course (`FileSymbolSnapshotStore.java:255-258`).
+
+### Helpers d'addition et de multiplication bornées
+
+Recherche des déclarations `private static long <nom>(` : **21**, décompte confirmé ; numéros de ligne corrigés.
+
+| Nom | Sites | Comportement au dépassement |
+|---|---|---|
+| `safeAdd` (8) | `HybridSearchService.java:249`, `SemanticIndexService.java:236`, `FingerprintConstrainedJavaProgramGraphProvider.java:163`, `FileSemanticVectorStore.java:474`, `FileSymbolSnapshotStore.java:388`, `PostgresCodeKnowledgeSnapshotStore.java:503` (corrigés : `:234`, `:204`, `:138`, `:471`, `:371`, `:456`) | sature à `Long.MAX_VALUE` (comparaison `right > Long.MAX_VALUE - left`) |
+| | `DeterministicJson.java:241` (classe imbriquée) | lève `OutputBudgetExceededException` |
+| | `RuntimeIntelligenceService.java:311` (corrigé : `:303` ; trois paramètres, dont `label`) | lève `IllegalStateException` sur `Math.addExact` |
+| `checkedAdd` (3) | `SemanticSearchService.java:129` | sature (`Math.addExact` rattrapé) |
+| | `RemoteCloneBudget.java:143` | lève `IOException` |
+| | `FileSemanticVectorStore.java:444` (corrigé : `:441` ; classe imbriquée `DecodeBudget`, trois paramètres) | lève `IOException` |
+| `saturatingAdd` (5) | `ProgramGraphService.java:289` (`Math.addExact` rattrapé) ; `JGitRemoteRepositoryMaterializer.java:391`, `ProviderWriteQuotaSupervisor.java:302`, `RunDirectoryRetention.java:361` (comparaison) ; `ScipIngestionLimits.java:258` (comparaison, **refuse un opérande négatif**) | sature |
+| `safeMultiply` (3) | `SemanticIndexService.java:240`, `FileSymbolSnapshotStore.java:392`, `PostgresCodeKnowledgeSnapshotStore.java:507` (relus : `Math.multiplyExact` rattrapé) | sature |
+| `saturatingMultiply` (2) | `SourceBudgetPolicy.java:106` (`Math.multiplyExact` rattrapé) ; `ScipIngestionLimits.java:263` (division, refuse un opérande négatif) | sature |
+
+Deux constats nouveaux :
+
+- **Opérandes négatifs.** La forme par comparaison suppose `left ≥ 0` : avec `left < 0`, `Long.MAX_VALUE - left` déborde et la fonction rend `Long.MAX_VALUE` à tort ; la forme `Math.addExact` rattrapée rend `Long.MAX_VALUE` même sur un débordement vers le bas. Seul `ScipIngestionLimits` refuse les négatifs. Aucun appelant relu ne passe de négatif (poids et tailles partent de constantes positives). Le renommage du lot 1 ne change pas ce comportement ; il est consigné, pas corrigé.
+- **Autres helpers nommés autrement** : `ScipIngestionLimits.add(…, label)` (`:250`, lève `IOException`), `FileProjectFingerprintSnapshotStore.addSnapshotBytes` (`minos-storage-local/src/main/java/com/minos/storage/local/incremental/`, `:476`, lève `IOException`), `NexusExportService.addWeight` (`minos-nexus`, `:313`, sature). Leur nom n'est pas l'un des noms ambigus de D1 : hors périmètre, comme les 38 appels `Math.addExact` / `Math.multiplyExact` écrits en ligne.
+
+### Gates littéraux et outillage concernés (relus)
+
+| Gate | Ligne | Chaîne exigée | Sort |
+|---|---|---|---|
+| `scripts/remediation/check-mne.py` | `:85-86` | `safeMultiply` dans `FileSymbolSnapshotStore.java` (avec `QUERY_VIEW_PERSISTED_AMPLIFICATION`, `Files.size(snapshot)`) | **supprimée par le lot 1** : réécrite en `saturatingMultiply(Files.size(snapshot)` (D1) |
+| `scripts/remediation/check-mnd.py` | `:103-104` | `trimCache` (`FingerprintConstrainedJavaProgramGraphProvider.java`) | **supprimée par le lot 2** |
+| | `:105-106` | `trimCorpusCache` (`HybridSearchService.java`) | **supprimée par le lot 2** |
+| | `:101-102` | `WeightedGraph`, `evidenceWeight`, `stringWeight`, `maximumWeight` (`ProgramGraphService.java`) | `maximumWeight` est un champ du record public `CacheStats` (`:361-362`) et reste (corrigé : la première rédaction le croyait supprimé) ; `evidenceWeight`, `stringWeight` sont des estimateurs et restent ; `WeightedGraph` (record de valeur, `:62`) disparaît si le poids passe dans le cache partagé |
+| | `:99-100` | `queryCache`, `MAX_QUERY_CACHE_WEIGHT_BYTES`, `buildLocks` (store PostgreSQL) | conservées (D5) |
+| `scripts/remediation/check-p0-p2.py` | `:221` | `public CacheStats cacheStats()` (`ProgramGraphService.java`) | conservée |
+| | `:305-312` | `ReentrantLock[] buildLocks`, `buildLock.lock()`, `buildLock.unlock()` ; interdit `synchronized (buildLock(` (`ProgramGraphService.java`, `FileSymbolSnapshotStore.java`) | conservées : les verrous de construction restent hors du cache (D4) |
+| `scripts/quality/check-semantic-retrieval-consistency.py` | `:119-130` | `MAX_QUERY_CACHE_ENTRIES = 256`, `MAX_QUERY_CACHE_WEIGHT_BYTES = 8L * 1024L * 1024L`, `QueryCacheKey` (`SemanticSearchService.java`) | conservées (corrigé : gate absent de la première rédaction) |
+| `scripts/architecture/check-module-boundaries.py` | A14 `:612-636` | racines de packages par module ; `store` n'appartient qu'à `minos-engine` | un package `com.minos.store.cache` ne crée pas de racine (D2) |
+| | A15 `:842-972` | tout type public de production a un appelant de production, sinon une entrée motivée (cliquet) | la classe partagée n'est pas livrée sans un premier cache migré (D5) |
+| | A3, A8 | un package par module, aucun cycle | le package d'accueil est une feuille (JDK seul) |
+
+Scopes JaCoCo (`scripts/quality/check-jacoco.py`, préfixes résolus) : `ProgramGraphService` → `program-graph-analysis` ; `FingerprintConstrainedJavaProgramGraphProvider` → `java-advanced-provider` ; `SemanticSearchService`, `HybridSearchService`, `SemanticIndexService` → `semantic-hybrid-retrieval` ; `FileSemanticVectorStore` → `semantic-vector-store` ; `FileSymbolSnapshotStore` → `persistence-cache-indexes` ; `PostgresCodeKnowledgeSnapshotStore` → `m30-postgresql-pgvector` (sauté sur Windows, `pr-ci.yml:356`) ; `RuntimeIntelligenceService` → `m26-runtime-dynamic-intelligence` (corrigé : absent) ; `RemoteCloneBudget`, `DeterministicJson`, `SourceStateKeyMemo` et tout `com/minos/store/cache/` → `global` seulement (corrigé : `RemoteCloneBudget` n'est pas dans `m25-remote-distributed-indexing` ; `advanced-impact-security` ne couvre aucune classe touchée).
+
+Base SpotBugs : `quality/spotbugs-baseline/minos-storage-local.xml` porte une alerte `EI_EXPOSE_REP` sur `FileSymbolSnapshotStore.retentionService` (`:698-714`), sans rapport avec le cache. SpotBugs ne tourne que dans `code-audit.yml` (déclenchement manuel, profil `audit-spotbugs`) ; la comparaison par `instanceHash` se fait par `python scripts/quality/audit-report-summary.py spotbugs --baseline-dir quality/spotbugs-baseline`.
+
+Tests existants des caches : `FileSymbolSnapshotStoreCacheTest`, `-RetryTest`, `-IntegrityTest`, `QueryViewWeightTest`, `FileSemanticVectorStoreTest`, `-ReuseTest` (`minos-storage-local`) ; `PostgresCodeKnowledgeSnapshotStoreCacheTest` (`minos-storage-postgresql`, base réelle) ; `ProgramGraphSourceStateReuseTest`, `AdvancedImpactAdjacencyReuseTest`, `HybridQueryCostTest`, `SemanticQueryPathStatesTest`, `SourceStateKeyMemoTest` (`minos-application`) ; `ProgramGraphServiceConcurrencyTest`, `HybridCorpusWeightTest` (`minos-bootstrap`). Aucun test ne nomme un helper d'addition ni n'atteint un champ de cache par réflexion.
 
 ### Écarts avec l'action proposée par l'audit
 
-1. **« Huit caches » : sept.** `HostedDenialThrottle` n'est pas un cache pondéré ; le plier dans une classe générique lui ferait porter un poids factice.
-2. **« Treize helpers » : vingt et un**, et `checkedAdd` a lui aussi deux comportements.
-3. **L'extraction du cache supprime des chaînes que trois gates exigent.** Chaque migration réécrit l'assertion correspondante dans la même tâche, sinon le job `invariants` casse.
-4. **`safeMultiply` de `FileSymbolSnapshotStore` ne se renomme pas sans toucher `check-mne.py:86`**, et le changement actif `ramener-le-poids-des-vues-a-la-mesure` modifie la même ligne : il reste hors du lot 1.
-5. **Conflits de fusion certains** avec les changements actifs `ramener-le-poids-des-vues-a-la-mesure`, `lire-l-identite-du-snapshot-actif-sans-le-charger`, `ne-plus-hacher-les-sources-avant-le-cache-du-graphe`, `synchroniser-l-index-semantique-par-differentiel` et `lire-chaque-source-une-fois-par-fichier`. Le lot 2 passe après eux ; le lot 1 (renommage local) peut passer avant, au prix de conflits triviaux.
+1. **« Huit caches » : sept caches pondérés**, sur neuf cartes à ordre d'accès. `HostedDenialThrottle` et `SourceStateKeyMemo` n'ont pas de poids ; les plier dans une classe générique leur ferait porter un poids factice.
+2. **« Treize helpers » : vingt et un**, et `checkedAdd` a lui aussi deux comportements ; `saturatingAdd` en a deux face aux opérandes négatifs (refus dans `ScipIngestionLimits` seulement).
+3. **Les sept caches ne sont pas identiques** : `FileSemanticVectorStore` n'a pas de borne en entrées ; `SemanticSearchService` ne teste pas l'entrée trop lourde ; deux caches ne comptent pas les évictions ; trois invalident les entrées du même projet avant d'insérer. Le contrat partagé (D4) doit le permettre sans changer le comportement observable.
+4. **Les noms que la migration supprime sont dans deux gates** (`check-mnd.py`, `check-mne.py`) ; `check-p0-p2.py` et `check-semantic-retrieval-consistency.py` lisent les mêmes fichiers et restent verts si les noms conservés par D5 le restent.
+5. **Ordre des lots.** Les cinq changements de performance qui bloquaient le lot 2 sont archivés le 2026-10-15 (`openspec/changes/archive/2026-10-15-ramener-le-poids-des-vues-a-la-mesure`, `…-lire-l-identite-du-snapshot-actif-sans-le-charger`, `…-ne-plus-hacher-les-sources-avant-le-cache-du-graphe`, `…-synchroniser-l-index-semantique-par-differentiel`, `…-lire-chaque-source-une-fois-par-fichier`). Cette contrainte est levée ; celle qui reste est l'ordre avec `exposer-un-port-de-lecture-de-snapshot` (ci-dessous). L'ordre lot 1 puis lot 2 tient toujours : le lot 1 est sans dépendance et réduit le diff du lot 2.
+
+### Recouvrements avec les changements actifs
+
+| Changement | Point de contact | Conduite |
+|---|---|---|
+| `exposer-un-port-de-lecture-de-snapshot` (1/22) | sa tâche 2.2 change la valeur mise en cache par `FileSymbolSnapshotStore` et `PostgresCodeKnowledgeSnapshotStore` ; son design (tableau des recouvrements, relu le 2026-10-22) demande que la migration de ces deux caches fusionne **avant** ; son design (liste des « Littéraux des stores, à conserver ») cite `safeMultiply` de `check-mne.py:86` parmi les littéraux « à conserver » | ordre recommandé : lot 1, migration des stores (tâche 4.4), puis sa tâche 2.2 ; le cache partagé est générique, le type de valeur change sans le toucher. Après le lot 1, cette mention est périmée (`saturatingMultiply`) : à signaler dans la PR |
+| `calculer-le-rang-de-symbole-une-fois` (0/9) | sa décision D2 (précalcul dans la vue, non recommandé) toucherait l'estimation de poids des deux stores et `check-mne.py:86` | conflit textuel seulement |
+| `decouper-les-classes-de-plus-de-800-lignes` (0/18) | modifie d'autres lignes de `check-mnd.py` (`:60`, `:118`, `:122`) et de `check-p0-p2.py` (`:130`, `:139`) ; crée des classes dans `com.minos.io` (`minos-engine`) | conflits triviaux dans les scripts ; aucun package commun avec `com.minos.store.cache` ; aucune classe touchée ici ne dépasse 800 lignes (la plus longue : `PostgresCodeKnowledgeSnapshotStore`, 536) |
+| `decouper-les-methodes-d-analyse-et-d-ingestion` (0/10) | `ImpactAnalysisService`, `ScipIngestionAdapter`, `CodeSearchService`, `IndexingLifecycleService` | aucun fichier commun ; `ScipIngestionLimits`, voisin de `ScipIngestionAdapter`, n'est pas renommé ici |
 
 ## Goals / Non-Goals
 
-**Goals** : un nom, un comportement ; un seul endroit où l'invariant d'un cache LRU pondéré est écrit et testé ; aucun comportement observable modifié.
+**Goals** : un nom, un comportement ; un seul endroit où l'invariant d'un cache LRU pondéré est écrit et testé ; aucun comportement observable modifié hors du chemin inatteignable de `SemanticSearchService` (D4).
 
-**Non-Goals** : changer une borne ; unifier ce qui n'a pas la même nature (fenêtres de refus) ; créer un module.
+**Non-Goals** : changer une borne, un plafond ou une estimation de poids ; unifier ce qui n'a pas la même nature (fenêtres de refus, mémo à délai) ; créer un module ; corriger la sémantique des opérandes négatifs des helpers existants.
 
 ## Decisions
 
 ### D1. Noms par comportement, renommage en place (lot 1)
 
-`saturatingAdd` pour ce qui sature ; un nom qui dit l'échec pour ce qui lève (`addOrThrow`, suffixé par ce qui est borné si utile). Les `safeAdd` et `checkedAdd` privés sont renommés dans leur classe, sans extraction : aucune classe neuve, aucun appelant externe. `safeMultiply` : renommé de même là où aucun gate ne l'exige ; conservé dans `FileSymbolSnapshotStore` (écart 4). Aucune ligne de calcul n'est modifiée.
+`saturatingAdd` / `saturatingMultiply` pour ce qui sature ; `addOrThrow` (suffixé si utile) pour ce qui lève ; `checkedAdd` n'est gardé que pour ce qui lève. Les huit `safeAdd`, le `checkedAdd` de `SemanticSearchService` et les trois `safeMultiply` sont renommés dans leur classe, sans extraction ni ligne de calcul modifiée. `check-mne.py:86` passe de `safeMultiply` à `saturatingMultiply(Files.size(snapshot)` dans la même tâche : l'ancre est plus forte (l'appel, pas seulement le nom). La première rédaction gardait `safeMultiply` dans `FileSymbolSnapshotStore` à cause de `ramener-le-poids-des-vues-a-la-mesure`, archivé depuis : cette exception n'a plus de raison.
 
-### D2. Module et package de la classe partagée — **décision en attente du propriétaire**
+### D2. Module et package du cache partagé — **décision en attente du propriétaire**
 
-Recommandation : `minos-engine`, dans un **nouveau package à propriétaire unique** (ADR 0044). Les trois modules consommateurs (`minos-storage-local`, `minos-storage-postgresql`, `minos-application`) sont en aval de `minos-engine` (ADR 0022) : aucune arête nouvelle. La classe ne dépend que du JDK.
+Recommandation : **`minos-engine`, package neuf `com.minos.store.cache`**, classe `WeightedLruCache` (nom indicatif).
 
-Alternative : `minos-domain`. Plus en amont, mais le domaine n'a pas vocation à porter une structure de données technique.
+- Direction (ADR 0022) : les trois modules consommateurs (`minos-application`, `minos-storage-local`, `minos-storage-postgresql`) dépendent déjà de `minos-engine` (POM relus) ; aucune arête nouvelle. `minos-application` est exclu (les stores n'en dépendent pas : ce serait inverser la direction) ; `minos-storage-local` aussi (l'application n'en dépend pas, et le store PostgreSQL ne nomme que les quatre types de sa liste A13, `check-module-boundaries.py:604-609`).
+- Propriété (ADR 0044, ADR 0062, A14) : la racine `store` n'appartient qu'à `minos-engine` (`:618-621`) ; le sous-package ne crée ni racine ni package partagé. Il est une feuille (JDK seul) : A8 reste à zéro cycle.
+- Alternative : `minos-domain`. Plus en amont, mais le domaine porte le modèle, pas une structure de données technique, et sa liste A14 (`domain`, `program`, `semantic`) imposerait une racine nouvelle, donc une décision au sens de l'ADR 0062.
 
-Une classe d'arithmétique bornée partagée (action de l'audit, `BoundedArithmetic`) suit la même décision : elle n'est créée que si D2 est tranchée, dans le même package, et elle remplace alors les helpers renommés au lot 1.
+**D2b. Arithmétique bornée partagée** (action de l'audit, `BoundedArithmetic`) — **décision en attente du propriétaire**. Recommandation : **ne pas la créer dans ce changement**. Le lot 1 suffit à lever l'ambiguïté ; une classe partagée toucherait sept modules (dont `minos-runtime-local`, `minos-provider-scip`, `minos-integration-git`) pour des fonctions d'une ligne et devrait trancher la sémantique des négatifs (écart 2). Si le propriétaire la veut, elle vit dans `minos-engine` (seul module en amont de tous ses appelants, hors domaine) et fait l'objet d'un changement distinct.
 
-### D3. `HostedDenialThrottle` — **décision en attente du propriétaire**
+### D3. Structures sans poids — **décision en attente du propriétaire**
 
-Recommandation : **exclu**. Il figure dans la liste fermée du gate avec sa raison (« fenêtres glissantes, non pondéré »). Alternative : l'inclure en donnant un poids unitaire à chaque entrée ; cela ne partage que l'éviction par nombre d'entrées, pour un couplage de plus.
+Recommandation : **exclure `HostedDenialThrottle` et `SourceStateKeyMemo`**, inscrits dans la liste fermée du gate avec leur raison (« fenêtres de refus glissantes, sans poids » ; « mémo à délai de réutilisation, borné en nombre, sans poids »). Alternative : leur donner un poids unitaire ; cela ne partage que l'éviction par nombre, au prix d'un couplage et d'une sémantique de délai que le cache n'a pas.
 
-### D4. Contrat de la classe partagée
+### D4. Contrat du cache partagé
 
-Bornée en nombre d'entrées et en poids total ; le poids d'une entrée est fourni à l'insertion ; il est retranché à chaque retrait, remplacement ou éviction ; une entrée plus lourde que le plafond n'est **pas** mise en cache (comportement des caches actuels, à confirmer cache par cache en tâche 3.1) ; tous les accès, lectures comprises, sont sérialisés (une lecture en ordre d'accès modifie la carte) ; statistiques lisibles. Les verrous de construction par bande (`buildLocks`) ne font **pas** partie du cache : ils restent dans leurs classes, avec leurs chaînes exigées par `check-p0-p2.py`.
+- Bornes fixées à la construction : nombre d'entrées ≥ 1 (une borne « illimitée » s'exprime par `Integer.MAX_VALUE`, pour `FileSemanticVectorStore`) et plafond de poids dans `[1, Long.MAX_VALUE / 2]` ; hors de ces plages, `IllegalArgumentException`. Chaque entrée conservée étant ≤ plafond, la somme ne peut pas déborder.
+- Le poids d'une entrée est fourni à l'insertion ; un poids négatif est **refusé** (`IllegalArgumentException`, cache inchangé) au lieu d'être masqué par une remise à zéro ; il est retranché à chaque retrait, remplacement, invalidation ou éviction.
+- Une entrée plus lourde que le plafond n'est **pas** conservée et n'évince rien ; l'ancienne valeur de la **même clé** est retirée (comportement des caches qui testent ce cas). Pour `SemanticSearchService`, c'est un changement sur un chemin inatteignable (poids d'entrée de l'ordre de 200 Kio au plus pour un plafond de 8 Mio) : à dire dans la PR.
+- Éviction par ordre d'accès, de la plus anciennement lue, tant que l'une des deux bornes est dépassée.
+- Retrait par prédicat sur la clé, pour les invalidations par projet (`removeSupersededEntries`, `removeProjectEntries`).
+- Statistiques du cache : entrées, poids, évictions de capacité. Succès, échecs et durées restent comptés par la classe propriétaire ; chaque record public de statistiques garde ses noms et ses valeurs (une invalidation de `FileSemanticVectorStore` comptée comme éviction le reste, par lui).
+- Concurrence : toutes les opérations, lectures comprises, sont sérialisées par le moniteur du cache (une lecture en ordre d'accès modifie la carte). Les séquences composées des propriétaires (relecture après course, invalidation puis insertion) restent sous leur verrou actuel ; l'ordre des verrous est toujours propriétaire → cache, et le cache n'appelle aucun code extérieur sous son moniteur (le poids est calculé avant l'appel).
+- Les verrous de construction par bande (`buildLocks`) ne font **pas** partie du cache.
 
 ### D5. Migration un cache à la fois, gate réécrit dans la même tâche
 
-Pour chaque cache : tests existants verts avant, migration, tests verts après, puis réécriture de l'assertion littérale devenue fausse. Les noms publics ou exigés qui gardent un sens sont **conservés** (`queryCache`, `MAX_QUERY_CACHE_WEIGHT_BYTES`, `fingerprintCacheStats`, `public CacheStats cacheStats()`) ; ceux qui désignaient le code d'éviction supprimé (`trimCache`, `trimCorpusCache`, `maximumWeight`) sont remplacés dans le gate par l'usage de la classe partagée.
+Pour chaque cache : tests existants verts avant, migration, tests verts après, puis réécriture de l'assertion devenue fausse. Les noms publics ou exigés qui gardent un sens sont **conservés** : `queryCache`, `MAX_QUERY_CACHE_WEIGHT_BYTES`, `MAX_QUERY_CACHE_ENTRIES`, `buildLocks`, `fingerprintCacheStats`, `public CacheStats cacheStats()`, `maximumWeight`, `evidenceWeight`, `stringWeight`, les constantes `DEFAULT_MAX_*`. Ceux qui désignaient le code d'éviction supprimé (`trimCache`, `trimCorpusCache`, et `WeightedGraph` s'il disparaît) sont remplacés dans `check-mnd.py` par une chaîne qui prouve l'usage du cache partagé (déclaration du champ), sans affaiblir l'invariant protégé (cache borné en poids). La classe partagée n'est livrée qu'avec un premier cache migré (A15) : pas d'entrée temporaire dans `UNREFERENCED_PRODUCTION_TYPES`.
 
 ### D6. Un gate neuf, à liste fermée
 
-`scripts/quality/check-bounded-helpers.py` (nouveau, avec `--self-test`, câblé dans `invariants`) refuse dans `*/src/main/**` : une déclaration `long safeAdd(` ou une déclaration `checkedAdd` qui ne lève pas (lot 1) ; un `new LinkedHashMap<>(…, true)` hors de la classe partagée et hors de la liste fermée (lot 2). Une entrée de liste qui ne correspond plus à rien fait échouer le gate.
+`scripts/quality/check-bounded-helpers.py` (nouveau, `--self-test` sur arbres temporaires, racine paramétrable, câblé dans le job `invariants` de `pr-ci.yml`) refuse dans `minos-*/src/main/**` : une déclaration de méthode `safeAdd` ou `safeMultiply` (toute signature) ; une déclaration `checkedAdd` dont le corps ne contient pas `throw` (lot 1) ; une construction `new LinkedHashMap<…>(…, true)` (espaces et retours à la ligne admis) hors de la classe partagée et hors de la liste fermée (lot 2). Une entrée de liste qui ne correspond plus à rien fait échouer le gate. Le gate affiche le nombre de helpers contrôlés et la liste fermée.
 
 ## Direction des dépendances
 
-`minos-engine` reçoit la classe ; `storage` et `application` l'importent, dans le sens de l'ADR 0022. Aucun adaptateur n'importe un autre adaptateur. La règle A8 (`check-module-boundaries.py`) doit rester à 0 cycle avec le nouveau package.
+`minos-engine` reçoit la classe ; `minos-application`, `minos-storage-local` et `minos-storage-postgresql` l'importent, dans le sens de l'ADR 0022. Aucun adaptateur n'importe un autre adaptateur (A13 inchangée) ; aucune surface ne nomme la classe (A11 inchangée). Le lot 1 n'ajoute aucune dépendance.
 
 ## Qualification des capacités
 
-Sans objet : aucune capacité produit nouvelle. Le cache partagé est un composant interne, qualifié par ses propres tests (bornes, poids, concurrence).
+Sans objet : aucune capacité produit nouvelle ni modifiée. Le cache partagé est un composant interne, qualifié par ses propres tests (bornes, poids, refus, concurrence).
 
 ## Windows et Linux
 
-Aucune différence de comportement. Le store PostgreSQL ne se teste qu'avec une base réelle (CI Linux) : dire dans la PR si ses tests ont tourné localement.
+Aucune différence de comportement : code JDK pur, sans E/S. Le store PostgreSQL ne se teste qu'avec une base réelle (Docker, `"-Dminos.postgresql.tests.required=true"`) ; sur Windows, le scope `m30-postgresql-pgvector` est sauté (`pr-ci.yml:356`) et la couverture de ce store vient du job Linux. Les tests de concurrence utilisent des barrières, pas des délais, pour tenir sur les deux systèmes.
 
 ## Risks / Trade-offs
 
-- **SonarCloud** : la classe partagée est du code neuf dans son module et doit atteindre 80 % **par ses propres tests dans ce module** ; les lignes renommées au lot 1 comptent aussi comme nouveau code et doivent être couvertes par les tests existants de chaque module.
-- Une différence fine entre deux caches (ordre d'éviction, traitement de l'entrée trop lourde, moment où les statistiques sont comptées) peut être gommée par la mutualisation : d'où la migration un par un et le relevé 3.1.
-- Un test de concurrence instable serait pire qu'absent : il utilise des barrières déterministes, pas des délais.
-- Le lot 2 attend plusieurs changements : il peut rester ouvert longtemps. Le lot 1 se clôt seul.
+- **SonarCloud** (nouveau code par module, seuil 80 %) : la classe partagée est du code neuf de `minos-engine`, couvert par **ses propres tests dans ce module** ; les lignes renommées (lot 1) et migrées (lot 2) comptent comme nouveau code de chaque module. Plusieurs caches de `minos-application` ne sont exercés que par des tests de `minos-bootstrap` (`ProgramGraphServiceConcurrencyTest`, `HybridCorpusWeightTest`) : prévoir un test dans `minos-application` si le rapport de la PR montre ces lignes non couvertes.
+- Une différence fine entre deux caches (écart 3) peut être gommée : d'où la migration un par un et le tableau ci-dessus, à relire au HEAD de la branche d'implémentation.
+- Un test de concurrence instable serait pire qu'absent : barrières déterministes, aucun `sleep`.
+- Conflits de fusion avec `exposer-un-port-de-lecture-de-snapshot` sur les deux stores et `check-mne.py` : ordre recommandé ci-dessus.
+- Le refus d'un poids négatif est un nouvel échec possible ; aucun appelant relu n'en produit, et un test par cache migré le confirme.

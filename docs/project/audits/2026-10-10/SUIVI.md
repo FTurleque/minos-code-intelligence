@@ -589,7 +589,29 @@ Six changements OpenSpec, même branche. Aucun build, test ni gate exécuté.
 | AUD-QUA-11 | `fixer-la-langue-des-commentaires` | **Spécifié** | 173 fichiers sur 553, 26 mixtes. `CONTRIBUTING.md` ne dit rien de la langue. Cliquet sur les fichiers mixtes, pas de traduction en masse. Décision en attente : D1 (langue de référence). |
 | AUD-QUA-07 | `decouper-les-methodes-d-analyse-et-d-ingestion` | **Spécifié** (sans exigence nouvelle) | Décompte de l'audit non reproduit (24 méthodes de 80 lignes ou plus par une autre mesure, contre 40). `LocalIsolatedIndexWorker` hors lot (six gates le citent). |
 
-Capacités nouvelles créées à l'archivage des sprints 6 à 11 : aucune (les exigences s'ajoutent aux capacités existantes et à `recherche-semantique`, créée par le sprint 4). Preuve de la spécification : `openspec validate --all --strict` → 66 passés, 0 échec. Les changements des sprints 6, 7, 8, 9 et 11 ont été rédigés à partir d'une contre-vérification des preuves au HEAD ; ils n'ont pas reçu de seconde relecture indépendante après rédaction.
+Capacités nouvelles créées à l'archivage des sprints 6 à 11 : aucune (les exigences s'ajoutent aux capacités existantes et à `recherche-semantique`, créée par le sprint 4). Preuve de la spécification : `openspec validate --all --strict` → 66 passés, 0 échec.
+
+## Seconde contre-vérification des changements non implémentés (2026-10-22, HEAD `5ce7b79b`)
+
+Les neuf changements actifs sans implémentation ont été relus au HEAD, un par un, indépendamment de leur auteur : chaque `fichier:ligne`, décompte, gate littéral, scope JaCoCo et recouvrement. Les « État vérifié au HEAD » sont mis à jour en place ; la méthode de chaque décompte est écrite dans le design. Aucun build ni test n'a été exécuté : ce sont des preuves de lecture.
+
+| Changement | Constat | Avant → après | Corrections principales | Décisions en attente du propriétaire |
+|---|---|---|---|---|
+| `calculer-le-rang-de-symbole-une-fois` | AUD-PERF-10 | corrections mineures → prêt | toutes les lignes avaient dérivé ; deux prérequis archivés ; `search-code`, `minos_search_code` et le plugin ajoutés aux surfaces ; quatre goldens nommés | D2 (précalcul des minuscules : non sans mesure), D3 (rang 6 : conservé) |
+| `decouper-les-classes-de-plus-de-800-lignes` | AUD-QUA-07, AUD-ARC-05 | à refaire → prêt | condition préalable levée (branches fusionnées) ; 1 004 lignes et non 1 019 ; liste de tolérance 23 entrées ; règle A12 existante ; six classes de plus de 800 lignes, pas deux | Q4 (`WindowsDacl` nouveau lanceur d'`icacls` : note à l'ADR 0062), Q5 (quatre autres classes hors lot) |
+| `decouper-les-methodes-d-analyse-et-d-ingestion` | AUD-QUA-07 | corrections mineures → prêt | `execute` a 16 paramètres ; `analyze` est une surcharge privée ; scope `m24` faux ; baseline SpotBugs comparée par `instanceHash` ; 18 méthodes de 80 lignes ou plus | P1 (deux records, recommandé), P2 (méthodes hors lot consignées ici) |
+| `exposer-un-port-de-lecture-de-snapshot` | AUD-ARC-07 | prêt avec failles → prêt | cliquet A17 contournable (`view.queryStore()` sans import) ; rouge 2.1 impossible ; compatibilité binaire prouvée par descripteurs ; `run-final.ps1` déjà cassé | D6 à reconfirmer (ne rien toucher), D7 nouvelle (`CodeKnowledgeStore` refusé dans `minos-application` : oui) |
+| `faire-consommer-l-indexation-aux-surfaces` | AUD-ARC-01 | corrections mineures → prêt | placement qui aurait créé un cycle (A8) ; preuve « lecture sans écriture » déplacée ; `-Dsurefire.failIfNoSpecifiedTests=false` ; goldens exécutés dans `minos-app` | D7 nouvelle (installation et liste des runtimes sur `ProviderPlatformService`) |
+| `fixer-la-langue-des-commentaires` | AUD-QUA-11 | à corriger → prêt | 168 fichiers sur 560, 22 à 29 mixtes selon le critère ; un exemple de l'audit disparu ; liste nommée par nom de fichier et compteur par module | D1 (langue de référence : anglais recommandé), plugin inclus |
+| `garder-les-fonctions-de-scripts-jumelles` | AUD-QUA-09 | à refaire → prêt | quatre fonctions d'ACL du fichier de secret recopiées dans deux scripts livrés ; commandes d'auto-test inexistantes ; prémisse fausse de D4 ; gate d'identité sur le modèle de `check-job-object-launcher-parity.py` | D1 (gate d'identité), D4 (`gate_cli.py`) |
+| `mutualiser-les-caches-lru-et-nommer-les-additions-bornees` | AUD-QUA-05 | corrections mineures → prêt | neuf structures à ordre d'accès ; caches non identiques (contrat réécrit) ; trois scopes JaCoCo faux ; gate `check-semantic-retrieval-consistency.py` ajouté | D2 (`com.minos.store.cache` dans le moteur), D2b, D3 |
+| `retirer-les-jalons-des-identifiants` | AUD-QUA-08 | corrections nécessaires → prêt | six méthodes du catalogue, pas cinq ; trois tests appelants manquants ; 39 lignes de chaînes publiques, pas six ; inventaire sans faux positif | D2 (motif à un chiffre), D3 (chaînes publiques hors lot) |
+
+Points transverses :
+
+- **Commentaires citant un jalon** (112 lignes Java) : `retirer-les-jalons-des-identifiants` et `fixer-la-langue-des-commentaires` les excluent tous deux. Décision à prendre : les rattacher à l'un des deux, ou les déclarer hors de l'audit.
+- **Ordre** : le lot 2 de `mutualiser-les-caches-…` et `decouper-les-methodes-…` (section 2) passent avant la tâche 2.2/3.2 d'`exposer-un-port-de-lecture-de-snapshot` ; `calculer-le-rang-…` passe après lui. `decouper-les-classes-…` et `decouper-les-methodes-…` ne vont pas dans la même PR.
+- **Défauts relevés hors périmètre** : les additions bornées par comparaison sont fausses pour un opérande négatif (seul `ScipIngestionLimits` refuse les négatifs) ; `Find-EmbeddedClaudeCli` lit `%APPDATA%` différemment dans la détection et dans la configuration des clients MCP ; `rendre-l-echec-de-scip-java-sous-windows-actionnable` cite `IndexingRunExecutor.java:837` (`:845` au HEAD).
 
 ## Cause probable de MINOS-AUD-H23 et garde du plugin (2026-10-15, branche `sec/proteger-la-dacl-des-dossiers-du-plugin`)
 
