@@ -947,6 +947,264 @@ class ServiceLoaderClassLoaderTest(unittest.TestCase):
         self.assertEqual(4, _MODULE.check_service_loader_class_loaders())
 
 
+class RatchetTreeTestCase(unittest.TestCase):
+    """A temporary reactor tree (root pom.xml with groupId com.minos) for the A11-A14 ratchets."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        write_root_pom(self.root)
+
+    def write(self, module, package, name, body, imports=(), kind="main"):
+        directory = self.root / module / "src" / kind / "java" / Path(*package.split("."))
+        directory.mkdir(parents=True, exist_ok=True)
+        lines = "".join(f"import {line};\n" for line in imports)
+        (directory / f"{name}.java").write_text(f"package {package};\n\n{lines}\n{body}\n", encoding="utf-8")
+
+    def refused(self, action, *fragments):
+        with self.assertRaises(RuntimeError) as raised:
+            action()
+        for fragment in fragments:
+            self.assertIn(fragment, str(raised.exception))
+        return str(raised.exception)
+
+
+class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
+    """A11 — each surface names only the minos-engine types of its list (AUD-ARC-01, ADR 0058 section 3)."""
+
+    LISTED = {"minos-cli": frozenset({"query.SymbolResult"})}
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-engine", "com.minos.query", "SymbolResult", "public record SymbolResult() { }")
+        self.write("minos-engine", "com.minos.hosted", "HostedRole", "public enum HostedRole { OWNER }")
+        self.write("minos-cli", "com.minos.cli", "Search", "final class Search { SymbolResult r; }",
+                   ["com.minos.query.SymbolResult"])
+
+    def check(self, listed=None):
+        return _MODULE.check_engine_types_named_by_surfaces(self.root, listed=self.LISTED if listed is None else listed)
+
+    def test_a_conforming_tree_is_accepted_with_the_count_per_surface(self):
+        self.assertEqual({"minos-api": 0, "minos-cli": 1, "minos-mcp": 0, "minos-nexus": 0}, self.check())
+
+    def test_an_imported_type_outside_the_list_is_refused_naming_surface_file_and_type(self):
+        self.write("minos-cli", "com.minos.cli", "Leak", "final class Leak { HostedRole r; }",
+                   ["com.minos.hosted.HostedRole"])
+        self.refused(self.check, "A11", "minos-cli", "minos-cli/src/main/java/com/minos/cli/Leak.java",
+                     "com.minos.hosted.HostedRole")
+
+    def test_a_qualified_name_outside_the_list_is_refused(self):
+        self.write("minos-mcp", "com.minos.mcp", "Leak", "final class Leak { Object r = com.minos.hosted.HostedRole.OWNER; }")
+        self.refused(self.check, "A11", "minos-mcp", "com.minos.hosted.HostedRole")
+
+    def test_a_nested_type_counts_as_its_listed_top_level_type(self):
+        self.write("minos-cli", "com.minos.cli", "Nested", "final class Nested { }", ["com.minos.query.SymbolResult.Kind"])
+        self.assertEqual(1, self.check()["minos-cli"])
+
+    def test_a_wildcard_import_of_an_engine_package_is_refused(self):
+        self.write("minos-api", "com.minos.api", "Wide", "final class Wide { }", ["com.minos.hosted.*"])
+        self.refused(self.check, "A11", "wildcard", "com.minos.hosted.*")
+
+    def test_a_dead_entry_is_refused(self):
+        listed = {"minos-cli": frozenset({"query.SymbolResult", "hosted.HostedRole"})}
+        self.refused(lambda: self.check(listed), "A11", "hosted.HostedRole", "no longer named")
+
+    def test_an_entry_naming_no_existing_type_is_refused(self):
+        listed = {"minos-cli": frozenset({"query.SymbolResult", "query.Gone"})}
+        self.refused(lambda: self.check(listed), "A11", "query.Gone", "names no production type")
+
+    def test_comments_literals_and_test_sources_do_not_count(self):
+        self.write("minos-cli", "com.minos.cli", "Quiet",
+                   'final class Quiet { // com.minos.hosted.HostedRole\n String s = "com.minos.hosted.HostedRole"; }')
+        self.write("minos-cli", "com.minos.cli", "QuietTest", "final class QuietTest { }",
+                   ["com.minos.hosted.HostedRole"], kind="test")
+        self.assertEqual(1, self.check()["minos-cli"])
+
+    def test_the_real_tree_names_only_listed_engine_types(self):
+        counts = _MODULE.check_engine_types_named_by_surfaces()
+        self.assertEqual({surface: len(types) for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items()},
+                         counts)
+
+
+class ProcessLauncherRuleTest(RatchetTreeTestCase):
+    """A12 — in the domain, the engine and the application, only listed classes launch a process (AUD-ARC-05)."""
+
+    LISTED = frozenset({"minos-engine/io.PrivateLocalStorage"})
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-engine", "com.minos.io", "PrivateLocalStorage",
+                   'public final class PrivateLocalStorage { Object p = new ProcessBuilder("icacls.exe"); }')
+
+    def check(self, listed=None):
+        return _MODULE.check_process_launchers(self.root, listed=self.LISTED if listed is None else listed)
+
+    def test_the_listed_launcher_is_accepted(self):
+        self.assertEqual(1, self.check())
+
+    def test_a_process_builder_in_an_unlisted_engine_class_is_refused(self):
+        self.write("minos-engine", "com.minos.io", "Second", 'final class Second { Object p = new ProcessBuilder("x"); }')
+        self.refused(self.check, "A12", "minos-engine/src/main/java/com/minos/io/Second.java", "minos-engine/io.Second")
+
+    def test_runtime_exec_in_the_application_is_refused(self):
+        self.write("minos-application", "com.minos.application", "Exec",
+                   'final class Exec { void r() throws Exception { Runtime.getRuntime().exec(new String[] {"x"}); } }')
+        self.refused(self.check, "A12", "minos-application/application.Exec")
+
+    def test_an_entry_that_launches_nothing_any_more_is_refused(self):
+        self.write("minos-engine", "com.minos.io", "PrivateLocalStorage", "public final class PrivateLocalStorage { }")
+        self.refused(self.check, "A12", "minos-engine/io.PrivateLocalStorage", "launches no process any more")
+
+    def test_a_mention_in_a_comment_or_literal_and_the_runtime_adapter_are_accepted(self):
+        self.write("minos-domain", "com.minos.domain", "Doc",
+                   'final class Doc { // new ProcessBuilder()\n String s = "Runtime.getRuntime().exec"; }')
+        self.write("minos-runtime-local", "com.minos.runtime.local", "Runner",
+                   'final class Runner { Object p = new ProcessBuilder("x"); }')
+        self.assertEqual(1, self.check())
+
+    def test_the_real_tree_has_only_the_listed_launchers(self):
+        self.assertEqual(len(_MODULE.PROCESS_LAUNCHERS), _MODULE.check_process_launchers())
+
+
+class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
+    """A13 — an adapter names another adapter's types only through the list of the couple (AUD-ARC-08)."""
+
+    COUPLE = ("minos-storage-postgresql", "minos-storage-local")
+    LISTED = {COUPLE: frozenset({"storage.local.store.SnapshotCodec"})}
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-storage-local", "com.minos.storage.local.store", "SnapshotCodec", "public interface SnapshotCodec { }")
+        self.write("minos-storage-local", "com.minos.storage.local.store", "SnapshotIntegrityService",
+                   "public final class SnapshotIntegrityService { }")
+        self.write("minos-storage-postgresql", "com.minos.storage.postgresql", "Store", "final class Store { SnapshotCodec c; }",
+                   ["com.minos.storage.local.store.SnapshotCodec"])
+
+    def check(self, listed=None):
+        return _MODULE.check_adapter_types_named_by_adapters(self.root, listed=self.LISTED if listed is None else listed)
+
+    def test_a_conforming_tree_is_accepted(self):
+        self.assertEqual(1, self.check())
+
+    def test_an_imported_type_outside_the_list_is_refused_naming_both_modules(self):
+        self.write("minos-storage-postgresql", "com.minos.storage.postgresql", "Leak",
+                   "final class Leak { SnapshotIntegrityService s; }",
+                   ["com.minos.storage.local.store.SnapshotIntegrityService"])
+        self.refused(self.check, "A13", "minos-storage-postgresql -> minos-storage-local",
+                     "com.minos.storage.local.store.SnapshotIntegrityService")
+
+    def test_a_qualified_name_without_import_is_refused_like_an_import(self):
+        self.write("minos-storage-postgresql", "com.minos.storage.postgresql", "Leak",
+                   "final class Leak { Object s = new com.minos.storage.local.store.SnapshotIntegrityService(); }")
+        self.refused(self.check, "A13", "minos-storage-postgresql -> minos-storage-local",
+                     "com.minos.storage.local.store.SnapshotIntegrityService")
+
+    def test_a_couple_absent_from_the_table_is_refused(self):
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Leak", "final class Leak { SnapshotCodec c; }",
+                   ["com.minos.storage.local.store.SnapshotCodec"])
+        self.refused(self.check, "A13", "minos-provider-scip -> minos-storage-local")
+
+    def test_a_dead_entry_is_refused(self):
+        listed = {self.COUPLE: frozenset({"storage.local.store.SnapshotCodec", "storage.local.store.SnapshotIntegrityService"})}
+        self.refused(lambda: self.check(listed), "A13", "storage.local.store.SnapshotIntegrityService", "no longer named")
+
+    def test_a_table_key_that_is_not_a_couple_of_adapters_is_refused(self):
+        listed = {**self.LISTED, ("minos-cli", "minos-storage-local"): frozenset()}
+        self.refused(lambda: self.check(listed), "A13", "minos-cli -> minos-storage-local", "not a couple of adapters")
+
+    def test_the_real_tree_names_only_listed_adapter_types(self):
+        self.assertEqual(sum(len(types) for types in _MODULE.ADAPTER_TYPES_NAMED_BY_ADAPTER.values()),
+                         _MODULE.check_adapter_types_named_by_adapters())
+
+
+class PackageRootRuleTest(RatchetTreeTestCase):
+    """A14 — a module creates no new package root (AUD-ARC-12, ADR 0044)."""
+
+    MODULES = ("minos-engine", "minos-cli")
+    LISTED = {"minos-engine": frozenset({"io"}), "minos-cli": frozenset({"cli"})}
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-engine", "com.minos.io", "Sha256", "public final class Sha256 { }")
+        self.write("minos-cli", "com.minos.cli", "Main", "public final class Main { }")
+
+    def check(self, listed=None):
+        return _MODULE.check_package_roots(self.root, listed=self.LISTED if listed is None else listed,
+                                           modules=self.MODULES)
+
+    def test_a_conforming_tree_is_accepted(self):
+        self.assertEqual(2, self.check())
+
+    def test_a_new_root_in_the_engine_is_refused_naming_module_and_root(self):
+        self.write("minos-engine", "com.minos.nouveau", "Thing", "final class Thing { }")
+        self.refused(self.check, "A14", "minos-engine", "com.minos.nouveau")
+
+    def test_a_sub_package_of_a_listed_root_is_accepted(self):
+        self.write("minos-engine", "com.minos.io.lease", "Lease", "final class Lease { }")
+        self.assertEqual(2, self.check())
+
+    def test_a_listed_root_without_source_is_refused(self):
+        listed = dict(self.LISTED, **{"minos-engine": frozenset({"io", "remote"})})
+        self.refused(lambda: self.check(listed), "A14", "com.minos.remote", "holds no production source")
+
+    def test_a_package_outside_the_group_is_refused(self):
+        self.write("minos-cli", "org.example", "Stray", "final class Stray { }")
+        self.refused(self.check, "A14", "minos-cli", "<none>")
+
+    def test_the_real_tree_creates_no_new_root(self):
+        self.assertEqual(sum(len(roots) for roots in _MODULE.PACKAGE_ROOTS_BY_MODULE.values()),
+                         _MODULE.check_package_roots())
+
+
+class RuntimeServiceEdgeTest(RatchetTreeTestCase):
+    """AUD-ARC-11 — execution edges by service are rendered and checked in the generated document."""
+
+    GRAPH = {module: frozenset() for module in MODULES}
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-cli", "com.minos.cli", "McpLaunchRoute", "public interface McpLaunchRoute { }")
+        self.write("minos-app", "com.minos.app", "Route", "public final class Route implements McpLaunchRoute { }")
+        services = self.root / "minos-app" / "src" / "main" / "resources" / "META-INF" / "services"
+        services.mkdir(parents=True)
+        (services / "com.minos.cli.McpLaunchRoute").write_text("# route\ncom.minos.app.Route\n", encoding="utf-8")
+        (services / "javax.annotation.processing.Processor").write_text("com.minos.app.Route\n", encoding="utf-8")
+        self.document = self.root / "docs" / "module-dependencies.md"
+
+    def edges(self):
+        return _MODULE.runtime_service_edges(self.root)
+
+    def test_a_service_declared_by_one_module_and_provided_by_another_is_an_edge(self):
+        self.assertEqual({("minos-cli", "minos-app"): ("com.minos.cli.McpLaunchRoute",)}, self.edges())
+        text = _MODULE.render_dependency_document(self.GRAPH, self.edges())
+        self.assertIn("minos_cli -.-> minos_app", text)
+        self.assertIn("| `minos-cli` | `minos-app` | `com.minos.cli.McpLaunchRoute` |", text)
+
+    def test_an_implementation_foreign_to_the_registering_module_is_refused(self):
+        services = self.root / "minos-app" / "src" / "main" / "resources" / "META-INF" / "services"
+        (services / "com.minos.cli.McpLaunchRoute").write_text("com.minos.app.Missing\n", encoding="utf-8")
+        self.refused(self.edges, "com.minos.app.Missing", "not a production type of minos-app")
+
+    def test_a_document_without_the_edge_is_refused_naming_the_edge(self):
+        edges = self.edges()
+        with contextlib.redirect_stdout(io.StringIO()):
+            _MODULE.check_or_write_dependency_document(self.GRAPH, True, self.document, runtime_edges=edges)
+        _MODULE.check_or_write_dependency_document(self.GRAPH, False, self.document, runtime_edges=edges)
+        text = self.document.read_text(encoding="utf-8")
+        self.document.write_text(text.replace("| `minos-cli` | `minos-app` | `com.minos.cli.McpLaunchRoute` |\n", ""),
+                                 encoding="utf-8")
+        self.refused(lambda: _MODULE.check_or_write_dependency_document(self.GRAPH, False, self.document,
+                                                                        runtime_edges=edges),
+                     "misses the execution edge", "minos-cli -> minos-app")
+
+    def test_the_real_tree_documents_the_cli_to_assembly_edge(self):
+        edges = _MODULE.runtime_service_edges()
+        self.assertIn(("minos-cli", "minos-app"), edges)
+        self.assertIn(_MODULE.runtime_edge_row("minos-cli", "minos-app", edges[("minos-cli", "minos-app")]),
+                      _MODULE.GENERATED_DEPENDENCY_DOC.read_text(encoding="utf-8").splitlines())
+
+
 class EveryRuleHasATest(unittest.TestCase):
 
     def test_every_check_function_of_the_script_is_referenced_by_a_test(self):
@@ -1007,6 +1265,16 @@ class MainWiringTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(calls, ["exports"])
         self.assertIn("spy exports failed", error)
+
+    def test_main_runs_the_ratchet_rules_a11_to_a14(self):
+        for name in ("check_engine_types_named_by_surfaces", "check_process_launchers",
+                     "check_adapter_types_named_by_adapters", "check_package_roots"):
+            with self.subTest(rule=name):
+                calls: list[str] = []
+                code, error = self.run_main_with(**{name: self.spy(calls, name)})
+                self.assertEqual(code, 1)
+                self.assertEqual(calls, [name])
+                self.assertIn(f"spy {name} failed", error)
 
     def test_main_runs_the_unreferenced_production_type_rule(self):
         calls: list[str] = []

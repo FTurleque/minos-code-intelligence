@@ -2,7 +2,9 @@
 """Enforce MINOS source ownership, Maven dependency directions, and generated architecture facts.
 
 The governed module list is checked against the root reactor (A7), and every Java package belongs to
-exactly one module (A3 / ADR 0044). Self-test: scripts/architecture/test_check_module_boundaries.py.
+exactly one module (A3 / ADR 0044). Architecture debt is held by ratchets (A8, A10 to A15); the generated
+dependency document also shows the execution edges created by META-INF/services files.
+Self-test: scripts/architecture/test_check_module_boundaries.py.
 """
 
 from __future__ import annotations
@@ -497,6 +499,291 @@ def check_runtime_local_exports(root: Path = ROOT, group_id: str | None = None,
     return len(exported)
 
 
+# A11 to A14 — debt held by ratchets (AUD-ARC-01, -05, -08, -12). Each table lists, from the production sources, what
+# exists today and nothing more: a name outside the table fails, and so does an entry nobody uses any more. The tables
+# only shrink, by a visible edit, when a structural change removes a use. Names are written relative to the reactor
+# groupId (read from the root POM). Test sources are not concerned.
+ENGINE_MODULE = "minos-engine"
+
+# A11 / AUD-ARC-01, ADR 0058 § 3 — the minos-engine types each surface names (import or fully qualified name).
+ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, frozenset[str]] = {
+    "minos-api": frozenset({
+        "diagnostics.PublicErrorMessages",
+        "git.GitIntelligence",
+        "hosted.HostedAuditEvent",
+        "hosted.HostedControlPlaneService",
+        "hosted.HostedPrincipal",
+        "hosted.HostedProjectBinding",
+        "hosted.HostedRetentionPlan",
+        "hosted.HostedRetentionPolicy",
+        "hosted.HostedRole",
+        "hosted.HostedTenantState",
+        "hosted.SharedWorkspace",
+        "orchestration.ProviderConformanceKit",
+        "orchestration.ResumableRunSummary",
+        "query.RelationshipResult",
+        "query.SymbolResult",
+        "query.UsageResult",
+    }),
+    "minos-cli": frozenset({
+        "diagnostics.PublicErrorMessages",
+        "git.GitIntelligence",
+        "hosted.HostedControlPlaneService",
+        "hosted.HostedRetentionPolicy",
+        "hosted.HostedRole",
+        "io.BoundedFileLease",
+        "io.PrivateLocalStorage",
+        "io.Sha256",
+        "orchestration.IndexStateStore",
+        "orchestration.IndexerDescriptor",
+        "orchestration.IndexingMode",
+        "orchestration.IndexingResumePolicy",
+        "orchestration.IndexingRun",
+        "orchestration.IndexingRuntimePorts",
+        "orchestration.ResumableRunSummary",
+        "query.RelationshipResult",
+        "query.SymbolResult",
+        "query.UsageResult",
+        "registry.DegradedEntry",
+        "registry.ProjectPathMapping",
+        "registry.ProjectPathMappings",
+        "registry.ProjectRegistry",
+        "registry.RegisteredProject",
+        "registry.UnreadableRegistryException",
+        "remote.DistributedIndexing",
+        "remote.IdempotentRemoteRepositoryMaterializer",
+        "remote.RemoteIndexingRuntime",
+        "remote.RemoteRepositoryMaterializer",
+        "remote.RemoteRepositoryRequest",
+        "runtime.MinosVersion",
+        "runtime.ProviderRuntimeManager",
+        "runtime.ProviderRuntimeStatus",
+        "runtime.WorkerSandboxProbe",
+    }),
+    "minos-mcp": frozenset({
+        "diagnostics.PublicErrorMessages",
+        "hosted.HostedControlPlaneService",
+        "orchestration.ResumableRunSummary",
+        "registry.UnreadableRegistryException",
+        "runtime.MinosVersion",
+    }),
+    "minos-nexus": frozenset({
+        "io.Sha256",
+        "registry.ProjectRegistry",
+        "registry.RegisteredProject",
+        "registry.UnreadableRegistryException",
+        "store.CodeKnowledgeSnapshot",
+        "store.CodeKnowledgeSnapshotStore",
+    }),
+}
+
+# A12 / AUD-ARC-05, ADR 0022 — classes of the inner layers that launch a process (module/name.Type).
+PROCESS_LAUNCHER_MODULES = ("minos-domain", ENGINE_MODULE, APPLICATION_MODULE)
+PROCESS_LAUNCHERS = frozenset({
+    # Windows ACL primitive (icacls.exe); its extraction to a platform port is designed with AUD-SEC-06.
+    "minos-engine/io.PrivateLocalStorage",
+})
+PROCESS_LAUNCH = re.compile(r"\bProcessBuilder\b|\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\b")
+
+# A13 / AUD-ARC-08, ADR 0055 — the types of one adapter another adapter names, per (naming, named) couple.
+ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], frozenset[str]] = {
+    ("minos-provider-scip", "minos-runtime-local"): frozenset({
+        "runtime.local.StrongProcessOwnershipIndexerExecutor",
+        "runtime.local.process.BoundedProcessOutput",
+        "runtime.local.process.CommandLocator",
+        "runtime.local.process.IndexerProcessPlan",
+        "runtime.local.process.IndexerProcessPlanFactory",
+        "runtime.local.process.InstallationProcessEnvironment",
+        "runtime.local.process.ProcessIndexerExecutor",
+        "runtime.local.sandbox.WorkerSandboxBackend",
+        "runtime.local.sandbox.WorkerSandboxBackends",
+    }),
+    ("minos-provider-scip", "minos-storage-local"): frozenset({
+        "storage.local.store.FileSymbolSnapshotStore",
+    }),
+    ("minos-storage-postgresql", "minos-storage-local"): frozenset({
+        "storage.local.registry.ProjectPathMappingStore",
+        "storage.local.store.KnowledgeSnapshotCodecs",
+        "storage.local.store.SnapshotCodec",
+        "storage.local.store.SnapshotIntegrityService",
+    }),
+}
+
+# A14 / AUD-ARC-12, ADR 0044 — the package roots (first segment under the groupId) each module owns. A new package
+# goes under one of its module's roots; a new root is a decision, written here by a visible edit (ADR 0062). A root may
+# be owned by several modules (runtime, storage, program, integration): A3 keeps each package in one module, and
+# ADR 0044 gives the adapters a module namespace below such a root (com.minos.runtime.local, com.minos.storage.local).
+PACKAGE_ROOTS_BY_MODULE: dict[str, frozenset[str]] = {
+    "minos-domain": frozenset({"domain", "program", "semantic"}),
+    "minos-engine": frozenset({
+        "diagnostics", "discovery", "dynamic", "git", "hosted", "incremental", "io", "orchestration", "query",
+        "registry", "remote", "runtime", "source", "storage", "store",
+    }),
+    "minos-runtime-local": frozenset({"runtime"}),
+    "minos-storage-local": frozenset({"storage"}),
+    "minos-storage-postgresql": frozenset({"storage"}),
+    "minos-provider-scip": frozenset({"adapter"}),
+    "minos-integration-git": frozenset({"integration"}),
+    "minos-application": frozenset({
+        "application", "architecture", "context", "impact", "output", "program", "workspace",
+    }),
+    "minos-bootstrap": frozenset({"bootstrap"}),
+    "minos-nexus": frozenset({"nexus"}),
+    "minos-cli": frozenset({"cli"}),
+    "minos-api": frozenset({"api"}),
+    "minos-mcp": frozenset({"mcp"}),
+    "minos-app": frozenset({"app", "integration"}),
+}
+
+
+def production_types(root: Path, module: str) -> dict[str, str]:
+    """Top-level production types of one module: qualified name -> package."""
+    source_root = root / module / "src" / "main" / "java"
+    if not source_root.is_dir():
+        return {}
+    return {".".join(source.relative_to(source_root).with_suffix("").parts):
+            ".".join(source.relative_to(source_root).parts[:-1]) for source in sorted(source_root.rglob("*.java"))}
+
+
+def types_named_by_module(root: Path, module: str, targets: dict[str, str],
+                          qualified_name: re.Pattern[str]) -> tuple[dict[str, set[str]], list[str]]:
+    """Target types the production sources of one module name, by single or static import or fully qualified name
+    (type -> files), and every wildcard import of a target package ('file -> package.*'). Comments and string literals
+    are ignored; a nested type counts as its top-level type."""
+    named: dict[str, set[str]] = {}
+    wildcards: list[str] = []
+    packages = set(targets.values())
+    source_root = root / module / "src" / "main" / "java"
+    if not source_root.is_dir():
+        return named, wildcards
+    for source in sorted(source_root.rglob("*.java")):
+        code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+        relative = source.relative_to(root).as_posix()
+        names = []
+        for static, name, wildcard in SOURCE_IMPORT.findall(code):
+            if wildcard and not static:
+                if name in packages:
+                    wildcards.append(f"{relative} -> {name}.*")
+                continue
+            names.append(name)
+        names += qualified_name.findall(SOURCE_IMPORT.sub(" ", code))
+        for name in names:
+            resolved = resolve_adapter_class(name, targets)
+            if resolved:
+                named.setdefault(resolved, set()).add(relative)
+    return named, wildcards
+
+
+def named_type_ratchet_problems(rule: str, label: str, table: str, root: Path, naming: str, target: str,
+                             listed: frozenset[str], group: str, qualified_name: re.Pattern[str]) -> list[str]:
+    """Problems of one (naming module, target module) list: unknown entry, type outside the list, dead entry."""
+    targets = production_types(root, target)
+    prefix = group + "."
+    problems = [f"{label}: {table} entry {name} names no production type of {target}"
+                for name in sorted(listed) if prefix + name not in targets]
+    named, wildcards = types_named_by_module(root, naming, targets, qualified_name)
+    problems += [f"{label}: wildcard import of a {target} package {wildcard}" for wildcard in wildcards]
+    for qualified in sorted(named):
+        if qualified.removeprefix(prefix) not in listed:
+            problems.append(f"{label}: {', '.join(sorted(named[qualified]))} names {qualified}, "
+                            f"absent from {table}")
+    used = {qualified.removeprefix(prefix) for qualified in named}
+    problems += [f"{label}: {table} entry {name} is no longer named; remove it (the ratchet only shrinks)"
+                 for name in sorted(listed) if prefix + name in targets and name not in used]
+    return problems
+
+
+def check_engine_types_named_by_surfaces(root: Path = ROOT, group_id: str | None = None,
+                                         listed: dict[str, frozenset[str]] | None = None) -> dict[str, int]:
+    """A11 — each surface names only the minos-engine types of its ENGINE_TYPES_NAMED_BY_SURFACE list."""
+    listed = ENGINE_TYPES_NAMED_BY_SURFACE if listed is None else listed
+    group = group_id or repository_group_id(root)
+    qualified_name = qualified_name_pattern(group)
+    unknown = sorted(set(listed) - SURFACE_MODULES)
+    problems = [f"ENGINE_TYPES_NAMED_BY_SURFACE names {module}, which is not a surface" for module in unknown]
+    for surface in sorted(SURFACE_MODULES):
+        problems += named_type_ratchet_problems("A11", surface, "ENGINE_TYPES_NAMED_BY_SURFACE", root, surface,
+                                             ENGINE_MODULE, listed.get(surface, frozenset()), group, qualified_name)
+    if problems:
+        fail("A11 surface -> minos-engine ratchet (ADR 0058 section 3: a new engine type used by a surface needs a "
+             "justification; go through an application port, or add the type to ENGINE_TYPES_NAMED_BY_SURFACE in "
+             "a reviewed change): " + "; ".join(problems))
+    return {surface: len(listed.get(surface, frozenset())) for surface in sorted(SURFACE_MODULES)}
+
+
+def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
+                            listed: frozenset[str] = PROCESS_LAUNCHERS,
+                            modules: tuple[str, ...] = PROCESS_LAUNCHER_MODULES) -> int:
+    """A12 — in the domain, the engine and the application, only the PROCESS_LAUNCHERS classes launch a process
+    (ProcessBuilder, Runtime.getRuntime().exec). Comments and string literals are ignored."""
+    prefix = (group_id or repository_group_id(root)) + "."
+    found: dict[str, str] = {}
+    for module in modules:
+        source_root = root / module / "src" / "main" / "java"
+        if not source_root.is_dir():
+            continue
+        for source in sorted(source_root.rglob("*.java")):
+            code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+            if PROCESS_LAUNCH.search(code):
+                name = ".".join(source.relative_to(source_root).with_suffix("").parts).removeprefix(prefix)
+                found[f"{module}/{name}"] = source.relative_to(root).as_posix()
+    problems = [f"{path} launches a process and is not in PROCESS_LAUNCHERS ({entry})"
+                for entry, path in sorted(found.items()) if entry not in listed]
+    problems += [f"PROCESS_LAUNCHERS entry {entry} launches no process any more; remove it (the ratchet only shrinks)"
+                 for entry in sorted(listed - set(found))]
+    if problems:
+        fail("A12 process launch outside minos-runtime-local (ADR 0022: the process runtime belongs to the local "
+             "runtime adapter; inject a port it provides): " + "; ".join(problems))
+    return len(listed)
+
+
+def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | None = None,
+                                          listed: dict[tuple[str, str], frozenset[str]] | None = None) -> int:
+    """A13 — an adapter names the types of another adapter only through ADAPTER_TYPES_NAMED_BY_ADAPTER."""
+    listed = ADAPTER_TYPES_NAMED_BY_ADAPTER if listed is None else listed
+    group = group_id or repository_group_id(root)
+    qualified_name = qualified_name_pattern(group)
+    problems = [f"ADAPTER_TYPES_NAMED_BY_ADAPTER names {naming} -> {named}, which is not a couple of adapters"
+                for naming, named in sorted(listed) if {naming, named} - ADAPTER_MODULES or naming == named]
+    for naming in sorted(ADAPTER_MODULES):
+        for named in sorted(ADAPTER_MODULES - {naming}):
+            problems += named_type_ratchet_problems("A13", f"{naming} -> {named}", "ADAPTER_TYPES_NAMED_BY_ADAPTER",
+                                                 root, naming, named, listed.get((naming, named), frozenset()),
+                                                 group, qualified_name)
+    if problems:
+        fail("A13 adapter -> adapter ratchet (ADR 0055: adapters meet through engine ports; a new coupling is "
+             "added to ADAPTER_TYPES_NAMED_BY_ADAPTER in a reviewed change): " + "; ".join(problems))
+    return sum(len(types) for types in listed.values())
+
+
+def check_package_roots(root: Path = ROOT, group_id: str | None = None,
+                        listed: dict[str, frozenset[str]] | None = None,
+                        modules: tuple[str, ...] = MODULES) -> int:
+    """A14 — every production package of a module sits under one of its PACKAGE_ROOTS_BY_MODULE roots."""
+    listed = PACKAGE_ROOTS_BY_MODULE if listed is None else listed
+    group = group_id or repository_group_id(root)
+    problems = [f"PACKAGE_ROOTS_BY_MODULE names {module}, which is not a governed module"
+                for module in sorted(set(listed) - set(modules))]
+    for module in modules:
+        source_root = root / module / "src" / "main" / "java"
+        roots: dict[str, str] = {}
+        if source_root.is_dir():
+            for source in sorted(source_root.rglob("*.java")):
+                package = declared_package(source)
+                segment = package[len(group) + 1:].split(".")[0] if package.startswith(group + ".") else ""
+                roots.setdefault(segment, source.relative_to(root).as_posix())
+        allowed = listed.get(module, frozenset())
+        problems += [f"{module}: new package root {group}.{segment or '<none>'} ({path}); put the package under "
+                     f"one of {', '.join(sorted(allowed)) or 'no root'}" for segment, path in sorted(roots.items())
+                     if segment not in allowed]
+        problems += [f"{module}: root {group}.{segment} holds no production source any more; remove it (the ratchet "
+                     "only shrinks)" for segment in sorted(allowed - set(roots))]
+    if problems:
+        fail("A14 package roots (ADR 0044: no rename of existing packages, no new root without a decision): "
+             + "; ".join(problems))
+    return sum(len(roots) for roots in listed.values())
+
+
 SERVICE_LOADER_LOAD = re.compile(r"\bServiceLoader\s*\.\s*load\s*\(")
 
 
@@ -552,10 +839,8 @@ def check_service_loader_class_loaders(root: Path = ROOT, modules: tuple[str, ..
     return sites
 
 
-# A15 / AUD-QUA-02 — a public production type is used by production, or declared. Numbered after A11-A14 (reserved
-# by figer-la-dette-de-frontieres-par-des-cliquets); A16 is the two-argument ServiceLoader rule of
-# decouvrir-les-fournisseurs-par-chargeur-explicite. Each entry names one top-level public type of a reactor
-# src/main (module/package.Type) with the reason it has no production caller. The list is a ratchet: an entry whose
+# A15 / AUD-QUA-02 — a public production type is used by production, or declared. Each entry names one top-level
+# public type of a reactor src/main (module/package.Type) with the reason it has no production caller. The list is a ratchet: an entry whose
 # type is gone, or is now named by production, fails the guard.
 UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
     "minos-api/com.minos.api.LocalAdvancedCodeIntelligenceApi":
@@ -1023,7 +1308,43 @@ def mermaid_id(module: str) -> str:
     return module.replace("-", "_")
 
 
-def render_dependency_document(graph: dict[str, frozenset[str]]) -> str:
+RuntimeEdges = dict[tuple[str, str], tuple[str, ...]]
+
+
+def runtime_service_edges(root: Path = ROOT, modules: tuple[str, ...] = MODULES) -> RuntimeEdges:
+    """AUD-ARC-11 — execution edges a POM does not show: (declaring module, providing module) -> services.
+
+    A production META-INF/services file of module Y whose service interface is a production type of module X != Y
+    makes X load an implementation of Y at run time. A service interface outside the reactor is not an edge. An
+    implementation that is not a production type of the module that registers it fails.
+    """
+    owners = {qualified: module for module in modules for qualified in production_types(root, module)}
+    edges: dict[tuple[str, str], set[str]] = {}
+    for module in modules:
+        services = root / module / "src" / "main" / "resources" / "META-INF" / "services"
+        if not services.is_dir():
+            continue
+        for descriptor in sorted(path for path in services.iterdir() if path.is_file()):
+            service = descriptor.name.strip()
+            for line in descriptor.read_text(encoding="utf-8").splitlines():
+                implementation = line.split("#", 1)[0].strip()
+                if not implementation:
+                    continue
+                if owners.get(implementation) != module:
+                    fail(f"{module}: META-INF/services/{service} names {implementation}, which is not a production "
+                         f"type of {module}")
+                declaring = owners.get(service)
+                if declaring is not None and declaring != module:
+                    edges.setdefault((declaring, module), set()).add(service)
+    return {edge: tuple(sorted(services)) for edge, services in sorted(edges.items())}
+
+
+def runtime_edge_row(declaring: str, providing: str, services: tuple[str, ...]) -> str:
+    return f"| `{declaring}` | `{providing}` | {', '.join(f'`{service}`' for service in services)} |"
+
+
+def render_dependency_document(graph: dict[str, frozenset[str]], runtime_edges: RuntimeEdges | None = None) -> str:
+    runtime_edges = runtime_edges or {}
     lines = [
         "# Diagramme — Dépendances Maven entre modules MINOS",
         "",
@@ -1040,6 +1361,8 @@ def render_dependency_document(graph: dict[str, frozenset[str]]) -> str:
     for module in MODULES:
         for dependency in sorted(graph[module]):
             lines.append(f"    {mermaid_id(module)} --> {mermaid_id(dependency)}")
+    for declaring, providing in runtime_edges:
+        lines.append(f"    {mermaid_id(declaring)} -.-> {mermaid_id(providing)}")
     lines.extend([
         "```",
         "",
@@ -1053,16 +1376,35 @@ def render_dependency_document(graph: dict[str, frozenset[str]]) -> str:
         lines.append(f"| `{module}` | {dependencies} |")
     lines.extend([
         "",
-        "Le sens d'une flèche est **module → dépendance directe**. Les dépendances transitives ne sont pas répétées.",
-        "Le mode normal du checker échoue si ce fichier n'est plus exactement aligné avec les POMs courants.",
+        "## Arêtes d'exécution par service",
+        "",
+        "Un module déclare un service (`ServiceLoader`) qu'un autre module fournit par un fichier",
+        "`META-INF/services` : le premier charge le second à l'exécution, sans dépendance Maven dans ce sens.",
+        "Ces arêtes sont en pointillés dans le diagramme et ne comptent pas dans la politique de dépendances.",
+        "",
+        "| Module qui déclare | Module qui fournit | Services |",
+        "|---|---|---|",
+    ])
+    lines.extend(runtime_edge_row(declaring, providing, services)
+                 for (declaring, providing), services in runtime_edges.items())
+    if not runtime_edges:
+        lines.append("| — | — | — |")
+    lines.extend([
+        "",
+        "Le sens d'une flèche pleine est **module → dépendance directe** ; une flèche en pointillés va",
+        "du module qui déclare un service au module qui le fournit. Les dépendances transitives ne sont pas répétées.",
+        "Le mode normal du checker échoue si ce fichier n'est plus exactement aligné avec les POMs et les fichiers",
+        "`META-INF/services` courants.",
         "",
     ])
     return "\n".join(lines)
 
 
 def check_or_write_dependency_document(graph: dict[str, frozenset[str]], write_doc: bool,
-                                       document: Path = GENERATED_DEPENDENCY_DOC) -> None:
-    expected = render_dependency_document(graph)
+                                       document: Path = GENERATED_DEPENDENCY_DOC,
+                                       runtime_edges: RuntimeEdges | None = None) -> None:
+    runtime_edges = runtime_edges or {}
+    expected = render_dependency_document(graph, runtime_edges)
     if write_doc:
         document.parent.mkdir(parents=True, exist_ok=True)
         document.write_text(expected, encoding="utf-8", newline="\n")
@@ -1075,6 +1417,11 @@ def check_or_write_dependency_document(graph: dict[str, frozenset[str]], write_d
             "python scripts/architecture/check-module-boundaries.py --write-doc"
         )
     actual = document.read_text(encoding="utf-8")
+    missing = [f"{declaring} -> {providing}" for (declaring, providing), services in runtime_edges.items()
+               if runtime_edge_row(declaring, providing, services) not in actual.splitlines()]
+    if missing:
+        fail("generated module dependency documentation misses the execution edge(s) " + ", ".join(missing)
+             + "; run: python scripts/architecture/check-module-boundaries.py --write-doc")
     if actual != expected:
         fail(
             "generated module dependency documentation is stale; run: "
@@ -1096,12 +1443,17 @@ def main() -> int:
         total, counts = check_java_layout()
         check_source_boundaries()
         exported = check_runtime_local_exports()
+        engine_types = check_engine_types_named_by_surfaces()
+        launchers = check_process_launchers()
+        adapter_types = check_adapter_types_named_by_adapters()
+        package_roots = check_package_roots()
         service_loaders = check_service_loader_class_loaders()
         unreferenced = check_unreferenced_production_types()
         packages = check_package_ownership()
         cycles, cycle_packages = check_package_cycles()
         documented = check_architecture_documentation(graph)
-        check_or_write_dependency_document(graph, write_doc)
+        runtime_edges = runtime_service_edges()
+        check_or_write_dependency_document(graph, write_doc, runtime_edges=runtime_edges)
         for module in MODULES:
             dependencies = ",".join(sorted(graph[module])) or "-"
             print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")
@@ -1112,6 +1464,16 @@ def main() -> int:
         print(f"A9 architecture document: {documented} module sections match the POM dependencies")
         print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
               f"modules, none other is")
+        print("A11 surface -> minos-engine types: "
+              + ", ".join(f"{surface}={count}" for surface, count in engine_types.items())
+              + " listed in ENGINE_TYPES_NAMED_BY_SURFACE, none other is named")
+        print(f"A12 process launchers: {launchers} class(es) of domain, engine and application listed, none other "
+              f"launches a process")
+        print(f"A13 adapter -> adapter types: {adapter_types} listed in ADAPTER_TYPES_NAMED_BY_ADAPTER, none other "
+              f"is named")
+        print(f"A14 package roots: {package_roots} roots over {len(MODULES)} modules, no new root")
+        print(f"AUD-ARC-11 execution edges by service: "
+              + (", ".join(f"{a} -> {b}" for a, b in runtime_edges) or "none") + " (documented)")
         print(f"A16 service discovery: {service_loaders} production ServiceLoader.load calls, each with an "
               f"explicit class loader")
         print(f"A15 unreferenced production types: {unreferenced} listed in UNREFERENCED_PRODUCTION_TYPES, "

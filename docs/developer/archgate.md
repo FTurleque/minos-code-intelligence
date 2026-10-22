@@ -59,6 +59,7 @@ Un pont dont le frontmatter porte `files:` n'est exécuté que si un fichier de 
 | A8 — aucun cycle de packages | 0044 | `check-module-boundaries.py` | non porté |
 | A9 — document d'architecture arc42 aligné sur les POM | 0022 | `check-module-boundaries.py` | non porté |
 | A10 — exports de `minos-runtime-local` | 0042 | `check-module-boundaries.py` | non porté |
+| A11 à A14 — dette d'architecture en cliquet (types du moteur par surface, lanceurs de processus, types entre adaptateurs, racines de packages) et arêtes d'exécution par service | 0022, 0044, 0055, 0058, 0062 | `check-module-boundaries.py` | non porté |
 | E/S privées confinées | — | `check-private-io.py` | non porté |
 | Autres gates `scripts/**/check-*.py` | divers | job `invariants` | non portés |
 
