@@ -89,9 +89,9 @@ Après le lot : CLI 15, API 14, MCP 4, NEXUS 6 (39 entrées). `WorkerSandboxProb
 |---|---|---|---|
 | 2 — diagnostic de l'hôte | 2 (CLI) | service applicatif de diagnostic (sandbox, confidentialité des dossiers) rendant un rapport JDK | SH-08 (port d'ACL de plateforme, AUD-ARC-05) : `privacyOf` y change de forme |
 | 3 — contrôle hébergé | 13 (API 9, CLI 3, MCP 1) | façade applicative de l'équipe rendant des résumés, au-dessus de `HostedControlPlaneService` qui reste dans le moteur (ADR 0062 § 1) ; `HostedControlPlaneRenderer` (application) suit | aucun ; à coordonner avec la cartographie de SH-08, qui peut déplacer `hosted` par un nouvel ADR |
-| 4 — Git et résultats de requête | 8 (API 4, CLI 4) | requête applicative d'activité Git ; sort des résultats de requête selon D4 | décision D4 |
+| 4 — Git et résultats de requête | 8 (API 4, CLI 4) | requête applicative d'activité Git (2 entrées retirées) ; résultats de requête gardés comme modèles de lecture publiés (D4 = a, 6 entrées justifiées) | amendement de l'ADR 0057 § 6 dans le même changement |
 | 5 — export NEXUS | 6 | cas d'usage applicatif produisant les données d'export, traduction JSON dans l'adaptateur (SH-09) | SH-04 (port de lecture des snapshots, AUD-ARC-07), spécifié en parallèle |
-| 6 — noyau transverse | 10 (`PublicErrorMessages` ×3, `MinosVersion` ×2, `UnreadableRegistryException` ×2, `DegradedEntry`, `ProjectPathMapping`, `ProjectPathMappings`) | selon D5 | aucun |
+| 6 — noyau transverse | 10 (`PublicErrorMessages` ×3, `MinosVersion` ×2, `UnreadableRegistryException` ×2, `DegradedEntry`, `ProjectPathMapping`, `ProjectPathMappings`) | descente dans `minos-domain` des types sans E/S ni dépendance au moteur, justification des autres (D5) | aucun |
 
 ## Goals / Non-Goals
 
@@ -101,9 +101,11 @@ Après le lot : CLI 15, API 14, MCP 4, NEXUS 6 (39 entrées). `WorkerSandboxProb
 
 ## Decisions
 
+Décisions du propriétaire du 2026-10-22 : toutes les recommandations ci-dessous sont retenues (D1 = A, D2, D3, D4 = a, D5, D6, et l'extension d'A11 aux accesseurs avec le lot 4).
+
 ### D1 — La CLI garde ses ports et ses vues ; la logique qui nomme le moteur monte dans l'application
 
-- **A (recommandée)** : `AutonomousIndexOperations`, `RemoteIndexOperations`, `IndexResumeStatusSource` et leurs vues restent dans `com.minos.cli.operations` (contrat de présentation et point d'injection des doublures des tests de commande) ; leurs signatures ne portent plus que des types JDK, CLI ou application. Les implémentations `Local*` restent dans la CLI et ne font que convertir et projeter. L'exigence « Le module CLI est rangé en sous-packages sans cycle » reste vraie telle quelle.
+- **A (retenue)** : `AutonomousIndexOperations`, `RemoteIndexOperations`, `IndexResumeStatusSource` et leurs vues restent dans `com.minos.cli.operations` (contrat de présentation et point d'injection des doublures des tests de commande) ; leurs signatures ne portent plus que des types JDK, CLI ou application. Les implémentations `Local*` restent dans la CLI et ne font que convertir et projeter. L'exigence « Le module CLI est rangé en sous-packages sans cycle » reste vraie telle quelle.
 - **B** : déplacer ports, vues et implémentations dans l'application (précédent : `ProjectOperations`). Moins de projection, mais les vues dépendent de `CliCommandSupport.publicDiagnostic`, l'entrée de base SpotBugs de `ProviderView` suit, le package `operations` se vide (exigence de rangement à modifier) et une `minos-application` ne peut pas implémenter une interface de la CLI.
 
 ### D2 — Les énumérations du moteur en entrée ont un pendant applicatif
@@ -114,13 +116,13 @@ Après le lot : CLI 15, API 14, MCP 4, NEXUS 6 (39 entrées). `WorkerSandboxProb
 
 SonarCloud juge la couverture du nouveau code **module par module** : le code monté dans `minos-application` doit être couvert par les tests de `minos-application`, qui ne peut dépendre ni de `minos-bootstrap` ni de `minos-runtime-local`. Les tests unitaires s'écrivent avec des doublures des ports du moteur (`RemoteIndexingRuntime`, `RemoteRepositoryMaterializer`, `IndexingFixture` existant). Les tests qui ont besoin du runtime réel (`LocalRemoteIndexingRuntimeFixtures`, `DistributedArtifactBundleStore`) restent dans `minos-cli` et traversent le cas d'usage ; ils comptent pour le rapport agrégé de `check-jacoco.py`, pas pour Sonar.
 
-### D4 — Résultats de requête et port Git (décision du propriétaire, lot 4)
+### D4 — Résultats de requête et port Git (lot 4)
 
-`SymbolResult`, `UsageResult`, `RelationshipResult` sont les résultats que rend déjà le port applicatif `ProjectSymbolQuery`. (a) **Recommandée** : les déclarer modèles de lecture publiés aux surfaces — amendement de l'ADR 0057 § 6, entrées gardées dans A11 avec cette justification ; l'appel direct du port `GitIntelligence` par une surface passe en revanche par une requête applicative. (b) Dupliquer ces records dans l'application (une dizaine de types, conversions sans valeur ajoutée).
+`SymbolResult`, `UsageResult`, `RelationshipResult` sont les résultats que rend déjà le port applicatif `ProjectSymbolQuery`. (a) **Retenue** : ils sont des modèles de lecture publiés aux surfaces — amendement de l'ADR 0057 § 6, planifié dans le changement du lot 4 ; leurs 6 entrées restent dans A11 avec cette justification ; l'appel direct du port `GitIntelligence` par une surface passe en revanche par une requête applicative. (b) Écartée : dupliquer ces records dans l'application (une dizaine de types, conversions sans valeur ajoutée).
 
 ### D5 — Noyau transverse (lot 6)
 
-`PublicErrorMessages`, `MinosVersion` et `DegradedEntry.printable` sont des politiques sans état partagées par toutes les surfaces. À évaluer type par type : descendre dans `minos-domain` s'il n'a ni E/S ni dépendance au moteur, sinon garder l'entrée avec justification. Aucune décision n'est demandée pour ce lot.
+`PublicErrorMessages`, `MinosVersion` et `DegradedEntry.printable` sont des politiques sans état partagées par toutes les surfaces. Règle retenue pour le lot 6, appliquée type par type : un type sans E/S ni dépendance au moteur descend dans `minos-domain` ; sinon son entrée reste dans A11 avec sa justification.
 
 ### D6 — Les lignes de la table sont retirées dans la même PR que le code
 
@@ -169,5 +171,4 @@ Une PR vers `develop`, branche `refactor/`. Sections dans l'ordre des tâches : 
 
 ## Open Questions
 
-- Étendre A11 aux accesseurs de `MinosApplication` appelés par les surfaces (usages sans nom) : recommandé dans un changement ultérieur, avec le lot 4, pour ne pas changer la règle pendant qu'on vide sa table.
-- D4 et D5 : à trancher avant de spécifier les lots 4 et 6.
+Aucune pour ce lot. L'extension d'A11 aux accesseurs de `MinosApplication` appelés par les surfaces (usages sans nom) est retenue et se spécifie avec le lot 4, pour ne pas changer la règle pendant qu'on vide sa table.
