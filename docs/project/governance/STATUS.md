@@ -121,7 +121,7 @@ Reste : l'injection du fournisseur d'identité de chemin depuis la racine de com
 
 ## Audit 2026-10-10 — sprint 10 (2026-10-22)
 
-Les deux changements du sprint 10 (« frontières d'architecture ») **figent la dette sans déplacer de classe** et consignent les décisions du propriétaire :
+Les deux changements du sprint 10 (« frontières d'architecture ») sont **fusionnés dans `develop` et archivés** ([PR #534](https://github.com/FTurleque/minos-code-intelligence/pull/534)). Ils **figent la dette sans déplacer de classe** et consignent les décisions du propriétaire :
 
 - **Cliquets** (`figer-la-dette-de-frontieres-par-des-cliquets`) : règles **A11** (types de `minos-engine` nommés par chaque surface : 60 entrées, dont 33 pour la CLI), **A12** (seul `PrivateLocalStorage` lance un processus dans le domaine, le moteur et l'application), **A13** (14 types d'un adaptateur nommés par un autre) et **A14** (37 racines de packages, aucune nouvelle) de `check-module-boundaries.py` ; chaque table refuse un nom hors liste et une entrée devenue inutile. Le document généré `docs/architecture/diagrams/module-dependencies.md` montre les quatre arêtes d'exécution par service, dont `minos-cli` → `minos-app`.
 - **Décisions** (`trancher-les-decisions-d-architecture-du-sprint-10`) : [ADR 0062](../../architecture/adr/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) (port d'ACL de plateforme conçu avec AUD-SEC-06, `hosted` et `minos-app` inchangés, aucun nouveau package hors des racines de son module) ; ordre de l'ADR 0047 confirmé (option A déjà livrée).
