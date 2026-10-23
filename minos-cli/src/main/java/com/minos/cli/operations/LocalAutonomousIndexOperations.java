@@ -3,76 +3,55 @@ package com.minos.cli.operations;
 import com.minos.application.MinosApplication;
 import com.minos.application.ProviderPlatformService;
 import com.minos.application.ProviderRuntimeSummary;
+import com.minos.application.indexing.IndexExecutionSummary;
+import com.minos.application.indexing.IndexPlanSummary;
+import com.minos.application.indexing.IndexingResumeChoice;
 import com.minos.application.indexing.ProjectIndexingUseCase;
-import com.minos.orchestration.IndexingResumePolicy;
-import com.minos.orchestration.IndexingRun;
-import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.application.indexing.ResumeTraceSummary;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.UnaryOperator;
 
-/** Autonomous indexing adapter over the selected MINOS storage backend. */
-public final class LocalAutonomousIndexOperations
-        implements AutonomousIndexOperations, AutoCloseable {
+/**
+ * Autonomous indexing over the selected MINOS storage backend. The orchestration is the application use case
+ * (AUD-ARC-02) and the provider runtimes are administered by {@link ProviderPlatformService}; this class only
+ * projects their summaries into the views of the command (AUD-ARC-01).
+ */
+public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations, AutoCloseable {
     private final MinosApplication ownedApplication;
     private final MinosApplication application;
     private final ProjectIndexingUseCase indexing;
 
     public LocalAutonomousIndexOperations(Path minosHome) throws IOException {
-        this(MinosApplication.open(minosHome), UnaryOperator.identity(), true);
+        this(MinosApplication.open(minosHome), true);
     }
 
     public LocalAutonomousIndexOperations(MinosApplication application) {
-        this(application, UnaryOperator.identity(), false);
+        this(application, false);
     }
 
-    public LocalAutonomousIndexOperations(
-            MinosApplication application,
-            UnaryOperator<IndexerExecutor> executorDecorator
-    ) {
-        this(application, executorDecorator, false);
-    }
-
-    private LocalAutonomousIndexOperations(
-            MinosApplication application,
-            UnaryOperator<IndexerExecutor> executorDecorator,
-            boolean ownsApplication
-    ) {
-        Objects.requireNonNull(application, "application");
+    private LocalAutonomousIndexOperations(MinosApplication application, boolean ownsApplication) {
+        this.application = Objects.requireNonNull(application, "application");
         this.ownedApplication = ownsApplication ? application : null;
-        this.application = application;
-        // AUD-ARC-02: the orchestration lives in the application use case; this surface only projects its result.
-        this.indexing = ProjectIndexingUseCase.of(application, executorDecorator);
+        this.indexing = ProjectIndexingUseCase.of(application);
     }
 
     @Override
     public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
-        return view(indexing.plan(projectIdentifier, providerOverride, forceFull));
+        return view(indexing.planSummary(projectIdentifier, providerOverride, forceFull));
     }
 
     @Override
     public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
-        return execute(projectIdentifier, providerOverride, forceFull, IndexingResumePolicy.RESUME);
+        return execute(projectIdentifier, providerOverride, forceFull, IndexingResumeChoice.RESUME);
     }
 
     @Override
     public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull,
-                                      IndexingResumePolicy resumePolicy) throws Exception {
-        ProjectIndexingUseCase.Outcome outcome =
-                indexing.execute(projectIdentifier, providerOverride, forceFull, resumePolicy);
-        return new IndexExecutionView(view(outcome.preparation()), outcome.run().map(run -> run.id().toString()).orElse(null),
-                outcome.status(), outcome.activeSnapshotId().orElse(null), outcome.fingerprintPromoted(),
-                outcome.diagnostic().orElse(null), outcome.run().map(LocalAutonomousIndexOperations::resumeView).orElse(null));
-    }
-
-    private static ResumeView resumeView(IndexingRun run) {
-        return run.resume()
-                .map(trace -> new ResumeView(trace.attempt(), trace.reusedTargets(), trace.reexecutedTargets(),
-                        trace.refusalReason().orElse(null)))
-                .orElse(null);
+                                      IndexingResumeChoice resumeChoice) throws Exception {
+        return view(indexing.executeSummary(projectIdentifier, providerOverride, forceFull, resumeChoice));
     }
 
     @Override public List<ProviderView> providers() {
@@ -84,16 +63,24 @@ public final class LocalAutonomousIndexOperations
         return view(ProviderPlatformService.defaults(application).installRuntime(providerId));
     }
 
-    private static IndexPlanView view(ProjectIndexingUseCase.Preparation prepared) {
-        var project = prepared.project();
+    /** The view of an execution summary, shared with the remote indexing of the command. */
+    static IndexExecutionView view(IndexExecutionSummary execution) {
+        return new IndexExecutionView(view(execution.plan()), execution.runId().orElse(null), execution.status(),
+                execution.activeSnapshotId().orElse(null), execution.fingerprintPromoted(),
+                execution.diagnostic().orElse(null),
+                execution.resumed().map(LocalAutonomousIndexOperations::view).orElse(null));
+    }
+
+    private static ResumeView view(ResumeTraceSummary trace) {
+        return new ResumeView(trace.attempt(), trace.reusedTargets(), trace.reexecutedTargets(),
+                trace.refusalReason().orElse(null));
+    }
+
+    private static IndexPlanView view(IndexPlanSummary plan) {
         return new IndexPlanView(
-                project.id().toString(), project.displayName(), project.rootPath().toString(),
-                prepared.discovery().languages().stream().map(Enum::name).sorted().toList(),
-                prepared.discovery().buildSystems().stream().map(Enum::name).sorted().toList(),
-                prepared.providerIds(),
-                prepared.providerRuntimes().stream().map(ProviderRuntimeSummary::of)
-                        .map(LocalAutonomousIndexOperations::view).toList(),
-                prepared.effectiveMode(), prepared.reasons(), prepared.changedFiles(), prepared.forcedFull());
+                plan.projectId(), plan.projectName(), plan.rootPath(), plan.languages(), plan.buildSystems(),
+                plan.providerIds(), plan.providerRuntimes().stream().map(LocalAutonomousIndexOperations::view).toList(),
+                plan.mode(), plan.reasons(), plan.changedFiles(), plan.forcedFull());
     }
 
     private static ProviderView view(ProviderRuntimeSummary runtime) {

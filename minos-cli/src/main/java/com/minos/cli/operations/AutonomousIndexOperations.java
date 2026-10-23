@@ -1,8 +1,7 @@
 package com.minos.cli.operations;
 
+import com.minos.application.indexing.IndexingResumeChoice;
 import com.minos.cli.support.CliCommandSupport;
-import com.minos.orchestration.IndexingMode;
-import com.minos.orchestration.IndexingResumePolicy;
 
 import java.util.List;
 import java.util.Objects;
@@ -17,18 +16,18 @@ public interface AutonomousIndexOperations {
     IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception;
 
     /**
-     * Executes with an explicit resume policy (ADR 0039 §6). Backends without resume control accept
-     * only {@link IndexingResumePolicy#RESUME}, which is the default behaviour of {@link #execute}.
-     * {@link IndexingResumePolicy#NO_RESUME} is a complete run: it never reopens an interrupted run,
+     * Executes with an explicit resume choice (ADR 0039 §6). Backends without resume control accept
+     * only {@link IndexingResumeChoice#RESUME}, which is the default behaviour of {@link #execute}.
+     * {@link IndexingResumeChoice#NO_RESUME} is a complete run: it never reopens an interrupted run,
      * supersedes it and indexes everything, as if {@code forceFull} were set.
      */
     default IndexExecutionView execute(
             String projectIdentifier,
             String providerOverride,
             boolean forceFull,
-            IndexingResumePolicy resumePolicy
+            IndexingResumeChoice resumeChoice
     ) throws Exception {
-        if (Objects.requireNonNull(resumePolicy, "resumePolicy") != IndexingResumePolicy.RESUME) {
+        if (Objects.requireNonNull(resumeChoice, "resumeChoice") != IndexingResumeChoice.RESUME) {
             throw new IllegalStateException("resume control is not supported by this indexing backend");
         }
         return execute(projectIdentifier, providerOverride, forceFull);
@@ -68,7 +67,7 @@ public interface AutonomousIndexOperations {
             List<String> buildSystems,
             List<String> providerIds,
             List<ProviderView> providerRuntimes,
-            IndexingMode mode,
+            String mode,
             List<String> reasons,
             List<String> changedFiles,
             boolean forcedFull
@@ -81,7 +80,7 @@ public interface AutonomousIndexOperations {
             buildSystems = List.copyOf(Objects.requireNonNull(buildSystems, "buildSystems"));
             providerIds = List.copyOf(Objects.requireNonNull(providerIds, "providerIds"));
             providerRuntimes = List.copyOf(Objects.requireNonNull(providerRuntimes, "providerRuntimes"));
-            Objects.requireNonNull(mode, "mode");
+            requireText(mode, "mode");
             reasons = List.copyOf(Objects.requireNonNull(reasons, "reasons"));
             changedFiles = List.copyOf(Objects.requireNonNull(changedFiles, "changedFiles"));
         }

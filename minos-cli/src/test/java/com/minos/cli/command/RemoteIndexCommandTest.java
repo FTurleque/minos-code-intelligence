@@ -2,7 +2,6 @@ package com.minos.cli.command;
 
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.operations.RemoteIndexOperations;
-import com.minos.orchestration.IndexingMode;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.RemoteRepositoryRequest;
 import org.junit.jupiter.api.Test;
@@ -169,7 +168,7 @@ class RemoteIndexCommandTest {
                 List.of("MAVEN"),
                 List.of("scip-java"),
                 List.of(),
-                IndexingMode.FULL,
+                "FULL",
                 List.of("FORCED_FULL"),
                 List.of(),
                 true

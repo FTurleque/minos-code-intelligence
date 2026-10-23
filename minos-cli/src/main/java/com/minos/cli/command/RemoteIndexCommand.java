@@ -156,7 +156,7 @@ public final class RemoteIndexCommand {
         map.put("providers", value.plan().providerIds());
         map.put("languages", value.plan().languages());
         map.put("buildSystems", value.plan().buildSystems());
-        map.put("mode", value.plan().mode().name());
+        map.put("mode", value.plan().mode());
         return map;
     }
 

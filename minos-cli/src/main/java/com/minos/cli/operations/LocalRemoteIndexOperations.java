@@ -2,6 +2,8 @@ package com.minos.cli.operations;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.MinosApplicationComposer;
+import com.minos.application.indexing.IndexingResumeChoice;
+import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.registry.ProjectRegistry;
@@ -162,8 +164,9 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                 distributedExecutors.add(distributed);
                 return distributed;
             };
-            AutonomousIndexOperations.IndexExecutionView execution = new LocalAutonomousIndexOperations(
-                    application, decorator).execute(project.id().toString(), providerOverride, true);
+            AutonomousIndexOperations.IndexExecutionView execution = LocalAutonomousIndexOperations.view(
+                    ProjectIndexingUseCase.of(application, decorator).executeSummary(
+                            project.id().toString(), providerOverride, true, IndexingResumeChoice.RESUME));
 
             List<ArtifactEvidence> evidence = distributedExecutors.stream()
                     .flatMap(executor -> {

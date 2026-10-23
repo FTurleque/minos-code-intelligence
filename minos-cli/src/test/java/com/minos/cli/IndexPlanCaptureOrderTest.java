@@ -7,7 +7,6 @@ import com.minos.discovery.DefaultDiscoveryPlugins;
 import com.minos.discovery.ProjectDiscovery.SourceRoot;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.discovery.SourceRootDetector;
-import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.RegisteredProject;
@@ -24,7 +23,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -58,12 +56,12 @@ class IndexPlanCaptureOrderTest {
                 .build()) {
             RegisteredProject project = indexedBaseline(application, root);
             LocalAutonomousIndexOperations operations =
-                    new LocalAutonomousIndexOperations(application, UnaryOperator.identity());
+                    new LocalAutonomousIndexOperations(application);
 
             AutonomousIndexOperations.IndexPlanView plan = operations.plan(project.id().toString(), null, false);
 
             assertTrue(Files.isRegularFile(root.resolve("late/pom.xml")), "the module did appear during discovery");
-            assertEquals(IndexingMode.NONE, plan.mode(),
+            assertEquals("NONE", plan.mode(),
                     "the reference fingerprint was taken before the discovery: the new module is not in it");
         }
     }

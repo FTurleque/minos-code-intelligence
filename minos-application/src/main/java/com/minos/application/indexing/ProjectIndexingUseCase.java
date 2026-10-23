@@ -221,6 +221,11 @@ public final class ProjectIndexingUseCase {
                 semanticRefresh(application.semanticIndexService())), executorDecorator);
     }
 
+    /** The production wiring without executor decoration: the local indexing of every surface. */
+    public static ProjectIndexingUseCase of(MinosApplication application) {
+        return of(application, UnaryOperator.identity());
+    }
+
     /** The semantic refresh of the product: skipped without an embedding provider, never fatal to the index. */
     public static SemanticRefresh semanticRefresh(SemanticIndexService semanticIndexService) {
         Objects.requireNonNull(semanticIndexService, "semanticIndexService");
@@ -247,6 +252,19 @@ public final class ProjectIndexingUseCase {
      */
     public Preparation plan(String projectIdentifier, String providerOverride, boolean forceFull) throws IOException {
         return prepare(projectIdentifier, providerOverride, forceFull, false);
+    }
+
+    /** {@link #plan} as a summary in JDK types, for a surface that must not name the engine (AUD-ARC-01). */
+    public IndexPlanSummary planSummary(String projectIdentifier, String providerOverride, boolean forceFull)
+            throws IOException {
+        return IndexPlanSummary.of(plan(projectIdentifier, providerOverride, forceFull));
+    }
+
+    /** {@link #execute} with the application resume choice, as a summary in JDK types (AUD-ARC-01). */
+    public IndexExecutionSummary executeSummary(String projectIdentifier, String providerOverride, boolean forceFull,
+                                                IndexingResumeChoice resumeChoice) throws IOException {
+        Objects.requireNonNull(resumeChoice, "resumeChoice");
+        return IndexExecutionSummary.of(execute(projectIdentifier, providerOverride, forceFull, resumeChoice.policy()));
     }
 
     /** Executes an indexing under the project lease; a run that does not succeed is an {@link IllegalStateException}. */
