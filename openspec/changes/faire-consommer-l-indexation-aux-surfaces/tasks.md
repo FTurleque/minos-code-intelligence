@@ -39,4 +39,4 @@ Ordre dans chaque section : rouge, correction, preuve. Les tests vivent dans le 
 
 - [x] 7.1 Documentation courante : `docs/developer/remote-distributed-indexing.md`, `docs/architecture/arc42/06-vue-execution.md`, `docs/architecture/diagrams/seq-indexation-nominale.md`, `docs/architecture/diagrams/seq-erreur-provider.md` ; notes de mise en œuvre des ADR 0057 § 6 et 0058 § 3 (lot 1 livré, 39 entrées restantes, ordre des lots) ; mentions de `LocalRemoteIndexOperations` des ADR 0041 et 0042 ; `docs/project/roadmap/storage-hexagonal-2026-10/README.md` (tableau des chantiers). Rejouer `python scripts/docs/check-current-docs.py`.
 - [x] 7.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-ARC-01 : lot 1 livré, décomptes, lots restants et prérequis) et `docs/project/governance/STATUS.md`.
-- [ ] 7.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : celles de 7.1 et 7.2.
+- [x] 7.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : celles de 7.1 et 7.2.
