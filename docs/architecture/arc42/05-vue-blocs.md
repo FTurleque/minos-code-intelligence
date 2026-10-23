@@ -52,8 +52,8 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 
 ### minos-engine
 - **Responsabilité** : définit les ports (interfaces) du moteur et les services provider-indépendants : requêtes, découverte de projet, planification incrémentale et orchestration de l'indexation (cycle de vie, exécution des runs, reprise) — [ADR 0044](../adr/archive/0044-un-package-un-module.md).
-- **Types clés** : `CodeKnowledgeStore` (port), `InMemoryCodeKnowledgeStore` (`com.minos.store`), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`, `ProjectDiscoveryService`, `IndexingLifecycleService`, `IndexingRunExecutor`.
-- **Interfaces** : `CodeKnowledgeStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…).
+- **Types clés** : `CodeKnowledgeReader` (port de lecture), `CodeKnowledgeStore` (port d'écriture et de lecture), `SnapshotReadView` (vue de lecture du snapshot actif), `InMemoryCodeKnowledgeStore` (`com.minos.store`, implémentation interne du port de lecture, nommée par ce seul package — règle A18), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`, `ProjectDiscoveryService`, `IndexingLifecycleService`, `IndexingRunExecutor`.
+- **Interfaces** : `CodeKnowledgeReader`, `CodeKnowledgeStore`, `CodeKnowledgeSnapshotStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…).
 - **Dépendances** : `minos-domain`.
 - **Sources** : `minos-engine/src/main/java/com/minos/store/`, `com/minos/orchestration/`, `com/minos/query/`, `com/minos/discovery/`, `com/minos/incremental/`, `com/minos/hosted/` (modèle, ports et services du plan de contrôle d'équipe), `com/minos/dynamic/` (modèle et port des observations runtime).
 

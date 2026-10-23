@@ -65,7 +65,7 @@ Chaque ADR suit le format et la convention Archgate ([GEN-0073](GEN-0073-tenir-l
 | [BE-0039](BE-0039-reprise-indexation-apres-interruption.md) | Reprendre une indexation interrompue au lieu de tout réindexer | Accepted | — |
 | [ARCH-0042](ARCH-0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Accepted (option c : module minos-bootstrap) | Audit 2026-09, A2 |
 | [GEN-0043](GEN-0043-retrait-des-artefacts-de-jalon.md) | Politique de retrait des scripts et workflows de jalon (permanent / gelé par assertion / archivé) | Accepted | Audit 2026-09, G3 |
-| [ARCH-0056](ARCH-0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — mise en œuvre partielle |
+| [ARCH-0056](ARCH-0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted |
 | [ARCH-0057](ARCH-0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels |
 | [ARCH-0058](ARCH-0058-declarer-les-usages-de-modules.md) | Tout module utilisé est déclaré ; la règle ArchUnit stricte devient obligatoire | Accepted |
 | [SEC-0060](SEC-0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Accepted |

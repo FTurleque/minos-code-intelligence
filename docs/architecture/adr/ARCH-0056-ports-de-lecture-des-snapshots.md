@@ -7,7 +7,7 @@ rules: false
 
 # Exposer un port de lecture de snapshot indépendant du store mémoire
 
-Date : 2026-10-05. Statut : **Accepted — mise en œuvre partielle** (port de lecture SH-04 à réaliser).
+Date : 2026-10-05. Statut : **Accepted**.
 
 ## Context
 
@@ -53,16 +53,17 @@ Validation : consommateur compilé avant/après si contrat publié, double de le
 
 **Mise en œuvre complémentaire, 2026-10-15** (changement OpenSpec `lire-l-identifiant-du-snapshot-a-la-reconciliation`) : les trois appelants passent à `activeSnapshotId`. Premier cas de **migration additive d'un record public** selon la règle ci-dessus : `ProjectIndexStateReconciler` gagne le record `ReconciledState` (identifiant du snapshot actif au lieu du snapshot chargé) et les lectures `reconcileState`, `observeState`, `observeStatusState` ; le record `Reconciliation` et `reconcile`, `observe`, `observeStatus` sont conservés, dépréciés (`@Deprecated(since = "1.3.0")`, sans retrait programmé) et rendent le même résultat au prix d'un seul chargement vérifié. Décompte par faux store : une lecture de statut passe de 2 chargements complets à 0, une réparation de 5 à 0, l'ancien contrat à 1. Le retrait de l'ancien contrat reste une rupture à versionner explicitement.
 
+**Mise en œuvre, 2026-10-23** (changement OpenSpec `exposer-un-port-de-lecture-de-snapshot`, tâche SH-04, constat AUD-ARC-07 de l'audit du 10 octobre 2026) : noms retenus `CodeKnowledgeReader` (port de lecture, sept lectures), `SnapshotReadView` (vue neutre du snapshot actif, classe finale qui mémorise son index dérivé) et `IncomingRelationships` (index des arêtes entrantes, implémenté par `InMemoryCodeKnowledgeStore.SymbolEdgeIndex`). `CodeKnowledgeStore` étend `CodeKnowledgeReader` et ne déclare plus que la voie d'écriture de l'ingestion ; `SymbolQueryService`, `RelationshipQueryService`, `CodeSearchService` et `ModuleFilterGuard.require` reçoivent `CodeKnowledgeReader` (rupture binaire de ces classes internes, listée dans `docs/user/java-api.md` § Ruptures). Migration additive du record public : `CodeKnowledgeSnapshotStore.loadActiveReadView` est une méthode `default` dérivée de `loadActiveQueryView`, qui reste abstraite ; `SnapshotQueryView.readView()` et la fabrique `SnapshotQueryView.of` relient les deux contrats ; `SnapshotQueryView`, `queryStore()`, `indexMetrics()`, `loadActiveQueryView` et la surcharge `ImpactAnalysisService.analyze(SnapshotQueryView, …)` sont dépréciés (`@Deprecated(since = "1.3.0")`, sans retrait programmé) et rendent le même résultat. Les deux stores mettent en cache la vue neutre, construite par la fabrique du cœur `SnapshotReadView.indexed`, et servent l'ancien contrat depuis elle : une vue et au plus un index des arêtes par snapshot actif pour les deux contrats (décompte par tests à compteurs, fichier et PostgreSQL). Métriques neutres : aucune ; `IndexMetrics` reste sur la classe mémoire, faute de consommateur de production (décision D3 du changement). Le coût de l'index est inchangé : un index mémoire complet est construit une fois par vue, sur défaut de cache (ADR 0024). Contrôle automatique : règle A18 de `scripts/architecture/check-module-boundaries.py` (seul `com.minos.store` de `minos-engine` nomme `InMemoryCodeKnowledgeStore` ; l'ancienne vue est bornée à une liste fermée ; `minos-application` ne nomme pas `CodeKnowledgeStore`). Un double de lecture non mémoire sert recherche, usages, relations, impact et rapport runtime dans les tests de `minos-engine` et de `minos-application`.
+
 ## Compliance and Enforcement
 
-- Aucun contrôle automatique : vérification en revue de code.
+- Règle A18 de `scripts/architecture/check-module-boundaries.py` (job `invariants`) : seul le package `com.minos.store` de `minos-engine` nomme `InMemoryCodeKnowledgeStore` ; `SnapshotQueryView`, `loadActiveQueryView(` et `queryStore()` ne sont utilisés que par la liste fermée `LEGACY_SNAPSHOT_VIEW_USERS` ; `minos-application` ne nomme pas `CodeKnowledgeStore`.
 - Revue : aucun cas d'usage de lecture n'accède aux mutations du store ; toute modification d'un record public est additive ou consignée comme rupture versionnée.
 
 ## Écarts constatés
 
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
 
-- Le port de lecture (nom de travail `CodeKnowledgeReader`) n'existe pas ; `SnapshotQueryView` expose toujours la classe concrète et son type imbriqué `InMemoryCodeKnowledgeStore.IndexMetrics` — preuve : `minos-engine/src/main/java/com/minos/store/SnapshotQueryView.java:14`, `:26`.
 - Le changement `lire-l-identifiant-du-snapshot-a-la-reconciliation`, cité comme mis en œuvre, n'est pas archivé (tâche 3.2 ouverte) — preuve : `openspec/changes/lire-l-identifiant-du-snapshot-a-la-reconciliation/tasks.md:18`.
 
 ## References
