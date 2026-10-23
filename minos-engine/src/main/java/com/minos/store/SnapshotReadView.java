@@ -17,7 +17,7 @@ public final class SnapshotReadView {
     private final CodeKnowledgeReader reader;
     private final long buildNanos;
     private final Object derivedLock = new Object();
-    private volatile IncomingRelationships incoming;
+    private IncomingRelationships incoming;
     private long incomingBuilds;
     @SuppressWarnings("deprecation")
     private SnapshotQueryView legacy;
@@ -75,10 +75,6 @@ public final class SnapshotReadView {
     public IncomingRelationships incomingRelationships() {
         if (reader instanceof InMemoryCodeKnowledgeStore memory) {
             return memory.symbolEdgeIndex(snapshot.projectId().toString());
-        }
-        IncomingRelationships built = incoming;
-        if (built != null) {
-            return built;
         }
         synchronized (derivedLock) {
             if (incoming == null) {
