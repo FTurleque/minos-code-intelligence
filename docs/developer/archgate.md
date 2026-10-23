@@ -27,6 +27,7 @@ docs/architecture/
     {ID}-slug.rules.ts         règle compagnon, quand rules: true
     README.md                  index ; sans en-tête, Archgate le signale comme non lu
     gabarit/template.md        gabarit ; un sous-dossier n'est pas lu par Archgate
+    tsconfig.json              vérification de type des règles par l'éditeur et par tsc (ES2022, strict) ; Archgate ne s'en sert pas
 ```
 
 Le format d'un ADR (en-tête, sections `Context`, `Decision`, `Do's and Don'ts`, `Consequences`, `Compliance and Enforcement`, `References`) est décrit dans le [gabarit](../architecture/adr/gabarit/template.md). L'en-tête doit être en ligne 1 ; un `id` en double est une erreur bloquante ; les sous-dossiers ne sont pas lus.
@@ -76,8 +77,9 @@ Les invariants non portés demandent d'analyser du XML Maven à portées multipl
 1. Vérifier que l'invariant est déjà gardé par un gate Python et qu'un test de ce gate existe.
 2. Créer `docs/architecture/adr/{ID}-slug.rules.ts` à côté de l'ADR canonique (même nom de base, identifiants de règle en kebab-case anglais ; `files` dans l'en-tête si la règle ne regarde qu'une partie du dépôt) et passer son en-tête à `rules: true`.
 3. La règle lit la source de vérité du gate ; elle ne recopie aucune liste.
-4. Prouver la règle au rouge : muter la source (par exemple retirer un module de `MODULES`), constater l'échec de `archgate check`, rétablir.
-5. Compléter la section `Compliance and Enforcement` de l'ADR et la table ci-dessus, puis rejouer `python .claude/scripts/run_gates.py --fast` et `python scripts/docs/check-current-docs.py`.
+4. Vérifier les types : `npx --package typescript tsc -p docs/architecture/adr/tsconfig.json` après un `archgate check` (qui génère `docs/architecture/rules.d.ts`) ; aucune erreur attendue.
+5. Prouver la règle au rouge : muter la source (par exemple retirer un module de `MODULES`), constater l'échec de `archgate check`, rétablir.
+6. Compléter la section `Compliance and Enforcement` de l'ADR et la table ci-dessus, puis rejouer `python .claude/scripts/run_gates.py --fast` et `python scripts/docs/check-current-docs.py`.
 
 ## Limites
 
