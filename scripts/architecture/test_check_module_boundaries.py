@@ -1021,6 +1021,26 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
                    ["com.minos.hosted.HostedRole"], kind="test")
         self.assertEqual(1, self.check()["minos-cli"])
 
+    def test_a_type_removed_by_the_first_lot_is_refused_again_against_the_real_cli_list(self):
+        # AUD-ARC-01, lot 1: the remote indexing left the CLI; naming its engine port again fails A11.
+        cli = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"]
+        imports = []
+        for entry in sorted(cli | {"remote.RemoteIndexingRuntime"}):
+            package, name = entry.rsplit(".", 1)
+            self.write("minos-engine", "com.minos." + package, name, f"public interface {name} {{ }}")
+            imports.append(f"com.minos.{entry}")
+        self.write("minos-cli", "com.minos.cli", "Search", "final class Search { }",
+                   [name for name in imports if name != "com.minos.remote.RemoteIndexingRuntime"])
+        listed = {"minos-cli": cli}
+        self.assertEqual(len(cli), self.check(listed)["minos-cli"])
+
+        self.write("minos-cli", "com.minos.cli.operations", "RemoteLeak", "final class RemoteLeak { }",
+                   ["com.minos.remote.RemoteIndexingRuntime"])
+        message = self.refused(lambda: self.check(listed), "A11", "minos-cli",
+                               "minos-cli/src/main/java/com/minos/cli/operations/RemoteLeak.java",
+                               "com.minos.remote.RemoteIndexingRuntime")
+        self.assertNotIn("no longer named", message)
+
     def test_the_real_tree_names_only_listed_engine_types(self):
         counts = _MODULE.check_engine_types_named_by_surfaces()
         self.assertEqual({surface: len(types) for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items()},
