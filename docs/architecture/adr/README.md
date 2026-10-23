@@ -11,6 +11,10 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 - **Superseded** — remplacée par un ADR plus récent ;
 - **Rejected** — évaluée et non retenue.
 
+## Format
+
+Chaque ADR suit le format Archgate (ADR 0063) : en-tête YAML en ligne 1 (`id: ADR-NNNN`, `title`, `domain`, `rules`), sections `Context`, `Decision`, `Do's and Don'ts`, `Consequences`, `Compliance and Enforcement`, `References`, texte en français. Archgate lit ce dossier (`.archgate/config.json`, `paths.adrs`) ; une règle Archgate vit à côté de son ADR (`NNNN-slug.rules.ts`). Gabarit : [`gabarit/template.md`](gabarit/template.md).
+
 ## Index
 
 | ADR | Décision | Statut | Origine |
@@ -77,13 +81,14 @@ Les numéros 0048–0054 sont utilisés par l'étude proposée dans la PR #333, 
 | ADR | Décision | Statut |
 |---|---|---|
 | [0055](0055-unifier-les-adaptateurs-de-stockage.md) | Un module minos-storage, packages local/PostgreSQL et codec partagé | Accepted — à implémenter |
-| [0056](0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — à implémenter |
+| [0056](0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — mise en œuvre partielle |
 | [0057](0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels |
 | [0058](0058-declarer-les-usages-de-modules.md) | Tout module utilisé est déclaré ; la règle ArchUnit stricte devient obligatoire | Accepted |
 | [0059](0059-migrer-le-socle-vers-java-25-lts.md) | Socle en Java 25 LTS, version énoncée une fois et gardée par un gate ; plugin en Java 21 | Accepted |
 | [0060](0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Accepted |
-| [0061](0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité : durci, ou hérité de la racine | Proposed |
+| [0061](0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité : durci, ou hérité de la racine | Accepted |
 | [0062](0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) | Confirmer les emplacements de l'ADR 0044 (ACL Windows par un port conçu avec AUD-SEC-06, `hosted` et `minos-app` inchangés) ; aucun nouveau package hors des racines de son module | Accepted |
+| [0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md) | Écrire les ADR au format Archgate (en-tête YAML, sections Archgate) dans le registre arc42, lu par Archgate | Accepted |
 
 [Backlog, tâches et démarrage Claude](../../project/roadmap/storage-hexagonal-2026-10/README.md).
 
