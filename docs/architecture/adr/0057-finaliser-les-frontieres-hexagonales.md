@@ -1,14 +1,21 @@
+---
+id: ADR-0057
+title: "Finaliser les frontières hexagonales sans refaire les corrections acquises"
+domain: architecture
+rules: false
+---
+
 # ADR 0057 — Finaliser les frontières hexagonales sans refaire les corrections acquises
 
 Date : 2026-10-05. Statut : **Accepted — direction validée ; travaux résiduels planifiés**.
 
-## Contexte
+## Context
 
 Minos reste un monolithe modulaire local-first avec un plugin IntelliJ externe. `develop` a déjà une couche application sans dépendance Maven vers les adaptateurs, une racine `minos-bootstrap`, un package par module et des gardes de sources (ADR 0042/0044/0045). Cela n'interdit pas encore tout mélange de responsabilités à l'intérieur des modules.
 
 Restent notamment `LocalAutonomousIndexOperations` dans la CLI, `OllamaEmbeddingProvider` et son instanciation dans la configuration applicative, les I/O concrètes de `com.minos.io` dans engine, et le staging local concret dans `ScipProjectSnapshotLifecycle`.
 
-## Décision
+## Decision
 
 1. Préserver le monolithe modulaire, le bootstrap existant et le client IntelliJ externe. Aucun microservice, framework serveur ou migration JPMS n'est introduit par ce chantier.
 2. Déplacer la coordination d'indexation de la CLI vers un cas d'usage partagé, avec des ports et les garanties actuelles de reprise, verrouillage, empreinte et synchronisation.
@@ -17,6 +24,22 @@ Restent notamment `LocalAutonomousIndexOperations` dans la CLI, `OllamaEmbedding
 5. Réduire progressivement le mélange des politiques et mécanismes I/O dans engine, avec une cartographie préalable. Ne pas multiplier mécaniquement les modules, casser les contrats existants ou disperser les primitives durcies. Une extraction physique nécessitant une nouvelle frontière doit expliciter son graphe et sa compatibilité avant code.
 6. Organiser les cas d'usage par capacité et faire consommer leurs résultats par API/CLI/MCP/NEXUS. Conserver les contrats publics. La scission de `minos-api` en deux artefacts demeure une option à évaluer ; elle n'est pas ratifiée par ce document.
 7. Protéger les frontières par les gardes existantes, complétées au niveau des packages/classes si nécessaire. ArchUnit est une option de réalisation, pas une dépendance de production imposée.
+
+## Do's and Don'ts
+
+### Do
+
+- Préserver le monolithe modulaire, le bootstrap existant et le client IntelliJ externe.
+- Fournir le staging et la publication SCIP par des ports injectés.
+- Séparer le calcul sémantique des appels au fournisseur Ollama ; l'adaptateur HTTP et sa construction relèvent d'une frontière technique et du bootstrap.
+- Faire consommer les cas d'usage par API/CLI/MCP/NEXUS en conservant les contrats publics.
+
+### Don't
+
+- Aucun microservice, framework serveur ni migration JPMS.
+- Ne pas remplacer une dépendance de stockage par une dépendance vers bootstrap.
+- Ne pas multiplier mécaniquement les modules ni disperser les primitives durcies.
+- Ne pas imposer ArchUnit comme dépendance de production.
 
 ## Alternatives, conséquences et limites
 
@@ -34,7 +57,20 @@ Cycles de packages (point 7, mis en œuvre le 2026-10-10, audit AUD-ARC-06) : le
 
 Cas d'usage d'indexation (point 2, mis en œuvre le 2026-10-21, audit AUD-ARC-02, changement `unifier-l-orchestration-d-indexation`, tâche SH-05) : la préparation, l'exécution sous bail, la reprise d'un run promu, la promotion de l'empreinte, la synchronisation sémantique et la rétention vivent dans `ProjectIndexingUseCase` (`minos-application`, package `com.minos.application.indexing`), invocable sans la CLI ; `LocalAutonomousIndexOperations` ne fait plus que projeter son résultat sur les vues de la commande. Le coordinateur sans appelant `IncrementalIndexingCoordinator` et `IncrementalIndexingResult` sont supprimés, leurs tests reportés sur le cas d'usage. Une baseline d'empreinte illisible est désormais déclarée par un diagnostic sans chemin ; l'échec de publication de l'empreinte reste une erreur de la commande (décision du propriétaire du 2026-10-21).
 
-## Références
+## Compliance and Enforcement
+
+- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — règle A2 (frontières hexagonales, POM et sources) et règle A8 (aucun cycle de packages, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris) ; auto-test `test_check_module_boundaries.py`.
+- Test `ModuleArchitectureTest` (`minos-app`) — dépendances autorisées entre modules.
+- Revue : chaque lot reste comportementalement conservateur, réversible et validé avant le suivant.
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- Point 4 : `OllamaEmbeddingProvider` vit dans `minos-application` et y est instancié par la configuration applicative — preuve : `minos-application/src/main/java/com/minos/application/MinosApplicationRuntimeConfiguration.java:53`.
+- Point 3 : `ScipProjectSnapshotLifecycle` construit directement un `FileSymbolSnapshotStore` au lieu de recevoir son staging par un port injecté — preuve : `minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java:41`, `:82`.
+
+## References
 
 - [Cockburn — Ports and Adapters](https://alistair.cockburn.us/hexagonal-architecture)
 - [ArchUnit — couches, packages et cycles](https://www.archunit.org/userguide/html/000_Index.html)

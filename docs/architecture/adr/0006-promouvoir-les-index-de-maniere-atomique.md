@@ -1,9 +1,16 @@
+---
+id: ADR-0006
+title: "Promouvoir les index fournisseur de manière atomique"
+domain: data
+rules: false
+---
+
 # ADR-0006 — Promouvoir les index fournisseur de manière atomique
 
 - Statut : **Acceptée**
 - Date de décision : **22 juillet 2026**
 
-## Contexte
+## Context
 
 MINOS reconstruit ses connaissances depuis des index produits par des
 fournisseurs externes. Une indexation peut échouer après avoir écrit des
@@ -19,7 +26,7 @@ sont pas réécrits dans la forme fournisseur finale, les références entre
 shards ne sont pas réconciliées et certaines métadonnées ou relations peuvent
 manquer.
 
-## Décision
+## Decision
 
 La promotion d'un résultat d'indexation vers le snapshot actif MINOS est
 **atomique**.
@@ -39,6 +46,22 @@ run fournisseur échoué
 Les journaux, codes de phase et artefacts intermédiaires d'un run échoué sont
 conservés séparément pour diagnostic. Ils ne deviennent pas des faits résolus
 du snapshot actif.
+
+## Do's and Don'ts
+
+### Do
+
+- Promouvoir de manière atomique un résultat d'indexation vers le snapshot actif.
+- Conserver le snapshot actif précédent si le run fournisseur, l'artefact final ou l'ingestion échoue.
+- Conserver séparément les journaux, codes de phase et artefacts intermédiaires d'un run échoué pour diagnostic.
+- Promouvoir une seule fois le snapshot commun d'un run projet multi-indexeurs.
+
+### Don't
+
+- Ne jamais remplacer un index valide par un index partiel.
+- Ne pas présenter un ancien fichier de sortie comme le résultat du run courant.
+- Ne pas promouvoir fournisseur par fournisseur.
+- Ne pas implémenter de récupération best-effort sans décision séparée.
 
 ## Invariants
 
@@ -89,7 +112,7 @@ séparée et devrait exposer explicitement :
 - une origine et des preuves distinctes ;
 - l'interdiction de promotion automatique comme snapshot sain.
 
-## Conséquences
+## Consequences
 
 ### Positives
 
@@ -107,6 +130,11 @@ séparée et devrait exposer explicitement :
   chemin standard ;
 - la future implémentation persistante devra distinguer staging et snapshot
   actif.
+
+## Compliance and Enforcement
+
+- Tests `IndexingLifecycleServiceTest.failedRefreshKeepsPreviousSnapshotAndMarksProjectStale`, `AbandonedIndexingLifecycleRecoveryTest.abandonedRefreshBecomesStaleWhenPreviousSnapshotRemainsActive`, `IndexingCommitRecoveryTest.metadataFailureAfterPromotionNeverRestoresPreviousSnapshot` (`minos-engine`) — conservation du snapshot précédent après un échec.
+- Revue : aucune promotion partielle ou par fournisseur, diagnostics d'échec hors du snapshot actif.
 
 ## Portée M0 / M1
 

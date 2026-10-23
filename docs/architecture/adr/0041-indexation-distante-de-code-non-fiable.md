@@ -1,3 +1,10 @@
+---
+id: ADR-0041
+title: "Indexation distante de code non fiable : quota d'écriture OS ou fermeture assumée"
+domain: security
+rules: false
+---
+
 # 0041 — Indexation distante de code non fiable : quota d'écriture OS ou fermeture assumée
 
 Status: Accepted (2026-09-26) — option (b) retenue : l'indexation distante de code non fiable reste fermée par décision, le refus est journalisé et diagnosticable, les revendications sont alignées sur ce que l'OS applique. L'option (a) reste chiffrée ci-dessous pour un ADR ultérieur si un besoin `remote index` est confirmé.
@@ -6,7 +13,7 @@ Complète et amende la §4 de [0038](0038-aggregate-worker-resource-containment.
 
 Toutes les références `fichier:ligne` ci-dessous ont été relues sur la base `38756b28`.
 
-## 1. Contexte
+## Context
 
 L'audit ([`../../project/audits/archive/2026-09/AUDIT-2026-09.md`](../../project/audits/archive/2026-09/AUDIT-2026-09.md), § 3 A1) constate que `remote index` est refusé sur tous les OS parce que le quota d'écriture disque des deux backends sandbox est `SUPERVISED_HARD_KILL`, que la qualification exige `OS_ENFORCED` sur cette dimension, et que le repli vers le backend natif se fait sans journal. Le sprint 1 (G2) a aligné le README, `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md` et `docs/user/{cli,remote-indexing,installation,production-installation}.md` sur ce fait, et le gate `scripts/docs/product-facts.py:126-132` verrouille désormais la phrase exacte de `docs/project/governance/STATUS.md:13`. **Le fond n'est pas tranché** : faut-il rendre ce quota réellement appliqué par l'OS (et rouvrir `remote index`), ou assumer la fermeture comme une décision d'architecture ?
 
@@ -159,6 +166,21 @@ Durcissement gratuit à garder en réserve quelle que soit l'option (« à trait
 
 **Acceptez-vous que l'indexation distante de code non fiable reste fermée par décision sur tous les OS (option b, ≈ 4–5 j-p, refus journalisé et diagnosticable, documents alignés), l'ouverture Linux par quota de projet (option a, ≈ 9–11 j-p, Linux seulement, prérequis root à l'installation, Windows restant fermé) étant reportée à un ADR ultérieur si un besoin `remote index` est confirmé ?**
 
+## Do's and Don'ts
+
+### Do
+
+- Garder l'indexation distante de code non fiable fermée par décision, sur tous les OS.
+- Journaliser le refus et le rendre diagnosticable par `minos doctor`.
+- Aligner les revendications (README, documents, `WorkerSandboxQualification`) sur ce que l'OS applique.
+- Mettre à jour le test verrou en cohérence avec la décision, sans jamais le supprimer.
+
+### Don't
+
+- Ne pas revendiquer une isolation qui n'est pas exactement vraie.
+- Ne pas rouvrir `remote index` par quota de projet sans ADR ultérieur fondé sur un besoin confirmé.
+- Ne pas prévoir de valeur qui désactive le refus précoce de `LocalRemoteIndexOperations`.
+
 ## Écarts d'implémentation
 
 Consignés à la livraison (sprint 2, revue `verif-qualite` V24, V29, V31, V33). La décision ci-dessus reste la référence ; ces points précisent comment elle est réalisée.
@@ -178,7 +200,13 @@ Consignés à la livraison (sprint 2, revue `verif-qualite` V24, V29, V31, V33).
 - [S6] Microsoft Learn, `AttachVirtualDisk` : échec « if the caller does not have `SE_MANAGE_VOLUME_PRIVILEGE` access rights » — https://learn.microsoft.com/en-us/windows/win32/api/virtdisk/nf-virtdisk-attachvirtualdisk
 - Documentation noyau, cgroup v2 (`memory.max`, imputation des pages tmpfs/shmem au cgroup) — https://docs.kernel.org/admin-guide/cgroup-v2.html
 
-## Liens
+## Compliance and Enforcement
+
+- Test `WorkerResourceContainmentTest.currentOsBackendsStayFailClosedByDecisionAdr0041` (`minos-runtime-local`) — les backends OS actuels restent rétrogradés pour du code non fiable.
+- Gate `scripts/docs/product-facts.py --check` (job `invariants`) — exige la limitation `WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041` dans `WorkerSandboxQualification`, la citation de cet ADR dans `STATUS.md` et le README, et refuse l'ancien nom du test verrou.
+- Revue : une revendication de qualification pour du code non fiable exige un ADR qui remplace celui-ci.
+
+## References
 
 - audit : [`../../project/audits/archive/2026-09/AUDIT-2026-09.md`](../../project/audits/archive/2026-09/AUDIT-2026-09.md) (A1, G2) ; suivi sprint 1 : [`../../project/audits/archive/2026-09/SPRINT-1-SUIVI.md`](../../project/audits/archive/2026-09/SPRINT-1-SUIVI.md)
 - ADR amendé : [0038](0038-aggregate-worker-resource-containment.md) §4 ; ADR liés : [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md), [0039](0039-reprise-indexation-apres-interruption.md) (intersection `runs/`)

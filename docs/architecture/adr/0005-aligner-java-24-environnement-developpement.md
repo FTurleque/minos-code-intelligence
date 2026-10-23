@@ -1,10 +1,17 @@
+---
+id: ADR-0005
+title: "Aligner MINOS sur Java 24 avec l'environnement de développement"
+domain: backend
+rules: false
+---
+
 # ADR-0005 — Aligner MINOS sur Java 24 avec l'environnement de développement
 
 - Statut : **Superseded** — remplacée par l'[ADR 0059](0059-migrer-le-socle-vers-java-25-lts.md) le 13 octobre 2026
 - Date de décision : **22 juillet 2026**
 - Remplace : **ADR-0004 pour la version Java uniquement**
 
-## Contexte
+## Context
 
 ADR-0004 avait retenu Java 25 LTS pour le cœur MINOS.
 
@@ -14,7 +21,7 @@ Imposer Java 25 uniquement à MINOS obligerait à maintenir plusieurs JDK locaux
 
 La cohérence de l'environnement de développement, la simplicité d'exploitation et la réduction des différences entre projets sont prioritaires pendant M0.
 
-## Décision
+## Decision
 
 MINOS utilise :
 
@@ -36,6 +43,16 @@ et Maven Enforcer accepte la famille :
 ```text
 [24,25)
 ```
+
+## Do's and Don'ts
+
+### Do
+
+- Appliquer l'ADR 0059 ; ce document est conservé pour l'historique.
+
+### Don't
+
+- Ne pas s'appuyer sur ce document pour une décision nouvelle.
 
 ## Règle d'alignement
 
@@ -97,3 +114,8 @@ Ce risque est accepté consciemment au profit de l'alignement de l'écosystème 
 Cette ADR résulte d'une décision explicite du propriétaire du projet pendant M0 :
 
 > **MINOS doit utiliser le même JDK que les autres projets ; l'environnement de développement de référence est actuellement Java 24.**
+
+## Compliance and Enforcement
+
+- Sans objet : décision remplacée ; la baseline Java courante (ADR 0059) est gardée par `scripts/quality/check-toolchain-baseline.py` (job `invariants`).
+- Revue : aucune nouvelle référence à cet ADR comme décision en vigueur.

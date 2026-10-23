@@ -1,24 +1,52 @@
+---
+id: ADR-0054
+title: "Étudier un bridge IntelliJ de lecture symbolique"
+domain: architecture
+rules: false
+---
+
 # 0054 — Étudier un bridge IntelliJ de lecture symbolique
 
 Status: **Proposed** (2026-10-04). Aucune implémentation ni qualification acquise.
 Programme : [étude MINOS](../../project/research/minos-evolution-2026-10/README.md).
-Complète les ADR 0027,0042 ; ne les remplace pas à ce stade.
+Complète les ADR 0027, 0042 ; ne les remplace pas à ce stade.
 
-## Contexte
+## Context
 
 Le plugin MINOS est un client externe et utilise déjà PSI pour le contexte éditeur. Serena montre l'intérêt possible de l'IDE comme backend, mais les garanties et coûts sont différents.
 
-## Décision proposée
+## Decision
 
 Autoriser un spike avant toute implémentation produit. Si concluant, créer un bridge optionnel versionné pour symboles/usages/implémentations, avec provenance IDE, version du document, identité projet et limites. Transport local authentifié, opérations allowlistées et bornées. Garder les observations IDE séparées des snapshots. Aucun refactoring/debug/shell.
+
+## Do's and Don'ts
+
+### Do
+
+- Tant que l'ADR est Proposed, ces points ne sont pas normatifs.
+- Mener un spike avant toute implémentation produit.
+- Si le spike est concluant : bridge optionnel versionné, transport local authentifié, opérations allowlistées et bornées.
+- Garder les observations IDE séparées des snapshots.
+
+### Don't
+
+- Aucun refactoring, debug ni shell par le bridge.
+- Ne pas faire de l'IDE le moteur obligatoire.
+- Ne pas dépendre des classes internes com.minos dans le plugin.
 
 ## Alternatives considérées
 
 A : faire de l'IDE le moteur obligatoire — rejetée. B : importer toutes ses relations comme faits snapshot — rejetée sans corrélation exacte. C : bridge opt-in séparé — proposée. D : utiliser Serena à côté sans intégrer — alternative à mesurer.
 
-## Conséquences et limites
+## Consequences
 
 Étend le rôle du plugin au-delà de l'ADR-0027 ; son statut ne peut changer sans décision explicite. Ne pas dépendre des classes internes com.minos dans le plugin. PSI APIs publiques et compatibilité CE/langage à vérifier. Gestion dirty/dumb mode et fermeture essentielle.
+
+## Compliance and Enforcement
+
+- Aucun contrôle automatique : vérification en revue de code.
+- Revue : aucune implémentation produit avant le go/no-go du spike, et l'extension de l'ADR 0027 acceptée avant U7-03.
+- À réévaluer : aucune mise en œuvre au 2026-10-23.
 
 ## Validation et tâches
 

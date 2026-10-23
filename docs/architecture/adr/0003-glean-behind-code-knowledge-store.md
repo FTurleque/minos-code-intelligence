@@ -1,10 +1,17 @@
+---
+id: ADR-0003
+title: "Isoler le backend de connaissance et traiter Glean comme backend avancé optionnel"
+domain: data
+rules: false
+---
+
 # ADR-0003 — Isoler le backend de connaissance et traiter Glean comme backend avancé optionnel
 
 - Statut : **Acceptée — orientation confirmée par M0 C1/E2**
 - Date de décision : **22 juillet 2026**
 - Validation de Glean : **M0**
 
-## Contexte
+## Context
 
 Glean fournit un système spécialisé pour collecter, stocker, dériver et interroger des faits typés sur le code source. Il possède un moteur de stockage fondé sur RocksDB, des schémas typés, le langage de requête Angle, des prédicats dérivés et des mécanismes permettant d'ajouter des faits spécifiques.
 
@@ -22,7 +29,7 @@ Cependant, l'étude C0 met en évidence des contraintes opérationnelles importa
 
 MINOS étant local-first et devant prendre en compte Windows, Linux et macOS, Glean ne peut pas être déclaré backend obligatoire du MVP sans validation opérationnelle.
 
-## Décision
+## Decision
 
 ### 1. `CodeKnowledgeStore` devient une frontière architecturale MINOS
 
@@ -104,6 +111,21 @@ Services MINOS
 ```
 
 Ce chemin mesure la valeur ajoutée réelle de Glean et son coût opérationnel.
+
+## Do's and Don'ts
+
+### Do
+
+- Faire de `CodeKnowledgeStore` une frontière définie à partir des cas d'usage MINOS et non d'une API particulière.
+- Retenir un backend MINOS léger pour le chemin par défaut.
+- Disposer d'un `InMemoryCodeKnowledgeStore` pour les tests.
+- Justifier par des mesures les coûts d'adoption de Glean.
+
+### Don't
+
+- Ne laisser traverser la frontière `CodeKnowledgeStore` aucun type Glean, prédicat Angle, identifiant de fait ou type Thrift.
+- Ne pas faire de Glean le backend obligatoire ni le backend par défaut.
+- Ne pas faire du convertisseur SQLite expérimental de la CLI SCIP une dépendance de production sans étude supplémentaire.
 
 ## Pourquoi conserver Glean dans l'évaluation
 
@@ -214,7 +236,7 @@ E2 retient donc le scénario **ADOPTER_AVEC_CONTRAINTES** au sens suivant :
 
 Cette décision ne choisit pas encore le stockage persistant MINOS. Elle exclut
 seulement Glean du chemin par défaut actuel. Les mesures complètes sont dans
-`docs/project/history/m0/RAPPORT_GLEAN_C1.md` et `docs/project/history/m0/COMPARATIF_BACKENDS.md`.
+`docs/project/history/milestones/m0/RAPPORT_GLEAN_C1.md` et `docs/project/history/milestones/m0/COMPARATIF_BACKENDS.md`.
 
 ## Alternatives surveillées
 
@@ -235,3 +257,8 @@ Sources consultées le 22 juillet 2026 :
 - CLI Glean : https://glean.software/docs/cli/
 - Indexation Python/SCIP : https://glean.software/docs/indexer/scip-python/
 - Indexation Java : https://glean.software/docs/indexer/lsif-java/
+
+## Compliance and Enforcement
+
+- Aucun contrôle automatique : vérification en revue de code.
+- Revue : aucun type Glean, Angle ou Thrift derrière `CodeKnowledgeStore`, aucune dépendance Glean ajoutée au chemin par défaut sans mesure.

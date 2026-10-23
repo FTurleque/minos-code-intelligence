@@ -1,24 +1,51 @@
+---
+id: ADR-0050
+title: "Assembler un contexte cohérent, compact et traçable"
+domain: backend
+rules: false
+---
+
 # 0050 — Assembler un contexte cohérent, compact et traçable
 
 Status: **Proposed** (2026-10-04). Aucune implémentation ni qualification acquise.
 Programme : [étude MINOS](../../project/research/minos-evolution-2026-10/README.md).
-Complète les ADR 0011,0029 ; ne les remplace pas à ce stade.
+Complète les ADR 0011, 0029 ; ne les remplace pas à ce stade.
 
-## Contexte
+## Context
 
 SemanticDocumentFactory produit SYMBOL/FILE/CHUNK ; HybridContextBuilder sélectionne sous budget de contenu. Les recouvrements et l'enveloppe sérialisée doivent être mesurés.
 
-## Décision proposée
+## Decision
 
 Découper d'abord avec les frontières symboliques disponibles ; isoler documents/config des faits SCIP ; dédupliquer par plage et génération ; conserver preuves et source. Définir le budget complet rendu avec compteurs estimés explicitement nommés et tokenizer de référence pour le banc. Résumé puis détail par référence versionnée.
+
+## Do's and Don'ts
+
+### Do
+
+- Tant que l'ADR est Proposed, ces points ne sont pas normatifs.
+- Découper d'abord avec les frontières symboliques disponibles.
+- Isoler documents et configuration des faits SCIP ; dédupliquer par plage et génération ; conserver preuves et source.
+- Définir le budget complet rendu avec des compteurs estimés explicitement nommés.
+
+### Don't
+
+- Aucun chunk documentaire ne devient un symbole.
+- Ne pas imposer Tree-sitter à tous les langages sans justifier le double parsing.
 
 ## Alternatives considérées
 
 A : fichiers entiers — coûteux. B : Tree-sitter imposé à tous les langages — double parsing à justifier. C : symboles existants puis fallback syntaxique/textuel explicitement limité — proposée.
 
-## Conséquences et limites
+## Consequences
 
 Plus de métadonnées et règles de déduplication. Aucun chunk documentaire ne devient un symbole. Changer le découpage invalide le cache mais ne migre pas le snapshot. Les imports/config utiles restent accessibles.
+
+## Compliance and Enforcement
+
+- Aucun contrôle automatique : vérification en revue de code.
+- Revue : un changement de découpage conserve l'ancien découpage et le rendu v1 en repli, sans perte de preuves.
+- À réévaluer : aucune mise en œuvre au 2026-10-23.
 
 ## Validation et tâches
 

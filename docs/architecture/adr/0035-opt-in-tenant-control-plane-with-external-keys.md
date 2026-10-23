@@ -1,3 +1,10 @@
+---
+id: ADR-0035
+title: "Opt-in tenant control plane with external keys"
+domain: security
+rules: false
+---
+
 # ADR-0035 — Opt-in tenant control plane with external keys
 
 - Status: **Accepted — final M27 dispositions recorded from exact-head Windows + Linux evidence.**
@@ -27,11 +34,35 @@ M27 adds an **opt-in embeddable control plane**, not a hosted SaaS deployment:
 - shared project bindings preserve the exact active structured snapshot identity;
 - CLI and Java API expose administration; MCP exposes five strictly read-only views and obtains its token from `MINOS_TEAM_TOKEN`, never tool arguments.
 
+## Do's and Don'ts
+
+### Do
+
+- N'activer le plan de contrôle d'équipe que par `MINOS_HOSTED_MODE=enabled` ; sans lui, garder le mode local inchangé.
+- Dériver l'identité du tenant du jeton porteur authentifié.
+- Fournir de l'extérieur la matière maîtresse de 256 bits (`MINOS_TEAM_KEY_<KEY_ID>`) et dériver en mémoire les clés par usage et par tenant.
+- Chaîner les événements d'audit par HMAC-SHA-256, mutations refusées par le RBAC comprises.
+- Appliquer la rétention en plan/apply, sans suppression ni éviction implicite.
+- Faire lire au MCP son jeton dans `MINOS_TEAM_TOKEN`, jamais dans un argument d'outil.
+
+### Don't
+
+- Ne pas accepter un identifiant de tenant ou de principal fourni par l'appelant.
+- Ne pas stocker de jeton porteur ni de clé maîtresse dans l'état du tenant.
+- Ne pas accepter de secret en argument de CLI ou de MCP.
+- Ne pas stocker l'état du plan de contrôle en JSON non chiffré.
+- Ne pas présenter ce plan de contrôle comme un service multi-tenant opéré par MINOS.
+
 ## Consequences
 
 The reference implementation is portable on Windows and Linux and can be embedded behind another transport. It is not a claim that MINOS operates a public multi-tenant service, provisions an IdP/KMS, provides TLS, or supplies network isolation. Operators own process isolation, secret injection, backup and availability.
 
 The static snapshot remains authoritative. Membership and workspace metadata neither promote provider capabilities nor change code-intelligence facts.
+
+## Compliance and Enforcement
+
+- Gate `scripts/quality/check-hosted-control-plane-consistency.py`, exécuté par `scripts/remediation/check-post-mne.py` (job `invariants`) — vérifie notamment le préfixe `MINOS_TEAM_KEY_`, le chiffrement AES/GCM sans sérialisation Java du magasin, la chaîne d'audit `HmacSHA256`, la rétention plan/apply, le jeton MCP lu dans `MINOS_TEAM_TOKEN` et l'absence de `bearerToken` et d'outils de mutation dans `MinosMcpTools`, ainsi que la ligne de statut de cet ADR.
+- Revue : aucune nouvelle opération ne reçoit d'identifiant de tenant ni de secret en paramètre.
 
 ## Rejected alternatives
 

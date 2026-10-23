@@ -1,14 +1,21 @@
+---
+id: ADR-0015
+title: "Traiter l’analyse d’impact comme une estimation potentielle du graphe observé"
+domain: backend
+rules: false
+---
+
 # ADR-0015 — Traiter l’analyse d’impact comme une estimation potentielle du graphe observé
 
 - **Statut** : Accepted
 - **Date** : 24 juillet 2026
 - **Origine** : M8 — Analyse d’impact
 
-## Contexte
+## Context
 
 Le graphe statique observé par MINOS ne peut pas prouver tous les comportements runtime : dispatch dynamique, réflexion, configuration et chargements externes peuvent échapper aux fournisseurs d’indexation.
 
-## Décision
+## Decision
 
 L’analyse d’impact MINOS est déterministe, bornée et explicable, mais reste une **estimation potentielle** fondée sur le graphe disponible.
 
@@ -19,9 +26,28 @@ L’analyse d’impact MINOS est déterministe, bornée et explicable, mais rest
 - les limitations runtime sont exposées ;
 - aucun résultat n’est présenté comme preuve d’exhaustivité runtime.
 
-## Conséquences
+## Do's and Don'ts
+
+### Do
+
+- Conserver les chemins explicatifs des impacts directs et indirects.
+- Borner la profondeur et le nombre de résultats.
+- Gérer les cycles explicitement et exposer les limitations runtime.
+
+### Don't
+
+- Ne présenter aucun résultat comme preuve d'exhaustivité runtime.
+- Ne pas confondre absence de chemin statique et absence d'impact réel.
+
+## Consequences
 
 Les consommateurs peuvent utiliser l’impact pour prioriser inspection et tests sans confondre absence de chemin statique et absence d’impact réel.
+
+## Compliance and Enforcement
+
+- Validation d'entrée de `ImpactAnalysisRequest` (`minos-application`) — profondeur bornée de 1 à 32.
+- Test `ImpactAnalysisServiceTest` (`minos-application`) — chemins, profondeur et cycles de l'analyse d'impact.
+- Revue : résultats bornés et explicables, limitations runtime exposées.
 
 ## Preuves
 

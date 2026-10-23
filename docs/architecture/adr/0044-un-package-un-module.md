@@ -1,10 +1,19 @@
+---
+id: ADR-0044
+title: "Un package, un module"
+domain: architecture
+rules: true
+---
+
 # 0044 — Un package, un module
 
 Status: Accepted (2026-09-29) — mis en œuvre ; historique et preuves dans [`ARCHI-SUIVI.md`](../../project/audits/archive/2026-09/ARCHI-SUIVI.md).
 
 Complète l'audit [`AUDIT-2026-09.md`](../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constats A3 et A7). Amende l'[ADR 0022](0022-maven-reactor-and-module-boundaries.md) sur l'emplacement de `discovery`, `incremental`, `orchestration` et `MinosVersion`. Prolonge l'[ADR 0042](0042-racine-de-composition.md), dont il garde toutes les frontières.
 
-## Contexte
+Amendé par l'[ADR 0055](0055-unifier-les-adaptateurs-de-stockage.md) (partition des artefacts de stockage) ; confirmé par l'[ADR 0062](0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md).
+
+## Context
 
 Le reactor Maven (ADR 0022) a découpé MINOS en modules sans découper les packages : une même déclaration `package com.minos.x;` apparaît dans les sources de production de plusieurs modules. A2 (ADR 0042) a accentué l'éclatement en descendant des ports dans `minos-engine` « dans leur package » : sur la base `10486cb7`, **14 packages de production** sont déclarés par plusieurs modules (l'audit en comptait 9), et **45 fichiers de test** sont logés dans un package dont la production appartient à un autre module. Inventaire daté et détaillé : `ARCHI-SUIVI.md` § 2.
 
@@ -16,7 +25,7 @@ Trois conséquences :
 
 A7 s'y ajoute : la liste des modules de `scripts/architecture/check-module-boundaries.py` est codée en dur et jamais confrontée aux `<modules>` du POM racine. Un module ajouté au reactor et oublié dans le script échappe à toutes ses règles.
 
-## Décision
+## Decision
 
 ### 1. Principe
 
@@ -59,9 +68,25 @@ La correspondance classe par classe (ancien module et FQN → nouveau) est tenue
 
 La règle est **stricte** : aucun éclatement n'est toléré. Elle est arrivée en cliquet pendant la mise en œuvre (liste des éclatements tolérés, égale à l'inventaire, réduite commit par commit, périmée = échec), puis la liste, vide, a été supprimée avec son code. Le contrôle vérifie aussi que le répertoire d'un test déclare son package, comme pour la production. Appliquée à l'arbre de la base `10486cb7`, la règle finale échoue sur 59 violations (14 packages, 45 tests).
 
+## Do's and Don'ts
+
+### Do
+
+- Faire appartenir chaque package Java à un seul module, sources de production et tests compris.
+- Replier un package éclaté d'abord par déplacement dans le module le plus bas capable d'accueillir toutes ses classes, à nom pleinement qualifié constant.
+- Quand les deux côtés sont épinglés, renommer le côté interne dans l'espace de noms de son module.
+- Confronter la liste des modules de `check-module-boundaries.py` aux `<modules>` du POM racine (A7).
+- Justifier par écrit, dans le commit et dans le suivi, toute visibilité élargie.
+
+### Don't
+
+- Ne pas faire descendre un adaptateur dans `minos-engine` ou `minos-domain`.
+- Ne pas renommer un point d'entrée documenté.
+- Ne tolérer aucun package éclaté.
+
 ## Ruptures
 
-Aucune signature publique de `minos-api` ne change : sur la base, les signatures publiques et protégées de `minos-api` (`javap -public`, types génériques compris) ne nomment que `com.minos.api.*` et `com.minos.application.MinosApplication`, qui ne bouge pas. Les points d'entrée de processus gardent leur nom : `com.minos.cli.MinosLauncher`, `com.minos.cli.DockerRuntimeBootstrap`, `com.minos.integration.nexus.NexusExportBridgeMain`, `com.minos.mcp.MinosMcpServer`, `com.minos.adapter.scip.runtime.StampManagedProviderMarkers`.
+Aucune signature publique de `minos-api` ne change : sur la base, les signatures publiques et protégées de `minos-api` (`javap -public`, types génériques compris) ne nomment que `com.minos.api.*` et `com.minos.application.MinosApplication`, qui ne bouge pas. Les points d'entrée de processus gardent leur nom : `com.minos.cli.MinosLauncher`, `com.minos.cli.DockerRuntimeBootstrap`, `com.minos.integration.nexus.NexusExportBridgeMain`, `com.minos.mcp.MinosMcpServer`, `com.minos.adapter.scip.runtime.install.StampManagedProviderMarkers`.
 
 Les packages renommés sont tous internes (adaptateurs, services applicatifs, classes d'assemblage). Un code Java qui les importait directement doit changer ses imports :
 
@@ -95,13 +120,20 @@ L'ADR 0022 attribuait les packages aux modules par leur nom, sans prévoir qu'un
 
 L'emplacement de chaque package est désormais donné par la *Table des décisions* ci-dessus ; les frontières de dépendances de l'ADR 0022 (direction, reactor, coordonnée de l'artefact) ne changent pas.
 
-## Conséquences
+## Consequences
 
 - Chaque package a un propriétaire unique, lisible dans son nom ; la visibilité package ne traverse plus aucun jar, en production comme en test. La voie vers JPMS est ouverte (elle n'est pas prise ici).
 - **`minos-engine` grossit** : 92 → 161 fichiers de production (+69) et 26 → 70 fichiers de test (+44) ; `minos-application` passe de 155 à 105 fichiers de production, `minos-domain` de 55 à 36. C'est le prix de « déplacer plutôt que renommer » : le constat A5 (« engine fourre-tout ») s'aggrave en volume, et son découpage éventuel (sous-modules ports / orchestration) devient plus pressant. A5 n'est pas traité ici.
 - Les classes renommées qui journalisent par `System.getLogger(X.class.getName())` (huit classes de runtime-local) changent de nom de journal. Aucune configuration de journalisation du dépôt ni aucun golden n'en dépend.
 - Les scripts de contrôle qui citent des chemins ou des FQN sont mis à jour à assertion identique, seul le chemin change (liste : `ARCHI-SUIVI.md` § 5). Les portées JaCoCo désignent les mêmes classes ; `DockerRuntimeBootstrap`, passé dans `minos-cli`, quitte la portée `m29-backend-routing` (rapport propre de `minos-app`) pour une portée à lui, `m29-docker-runtime-bootstrap`, aux mêmes seuils, sur le rapport agrégé.
 - `minos mcp` passe par un SPI : `MinosLauncher` (dans `minos-cli`, qui ne peut dépendre de `minos-mcp`) résout `McpLaunchRoute` dans le seul chargeur de classes de MINOS et échoue explicitement, sans chemin, à zéro ou plusieurs fournisseurs ; le JAR ombré en déclare exactement un (`com.minos.app.McpLaunchRouteProvider`).
+
+## Compliance and Enforcement
+
+- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — `check_package_ownership` (aucun package éclaté, tests compris) et `check_reactor_modules` (A7) ; auto-test `scripts/architecture/test_check_module_boundaries.py`.
+- Test ArchUnit `ModuleArchitectureTest.everyPackageBelongsToOneModule` (`minos-app`).
+- Règle Archgate `governed-modules-match-reactor` (`0044-un-package-un-module.rules.ts`) — porte A7 en lisant la liste `MODULES` du script ; lancée par `archgate check`, pas par la CI.
+- Revue : un nouveau package est déclaré par un seul module et prend l'espace de noms de ce module.
 
 ## Limites connues
 

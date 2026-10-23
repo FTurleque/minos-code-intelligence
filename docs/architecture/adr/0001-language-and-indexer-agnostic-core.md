@@ -1,9 +1,16 @@
+---
+id: ADR-0001
+title: "Conserver un cœur MINOS agnostique du langage et de l'indexeur"
+domain: architecture
+rules: false
+---
+
 # ADR-0001 — Conserver un cœur MINOS agnostique du langage et de l'indexeur
 
 - Statut : **Acceptée**
 - Date de décision : **22 juillet 2026**
 
-## Contexte
+## Context
 
 MINOS doit devenir un moteur de Code Intelligence capable de comprendre des dépôts utilisant plusieurs langages et différents systèmes de build.
 
@@ -18,7 +25,7 @@ Le cahier des charges validé établit explicitement deux exigences structurante
 
 Cette décision ne préjuge pas de l'adoption future de SCIP, Glean ou d'un autre fournisseur.
 
-## Décision
+## Decision
 
 Le domaine MINOS, son modèle de connaissance et son modèle de requêtes sont conçus pour être :
 
@@ -56,7 +63,24 @@ Un `IndexerRegistry` et un mécanisme de négociation des capacités permettront
 
 Les modèles propres aux fournisseurs doivent être normalisés avant de franchir la frontière du domaine MINOS.
 
-## Conséquences positives
+## Do's and Don'ts
+
+### Do
+
+- Fournir l'indexation propre à un langage par des fournisseurs enregistrés.
+- Faire déclarer leurs capacités aux fournisseurs plutôt que de les sélectionner uniquement par le nom du langage.
+- Normaliser les modèles propres aux fournisseurs avant la frontière du domaine MINOS.
+- Représenter explicitement les capacités, y compris leur absence, sans inventer de résultat.
+
+### Don't
+
+- Ne pas coder dans le cœur une logique figée du type « si Java -> pipeline Java ».
+- Ne pas exposer de type propre à un fournisseur dans les contrats publics du domaine MINOS.
+- Ne pas imposer la modification des services métier existants pour supporter un nouveau langage.
+
+## Consequences
+
+### Conséquences positives
 
 - ajout de nouveaux langages sans réécriture des services principaux ;
 - combinaison possible de plusieurs moteurs pour un même langage ;
@@ -65,13 +89,20 @@ Les modèles propres aux fournisseurs doivent être normalisés avant de franchi
 - consommateurs CLI, MCP, API, NEXUS et agents indépendants des technologies d'indexation ;
 - possibilité de remplacer SCIP ou Glean sans redéfinir le domaine MINOS.
 
-## Conséquences négatives
+### Conséquences négatives
 
 - nécessité de concevoir soigneusement un modèle normalisé ;
 - complexité supplémentaire de négociation des capacités ;
 - risque de perdre certaines richesses propres à un fournisseur lors de la normalisation ;
 - besoin de tests d'intégration entre fournisseurs ;
 - nécessité de définir explicitement les capacités absentes ou partielles.
+
+## Compliance and Enforcement
+
+- Règle A2 de `scripts/architecture/check-module-boundaries.py` (job `invariants`) — dépendances autorisées entre modules et frontière hexagonale ; contrôle indirect de l'isolation des fournisseurs.
+- Test `ModuleArchitectureTest` (`adaptersDoNotReachBackIntoUpperLayers`, `everyModuleOnlyUsesItsAllowedModules`) — mêmes frontières de modules, vues depuis les classes.
+- Aucun contrôle automatique de l'absence de logique par langage dans le cœur.
+- Revue : aucun aiguillage par langage vers un pipeline dans le cœur, aucun type de fournisseur dans un contrat public, capacités absentes représentées explicitement.
 
 ## Alternatives rejetées
 
@@ -105,3 +136,10 @@ Rejetée : les langages supportés sont une propriété des fournisseurs disponi
 Cette ADR est acceptée à la suite de la validation du cahier des charges MINOS, qui confirme explicitement les principes d'agnosticisme du langage et de l'indexeur.
 
 Les expérimentations M0 devront vérifier que cette abstraction reste praticable avec au moins deux écosystèmes de langage et plusieurs types de fournisseurs.
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- Le moteur porte une énumération fermée de langages (`ProjectDiscovery.Language` : `JAVA` … `RUST`), alors que l'ADR rejette « une liste fermée de langages supportés dans le cœur » — preuve : `minos-engine/src/main/java/com/minos/discovery/ProjectDiscovery.java:44-54`.
+- `ProjectInvalidationService.matchesLanguageExtension` aiguille par langage (`switch`) ; il associe des extensions de fichiers et ne choisit pas de pipeline : la lecture de la règle « si Java -> pipeline Java » reste à qualifier — preuve : `minos-engine/src/main/java/com/minos/orchestration/ProjectInvalidationService.java:194-206`.

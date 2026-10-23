@@ -1,10 +1,19 @@
+---
+id: ADR-0046
+title: "Format de snapshot V3 : chaînes UTF-8, lecture de tous les formats antérieurs"
+domain: data
+rules: false
+---
+
 # 0046 — Format de snapshot V3 : chaînes UTF-8, lecture de tous les formats antérieurs
 
 Status: Accepted (2026-09-29) — mis en œuvre ; mesures, preuves et journal dans [`ARCHI-SUIVI.md`](../../project/audits/archive/2026-09/ARCHI-SUIVI.md) (lot 3, A6, § A6.10 et § A6.11).
 
 Complète l'audit [`AUDIT-2026-09.md`](../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constat A6) et l'[ADR 0023](0023-decomposed-local-snapshot-persistence.md) (persistance locale décomposée, codecs versionnés, pointeur actif). Ne change ni l'[ADR 0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) (vue de requête et cache) ni le plafond de 256 Mio.
 
-## Contexte
+Prolongé par l'[ADR 0047](0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md), qui s'appuie sur ce format V3 (dédoublonnage et table de chaînes du snapshot en mémoire).
+
+## Context
 
 Le format V2 écrit chaque chaîne en unités UTF-16, deux octets par caractère (`DataOutputStream.writeChar`). Or les chaînes font 97 % d'un snapshot. Sur sept corpus réels, tous en ASCII, le fichier est donc 1,8 fois plus gros que nécessaire.
 
@@ -12,7 +21,7 @@ La conséquence est concrète : ce dépôt, indexé par scip-java, produit un SC
 
 En mémoire, le coût est nul. Les chaînes décodées sont compactes (Latin-1, un octet par caractère) quel que soit l'encodage sur disque, et le tas d'un snapshot chargé ne dépend pas du format.
 
-## Décision
+## Decision
 
 ### 1. Format V3
 
@@ -37,7 +46,24 @@ Le choix et la taille encodée exacte sont établis avant toute écriture. Un sn
 - **Ré-import sous le même identifiant.** Même contenu, autres octets (un payload V2 ré-importé après V3) : ce n'est plus un conflit. PostgreSQL décode les deux payloads, chacun dans son format, et compare les contenus. Un payload V2 existant et identique est conservé, tandis qu'un contenu différent reste un conflit d'identité. Le magasin fichier n'a jamais refusé ce cas.
 - **Inchangés.** `logicalIdHash`, le schéma des noms `snapshot-<logicalIdHash>-<sha256 du contenu><extension>`, `listSnapshotFiles`, la compaction et la rétention. L'intégrité reste le sha256 des octets du fichier, porté par le pointeur ou par la ligne PostgreSQL : un snapshot V2 existant n'est jamais déclaré corrompu.
 
-## Conséquences
+## Do's and Don'ts
+
+### Do
+
+- Écrire les chaînes V3 en longueur d'octets sur 32 bits puis octets UTF-8, mise en page V2 conservée.
+- Décoder strictement (`CodingErrorAction.REPORT`) et borner chaque longueur avant toute lecture.
+- Écrire un nouveau snapshot de connaissance en V3, ou entièrement en V2 si une de ses chaînes contient un surrogate isolé.
+- Établir le format et la taille encodée exacte avant toute écriture.
+- Garder lisible tout format jamais écrit, dans le magasin fichier comme dans PostgreSQL.
+
+### Don't
+
+- Ne pas altérer silencieusement une chaîne à surrogate isolé.
+- Ne pas pré-allouer la longueur déclarée.
+- Ne jamais refuser ni substituer à l'écriture : V3, sinon V2.
+- Ne pas déclarer corrompu un snapshot V2 existant.
+
+## Consequences
 
 - **Taille.** Sur les corpus mesurés, un fichier V3 fait 0,548 à 0,550 fois le fichier V2 de même contenu. Ce dépôt passe de 355 045 885 à 194 552 030 octets et redevient indexable. Le seuil SCIP du plafond passe de 18,0 à 32,9 Mo pour ce corpus.
 - **Lecture à froid** : 2,5 fois plus rapide sur une tranche de 93 Mo (≈ 0,6 s contre 1,5 à 1,7 s), puisqu'il y a moitié moins d'octets à lire et à décoder.
@@ -47,3 +73,9 @@ Le choix et la taille encodée exacte sont établis avant toute écriture. Un sn
 - **Asymétrie au ré-import (V-A6-07).** Dans le magasin fichier, ré-importer le même `snapshotId` après la mise à jour écrit un fichier V3 et laisse le V2 de même préfixe comme historique : il occupe un emplacement de rétention jusqu'à la prochaine compaction. PostgreSQL, lui, conserve le payload V2 existant et n'en écrit pas de nouveau. Ce comportement est documenté, pas corrigé.
 - **Historique (V-A6-05).** Le commit qui introduit V3 (`a68c560e`) est volontairement rouge sur un seul test, `retention.golden`. Le commit suivant, `ebdc6969`, le met à jour, seul et avec sa preuve. Pour un `git bisect`, traiter la paire comme une seule étape.
 - **Hors périmètre.** `CodeKnowledgeSnapshotBinaryCodec`, pont public vers le format V2 canonique, reste en V2. Une table de chaînes (chaque chaîne distincte stockée une fois, environ 0,19 fois V2) donnerait un gain bien supérieur, mais demande un format plus profond. Elle est instruite avec le snapshot paginé ou mappé, dans un ADR séparé.
+
+## Compliance and Enforcement
+
+- Test `SnapshotCodecV3Test` (`minos-storage-local`) — aller-retour exact, longueurs bornées en octets avant lecture, refus croisé des versions.
+- Test `RetentionFormatEquivalenceTest` (`minos-app`) — même modèle décodé en V2 et en V3.
+- Revue : un nouveau format de snapshot garde lisibles tous les formats déjà écrits.

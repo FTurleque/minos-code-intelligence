@@ -1,10 +1,17 @@
+---
+id: ADR-0038
+title: "Confiner les ressources des workers non fiables de manière agrégée et fail-closed"
+domain: security
+rules: false
+---
+
 # 0038 — Confiner les ressources des workers non fiables de manière agrégée et fail-closed
 
 Status: Accepted — MINOS-01 (P1). Amendé par [0041](0041-indexation-distante-de-code-non-fiable.md) (2026-09-26) sur la §4 : le quota d'écriture reste une supervision et l'indexation distante de code non fiable est fermée par décision.
 
-Complète [0033](0033-immutable-remote-revisions-and-verified-worker-artifacts.md) et précise la section « Real OS worker sandbox » de [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md).
+Complète [0033](0033-immutable-remote-revisions-and-verified-worker-artifacts.md) et précise la §3 « Treat sandbox claims as platform-qualified facts » de [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md).
 
-## Contexte
+## Context
 
 MINOS annonçait `UNTRUSTED_CODE_SUPPORTED` pour ses backends worker Linux et Windows alors que le confinement réel n'était pas agrégé :
 
@@ -15,7 +22,7 @@ MINOS annonçait `UNTRUSTED_CODE_SUPPORTED` pour ses backends worker Linux et Wi
 
 Une revendication d'isolation qui n'est pas exactement vraie est pire qu'une absence de revendication.
 
-## Décision
+## Decision
 
 ### 1. Rendre le confinement explicite et par dimension
 
@@ -47,7 +54,25 @@ Aucune des deux plateformes n'offre de quota disque par job à un utilisateur no
 
 Le résidu du provider dans le run est récupéré après succès, erreur, timeout ou dépassement. La rétention traite un ancien run illisible ou hors budget comme récupérable en priorité, borne la suppression par invocation et met en quarantaine le reliquat au lieu de propager un échec.
 
-## Conséquences
+## Do's and Don'ts
+
+### Do
+
+- Décrire chaque dimension de confinement par `WorkerResourceContainment`, avec une disposition parmi `OS_ENFORCED`, `SUPERVISED_HARD_KILL`, `MEASURED_ONLY` et `UNAVAILABLE`.
+- Sous Linux, créer avant l'exécution un cgroup v2 dédié au run, configuré (`memory.max`, `memory.swap.max`, `pids.max`, `cpu.max`) et relu depuis le noyau, rejoint avant l'exec du code non fiable, puis détruit par `cgroup.kill`.
+- Sous Windows, configurer le Job Object avant le processus, vérifier l'appartenance par `IsProcessInJob` avant `ResumeThread`, refuser tout breakaway et appeler `TerminateJobObject` sur tous les chemins de sortie.
+- Inscrire chaque droit accordé au SID du conteneur au journal de récupération du run avant `icacls /grant`.
+- Récupérer le résidu du provider après succès, erreur, timeout ou dépassement.
+
+### Don't
+
+- Ne pas déclarer `UNTRUSTED_CODE_SUPPORTED` sans frontière de job `OS_ENFORCED` sur les quatre dimensions agrégées.
+- Ne pas présenter une limite par processus comme une garantie agrégée.
+- Ne pas exécuter de code non fiable sous Linux sans racine cgroup déléguée réellement sondée.
+- Ne pas déclarer le quota d'écriture `OS_ENFORCED` : il est `SUPERVISED_HARD_KILL`.
+- Ne pas laisser un résidu ni un ancien run hors budget bloquer le run suivant.
+
+## Consequences
 
 ### Positives
 
@@ -62,6 +87,13 @@ Le résidu du provider dans le run est récupéré après succès, erreur, timeo
 - la qualification du processus MINOS déplace celui-ci dans un cgroup enfant dédié afin que la racine déléguée puisse porter `cgroup.subtree_control` ;
 - la supervision d'écriture ajoute un parcours périodique borné des racines accessibles au provider ;
 - le quota filesystem reste une supervision MINOS et doit être documenté comme telle tant qu'aucune primitive de quota par job non privilégiée n'existe.
+
+## Compliance and Enforcement
+
+- Tests `WorkerResourceContainmentTest` et `WorkerSandboxQualificationTest` (`minos-runtime-local`) — aucune qualification pour du code non fiable sans frontière de job agrégée appliquée par l'OS ; la supervision et la mesure a posteriori ne la remplacent pas.
+- Test `LinuxBubblewrapWorkerSandboxBackendTest` — la commande bubblewrap ne passe pas `--nproc` (amendement du 2026-10-16).
+- Test `ProcessIndexerExecutorBoundaryRefusalTest` — aucun exécuteur de `minos-runtime-local` ne lance un provider sans frontière.
+- Revue : une nouvelle dimension ou un nouveau backend déclare sa disposition réelle, sans promouvoir une supervision en garantie OS.
 
 ## Mise en œuvre (AUD-ARC-09, octobre 2026)
 

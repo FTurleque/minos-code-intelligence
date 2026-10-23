@@ -1,10 +1,17 @@
+---
+id: ADR-0002
+title: "Utiliser SCIP comme protocole d'interopérabilité sémantique privilégié"
+domain: architecture
+rules: false
+---
+
 # ADR-0002 — Utiliser SCIP comme protocole d'interopérabilité sémantique privilégié
 
 - Statut : **Acceptée**
 - Date de décision : **22 juillet 2026**
 - Validation opérationnelle des fournisseurs : **M0**
 
-## Contexte
+## Context
 
 MINOS a besoin d'informations précises au niveau des symboles : définitions, références, implémentations et autres relations sémantiques.
 
@@ -14,7 +21,7 @@ SCIP est un protocole d'indexation de Code Intelligence agnostique du langage ba
 
 Le protocole et les indexeurs restent néanmoins deux sujets distincts : accepter SCIP comme format privilégié ne signifie pas considérer tous les indexeurs SCIP comme équivalents ou suffisamment précis.
 
-## Décision
+## Decision
 
 SCIP est le **protocole d'interopérabilité sémantique privilégié de MINOS** lorsqu'un indexeur suffisamment fiable, maintenu et compatible avec les besoins du projet existe.
 
@@ -36,6 +43,21 @@ Indexeur sémantique spécifique au langage
 Les services du cœur MINOS ne doivent pas exposer directement les types Protobuf SCIP.
 
 Le `IndexerRegistry` doit permettre à des fournisseurs non-SCIP de fournir les mêmes capacités métier lorsque ceux-ci sont plus adaptés.
+
+## Do's and Don'ts
+
+### Do
+
+- Utiliser SCIP comme format d'entrée sémantique privilégié lorsqu'un indexeur suffisamment fiable, maintenu et compatible existe.
+- Passer par un adaptateur SCIP possédé par MINOS vers le modèle normalisé MINOS.
+- Qualifier les capacités d'un indexeur SCIP avant de l'activer comme fournisseur MINOS.
+- Versionner séparément le protocole et ses bindings, la CLI d'inspection et chaque indexeur producteur.
+
+### Don't
+
+- Ne pas rendre SCIP obligatoire.
+- Ne pas exposer directement les types Protobuf SCIP dans les services du cœur MINOS.
+- Ne pas empêcher un fournisseur non-SCIP de fournir les mêmes capacités métier lorsqu'il est plus adapté.
 
 ## Portée de la décision
 
@@ -173,3 +195,16 @@ Sources consultées le 22 juillet 2026 :
 - bindings Java SCIP : https://github.com/scip-code/scip/tree/main/bindings/java
 - scip-java : https://github.com/scip-code/scip-java
 - release scip-java v0.13.1 : https://github.com/scip-code/scip-java/releases/tag/v0.13.1
+
+## Compliance and Enforcement
+
+- Règle A2 de `scripts/architecture/check-module-boundaries.py` (job `invariants`) — dépendances autorisées entre modules et frontière hexagonale ; la dépendance `scip-java-bindings` n'est admise que dans `minos-provider-scip`.
+- Règle A13 de `scripts/architecture/check-module-boundaries.py` (job `invariants`) — types d'un adaptateur nommés par un autre adaptateur, par couple déclaré.
+- Revue : aucun type Protobuf SCIP hors de `minos-provider-scip`, chaque capacité d'un indexeur SCIP qualifiée avant activation.
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- L'ADR exige de conserver le modèle `IndexerCapabilities` ; aucun type ne porte ce nom, le modèle de capacités est l'énumération `IndexerCapability` avec `CapabilitySupportLevel` — preuve : `minos-engine/src/main/java/com/minos/orchestration/IndexerCapability.java:10`.
+- L'ADR demande de qualifier chaque capacité au minimum `FULL`, `PARTIAL`, `EXPERIMENTAL`, `UNSUPPORTED`, `UNKNOWN` ; `CapabilitySupportLevel` ne comporte pas `UNKNOWN` — preuve : `minos-engine/src/main/java/com/minos/orchestration/CapabilitySupportLevel.java:4-9`.

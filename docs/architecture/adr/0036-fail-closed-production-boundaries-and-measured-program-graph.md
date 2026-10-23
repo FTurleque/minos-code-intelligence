@@ -1,3 +1,10 @@
+---
+id: ADR-0036
+title: "Fail-closed production boundaries and measured ProgramGraph convergence"
+domain: security
+rules: false
+---
+
 # ADR-0036 — Fail-closed production boundaries and measured ProgramGraph convergence
 
 - Status: **Accepted**
@@ -73,10 +80,10 @@ The post-audit implementation adds two real platform backends.
 - `prlimit` bounds for address space, process count, open files and CPU ;
 - a bounded runtime capability probe before `OS_ENFORCED` is advertised.
 
-> Superseded on the resource-containment dimension by
-> [0038](0038-aggregate-worker-resource-containment.md): `prlimit` bounds are per process and are
-> multiplied by every `fork`. The aggregate job boundary is a per-run cgroup v2, and untrusted
-> execution is refused when that boundary cannot be created.
+> Précisé par ADR [0038](0038-aggregate-worker-resource-containment.md) sur la dimension du
+> confinement des ressources : les bornes `prlimit` sont par processus et se multiplient à chaque
+> `fork`. La frontière de job agrégée est un cgroup v2 par run, et l'exécution non fiable est refusée
+> quand cette frontière ne peut pas être créée.
 
 On Ubuntu 24.04 qualification, the distribution-provided AppArmor profile `bwrap-userns-restrict` is loaded so the same unprivileged-user-namespace boundary exercised by production can be tested. If kernel/LSM policy or required tools do not permit the sandbox, discovery fails and MINOS remains process-only / fail-closed.
 
@@ -108,6 +115,24 @@ Operator boundaries remain explicit ports :
 
 The embedded baseline exposes `HostedProductionBoundary.Mode.EMBEDDED_LOCAL_FIRST` and cannot claim qualified transport/TLS, backup/availability, SaaS operation or process isolation that has not been independently provided and qualified.
 
+## Do's and Don'ts
+
+### Do
+
+- Composer en production `FingerprintConstrainedJavaProgramGraphProvider`, avec l'empreinte exacte du projet dans la clé de cache.
+- Échouer fermé (`JAVA_ADVANCED_PROVIDER_SOURCE_DIFFERS_FROM_SNAPSHOT_FINGERPRINT`) quand l'arbre de travail diffère du snapshot actif.
+- Rejeter `DENY` avant l'exécution du provider quand le backend choisi ne prouve pas l'enforcement OS.
+- N'accepter une implémentation OS qu'avec des tests négatifs d'évasion réseau et fichiers et un test de chemin réel `ProcessIndexerExecutor → sandbox → provider → artefact`.
+- Garder explicites, sous forme de ports, les frontières opérateur du mode hébergé (`HostedIdentityProvider`, `HostedTenantKeyProvider`, `HostedAuditSink`, `HostedTransportSecurityPort`, `HostedAvailabilityPort`).
+
+### Don't
+
+- Ne pas traiter une séparation de processus comme un bac à sable.
+- Ne pas annoncer un bac à sable sur la seule présence d'un outil : sous Linux, une sonde d'exécution bornée est obligatoire.
+- Ne pas rétrograder silencieusement `DENY` en `ALLOW`.
+- Ne pas présenter le mode hébergé embarqué comme un SaaS de production.
+- Ne pas introduire d'ANN ni de cache ProgramGraph en base sans profil de performance qui démontre un goulot.
+
 ## Consequences
 
 ### Positive
@@ -130,6 +155,12 @@ The embedded baseline exposes `HostedProductionBoundary.Mode.EMBEDDED_LOCAL_FIRS
 - environments without a qualified sandbox cannot execute remote providers, with either `ALLOW` or `DENY`, and deliberately fail closed ;
 - the embedded hosted mode remains intentionally insufficient for an operated SaaS service ;
 - audit-sink export still needs idempotent retry handling in an operated adapter.
+
+## Compliance and Enforcement
+
+- Gate `scripts/quality/check-vertical-decomposition-consistency.py`, exécuté par `scripts/remediation/check-post-mne.py` (job `invariants`) — exige la portée JaCoCo des composants Java décomposés (dont `FingerprintConstrainedJavaProgramGraphProvider`), les dispositions `NetworkGuarantee`, `FAIL_CLOSED_NOT_ENFORCED`, `UNTRUSTED_CODE_UNSUPPORTED` et `WORKER_SANDBOX_CLAIM_PROHIBITED`, et les refus de `HostedProductionBoundary` (`EMBEDDED_LOCAL_FIRST`, `HOSTED_*_NOT_PROVIDED`).
+- Tests `WorkerSandboxQualificationTest` et `WorkerResourceContainmentTest` (`minos-runtime-local`) — qualification des backends et refus d'une revendication non prouvée.
+- Revue : une nouvelle revendication de bac à sable s'appuie sur une sonde d'exécution et des tests négatifs, jamais sur la présence d'un exécutable.
 
 ## Rejected alternatives
 
@@ -173,3 +204,9 @@ The acceptance evidence includes :
 - fail-closed fallback when an OS backend cannot be qualified.
 
 Execution state remains summarized in `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md` and the post-audit PR/issue evidence. Historical M28 evidence remains in `docs/project/roadmap/M28_EXECUTION.md` and milestone records.
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- § 3, Linux : la liste annonce des bornes `prlimit` sur le nombre de processus ; au HEAD, `prlimit --nproc` n'est plus passé et le nombre de processus de l'arbre du provider est borné par `pids.max` seul (amendement du 2026-10-16 de l'ADR 0038, § 2) — preuve : `minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend.java:52-58` ; `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackendTest.java:69`.
