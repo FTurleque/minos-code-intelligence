@@ -34,7 +34,7 @@ Le nom de la variable n'est pas libre : seules `MINOS_REMOTE_TOKEN` (ou `MINOS_R
 
 ## État de `remote index`
 
-`remote materialize` est utilisable indépendamment de la sandbox provider. En revanche, `remote index` n’exécute du code distant que si **toutes** les dimensions de confinement exigées sont qualifiées au niveau OS. Une **sandbox OS qualifiée** désigne ici une frontière qui satisfait réellement toutes ces exigences ; **aucun backend intégré ne l’est, par décision** ([ADR 0041](../architecture/adr/0041-indexation-distante-de-code-non-fiable.md), 2026-09-26).
+`remote materialize` est utilisable indépendamment de la sandbox provider. En revanche, `remote index` n’exécute du code distant que si **toutes** les dimensions de confinement exigées sont qualifiées au niveau OS. Une **sandbox OS qualifiée** désigne ici une frontière qui satisfait réellement toutes ces exigences ; **aucun backend intégré ne l’est, par décision** ([ADR 0041](../architecture/adr/archive/0041-indexation-distante-de-code-non-fiable.md), 2026-09-26).
 
 Les backends locaux intégrés bornent la mémoire, les processus, la CPU et la durée via les primitives OS prévues (cgroup v2/bubblewrap sous Linux, AppContainer/Job Object sous Windows). Le quota d’écriture bytes/entrées reste **supervisé par MINOS** (`SUPERVISED_HARD_KILL`), pas un quota stockage `OS_ENFORCED` : l’ADR 0041 explique pourquoi cette limite est assumée plutôt que comblée (aucune primitive non privilégiée sous Windows ; quota de projet XFS/ext4 sous Linux seulement, chiffré et reporté). La qualification `UNTRUSTED_CODE_SUPPORTED` exigeant un quota stockage OS-enforced, les backends intégrés restent **fail-closed pour `remote index`**, sur tous les OS. Il n’existe pas d’option unsafe permettant de contourner cette exigence.
 
@@ -69,7 +69,7 @@ Sous Linux, la qualification CPU/mémoire/processus exige notamment une racine c
 
 ### Prérequis opérateur — sandbox Linux (indexation locale gérée)
 
-Ces prérequis servent l'**indexation locale gérée** (providers gérés lancés sous sandbox OS). Ils **ne rouvrent pas `remote index`**, fermé par décision ([ADR 0041](../architecture/adr/0041-indexation-distante-de-code-non-fiable.md)) : une fois réunis, `minos doctor` passe seulement de la cause `NO_OS_BACKEND_AVAILABLE` (prérequis manquant) à `REJECTED_BY_DECISION`, et `remote index` refuse toujours.
+Ces prérequis servent l'**indexation locale gérée** (providers gérés lancés sous sandbox OS). Ils **ne rouvrent pas `remote index`**, fermé par décision ([ADR 0041](../architecture/adr/archive/0041-indexation-distante-de-code-non-fiable.md)) : une fois réunis, `minos doctor` passe seulement de la cause `NO_OS_BACKEND_AVAILABLE` (prérequis manquant) à `REJECTED_BY_DECISION`, et `remote index` refuse toujours.
 
 La qualification `linux-bubblewrap-cgroup2-v5` (voir [`remote-worker-sandbox-disposition.md`](../developer/remote-worker-sandbox-disposition.md)) sonde réellement les primitives disponibles sur l'hôte avant toute revendication. Sans elles, aucun backend OS Linux n'est découvert : les providers locaux gérés n'ont pas de sandbox OS et `remote index` refuse avec la cause `NO_OS_BACKEND_AVAILABLE` — il n'existe aucun contournement. Sur un hôte opérateur (hors CI, où `pr-ci.yml`/`scripts/ci/delegate-linux-cgroup.sh` provisionnent déjà tout ceci), il faut réunir explicitement :
 

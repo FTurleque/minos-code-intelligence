@@ -93,4 +93,4 @@ Ce dernier point est explicitement measurement-gated : M18 ne crée pas un daemo
 
 ## Mise en œuvre — note du 2026-10-13
 
-La baseline du produit est passée de Java 24 à **Java 25 LTS** ([ADR 0059](0059-migrer-le-socle-vers-java-25-lts.md)). La décision est inchangée : le plugin reste un client externe en Java 21, la frontière de processus sépare désormais Java 21 et Java 25.
+La baseline du produit est passée de Java 24 à **Java 25 LTS** ([ADR 0059](archive/0059-migrer-le-socle-vers-java-25-lts.md)). La décision est inchangée : le plugin reste un client externe en Java 21, la frontière de processus sépare désormais Java 21 et Java 25.

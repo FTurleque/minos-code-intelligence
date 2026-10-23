@@ -2,7 +2,7 @@
 
 > Branche : `archi/a3-packages` (depuis `develop`, base `10486cb7`), worktree `minos-wt/a3-packages`.
 > Constats : **A3** (packages éclatés entre modules et alias CLI dépréciés, `AUDIT-2026-09.md` § 3) et **A7** (le script de frontières ne se confronte jamais au reactor), fermé au passage.
-> Décision d'architecture : [ADR 0044](../../../../architecture/adr/0044-un-package-un-module.md).
+> Décision d'architecture : [ADR 0044](../../../../architecture/adr/archive/0044-un-package-un-module.md).
 > Agents : `impl-archi` (implémentation), `verif-archi` (inspection de chaque commit). Aucun push, aucune PR ouverte par les agents.
 > Règles du lot : aucun changement de comportement (les deux tests de caractérisation A2 et les 12 golden de `minos-app/src/test/resources/characterization/` restent verts et identiques octet pour octet, jamais régénérés) ; déplacer plutôt que renommer ; aucune règle de `check-module-boundaries.py` assouplie ; aucune dépendance Maven ajoutée hors de `ALLOWED_DEPENDENCIES`.
 
@@ -488,7 +488,7 @@ Points d'entrée dont le FQN ne change pas : `com.minos.cli.MinosLauncher` (`doc
 # Lot 2 — A4 : surfaces d'objet (classes-dieux et constructeurs télescopiques)
 
 > Branche : `archi/a4-surfaces`, créée depuis la tête d'A3 (`324d85bb`), worktree `minos-wt/a4-surfaces` ; elle sera rebasée sur `develop` après la fusion d'A3 (PR draft #302).
-> Constat : **A4** (`AUDIT-2026-09.md` § 3). Décision d'architecture : [ADR 0045](../../../../architecture/adr/0045-constructeur-unique-et-point-d-entree-nomme.md) (Accepted).
+> Constat : **A4** (`AUDIT-2026-09.md` § 3). Décision d'architecture : [ADR 0045](../../../../architecture/adr/archive/0045-constructeur-unique-et-point-d-entree-nomme.md) (Accepted).
 > Agents : `impl-archi` (implémentation), `verif-archi` (inspection de chaque commit). Aucun push, aucune PR ouverte par les agents.
 > Règles du lot : aucun changement de comportement (les deux tests de caractérisation A2 verts, les 12 golden de `minos-app/src/test/resources/characterization/` identiques octet pour octet, jamais régénérés) ; un constructeur unique et un point d'entrée nommé à la place des constructeurs télescopiques ; aucun alias déprécié ; toute rupture d'une signature publique de `minos-api` ou de `MinosApplication` listée, justifiée et documentée (`docs/user/java-api.md` § Ruptures, en-tête de PR) ; cache de `LocalProjectArchitectureQuery` seulement si son invalidation est prouvée.
 
@@ -1055,7 +1055,7 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 
 ## A6.11 Étape 2 — format V3 UTF-8
 
-Décision : [ADR 0046](../../../../architecture/adr/0046-format-de-snapshot-v3-chaines-utf8.md).
+Décision : [ADR 0046](../../../../architecture/adr/archive/0046-format-de-snapshot-v3-chaines-utf8.md).
 
 **Réalisation** (`a68c560e`).
 
@@ -1213,7 +1213,7 @@ Arbitrage : **ne pas faire**. Le constat de l'audit est exact dans le code : `Im
 
 ## A6.14 Étape 5 — ADR 0047 (`Proposed`)
 
-[ADR 0047](../../../../architecture/adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md), appuyé sur les mesures des § A6.3 et § A6.11, sans implémentation.
+[ADR 0047](../../../../architecture/adr/archive/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md), appuyé sur les mesures des § A6.3 et § A6.11, sans implémentation.
 
 Constats :
 - le tas d'un snapshot relu (413 Mo pour ce dépôt) est 2,5 fois celui du même snapshot ingéré (163 Mo), parce que le décodage recrée une chaîne par champ ;

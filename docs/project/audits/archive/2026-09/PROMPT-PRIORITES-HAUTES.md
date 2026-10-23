@@ -141,4 +141,4 @@ Chiffre pour chaque option le travail, les prérequis opérateur, ce qui devient
 
 ---
 
-*Références : `docs/audit/archive/2026-09/AUDIT-2026-09.md` (filtre Sévérité = Haute, État = Ouverts), `docs/adr/0039-reprise-indexation-apres-interruption.md`, `docs/adr/0038-aggregate-worker-resource-containment.md`, `docs/audit/archive/2026-09/SPRINT-1-SUIVI.md`.*
+*Références : `docs/audit/archive/2026-09/AUDIT-2026-09.md` (filtre Sévérité = Haute, État = Ouverts), `docs/adr/0039-reprise-indexation-apres-interruption.md`, `docs/adr/archive/0038-aggregate-worker-resource-containment.md`, `docs/audit/archive/2026-09/SPRINT-1-SUIVI.md`.*

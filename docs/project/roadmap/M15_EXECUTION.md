@@ -111,7 +111,7 @@ Soit **12 modules enfants + le parent = 13 projets Maven**.
 
 Qualification fonctionnelle S2 : SHA `637402782c29526b926968e0b8b525a2fa6fdc2c`, 238 PASS, M14/Windows/install/doctor/MCP/ownership PASS.
 
-Décision : [ADR-0022](../../architecture/adr/0022-maven-reactor-and-module-boundaries.md).
+Décision : [ADR-0022](../../architecture/adr/archive/0022-maven-reactor-and-module-boundaries.md).
 
 ---
 
@@ -190,7 +190,7 @@ Aucun changement de backend ou format disque. `.symbols`, `.knowledge`, `active.
 
 Qualification exacte : `ecbd6f64c8d0c7ad7a875d39d8905702f8dadef9`, 251 PASS, M14/providers/Windows/install/doctor/MCP/repeated-query PASS.
 
-Décision : [ADR-0023](../../architecture/adr/0023-decomposed-local-snapshot-persistence.md).
+Décision : [ADR-0023](../../architecture/adr/archive/0023-decomposed-local-snapshot-persistence.md).
 
 ---
 

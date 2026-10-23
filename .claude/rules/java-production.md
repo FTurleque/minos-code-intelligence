@@ -8,12 +8,12 @@ paths:
 Conventions relevées dans les gates, les ADR et les revues du dépôt. La convention du **module touché** fait foi quand elle est plus précise.
 
 ## Architecture
-- Respecter la direction `domain → engine → runtime/storage → adapters → application → surfaces` (ADR 0022). Aucune dépendance Maven nouvelle sans relire `scripts/architecture/check-module-boundaries.py` (règles A2, A3, A7 à A16).
-- Un package appartient à **un seul module** (ADR 0044). Déplacer une classe plutôt que renommer ; un déplacement fait entrer la classe en « code neuf » pour SonarCloud : ses tests vivent dans son module.
+- Respecter la direction `domain → engine → runtime/storage → adapters → application → surfaces` (ADR 0068). Aucune dépendance Maven nouvelle sans relire `scripts/architecture/check-module-boundaries.py` (règles A2, A3, A7 à A16).
+- Un package appartient à **un seul module** (ADR 0068). Déplacer une classe plutôt que renommer ; un déplacement fait entrer la classe en « code neuf » pour SonarCloud : ses tests vivent dans son module.
 - `application` ne nomme aucune classe d'adaptateur ; les surfaces non plus (ADR 0042, 0058). Le câblage est dans `minos-bootstrap`.
 - Hors de `minos-runtime-local`, ne nommer que les types de ses packages `process`, `sandbox` et `workspace` listés dans `RUNTIME_LOCAL_EXPORTED_TYPES` (règle A10) ; allonger cette liste est une décision relue, pas un correctif de compilation.
-- La dette d'architecture est figée par des listes fermées du même garde (ADR 0062) : une surface ne nomme que les types de `minos-engine` listés pour elle (A11) ; aucun `ProcessBuilder` ni `Runtime.exec` dans le domaine, le moteur ou l'application hors `PROCESS_LAUNCHERS` (A12) ; un adaptateur ne nomme d'un autre que les types listés pour le couple (A13). Ces listes se réduisent, elles ne s'allongent que par une décision relue.
-- **Nouveau package** : sous une racine `com.minos.<x>` que son module possède déjà (A14, `PACKAGE_ROOTS_BY_MODULE`), de préférence sous l'espace de noms propre au module (`com.minos.application.…`, `com.minos.storage.local.…`, `com.minos.runtime.local.…`, `com.minos.adapter.scip.…`). Aucun package existant n'est renommé ; une nouvelle racine est une décision d'architecture (ADR 0062).
+- La dette d'architecture est figée par des listes fermées du même garde (ADR 0068) : une surface ne nomme que les types de `minos-engine` listés pour elle (A11) ; aucun `ProcessBuilder` ni `Runtime.exec` dans le domaine, le moteur ou l'application hors `PROCESS_LAUNCHERS` (A12) ; un adaptateur ne nomme d'un autre que les types listés pour le couple (A13). Ces listes se réduisent, elles ne s'allongent que par une décision relue.
+- **Nouveau package** : sous une racine `com.minos.<x>` que son module possède déjà (A14, `PACKAGE_ROOTS_BY_MODULE`), de préférence sous l'espace de noms propre au module (`com.minos.application.…`, `com.minos.storage.local.…`, `com.minos.runtime.local.…`, `com.minos.adapter.scip.…`). Aucun package existant n'est renommé ; une nouvelle racine est une décision d'architecture (ADR 0068).
 - Pas de cycle de packages : un nouveau package est une feuille tant qu'il peut l'être (callbacks plutôt que dépendances vers `ui`/`actions`).
 - Constructeur unique et point d'entrée nommé (ADR 0045, règle A4) : pas de constructeurs télescopiques. Aucune E/S dans un constructeur de `record`.
 

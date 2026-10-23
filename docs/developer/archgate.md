@@ -24,7 +24,7 @@ docs/architecture/
   rules.d.ts                   généré dans le parent du dossier d'ADR, ignoré par Git
   adr/
     NNNN-slug.md               ADR : en-tête YAML (id: ADR-NNNN, title, domain, rules) puis sections Archgate
-    NNNN-slug.rules.ts         règle compagnon, quand rules: true (aujourd'hui 0044)
+    NNNN-slug.rules.ts         règle compagnon, quand rules: true (aujourd'hui 0068)
     README.md                  index ; sans en-tête, Archgate le signale comme non lu
     gabarit/template.md        gabarit ; un sous-dossier n'est pas lu par Archgate
 ```
@@ -36,11 +36,11 @@ Le format d'un ADR (en-tête, sections `Context`, `Decision`, `Do's and Don'ts`,
 ```bash
 archgate --version                       # CLI installée (installation : cli.archgate.dev)
 archgate adr list                        # ADR reconnus : id, title, domain, rules
-archgate adr show ADR-0044               # un ADR
+archgate adr show ADR-0068               # un ADR
 archgate review-context                  # ADR concernés par les fichiers modifiés : sections Decision et Do's and Don'ts
 archgate check --verbose                 # exécute les règles et montre les règles passantes
 archgate check --staged                  # sur les fichiers indexés (crochet de pré-commit)
-archgate check --adr ADR-0044            # les règles d'un seul ADR
+archgate check --adr ADR-0068            # les règles d'un seul ADR
 archgate check --output json             # sortie lisible par un outil
 ```
 
@@ -52,13 +52,13 @@ Un ADR dont l'en-tête porte `files:` n'est exécuté que si un fichier de cette
 
 | Invariant | ADR | Gate Python | Archgate |
 |---|---|---|---|
-| A7 — `MODULES` du gate = `<modules>` du `pom.xml` racine | 0044 | `check-module-boundaries.py` (`check_reactor_modules`) | **porté** : `0044-un-package-un-module.rules.ts` / `governed-modules-match-reactor` |
-| A2 — règles hexagonales POM et sources, politique de dépendances | 0022, 0042 | `check-module-boundaries.py` | non porté |
-| A3 — un package, un module | 0044 | `check-module-boundaries.py` | non porté |
-| A8 — aucun cycle de packages | 0044 | `check-module-boundaries.py` | non porté |
-| A9 — document d'architecture arc42 aligné sur les POM | 0022 | `check-module-boundaries.py` | non porté |
+| A7 — `MODULES` du gate = `<modules>` du `pom.xml` racine | 0068 | `check-module-boundaries.py` (`check_reactor_modules`) | **porté** : `0068-modules-dependances-et-propriete-des-packages.rules.ts` / `governed-modules-match-reactor` |
+| A2 — règles hexagonales POM et sources, politique de dépendances | 0068, 0042 | `check-module-boundaries.py` | non porté |
+| A3 — un package, un module | 0068 | `check-module-boundaries.py` | non porté |
+| A8 — aucun cycle de packages | 0068, 0057 | `check-module-boundaries.py` | non porté |
+| A9 — document d'architecture arc42 aligné sur les POM | 0068 | `check-module-boundaries.py` | non porté |
 | A10 — exports de `minos-runtime-local` | 0042 | `check-module-boundaries.py` | non porté |
-| A11 à A14 — dette d'architecture en cliquet (types du moteur par surface, lanceurs de processus, types entre adaptateurs, racines de packages) et arêtes d'exécution par service | 0022, 0044, 0055, 0058, 0062 | `check-module-boundaries.py` | non porté |
+| A11 à A14 — dette d'architecture en cliquet (types du moteur par surface, lanceurs de processus, types entre adaptateurs, racines de packages) et arêtes d'exécution par service | 0068, 0058 | `check-module-boundaries.py` | non porté |
 | E/S privées confinées | 0061 | `check-private-io.py` | non porté |
 | Autres gates `scripts/**/check-*.py` | divers | job `invariants` | non portés |
 

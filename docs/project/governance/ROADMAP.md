@@ -169,7 +169,7 @@ Les sprints 1 et 2 sont terminés ; suite ouverte par le sprint 2 : un changemen
 
 | Sujet | Décision | État |
 |---|---|---|
-| Distribution auto-portante : les indexeurs sont livrés dans le paquet, plus aucune étape `tools install` à la charge de l'utilisateur | [ADR 0040](../../architecture/adr/0040-distribution-auto-portante-indexeurs-embarques.md) | implémentée (scip-java, scip-typescript ; qualification hors ligne physique à confirmer) |
+| Distribution auto-portante : les indexeurs sont livrés dans le paquet, plus aucune étape `tools install` à la charge de l'utilisateur | [ADR 0040](../../architecture/adr/archive/0040-distribution-auto-portante-indexeurs-embarques.md) | implémentée (scip-java, scip-typescript ; qualification hors ligne physique à confirmer) |
 
 La reprise d'une indexation interrompue ([ADR 0039](../../architecture/adr/0039-reprise-indexation-apres-interruption.md)) n'est plus en conception : l'ADR est acceptée et implémentée au sprint 2 (`IndexingResumePlanner`, `IndexingRun.Status.INTERRUPTED` dans `minos-engine`).
 
@@ -177,7 +177,7 @@ Aucun nouveau jalon fonctionnel livré n'est déclaré par l'étude d'octobre ; 
 
 ## Programme proposé — amélioration retrieval et intelligence IDE (4 octobre 2026)
 
-L'[étude MINOS / Semble / Serena](../research/minos-evolution-2026-10/README.md) ouvre un programme de conception distinct des jalons historiques : **35 tâches TODO, U0–U8**, sept ADR Proposed (0048–0054), mesures préalables et options conditionnelles.
+L'[étude MINOS / Semble / Serena](../research/minos-evolution-2026-10/README.md) ouvre un programme de conception distinct des jalons historiques : **35 tâches TODO, U0–U8**, mesures préalables et options conditionnelles. Ses sept propositions d'ADR (0048–0054) sont archivées `Rejected` depuis le 2026-10-23 (aucune mise en œuvre, aucun changement OpenSpec) ; un lot du programme qui reprend démarre par un changement OpenSpec, et un ADR seulement si une décision durable en sort.
 
 - [Roadmap intégrale, charges, dépendances et critères d'acceptation](../research/minos-evolution-2026-10/ROADMAP.md)
 - [Protocole de qualification](../research/minos-evolution-2026-10/EVALUATION.md)

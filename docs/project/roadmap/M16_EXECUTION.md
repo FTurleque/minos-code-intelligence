@@ -128,7 +128,7 @@ L'ordre est obligatoire :
 
 Si le backend M15 passe tous les seuils STANDARD et qu'aucun goulot structurel n'est observé, la décision M16 est **de conserver le backend actuel** et de ne pas introduire une dépendance de stockage supplémentaire.
 
-Le prototype comparatif SQLite fourni par M16 reste un outil de benchmark, pas une dépendance runtime MINOS. La règle durable est formalisée dans [ADR-0025](../../architecture/adr/0025-measurement-gated-storage-backend-evolution.md).
+Le prototype comparatif SQLite fourni par M16 reste un outil de benchmark, pas une dépendance runtime MINOS. La règle durable est formalisée dans [ADR-0025](../../architecture/adr/archive/0025-measurement-gated-storage-backend-evolution.md).
 
 ## Optimisations M16
 

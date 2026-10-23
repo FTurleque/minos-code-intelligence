@@ -104,7 +104,7 @@ def main() -> int:
         indexing_path = "minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java"
         quality_path = "scripts/quality/check-jacoco.py"
         roadmap_path = "docs/project/roadmap/M24_EXECUTION.md"
-        adr_path = "docs/architecture/adr/0032-evidence-gated-polyglot-scip-providers.md"
+        adr_path = "docs/architecture/adr/archive/0032-evidence-gated-polyglot-scip-providers.md"
         bootstrap_path = "scripts/m24/bootstrap-windows-toolchains.ps1"
         windows_prereq_path = "scripts/m24/check-windows-prerequisites.ps1"
         windows_final_path = "scripts/m24/run-final.ps1"

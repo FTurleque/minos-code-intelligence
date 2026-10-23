@@ -4,7 +4,7 @@ Date : 2026-10-05. Base d'observation : `develop` à `c9a339088f81b6b31c65c7ad12
 
 Toutes les tâches sont **À faire**, sauf SH-05 (fait le 2026-10-21). P1/P2 indiquent un ordre de travail architectural, pas une nouvelle sévérité de vulnérabilité. Les chemins désignent la base observée ; appliquer la table de migration de SH-01 après déplacement.
 
-[Backlog et démarrage](README.md) · [ADR 0055](../../../architecture/adr/0055-unifier-les-adaptateurs-de-stockage.md) · [ADR 0056](../../../architecture/adr/0056-ports-de-lecture-des-snapshots.md) · [ADR 0057](../../../architecture/adr/0057-finaliser-les-frontieres-hexagonales.md)
+[Backlog et démarrage](README.md) · [ADR 0055](../../../architecture/adr/archive/0055-unifier-les-adaptateurs-de-stockage.md) · [ADR 0056](../../../architecture/adr/0056-ports-de-lecture-des-snapshots.md) · [ADR 0057](../../../architecture/adr/0057-finaliser-les-frontieres-hexagonales.md)
 
 ## SH-01 — Établir la baseline et la cartographie de migration
 
@@ -60,7 +60,7 @@ python scripts/architecture/check-module-boundaries.py ; python scripts/docs/che
 - État : À faire
 - Priorité : P1
 - Dépendances : SH-02
-- Point d'entrée : `minos-storage-local/src/main/java/com/minos/storage/local/store/KnowledgeSnapshotCodecs.java`, `minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresSnapshotPayloadCodec.java`, `docs/architecture/adr/0046-format-de-snapshot-v3-chaines-utf8.md`
+- Point d'entrée : `minos-storage-local/src/main/java/com/minos/storage/local/store/KnowledgeSnapshotCodecs.java`, `minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresSnapshotPayloadCodec.java`, `docs/architecture/adr/archive/0046-format-de-snapshot-v3-chaines-utf8.md`
 
 ### Actions
 
