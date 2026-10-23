@@ -3,7 +3,9 @@ package com.minos.storage.postgresql.snapshot;
 import com.minos.domain.Symbol;
 import com.minos.storage.postgresql.PostgresTestSupport;
 import com.minos.storage.postgresql.support.PostgresConnectionFactory;
+import com.minos.store.IncomingRelationships;
 import com.minos.store.SnapshotQueryView;
+import com.minos.store.SnapshotReadView;
 import com.minos.store.SymbolSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -82,6 +84,29 @@ class PostgresCodeKnowledgeSnapshotStoreCacheTest extends PostgresTestSupport {
         assertEquals(1L, afterHit.misses());
         assertEquals(0L, afterHit.evictions());
         assertEquals(afterBuild.weightBytes(), afterHit.weightBytes());
+    }
+
+    /** AUD-ARC-07 : la vue neutre est l'objet en cache ; l'ancien contrat partage sa construction et son index. */
+    @Test
+    @SuppressWarnings("deprecation")
+    void theReadViewAndTheLegacyViewShareOneBuildAndOneIncomingIndex() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
+        store.publish(projectId, "snap-1", List.of(symbol(projectId, "sym-a"), symbol(projectId, "sym-b")));
+
+        SnapshotReadView read = store.loadActiveReadView(projectId).orElseThrow();
+        IncomingRelationships byReadView = read.incomingRelationships();
+        SnapshotQueryView legacy = store.loadActiveQueryView(projectId).orElseThrow();
+
+        assertSame(read, store.loadActiveReadView(projectId).orElseThrow());
+        assertSame(legacy, store.loadActiveQueryView(projectId).orElseThrow());
+        assertSame(read.reader(), legacy.queryStore());
+        assertSame(read.snapshot(), legacy.snapshot());
+        assertSame(byReadView, legacy.queryStore().symbolEdgeIndex(projectId.toString()));
+        assertEquals(1L, legacy.queryStore().symbolEdgeIndexBuilds());
+        assertEquals(1L, store.queryCacheStats().misses(), "one view built for both contracts");
+        assertEquals(3L, store.queryCacheStats().hits());
+        assertEquals(1, store.queryCacheStats().entries());
     }
 
     @Test

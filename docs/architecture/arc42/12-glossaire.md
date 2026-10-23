@@ -26,8 +26,10 @@
 | **MCP** | Model Context Protocol — protocole JSON-RPC 2.0 STDIO permettant aux agents IA de consommer MINOS comme fournisseur de contexte |
 | **NEXUS** | Orchestrateur externe consommant l'export JSON de snapshot normalisé MINOS |
 | **Shaded JAR** | JAR autonome contenant MINOS et toutes ses dépendances (produit par `maven-shade-plugin` dans `minos-app`) |
-| **CodeKnowledgeStore** | Port du moteur définissant le contrat de stockage/requête provider-indépendant |
-| **SnapshotQueryView** | Vue en mémoire du snapshot actif, reconstruite à la promotion, permettant des requêtes sans I/O |
+| **CodeKnowledgeReader** | Port de lecture du moteur : les lectures de la connaissance du code dont ont besoin les cas d'usage de requête, sans écriture (ADR-0056) |
+| **CodeKnowledgeStore** | Port du moteur qui étend `CodeKnowledgeReader` avec la voie d'écriture de l'ingestion, provider-indépendant |
+| **SnapshotReadView** | Vue de lecture du snapshot actif, construite une fois et mise en cache par le store, permettant des requêtes sans I/O par `CodeKnowledgeReader` |
+| **SnapshotQueryView** | Vue du snapshot actif qui expose l'index mémoire ; dépréciée depuis 1.3.0 au profit de `SnapshotReadView`, conservée sans retrait programmé |
 | **Evidence** | Type du domaine portant la provenance d'un fait (provider, type de preuve, confiance) |
 | **ResolutionStatus** | État de résolution d'un symbole ou d'une relation (RESOLVED, UNRESOLVED, PARTIAL…) |
 | **ProgramGraph** | Graphe de programme capability-honest : nœuds et arêtes typés, avec capacités et limitations déclarées |

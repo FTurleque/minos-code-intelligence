@@ -15,7 +15,7 @@ import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.SnapshotQueryView;
+import com.minos.store.SnapshotReadView;
 
 import java.io.IOException;
 import java.time.Clock;
@@ -181,9 +181,9 @@ public final class RuntimeIntelligenceService {
         if (callLimit < 1 || callLimit > MAX_HOT_PATHS) throw new IllegalArgumentException("call limit is invalid");
         RegisteredProject project = projects.resolve(projectReference);
         // AUD-PERF-13 : recherche par l'index de la vue active, en temps constant, sans parcourir les symboles.
-        SnapshotQueryView view = activeQueryView(project);
+        SnapshotReadView view = activeReadView(project);
         CodeKnowledgeSnapshot snapshot = view.snapshot();
-        Symbol symbol = view.queryStore().findSymbolById(project.id().toString(), symbolId)
+        Symbol symbol = view.reader().findSymbolById(project.id().toString(), symbolId)
                 .orElseThrow(() -> new IllegalArgumentException("unknown symbol in active snapshot: " + symbolId));
         List<CorrelatedRuntimeSession> selected = selectSessions(project.id(), snapshot.snapshotId(), sessionId);
         long executionHits = 0;
@@ -247,8 +247,8 @@ public final class RuntimeIntelligenceService {
                 .orElseThrow(() -> new IllegalStateException("project has no active static snapshot: " + project.displayName()));
     }
 
-    private SnapshotQueryView activeQueryView(RegisteredProject project) throws IOException {
-        return snapshots.loadActiveQueryView(project.id())
+    private SnapshotReadView activeReadView(RegisteredProject project) throws IOException {
+        return snapshots.loadActiveReadView(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active static snapshot: " + project.displayName()));
     }
 

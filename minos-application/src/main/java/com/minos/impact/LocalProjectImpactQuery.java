@@ -4,7 +4,7 @@ import com.minos.application.resolution.ProjectResolver;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.SnapshotQueryView;
+import com.minos.store.SnapshotReadView;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -40,7 +40,7 @@ public final class LocalProjectImpactQuery implements ProjectImpactQuery {
     public ImpactAnalysisReport analyzeImpact(String projectIdentifier, ImpactAnalysisRequest request) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         // AUD-PERF-11 : la vue active, en cache, porte l'index des arêtes entrantes construit une fois pour elle.
-        SnapshotQueryView view = snapshotStore.loadActiveQueryView(project.id())
+        SnapshotReadView view = snapshotStore.loadActiveReadView(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active code knowledge snapshot: " + project.id()));
         return impactService.analyze(view, request);
     }

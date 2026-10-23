@@ -329,6 +329,19 @@ Pour les détails d’architecture, voir [../developer/public-surfaces.md](../de
 
 ## Ruptures
 
+### Port de lecture des snapshots ([ADR 0056](../architecture/adr/ARCH-0056-ports-de-lecture-des-snapshots.md)), version 1.3.0
+
+Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change. Les types publics de `com.minos.store` publiés depuis la 1.2.0 sont conservés : `SnapshotQueryView`, ses accesseurs `queryStore()` et `indexMetrics()`, `CodeKnowledgeSnapshotStore.loadActiveQueryView` et `ImpactAnalysisService.analyze(SnapshotQueryView, ImpactAnalysisRequest)` sont dépréciés (`@Deprecated(since = "1.3.0")`, sans retrait programmé) et rendent le même résultat ; leur remplaçant est `SnapshotReadView`, obtenue par `CodeKnowledgeSnapshotStore.loadActiveReadView`. Les lectures de `CodeKnowledgeStore` sont déclarées par sa super-interface `CodeKnowledgeReader` : un appelant compilé contre la 1.2.0 les résout toujours.
+
+Quatre signatures de classes publiques internes prennent le port de lecture au lieu du port complet. Un appel compile sans changement (un `CodeKnowledgeStore` est un `CodeKnowledgeReader`), mais un code précompilé qui appelait l'une d'elles doit être recompilé (rupture binaire) :
+
+| Signature 1.2.0 | Signature 1.3.0 |
+|---|---|
+| `new SymbolQueryService(CodeKnowledgeStore)` | `new SymbolQueryService(CodeKnowledgeReader)` |
+| `new RelationshipQueryService(CodeKnowledgeStore)` | `new RelationshipQueryService(CodeKnowledgeReader)` |
+| `new CodeSearchService(CodeKnowledgeStore, SourceReader)` | `new CodeSearchService(CodeKnowledgeReader, SourceReader)` |
+| `ModuleFilterGuard.require(CodeKnowledgeStore, String, SymbolSearchCriteria)` | `ModuleFilterGuard.require(CodeKnowledgeReader, String, SymbolSearchCriteria)` |
+
 ### Packages internes renommés : un package, un module ([ADR 0044](../architecture/adr/archive/0044-un-package-un-module.md))
 
 Aucune signature de `com.minos.api` ne change : les contrats publics ne nomment que `com.minos.api.*` et

@@ -64,7 +64,7 @@
 ## 8.6 Résilience
 
 - **Promotion atomique** des snapshots : un snapshot est visible seulement après promotion complète (ADR-0006).
-- **Snapshot actif en mémoire** (`SnapshotQueryView`) : requêtes rapides sans I/O pour chaque appel (ADR-0024).
+- **Snapshot actif en mémoire** (`SnapshotReadView`) : requêtes rapides sans I/O pour chaque appel, par le port de lecture `CodeKnowledgeReader` (ADR-0024, ADR-0056).
 - **Indexation incrémentale** : planifiée uniquement sous preuve explicite de capacité provider (ADR-0014).
 - **Compaction et rétention** : `SnapshotCompactionService`, `SnapshotRetentionService` maintiennent la taille sous contrôle.
 - **Fail-closed** sur les configurations inconnues (ADR-0037).
@@ -111,7 +111,7 @@
 
 ## 8.10 Performance et concurrence
 
-- La `SnapshotQueryView` est construite en mémoire à la promotion du snapshot et partagée en lecture seule.
+- La `SnapshotReadView` du snapshot actif est construite au premier besoin, mise en cache par le store et partagée en lecture seule : les cas d'usage n'y voient que les lectures de `CodeKnowledgeReader`, jamais l'index mémoire ni ses écritures (ADR-0056). L'ancienne `SnapshotQueryView`, dépréciée, partage la même vue et le même index.
 - Les index en mémoire (symboles, relations) sont reconstruits depuis les facts persistés.
 - **Baseline M15** (repeated query, in-memory) : first = 22,6 ms, p50 = 3,88 ms, p95 = 5,34 ms.
 - La recherche sémantique linéaire est volontaire ; une structure ANN n'est introduite que sous mesures (ADR-0031).

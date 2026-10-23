@@ -33,7 +33,7 @@
 | [BE-0039](../adr/BE-0039-reprise-indexation-apres-interruption.md) | Reprendre une indexation interrompue au lieu de tout réindexer | Accepted — implémenté au sprint 2 | 2026-09-26 | — |
 | [ARCH-0042](../adr/ARCH-0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Accepted — option (c) retenue | 2026-09-27 | — |
 | [GEN-0043](../adr/GEN-0043-retrait-des-artefacts-de-jalon.md) | Politique de retrait des scripts et workflows de jalon | Accepted | — | — |
-| [ARCH-0056](../adr/ARCH-0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — mise en œuvre partielle | 2026-10-05 | — |
+| [ARCH-0056](../adr/ARCH-0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted | 2026-10-05 | — |
 | [ARCH-0057](../adr/ARCH-0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels planifiés | 2026-10-05 | — |
 | [ARCH-0058](../adr/ARCH-0058-declarer-les-usages-de-modules.md) | Déclarer chaque module utilisé | Accepted | 2026-10-09 | — |
 | [SEC-0060](../adr/SEC-0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Accepted | 2026-10-18 | — |

@@ -32,3 +32,11 @@ Le garde `check-module-boundaries.py` SHALL refuser toute classe de production h
 - **GIVEN** le dépôt après ce changement
 - **WHEN** le garde et `python scripts/architecture/test_check_module_boundaries.py` sont exécutés
 - **THEN** les deux sortent en code 0
+
+### Requirement: Les cas d'usage de lecture ne reçoivent pas le port d'écriture
+Le garde `check-module-boundaries.py` SHALL refuser toute classe de production de `minos-application` qui nomme le port d'écriture `CodeKnowledgeStore` ; un cas d'usage de lecture reçoit `CodeKnowledgeReader`. Les adaptateurs d'ingestion restent libres de le nommer.
+
+#### Scenario: Cas d'usage qui reçoit le port d'écriture
+- **GIVEN** une copie temporaire où une classe de `minos-application` déclare un champ de type `CodeKnowledgeStore`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** il sort en code 1 en nommant la classe et le port

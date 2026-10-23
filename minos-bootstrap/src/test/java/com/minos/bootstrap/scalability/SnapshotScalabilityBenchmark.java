@@ -36,6 +36,7 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.InMemoryCodeKnowledgeStore;
 import com.minos.store.SnapshotDescriptor;
 import com.minos.store.SnapshotQueryView;
+import com.minos.store.SnapshotReadView;
 import com.minos.store.SymbolSnapshot;
 import jdk.jfr.Recording;
 import jdk.jfr.consumer.RecordedEvent;
@@ -391,7 +392,7 @@ public final class SnapshotScalabilityBenchmark {
         for (int index = 0; index < loadNanos.length; index++) {
             FileSymbolSnapshotStore cold = new FileSymbolSnapshotStore(storeRoot);
             long started = System.nanoTime();
-            SnapshotQueryView view = cold.loadActiveQueryView(project.id()).orElseThrow();
+            SnapshotReadView view = cold.loadActiveReadView(project.id()).orElseThrow();
             loadNanos[index] = System.nanoTime() - started;
             buildNanos[index] = view.buildNanos();
             stats = cold.cacheStats();
@@ -404,7 +405,7 @@ public final class SnapshotScalabilityBenchmark {
 
         long before = settledHeap();
         FileSymbolSnapshotStore cold = new FileSymbolSnapshotStore(storeRoot);
-        SnapshotQueryView view = cold.loadActiveQueryView(project.id()).orElseThrow();
+        SnapshotReadView view = cold.loadActiveReadView(project.id()).orElseThrow();
         long withView = settledHeap();
         CodeKnowledgeSnapshot snapshotOnly = view.snapshot();
         Reference.reachabilityFence(view);
@@ -1212,15 +1213,19 @@ public final class SnapshotScalabilityBenchmark {
             return Optional.ofNullable(active.get(projectId));
         }
 
+        /** Ancien contrat, servi par la vue de lecture. */
+        @Deprecated(since = "1.3.0")
         @Override
         public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) {
-            return loadActiveKnowledge(projectId).map(snapshot -> {
-                long started = System.nanoTime();
-                InMemoryCodeKnowledgeStore indexes = new InMemoryCodeKnowledgeStore(snapshot);
-                return new SnapshotQueryView(new SnapshotDescriptor(2, snapshot.snapshotId(), "in-memory",
-                        NO_FILE_SHA256, snapshot.symbols().size(), snapshot.occurrences().size(),
-                        snapshot.relationships().size()), snapshot, indexes, System.nanoTime() - started);
-            });
+            return loadActiveReadView(projectId).map(SnapshotQueryView::of);
+        }
+
+        @Override
+        public Optional<SnapshotReadView> loadActiveReadView(UUID projectId) {
+            return loadActiveKnowledge(projectId).map(snapshot -> SnapshotReadView.indexed(
+                    new SnapshotDescriptor(2, snapshot.snapshotId(), "in-memory", NO_FILE_SHA256,
+                            snapshot.symbols().size(), snapshot.occurrences().size(), snapshot.relationships().size()),
+                    snapshot));
         }
     }
 }

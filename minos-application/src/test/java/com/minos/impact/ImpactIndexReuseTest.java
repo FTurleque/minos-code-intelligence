@@ -11,6 +11,7 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.InMemoryCodeKnowledgeStore;
 import com.minos.store.SnapshotDescriptor;
 import com.minos.store.SnapshotQueryView;
+import com.minos.store.SnapshotReadView;
 import com.minos.store.SymbolSnapshot;
 import org.junit.jupiter.api.Test;
 
@@ -47,7 +48,7 @@ class ImpactIndexReuseTest {
         ImpactAnalysisReport first = query.analyzeImpact(PROJECT, new ImpactAnalysisRequest("s00", 8, 200));
         ImpactAnalysisReport second = query.analyzeImpact(PROJECT, new ImpactAnalysisRequest("s01", 8, 200));
 
-        assertEquals(1L, store.view.queryStore().symbolEdgeIndexBuilds());
+        assertEquals(1L, memoryIndex(store.view.readView()).symbolEdgeIndexBuilds());
         assertTrue(referenceLines().contains(ImpactReferenceFixture.digestLine(first)));
         assertTrue(referenceLines().contains(ImpactReferenceFixture.digestLine(second)));
     }
@@ -64,12 +65,12 @@ class ImpactIndexReuseTest {
         }
 
         assertEquals(ImpactReferenceFixture.reference(ImpactReferenceReportsTest.REFERENCE), rendered.toString());
-        assertEquals(1L, store.view.queryStore().symbolEdgeIndexBuilds());
+        assertEquals(1L, memoryIndex(store.view.readView()).symbolEdgeIndexBuilds());
     }
 
     @Test
-    void serviceOnAViewRendersTheReference() throws Exception {
-        SnapshotQueryView view = view();
+    void serviceOnAReadViewRendersTheReference() throws Exception {
+        SnapshotReadView view = view().readView();
         ImpactAnalysisService service = new ImpactAnalysisService();
 
         StringBuilder rendered = new StringBuilder();
@@ -80,9 +81,25 @@ class ImpactIndexReuseTest {
         assertEquals(ImpactReferenceFixture.reference(ImpactReferenceReportsTest.REFERENCE), rendered.toString());
     }
 
+    /** L'ancien contrat reste servi : même rapport, et l'index de la vue n'est construit qu'une fois. */
+    @Test
+    @SuppressWarnings("deprecation")
+    void serviceOnTheLegacyViewRendersTheReferenceWithTheSameIndex() throws Exception {
+        SnapshotQueryView view = view();
+        ImpactAnalysisService service = new ImpactAnalysisService();
+
+        StringBuilder rendered = new StringBuilder();
+        for (ImpactAnalysisRequest request : ImpactReferenceFixture.requests()) {
+            rendered.append(ImpactReferenceFixture.digestLine(service.analyze(view, request)));
+        }
+
+        assertEquals(ImpactReferenceFixture.reference(ImpactReferenceReportsTest.REFERENCE), rendered.toString());
+        assertEquals(1L, view.queryStore().symbolEdgeIndexBuilds());
+    }
+
     @Test
     void simultaneousFirstAnalysesAllRenderTheExpectedReport() throws Exception {
-        SnapshotQueryView view = view();
+        SnapshotReadView view = view().readView();
         ImpactAnalysisService service = new ImpactAnalysisService();
         List<ImpactAnalysisRequest> requests = ImpactReferenceFixture.requests().subList(0, 12);
         int threads = requests.size();
@@ -105,7 +122,12 @@ class ImpactIndexReuseTest {
         } finally {
             executor.shutdownNow();
         }
-        assertEquals(1L, view.queryStore().symbolEdgeIndexBuilds());
+        assertEquals(1L, memoryIndex(view).symbolEdgeIndexBuilds());
+    }
+
+    /** Compteur de constructions de l'index mémoire que porte la vue de lecture. */
+    private static InMemoryCodeKnowledgeStore memoryIndex(SnapshotReadView view) {
+        return (InMemoryCodeKnowledgeStore) view.reader();
     }
 
     private static List<String> referenceLines() throws Exception {
@@ -113,6 +135,7 @@ class ImpactIndexReuseTest {
                 .map(line -> line + '\n').toList();
     }
 
+    @SuppressWarnings("deprecation")
     private static SnapshotQueryView view() {
         CodeKnowledgeSnapshot snapshot = ImpactReferenceFixture.snapshot();
         return new SnapshotQueryView(

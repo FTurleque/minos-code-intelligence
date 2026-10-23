@@ -68,7 +68,7 @@ def main() -> int:
                 "MAX_ACTIVE_QUERY_RETRIES", "for (int attempt = 1; attempt <= MAX_ACTIVE_QUERY_RETRIES; attempt++)",
                 "Files.deleteIfExists(value.payload())")
         forbid("PostgresCodeKnowledgeSnapshotStore.java", postgres_snapshot,
-               "return loadActiveQueryView(projectId);")
+               "return loadActiveQueryView(projectId);", "return loadActiveReadView(projectId);")
 
         # MNE-03/04/06/07: real byte/working-set bounds and payload-aware cache weights.
         require("SemanticIndexBudget.java", semantic_budget,

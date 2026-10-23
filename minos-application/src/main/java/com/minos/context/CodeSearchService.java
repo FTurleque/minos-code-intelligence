@@ -12,7 +12,7 @@ import com.minos.query.ModuleFilterGuard;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
-import com.minos.store.CodeKnowledgeStore;
+import com.minos.store.CodeKnowledgeReader;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -32,10 +32,10 @@ public final class CodeSearchService {
 
     private static final int RESPONSE_OVERHEAD_TOKENS = 24;
 
-    private final CodeKnowledgeStore knowledgeStore;
+    private final CodeKnowledgeReader knowledgeStore;
     private final SourceReader sourceReader;
 
-    public CodeSearchService(CodeKnowledgeStore knowledgeStore, SourceReader sourceReader) {
+    public CodeSearchService(CodeKnowledgeReader knowledgeStore, SourceReader sourceReader) {
         this.knowledgeStore = Objects.requireNonNull(knowledgeStore, "knowledgeStore");
         this.sourceReader = Objects.requireNonNull(sourceReader, "sourceReader");
     }
