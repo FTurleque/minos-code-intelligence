@@ -2,7 +2,7 @@
 id: ADR-0070
 title: "Code non fiable : confinement des providers et indexation distante"
 domain: security
-rules: false
+rules: true
 ---
 
 # ADR-0070 — Code non fiable : confinement des providers et indexation distante
@@ -132,7 +132,9 @@ MINOS applique pendant l'exécution un budget d'octets **et** d'entrées sur tou
 - Gate `scripts/quality/check-vertical-decomposition-consistency.py`, exécuté par `scripts/remediation/check-post-mne.py` (job `invariants`) — exige `NetworkGuarantee.NONE` et `NetworkGuarantee.OS_ENFORCED` dans `WorkerSandboxBackend`, les dispositions `FAIL_CLOSED_NOT_ENFORCED`, `UNTRUSTED_CODE_UNSUPPORTED` et `WORKER_SANDBOX_CLAIM_PROHIBITED` dans `WorkerSandboxQualification`, et le refus fail-closed de `DENY` dans `LocalIsolatedIndexWorker`.
 - Tests de `minos-runtime-local` (lancés par `mvnw verify`) : `WorkerResourceContainmentTest` (dont `currentOsBackendsStayFailClosedByDecisionAdr0041` : les backends OS intégrés restent rétrogradés pour du code non fiable), `WorkerSandboxQualificationTest` (aucune revendication de `DENY` ni de code non fiable sans preuve OS), `WorkerSandboxBackendsTest` (sélection rapportée, trois causes, WARNING sans chemin), `LinuxBubblewrapWorkerSandboxBackendTest` (réseau isolé pour `DENY`, aucun `--nproc`), `LinuxCgroupJobContainmentTest` (Linux) et `WindowsJobObjectContainmentTest` (Windows) (limites agrégées réellement appliquées, aucun descendant survivant), `ProcessIndexerExecutorBoundaryRefusalTest` (aucun provider sans frontière).
 - Tests de `minos-cli` : `LocalRemoteIndexOperationsRefusalTest` (refus avant toute matérialisation, sélection obligatoire), `DoctorCommandTest` (indexation distante indisponible, cause et codes, sans chemin).
-- Pas de règle Archgate : la frontière de job et la qualification d'un bac à sable sont des comportements prouvés par sonde et tests négatifs ; les chaînes lisibles par fichier sont déjà tenues par les gates ci-dessus.
+- Règle Archgate `0070-code-non-fiable-confinement-et-indexation-distante.rules.ts` / `limitation-de-decision-dans-le-code` : refuse l'absence du littéral `"WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041"` (commentaires exclus) dans `WorkerSandboxQualification` ; second exécutant de `scripts/docs/product-facts.py --check`.
+- Règle Archgate `0070-code-non-fiable-confinement-et-indexation-distante.rules.ts` / `product-facts-exige-la-limitation` : refuse que `scripts/docs/product-facts.py` cesse de comparer un texte à ce littéral (lecture de son AST Python) ; contrôle propre à Archgate, il garde le gate lui-même.
+- La frontière de job et la qualification d'un bac à sable n'ont pas de règle Archgate : ce sont des comportements prouvés par sonde et tests négatifs ; les autres chaînes lisibles par fichier sont tenues par les gates ci-dessus.
 - Revue : une nouvelle revendication de bac à sable s'appuie sur une sonde d'exécution et des tests négatifs ; une nouvelle dimension ou un nouveau backend déclare sa disposition réelle sans promouvoir une supervision en garantie OS ; tout nouveau chemin d'import d'artefact distant passe par la validation du coordinateur et par le staging.
 
 ## Écarts constatés

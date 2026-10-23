@@ -2,7 +2,7 @@
 id: ADR-0057
 title: "Finaliser les frontières hexagonales sans refaire les corrections acquises"
 domain: architecture
-rules: false
+rules: true
 ---
 
 # ADR 0057 — Finaliser les frontières hexagonales sans refaire les corrections acquises
@@ -61,6 +61,7 @@ Cas d'usage d'indexation (point 2, mis en œuvre le 2026-10-21, audit AUD-ARC-02
 
 - Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — règle A2 (frontières hexagonales, POM et sources) et règle A8 (aucun cycle de packages, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris) ; auto-test `test_check_module_boundaries.py`.
 - Test `ModuleArchitectureTest` (`minos-app`) — dépendances autorisées entre modules.
+- Règle Archgate `0057-finaliser-les-frontieres-hexagonales.rules.ts` / `no-jpms-module-descriptor` : refuse tout `module-info.java` dans les sources d'un module du reactor (liste lue dans les `<modules>` du POM racine), premier pas d'une migration JPMS exclue par la décision 1 ; contrôle propre à Archgate, aucun gate Python ne le fait (lancée par `archgate check`, pas par la CI).
 - Revue : chaque lot reste comportementalement conservateur, réversible et validé avant le suivant.
 
 ## Écarts constatés

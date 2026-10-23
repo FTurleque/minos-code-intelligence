@@ -2,7 +2,7 @@
 id: ADR-0017
 title: "Exposer MINOS en MCP via STDIO read-only"
 domain: architecture
-rules: false
+rules: true
 ---
 
 # ADR-0017 — Exposer MINOS en MCP via STDIO read-only
@@ -48,6 +48,8 @@ Les IDE, agents et orchestrateurs peuvent utiliser MINOS comme fournisseur de Co
 
 - Tests `MinosMcpReadOnlyHomeTest` et `MinosMcpWriteProtectedHomeTest` (`minos-mcp`, lancés par `mvnw verify`) — les tools répondent sur un `MINOS_HOME` protégé en écriture sans le modifier et n’inspectent pas les runtimes des providers.
 - Test `M29DockerQueryImageContractTest` (`minos-app`) et `scripts/ci/qualify-docker-release.sh` (workflow `docker-release-validation.yml`) — la qualification interroge le serveur MCP sur un répertoire de données monté en lecture seule.
+- Règle Archgate `0017-mcp-stdio-read-only.rules.ts` / `mcp-sans-processus-ni-ecriture` : refuse dans `minos-mcp/src/main/java`, commentaires et littéraux effacés, tout lancement de processus (`ProcessBuilder`, `Runtime.getRuntime().exec`) et toute écriture de fichier (`Files.write*`, `newOutputStream`, création, copie, déplacement ou suppression, `FileOutputStream`, écritures par `PrivateLocalStorage` ou `DurableAtomicFile`), hors de la sonde client `MinosMcpHandshakeProbe` tant qu'elle n'importe que le client du SDK ; contrôle propre à Archgate, aucun gate Python ne le fait (`check-private-io.py` ne couvre que les écritures brutes, avec liste de tolérance).
+- Règle Archgate `0017-mcp-stdio-read-only.rules.ts` / `mcp-stdout-reserve-au-transport` : refuse tout `System.out` (ou `System.setOut`, `FileDescriptor.out`) de `minos-mcp/src/main/java` hors des arguments de `new StdioServerTransportProvider(...)` ; contrôle propre à Archgate, aucun gate Python ne le fait.
 - Revue : tout tool `minos_*` nouveau ou modifié est en lecture seule, délègue à un service existant et borne sa réponse.
 
 ## Preuves
