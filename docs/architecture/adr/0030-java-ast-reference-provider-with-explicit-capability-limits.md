@@ -1,3 +1,10 @@
+---
+id: ADR-0030
+title: "Java AST reference provider with explicit capability limits"
+domain: backend
+rules: false
+---
+
 # ADR-0030 — Java AST reference provider with explicit capability limits
 
 Status: **Accepted**
@@ -31,6 +38,22 @@ The provider:
 The provider does **not** perform implicit full-classpath compiler attribution in M22 v1. Therefore it does not claim overload/type resolution that it has not established.
 
 The M21 sidecar remains supported and composable. A stronger Java analyzer may later replace or complement the reference provider without changing the `ProgramGraphProvider` contract.
+
+## Do's and Don'ts
+
+### Do
+
+- N’analyser que les fichiers `.java` représentés par le snapshot structuré actif, confinés à la racine du projet enregistrée.
+- Analyser toutes les unités source requises en une seule opération fail-closed.
+- Publier chaque capacité seulement lorsque les faits de graphe correspondants sont présents.
+- Marquer les nœuds AST `FACTUAL` (`OriginType.AST`) et les arêtes d’analyse `DERIVED` (`OriginType.DERIVED_BY_MINOS`), avec confiance et `Evidence`.
+
+### Don't
+
+- Ne pas revendiquer de résolution de surcharge ou de type non établie (pas d’attribution implicite du classpath complet).
+- Ne jamais promouvoir un chemin statique en fait runtime.
+- Ne pas rendre `SECURITY_TAINT` disponible sans le fichier de règles local `.minos/java-advanced-provider.properties`.
+- Ne résoudre l’interprocédural que lorsque nom simple + arité désignent exactement une méthode du projet.
 
 ## Information nature
 
@@ -69,6 +92,12 @@ Source, sink and sanitizer method names are explicit local policy. Without this 
 - exception CFG edges are conservative;
 - security flow is intraprocedural and taxonomy-driven;
 - TypeScript/Python are not promoted by this ADR.
+
+## Compliance and Enforcement
+
+- Gate `scripts/quality/check-java-ast-provider-consistency.py` — constantes du provider, documentation et cet ADR ; lancé seulement par `scripts/m22/run-final.ps1`, `scripts/m23/run-final.ps1` et `scripts/m24/run-final.ps1` (aucun workflow).
+- Test `JavaSourceProgramGraphProviderTest` (`minos-application`, lancé par `mvnw verify`) — précision et rappel sur fixtures contrôlées, échec fermé hors Java ou sur erreur de syntaxe, sécurité jamais revendiquée sans règles explicites.
+- Revue : toute capacité nouvelle du provider s’appuie sur des faits présents et garde ses limitations.
 
 ## Rejected alternatives
 

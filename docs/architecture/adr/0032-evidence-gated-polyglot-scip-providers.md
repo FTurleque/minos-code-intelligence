@@ -1,3 +1,10 @@
+---
+id: ADR-0032
+title: "Evidence-gated polyglot SCIP providers"
+domain: architecture
+rules: false
+---
+
 # ADR-0032 — Evidence-gated polyglot SCIP providers
 
 Status: **Accepted — final M24 dispositions recorded from exact-head Windows + Linux evidence.**
@@ -34,6 +41,24 @@ The evaluated ecosystems expose viable SCIP paths, but with materially different
 13. **Public surfaces remain additive.** CLI, Java API, MCP, IntelliJ and NEXUS expose provider/discovery data through shared core contracts; they do not maintain divergent hard-coded language capability tables.
 14. **Promotion requires the same exact HEAD on Windows and Linux.** Platform-inapplicable providers must report a documented limitation, not a fake PASS. No GitHub Actions result participates in M24 promotion during July 2026.
 
+## Do's and Don'ts
+
+### Do
+
+- Faire passer toute intégration de langage par l'ingestion SCIP et le pipeline de snapshot existants, sans modèle de domaine ni chemin de stockage propre à un langage.
+- Donner à chaque provider un profil de capacités et opérationnel explicite et exhaustif.
+- N'attribuer `QUALIFIED`, `QUALIFIED_WITH_CONSTRAINTS` ou `EXPERIMENTAL` qu'après le passage des fixtures et des gates de plateforme correspondants.
+- Confiner sous `MINOS_HOME/tools` les fichiers d'un provider installé par MINOS.
+- Conserver pour chaque symbole, occurrence et relation l'id et la version du provider, le run d'indexation et l'origine SCIP.
+
+### Don't
+
+- Ne pas faire brancher `ProjectDiscoveryService` sur C/C++/C#/Go/Rust.
+- Ne pas faire d'installation globale npm/dotnet/go/rust ni modifier la toolchain Rust de l'utilisateur.
+- Ne pas fabriquer de relation absente en amont.
+- Ne pas revendiquer CFG, def-use, data-flow interprocédural ou analyse de sécurité pour un nouveau provider sans preuve séparée.
+- Ne pas maintenir dans les surfaces des tables de capacités par langage codées en dur.
+
 ## Final M24 disposition
 
 The exact-head gates passed on `927f57768a79af162e2cdc765d0f54d274cbe02e`; PR #82 merged that head into `develop` as `2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa` and issue #81 was closed as completed.
@@ -65,6 +90,11 @@ Windows required real e2e PASS for Go and Rust. Linux required real e2e PASS for
 - Rust remains constrained to the pinned release/commit and the two platforms actually reproduced; no other platform or toolchain is implied;
 - provider profiles may differ substantially in structural relationship quality even when symbols/references are strong;
 - a shared SCIP transport does not imply shared semantic completeness.
+
+## Compliance and Enforcement
+
+- Gate `scripts/quality/check-polyglot-provider-consistency.py`, exécuté par `scripts/remediation/check-post-mne.py` (job `invariants`) — interdit toute branche `Language.CSHARP`, `Language.GO`, `Language.RUST`, `Language.CPP` ou `Language.C` dans `ProjectDiscoveryService`, toute installation globale et toute exécution implicite de `rustup`, et exige les chaînes de cet ADR.
+- Revue : un nouveau provider arrive avec un profil exhaustif, une disposition fondée sur des fixtures et des gates de plateforme, et aucune capacité M22 revendiquée sans preuve propre.
 
 ## Rejected alternatives
 

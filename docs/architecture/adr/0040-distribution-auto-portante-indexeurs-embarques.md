@@ -1,10 +1,17 @@
+---
+id: ADR-0040
+title: "Livrer les indexeurs dans le paquet, pas après l'installation"
+domain: general
+rules: false
+---
+
 # 0040 — Livrer les indexeurs dans le paquet, pas après l'installation
 
 Status: Accepted — implémentée par le lot D1 (chantier sprints 2–3) ; écarts à la conception initiale dans « Mise en œuvre ».
 
 Complète [0032](0032-evidence-gated-polyglot-scip-providers.md) (providers SCIP sous preuve), [0037](0037-first-class-native-and-docker-runtime-backends.md) et la §Supply-chain de [ROADMAP.md](../../project/governance/ROADMAP.md).
 
-## Contexte
+## Context
 
 **Exigence produit, jusqu'ici jamais écrite** : après avoir lancé le setup Windows (ou déplié le ZIP), MINOS doit être utilisable immédiatement. L'utilisateur ne doit pas avoir à installer lui-même les indexeurs dont MINOS a besoin pour fonctionner.
 
@@ -24,7 +31,7 @@ Seule l'image Docker release fait déjà mieux : elle embarque ses toolchains av
 
 **Hors périmètre** : les toolchains du projet analysé (JDK du projet, Node.js, Go, SDK .NET, `cargo`/`rustc`). Elles appartiennent au poste de développement, MINOS les détecte mais ne les installe pas. Cette limite doit être dite explicitement à l'utilisateur, au lieu d'être confondue avec « il manque un outil MINOS ».
 
-## Décision
+## Decision
 
 ### 1. Le paquet contient une charge d'outils versionnée
 
@@ -72,9 +79,26 @@ Le setup Windows vérifie en fin d'installation, via `doctor --format json`, que
 
 Chaque élément de la charge entre dans le SBOM CycloneDX et dans `THIRD-PARTY-NOTICES.txt`, avec sa licence. `scripts/release/check-supply-chain.py` est étendu d'un gate `check-tools-manifest.py` qui vérifie la cohérence catalogue ↔ manifeste ↔ fichiers réellement présents (hash et taille). Une release dont la charge d'outils diverge du catalogue est refusée.
 
-La mise à jour transactionnelle de l'installation (`integration/update-installation.ps1`) traite la charge d'outils comme le reste du payload : staging, bascule, rollback.
+La mise à jour transactionnelle de l'installation (`scripts/install/update-installation.ps1`, livré sous `integration/` dans la distribution) traite la charge d'outils comme le reste du payload : staging, bascule, rollback.
 
-## Conséquences
+## Do's and Don'ts
+
+### Do
+
+- Livrer dans le paquet une charge d'outils versionnée, décrite par un manifeste, aux versions exactes de `ScipIndexerCatalog`.
+- Amorcer `MINOS_HOME/tools` depuis la charge embarquée, sans réseau, en vérifiant le SHA-256 avant et après copie, de façon idempotente, atomique et durable.
+- Prendre dans le catalogue, jamais auprès du serveur, la version et le SHA-256 attendus de tout téléchargement.
+- Faire distinguer par `minos doctor` un outil MINOS absent d'une dépendance externe du poste manquante.
+- Faire entrer chaque composant embarqué dans le SBOM CycloneDX et dans `THIRD-PARTY-NOTICES.txt`, avec sa licence.
+
+### Don't
+
+- Ne pas faire télécharger un outil par un provider en cours d'exécution.
+- Ne rien exécuter depuis un emplacement modifiable sans élévation.
+- Ne pas installer les toolchains du projet analysé.
+- Ne pas présenter `tools install` comme une étape de démarrage.
+
+## Consequences
 
 ### Positives
 
@@ -92,6 +116,12 @@ La mise à jour transactionnelle de l'installation (`integration/update-installa
 | Licences de redistribution | Vérification licence par licence avant embarquement ; un composant non redistribuable reste en téléchargement automatique et n'entre pas dans la charge |
 | Le repli réseau contredit l'esprit hors ligne | Épinglage version + SHA-256, liste blanche d'hôtes, `--offline` disponible, jamais de téléchargement par un provider |
 | Faux sentiment de complétude | `doctor` sépare explicitement « outil MINOS manquant » et « toolchain du projet manquante » |
+
+## Compliance and Enforcement
+
+- Gate `scripts/quality/check-tools-manifest.py` (job `invariants`) — cohérence entre le catalogue, le manifeste et les fichiers réellement présents (hash et taille), une seule version majeure de Node entre plateformes, verrou de classpath de scip-java aligné sur le catalogue.
+- Script `scripts/quality/check-embedded-tools-advisories.py`, lancé chaque semaine par `.github/workflows/embedded-tools-advisories.yml` (hors PR, non exigé) — avis OSV sur les composants du catalogue.
+- Revue : un nouveau composant embarqué entre dans le catalogue, le SBOM et les notices dans le même changement.
 
 ## Plan d'implémentation
 
@@ -121,3 +151,10 @@ Ce qui a été livré, et ce qui diffère de la conception ci-dessus :
 - **Troisième nature de composant : classpath résolu à l'installation, vérifié contre un verrou** (changement `epingler-et-isoler-l-installation-des-providers`, AUD-SEC-02, octobre 2026). Hors paquet Windows, `minos tools install scip-java` ne lance plus scip-java pour « sonder » sa version : il résout le classpath par `coursier fetch --classpath` (jamais `launch`) et compare, ensemble à ensemble, chaque jar au verrou `scip-java-classpath.lock.json` (nom, taille, SHA-256 des 74 jars, identique sous Windows et Linux, mesuré avec le Coursier épinglé de chaque plateforme). Le moindre écart (jar remplacé par l'amont ou un miroir, jar en trop, jar manquant) fait échouer l'installation avant que `classpath.txt` soit écrit ; le message nomme le fichier, jamais un répertoire. Le verrou est la description unique : `build-embedded-tools.py` y compare aussi le classpath du paquet Windows, et `check-tools-manifest.py` refuse un verrou dont la version ou la coordonnée diffère du catalogue. **Limites** : (1) ~~l'indexation Linux relance `coursier launch` et relit le cache~~ — levée par le changement `executer-scip-java-sur-classpath-verifie` (AUD-SEC-02, résidu D2, octobre 2026) : l'installation copie les jars vérifiés dans `MINOS_HOME/tools` avec un lanceur à manifeste, et le plan d'indexation revérifie chaque jar contre le verrou avant chaque exécution, sous Windows et sous Linux ; reste la fenêtre entre vérification et ouverture par la JVM, propre au compte de l'utilisateur. (2) L'image Docker construit son propre classpath (`cs launch`, `cs bootstrap --standalone`) sans ce verrou. (3) Le verrou doit être régénéré à chaque montée de version de scip-java.
 - **Veille des vulnérabilités du catalogue** (changement `surveiller-les-outils-embarques`, AUD-DEP-03, octobre 2026). Le risque « composants tiers à jour dans le paquet » n'avait aucun contrôle automatique : ni Dependabot ni Dependency-Check ne lisent le catalogue. Deux contrôles l'ajoutent, sans rien monter d'eux-mêmes. (1) Les deux verrous npm livrés sont passés par chemin à OSV-Scanner dans le gate de PR (`--lockfile=package-lock.json:<chemin>`), sans renommage ; `check-ci-wiring.py` refuse un verrou de ressources absent des arguments. (2) `scripts/quality/check-embedded-tools-advisories.py`, lancé chaque semaine par `embedded-tools-advisories.yml`, interroge OSV pour les entrées du catalogue qui ont un nom de paquet et pour les 74 jars du verrou de scip-java, et compare la ligne de Node.js à son calendrier de support. **Limites** : les binaires sans nom de paquet (Coursier, scip-clang, rust-analyzer), les avis du runtime Node.js et les bibliothèques incluses dans une distribution interrogée ne sont pas couverts ; le script les énumère à chaque passage. Une alerte se traite par une montée de catalogue qualifiée ou une dérogation datée (`docs/developer/supply-chain.md`, « Traiter une alerte »). Le script porte la table des groupes Maven des jars du verrou : elle se met à jour avec lui.
 - **§6, notices de la charge** (changement `conserver-les-notices-tierces`, AUD-DEP-16, octobre 2026). `THIRD-PARTY-NOTICES.txt` est un index de coordonnées, pas un texte de notice. Le jar ombré garde désormais les notices de ses dépendances Java, agrégées dans `META-INF/NOTICE`, et leurs fichiers de licence, un répertoire par dépendance sous `META-INF/licenses/` ; les images Docker les extraient du jar sous `/opt/minos/licenses/`. **Limite** : les outils de la charge qui ne viennent pas de Maven (Node, paquets npm, Go, Rust, .NET, indexeurs) restent hors de ce périmètre (décision du propriétaire) ; détail dans `docs/developer/supply-chain.md`, « Notices et licences tierces dans les livrables ».
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- § 3 (repli par téléchargement automatique) n'est pas réalisé alors que le statut dit la décision implémentée ; l'option de CLI `--offline` n'existe pas, seul `MINOS_TOOLS_OFFLINE=1` interdit tout téléchargement — preuve : section « Mise en œuvre » de cet ADR ; `minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ToolsNetworkPolicy.java:15`.
+- § 6 : `check-tools-manifest.py` est un gate autonome lancé par le job `invariants`, pas une extension de `scripts/release/check-supply-chain.py`, qui ne le cite pas — preuve : `.github/workflows/pr-ci.yml:118`.

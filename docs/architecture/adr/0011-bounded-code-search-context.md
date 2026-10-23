@@ -1,14 +1,21 @@
+---
+id: ADR-0011
+title: "Borner explicitement la recherche et le contexte de code"
+domain: backend
+rules: false
+---
+
 # ADR-0011 — Borner explicitement la recherche et le contexte de code
 
 - **Statut** : Accepted
 - **Date** : 24 juillet 2026
 - **Origine** : M4 — Recherche et contexte compact
 
-## Contexte
+## Context
 
 Une surface de Code Intelligence destinée aux humains et aux agents doit rester déterministe, compacte et contrôlable. Retourner implicitement des fichiers entiers ou des graphes non bornés rend le coût et la taille du contexte imprévisibles.
 
-## Décision
+## Decision
 
 MINOS sépare la recherche structurée du chargement explicite de source complète.
 
@@ -18,9 +25,28 @@ MINOS sépare la recherche structurée du chargement explicite de source complè
 - la recherche privilégie les extraits et faits pertinents ;
 - la lecture d’un fichier complet est une opération explicite distincte.
 
-## Conséquences
+## Do's and Don'ts
+
+### Do
+
+- Borner les résultats, les profondeurs et les budgets de tokens.
+- Signaler les troncatures et les limitations.
+- Faire de la lecture d'un fichier complet une opération explicite distincte.
+- Conserver les mêmes bornes dans les surfaces CLI, API et MCP.
+
+### Don't
+
+- Ne pas renvoyer implicitement des fichiers entiers ou des graphes non bornés.
+- Ne pas réimplémenter dans une surface une politique de bornes différente.
+
+## Consequences
 
 Les consommateurs peuvent budgéter le contexte et éviter les réponses volumineuses involontaires. Les surfaces CLI, API et MCP doivent conserver ces bornes au lieu de réimplémenter une politique différente.
+
+## Compliance and Enforcement
+
+- Test `CodeSearchServiceTest` (`minos-application`) — bornes et troncatures de la recherche.
+- Revue : toute nouvelle requête ou surface est bornée, signale ses troncatures et réutilise la politique commune.
 
 ## Preuves
 

@@ -1,3 +1,10 @@
+---
+id: ADR-0042
+title: "Racine de composition : où câbler les adaptateurs une fois `minos-application` réduite à ses ports"
+domain: architecture
+rules: false
+---
+
 # 0042 — Racine de composition : où câbler les adaptateurs une fois `minos-application` réduite à ses ports
 
 Status: Accepted (2026-09-27) — option (c) retenue par l'utilisateur : la racine de composition vit dans un
@@ -35,7 +42,7 @@ Conditions attachées à la décision (chacune prouvée par un test ou par le sc
 
 Relu sur la branche `hautes/impl-hexagone` au commit `22add2af` (tour 3 et ronde 4 de vérification).
 
-## 1. Contexte
+## Context
 
 La cible A2 est : `minos-application` n'expose que des ports et ne dépend d'aucun adaptateur
 (`minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql`, `minos-provider-scip`,
@@ -226,6 +233,23 @@ tests hors de leur module.
 `minos-bootstrap` (entre les adaptateurs et les surfaces, découvert par `ServiceLoader` derrière
 `MinosApplication.open`) plutôt que dans `minos-app`, écart assumé à la cible de l'audit ?
 
+## Do's and Don'ts
+
+### Do
+
+- Placer la racine de composition dans `minos-bootstrap`, découverte par `ServiceLoader` derrière `MinosApplication.open(home)` / `Builder.build()`.
+- Faire de `minos-bootstrap` le seul module non adaptateur qui connaît une classe concrète d'adaptateur (hors `minos-app`, assemblage final).
+- Échouer vite et de façon déterministe : aucune implémentation → message qui nomme le module manquant ; plusieurs → refus ; aucun chemin dans les messages.
+- Couvrir le JAR distribué par un test de contrat de packaging (`ShadedJarCompositionRootIT`).
+- Passer un chargeur explicite à tout `ServiceLoader.load` d'un `src/main` du reactor.
+
+### Don't
+
+- Ne pas introduire de dépendance `application → adaptateurs`, `adaptateurs → application` ni `surfaces → adaptateurs`, toutes portées confondues, `test` compris.
+- Ne pas faire dépendre une surface de `minos-bootstrap` en portée `compile`.
+- Ne nommer aucune classe d'adaptateur depuis une classe de production de `minos-application`, des surfaces ou de `minos-app`.
+- N'inscrire aucune exception, même temporaire, dans le script de frontières.
+
 ## 5. Suite, quelle que soit l'option
 
 1. Ports manquants, descendus en `minos-engine` comme les précédents : `ProviderRuntimeManager` /
@@ -237,7 +261,7 @@ tests hors de leur module.
    `application → adaptateurs` ; déménagement des 45 tests couplés (dont V27).
 3. Engagement de `check-module-boundaries.py` durci, qui passe alors au vert — jamais assoupli.
 
-## 6. Conséquences
+## Consequences
 
 - Positives : frontières hexagonales vérifiées par le script ; les adaptateurs deviennent
   interchangeables sans recompiler l'application.
@@ -267,6 +291,13 @@ tests hors de leur module.
   `minos-bootstrap` (tests de `minos-cli`) ; le JAR de production n'offre que `production(home)`, qui
   sonde l'hôte réel (`LocalRemoteIndexingRuntimeInjectionTest`). En profondeur, le worker isolé refuse de
   toute façon une sandbox non qualifiée pour du code non fiable (ADR 0041).
+
+## Compliance and Enforcement
+
+- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — politique hexagonale des POM (`check_hexagonal_boundaries`), contrôle des sources (`check_source_boundaries`) et règle A16 (`check_service_loader_class_loaders`) ; auto-test `scripts/architecture/test_check_module_boundaries.py`.
+- Test ArchUnit `ModuleArchitectureTest` (`minos-app`) — `applicationOnlyKnowsPorts`, `surfacesDoNotCompileAgainstTheCompositionRootOrAdapters`, `adaptersDoNotReachBackIntoUpperLayers`.
+- Tests `MinosApplicationComposersTest` (`minos-application`) et `ShadedJarCompositionRootIT` (`minos-app`) — découverte en échec rapide et contrat du JAR ombré.
+- Revue : un nouveau câblage d'adaptateur vit dans `minos-bootstrap`.
 
 ## 7. Mise en œuvre (tour 2)
 
@@ -307,7 +338,7 @@ trois classes concernées sont donc passées par la composition avant l'engageme
   (`LocalRemoteIndexingRuntime` dans `minos-bootstrap`) de la composition. Garde-fous A1 conservés :
   `remote index` refuse avant toute matérialisation, bail, enregistrement ou épinglage ; le constructeur
   de production n'a pas de sentinelle ; un test exerce le câblage de production réel ; aucun point
-  d'injection public (§ 6).
+  d'injection public (§ « Consequences »).
 - Le POM de `minos-cli` ne déclare plus `minos-runtime-local` ni `minos-integration-git`, dans aucune
   portée ; il ne garde que `minos-bootstrap` en `runtime` et son test-jar en `test`.
 
@@ -344,7 +375,7 @@ surface → adaptateur refusé en `compile`, `runtime`, `test` et `provided`).
 ## 9. Mise en œuvre : découverte par chargeur explicite (AUD-ARC-04, 2026-10-21)
 
 Changement OpenSpec `decouvrir-les-fournisseurs-par-chargeur-explicite`. Le résidu de chargeur de contexte
-noté au § 6 est fermé aux deux sites qui le portaient :
+noté au § « Consequences » est fermé aux deux sites qui le portaient :
 
 - `StorageBackendSelection` découvre `StorageBackendProvider` par le chargeur du port
   (`StorageBackendProvider.class.getClassLoader()`), comme `MinosApplicationComposers` ; deux fournisseurs

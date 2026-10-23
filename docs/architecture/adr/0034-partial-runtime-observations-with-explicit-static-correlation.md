@@ -1,3 +1,10 @@
+---
+id: ADR-0034
+title: "Partial runtime observations with explicit static correlation"
+domain: data
+rules: false
+---
+
 # ADR-0034 — Partial runtime observations with explicit static correlation
 
 Status: **Accepted — final M26 dispositions recorded from exact-head Windows + Linux evidence.**
@@ -21,6 +28,24 @@ M26 doit rendre les observations runtime utiles pour la couverture observée, le
 7. La CLI porte l’import explicite. Les trois tools MCP M26 sont strictement read-only.
 8. Les traces ne promeuvent jamais CFG, def-use, interprocedural data-flow, security ou toute autre capability statique.
 
+## Do's and Don'ts
+
+### Do
+
+- N'accepter en entrée que `minos-runtime-observation-v1`, TSV UTF-8 strict, versionné et borné.
+- Déclarer `completeness=PARTIAL` pour toute session, et `OBSERVED_PARTIAL` et `exhaustive=false` dans les rapports.
+- Laisser visibles les états `RESOLVED`, `AMBIGUOUS` et `UNRESOLVED` de la corrélation.
+- Rendre les sessions acceptées immuables, alignées sur un snapshot, vérifiées par SHA-256 et publiées atomiquement dans un store local borné.
+- Porter l'import par la CLI et garder strictement read-only les trois tools MCP M26.
+
+### Don't
+
+- Ne pas accepter de claim `COMPLETE`.
+- Ne pas modifier le snapshot actif lors de la corrélation.
+- Ne pas résoudre une ambiguïté par un choix arbitraire.
+- Ne pas exposer l'import par MCP.
+- Ne pas promouvoir de capacité statique (CFG, def-use, data-flow interprocédural, sécurité) à partir de traces.
+
 ## Consequences
 
 - Les observations d’un ancien snapshot restent auditables mais ne sont pas fusionnées avec le snapshot actif.
@@ -28,6 +53,11 @@ M26 doit rendre les observations runtime utiles pour la couverture observée, le
 - Les ratios et hot paths sont utiles pour les sessions sélectionnées, jamais universels.
 - Le collecteur reste externe/opéré séparément ; MINOS M26 importe un contrat et ne déploie pas d’agent universel.
 - Un futur collector ou backend de stockage peut implémenter les mêmes contrats sans modifier la découverte M17 ni l’autorité des snapshots.
+
+## Compliance and Enforcement
+
+- Gate `scripts/quality/check-runtime-dynamic-consistency.py`, exécuté par `scripts/remediation/check-post-mne.py` (job `invariants`) — interdit à `RuntimeIntelligenceService` toute publication (`.publish(`) et tout usage de `ProviderCapability` ou de `ProjectDiscoveryService`, interdit `minos_runtime_import` dans `MinosMcpTools`, exige que cet ADR, la roadmap M26 et les guides citent `minos-runtime-observation-v1` et `OBSERVED_PARTIAL`, et que cet ADR cite `NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS`.
+- Revue : un nouveau rapport runtime déclare son caractère partiel, et aucune donnée runtime n'entre dans le snapshot structuré.
 
 ## Rejected alternatives
 

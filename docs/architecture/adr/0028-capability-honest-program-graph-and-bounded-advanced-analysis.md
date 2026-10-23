@@ -1,3 +1,10 @@
+---
+id: ADR-0028
+title: "Capability-honest program graph and bounded advanced analysis"
+domain: backend
+rules: false
+---
+
 # ADR-0028 — Capability-honest program graph and bounded advanced analysis
 
 Status: Accepted for M19 implementation
@@ -28,6 +35,22 @@ Advanced program analysis follows these rules:
    *Implementation note (2026-10-17, AUD-SEC-11):* the Java provider reads its source/sink/sanitizer rules only from the analysed repository (`.minos/java-advanced-provider.properties`), which is untrusted; every response built on such rules carries the additive limitation `SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY`, relayed by `minos_program_graph`, `minos_impact_v2` and `minos_security_paths`. A declared sanitizer never removes a path: it is reported with `sanitizedPathObserved=true`. Operator-supplied rules outside the repository are not supported and remain a later, separately decided change.
 10. Public API/MCP exposure is additive and versioned independently from the stable `MinosApi` v1 contract.
 
+## Do's and Don'ts
+
+### Do
+
+- Garder le snapshot Code Knowledge persisté comme autorité ; les program graphs sont des vues reconstructibles.
+- Marquer tout flux local dérivé de `READS`/`WRITES` comme potentiel, avec la limitation `EXECUTION_ORDER_NOT_PROVEN`.
+- Rejeter, à la composition, les collisions d’identifiant stable dont le contenu diffère.
+- Borner l’analyse interprocédurale par la profondeur et les limites de résultats, et signaler cycles et troncature.
+
+### Don't
+
+- Ne pas produire de CFG exact, de def-use exact ni d’annotation de sécurité sans `ProgramGraphProvider` capable.
+- Ne pas faire du CPG une seconde source de vérité.
+- Ne pas présenter les chemins de sécurité comme preuve exhaustive de présence ou d’absence de vulnérabilité.
+- Ne jamais retirer un chemin parce qu’un sanitizer est déclaré.
+
 ## Consequences
 
 - Existing snapshots and providers remain compatible.
@@ -35,6 +58,13 @@ Advanced program analysis follows these rules:
 - CFG/data-flow precision can improve provider by provider without branches in core orchestration.
 - Consumers can distinguish unavailable, derived and factual capabilities.
 - Analysis remains bounded and scalable under the M16 discipline.
+
+## Compliance and Enforcement
+
+- Test `ProgramGraphSecurityRulesProvenanceTest` (`minos-application`, lancé par `mvnw verify`) — limitation `SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY` déclarée par les trois analyses ; un sanitizer sur le chemin le marque sans le retirer.
+- Test `ProgramGraphComposerLimitationsTest` (`minos-application`) — la troncature déclare ses causes.
+- Le harnais de jalon `scripts/history/m19/run-final.ps1` est une archive : aucun workflow ne le lance.
+- Revue : une capacité avancée n’est publiée que par un provider capable ; tout flux dérivé porte sa limitation.
 
 ## Rejected alternatives
 

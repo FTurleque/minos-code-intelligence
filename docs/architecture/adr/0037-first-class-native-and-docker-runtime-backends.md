@@ -1,3 +1,10 @@
+---
+id: ADR-0037
+title: "Traiter native et Docker comme backends MCP explicites et fail-closed"
+domain: architecture
+rules: false
+---
+
 # ADR-0037 — Traiter native et Docker comme backends MCP explicites et fail-closed
 
 Date : 2 août 2026
@@ -6,7 +13,7 @@ Statut : **Accepted pour le contrat S1 ; parité Docker non acquise**
 
 Origine : M29
 
-## Contexte
+## Context
 
 ADR-0021 a correctement établi le runtime natif comme moteur autonome d'indexation et a conservé Docker comme serveur MCP read-only optionnel. Depuis, MINOS dispose d'un installateur Windows, d'un point d'entrée stable `minos.exe mcp`, d'un registre persistant, de snapshots structurés et d'un vector store sémantique v2.
 
@@ -14,7 +21,7 @@ M29 doit faire évoluer Docker vers un backend autonome de premier rang sans cas
 
 L'ouverture actuelle de `MinosApplication` initialise immédiatement le registre, les snapshots, l'index state, les fingerprints, le vector store et les runtimes providers. Le choix du backend doit donc intervenir **avant** cette ouverture.
 
-## Décision
+## Decision
 
 ### Point d'entrée stable
 
@@ -68,6 +75,23 @@ Si Docker, le daemon ou le conteneur est indisponible, MINOS échoue expliciteme
 
 Les probes sont bornés dans le temps. Une interruption détruit le processus enfant et restaure le statut d'interruption Java. Les erreurs de bootstrap restent mappées sur le code d'erreur d'exécution CLI existant ; une session MCP normale retourne succès.
 
+## Do's and Don'ts
+
+### Do
+
+- Garder `minos.exe mcp` comme point d'entrée stable des clients IA.
+- Charger la configuration backend versionnée (`<MINOS_HOME>/runtime/backend.properties`, `formatVersion=1`, `backend=native` ou `backend=docker`) avant toute initialisation métier propre au runtime.
+- Échouer fermé, dès qu'un fichier existe, sur une version, un backend, une propriété ou une valeur inconnus ou invalides.
+- Pour `docker`, vérifier le daemon puis l'état `Running` du conteneur configuré avant d'ouvrir la session STDIO `docker exec -i`.
+- Borner les probes dans le temps.
+
+### Don't
+
+- Ne pas tomber de Docker vers natif.
+- Ne pas ouvrir `MinosApplication` côté hôte quand le backend est `docker`.
+- Ne pas configurer chaque client IA directement vers `docker exec`.
+- Ne pas déduire la parité Docker de l'acceptation de cet ADR.
+
 ## Switching
 
 M29-S7 appliquera une bascule transactionnelle :
@@ -82,7 +106,7 @@ prepare backend cible
 
 Une validation échouée laisse la configuration active inchangée. Le store S1 fournit déjà l'écriture atomique nécessaire ; S7 ajoute l'orchestration d'installation/rollback.
 
-## Conséquences
+## Consequences
 
 ### Positives
 
@@ -98,6 +122,12 @@ Une validation échouée laisse la configuration active inchangée. Le store S1 
 - le conteneur doit être préparé et validé avant de sélectionner `docker` ;
 - S1 ne prouve pas encore l'autonomie d'indexation, la portabilité des données ni la parité fonctionnelle : ces preuves appartiennent à S2–S8 ;
 - aucun document ne peut déduire la parité Docker de l'acceptation de cet ADR.
+
+## Compliance and Enforcement
+
+- Tests `McpBackendRouterTest` et `McpBackendRouterLifecycleTest` (`minos-app`) — configuration invalide ou inconnue refusée, Docker indisponible sans repli natif, ordre daemon → conteneur → STDIO, backend natif seul en mode `native`.
+- Portée JaCoCo `m29-backend-routing` de `scripts/quality/check-jacoco.py` (job `verify`) — couverture de `McpBackendRouter`.
+- Revue : aucun chemin d'erreur Docker n'ouvre l'application native.
 
 ## Relation avec ADR-0021
 
@@ -119,7 +149,13 @@ Rejeté : le runtime réellement utilisé deviendrait ambigu, les données pourr
 
 Rejeté : Windows et Linux ont des localisations physiques différentes. S2 introduit une identité logique et un mapping typé plutôt qu'une substitution de chaînes.
 
-## Liens
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- Le statut déclare « parité Docker non acquise » alors que la roadmap présente le jalon M29 « Autonomous Docker Runtime & Native Parity » comme terminé (issue #107 CLOSED, PR #108 intégrée) — preuve : `docs/project/governance/ROADMAP.md:52`.
+
+## References
 
 - issue : #107
 - roadmap : [`../../project/roadmap/M29_EXECUTION.md`](../../project/roadmap/M29_EXECUTION.md)

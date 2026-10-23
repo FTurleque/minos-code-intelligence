@@ -1,3 +1,10 @@
+---
+id: ADR-0023
+title: "Décomposer la persistance locale des snapshots sans changer le format disque"
+domain: data
+rules: false
+---
+
 # ADR-0023 — Décomposer la persistance locale des snapshots sans changer le format disque
 
 Date : 26 juillet 2026
@@ -6,7 +13,9 @@ Statut : **Accepted — implémenté par M15-S6 sous qualification exact-head**
 
 Origine : M15-S6
 
-## Contexte
+Relations : complété par [ADR 0046](0046-format-de-snapshot-v3-chaines-utf8.md) (format de snapshot V3).
+
+## Context
 
 Après M15-S5, `FileSymbolSnapshotStore` concentre encore plusieurs responsabilités indépendantes :
 
@@ -22,7 +31,7 @@ Cette concentration rend difficile l'évolution du format, le test isolé d'un c
 
 En revanche, M15 ne dispose d'aucune mesure justifiant un nouveau backend de persistance. Les formats actuellement publiés sont qualifiés par les replays M14 et doivent rester lisibles.
 
-## Décision
+## Decision
 
 Conserver `FileSymbolSnapshotStore` comme **façade de compatibilité locale**, mais déplacer les responsabilités vers des composants explicites dans `minos-storage-local` :
 
@@ -59,6 +68,22 @@ S6 ne modifie volontairement aucun des éléments suivants :
 
 Un snapshot v1 chargé comme connaissance complète continue d'être adapté avec des collections occurrences/relations vides.
 
+## Do's and Don'ts
+
+### Do
+
+- Conserver `FileSymbolSnapshotStore` comme façade de compatibilité locale et répartir ses responsabilités dans des composants explicites de `minos-storage-local`.
+- Publier le fichier snapshot **avant** de promouvoir le pointeur actif.
+- Écrire le pointeur actif dans un fichier temporaire distinct puis le remplacer après publication du snapshot.
+- Conserver une erreur explicite pour toute version de codec non supportée.
+
+### Don't
+
+- Ne pas laisser fuir le format binaire vers le domaine, le moteur, l’API ou les transports.
+- Ne pas supprimer le fichier snapshot actif par le service de rétention.
+- Ne pas adopter de politique automatique de rétention sans les mesures de M16.
+- Ne jamais promouvoir un fichier snapshot partiellement écrit.
+
 ## Atomicité
 
 Le repository publie le fichier snapshot par déplacement atomique lorsque le système de fichiers le permet, avec fallback `REPLACE_EXISTING` historique lorsque `ATOMIC_MOVE` n'est pas supporté.
@@ -73,7 +98,7 @@ S6 sépare le **mécanisme** de rétention de la politique.
 
 Aucune politique automatique de nombre maximal, âge, compaction ou quota n'est adoptée en S6. Ces seuils restent gouvernés par les mesures de M16.
 
-## Conséquences
+## Consequences
 
 ### Positives
 
@@ -91,6 +116,11 @@ Aucune politique automatique de nombre maximal, âge, compaction ou quota n'est 
 - la compatibilité v1/v2 et l'atomicité restent des gates obligatoires ;
 - la rétention automatique reste hors périmètre tant que M16 n'a pas fourni de mesures.
 
+## Compliance and Enforcement
+
+- Tests `SnapshotCodecTest`, `SnapshotFormatCompatibilityTest` et `SnapshotPublicationCrashTest` (`minos-storage-local`, lancés par `mvnw verify`) — codecs testés sans repository, compatibilité des formats, publication interrompue à tout point qui laisse un snapshot actif valide.
+- Revue : une évolution de codec garde la lecture des formats publiés et une erreur explicite pour les versions non supportées ; l’ordre « snapshot puis pointeur » est conservé.
+
 ## Validation
 
 La fermeture de M15-S6 doit être rattachée à un SHA exact et démontrer au minimum :
@@ -103,3 +133,9 @@ La fermeture de M15-S6 doit être rattachée à un SHA exact et démontrer au mi
 - `FileSymbolSnapshotStore` ne contient plus l'encodage binaire ni le format du pointeur.
 
 Les nombres de tests, mesures et SHA de qualification restent enregistrés dans la PR/issue de M15 plutôt que dans cet ADR.
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- Un codec V3 existe en plus des versions v1 et v2 énumérées par la décision ; il relève de l’ADR 0046 — preuve : `minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotCodecV3.java`.

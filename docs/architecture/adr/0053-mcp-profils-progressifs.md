@@ -1,24 +1,51 @@
+---
+id: ADR-0053
+title: "Réduire le coût de découverte MCP avec des profils explicites"
+domain: architecture
+rules: false
+---
+
 # 0053 — Réduire le coût de découverte MCP avec des profils explicites
 
 Status: **Proposed** (2026-10-04). Aucune implémentation ni qualification acquise.
 Programme : [étude MINOS](../../project/research/minos-evolution-2026-10/README.md).
-Complète les ADR 0017,0018 ; ne les remplace pas à ce stade.
+Complète les ADR 0017, 0018 ; ne les remplace pas à ce stade.
 
-## Contexte
+## Context
 
 Un catalogue étendu peut ajouter du contexte ou rendre le choix d'outil difficile ; le coût exact dépend du client et doit être mesuré.
 
-## Décision proposée
+## Decision
 
 Définir des profils au démarrage avec handlers partagés ; conserver le catalogue legacy par défaut. Réponses compactes puis détails sous références de génération. Mesurer avec Claude. Aucun REPL arbitraire, exécution de code fourni par l'agent ni mutation implicite.
+
+## Do's and Don'ts
+
+### Do
+
+- Tant que l'ADR est Proposed, ces points ne sont pas normatifs.
+- Définir des profils au démarrage avec handlers partagés ; conserver le catalogue legacy par défaut.
+- Répondre de façon compacte, puis détailler sous références de génération.
+- Faire échouer explicitement toute référence périmée.
+
+### Don't
+
+- Aucun REPL arbitraire, aucune exécution de code fourni par l'agent, aucune mutation implicite.
+- Ne pas supposer tools/list_changed universel.
 
 ## Alternatives considérées
 
 A : exposer tous les détails toujours — baseline. B : reproduire un REPL général — hors périmètre et surface d'exécution excessive. C : profils et lectures progressives — proposée.
 
-## Conséquences et limites
+## Consequences
 
 Plusieurs profils à qualifier ; ne pas supposer tools/list_changed universel. Des descriptions plus courtes ne garantissent pas moins de tokens sur tous les clients. Toute référence périmée échoue explicitement.
+
+## Compliance and Enforcement
+
+- Aucun contrôle automatique : vérification en revue de code.
+- Revue : un profil MCP garde le catalogue legacy par défaut et n'ajoute aucun outil d'exécution ni de mutation.
+- À réévaluer : aucune mise en œuvre au 2026-10-23.
 
 ## Validation et tâches
 

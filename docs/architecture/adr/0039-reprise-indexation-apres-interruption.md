@@ -1,10 +1,17 @@
+---
+id: ADR-0039
+title: "Reprendre une indexation interrompue au lieu de tout réindexer"
+domain: backend
+rules: false
+---
+
 # 0039 — Reprendre une indexation interrompue au lieu de tout réindexer
 
 Status: Accepted — implémenté au sprint 2 (2026-09-26), lots 1 à 5 et corrections de revue (commits fusionnés `bc78af20`, `be4cacda`, `dd48ee64`, `90ab9197`, `6ce0f128`, `536700d0`, `e7bfbeba`, `d98aa913`, `58253065`, `8b5bfae0` ; faits produit régénérés : `1919d136`).
 
 Complète [0006](0006-promouvoir-les-index-de-maniere-atomique.md) (promotion atomique), [0014](0014-safe-incremental-indexing.md) (indexation incrémentale sûre), [0021](0021-native-runtime-autonomous-indexing.md) et [0038](0038-aggregate-worker-resource-containment.md) (rétention des répertoires de run).
 
-## Contexte
+## Context
 
 Aujourd'hui, une indexation qui s'arrête brutalement (reboot, `kill`, fermeture du terminal, coupure de courant, arrêt du conteneur) est intégralement perdue, même quand la quasi-totalité du travail coûteux avait abouti.
 
@@ -28,7 +35,7 @@ Aujourd'hui, une indexation qui s'arrête brutalement (reboot, `kill`, fermeture
 
 **Non-objectifs.** Reprendre *à l'intérieur* d'un provider (les indexeurs SCIP ne savent pas repartir d'un fichier donné) ; reprendre sur une autre machine ou un autre `MINOS_HOME` ; reprendre une indexation distante (elle est de toute façon fermée aujourd'hui, cf. constat A1 de l'audit) ; garantir une reprise après suppression manuelle de `MINOS_HOME/runs`.
 
-## Décision
+## Decision
 
 ### 1. Un run devient reprenable, avec des points de contrôle par cible
 
@@ -77,7 +84,7 @@ stateDiagram-v2
 
 Reprendre, c'est **rouvrir** le run interrompu : même `runId`, donc même répertoire `runs/<runId>/`, donc aucun déplacement ni copie d'artefacts de 512 Mio. Un compteur `attempt` est incrémenté et tracé dans le message du run.
 
-Sous le bail exclusif, `IndexingRunExecutor` demande d'abord un plan de reprise à un nouveau composant `IndexingResumePlanner` (module `minos-application`, package `orchestration`) :
+Sous le bail exclusif, `IndexingRunExecutor` demande d'abord un plan de reprise à un nouveau composant `IndexingResumePlanner` (module `minos-engine`, package `com.minos.orchestration`) :
 
 1. charger le run `INTERRUPTED` désigné par `resumableRunId` (au plus un par projet) ;
 2. pour chaque cible du nouveau plan, chercher un point de contrôle de même `targetKey` ;
@@ -120,7 +127,24 @@ La reprise ne dépend pas de ce marqueur pour sa correction : si le répertoire 
 
 Les artefacts réutilisés viennent de `MINOS_HOME`, pas d'une entrée non fiable, mais la reprise les traite quand même comme des données à valider : chemin confiné sous `runs/<runId>/` (résolution canonique, refus des liens symboliques), taille bornée par `IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES`, SHA-256 vérifié avant ingestion. Le principe reste **fail-closed** : en cas de doute, réindexation complète, jamais un index partiel présenté comme complet.
 
-## Conséquences
+## Do's and Don'ts
+
+### Do
+
+- Prendre comme unité de reprise la cible d'exécution `(indexerId, projectRelativeRoot)`, avec un point de contrôle durable par cible.
+- Distinguer l'état `INTERRUPTED` de `FAILED`.
+- Reprendre en rouvrant le run interrompu, sous le même `runId`.
+- Ne réutiliser un artefact que si tout concorde : fichier régulier confiné sous `runs/<runId>/`, taille et SHA-256, version du provider, mode, empreinte du scope et âge inférieur à `resumeTtl`.
+- Annuler toute la reprise et basculer en run complet, raison journalisée, au moindre écart inattendu.
+
+### Don't
+
+- Ne pas présenter un index partiel comme complet.
+- Ne pas exposer de chemin absolu dans les messages de reprise.
+- Ne pas laisser un run `INTERRUPTED` bloquer un nouveau run.
+- Ne pas réutiliser pour un run FULL un artefact produit en incrémental.
+
+## Consequences
 
 ### Positives
 
@@ -138,6 +162,12 @@ Les artefacts réutilisés viennent de `MINOS_HOME`, pas d'une entrée non fiabl
 | Provider non déterministe dont l'artefact dépend d'un état externe | La réutilisation est un choix par provider : `IndexerCapability.RESUMABLE_ARTIFACT`, absente par défaut pour un indexeur non qualifié |
 | Format de run persistant modifié | Champ `runFormatVersion` ; un run écrit par une version antérieure est lisible mais jamais reprenable |
 | Coût du SHA-256 et de l'empreinte de scope | ~1 s/512 Mio, et l'empreinte de scope est déjà calculée par le planificateur incrémental |
+
+## Compliance and Enforcement
+
+- Portée JaCoCo `resume-orchestration` de `scripts/quality/check-jacoco.py` (job `verify`) — couverture de `IndexingResumePlanner`, `AuthoritativeProjectStateReconciler` et `IndexingRunExecutor`.
+- Tests `IndexingResumePlannerTest`, `IndexingResumeTest`, `IndexingInterruptionTest` (`minos-engine`) et `ResumeAfterHardKillIntegrationTest` (`minos-bootstrap`) — conditions de réutilisation, état `INTERRUPTED`, reprise après arrêt brutal d'une JVM.
+- Revue : toute nouvelle condition de reprise échoue vers le run complet, jamais vers un index partiel.
 
 ## Plan d'implémentation
 
@@ -167,7 +197,7 @@ Consignés à la livraison (sprint 2, revue `verif-qualite` rondes 0 à 4). Chaq
 - **(c) Empreinte de scope.** Capturée **avant** le lancement du provider (une fois par scope, mémoïsée dans le run), pour qu'une modification pendant l'exécution invalide la reprise ; élargie au-delà du sous-arbre du scope aux fichiers de contrôle racine (`.gitignore`, `.minosignore`) et aux descripteurs de build et d'outillage des répertoires ancêtres (`pom.xml`, lockfiles, `tsconfig*.json`, `.npmrc`, `.mvn/**`), sous la politique d'ignore de la racine. Un scope traversant un lien symbolique est refusé. Au-delà du budget de sources (100 000 fichiers / 2 Gio), aucun point de contrôle n'est persisté.
 - **(d) Supersession.** Tout nouveau run qui ne reprend pas (politique `NO_RESUME`, reprise refusée ou annulée) supplante explicitement le run `INTERRUPTED` offert : celui-ci devient `FAILED` (« superseded ») et son marqueur est retiré, de sorte qu'un projet n'offre jamais plus d'un run à la reprise. `--no-resume` est exactement cette supersession ; `--resume-only` échoue sans créer de run.
 - **(e) Snapshots préparés orphelins.** Les `.snapshot-*.tmp` sont des temporaires de publication à nom unique, jamais référencés par un run (le snapshot préparé est publié sous son nom final avant d'être référencé) ; ils sont balayés par `SnapshotRetentionService` après 24 h, sous `SnapshotProjectLease` (âge vérifié et suppression sous le même bail), et non « avant la remise en scène » comme l'énonce §4. Depuis le 2026-10-08 (MINOS-AUD-H13), les `.active-*.tmp` plus vieux que 24 h sont balayés par la même règle : la promotion écrit puis renomme son temporaire de pointeur sous ce même bail, un temporaire ancien ne peut donc être que le reste d'une promotion interrompue.
-- **(f) Deux constantes de 24 h.** `IndexingResumePlanner.DEFAULT_RESUME_TTL` (`minos-application`) et `RunDirectoryRetention.DEFAULT_RESUME_TTL` (`minos-runtime-local`) vivent dans deux modules sans dépendance commune ; elles doivent rester alignées à la main (`SnapshotRetentionService.DEFAULT_ORPHAN_MAX_AGE` suit la même valeur).
+- **(f) Deux constantes de 24 h.** `IndexingResumePlanner.DEFAULT_RESUME_TTL` (`minos-engine`) et `RunDirectoryRetention.DEFAULT_RESUME_TTL` (`minos-runtime-local`) vivent dans deux modules sans dépendance commune ; elles doivent rester alignées à la main (`SnapshotRetentionService.DEFAULT_ORPHAN_MAX_AGE` suit la même valeur).
 - **(g) Reprise en phase `PROMOTION`.** La promotion directe du `stagedSnapshotId` connu n'a lieu que si **toutes** les cibles du plan courant possèdent un point de contrôle valide ; sinon le snapshot préparé est considéré périmé et le run repasse par les providers manquants et la mise en scène (fail-closed). Un échec de cette promotion annule la reprise et déclenche un run complet.
 - **(h) `IndexerCapability.RESUMABLE_ARTIFACT`.** Déclarée pour `scip-java` seul (profil `FULL`, justifié dans le catalogue : sources et descripteurs Maven couverts par l'empreinte, seul un SNAPSHOT de dépendance remplacé à coordonnées identiques y échappe) ; `scip-typescript`, `scip-python` et les providers polyglottes M24 la déclarent `UNSUPPORTED`. `ResumableArtifactPolicy` dérive de cette capacité, jamais d'une liste d'identifiants.
 - **(i) Format de run.** `runFormatVersion` vaut 1 (antérieur, jamais reprenable, valeur absente ou invalide dégradée à 1 sans bloquer `listRuns`) ou 2 (courant). À l'écriture, seules les 3 265 premières exécutions conservent leur point de contrôle pour rester sous la borne d'entrées du fichier de run ; à la lecture, jusqu'à 10 000 exécutions restent lisibles. Un point de contrôle incomplet ou invalide est abandonné à la lecture, jamais partiellement cru.
@@ -181,3 +211,9 @@ Autres précisions : une `InterruptedException` pendant un provider produit un r
 ## Mise en œuvre — empreinte du scope racine (2026-10-21)
 
 Changement `hacher-l-arbre-source-une-fois-par-indexation` (AUD-PERF-04) : l'empreinte du scope racine d'un point de contrôle peut être fournie par l'orchestration (`ReferenceFingerprint`, empreinte de référence capturée avant la découverte) quand le service qui l'a produite capture comme celui des points de contrôle ; sinon elle est recapturée. La valeur persistée et la vérification de reprise sont inchangées. Le raccourci taille / date pour l'empreinte de fin de run est écarté (décision du propriétaire du 2026-10-21).
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- L'écart (f) dit les deux constantes de 24 h logées dans deux modules sans dépendance commune ; au HEAD, `IndexingResumePlanner` vit dans `minos-engine`, dont `minos-runtime-local` dépend ; les deux constantes restent distinctes et package-private — preuve : `minos-runtime-local/pom.xml:25` ; `minos-engine/src/main/java/com/minos/orchestration/IndexingResumePlanner.java:36` ; `minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/RunDirectoryRetention.java:54`.

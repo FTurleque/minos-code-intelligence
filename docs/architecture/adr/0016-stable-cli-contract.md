@@ -1,14 +1,21 @@
+---
+id: ADR-0016
+title: "Stabiliser la CLI comme surface d’exposition du cœur métier"
+domain: architecture
+rules: false
+---
+
 # ADR-0016 — Stabiliser la CLI comme surface d’exposition du cœur métier
 
 - **Statut** : Accepted
 - **Date** : 24 juillet 2026
 - **Origine** : M9 — CLI stabilisée
 
-## Contexte
+## Context
 
 MINOS doit être scriptable sans créer une seconde implémentation des capacités déjà présentes dans les services internes. La CLI doit aussi rester honnête sur les opérations réellement disponibles.
 
-## Décision
+## Decision
 
 La CLI MINOS est une surface stable qui délègue au même cœur métier que les autres interfaces.
 
@@ -17,9 +24,29 @@ La CLI MINOS est une surface stable qui délègue au même cœur métier que les
 - les erreurs et limitations restent structurées et déterministes ;
 - `minos index` ne simule jamais un runner externe absent ; l’import d’un artefact fournisseur reste explicite lorsqu’aucun runner qualifié n’est disponible.
 
-## Conséquences
+## Do's and Don'ts
+
+### Do
+
+- Faire déléguer la CLI au même cœur métier que les autres interfaces, par les services existants.
+- Traiter les formats `text` et `json` ainsi que les codes de sortie comme partie du contrat CLI.
+- Produire des erreurs et des limitations structurées et déterministes.
+- Garder explicite l’import d’un artefact fournisseur lorsqu’aucun runner qualifié n’est disponible.
+
+### Don't
+
+- Ne pas simuler dans `minos index` un runner externe absent.
+- Ne pas créer dans la CLI une seconde implémentation des capacités déjà présentes dans les services internes.
+
+## Consequences
 
 Les scripts et intégrations peuvent dépendre d’un comportement CLI cohérent sans divergence fonctionnelle avec l’API ou le MCP.
+
+## Compliance and Enforcement
+
+- Test `CliExitCodesTest` (`minos-cli`, lancé par `mvnw verify` dans les checks `Verify`) — les codes de sortie gardent leurs valeurs publiées.
+- Aucun contrôle automatique de la délégation au cœur métier ni du refus de simuler un runner absent.
+- Revue : une commande nouvelle ou modifiée délègue à un service existant, garde les formats `text` et `json` et un code de sortie documenté, et ne simule aucun runner.
 
 ## Preuves
 

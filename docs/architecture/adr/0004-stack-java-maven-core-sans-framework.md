@@ -1,12 +1,20 @@
+---
+id: ADR-0004
+title: "Implémenter le cœur MINOS en Java 25 avec Maven, sans framework serveur"
+domain: backend
+rules: false
+---
+
 # ADR-0004 — Implémenter le cœur MINOS en Java 25 avec Maven, sans framework serveur
 
 - Statut : **Partiellement remplacée par ADR-0005**
 - Date de décision : **22 juillet 2026**
 - Remplacement : **la cible Java 25 est remplacée par Java 24 via ADR-0005**
+- Renvoi : les passages qui fixent Java 24 (dont `maven.compiler.release = 24`) sont réglés par l'[ADR 0059](0059-migrer-le-socle-vers-java-25-lts.md) (Java 25 LTS).
 
 > Cette ADR conserve la trace de la décision C0 initiale. La version Java courante de MINOS est désormais définie par **ADR-0005**. Les décisions Maven 3.9.x, Maven Wrapper et cœur sans framework serveur restent valides.
 
-## Contexte
+## Context
 
 MINOS doit disposer d'une stack d'implémentation principale sans confondre :
 
@@ -27,7 +35,7 @@ Les contraintes principales sont :
 - tests et packaging reproductibles ;
 - éviter un framework serveur avant qu'une API réseau soit réellement nécessaire.
 
-## Décision initiale C0
+## Decision
 
 C0 avait retenu :
 
@@ -48,6 +56,20 @@ Apache Maven 3.9.x            ← conservé
 Maven Wrapper                 ← conservé
 aucun framework serveur       ← conservé
 ```
+
+## Do's and Don'ts
+
+### Do
+
+- Construire avec Apache Maven 3.9.x par le Maven Wrapper.
+- Garder CLI, MCP et API comme adaptateurs périphériques.
+- Isoler du domaine les adaptateurs d'indexeurs externes.
+- Garder les outils externes exécutables comme processus séparés lorsque nécessaire.
+
+### Don't
+
+- Ne pas introduire Spring, Quarkus ou Micronaut dans le domaine ou les services.
+- Ne pas faire dépendre les DTO et objets du domaine du framework d'exposition.
 
 ## Build
 
@@ -136,3 +158,16 @@ La stack courante doit être lue conjointement avec ADR-0005.
 ## Mise en œuvre — note du 2026-10-13
 
 La baseline du produit est passée de Java 24 à **Java 25 LTS** ([ADR 0059](0059-migrer-le-socle-vers-java-25-lts.md)). La cible Java 25 retenue à l'origine par cette décision, puis remplacée par l'ADR-0005, est donc rétablie ; le reste de la décision (Maven, aucun framework serveur dans le cœur) est inchangé.
+
+## Compliance and Enforcement
+
+- Gate `scripts/quality/check-toolchain-baseline.py` (job `invariants`) — version Java du POM racine, de l'Enforcer, des workflows, des images et de la politique de toolchain ; il ne garde pas la version de Maven.
+- Maven Enforcer `requireMavenVersion` `[3.9,4.0)` (`pom.xml`) — exige au build une version de Maven comprise dans `[3.9,4.0)`.
+- Aucun contrôle automatique de l'absence de framework serveur.
+- Revue : aucun framework serveur dans le domaine ou les services, adaptateurs d'indexeurs isolés du domaine.
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- L'ADR retient « Apache Maven 3.9.x » épinglé par le Maven Wrapper ; le wrapper télécharge Maven 3.10.0, que l'Enforcer `[3.9,4.0)` accepte — preuve : `.mvn/wrapper/maven-wrapper.properties:3`, `pom.xml:216`, `docs/developer/TOOLCHAIN_POLICY.md:11`.

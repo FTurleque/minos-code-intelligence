@@ -43,7 +43,7 @@ La documentation est rangée en trois espaces, un par lecteur, plus le dossier d
 
 | Besoin | Document |
 |---|---|
-| retrouver ou écrire une décision | [Registre des ADR](architecture/adr/README.md) · [gabarit](architecture/adr/template.md) |
+| retrouver ou écrire une décision | [Registre des ADR](architecture/adr/README.md) · [gabarit](architecture/adr/gabarit/template.md) |
 | vue d'ensemble du système | [Vue d'ensemble](architecture/overview.md) |
 | dossier arc42 complet | [Index arc42](architecture/README.md) |
 

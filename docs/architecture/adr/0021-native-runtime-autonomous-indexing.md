@@ -1,12 +1,21 @@
+---
+id: ADR-0021
+title: "Utiliser un runtime MINOS natif pour l'indexation autonome"
+domain: architecture
+rules: false
+---
+
 # ADR-0021 — Utiliser un runtime MINOS natif pour l'indexation autonome
 
 Date : 24 juillet 2026
 
-Statut : **Accepted**
+Statut : **Accepted — partiellement remplacé par ADR 0037**
 
 Origine : M14
 
-## Contexte
+Relations : partiellement remplacé par [ADR 0037](0037-first-class-native-and-docker-runtime-backends.md) (rôle de Docker, voir ADR 0037 § « Relation avec ADR-0021 »).
+
+## Context
 
 MINOS dispose déjà d'un mode Docker PROD adapté au serveur MCP : image JRE minimale, aucun port réseau, `network_mode: none`, filesystem read-only et projets montés en lecture seule.
 
@@ -14,7 +23,7 @@ M14 ajoute une autre responsabilité : exécuter automatiquement les indexeurs s
 
 Transformer le conteneur MCP en environnement de build universel créerait une tension forte avec son objectif de surface de lecture durcie : image beaucoup plus lourde, multiplication des toolchains, mappings de chemins hôte/conteneur, caches de build, accès réseau potentiel et compatibilité plus faible avec les projets locaux.
 
-## Décision
+## Decision
 
 Le **runtime natif local** devient le chemin principal pour :
 
@@ -30,7 +39,22 @@ Le **Docker MCP existant est conservé comme mode durci optionnel de consommatio
 
 L'installation utilisateur native doit à terme embarquer son propre runtime Java afin que l'exécution de MINOS ne dépende pas du `JAVA_HOME` utilisateur. Les prérequis nécessaires au build du projet restent, eux, des prérequis du provider et du projet.
 
-## Conséquences
+## Do's and Don'ts
+
+### Do
+
+- Utiliser le runtime natif local comme chemin principal pour la CLI, l’administration des projets, l’exécution des providers, l’indexation autonome et le MCP local sans isolation Docker demandée.
+- Exécuter les providers dans l’environnement du projet, avec les chemins réels du poste.
+- Embarquer dans l’installation utilisateur native son propre runtime Java.
+- Tracer explicitement les commandes exécutées par un provider.
+
+### Don't
+
+- Ne pas installer silencieusement les dépendances métier d’un projet.
+- Ne pas faire dépendre l’exécution de MINOS du `JAVA_HOME` de l’utilisateur.
+- Ne pas faire du conteneur MCP de consommation read-only un environnement de build universel.
+
+## Consequences
 
 ### Positives
 
@@ -49,6 +73,13 @@ L'installation utilisateur native doit à terme embarquer son propre runtime Jav
 - MINOS ne doit pas installer silencieusement les dépendances métier d'un projet ;
 - les mappings entre registre natif et Docker doivent rester explicites si les deux modes partagent des données.
 
+## Compliance and Enforcement
+
+- Aucun gate ni test ne cite cet ADR.
+- Tests `BoundedFileLeaseSharedTest` et `BoundedFileLeaseSharedProcessTest` (`minos-engine`) — une lecture prend un bail partagé sur un verrou protégé en écriture sans le créer ni le modifier (note « le plan de requête lit sans écrire »).
+- Test `M29DockerQueryImageContractTest` (`minos-app`) — la cible `query` de l’image Docker ne porte aucune chaîne de compilation (note AUD-DEP-15).
+- Revue : un provider ne déclenche aucune installation silencieuse de dépendances du projet et ses commandes sont tracées.
+
 ## Alternatives rejetées
 
 ### Tout exécuter dans le conteneur MCP
@@ -63,7 +94,7 @@ Rejeté : le mode Docker reste utile comme surface MCP locale durcie, sans rése
 
 Rejeté comme cible produit : Java 24 reste la toolchain de développement MINOS, mais la distribution utilisateur doit embarquer le runtime nécessaire à MINOS.
 
-## Liens
+## References
 
 - roadmap opérationnelle : [`../../project/roadmap/M14_EXECUTION.md`](../../project/roadmap/M14_EXECUTION.md)
 - architecture d'indexation : [`../../developer/indexing-and-storage.md`](../../developer/indexing-and-storage.md)

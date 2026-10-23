@@ -10,7 +10,7 @@ paths:
 - **Français**, concise, factuelle, sans promesse de capacité non qualifiée (principe capability-honest).
 - **État courant** : `docs/project/governance/STATUS.md` (livré) et `docs/project/governance/ROADMAP.md` (progression) ; leurs affirmations sont gardées par `scripts/docs/check-current-docs.py` et `scripts/docs/product-facts.py --check`. Un fait chiffré (nombre de modules, version, seuil) s'écrit une seule fois puis se référence. Rejouer les deux scripts après toute modification de docs courantes.
 - **Historique figé** : `docs/project/history/`, `docs/project/audits/archive/`, `openspec/changes/archive/` conservent l'état d'époque (anciens SHA, « à valider », anciens nombres). Ne pas les « mettre à jour » ; un lien cassé ou une erreur factuelle se corrige, avec confirmation.
-- **ADR** (`docs/architecture/adr/`) : partir de `template.md`, Contexte / Décision / Conséquences, statut `Proposed | Accepted | Superseded | Rejected`, ajouté à l'index de `docs/architecture/adr/README.md` et à `docs/architecture/arc42/09-decisions.md`. Une décision Accepted ne se réécrit pas : compléter « Mise en œuvre » ou écrire l'ADR qui la remplace (commande `/minos:adr`).
+- **ADR** (`docs/architecture/adr/`, format Archgate, ADR 0063) : copier `gabarit/template.md` ; en-tête YAML en ligne 1 (`id: ADR-NNNN`, `title`, `domain`, `rules`) ; sections `Context` / `Decision` / `Do's and Don'ts` / `Consequences` / `Compliance and Enforcement` / `References`, texte en français ; statut `Proposed | Accepted | Superseded | Rejected` dans le corps ; ajouté à l'index de `docs/architecture/adr/README.md` et à `docs/architecture/arc42/09-decisions.md`. Une décision Accepted ne se réécrit pas : compléter « Mise en œuvre », consigner un écart dans « Écarts constatés », ou écrire l'ADR qui la remplace (commande `/minos:adr`). Jamais `archgate adr create`, jamais de registre ni de pont dans `.archgate/adrs/`.
 - **Audits** : seul l'audit en cours reste à la racine de `docs/project/audits/` ; à la clôture, déplacement sous `archive/<date>/` par `git mv`, liens relatifs corrigés (commande `/minos:audit-archive`). Aucun lien d'un document suivi vers un dossier non suivi.
 - **Liens** : relatifs, vérifiés (aucun lien cassé dans les fichiers modifiés). Références de code sous la forme `chemin:ligne`, relues au HEAD avant d'être citées.
 - **Documentation utilisateur** (`docs/user/`) et **développeur** (`docs/developer/`) : une fonctionnalité qui change une sortie, une option ou un diagnostic met à jour la page correspondante dans la même PR.
@@ -30,7 +30,7 @@ docs/
     quality/           audit de code (SpotBugs, PIT, couverture)
     generated/         documents générés par script, jamais édités à la main
   architecture/        dossier arc42, overview, diagrams/, quality/, risks/
-    adr/               registre unique des ADR + template.md
+    adr/               registre unique des ADR (format Archgate) + gabarit/template.md
   project/             piloter et auditer le projet
     governance/        STATUS.md, ROADMAP.md
     roadmap/           M<n>_EXECUTION.md, <chantier>-<AAAA-MM>/

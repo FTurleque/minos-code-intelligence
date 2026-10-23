@@ -1,10 +1,17 @@
+---
+id: ADR-0047
+title: "Snapshot en mémoire : dédoublonnage des chaînes, table de chaînes, pagination ou mappage"
+domain: data
+rules: false
+---
+
 # 0047 — Snapshot en mémoire : dédoublonnage des chaînes, table de chaînes, pagination ou mappage
 
 Status: Accepted (2026-10-13) pour l'option A, mise en œuvre ; options B et C toujours conditionnelles ; mesures dans [`ARCHI-SUIVI.md`](../../project/audits/archive/2026-09/ARCHI-SUIVI.md) (lot 3, A6, § A6.3 et § A6.11).
 
 Complète l'audit [`AUDIT-2026-09.md`](../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constat A6, point 5). S'appuie sur l'[ADR 0046](0046-format-de-snapshot-v3-chaines-utf8.md) (format V3) et l'[ADR 0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) (vue de requête en mémoire, index reconstruits, cache borné).
 
-## Contexte
+## Context
 
 Chaque requête travaille sur un `CodeKnowledgeSnapshot` entièrement décodé en tas, complété par les index d'`InMemoryCodeKnowledgeStore`. Mesures sur ce dépôt (883 fichiers, 40 106 symboles, 281 342 occurrences, 14 299 relations ; JDK 24, G1) :
 
@@ -31,18 +38,39 @@ Trois constats en découlent :
 - **B. Table de chaînes sur disque (format V4).** Chaque chaîne distincte est stockée une fois, un index de 4 octets par champ. Gain : fichier ≈ 0,35 fois V3, lecture plus rapide, et le dédoublonnage de A devient gratuit. Coût : nouveau format, avec les mêmes obligations que V3 (lecture des formats antérieurs, pointeur, PostgreSQL, ré-import, fixtures de la base, preuve sur les golden qui listent des noms de fichiers).
 - **C. Snapshot paginé ou mappé en mémoire.** Les entités restent sur disque, accédées par décalage à travers un fichier mappé, avec des index construits sur les décalages. Gain : le tas ne porte plus le snapshot. Coût : une refonte, pas une correction. `CodeKnowledgeSnapshot` expose des `List` complètes, consommées par 25 classes de production hors stockage (impact, architecture, hybride, program graph, NEXUS…). Il faudrait introduire un accès paresseux ou par curseur dans tous, avec leurs contrats de déterminisme et d'ordre, et régler la durée de vie du mappage face à la rétention et à la compaction.
 
-## Décision proposée
+## Decision
 
 1. D'abord, **hors de cet ADR**, les corrections bornées du § A6.8 : poids estimé des vues et du corpus hybride ramené à la mesure, et suppression du double chargement. Elles font que les gros projets sont mis en cache au lieu d'être relus à chaque requête.
 2. Ensuite l'**option A**, sous preuve d'égalité du modèle décodé sur les corpus réels et les fixtures de la base, avec une mesure avant/après du tas relu.
 3. L'**option B** seulement si la taille sur disque ou le temps de lecture restent un problème après A, pour des tailles de projet cibles à fixer.
 4. L'**option C** seulement si, après 1 et 2, le tas d'un projet cible dépasse encore le budget mémoire accepté. Ce serait alors un chantier propre, précédé d'un inventaire des consommateurs de `CodeKnowledgeSnapshot`.
 
-## Conséquences
+## Do's and Don'ts
+
+### Do
+
+- Dédoublonner les chaînes au décodage (option A), sans changer le format persisté : le modèle décodé reste égal.
+- Ne passer à l'option B que si la taille sur disque ou le temps de lecture restent un problème après A.
+- Ne passer à l'option C que si le tas d'un projet cible dépasse encore le budget mémoire accepté, après un inventaire des consommateurs de `CodeKnowledgeSnapshot`.
+- Fonder tout passage d'une étape à la suivante sur une mesure du corpus réel (banc `benchmarks/scalability/`).
+- Soumettre B ou C, qui créent un format persisté, à la même discipline que l'ADR 0046.
+
+### Don't
+
+- Ne pas décider B ou C sur une estimation.
+- Ne publier aucune donnée décodée dont l'empreinte diffère.
+
+## Consequences
 
 - L'option A est décidée et mise en œuvre (voir « Mise en œuvre ») ; B et C ne changent rien tant que leur critère n'est pas atteint.
 - A ne touche aucun format persisté. B et C en créent un, et relèvent de la même discipline que l'ADR 0046.
 - Critère de passage d'une étape à la suivante : une mesure sur le corpus réel (banc `benchmarks/scalability/`), jamais une estimation.
+
+## Compliance and Enforcement
+
+- Tests `QueryViewWeightTest`, `SnapshotVerifiedReadTest` et `FileSymbolSnapshotStoreIntegrityTest` (`minos-storage-local`, build Maven des jobs `Verify`) — poids estimé d'une vue au moins égal au tas qu'elle retient, lecture authentifiée en un parcours, contenu altéré ou tronqué refusé comme écart d'empreinte.
+- Aucun gate `scripts/**/check-*.py` dédié.
+- Revue : tout passage à l'option B ou C cite une mesure du banc `benchmarks/scalability/` et respecte la discipline de format de l'ADR 0046.
 
 ## Mise en œuvre
 

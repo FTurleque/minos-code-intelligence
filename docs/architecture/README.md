@@ -26,7 +26,7 @@
 ## ADR
 
 - [Index des ADR](adr/README.md)
-- [Template ADR](adr/template.md)
+- [Gabarit d'ADR](adr/gabarit/template.md)
 
 ## Scénarios qualité
 

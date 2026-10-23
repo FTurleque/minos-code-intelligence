@@ -1,4 +1,9 @@
 {
-  "domains": {},
-  "baseBranch": "origin/develop"
+  "domains": {
+    "security": "SEC"
+  },
+  "baseBranch": "origin/develop",
+  "paths": {
+    "adrs": "docs/architecture/adr"
+  }
 }

@@ -1,3 +1,10 @@
+---
+id: ADR-0022
+title: "Imposer les frontières MINOS par un reactor Maven progressif"
+domain: architecture
+rules: false
+---
+
 # ADR-0022 — Imposer les frontières MINOS par un reactor Maven progressif
 
 Date : 26 juillet 2026
@@ -6,7 +13,9 @@ Statut : **Accepted — implémenté et qualifié par M15-S2**
 
 Origine : M15-S2
 
-## Contexte
+Relations : amendé par [ADR 0044](0044-un-package-un-module.md) (emplacement des packages) et [ADR 0055](0055-unifier-les-adaptateurs-de-stockage.md) (partition des artefacts de stockage).
+
+## Context
 
 À la fin de M14, MINOS est livré comme un unique projet Maven `com.minos:minos-code-intelligence` contenant dans le même artefact le domaine normalisé, le moteur de requête, la persistance locale, les adapters SCIP/Git, la CLI, l'API Java, le MCP et l'intégration NEXUS.
 
@@ -14,7 +23,7 @@ Les frontières existent principalement par packages et conventions. Elles ne so
 
 M15 doit rendre ces frontières structurelles sans effectuer un big-bang qui mélangerait simultanément déplacement de sources, changement de packaging, composition applicative et évolution fonctionnelle.
 
-## Décision
+## Decision
 
 Le dépôt devient un **reactor Maven multi-module** piloté par un parent racine `com.minos:minos-parent`.
 
@@ -142,6 +151,22 @@ Les surfaces et services sont ensuite séparés :
 - `minos-mcp` : serveur MCP et ses 16 outils ;
 - `minos-app` : uniquement les points d'entrée de composition/process (`MinosLauncher`, `NexusExportBridgeMain`) et l'artefact distribué.
 
+## Do's and Don'ts
+
+### Do
+
+- Organiser le dépôt en reactor Maven multi-module piloté par le parent `com.minos:minos-parent`.
+- Respecter la direction domaine → moteur → runtime/stockage local → adaptateurs et intégrations → services applicatifs et surfaces → `minos-app`.
+- Garder `minos-integration-git` seul module qui déclare directement `org.eclipse.jgit`.
+- Conserver une justification explicite pour les tests cross-boundary lors de tout déplacement de responsabilité.
+
+### Don't
+
+- Ne pas créer de module uniquement pour reproduire mécaniquement un package existant.
+- Ne pas introduire les dépendances domaine → SCIP ou SDK MCP, moteur → CLI, protocole MCP ou runtime process local concret, runtime local générique → provider SCIP, architecture/impact → couches d’exposition.
+- Ne pas faire dépendre `minos-engine` de `minos-storage-local`.
+- Ne pas créer de module vide, sans responsabilité ni code.
+
 ## Migration séquentielle
 
 S2 a suivi une migration en plusieurs commits qualifiables :
@@ -234,7 +259,9 @@ Chaque étape S2 a conservé :
 - la distribution et l'installation Windows ;
 - le handshake MCP natif.
 
-## Conséquences positives
+## Consequences
+
+### Positives
 
 - Maven devient un garde-fou d'architecture réel ;
 - IntelliJ dispose désormais d'un layout Maven physique standard avec 12 modules enfants, sans source root externe partagé ;
@@ -242,6 +269,13 @@ Chaque étape S2 a conservé :
 - la CLI peut utiliser le runtime local générique sans dépendre du provider SCIP ;
 - S3 à S8 peuvent évoluer derrière des contrats compilés plutôt que des conventions de packages ;
 - le packaging utilisateur reste stable pendant la migration.
+
+## Compliance and Enforcement
+
+- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — règle A2 (`ALLOWED_DEPENDENCIES`, dépendances autorisées entre modules, ADR 0022 et 0042) et règle A12 (aucun lancement de processus dans `minos-domain`, `minos-engine` et `minos-application` hors de `PROCESS_LAUNCHERS`).
+- Test ArchUnit `ModuleArchitectureTest` (`minos-app`, lancé par `mvnw verify`) — `coreModulesStayAtTheBottom` et `everyModuleOnlyUsesItsAllowedModules` (même table que A2).
+- Aucun contrôle automatique du confinement de JGit à `minos-integration-git`.
+- Revue : un module nouveau protège un invariant réel ; un test cross-boundary déplacé garde sa justification.
 
 ## Contraintes restantes
 
@@ -277,7 +311,14 @@ Rejeté : l'exécution de processus, la découverte du PATH et la gestion d'outi
 
 Rejeté : un module sans responsabilité ni code ne protège aucune frontière réelle.
 
-## Liens
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- Le reactor compte 14 modules enfants : `minos-storage-postgresql` et `minos-bootstrap` s’ajoutent aux 12 ratifiés à la fermeture de S2 — preuve : `pom.xml:24-37`.
+- Les attributions de classes des « Frontières ratifiées pendant S2 » ne décrivent plus le code ; l’ADR 0044 les amende : `CommandLocator`, `IndexerProcessPlan`, `IndexerProcessPlanFactory` et `ProcessIndexerExecutor` sont dans `com.minos.runtime.local.process`, `ProviderRuntimeManager`, `ProviderRuntimeStatus` et `MinosVersion` dans `minos-engine`, `MinosLauncher` dans `minos-cli` — preuve : `minos-runtime-local/src/main/java/com/minos/runtime/local/process/CommandLocator.java`, `minos-engine/src/main/java/com/minos/runtime/ProviderRuntimeManager.java`, `minos-engine/src/main/java/com/minos/runtime/MinosVersion.java`, `minos-cli/src/main/java/com/minos/cli/MinosLauncher.java`.
+
+## References
 
 - issue M15 : #55
 - roadmap opérationnelle : [`../../project/roadmap/M15_EXECUTION.md`](../../project/roadmap/M15_EXECUTION.md)

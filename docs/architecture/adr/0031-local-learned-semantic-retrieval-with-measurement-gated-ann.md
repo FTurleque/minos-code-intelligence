@@ -1,3 +1,10 @@
+---
+id: ADR-0031
+title: "Local learned semantic retrieval with measurement-gated ANN"
+domain: backend
+rules: false
+---
+
 # ADR-0031 — Local learned semantic retrieval with measurement-gated ANN
 
 Status: **Accepted for M23 implementation; final promotion remains exact-head gated.**
@@ -21,6 +28,24 @@ M23 must therefore improve semantic quality without rewriting history or convert
 7. Query embeddings are cached only in a bounded in-memory LRU view (256 entries). Cache contents are disposable and never authoritative.
 8. Exact cosine linear scan remains the reference retrieval backend. M23 does **not** add HNSW, Lucene, a vector database or another ANN backend because M21-S8 produced `KEEP_CURRENT_M20_BACKEND`. A future ANN change requires a fresh measured bottleneck and a separate decision.
 9. Public Java API, MCP and IntelliJ contracts remain additive/compatible. Existing semantic status and search responses already expose provider/model identity and continue to mark semantic results `HEURISTIC`.
+
+## Do's and Don'ts
+
+### Do
+
+- Adosser le provider learned à un endpoint Ollama local `/api/embed` géré par l’opérateur.
+- Exiger une configuration explicite du modèle et des dimensions, qui font partie de l’identité de l’index sémantique.
+- Écrire le format v2 float32 et garder la lecture des index v1 float64.
+- Garder le scan linéaire cosinus exact comme backend de référence.
+- Faire échouer chaque `embed` vers `minos-ollama` hors du runtime Docker, avant toute résolution de nom, par une erreur qui nomme `minos.semantic.endpoint`.
+
+### Don't
+
+- Ne pas pointer vers un hôte cloud, suivre une redirection, télécharger un modèle ni gérer d’identifiants Ollama.
+- Ne pas déduire la promotion d’un modèle du succès des appels HTTP.
+- Ne jamais présenter `local-hash` comme un modèle appris.
+- Ne pas ajouter d’ANN (HNSW, Lucene, base vectorielle) sans nouveau goulot mesuré ni décision séparée.
+- Ne jamais lire l’emplacement d’exécution dans `minos.properties`.
 
 ## Security and operability
 
@@ -47,6 +72,13 @@ M23 must therefore improve semantic quality without rewriting history or convert
 - quality and dimensions are model-specific, so a model that fails the controlled gate cannot be used as M23 promotion evidence;
 - float32 introduces bounded quantization relative to the in-memory double representation;
 - exact scan remains O(n) until measurements justify another index.
+
+## Compliance and Enforcement
+
+- Gate `scripts/quality/check-semantic-retrieval-consistency.py` — contrat sémantique, guide et cet ADR (`loopback`, `float32`, `256`, `KEEP_CURRENT_M20_BACKEND`) ; lancé seulement par `scripts/m23/run-final.ps1` et `scripts/m24/run-final.ps1` (aucun workflow).
+- Tests `OllamaEmbeddingProviderTest` et `OllamaEmbeddingProviderRuntimeLocationTest` (`minos-application`, lancés par `mvnw verify`) — bouclage et `minos-ollama` acceptés, hôtes distants refusés ; `minos-ollama` hors Docker refusé à l’usage avant toute résolution de nom.
+- Test `FileSemanticVectorStoreTest` (`minos-storage-local`) — écriture v2 float32, lecture v1 et migration au remplacement suivant.
+- Revue : aucun hôte accepté en plus du bouclage et de `minos-ollama` ; aucun backend ANN sans mesure.
 
 ## Rejected alternatives
 
@@ -76,3 +108,10 @@ Ajout, sans rien retirer à la décision ci-dessus : le § 2 (« loopback endpoi
 - **Corps d'erreur** : pour un statut hors 2xx, au plus 4 Kio sont lus, 512 caractères au plus sont retenus sur une ligne et passent par `PublicErrorMessages.sanitize` ; un extrait sensible (chemin, justificatif) est omis, le statut reste. La limite de 16 Mio ne vaut plus que pour les réponses valides.
 - **Inchangé** : HTTP en clair vers Ollama (le contrat reste le bouclage et le réseau Docker interne), pas de redirection, aucun modèle téléchargé.
 - **Limite** : la qualification sur une installation Docker réelle avec le profil Ollama, et l'absence de requête DNS pour `minos-ollama` depuis un poste natif, n'ont pas été rejouées (tâche manuelle 4.2 du changement).
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- Le § 2 dit « loopback endpoints only » ; le code accepte aussi `minos-ollama`, depuis le runtime Docker seulement (voir « Mise en œuvre (AUD-SEC-07, octobre 2026) ») — preuve : `minos-application/src/main/java/com/minos/application/semantic/OllamaEmbeddingProvider.java:41,43,144`.
+- Le cache des embeddings de requête est borné aussi en octets (8 Mio), ce que le § 7 ne dit pas — preuve : `minos-application/src/main/java/com/minos/application/semantic/SemanticSearchService.java:22`.

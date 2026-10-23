@@ -1,10 +1,17 @@
+---
+id: ADR-0045
+title: "Constructeur unique et point d'entrée nommé ; racine de composition regroupée par domaine"
+domain: backend
+rules: false
+---
+
 # 0045 — Constructeur unique et point d'entrée nommé ; racine de composition regroupée par domaine
 
 Status: Accepted (2026-09-29) — mis en œuvre ; historique, inventaire et preuves dans [`ARCHI-SUIVI.md`](../../project/audits/archive/2026-09/ARCHI-SUIVI.md) (lot 2, A4).
 
 Complète l'audit [`AUDIT-2026-09.md`](../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constat A4). Prolonge l'[ADR 0042](0042-racine-de-composition.md) (racine de composition, ordre d'initialisation) et l'[ADR 0044](0044-un-package-un-module.md), dont il garde toutes les frontières.
 
-## Contexte
+## Context
 
 Deux classes de surface empilaient des constructeurs télescopiques : `LocalProjectArchitectureQuery` en déclarait 9 et `MinosCli` 10. Chacun ajoutait un paramètre et déléguait au suivant avec une valeur par défaut (`null` pour `MinosCli`, un analyseur neuf pour `LocalProjectArchitectureQuery`). Le bytecode montrait que 6 des 9 constructeurs de la première et 6 des 10 de la seconde n'avaient aucun appelant : chaque besoin de câblage avait ajouté une surcharge, aucune n'avait jamais été retirée.
 
@@ -12,7 +19,7 @@ Deux classes de surface empilaient des constructeurs télescopiques : `LocalProj
 
 L'audit relève aussi que `LocalProjectArchitectureQuery` recalcule tout à chaque appel, sans cache.
 
-## Décision
+## Decision
 
 ### 1. Un constructeur unique et un point d'entrée nommé
 
@@ -35,9 +42,32 @@ Option écartée : des façades publiques `storage()`, `indexing()`, `queries()`
 
 Un cache n'est admis que si l'on prouve qu'il est invalidé par tout changement de ses entrées. Le snapshot actif est déjà en cache dans les magasins (fichier et PostgreSQL), sous la clé identifiant + `sha256` du pointeur actif. Ce pointeur est relu à chaque appel, donc les écritures des autres processus sont vues. La découverte du projet, elle, lit l'arborescence vivante, qu'aucune génération ne date. Toutes les vues d'architecture en dépendent. Un cache servirait donc une réponse périmée après une modification de l'arborescence et masquerait les échecs actuels. Il n'est pas ajouté. Seule une mémoïsation des analyses sous la clé (snapshot, découverte) serait prouvable ; le constat est renvoyé à A6, avec une mesure préalable.
 
-## Conséquences
+## Do's and Don'ts
+
+### Do
+
+- Déclarer pour une classe de surface un seul constructeur, qui reçoit tous ses collaborateurs, et un point d'entrée nommé qui fixe les valeurs par défaut.
+- Utiliser `defaults(...)` quand les valeurs par défaut sont fixes, un `builder` quand la plupart des collaborateurs sont facultatifs.
+- Changer les appelants de production et de test dans le même commit.
+- N'admettre un cache que si l'on prouve qu'il est invalidé par tout changement de ses entrées.
+
+### Don't
+
+- Ne laisser aucun alias déprécié.
+- Ne pas élargir de visibilité.
+- Ne pas remplacer les accesseurs plats de `MinosApplication` par des façades publiques `storage()`, `indexing()`, `queries()`, `semantic()`.
+- Ne pas ajouter de cache dans `LocalProjectArchitectureQuery`.
+
+## Consequences
 
 - Les constructeurs publics retirés, trois de `LocalProjectArchitectureQuery` et deux de `MinosCli`, sont des ruptures de source pour un code qui les appelait directement. Ils sont listés dans `docs/user/java-api.md` § Ruptures avec leurs remplaçants. Aucune signature de `com.minos.api` ni de `MinosApplication` ne change.
 - Le contrat CLI stable (`MinosCli.run`, ADR 0016) et la sortie des commandes sont inchangés.
 - La surface publique de `MinosApplication` reste de 35 accesseurs. Réduire le couplage demande des surfaces qui reçoivent des ports étroits plutôt que l'application entière, ce qui touche les constructeurs publics de `minos-api`. C'est un chantier distinct.
 - Les autres classes à constructeurs multiples relevées par le balayage (`IndexingLifecycleService`, `LocalMinosApi`, `LocalProjectImpactQuery`…) suivront la même règle quand elles seront reprises. Elles ne sont pas traitées ici.
+
+## Compliance and Enforcement
+
+- Tests `MinosCliSurfaceTest` (`minos-cli`) et `LocalProjectArchitectureQuerySurfaceTest` (`minos-application`) — par réflexion, échouent si un second constructeur réapparaît.
+- Test `A2CompositionCharacterizationTest` (`minos-app`) — ordre d'initialisation et de validation de `MinosApplication` inchangé.
+- Aucun contrôle automatique pour les autres classes de surface : vérification en revue de code.
+- Revue : une classe de surface reprise passe à un constructeur unique et à un point d'entrée nommé.

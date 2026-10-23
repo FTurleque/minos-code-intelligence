@@ -1,18 +1,41 @@
+---
+id: ADR-0056
+title: "Exposer un port de lecture de snapshot indépendant du store mémoire"
+domain: architecture
+rules: false
+---
+
 # ADR 0056 — Exposer un port de lecture de snapshot indépendant du store mémoire
 
-Date : 2026-10-05. Statut : **Accepted — direction validée ; implémentation à réaliser**.
+Date : 2026-10-05. Statut : **Accepted — mise en œuvre partielle** (port de lecture SH-04 à réaliser).
 
-## Contexte
+## Context
 
 Sur `develop` (`c9a3390`), `CodeKnowledgeSnapshotStore`, `SnapshotQueryView` et `InMemoryCodeKnowledgeStore` sont déjà dans `minos-engine`. Leur déplacement depuis le module local a donc été réalisé. Le couplage résiduel est dans le contrat : `SnapshotQueryView.queryStore()` expose la classe concrète et `indexMetrics()` son type imbriqué. Le port `CodeKnowledgeStore` réunit écritures et lectures.
 
-## Décision
+## Decision
 
 Introduire dans le cœur un port de lecture minimal (nom de travail `CodeKnowledgeReader`) et des métriques neutres, définis par les consommateurs réels. L'index mémoire implémente ce port ; il reste une optimisation interne réutilisable. Les cas d'usage ne doivent plus appeler de mutations via une vue de lecture. Conserver une voie d'écriture explicite pour l'ingestion et la construction de l'index.
 
 La séparation commandes/requêtes reste locale. Elle n'exige ni broker, ni Event Sourcing, ni deux bases. Le snapshot structuré reste autoritatif ; les index secondaires sont reconstruisibles. Préserver une identité de snapshot cohérente sur toute requête, les budgets et les limites de cache. La fusion de stockage (ADR 0055) ne modifie pas ce principe.
 
 Ne pas remplacer directement le type d'un composant de record public sans analyse : cela change son constructeur et les descripteurs binaires. SH-04 doit choisir une migration additive (nouvelle vue/accessor neutre, ancien contrat déprécié et conservé) ou consigner une rupture explicitement versionnée avant retrait. Aucun changement silencieux du contrat public n'est accepté. Le nom final du nouveau type dépendra de cette analyse.
+
+## Do's and Don'ts
+
+### Do
+
+- Introduire dans le cœur un port de lecture minimal et des métriques neutres, définis par les consommateurs réels.
+- Conserver une voie d'écriture explicite pour l'ingestion et la construction de l'index.
+- Migrer un record public de façon additive (nouvel accesseur neutre, ancien contrat déprécié et conservé) ou consigner une rupture explicitement versionnée avant retrait.
+- Préserver résultats, classement, ordre et métriques.
+
+### Don't
+
+- Les cas d'usage n'appellent pas de mutations via une vue de lecture.
+- Ni broker, ni Event Sourcing, ni deux bases.
+- Aucun changement silencieux du contrat public.
+- Pas d'interface géante recopiant toute l'implémentation.
 
 ## Alternatives et conséquences
 
@@ -30,7 +53,19 @@ Validation : consommateur compilé avant/après si contrat publié, double de le
 
 **Mise en œuvre complémentaire, 2026-10-15** (changement OpenSpec `lire-l-identifiant-du-snapshot-a-la-reconciliation`) : les trois appelants passent à `activeSnapshotId`. Premier cas de **migration additive d'un record public** selon la règle ci-dessus : `ProjectIndexStateReconciler` gagne le record `ReconciledState` (identifiant du snapshot actif au lieu du snapshot chargé) et les lectures `reconcileState`, `observeState`, `observeStatusState` ; le record `Reconciliation` et `reconcile`, `observe`, `observeStatus` sont conservés, dépréciés (`@Deprecated(since = "1.3.0")`, sans retrait programmé) et rendent le même résultat au prix d'un seul chargement vérifié. Décompte par faux store : une lecture de statut passe de 2 chargements complets à 0, une réparation de 5 à 0, l'ancien contrat à 1. Le retrait de l'ancien contrat reste une rupture à versionner explicitement.
 
-## Références
+## Compliance and Enforcement
+
+- Aucun contrôle automatique : vérification en revue de code.
+- Revue : aucun cas d'usage de lecture n'accède aux mutations du store ; toute modification d'un record public est additive ou consignée comme rupture versionnée.
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- Le port de lecture (nom de travail `CodeKnowledgeReader`) n'existe pas ; `SnapshotQueryView` expose toujours la classe concrète et son type imbriqué `InMemoryCodeKnowledgeStore.IndexMetrics` — preuve : `minos-engine/src/main/java/com/minos/store/SnapshotQueryView.java:14`, `:26`.
+- Le changement `lire-l-identifiant-du-snapshot-a-la-reconciliation`, cité comme mis en œuvre, n'est pas archivé (tâche 3.2 ouverte) — preuve : `openspec/changes/lire-l-identifiant-du-snapshot-a-la-reconciliation/tasks.md:18`.
+
+## References
 
 - [Cockburn — Ports and Adapters](https://alistair.cockburn.us/hexagonal-architecture)
 - [Microsoft — CQRS, modèles séparés avec stockage commun](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs)

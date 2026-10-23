@@ -1,3 +1,10 @@
+---
+id: ADR-0033
+title: "Immutable remote revisions and verified worker artifacts"
+domain: security
+rules: false
+---
+
 # ADR-0033 — Immutable remote revisions and verified worker artifacts
 
 Status: **Accepted — final M25 dispositions recorded from exact-head Windows + Linux evidence.**
@@ -20,6 +27,22 @@ M25 doit permettre l’indexation distante et une frontière d’exécution dist
 6. Le coordinateur valide format, chemins, bornes, checksum et concordance intégrale de provenance en mode fail-closed — y compris le `projectRelativeRoot` du manifest face à la requête, ce qui rend un scope-swap entre modules cryptographiquement impossible. Le bundle reçu est détruit après acceptation ou rejet ; seul le cache vérifié borné subsiste.
 7. L’artefact accepté retourne dans `ScipSymbolSnapshotImporter`, le staging et la promotion atomique existants. Les snapshots structurés restent autoritatifs.
 
+## Do's and Don'ts
+
+### Do
+
+- Décrire une source distante par `RemoteRepositoryRequest` : endpoint HTTPS officiel `github.com` ou `gitlab.com`, ref canonique, commit SHA-1 complet, sous-répertoire relatif et politique `FETCH_ONLY`.
+- Référencer les credentials par nom de variable d'environnement et ne les résoudre que pendant le clone.
+- Valider en fail-closed le format, les chemins, les bornes, le checksum et la concordance intégrale de provenance de l'artefact du worker, `projectRelativeRoot` compris.
+- Faire repasser l'artefact accepté par `ScipSymbolSnapshotImporter`, le staging et la promotion atomique existants.
+
+### Don't
+
+- N'écrire ni la valeur ni la référence d'un credential dans l'origin Git, les métadonnées de cache, les manifests ou les évidences CLI.
+- Ne pas faire accepter `DENY` par un worker qui ne prouve pas l'enforcement réseau OS.
+- Ne pas indexer directement le `HEAD` d'une branche.
+- Ne pas importer directement le ZIP du worker.
+
 ## Consequences
 
 - Une branche qui avance entre la demande et le clone produit un échec, jamais un autre snapshot silencieux.
@@ -28,6 +51,11 @@ M25 doit permettre l’indexation distante et une frontière d’exécution dist
 - Un futur backend conteneur/VM peut implémenter le même port et prouver `DENY` sans modifier le cœur ni la CLI.
 - GitHub/GitLab Enterprise, SSH, submodules, LFS externe, scheduler, workers non fiables et multi-tenant restent hors contrat M25.
 - SCIP ne prouve toujours pas CFG, def-use, data-flow ou security capabilities ; ADR-0026/0028/0032 restent applicables.
+
+## Compliance and Enforcement
+
+- Gate `scripts/quality/check-remote-distributed-consistency.py`, exécuté par `scripts/remediation/check-post-mne.py` (job `invariants`) — vérifie dans les sources la validation de `RemoteRepositoryRequest` (hôtes, `https`, SHA-1 complet, `FETCH_ONLY`, ni `http://`, ni `ssh://`, ni `git@`), le clone sans submodule ni journalisation de credential, le cache borné, et que cet ADR, la roadmap M25 et les guides énoncent les mêmes faits (ligne de statut comprise).
+- Revue : tout nouveau chemin d'import d'artefact distant passe par la validation du coordinateur et par le staging, jamais directement par le magasin.
 
 ## Rejected alternatives
 
@@ -44,3 +72,9 @@ Le HEAD `fc395d189cf7fc5a0e06130210a3dc763fc48637` a passé les runners exact-he
 Les dispositions finales sont `QUALIFIED_WITH_CONSTRAINTS` pour GitHub.com privé, GitLab.com public, le worker natif avec politique `ALLOW`, le transport `minos-distributed-artifact-v1` et les caches bornés. Le chemin credential GitLab privé reste contract-tested sans preuve live privée. Le réseau `DENY` demeure `BLOCKED/NOT_RUN` sur le worker natif et échoue fermé jusqu’à l’existence d’un backend prouvant l’isolation réseau OS.
 
 La matrice détaillée et les marqueurs des gates exact-head sont enregistrés dans [`../../project/roadmap/M25_EXECUTION.md`](../../project/roadmap/M25_EXECUTION.md).
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- La conséquence sur le backend natif et la section « Evidence » consignent `QUALIFIED_WITH_CONSTRAINTS` pour le worker natif avec politique `ALLOW` ; au HEAD, `remote index` refuse avant toute matérialisation tant qu'aucun bac à sable n'est qualifié pour du code non fiable, en `ALLOW` comme en `DENY` (ADR 0036, « Costs » ; ADR 0041) — preuve : `minos-cli/src/main/java/com/minos/cli/operations/LocalRemoteIndexOperations.java:102,111-119` ; `README.md:197`.
