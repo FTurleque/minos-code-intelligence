@@ -519,7 +519,6 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, frozenset[str]] = {
         "hosted.HostedRole",
         "hosted.HostedTenantState",
         "hosted.SharedWorkspace",
-        "orchestration.ProviderConformanceKit",
         "query.RelationshipResult",
         "query.SymbolResult",
         "query.UsageResult",

@@ -25,8 +25,8 @@ Ordre dans chaque section : rouge, correction, preuve. Les tests vivent dans le 
 
 ## 5. API Java
 
-- [ ] 5.1 [AUD-ARC-01] Rouge : test de `ProviderPlatformApi.ProviderDto` — capacités triées, non modifiables, clé ou valeur nulle refusée (`NullPointerException` comme `sortedCopy`).
-- [ ] 5.2 [AUD-ARC-01] Copie triée en JDK dans `ProviderDto` ; retirer `orchestration.ProviderConformanceKit` de la liste API. Preuve : `./mvnw -B -ntp -pl minos-api -am test` vert ; `check-module-boundaries.py` vert ; portée JaCoCo `public-api`.
+- [x] 5.1 [AUD-ARC-01] Rouge : test de `ProviderPlatformApi.ProviderDto` — capacités triées, non modifiables, clé ou valeur nulle refusée (`NullPointerException` comme `sortedCopy`).
+- [x] 5.2 [AUD-ARC-01] Copie triée en JDK dans `ProviderDto` ; retirer `orchestration.ProviderConformanceKit` de la liste API. Preuve : `./mvnw -B -ntp -pl minos-api -am test` vert ; `check-module-boundaries.py` vert ; portée JaCoCo `public-api`.
 
 ## 6. Preuves d'ensemble
 

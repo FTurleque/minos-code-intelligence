@@ -28,6 +28,25 @@ class ProviderDtoOrderTest {
         assertThrows(NullPointerException.class, () -> dto(null));
     }
 
+    /** AUD-ARC-01: the sorted copy keeps the refusals of the engine helper it replaces, and is detached. */
+    @Test
+    void capabilitiesRefuseANullKeyOrValueAndAreDetachedFromTheSource() {
+        Map<String, String> nullKey = new HashMap<>();
+        nullKey.put(null, "FULL");
+        Map<String, String> nullValue = new HashMap<>();
+        nullValue.put("SYMBOLS", null);
+
+        assertEquals("key", assertThrows(NullPointerException.class, () -> dto(nullKey)).getMessage());
+        assertEquals("value", assertThrows(NullPointerException.class, () -> dto(nullValue)).getMessage());
+        assertEquals("capabilities", assertThrows(NullPointerException.class, () -> dto(null)).getMessage());
+
+        Map<String, String> source = new HashMap<>(Map.of("SYMBOLS", "FULL", "CALLS", "PARTIAL"));
+        ProviderPlatformApi.ProviderDto dto = dto(source);
+        source.put("REFERENCES", "FULL");
+        assertEquals(List.of("CALLS", "SYMBOLS"), new ArrayList<>(dto.capabilities().keySet()));
+        assertEquals(dto, dto(Map.of("CALLS", "PARTIAL", "SYMBOLS", "FULL")));
+    }
+
     private static ProviderPlatformApi.ProviderDto dto(Map<String, String> capabilities) {
         return new ProviderPlatformApi.ProviderDto(
                 "provider", "1.0", List.of("JAVA"), List.of("MAVEN"), capabilities, 50, List.of(), "READY", List.of());
