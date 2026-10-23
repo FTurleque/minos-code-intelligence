@@ -63,7 +63,7 @@ sequenceDiagram
 | Participant | Classes (module) |
 |---|---|
 | CLI | `DoctorCommand`, `ToolsCommand` (`minos-cli`) |
-| Orchestration de l'indexation | `LocalAutonomousIndexOperations.providers` et `installProvider` |
+| Orchestration de l'indexation | `LocalAutonomousIndexOperations.providers` et `installProvider` (`minos-cli`), sur `ProviderPlatformService.runtimes` et `installRuntime` (`minos-application`) |
 | Provider SCIP | `ManagedScipProviderRuntimeManager.inspect` et `install` |
 
 Le rapport de `doctor` contient aussi les commandes trouvées, le stockage privé et l'état du sandbox des workers

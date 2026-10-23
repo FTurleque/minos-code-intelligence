@@ -1,6 +1,6 @@
 # Section 6 — Vue d'exécution
 
-> Preuves : `MinosCliRunner`, `LocalAutonomousIndexOperations`, `ProjectIndexingUseCase`, `IndexingLifecycleService`, `DoctorCommand`,
+> Preuves : `MinosCliRunner`, `LocalAutonomousIndexOperations`, `ProjectIndexingUseCase`, `RemoteIndexingUseCase`, `ProviderPlatformService`, `IndexingLifecycleService`, `DoctorCommand`,
 > `McpBackendRouter`, `DockerMcpTransport`, `MinosMcpServer`, ADR-0006, ADR-0014, ADR-0037, ADR-0039.
 
 Relu contre le code le 2026-10-07 : les noms exacts des classes sont dans les tableaux sous chaque diagramme, et les mêmes diagrammes sont dans [`diagrams/`](../diagrams/README.md), qui fait foi en cas d'écart.
@@ -147,7 +147,7 @@ sequenceDiagram
 | Participant | Classes (module) |
 |---|---|
 | CLI | `DoctorCommand`, `ToolsCommand` (`minos-cli`) |
-| Orchestration de l'indexation | `LocalAutonomousIndexOperations.providers` et `installProvider` |
+| Orchestration de l'indexation | `LocalAutonomousIndexOperations.providers` et `installProvider` (`minos-cli`), sur `ProviderPlatformService.runtimes` et `installRuntime` (`minos-application`) |
 | Provider SCIP | `ManagedScipProviderRuntimeManager.inspect` et `install` |
 
 Le rapport de `doctor` contient aussi les commandes trouvées, le stockage privé et l'état du sandbox des workers
