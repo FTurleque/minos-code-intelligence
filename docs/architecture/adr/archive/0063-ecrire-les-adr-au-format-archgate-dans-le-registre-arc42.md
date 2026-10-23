@@ -80,6 +80,6 @@ Options considérées :
 
 ## References
 
-- [ADR 0068](ARCH-0068-modules-dependances-et-propriete-des-packages.md) (règle A7 portée par Archgate).
+- [ADR 0068](../ARCH-0068-modules-dependances-et-propriete-des-packages.md) (règle A7 portée par Archgate).
 - Fiche d'usage : `docs/developer/archgate.md`.
 - Documentation Archgate : `reference/configuration` (`paths.adrs`), `reference/adr-schema`, `guides/writing-adrs`.
