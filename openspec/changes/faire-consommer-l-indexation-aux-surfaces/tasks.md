@@ -9,7 +9,7 @@ Ordre dans chaque section : rouge, correction, preuve. Les tests vivent dans le 
 
 ## 2. Runtimes de providers
 
-- [ ] 2.1 [AUD-ARC-01] Rouge : test de `ProviderPlatformService` — `runtimes()` et `installRuntime(String)` rendent `ProviderRuntimeSummary` (`com.minos.application` ; identifiant, version, état, exécutable, diagnostics, requis par défaut) sur un `ProviderRuntimeManager` de test. Écrit pour D7 = A ; si B est retenue, le même test vise le service distinct.
+- [ ] 2.1 [AUD-ARC-01] Rouge : test de `ProviderPlatformService` — `runtimes()` et `installRuntime(String)` rendent `ProviderRuntimeSummary` (`com.minos.application` ; identifiant, version, état, exécutable, diagnostics, requis par défaut) sur un `ProviderRuntimeManager` de test. D7 = A (décision du propriétaire du 2026-10-23).
 - [ ] 2.2 [AUD-ARC-01] Méthodes et résumé ; `LocalAutonomousIndexOperations.providers` et `installProvider` les utilisent ; le MCP n'appelle ni l'une ni l'autre. Retirer `runtime.ProviderRuntimeManager` et `runtime.ProviderRuntimeStatus` de la liste CLI. Preuve : `ToolsCommandTest`, `DoctorCommandTest`, `ProviderVerdictConsistencyTest` verts sans attente modifiée ; `MinosMcpReadOnlyHomeTest` vert (aucun appel au gestionnaire de runtimes, `:55`) ; `check-module-boundaries.py` vert.
 
 ## 3. Indexation locale : résumés et choix de reprise
