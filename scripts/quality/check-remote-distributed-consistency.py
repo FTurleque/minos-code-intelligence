@@ -123,10 +123,11 @@ def check_distributed_worker_sources() -> None:
 
 
 def check_remote_indexing_wiring() -> None:
-    """The CLI, the composition root and the final-validation runners that expose remote indexing."""
+    """The application use case, the composition root, the CLI and the final-validation runners of remote indexing."""
     # AUD-ARC-02: the executor decorator is a parameter of the application indexing use case.
     autonomous = read("minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java")
-    remote_operations = read("minos-cli/src/main/java/com/minos/cli/operations/LocalRemoteIndexOperations.java")
+    # AUD-ARC-01: the remote indexing is an application use case; the CLI converts and projects.
+    remote_use_case = read("minos-application/src/main/java/com/minos/application/remote/RemoteIndexingUseCase.java")
     # A2 / ADR 0042: the concrete M25 wiring moved verbatim to the composition root (minos-bootstrap).
     remote_runtime = read("minos-bootstrap/src/main/java/com/minos/bootstrap/LocalRemoteIndexingRuntime.java")
     composition_root = read("minos-bootstrap/src/main/java/com/minos/bootstrap/DefaultMinosApplicationComposer.java")
@@ -137,10 +138,10 @@ def check_remote_indexing_wiring() -> None:
     linux_runner = read("scripts/m25/run-final.sh")
 
     require_facts("ProjectIndexingUseCase.java", autonomous, "executorDecorator", "UnaryOperator<IndexerExecutor>")
-    require_facts("LocalRemoteIndexOperations.java", remote_operations,
+    require_facts("RemoteIndexingUseCase.java", remote_use_case,
                   "RemoteIndexingRuntime", "compositionRoot.remoteRepositoryMaterializer(",
                   "compositionRoot.remoteIndexingRuntime(", "force", "verified artifact evidence")
-    forbid("LocalRemoteIndexOperations.java", remote_operations,
+    forbid("RemoteIndexingUseCase.java", remote_use_case,
            "import com.minos.runtime.local.distributed.DistributedArtifactBundleStore",
            "import com.minos.runtime.local.distributed.DistributedIndexerExecutor",
            "import com.minos.integration.git.JGitRemoteRepositoryMaterializer")

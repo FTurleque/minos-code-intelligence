@@ -1,13 +1,13 @@
 package com.minos.cli.command;
 
+import com.minos.application.remote.RemoteSourceRequest;
+import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.operations.RemoteIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.output.SymbolOutputFormat;
-import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
-import com.minos.remote.RemoteRepositoryRequest;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -66,7 +66,8 @@ public final class RemoteIndexCommand {
                 (options, exception) -> "remote " + options.action().command() + " failed: "
                         + CliCommandSupport.failureMessage(CliCommandSupport.unwrapRuntime(exception)),
                 options -> {
-                    RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
+                    // D9: the source is validated here, before the lazy operations open the application.
+                    RemoteSourceRequest request = RemoteSourceRequest.of(
                             options.repository(), options.reference(), options.commit(), options.subdirectory(),
                             options.credentialEnvironmentVariable());
                     if (options.action() == Action.MATERIALIZE) {
@@ -75,7 +76,7 @@ public final class RemoteIndexCommand {
                     } else {
                         output.append(renderIndex(operations.index(
                                 request, options.displayName(), options.provider(), options.workerId(),
-                                options.workerNetworkPolicy()), options.format())).append('\n');
+                                options.workerNetwork()), options.format())).append('\n');
                     }
                     return FindSymbolCommand.SUCCESS;
                 });
@@ -199,7 +200,7 @@ public final class RemoteIndexCommand {
             String displayName,
             String provider,
             String workerId,
-            WorkerNetworkPolicy workerNetworkPolicy
+            WorkerNetworkChoice workerNetwork
     ) {
         private static Options parse(String[] arguments) {
             if (arguments.length < 2) {
@@ -231,10 +232,10 @@ public final class RemoteIndexCommand {
                     network == null ? null : parseNetwork(network));
         }
 
-        private static WorkerNetworkPolicy parseNetwork(String value) {
+        private static WorkerNetworkChoice parseNetwork(String value) {
             return switch (value.toLowerCase(java.util.Locale.ROOT)) {
-                case "allow" -> WorkerNetworkPolicy.ALLOW;
-                case "deny" -> WorkerNetworkPolicy.DENY;
+                case "allow" -> WorkerNetworkChoice.ALLOW;
+                case "deny" -> WorkerNetworkChoice.DENY;
                 default -> throw new IllegalArgumentException("worker network policy must be allow or deny");
             };
         }

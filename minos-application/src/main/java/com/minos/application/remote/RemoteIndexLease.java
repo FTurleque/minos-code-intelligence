@@ -1,4 +1,4 @@
-package com.minos.cli.operations;
+package com.minos.application.remote;
 
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.BoundedFileLease;
