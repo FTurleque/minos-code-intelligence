@@ -1,8 +1,8 @@
 package com.minos.storage.local.store;
 
 import com.minos.store.CodeKnowledgeSnapshot;
-import com.minos.store.InMemoryCodeKnowledgeStore;
-import com.minos.store.SnapshotQueryView;
+import com.minos.store.IncomingRelationships;
+import com.minos.store.SnapshotReadView;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -53,9 +53,9 @@ class QueryViewWeightTest {
 
         FileSymbolSnapshotStore reader = new FileSymbolSnapshotStore(root);
         long before = settledHeap();
-        SnapshotQueryView view = reader.loadActiveQueryView(projectId).orElseThrow();
+        SnapshotReadView view = reader.loadActiveReadView(projectId).orElseThrow();
         // AUD-PERF-11 : l'index dérivé des arêtes entrantes vit autant que la vue ; il est compté dans la mesure.
-        InMemoryCodeKnowledgeStore.SymbolEdgeIndex edges = view.queryStore().symbolEdgeIndex(projectId.toString());
+        IncomingRelationships edges = view.incomingRelationships();
         long retained = settledHeap() - before;
         assertNotNull(view.snapshot());
         assertTrue(edges.targetCount() > 0, "the derived index is built before the measure");
