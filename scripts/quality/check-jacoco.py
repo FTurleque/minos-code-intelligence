@@ -56,6 +56,7 @@ SCOPES = {
             "com/minos/storage/local/store/FileSymbolSnapshotStore", "com/minos/storage/local/store/ActiveSnapshotRepository",
             "com/minos/storage/local/store/SnapshotCodec", "com/minos/storage/local/store/SnapshotIntegrityService",
             "com/minos/store/InMemoryCodeKnowledgeStore", "com/minos/store/SnapshotQueryView",
+            "com/minos/store/SnapshotReadView", "com/minos/store/CodeKnowledgeReader",
         ), "line": 0.50, "branch": 0.35,
     },
     "project-resolution": {"prefixes": ("com/minos/application/resolution/ProjectResolver",), "line": 0.70, "branch": 0.50},
