@@ -13,7 +13,7 @@ Sprint 9 de l'audit du 10 octobre 2026 : **AUD-ARC-04**. HEAD analysé : `949e15
 - Fournisseur d'identité : `minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsExecutionPathIdentityProvider.java`, déclaré dans `minos-runtime-local/src/main/resources/META-INF/services/com.minos.orchestration.ExecutionPathIdentityProvider` (l'audit citait l'ancien package `com.minos.runtime.local`).
 - La capture est **statique** : `minos-engine/src/main/java/com/minos/orchestration/IndexingRuntimePorts.java:137` (`ExecutionPathAuthorization.tryCapture`) appelle `StableFileSystemIdentity.capture` (`:149`), et le constructeur public du record `IndexingExecutionRequest` l'appelle (`:279-292`). 22 fichiers de production nomment ce record.
 - Double de test : `minos-bootstrap/src/test/java/com/minos/bootstrap/CloseCountingStorageProvider.java:30-32` déclare l'identifiant `postgresql` ; il est enregistré dans les ressources de test de `minos-api`, `minos-cli` et `minos-mcp`. Sa Javadoc dit qu'il n'est jamais enregistré dans `minos-bootstrap`, où le vrai fournisseur PostgreSQL est sur le chemin de classes de test.
-- `docs/architecture/adr/0042-racine-de-composition.md:258-259` documente déjà le résidu de chargeur de contexte.
+- `docs/architecture/adr/ARCH-0042-racine-de-composition.md:258-259` documente déjà le résidu de chargeur de contexte.
 
 **Non vérifié** : aucun build ni test exécuté ; en particulier, **l'effet du refus des doublons sur les tests** de `minos-api`, `minos-cli` et `minos-mcp` (le vrai fournisseur PostgreSQL y est-il visible par transitivité ?) est à établir par exécution, en tâche 1.1. Le comportement dans le JAR ombré n'a pas été observé.
 

@@ -5,7 +5,7 @@ Date : 2026-10-05. **Décisions acceptées, implémentation non commencée par c
 ## Commencer maintenant
 
 1. Partir de la tête à jour de `develop`, pas de `main`. Ouvrir une branche d'implémentation distincte.
-2. Lire les ADR [0055](../../../architecture/adr/archive/0055-unifier-les-adaptateurs-de-stockage.md), [0056](../../../architecture/adr/0056-ports-de-lecture-des-snapshots.md), [0057](../../../architecture/adr/0057-finaliser-les-frontieres-hexagonales.md), puis [TASKS.md](TASKS.md).
+2. Lire les ADR [0055](../../../architecture/adr/archive/0055-unifier-les-adaptateurs-de-stockage.md), [0056](../../../architecture/adr/ARCH-0056-ports-de-lecture-des-snapshots.md), [0057](../../../architecture/adr/ARCH-0057-finaliser-les-frontieres-hexagonales.md), puis [TASKS.md](TASKS.md).
 3. Commencer par **SH-01** ; préparer les gardes **SH-11**. Première livraison fonctionnelle : **SH-02 + SH-03** (fusion et codec, en commits séparés, ou deux PR chacune verte).
 4. Traiter **SH-04 puis SH-05**, puis les résidus selon leurs dépendances. SH-11 accompagne chaque PR ; ce n'est pas une permission de différer les tests à la fin.
 5. Utiliser [START-WITH-CLAUDE.md](START-WITH-CLAUDE.md). Les issues GitHub servent au suivi quotidien ; ce dossier porte le plan versionné. Synchroniser leurs états dans chaque PR.

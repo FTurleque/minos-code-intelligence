@@ -216,7 +216,7 @@ Cette séparation évite que la couche sémantique transforme MINOS en orchestra
 
 ## Qualification
 
-M20 a été qualifié par `scripts/m20/run-final.ps1`, archivé depuis (jalon clos, aucun appelant vivant — voir [ADR 0043](../architecture/adr/0043-retrait-des-artefacts-de-jalon.md)) :
+M20 a été qualifié par `scripts/m20/run-final.ps1`, archivé depuis (jalon clos, aucun appelant vivant — voir [ADR 0043](../architecture/adr/GEN-0043-retrait-des-artefacts-de-jalon.md)) :
 
 ```text
 scripts/history/m20/run-final.ps1

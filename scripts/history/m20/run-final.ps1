@@ -56,7 +56,7 @@ function Require-Pattern {
 function Assert-M20Structure {
     $required = @(
         'docs\project\roadmap\M20_EXECUTION.md',
-        'docs\architecture\adr\0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md',
+        'docs\architecture\adr\BE-0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md',
         'docs\developer\semantic-hybrid-intelligence.md',
         'minos-domain\src\main\java\com\minos\semantic\SemanticDocument.java',
         'minos-domain\src\main\java\com\minos\semantic\SemanticDocumentKind.java',

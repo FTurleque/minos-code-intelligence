@@ -36,7 +36,7 @@ Tu travailles avec des **sous-agents** : des agents d'implémentation, **et au m
 
 ## R1 — Reprendre une indexation interrompue (🔴 Haute, fiabilité)
 
-**Conception déjà validée** : `docs/adr/0039-reprise-indexation-apres-interruption.md`. Lis-la en entier avant d'écrire une ligne ; elle fixe le modèle, la machine à états et le découpage en 5 lots. Ne la réinvente pas ; si tu veux t'en écarter, demande d'abord.
+**Conception déjà validée** : `docs/adr/BE-0039-reprise-indexation-apres-interruption.md`. Lis-la en entier avant d'écrire une ligne ; elle fixe le modèle, la machine à états et le découpage en 5 lots. Ne la réinvente pas ; si tu veux t'en écarter, demande d'abord.
 
 **État actuel à connaître** : un run abandonné est finalisé en `FAILED` par `AuthoritativeProjectStateReconciler` sans consulter le disque ; `IndexingRunExecutor.execute` tire un `UUID.randomUUID()` neuf, donc perd le lien avec `runs/<runId>/` ; `RunDirectoryRetention.prune` se déclenche au début de chaque exécution provider et peut effacer le run à reprendre.
 
@@ -141,4 +141,4 @@ Chiffre pour chaque option le travail, les prérequis opérateur, ce qui devient
 
 ---
 
-*Références : `docs/audit/archive/2026-09/AUDIT-2026-09.md` (filtre Sévérité = Haute, État = Ouverts), `docs/adr/0039-reprise-indexation-apres-interruption.md`, `docs/adr/archive/0038-aggregate-worker-resource-containment.md`, `docs/audit/archive/2026-09/SPRINT-1-SUIVI.md`.*
+*Références : `docs/audit/archive/2026-09/AUDIT-2026-09.md` (filtre Sévérité = Haute, État = Ouverts), `docs/adr/BE-0039-reprise-indexation-apres-interruption.md`, `docs/adr/archive/0038-aggregate-worker-resource-containment.md`, `docs/audit/archive/2026-09/SPRINT-1-SUIVI.md`.*

@@ -7,7 +7,7 @@ rules: false
 
 # 0038 — Confiner les ressources des workers non fiables de manière agrégée et fail-closed
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0070](../0070-code-non-fiable-confinement-et-indexation-distante.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0070](../SEC-0070-code-non-fiable-confinement-et-indexation-distante.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Status: Accepted — MINOS-01 (P1). Amendé par [0041](0041-indexation-distante-de-code-non-fiable.md) (2026-09-26) sur la §4 : le quota d'écriture reste une supervision et l'indexation distante de code non fiable est fermée par décision.
 

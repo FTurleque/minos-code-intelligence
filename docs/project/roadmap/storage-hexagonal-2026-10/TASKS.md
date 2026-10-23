@@ -4,14 +4,14 @@ Date : 2026-10-05. Base d'observation : `develop` à `c9a339088f81b6b31c65c7ad12
 
 Toutes les tâches sont **À faire**, sauf SH-05 (fait le 2026-10-21). P1/P2 indiquent un ordre de travail architectural, pas une nouvelle sévérité de vulnérabilité. Les chemins désignent la base observée ; appliquer la table de migration de SH-01 après déplacement.
 
-[Backlog et démarrage](README.md) · [ADR 0055](../../../architecture/adr/archive/0055-unifier-les-adaptateurs-de-stockage.md) · [ADR 0056](../../../architecture/adr/0056-ports-de-lecture-des-snapshots.md) · [ADR 0057](../../../architecture/adr/0057-finaliser-les-frontieres-hexagonales.md)
+[Backlog et démarrage](README.md) · [ADR 0055](../../../architecture/adr/archive/0055-unifier-les-adaptateurs-de-stockage.md) · [ADR 0056](../../../architecture/adr/ARCH-0056-ports-de-lecture-des-snapshots.md) · [ADR 0057](../../../architecture/adr/ARCH-0057-finaliser-les-frontieres-hexagonales.md)
 
 ## SH-01 — Établir la baseline et la cartographie de migration
 
 - État : À faire
 - Priorité : P1
 - Dépendances : aucune
-- Point d'entrée : `pom.xml`, `scripts/architecture/check-module-boundaries.py`, `docs/project/audits/archive/2026-09/ARCHI-SUIVI.md`, `docs/architecture/adr/0042-racine-de-composition.md`
+- Point d'entrée : `pom.xml`, `scripts/architecture/check-module-boundaries.py`, `docs/project/audits/archive/2026-09/ARCHI-SUIVI.md`, `docs/architecture/adr/ARCH-0042-racine-de-composition.md`
 
 ### Actions
 
@@ -221,7 +221,7 @@ Tests de contrat existants API/NEXUS/MCP/CLI ; compilation et vérification plug
 - État : À faire
 - Priorité : P2
 - Dépendances : SH-02
-- Point d'entrée : `minos-bootstrap/src/main/java/com/minos/bootstrap/StorageBackendSelection.java`, `minos-application/src/main/java/com/minos/application/MinosApplicationComposers.java`, `minos-engine/src/main/java/com/minos/io/StableFileSystemIdentity.java`, `docs/architecture/adr/0042-racine-de-composition.md`
+- Point d'entrée : `minos-bootstrap/src/main/java/com/minos/bootstrap/StorageBackendSelection.java`, `minos-application/src/main/java/com/minos/application/MinosApplicationComposers.java`, `minos-engine/src/main/java/com/minos/io/StableFileSystemIdentity.java`, `docs/architecture/adr/ARCH-0042-racine-de-composition.md`
 
 ### Actions
 

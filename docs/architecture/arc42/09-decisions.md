@@ -9,45 +9,45 @@
 
 | Identifiant | Titre | Statut | Date | Remplace / Remplacé par |
 |-------------|-------|--------|------|------------------------|
-| [ADR-0006](../adr/0006-promouvoir-les-index-de-maniere-atomique.md) | Promouvoir les index de manière atomique | Accepted | 2026-07-22 | — |
-| [ADR-0007](../adr/0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans le registre local | Accepted | 2026-07-22 | — |
-| [ADR-0008](../adr/0008-negocier-indexeurs-par-capacites-explicites.md) | Négocier les indexeurs par capacités explicites | Accepted | 2026-07-22 | — |
-| [ADR-0009](../adr/0009-normalized-symbol-identity.md) | Modéliser les identités de symboles sans inventer de canonicité | Accepted | 2026-07-24 | — |
-| [ADR-0010](../adr/0010-normalized-relationship-semantics.md) | Normaliser les relations avec provenance, preuve et confiance explicites | Accepted | 2026-07-24 | — |
-| [ADR-0011](../adr/0011-bounded-code-search-context.md) | Borner explicitement la recherche et le contexte de code | Accepted | 2026-07-24 | — |
-| [ADR-0012](../adr/0012-explainable-related-tests.md) | Conserver les tests liés comme dérivations explicables | Accepted | 2026-07-24 | — |
-| [ADR-0014](../adr/0014-safe-incremental-indexing.md) | N'utiliser l'indexation incrémentale que sous preuve explicite de capacité | Accepted | 2026-07-24 | — |
-| [ADR-0015](../adr/0015-conservative-impact-analysis.md) | Traiter l'analyse d'impact comme une estimation potentielle du graphe observé | Accepted | 2026-07-24 | — |
-| [ADR-0016](../adr/0016-stable-cli-contract.md) | Stabiliser la CLI comme surface d'exposition du cœur métier | Accepted | 2026-07-24 | — |
-| [ADR-0017](../adr/0017-mcp-stdio-read-only.md) | Exposer MINOS en MCP via STDIO read-only | Accepted | 2026-07-24 | — |
-| [ADR-0018](../adr/0018-versioned-public-java-api.md) | Versionner une API Java publique indépendante des modèles internes | Accepted | 2026-07-24 | — |
-| [ADR-0019](../adr/0019-cross-repository-identity-and-git-facts.md) | Résoudre les relations cross-repository uniquement par identité exacte et séparer les faits Git | Accepted | 2026-07-24 | — |
-| [ADR-0020](../adr/0020-minos-nexus-json-boundary.md) | Intégrer NEXUS par un contrat JSON local versionné | Accepted | 2026-07-24 | — |
-| [ADR-0024](../adr/0024-active-snapshot-query-view-and-rebuildable-indexes.md) | Mettre en cache une vue de snapshot actif et reconstruire ses indexes en mémoire | Accepted | 2026-07-26 | — |
-| [ADR-0026](../adr/0026-discovery-provider-spi-and-explicit-capability-profiles.md) | Étendre discovery/providers par SPI et interdire les capacités implicites | Accepted | 2026-07-27 | — |
-| [ADR-0027](../adr/0027-intellij-external-client-and-versioned-cli-protocol.md) | Isoler le plugin IntelliJ en client Java 21 et négocier un protocole CLI JSON versionné | Accepted | 2026-07-27 | — |
-| [ADR-0029](../adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) | Garder la couche sémantique optionnelle, reconstruisible et distincte des faits structurés | Accepted | 2026-07-27 | — |
-| [ADR-0030](../adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md) | Fournir un provider Java AST de référence avec limitations et capabilities explicites | Accepted | 2026-07-28 | — |
-| [ADR-0031](../adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md) | Ajouter un provider learned local qualifié et conserver ANN derrière une décision mesurée | Accepted | 2026-07-28 | — |
-| [ADR-0034](../adr/0034-partial-runtime-observations-with-explicit-static-correlation.md) | Conserver les observations runtime partielles séparées des faits statiques et corrélées à un snapshot exact | Accepted | 2026-07-29 | — |
-| [ADR-0039](../adr/0039-reprise-indexation-apres-interruption.md) | Reprendre une indexation interrompue au lieu de tout réindexer | Accepted — implémenté au sprint 2 | 2026-09-26 | — |
-| [ADR-0042](../adr/0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Accepted — option (c) retenue | 2026-09-27 | — |
-| [ADR-0043](../adr/0043-retrait-des-artefacts-de-jalon.md) | Politique de retrait des scripts et workflows de jalon | Accepted | — | — |
-| [ADR-0056](../adr/0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — mise en œuvre partielle | 2026-10-05 | — |
-| [ADR-0057](../adr/0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels planifiés | 2026-10-05 | — |
-| [ADR-0058](../adr/0058-declarer-les-usages-de-modules.md) | Déclarer chaque module utilisé | Accepted | 2026-10-09 | — |
-| [ADR-0060](../adr/0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Accepted | 2026-10-18 | — |
-| [ADR-0061](../adr/0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité | Accepted | 2026-10-23 | — |
-| [ADR-0063](../adr/0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md) | Écrire les ADR au format Archgate dans le registre arc42 | Accepted | 2026-10-23 | — |
-| [ADR-0064](../adr/0064-coeur-agnostique-du-langage-et-de-l-indexeur.md) | Cœur agnostique du langage et de l'indexeur, SCIP protocole privilégié | Accepted | 2026-10-23 | Remplace ADR-0001, ADR-0002 |
-| [ADR-0065](../adr/0065-providers-scip-polyglottes-livres-dans-le-paquet.md) | Providers SCIP polyglottes sous preuve, livrés dans le paquet | Accepted | 2026-10-23 | Remplace ADR-0032, ADR-0040 |
-| [ADR-0066](../adr/0066-port-de-connaissance-et-persistance-des-snapshots.md) | Port de connaissance et persistance des snapshots : format V3, compatibilité, dédoublonnage | Accepted | 2026-10-23 | Remplace ADR-0003, ADR-0023, ADR-0046, ADR-0047 |
-| [ADR-0067](../adr/0067-socle-d-execution-java-25-et-maven.md) | Socle d'exécution : Java 25, Maven par le wrapper, sans framework serveur | Accepted | 2026-10-23 | Remplace ADR-0004, ADR-0005, ADR-0059 |
-| [ADR-0068](../adr/0068-modules-dependances-et-propriete-des-packages.md) | Modules, dépendances et propriété des packages | Accepted | 2026-10-23 | Remplace ADR-0022, ADR-0044, ADR-0055, ADR-0062 |
-| [ADR-0069](../adr/0069-backends-mcp-natif-et-docker.md) | Backends MCP natif et Docker | Accepted | 2026-10-23 | Remplace ADR-0021, ADR-0037 |
-| [ADR-0070](../adr/0070-code-non-fiable-confinement-et-indexation-distante.md) | Code non fiable : confinement des providers et indexation distante | Accepted | 2026-10-23 | Remplace ADR-0033, ADR-0036, ADR-0038, ADR-0041 |
-| [ADR-0071](../adr/0071-plan-de-controle-d-equipe-embarque.md) | Plan de contrôle d'équipe embarqué | Accepted | 2026-10-23 | Remplace ADR-0035, ADR-0036 |
-| [ADR-0072](../adr/0072-graphe-de-programme-honnete-sur-ses-capacites.md) | Graphe de programme honnête sur ses capacités | Accepted | 2026-10-23 | Remplace ADR-0028, ADR-0036 |
+| [DATA-0006](../adr/DATA-0006-promouvoir-les-index-de-maniere-atomique.md) | Promouvoir les index de manière atomique | Accepted | 2026-07-22 | — |
+| [DATA-0007](../adr/DATA-0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans le registre local | Accepted | 2026-07-22 | — |
+| [ARCH-0008](../adr/ARCH-0008-negocier-indexeurs-par-capacites-explicites.md) | Négocier les indexeurs par capacités explicites | Accepted | 2026-07-22 | — |
+| [DATA-0009](../adr/DATA-0009-normalized-symbol-identity.md) | Modéliser les identités de symboles sans inventer de canonicité | Accepted | 2026-07-24 | — |
+| [DATA-0010](../adr/DATA-0010-normalized-relationship-semantics.md) | Normaliser les relations avec provenance, preuve et confiance explicites | Accepted | 2026-07-24 | — |
+| [BE-0011](../adr/BE-0011-bounded-code-search-context.md) | Borner explicitement la recherche et le contexte de code | Accepted | 2026-07-24 | — |
+| [DATA-0012](../adr/DATA-0012-explainable-related-tests.md) | Conserver les tests liés comme dérivations explicables | Accepted | 2026-07-24 | — |
+| [BE-0014](../adr/BE-0014-safe-incremental-indexing.md) | N'utiliser l'indexation incrémentale que sous preuve explicite de capacité | Accepted | 2026-07-24 | — |
+| [BE-0015](../adr/BE-0015-conservative-impact-analysis.md) | Traiter l'analyse d'impact comme une estimation potentielle du graphe observé | Accepted | 2026-07-24 | — |
+| [ARCH-0016](../adr/ARCH-0016-stable-cli-contract.md) | Stabiliser la CLI comme surface d'exposition du cœur métier | Accepted | 2026-07-24 | — |
+| [ARCH-0017](../adr/ARCH-0017-mcp-stdio-read-only.md) | Exposer MINOS en MCP via STDIO read-only | Accepted | 2026-07-24 | — |
+| [ARCH-0018](../adr/ARCH-0018-versioned-public-java-api.md) | Versionner une API Java publique indépendante des modèles internes | Accepted | 2026-07-24 | — |
+| [DATA-0019](../adr/DATA-0019-cross-repository-identity-and-git-facts.md) | Résoudre les relations cross-repository uniquement par identité exacte et séparer les faits Git | Accepted | 2026-07-24 | — |
+| [ARCH-0020](../adr/ARCH-0020-minos-nexus-json-boundary.md) | Intégrer NEXUS par un contrat JSON local versionné | Accepted | 2026-07-24 | — |
+| [DATA-0024](../adr/DATA-0024-active-snapshot-query-view-and-rebuildable-indexes.md) | Mettre en cache une vue de snapshot actif et reconstruire ses indexes en mémoire | Accepted | 2026-07-26 | — |
+| [BE-0026](../adr/BE-0026-discovery-provider-spi-and-explicit-capability-profiles.md) | Étendre discovery/providers par SPI et interdire les capacités implicites | Accepted | 2026-07-27 | — |
+| [ARCH-0027](../adr/ARCH-0027-intellij-external-client-and-versioned-cli-protocol.md) | Isoler le plugin IntelliJ en client Java 21 et négocier un protocole CLI JSON versionné | Accepted | 2026-07-27 | — |
+| [BE-0029](../adr/BE-0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) | Garder la couche sémantique optionnelle, reconstruisible et distincte des faits structurés | Accepted | 2026-07-27 | — |
+| [BE-0030](../adr/BE-0030-java-ast-reference-provider-with-explicit-capability-limits.md) | Fournir un provider Java AST de référence avec limitations et capabilities explicites | Accepted | 2026-07-28 | — |
+| [BE-0031](../adr/BE-0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md) | Ajouter un provider learned local qualifié et conserver ANN derrière une décision mesurée | Accepted | 2026-07-28 | — |
+| [DATA-0034](../adr/DATA-0034-partial-runtime-observations-with-explicit-static-correlation.md) | Conserver les observations runtime partielles séparées des faits statiques et corrélées à un snapshot exact | Accepted | 2026-07-29 | — |
+| [BE-0039](../adr/BE-0039-reprise-indexation-apres-interruption.md) | Reprendre une indexation interrompue au lieu de tout réindexer | Accepted — implémenté au sprint 2 | 2026-09-26 | — |
+| [ARCH-0042](../adr/ARCH-0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Accepted — option (c) retenue | 2026-09-27 | — |
+| [GEN-0043](../adr/GEN-0043-retrait-des-artefacts-de-jalon.md) | Politique de retrait des scripts et workflows de jalon | Accepted | — | — |
+| [ARCH-0056](../adr/ARCH-0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — mise en œuvre partielle | 2026-10-05 | — |
+| [ARCH-0057](../adr/ARCH-0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels planifiés | 2026-10-05 | — |
+| [ARCH-0058](../adr/ARCH-0058-declarer-les-usages-de-modules.md) | Déclarer chaque module utilisé | Accepted | 2026-10-09 | — |
+| [SEC-0060](../adr/SEC-0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Accepted | 2026-10-18 | — |
+| [SEC-0061](../adr/SEC-0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité | Accepted | 2026-10-23 | — |
+| [ARCH-0064](../adr/ARCH-0064-coeur-agnostique-du-langage-et-de-l-indexeur.md) | Cœur agnostique du langage et de l'indexeur, SCIP protocole privilégié | Accepted | 2026-10-23 | Remplace ADR-0001, ADR-0002 |
+| [BE-0065](../adr/BE-0065-providers-scip-polyglottes-livres-dans-le-paquet.md) | Providers SCIP polyglottes sous preuve, livrés dans le paquet | Accepted | 2026-10-23 | Remplace ADR-0032, ADR-0040 |
+| [DATA-0066](../adr/DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md) | Port de connaissance et persistance des snapshots : format V3, compatibilité, dédoublonnage | Accepted | 2026-10-23 | Remplace ADR-0003, ADR-0023, ADR-0046, ADR-0047 |
+| [GEN-0067](../adr/GEN-0067-socle-d-execution-java-25-et-maven.md) | Socle d'exécution : Java 25, Maven par le wrapper, sans framework serveur | Accepted | 2026-10-23 | Remplace ADR-0004, ADR-0005, ADR-0059 |
+| [ARCH-0068](../adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) | Modules, dépendances et propriété des packages | Accepted | 2026-10-23 | Remplace ADR-0022, ADR-0044, ADR-0055, ADR-0062 |
+| [ARCH-0069](../adr/ARCH-0069-backends-mcp-natif-et-docker.md) | Backends MCP natif et Docker | Accepted | 2026-10-23 | Remplace ADR-0021, ADR-0037 |
+| [SEC-0070](../adr/SEC-0070-code-non-fiable-confinement-et-indexation-distante.md) | Code non fiable : confinement des providers et indexation distante | Accepted | 2026-10-23 | Remplace ADR-0033, ADR-0036, ADR-0038, ADR-0041 |
+| [SEC-0071](../adr/SEC-0071-plan-de-controle-d-equipe-embarque.md) | Plan de contrôle d'équipe embarqué | Accepted | 2026-10-23 | Remplace ADR-0035, ADR-0036 |
+| [ARCH-0072](../adr/ARCH-0072-graphe-de-programme-honnete-sur-ses-capacites.md) | Graphe de programme honnête sur ses capacités | Accepted | 2026-10-23 | Remplace ADR-0028, ADR-0036 |
+| [GEN-0073](../adr/GEN-0073-tenir-le-registre-d-adr-au-format-archgate.md) | Tenir le registre d'ADR au format Archgate, à l'emplacement arc42 | Accepted | 2026-10-23 | Remplace ADR-0063 |
 
 ## ADR archivés
 
@@ -88,3 +88,4 @@ Remplacés, rejetés ou reclassés le 2026-10-23 (tri du registre) ; conservés 
 | [ADR-0055](../adr/archive/0055-unifier-les-adaptateurs-de-stockage.md) | Réunir les adaptateurs dans minos-storage | Superseded by ADR-0068 |
 | [ADR-0059](../adr/archive/0059-migrer-le-socle-vers-java-25-lts.md) | Migrer le socle MINOS vers Java 25 LTS et garder la baseline par un gate | Superseded by ADR-0067 |
 | [ADR-0062](../adr/archive/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) | Confirmer les emplacements de l'ADR 0044 et ne créer de package que sous les racines de son module | Superseded by ADR-0068 |
+| [ADR-0063](../adr/archive/0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md) | Écrire les ADR au format Archgate dans le registre arc42 | Superseded by GEN-0073 |

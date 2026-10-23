@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0004 — Implémenter le cœur MINOS en Java 25 avec Maven, sans framework serveur
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0067](../0067-socle-d-execution-java-25-et-maven.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0067](../GEN-0067-socle-d-execution-java-25-et-maven.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 - Statut : **Partiellement remplacée par ADR-0005**
 - Date de décision : **22 juillet 2026**

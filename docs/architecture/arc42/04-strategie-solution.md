@@ -81,8 +81,8 @@ La direction des dépendances est strictement ascendante : les couches basses ig
 ## 4.5 Liens vers les ADR principaux
 
 - [ADR-0001](../adr/archive/0001-language-and-indexer-agnostic-core.md) — Agnosticisme du langage et de l'indexeur
-- [ADR-0008](../adr/0008-negocier-indexeurs-par-capacites-explicites.md) — Négociation par capacités
-- [ADR-0017](../adr/0017-mcp-stdio-read-only.md) — MCP STDIO read-only
+- [ADR-0008](../adr/ARCH-0008-negocier-indexeurs-par-capacites-explicites.md) — Négociation par capacités
+- [ADR-0017](../adr/ARCH-0017-mcp-stdio-read-only.md) — MCP STDIO read-only
 - [ADR-0022](../adr/archive/0022-maven-reactor-and-module-boundaries.md) — Reactor Maven et frontières
-- [ADR-0029](../adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) — Couche sémantique optionnelle
+- [ADR-0029](../adr/BE-0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) — Couche sémantique optionnelle
 - [ADR-0037](../adr/archive/0037-first-class-native-and-docker-runtime-backends.md) — Backends natif et Docker

@@ -7,7 +7,7 @@ rules: false
 
 # 0041 — Indexation distante de code non fiable : quota d'écriture OS ou fermeture assumée
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0070](../0070-code-non-fiable-confinement-et-indexation-distante.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0070](../SEC-0070-code-non-fiable-confinement-et-indexation-distante.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Status: Accepted (2026-09-26) — option (b) retenue : l'indexation distante de code non fiable reste fermée par décision, le refus est journalisé et diagnosticable, les revendications sont alignées sur ce que l'OS applique. L'option (a) reste chiffrée ci-dessous pour un ADR ultérieur si un besoin `remote index` est confirmé.
 
@@ -211,5 +211,5 @@ Consignés à la livraison (sprint 2, revue `verif-qualite` V24, V29, V31, V33).
 ## References
 
 - audit : [`../../project/audits/archive/2026-09/AUDIT-2026-09.md`](../../../project/audits/archive/2026-09/AUDIT-2026-09.md) (A1, G2) ; suivi sprint 1 : [`../../project/audits/archive/2026-09/SPRINT-1-SUIVI.md`](../../../project/audits/archive/2026-09/SPRINT-1-SUIVI.md)
-- ADR amendé : [0038](0038-aggregate-worker-resource-containment.md) §4 ; ADR liés : [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md), [0039](../0039-reprise-indexation-apres-interruption.md) (intersection `runs/`)
+- ADR amendé : [0038](0038-aggregate-worker-resource-containment.md) §4 ; ADR liés : [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md), [0039](../BE-0039-reprise-indexation-apres-interruption.md) (intersection `runs/`)
 - utilisateur : [`../../user/remote-indexing.md`](../../../user/remote-indexing.md), [`../../user/cli.md`](../../../user/cli.md) ; développeur : [`../../developer/remote-worker-sandbox-disposition.md`](../../../developer/remote-worker-sandbox-disposition.md)

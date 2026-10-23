@@ -44,7 +44,7 @@ ASK_RULES = (
      "Liste de tolérance en cliquet : elle ne fait que se resserrer ; chaque entrée porte une justification nominative."),
     (re.compile(r"^docs/architecture/adr/archive/"),
      "ADR archivé : relevé historique, conservé tel quel (seuls les liens se recalculent)."),
-    (re.compile(r"^docs/architecture/adr/\d{4}-"),
+    (re.compile(r"^docs/architecture/adr/[A-Z]+-\d{4}-"),
      "ADR : une décision Accepted ne se réécrit pas ; compléter la section « Mise en œuvre » ou écrire un ADR qui la remplace."),
     (re.compile(r"^(LICENSE|SECURITY\.md|CONTRIBUTING\.md|\.gitleaks\.toml)$"),
      "Document juridique ou de sécurité du dépôt : modification à confirmer par le propriétaire."),

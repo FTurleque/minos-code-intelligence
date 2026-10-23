@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0032 — Evidence-gated polyglot SCIP providers
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0065](../0065-providers-scip-polyglottes-livres-dans-le-paquet.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0065](../BE-0065-providers-scip-polyglottes-livres-dans-le-paquet.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Status: **Accepted — final M24 dispositions recorded from exact-head Windows + Linux evidence.**
 

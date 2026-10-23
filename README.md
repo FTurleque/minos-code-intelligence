@@ -56,7 +56,7 @@ MINOS sait notamment :
 
 ## Architecture
 
-Le reactor Maven contient les modules métier, runtime/provider/storage et surfaces publiques, dont la racine de composition est `minos-bootstrap` ([ADR-0042](docs/architecture/adr/0042-racine-de-composition.md)) ; `minos-app` est l'assemblage final distribué (lanceur, JAR ombré, backends optionnels). La documentation architecture détaillée est sous [`docs/architecture/`](docs/architecture/README.md).
+Le reactor Maven contient les modules métier, runtime/provider/storage et surfaces publiques, dont la racine de composition est `minos-bootstrap` ([ADR-0042](docs/architecture/adr/ARCH-0042-racine-de-composition.md)) ; `minos-app` est l'assemblage final distribué (lanceur, JAR ombré, backends optionnels). La documentation architecture détaillée est sous [`docs/architecture/`](docs/architecture/README.md).
 
 ```mermaid
 flowchart TB

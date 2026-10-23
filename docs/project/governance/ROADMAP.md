@@ -171,7 +171,7 @@ Les sprints 1 et 2 sont terminés ; suite ouverte par le sprint 2 : un changemen
 |---|---|---|
 | Distribution auto-portante : les indexeurs sont livrés dans le paquet, plus aucune étape `tools install` à la charge de l'utilisateur | [ADR 0040](../../architecture/adr/archive/0040-distribution-auto-portante-indexeurs-embarques.md) | implémentée (scip-java, scip-typescript ; qualification hors ligne physique à confirmer) |
 
-La reprise d'une indexation interrompue ([ADR 0039](../../architecture/adr/0039-reprise-indexation-apres-interruption.md)) n'est plus en conception : l'ADR est acceptée et implémentée au sprint 2 (`IndexingResumePlanner`, `IndexingRun.Status.INTERRUPTED` dans `minos-engine`).
+La reprise d'une indexation interrompue ([ADR 0039](../../architecture/adr/BE-0039-reprise-indexation-apres-interruption.md)) n'est plus en conception : l'ADR est acceptée et implémentée au sprint 2 (`IndexingResumePlanner`, `IndexingRun.Status.INTERRUPTED` dans `minos-engine`).
 
 Aucun nouveau jalon fonctionnel livré n'est déclaré par l'étude d'octobre ; le programme proposé ci-dessous reste en conception. La dette durable de sécurité reste le hard filesystem quota pour une exécution réellement hostile : une primitive qui refuse l'écriture avant dépassement reste nécessaire avant de pouvoir renforcer cette claim. Les autres travaux doivent préserver les gates exact-head et la topologie `main ⊆ develop`.
 

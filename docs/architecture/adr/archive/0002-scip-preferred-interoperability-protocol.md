@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0002 — Utiliser SCIP comme protocole d'interopérabilité sémantique privilégié
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0064](../0064-coeur-agnostique-du-langage-et-de-l-indexeur.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0064](../ARCH-0064-coeur-agnostique-du-langage-et-de-l-indexeur.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 - Statut : **Acceptée**
 - Date de décision : **22 juillet 2026**
