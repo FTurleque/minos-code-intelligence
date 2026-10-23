@@ -14,8 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A4 (V-A4-04) : câblage complet de {@code MinosCliRunner}. La source de reprise d'`index-status` est
- * {@code LocalAutonomousIndexOperations} (ADR 0039 §6) ; sans elle, un run interrompu reprenable
- * disparaîtrait de la sortie. La fixture est partagée avec la vue MCP ({@link ResumableRunFixtures},
+ * {@code ProjectInspectionService#resumableRun} (ADR 0039 §6, AUD-ARC-01) ; sans elle, un run interrompu
+ * reprenable disparaîtrait de la sortie. La fixture est partagée avec la vue MCP ({@link ResumableRunFixtures},
  * test-jar de minos-bootstrap).
  */
 class MinosCliRunnerResumeStatusTest {

@@ -17,7 +17,6 @@ import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.impact.ImpactAnalysisRequest;
-import com.minos.orchestration.ResumableRunSummary;
 import com.minos.output.AdvancedAnalysisResultRenderer;
 import com.minos.output.ArchitectureResultRenderer;
 import com.minos.output.CodeIntelligenceResultRenderer;
@@ -119,7 +118,7 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         ProjectInspectionService.ProjectView view = projects.inspectStatus(project);
         // ADR 0039 §6: the run offered for resume, without any artifact location.
         Map<String, Object> map = ProjectJson.indexStatus(
-                view, ResumableRunSummary.of(application.indexStateStore(), UUID.fromString(view.id())), Instant.now());
+                view, projects.resumableRun(view.id()), Instant.now());
         map.put("providerProfiles", providerProfiles());
         return DeterministicJson.render(map);
     }

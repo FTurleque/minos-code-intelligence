@@ -2,8 +2,7 @@ package com.minos.output;
 
 import com.minos.application.ProjectInspectionService;
 import com.minos.application.ProjectOperations;
-import com.minos.orchestration.IndexingRun;
-import com.minos.orchestration.ResumableRunSummary;
+import com.minos.application.ResumableRunStatus;
 import com.minos.output.json.DeterministicJson;
 import org.junit.jupiter.api.Test;
 
@@ -55,8 +54,7 @@ class ProjectJsonTest {
 
     @Test
     void theIndexStatusDescribesTheResumableRun() {
-        ResumableRunSummary summary = new ResumableRunSummary(
-                RUN, IndexingRun.Phase.PROVIDER_EXECUTION, NOW.minusSeconds(90), 2, 3);
+        ResumableRunStatus summary = new ResumableRunStatus(RUN, "PROVIDER_EXECUTION", NOW.minusSeconds(90), 2, 3);
 
         Map<String, Object> map = ProjectJson.indexStatus(operationsView(), Optional.of(summary), NOW);
 

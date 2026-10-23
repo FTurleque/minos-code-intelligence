@@ -1,6 +1,6 @@
 package com.minos.cli.operations;
 
-import com.minos.orchestration.ResumableRunSummary;
+import com.minos.application.ResumableRunStatus;
 
 import java.util.Optional;
 
@@ -9,5 +9,5 @@ import java.util.Optional;
 public interface IndexResumeStatusSource {
 
     /** Résumé du run reprenable, ou vide ; {@code projectId} est l'identifiant rendu par la vue projet. */
-    Optional<ResumableRunSummary> resumableRun(String projectId);
+    Optional<ResumableRunStatus> resumableRun(String projectId);
 }

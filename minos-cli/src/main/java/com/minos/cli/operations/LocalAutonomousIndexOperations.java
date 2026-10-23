@@ -2,11 +2,9 @@ package com.minos.cli.operations;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.indexing.ProjectIndexingUseCase;
-import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexingResumePolicy;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.orchestration.ResumableRunSummary;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
@@ -14,15 +12,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 /** Autonomous indexing adapter over the selected MINOS storage backend. */
 public final class LocalAutonomousIndexOperations
-        implements AutonomousIndexOperations, IndexResumeStatusSource, AutoCloseable {
+        implements AutonomousIndexOperations, AutoCloseable {
     private final MinosApplication ownedApplication;
-    private final IndexStateStore stateStore;
     private final ProviderRuntimeManager runtimeManager;
     private final ProjectIndexingUseCase indexing;
 
@@ -48,19 +43,9 @@ public final class LocalAutonomousIndexOperations
     ) {
         Objects.requireNonNull(application, "application");
         this.ownedApplication = ownsApplication ? application : null;
-        this.stateStore = application.indexStateStore();
         this.runtimeManager = application.providerRuntimeManager();
         // AUD-ARC-02: the orchestration lives in the application use case; this surface only projects its result.
         this.indexing = ProjectIndexingUseCase.of(application, executorDecorator);
-    }
-
-    @Override
-    public Optional<ResumableRunSummary> resumableRun(String projectId) {
-        try {
-            return ResumableRunSummary.of(stateStore, UUID.fromString(projectId));
-        } catch (IllegalArgumentException notAProjectId) {
-            return Optional.empty();
-        }
     }
 
     @Override
