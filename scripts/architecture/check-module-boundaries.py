@@ -2,7 +2,7 @@
 """Enforce MINOS source ownership, Maven dependency directions, and generated architecture facts.
 
 The governed module list is checked against the root reactor (A7), and every Java package belongs to
-exactly one module (A3 / ADR 0068). Architecture debt is held by ratchets (A8, A10 to A15); the generated
+exactly one module (A3 / ADR 0068). Architecture debt is held by ratchets (A8, A10 to A15, A18); the generated
 dependency document also shows the execution edges created by META-INF/services files.
 Self-test: scripts/architecture/test_check_module_boundaries.py.
 """
@@ -838,6 +838,67 @@ def check_service_loader_class_loaders(root: Path = ROOT, modules: tuple[str, ..
              "drive production discovery; pass the loader of the service port): " + "; ".join(violations))
     return sites
 
+# A18 / AUD-ARC-07, ADR 0056 — read use cases read the active snapshot through SnapshotReadView and the
+# CodeKnowledgeReader port. Only the com.minos.store package of minos-engine names the in-memory index; the deprecated
+# SnapshotQueryView, which hands that index out, is named or reached (loadActiveQueryView(, queryStore()) only by the
+# closed list below; minos-application names no write port (CodeKnowledgeStore). The words are searched in the code
+# with comments and literals blanked: imports (single, static, wildcard), qualified names, nested types and chained
+# calls all show the word. The list only shrinks.
+LEGACY_SNAPSHOT_VIEW_USERS = frozenset({
+    # Both snapshot stores implement the deprecated loadActiveQueryView by SnapshotQueryView.of(read view).
+    "minos-storage-local/storage.local.store.FileSymbolSnapshotStore",
+    "minos-storage-postgresql/storage.postgresql.snapshot.PostgresCodeKnowledgeSnapshotStore",
+    # Deprecated public overload analyze(SnapshotQueryView, ...), delegating to analyze(SnapshotReadView, ...).
+    "minos-application/impact.ImpactAnalysisService",
+})
+CORE_STORE_PACKAGE = "store"
+MEMORY_INDEX = re.compile(r"\bInMemoryCodeKnowledgeStore\b")
+LEGACY_SNAPSHOT_VIEW = re.compile(r"\bSnapshotQueryView\b|\bloadActiveQueryView\s*\(|\bqueryStore\s*\(\s*\)")
+WRITE_PORT = re.compile(r"\bCodeKnowledgeStore\b")
+
+
+def check_snapshot_read_port(root: Path = ROOT, group_id: str | None = None,
+                             listed: frozenset[str] = LEGACY_SNAPSHOT_VIEW_USERS,
+                             modules: tuple[str, ...] = MODULES) -> int:
+    """A18 — the in-memory index stays in the core, the deprecated view in its closed list, the write port out of
+    minos-application (production sources; comments and string literals ignored)."""
+    group = group_id or repository_group_id(root)
+    core = f"{group}.{CORE_STORE_PACKAGE}"
+    problems: list[str] = []
+    users: set[str] = set()
+    for module in modules:
+        source_root = root / module / "src" / "main" / "java"
+        if not source_root.is_dir():
+            continue
+        for source in sorted(source_root.rglob("*.java")):
+            if module == ENGINE_MODULE and declared_package(source) == core:
+                continue
+            relative = source.relative_to(root).as_posix()
+            name = ".".join(source.relative_to(source_root).with_suffix("").parts).removeprefix(group + ".")
+            entry = f"{module}/{name}"
+            code = blank_comments_and_literals(source.read_text(encoding="utf-8"))
+            for number, line in enumerate(code.splitlines(), start=1):
+                if MEMORY_INDEX.search(line):
+                    problems.append(f"{relative}:{number} names InMemoryCodeKnowledgeStore; read through "
+                                    f"SnapshotReadView and CodeKnowledgeReader")
+                legacy = ", ".join(re.sub(r"\s+", "", match.group(0)).replace("(", "(...)").replace("(...))", "()")
+                                   for match in LEGACY_SNAPSHOT_VIEW.finditer(line))
+                if legacy:
+                    users.add(entry)
+                    if entry not in listed:
+                        problems.append(f"{relative}:{number} uses the deprecated snapshot view ({legacy}); use "
+                                        f"loadActiveReadView and SnapshotReadView")
+                if module == APPLICATION_MODULE and WRITE_PORT.search(line):
+                    problems.append(f"{relative}:{number} names the write port CodeKnowledgeStore; a read use case "
+                                    f"receives CodeKnowledgeReader")
+    problems += [f"LEGACY_SNAPSHOT_VIEW_USERS entry {entry} does not exist or no longer uses the deprecated view; "
+                 f"remove it (the ratchet only shrinks)" for entry in sorted(listed - users)]
+    if problems:
+        fail("A18 snapshot read port (ADR 0056: only minos-engine com.minos.store names the in-memory index; the "
+             "deprecated SnapshotQueryView stays in LEGACY_SNAPSHOT_VIEW_USERS): " + "; ".join(problems))
+    return len(listed)
+
+
 
 # A15 / AUD-QUA-02 — a public production type is used by production, or declared. Each entry names one top-level
 # public type of a reactor src/main (module/package.Type) with the reason it has no production caller. The list is a ratchet: an entry whose
@@ -1481,6 +1542,7 @@ def main() -> int:
         adapter_types = check_adapter_types_named_by_adapters()
         package_roots = check_package_roots()
         service_loaders = check_service_loader_class_loaders()
+        snapshot_view_users = check_snapshot_read_port()
         unreferenced = check_unreferenced_production_types()
         packages = check_package_ownership()
         cycles, cycle_packages = check_package_cycles()
@@ -1511,6 +1573,9 @@ def main() -> int:
               + (", ".join(f"{a} -> {b}" for a, b in runtime_edges) or "none") + " (documented)")
         print(f"A16 service discovery: {service_loaders} production ServiceLoader.load calls, each with an "
               f"explicit class loader")
+        print(f"A18 snapshot read port: {snapshot_view_users} classes listed in LEGACY_SNAPSHOT_VIEW_USERS use the "
+              f"deprecated view, only minos-engine com.minos.store names InMemoryCodeKnowledgeStore, minos-application "
+              f"names no CodeKnowledgeStore")
         print(f"A15 unreferenced production types: {unreferenced} listed in UNREFERENCED_PRODUCTION_TYPES, "
               f"every other public type is named by production")
         print(

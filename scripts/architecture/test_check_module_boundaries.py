@@ -1157,6 +1157,123 @@ class PackageRootRuleTest(RatchetTreeTestCase):
                          _MODULE.check_package_roots())
 
 
+class SnapshotReadPortRuleTest(RatchetTreeTestCase):
+    """A18 — only the core names the in-memory index; the deprecated view stays in its closed list (AUD-ARC-07)."""
+
+    MODULES = ("minos-engine", "minos-storage-local", "minos-storage-postgresql", "minos-application")
+    LISTED = frozenset({
+        "minos-storage-local/storage.local.store.FileSymbolSnapshotStore",
+        "minos-storage-postgresql/storage.postgresql.snapshot.PostgresCodeKnowledgeSnapshotStore",
+        "minos-application/impact.ImpactAnalysisService",
+    })
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-engine", "com.minos.store", "InMemoryCodeKnowledgeStore",
+                   "public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore { }")
+        self.write("minos-engine", "com.minos.store", "SnapshotQueryView",
+                   "public record SnapshotQueryView(InMemoryCodeKnowledgeStore queryStore) { }")
+        self.write("minos-engine", "com.minos.query", "SymbolQueryService",
+                   "public final class SymbolQueryService { CodeKnowledgeReader reader; }",
+                   ["com.minos.store.CodeKnowledgeReader"])
+        self.write("minos-storage-local", "com.minos.storage.local.store", "FileSymbolSnapshotStore",
+                   "public final class FileSymbolSnapshotStore {\n"
+                   "    public Optional<SnapshotQueryView> loadActiveQueryView(UUID id) { return null; }\n}",
+                   ["com.minos.store.SnapshotQueryView"])
+        self.write("minos-storage-postgresql", "com.minos.storage.postgresql.snapshot",
+                   "PostgresCodeKnowledgeSnapshotStore",
+                   "public final class PostgresCodeKnowledgeSnapshotStore {\n"
+                   "    public Optional<SnapshotQueryView> loadActiveQueryView(UUID id) { return null; }\n}",
+                   ["com.minos.store.SnapshotQueryView"])
+        self.write("minos-application", "com.minos.impact", "ImpactAnalysisService",
+                   "public final class ImpactAnalysisService {\n"
+                   "    public Object analyze(SnapshotQueryView view) { return view.readView(); }\n}",
+                   ["com.minos.store.SnapshotQueryView"])
+        self.write("minos-application", "com.minos.application", "ProjectQueryService",
+                   "public final class ProjectQueryService { SnapshotReadView view; CodeKnowledgeReader reader; }",
+                   ["com.minos.store.SnapshotReadView", "com.minos.store.CodeKnowledgeReader"])
+
+    def check(self, listed=None):
+        return _MODULE.check_snapshot_read_port(self.root, listed=self.LISTED if listed is None else listed,
+                                                modules=self.MODULES)
+
+    def use_case(self, name, body, imports=()):
+        self.write("minos-application", "com.minos.application", name, body, imports)
+
+    def test_a_conforming_tree_is_accepted_with_the_closed_list_count(self):
+        self.assertEqual(3, self.check())
+
+    def test_an_imported_memory_index_outside_the_core_is_refused_naming_class_and_type(self):
+        self.use_case("Leak", "final class Leak { InMemoryCodeKnowledgeStore store; }",
+                      ["com.minos.store.InMemoryCodeKnowledgeStore"])
+        self.refused(self.check, "A18", "minos-application/src/main/java/com/minos/application/Leak.java",
+                     "InMemoryCodeKnowledgeStore")
+
+    def test_a_static_import_of_the_memory_index_is_refused(self):
+        self.use_case("Weight", "final class Weight { long w = symbolEdgeIndexWeightBytes(1L); }",
+                      ["static com.minos.store.InMemoryCodeKnowledgeStore.symbolEdgeIndexWeightBytes"])
+        self.refused(self.check, "A18", "Weight.java", "InMemoryCodeKnowledgeStore")
+
+    def test_a_wildcard_import_of_the_core_package_with_the_memory_index_is_refused(self):
+        self.use_case("Wide", "final class Wide { InMemoryCodeKnowledgeStore store; }", ["com.minos.store.*"])
+        self.refused(self.check, "A18", "Wide.java", "InMemoryCodeKnowledgeStore")
+
+    def test_a_nested_type_of_the_memory_index_is_refused(self):
+        self.use_case("Edges", "final class Edges { SymbolEdgeIndex edges; }",
+                      ["com.minos.store.InMemoryCodeKnowledgeStore.SymbolEdgeIndex"])
+        self.refused(self.check, "A18", "Edges.java", "InMemoryCodeKnowledgeStore")
+
+    def test_a_qualified_name_of_the_memory_index_is_refused(self):
+        self.use_case("Qualified", "final class Qualified { com.minos.store.InMemoryCodeKnowledgeStore store; }")
+        self.refused(self.check, "A18", "Qualified.java", "InMemoryCodeKnowledgeStore")
+
+    def test_another_engine_package_may_not_name_the_memory_index(self):
+        self.write("minos-engine", "com.minos.query", "Shortcut", "final class Shortcut { InMemoryCodeKnowledgeStore s; }",
+                   ["com.minos.store.InMemoryCodeKnowledgeStore"])
+        self.refused(self.check, "A18", "minos-engine/src/main/java/com/minos/query/Shortcut.java")
+
+    def test_the_deprecated_view_named_outside_the_closed_list_is_refused(self):
+        self.use_case("Legacy", "final class Legacy { SnapshotQueryView view; }", ["com.minos.store.SnapshotQueryView"])
+        self.refused(self.check, "A18", "Legacy.java", "SnapshotQueryView")
+
+    def test_a_chained_call_reaching_the_memory_index_without_any_name_is_refused(self):
+        self.use_case("Chained", "final class Chained {\n    Object store(Object snapshots, Object id) {\n"
+                      "        var store = snapshots.loadActiveQueryView(id).orElseThrow().queryStore();\n"
+                      "        return store;\n    }\n}")
+        message = self.refused(self.check, "A18", "Chained.java:", "loadActiveQueryView(")
+        self.assertIn("queryStore()", message)
+
+    def test_the_write_port_named_by_the_application_is_refused(self):
+        self.use_case("Writer", "final class Writer { CodeKnowledgeStore store; }", ["com.minos.store.CodeKnowledgeStore"])
+        self.refused(self.check, "A18", "Writer.java", "CodeKnowledgeStore")
+
+    def test_the_write_port_stays_allowed_outside_the_application(self):
+        self.write("minos-storage-local", "com.minos.storage.local.store", "Ingest",
+                   "final class Ingest { CodeKnowledgeStore store; }", ["com.minos.store.CodeKnowledgeStore"])
+        self.assertEqual(3, self.check())
+
+    def test_an_entry_whose_class_is_gone_is_refused(self):
+        (self.root / "minos-application/src/main/java/com/minos/impact/ImpactAnalysisService.java").unlink()
+        self.refused(self.check, "A18", "minos-application/impact.ImpactAnalysisService", "remove")
+
+    def test_an_entry_whose_class_no_longer_uses_the_deprecated_view_is_refused(self):
+        self.write("minos-application", "com.minos.impact", "ImpactAnalysisService",
+                   "public final class ImpactAnalysisService { SnapshotReadView view; }",
+                   ["com.minos.store.SnapshotReadView"])
+        self.refused(self.check, "A18", "minos-application/impact.ImpactAnalysisService", "remove")
+
+    def test_comments_literals_and_test_sources_do_not_count(self):
+        self.use_case("Quiet", 'final class Quiet {\n    // InMemoryCodeKnowledgeStore, SnapshotQueryView, queryStore()\n'
+                      '    String s = "loadActiveQueryView(id) CodeKnowledgeStore";\n}')
+        self.write("minos-application", "com.minos.application", "QuietTest",
+                   "final class QuietTest { InMemoryCodeKnowledgeStore store; SnapshotQueryView view; }",
+                   ["com.minos.store.InMemoryCodeKnowledgeStore"], kind="test")
+        self.assertEqual(3, self.check())
+
+    def test_the_real_tree_keeps_the_memory_index_in_the_core(self):
+        self.assertEqual(len(_MODULE.LEGACY_SNAPSHOT_VIEW_USERS), _MODULE.check_snapshot_read_port())
+
+
 class RuntimeServiceEdgeTest(RatchetTreeTestCase):
     """AUD-ARC-11 — execution edges by service are rendered and checked in the generated document."""
 
@@ -1311,7 +1428,7 @@ class MainWiringTest(unittest.TestCase):
     def test_main_runs_the_ratchet_rules_a11_to_a14(self):
         for name in ("check_engine_types_named_by_surfaces", "check_process_launchers",
                      "check_adapter_types_named_by_adapters", "check_package_roots",
-                     "check_architecture_test_policy"):
+                     "check_architecture_test_policy", "check_snapshot_read_port"):
             with self.subTest(rule=name):
                 calls: list[str] = []
                 code, error = self.run_main_with(**{name: self.spy(calls, name)})
