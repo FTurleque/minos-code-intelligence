@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0035 — Opt-in tenant control plane with external keys
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0071](../0071-plan-de-controle-d-equipe-embarque.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0071](../SEC-0071-plan-de-controle-d-equipe-embarque.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 - Status: **Accepted — final M27 dispositions recorded from exact-head Windows + Linux evidence.**
 - Date: 2026-07-29

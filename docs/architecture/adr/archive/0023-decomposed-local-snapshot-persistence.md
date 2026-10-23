@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0023 — Décomposer la persistance locale des snapshots sans changer le format disque
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0066](../0066-port-de-connaissance-et-persistance-des-snapshots.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0066](../DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Date : 26 juillet 2026
 

@@ -38,7 +38,7 @@ Le `Path` fourni est le home MINOS, pas la racine du projet analysé.
 
 Les constructeurs qui ouvrent un home (`new LocalMinosApi(Path)`, `new LocalMinosMultiRepositoryApi(Path)`,
 `new LocalProviderPlatformApi(Path)`) passent par `MinosApplication.open(home)`, qui découvre la racine de
-composition de MINOS par `ServiceLoader` ([ADR 0042](../architecture/adr/0042-racine-de-composition.md)). Le module
+composition de MINOS par `ServiceLoader` ([ADR 0042](../architecture/adr/ARCH-0042-racine-de-composition.md)). Le module
 **`com.minos:minos-bootstrap` doit donc être présent au classpath d'exécution** :
 
 - le JAR distribué `minos-code-intelligence-*-all.jar` le contient déjà ;

@@ -87,7 +87,7 @@ function Invoke-MinosJson {
 function Assert-Structure {
     $required = @(
         'docs\project\roadmap\M17_EXECUTION.md',
-        'docs\architecture\adr\0026-discovery-provider-spi-and-explicit-capability-profiles.md',
+        'docs\architecture\adr\BE-0026-discovery-provider-spi-and-explicit-capability-profiles.md',
         'minos-application\src\main\java\com\minos\discovery\spi\ProjectDetector.java',
         'minos-application\src\main\java\com\minos\discovery\spi\BuildSystemDetector.java',
         'minos-application\src\main\java\com\minos\discovery\spi\SourceRootDetector.java',

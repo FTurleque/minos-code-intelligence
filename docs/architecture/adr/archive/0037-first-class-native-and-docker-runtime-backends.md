@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0037 — Traiter native et Docker comme backends MCP explicites et fail-closed
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0069](../0069-backends-mcp-natif-et-docker.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0069](../ARCH-0069-backends-mcp-natif-et-docker.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Date : 2 août 2026
 

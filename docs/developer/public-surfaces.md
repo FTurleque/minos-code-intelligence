@@ -321,4 +321,4 @@ Un backend remplaçant `FileSemanticVectorStore` doit implémenter `SemanticVect
 - architecture : `scripts/architecture/check-module-boundaries.py` ;
 - qualité : `scripts/quality/check-jacoco.py`.
 
-Voir aussi [Intelligence sémantique et hybride — M20](semantic-hybrid-intelligence.md), [Plugin IntelliJ](../user/intellij-plugin.md), [Team / Hosted](team-hosted-mode.md) et [ADR-0029](../architecture/adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md).
+Voir aussi [Intelligence sémantique et hybride — M20](semantic-hybrid-intelligence.md), [Plugin IntelliJ](../user/intellij-plugin.md), [Team / Hosted](team-hosted-mode.md) et [ADR-0029](../architecture/adr/BE-0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md).

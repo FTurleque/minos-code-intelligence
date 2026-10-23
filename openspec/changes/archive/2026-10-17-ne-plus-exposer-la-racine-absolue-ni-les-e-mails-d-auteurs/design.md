@@ -20,7 +20,7 @@ Sprint 7 de l'audit du 10 octobre 2026 : **AUD-SEC-10**. HEAD analysé : `949e15
 - `minos-cli/src/main/java/com/minos/cli/command/GitActivityCommand.java:131-140` : `commitMap` rend `authorName` (`:135`) et `authorEmail` (`:136`) ; `:120-121` rendent `workTree` et `originRemote`.
 - `minos-api/src/main/java/com/minos/api/LocalMinosMultiRepositoryApi.java:266-271` : `GitCommitDto` construit avec `value.authorEmail()` (`:268`) ; composant déclaré en `minos-api/src/main/java/com/minos/api/MinosMultiRepositoryApi.java:183`.
 - `GOLD/cli-git.golden` : 4 occurrences de l'adresse de test `a2@example.invalid`.
-- ADR 0019 (`docs/architecture/adr/0019-cross-repository-identity-and-git-facts.md`, « Intelligence Git ») : « Les commits, auteurs, fichiers et zones modifiées sont exposés comme faits Git bornés. »
+- ADR 0019 (`docs/architecture/adr/DATA-0019-cross-repository-identity-and-git-facts.md`, « Intelligence Git ») : « Les commits, auteurs, fichiers et zones modifiées sont exposés comme faits Git bornés. »
 
 **Non vérifié** : aucun build ni test lancé. Non relevé : si le format texte de `git-activity` affiche l'adresse ; si `GOLD/api.golden` en contient une ; les autres réponses MCP qui portent un chemin absolu ; la consommation de `rootPath` par NEXUS. **Non vérifié** : la rédaction de l'URL `originRemote` (identifiants éventuels dans l'URL). Repris de la contre-vérification sans relecture exhaustive : « aucun outil MCP n'expose l'e-mail ».
 

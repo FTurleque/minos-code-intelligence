@@ -139,7 +139,7 @@ En contrepartie, les gates issus de `mnd`/`mne`/`post-mne`/`post-228` (`check-mn
 
 ## 7. G3 — inventaire des scripts et workflows de jalon
 
-Politique : [ADR 0043](../../../../architecture/adr/0043-retrait-des-artefacts-de-jalon.md). Inventaire exhaustif des 101 fichiers sous `scripts/m0`…`scripts/m29`, `scripts/remediation`, plus `scripts/intellij/check-m21-parity.py`, établi par un agent de recherche dédié puis revérifié par des lectures directes (`check-post-mne.py`, `check-polyglot.py`, `check-provider.py`, `check-m28.py`, `run-runtime-e2e.py`, `run-hosted-e2e.py`) avant classification. Trois états, définis par l'ADR 0043 : **permanent**, **gelé par assertion**, **archivé**.
+Politique : [ADR 0043](../../../../architecture/adr/GEN-0043-retrait-des-artefacts-de-jalon.md). Inventaire exhaustif des 101 fichiers sous `scripts/m0`…`scripts/m29`, `scripts/remediation`, plus `scripts/intellij/check-m21-parity.py`, établi par un agent de recherche dédié puis revérifié par des lectures directes (`check-post-mne.py`, `check-polyglot.py`, `check-provider.py`, `check-m28.py`, `run-runtime-e2e.py`, `run-hosted-e2e.py`) avant classification. Trois états, définis par l'ADR 0043 : **permanent**, **gelé par assertion**, **archivé**.
 
 ### 7.1 Mécanisme clé : exécution indirecte
 
@@ -206,7 +206,7 @@ Aucune référence vivante (ni exécution directe, ni sous-processus, ni asserti
 | Lot | Fichiers | Référence restante avant retrait |
 |---|---|---|
 | `scripts/m0/**` (12 fichiers) | `README.md`, `export-glean-compatible-scip.ps1`, `install-glean-wsl.ps1`, `install-scip-tools.ps1`, `install-scip-typescript.ps1`, `run-in-memory-backend-benchmark.ps1`, `run-minos-scip-baseline.ps1`, `run-scip-java.ps1`, `run-scip-java.sh`, `run-scip-typescript.ps1`, `validate-local-ci.ps1`, `scip-java-windows-patch/.../ScipWriter.java` | Uniquement le propre `README.md` de M0 et `docs/history/milestones/m0/*.md` (déjà de l'historique) |
-| `scripts/m15/` phase S1–S6 (11 fichiers) | `run-s1.ps1`…`run-s6.ps1`, `run-s2-final.ps1`, `capture-query-baseline.ps1`, `M15RepeatedQueryProbe.java`, `relocate-main-sources.ps1`, `relocate-tests.ps1` | `run-s1.ps1`/`run-s3.ps1` cités par `docs/history/milestones/m15/M15_S1_BASELINE.md` et `docs/adr/0042-racine-de-composition.md:199` (référence historique, à laisser telle quelle — l'ADR cite un test déjà joué, pas un gate vivant) |
+| `scripts/m15/` phase S1–S6 (11 fichiers) | `run-s1.ps1`…`run-s6.ps1`, `run-s2-final.ps1`, `capture-query-baseline.ps1`, `M15RepeatedQueryProbe.java`, `relocate-main-sources.ps1`, `relocate-tests.ps1` | `run-s1.ps1`/`run-s3.ps1` cités par `docs/history/milestones/m15/M15_S1_BASELINE.md` et `docs/adr/ARCH-0042-racine-de-composition.md:199` (référence historique, à laisser telle quelle — l'ADR cite un test déjà joué, pas un gate vivant) |
 | `scripts/m16/**` (9 fichiers) | tout le répertoire — **aucun workflow ne déclenche `run-final.ps1`, confirmé** | `docs/adr/archive/0025-measurement-gated-storage-backend-evolution.md` (référence historique) |
 | `scripts/m17/run-final.ps1` | 1 fichier | `docs/roadmap/M17_EXECUTION.md:84`, `docs/adr/0026-...md:79` (historique) |
 | `scripts/m18/run-final.ps1` | 1 fichier — **son chemin est dans le filtre `paths:` de `intellij-plugin.yml:12,22` sans qu'aucune étape ne l'exécute** | Retirer le fichier **et** la ligne `scripts/m18/**` du filtre dans le même commit, sinon le filtre continue de retenir un chemin mort |

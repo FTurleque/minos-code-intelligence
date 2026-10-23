@@ -1,11 +1,11 @@
 ---
-id: ADR-NNNN
+id: ARCH-NNNN
 title: "Titre court qui énonce la décision"
 domain: architecture
 rules: false
 ---
 
-# ADR-NNNN — Titre court qui énonce la décision
+# Titre court qui énonce la décision
 
 - **Statut** : Proposed | Accepted | Superseded | Rejected
 - **Date** : AAAA-MM-JJ
@@ -13,7 +13,7 @@ rules: false
 - **Remplace** : ADR-XXXX (si applicable)
 - **Remplacé par** : ADR-YYYY (à remplir si cet ADR est remplacé plus tard)
 
-Copier ce fichier en `docs/architecture/adr/NNNN-titre-en-kebab-case.md` (numéro suivant de l'index). L'en-tête YAML reste en ligne 1 : Archgate le lit (`id` = `ADR-` + les quatre chiffres du fichier ; `domain` parmi `architecture`, `backend`, `data`, `general`, `security` ; `rules: true` seulement avec un fichier compagnon `NNNN-titre-en-kebab-case.rules.ts` dont la règle a été vue en échec sur une violation). Les titres de section restent ceux d'Archgate ; le texte est en français.
+Copier ce fichier en `docs/architecture/adr/{PRÉFIXE}-{NNNN}-titre-en-kebab-case.md` : préfixe du domaine (`architecture` → `ARCH`, `backend` → `BE`, `data` → `DATA`, `general` → `GEN`, `security` → `SEC`) et numéro suivant de l'index. L'en-tête YAML reste en ligne 1 ; `id` reprend le début du nom de fichier (`ARCH-NNNN`), le titre `#` reprend exactement `title`. `rules: true` seulement avec un fichier compagnon `{même nom}.rules.ts` dont la règle a été vue en échec sur une violation ; `files` borne le périmètre d'une règle qui ne regarde qu'une partie du dépôt. Les titres de section restent ceux d'Archgate ; le texte est en français.
 
 ## Context
 

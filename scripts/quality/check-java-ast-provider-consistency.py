@@ -45,7 +45,7 @@ def main() -> int:
         test_path = "minos-application/src/test/java/com/minos/program/analysis/JavaSourceProgramGraphProviderTest.java"
         roadmap_path = "docs/project/roadmap/M22_EXECUTION.md"
         provider_doc_path = "docs/developer/java-advanced-provider.md"
-        adr_path = "docs/architecture/adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md"
+        adr_path = "docs/architecture/adr/BE-0030-java-ast-reference-provider-with-explicit-capability-limits.md"
         quality_path = "scripts/quality/check-jacoco.py"
         runner_path = "scripts/m22/run-final.ps1"
 

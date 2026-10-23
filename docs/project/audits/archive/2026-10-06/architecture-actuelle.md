@@ -3,7 +3,7 @@
 > **Statut** : état observé au HEAD `bc1d3421` de `develop` (6 octobre 2026), pas une cible.
 > **Sources** : les `pom.xml` des 14 modules du reactor, les sources `src/main`, `minos-intellij` (Gradle, hors reactor) et les rapports d'analyse en [`annexes/`](annexes/).
 > **Limite** : les arêtes ci-dessous sont celles que déclarent les POM et que confirment les lectures de code citées. Le serveur MCP `minos` (index du projet lui-même) a échoué (`MINOS tool execution failed`, voir [MINOS-AUD-C01](constats.md#minos-aud-c01)) : aucune arête n'a donc été obtenue de l'index MINOS. La carte de dépendances de packages (cycles) vient d'un script jetable exécuté par l'analyse E, non conservé.
-> **Architecture cible** : elle n'est pas redessinée ici. Elle est décrite par les ADR [0055](../../../../architecture/adr/archive/0055-unifier-les-adaptateurs-de-stockage.md), [0056](../../../../architecture/adr/0056-ports-de-lecture-des-snapshots.md), [0057](../../../../architecture/adr/0057-finaliser-les-frontieres-hexagonales.md) et le [backlog SH-01..SH-12](../../../roadmap/storage-hexagonal-2026-10/README.md) ; la dernière section liste seulement les écarts que cet audit y ajoute.
+> **Architecture cible** : elle n'est pas redessinée ici. Elle est décrite par les ADR [0055](../../../../architecture/adr/archive/0055-unifier-les-adaptateurs-de-stockage.md), [0056](../../../../architecture/adr/ARCH-0056-ports-de-lecture-des-snapshots.md), [0057](../../../../architecture/adr/ARCH-0057-finaliser-les-frontieres-hexagonales.md) et le [backlog SH-01..SH-12](../../../roadmap/storage-hexagonal-2026-10/README.md) ; la dernière section liste seulement les écarts que cet audit y ajoute.
 
 ## 1. Contexte (C4, niveau 1)
 
@@ -152,7 +152,7 @@ sequenceDiagram
     Note over REC,ST: E01 : PostgreSQL ne persiste pas resumableRunId
 ```
 
-Schéma simplifié : l'ordre des appels reprend l'analyse D et les ADR ; seuls la construction de `IndexingLifecycleService` dans le CLI (`LocalAutonomousIndexOperations.java:166`) et l'emplacement des classes ont été revérifiés par l'auteur du livrable. Références : [ADR 0006](../../../../architecture/adr/0006-promouvoir-les-index-de-maniere-atomique.md), [ADR 0039](../../../../architecture/adr/0039-reprise-indexation-apres-interruption.md) (reprise sur le même `runId`), `LocalAutonomousIndexOperations.java:166` (construction de `IndexingLifecycleService`). Le point de contrôle de reprise est vérifié avant toute réutilisation d'un artefact (SHA-256, taille, empreinte de scope, version de provider) : aucun défaut nouveau trouvé sur cette chaîne par l'analyse D.
+Schéma simplifié : l'ordre des appels reprend l'analyse D et les ADR ; seuls la construction de `IndexingLifecycleService` dans le CLI (`LocalAutonomousIndexOperations.java:166`) et l'emplacement des classes ont été revérifiés par l'auteur du livrable. Références : [ADR 0006](../../../../architecture/adr/DATA-0006-promouvoir-les-index-de-maniere-atomique.md), [ADR 0039](../../../../architecture/adr/BE-0039-reprise-indexation-apres-interruption.md) (reprise sur le même `runId`), `LocalAutonomousIndexOperations.java:166` (construction de `IndexingLifecycleService`). Le point de contrôle de reprise est vérifié avant toute réutilisation d'un artefact (SHA-256, taille, empreinte de scope, version de provider) : aucun défaut nouveau trouvé sur cette chaîne par l'analyse D.
 
 ### 3.2 Interrogation par un agent (MCP)
 

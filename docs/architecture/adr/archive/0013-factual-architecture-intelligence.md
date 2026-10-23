@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0013 — Séparer les faits d’architecture de leur interprétation
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Archivé, reclassé : exigence de sortie de l'analyse d'architecture, tenue par la capacité OpenSpec `program-graph-et-architecture`, pas une décision d'architecture. Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Archivé, reclassé : exigence de sortie de l'analyse d'architecture, tenue par la capacité OpenSpec `program-graph-et-architecture`, pas une décision d'architecture. Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 - **Statut** : Accepted
 - **Date** : 24 juillet 2026

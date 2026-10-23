@@ -31,55 +31,55 @@ Un ADR mémorise une **décision d'architecture durable, encore en vigueur, coû
 
 **Cycle de vie.** Une proposition (`Proposed`) qui n'est portée par aucun changement OpenSpec ne reste pas indéfiniment au registre : elle est archivée `Rejected`. Un ADR amendé ne coexiste pas avec son amendement : si l'amendement couvre toute la décision, l'ancien passe `Superseded` ; s'il est partiel, un **ADR consolidé** réunit la décision en vigueur et remplace les deux. Un ADR `Superseded`, `Rejected` ou reclassé part dans [`archive/`](archive/) avec un bandeau qui dit ce qui le remplace ; il n'est jamais supprimé, et Archgate ne lit pas ce sous-dossier. Une décision réalisée une fois pour toutes, qui n'impose plus de règle au code, est archivée ; si elle impose encore une règle, l'ADR garde cette règle.
 
-**Contrôle.** Un ADR actif dont la contrainte se vérifie par lecture de fichiers porte une règle Archgate compagnon (`NNNN-slug.rules.ts`) qui lit les mêmes sources que le gate Python correspondant ; sinon sa section `Compliance and Enforcement` dit comment la décision est tenue.
+**Contrôle.** Un ADR actif dont la contrainte se vérifie par lecture de fichiers porte une règle Archgate compagnon (`{ID}-{slug}.rules.ts`) qui lit les mêmes sources que le gate Python correspondant ; sinon sa section `Compliance and Enforcement` dit comment la décision est tenue.
 
 ## Format
 
-Chaque ADR suit le format Archgate (ADR 0063) : en-tête YAML en ligne 1 (`id: ADR-NNNN`, `title`, `domain`, `rules`), sections `Context`, `Decision`, `Do's and Don'ts`, `Consequences`, `Compliance and Enforcement`, `References`, texte en français. Archgate lit ce dossier (`.archgate/config.json`, `paths.adrs`) ; une règle Archgate vit à côté de son ADR (`NNNN-slug.rules.ts`). Gabarit : [`gabarit/template.md`](gabarit/template.md).
+Chaque ADR suit le format et la convention Archgate ([GEN-0073](GEN-0073-tenir-le-registre-d-adr-au-format-archgate.md)) : fichier `{PRÉFIXE}-{NNNN}-{slug}.md`, en-tête YAML en ligne 1 (`id: {PRÉFIXE}-{NNNN}` — préfixe du domaine `ARCH`, `BE`, `DATA`, `GEN` ou `SEC`, numéro unique jamais renuméroté —, `title`, `domain`, `rules`, `files` facultatif), titre `#` égal au `title`, sections `Context`, `Decision`, `Do's and Don'ts`, `Consequences`, `Compliance and Enforcement`, `References`, texte en français. Archgate lit ce dossier (`.archgate/config.json`, `paths.adrs`) ; une règle Archgate vit à côté de son ADR (`{ID}-{slug}.rules.ts`). Gabarit : [`gabarit/template.md`](gabarit/template.md).
 
 ## Index
 
 | ADR | Décision | Statut | Origine |
 |---|---|---|---|
-| [0006](0006-promouvoir-les-index-de-maniere-atomique.md) | Promouvoir les index de manière atomique | Accepted | M1 |
-| [0007](0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans registre local | Accepted | M1 |
-| [0008](0008-negocier-indexeurs-par-capacites-explicites.md) | Négocier les indexeurs par capacités explicites | Accepted | M1 |
-| [0009](0009-normalized-symbol-identity.md) | Modéliser les identités de symboles sans inventer de canonicité | Accepted | M2 |
-| [0010](0010-normalized-relationship-semantics.md) | Normaliser les relations avec provenance, preuve et confiance explicites | Accepted | M3 |
-| [0011](0011-bounded-code-search-context.md) | Borner explicitement la recherche et le contexte de code | Accepted | M4 |
-| [0012](0012-explainable-related-tests.md) | Conserver les tests liés comme dérivations explicables | Accepted | M5 |
-| [0014](0014-safe-incremental-indexing.md) | N’utiliser l’indexation incrémentale que sous preuve explicite de capacité | Accepted | M7 |
-| [0015](0015-conservative-impact-analysis.md) | Traiter l’analyse d’impact comme une estimation potentielle du graphe observé | Accepted | M8 |
-| [0016](0016-stable-cli-contract.md) | Stabiliser la CLI comme surface d’exposition du cœur métier | Accepted | M9 |
-| [0017](0017-mcp-stdio-read-only.md) | Exposer MINOS en MCP via STDIO read-only | Accepted | M10 |
-| [0018](0018-versioned-public-java-api.md) | Versionner une API Java publique indépendante des modèles internes | Accepted | M11 |
-| [0019](0019-cross-repository-identity-and-git-facts.md) | Résoudre les relations cross-repository uniquement par identité exacte et séparer les faits Git | Accepted | M12 |
-| [0020](0020-minos-nexus-json-boundary.md) | Intégrer NEXUS par un contrat JSON local versionné | Accepted | M13 |
-| [0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) | Mettre en cache une vue de snapshot actif et reconstruire ses indexes en mémoire | Accepted | M15-S7/S8 |
-| [0026](0026-discovery-provider-spi-and-explicit-capability-profiles.md) | Étendre discovery/providers par SPI et interdire les capacités implicites | Accepted | M17 |
-| [0027](0027-intellij-external-client-and-versioned-cli-protocol.md) | Isoler le plugin IntelliJ en client Java 21 et négocier un protocole CLI JSON versionné | Accepted | M18 |
-| [0029](0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) | Garder la couche sémantique optionnelle, reconstruisible et distincte des faits structurés | Accepted | M20 |
-| [0030](0030-java-ast-reference-provider-with-explicit-capability-limits.md) | Fournir un provider Java AST de référence avec limitations et capabilities explicites | Accepted | M22 |
-| [0031](0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md) | Ajouter un provider learned local qualifié et conserver ANN derrière une décision mesurée | Accepted | M23 |
-| [0034](0034-partial-runtime-observations-with-explicit-static-correlation.md) | Conserver les observations runtime partielles séparées des faits statiques et corrélées à un snapshot exact | Accepted | M26 |
-| [0039](0039-reprise-indexation-apres-interruption.md) | Reprendre une indexation interrompue au lieu de tout réindexer | Accepted | — |
-| [0042](0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Accepted (option c : module minos-bootstrap) | Audit 2026-09, A2 |
-| [0043](0043-retrait-des-artefacts-de-jalon.md) | Politique de retrait des scripts et workflows de jalon (permanent / gelé par assertion / archivé) | Accepted | Audit 2026-09, G3 |
-| [0056](0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — mise en œuvre partielle |
-| [0057](0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels |
-| [0058](0058-declarer-les-usages-de-modules.md) | Tout module utilisé est déclaré ; la règle ArchUnit stricte devient obligatoire | Accepted |
-| [0060](0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Accepted |
-| [0061](0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité : durci, ou hérité de la racine | Accepted |
-| [0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md) | Écrire les ADR au format Archgate (en-tête YAML, sections Archgate) dans le registre arc42, lu par Archgate | Accepted |
-| [0064](0064-coeur-agnostique-du-langage-et-de-l-indexeur.md) | Cœur agnostique du langage et de l'indexeur, SCIP protocole privilégié | Accepted | Consolidation du registre, 2026-10-23 |
-| [0065](0065-providers-scip-polyglottes-livres-dans-le-paquet.md) | Providers SCIP polyglottes sous preuve, livrés dans le paquet | Accepted | Consolidation du registre, 2026-10-23 |
-| [0066](0066-port-de-connaissance-et-persistance-des-snapshots.md) | Port de connaissance et persistance des snapshots : format V3, compatibilité, dédoublonnage | Accepted | Consolidation du registre, 2026-10-23 |
-| [0067](0067-socle-d-execution-java-25-et-maven.md) | Socle d'exécution : Java 25, Maven par le wrapper, sans framework serveur | Accepted | Consolidation du registre, 2026-10-23 |
-| [0068](0068-modules-dependances-et-propriete-des-packages.md) | Modules, dépendances et propriété des packages | Accepted | Consolidation du registre, 2026-10-23 |
-| [0069](0069-backends-mcp-natif-et-docker.md) | Backends MCP natif et Docker | Accepted | Consolidation du registre, 2026-10-23 |
-| [0070](0070-code-non-fiable-confinement-et-indexation-distante.md) | Code non fiable : confinement des providers et indexation distante | Accepted | Consolidation du registre, 2026-10-23 |
-| [0071](0071-plan-de-controle-d-equipe-embarque.md) | Plan de contrôle d'équipe embarqué | Accepted | Consolidation du registre, 2026-10-23 |
-| [0072](0072-graphe-de-programme-honnete-sur-ses-capacites.md) | Graphe de programme honnête sur ses capacités | Accepted | Consolidation du registre, 2026-10-23 |
+| [DATA-0006](DATA-0006-promouvoir-les-index-de-maniere-atomique.md) | Promouvoir les index de manière atomique | Accepted | M1 |
+| [DATA-0007](DATA-0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans registre local | Accepted | M1 |
+| [ARCH-0008](ARCH-0008-negocier-indexeurs-par-capacites-explicites.md) | Négocier les indexeurs par capacités explicites | Accepted | M1 |
+| [DATA-0009](DATA-0009-normalized-symbol-identity.md) | Modéliser les identités de symboles sans inventer de canonicité | Accepted | M2 |
+| [DATA-0010](DATA-0010-normalized-relationship-semantics.md) | Normaliser les relations avec provenance, preuve et confiance explicites | Accepted | M3 |
+| [BE-0011](BE-0011-bounded-code-search-context.md) | Borner explicitement la recherche et le contexte de code | Accepted | M4 |
+| [DATA-0012](DATA-0012-explainable-related-tests.md) | Conserver les tests liés comme dérivations explicables | Accepted | M5 |
+| [BE-0014](BE-0014-safe-incremental-indexing.md) | N’utiliser l’indexation incrémentale que sous preuve explicite de capacité | Accepted | M7 |
+| [BE-0015](BE-0015-conservative-impact-analysis.md) | Traiter l’analyse d’impact comme une estimation potentielle du graphe observé | Accepted | M8 |
+| [ARCH-0016](ARCH-0016-stable-cli-contract.md) | Stabiliser la CLI comme surface d’exposition du cœur métier | Accepted | M9 |
+| [ARCH-0017](ARCH-0017-mcp-stdio-read-only.md) | Exposer MINOS en MCP via STDIO read-only | Accepted | M10 |
+| [ARCH-0018](ARCH-0018-versioned-public-java-api.md) | Versionner une API Java publique indépendante des modèles internes | Accepted | M11 |
+| [DATA-0019](DATA-0019-cross-repository-identity-and-git-facts.md) | Résoudre les relations cross-repository uniquement par identité exacte et séparer les faits Git | Accepted | M12 |
+| [ARCH-0020](ARCH-0020-minos-nexus-json-boundary.md) | Intégrer NEXUS par un contrat JSON local versionné | Accepted | M13 |
+| [DATA-0024](DATA-0024-active-snapshot-query-view-and-rebuildable-indexes.md) | Mettre en cache une vue de snapshot actif et reconstruire ses indexes en mémoire | Accepted | M15-S7/S8 |
+| [BE-0026](BE-0026-discovery-provider-spi-and-explicit-capability-profiles.md) | Étendre discovery/providers par SPI et interdire les capacités implicites | Accepted | M17 |
+| [ARCH-0027](ARCH-0027-intellij-external-client-and-versioned-cli-protocol.md) | Isoler le plugin IntelliJ en client Java 21 et négocier un protocole CLI JSON versionné | Accepted | M18 |
+| [BE-0029](BE-0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) | Garder la couche sémantique optionnelle, reconstruisible et distincte des faits structurés | Accepted | M20 |
+| [BE-0030](BE-0030-java-ast-reference-provider-with-explicit-capability-limits.md) | Fournir un provider Java AST de référence avec limitations et capabilities explicites | Accepted | M22 |
+| [BE-0031](BE-0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md) | Ajouter un provider learned local qualifié et conserver ANN derrière une décision mesurée | Accepted | M23 |
+| [DATA-0034](DATA-0034-partial-runtime-observations-with-explicit-static-correlation.md) | Conserver les observations runtime partielles séparées des faits statiques et corrélées à un snapshot exact | Accepted | M26 |
+| [BE-0039](BE-0039-reprise-indexation-apres-interruption.md) | Reprendre une indexation interrompue au lieu de tout réindexer | Accepted | — |
+| [ARCH-0042](ARCH-0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Accepted (option c : module minos-bootstrap) | Audit 2026-09, A2 |
+| [GEN-0043](GEN-0043-retrait-des-artefacts-de-jalon.md) | Politique de retrait des scripts et workflows de jalon (permanent / gelé par assertion / archivé) | Accepted | Audit 2026-09, G3 |
+| [ARCH-0056](ARCH-0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted — mise en œuvre partielle |
+| [ARCH-0057](ARCH-0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels |
+| [ARCH-0058](ARCH-0058-declarer-les-usages-de-modules.md) | Tout module utilisé est déclaré ; la règle ArchUnit stricte devient obligatoire | Accepted |
+| [SEC-0060](SEC-0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Accepted |
+| [SEC-0061](SEC-0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité : durci, ou hérité de la racine | Accepted |
+| [ARCH-0064](ARCH-0064-coeur-agnostique-du-langage-et-de-l-indexeur.md) | Cœur agnostique du langage et de l'indexeur, SCIP protocole privilégié | Accepted | Consolidation du registre, 2026-10-23 |
+| [BE-0065](BE-0065-providers-scip-polyglottes-livres-dans-le-paquet.md) | Providers SCIP polyglottes sous preuve, livrés dans le paquet | Accepted | Consolidation du registre, 2026-10-23 |
+| [DATA-0066](DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md) | Port de connaissance et persistance des snapshots : format V3, compatibilité, dédoublonnage | Accepted | Consolidation du registre, 2026-10-23 |
+| [GEN-0067](GEN-0067-socle-d-execution-java-25-et-maven.md) | Socle d'exécution : Java 25, Maven par le wrapper, sans framework serveur | Accepted | Consolidation du registre, 2026-10-23 |
+| [ARCH-0068](ARCH-0068-modules-dependances-et-propriete-des-packages.md) | Modules, dépendances et propriété des packages | Accepted | Consolidation du registre, 2026-10-23 |
+| [ARCH-0069](ARCH-0069-backends-mcp-natif-et-docker.md) | Backends MCP natif et Docker | Accepted | Consolidation du registre, 2026-10-23 |
+| [SEC-0070](SEC-0070-code-non-fiable-confinement-et-indexation-distante.md) | Code non fiable : confinement des providers et indexation distante | Accepted | Consolidation du registre, 2026-10-23 |
+| [SEC-0071](SEC-0071-plan-de-controle-d-equipe-embarque.md) | Plan de contrôle d'équipe embarqué | Accepted | Consolidation du registre, 2026-10-23 |
+| [ARCH-0072](ARCH-0072-graphe-de-programme-honnete-sur-ses-capacites.md) | Graphe de programme honnête sur ses capacités | Accepted | Consolidation du registre, 2026-10-23 |
+| [GEN-0073](GEN-0073-tenir-le-registre-d-adr-au-format-archgate.md) | Tenir le registre d'ADR au format Archgate, à l'emplacement arc42 (convention d'identifiant, critères, cycle de vie) | Accepted | Décision du propriétaire, 2026-10-23 |
 
 ## Archives
 
@@ -120,6 +120,7 @@ ADR remplacés, rejetés ou reclassés (non lus par Archgate) :
 | [0055](archive/0055-unifier-les-adaptateurs-de-stockage.md) | Réunir les adaptateurs dans minos-storage | Superseded by ADR-0068 |
 | [0059](archive/0059-migrer-le-socle-vers-java-25-lts.md) | Migrer le socle MINOS vers Java 25 LTS et garder la baseline par un gate | Superseded by ADR-0067 |
 | [0062](archive/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) | Confirmer les emplacements de l'ADR 0044 et ne créer de package que sous les racines de son module | Superseded by ADR-0068 |
+| [0063](archive/0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md) | Écrire les ADR au format Archgate dans le registre arc42 | Superseded by GEN-0073 |
 
 [Backlog, tâches et démarrage Claude](../../project/roadmap/storage-hexagonal-2026-10/README.md).
 

@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0033 — Immutable remote revisions and verified worker artifacts
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0070](../0070-code-non-fiable-confinement-et-indexation-distante.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0070](../SEC-0070-code-non-fiable-confinement-et-indexation-distante.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Status: **Accepted — final M25 dispositions recorded from exact-head Windows + Linux evidence.**
 

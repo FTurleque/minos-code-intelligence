@@ -7,7 +7,7 @@ rules: false
 
 # ADR 0055 — Réunir les adaptateurs dans minos-storage
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0068](../0068-modules-dependances-et-propriete-des-packages.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0068](../ARCH-0068-modules-dependances-et-propriete-des-packages.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Date : 2026-10-05. Statut : **Accepted — décision validée par le propriétaire ; implémentation à réaliser**.
 
@@ -79,4 +79,4 @@ Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en v
 
 - [Maven — reactor multi-module](https://maven.apache.org/guides/mini/guide-multiple-modules.html)
 - [Oracle — ServiceLoader](https://docs.oracle.com/en/java/javase/24/docs/api/java.base/java/util/ServiceLoader.html)
-- [ADR 0042](../0042-racine-de-composition.md), [ADR 0044](0044-un-package-un-module.md), [ADR 0046](0046-format-de-snapshot-v3-chaines-utf8.md).
+- [ADR 0042](../ARCH-0042-racine-de-composition.md), [ADR 0044](0044-un-package-un-module.md), [ADR 0046](0046-format-de-snapshot-v3-chaines-utf8.md).

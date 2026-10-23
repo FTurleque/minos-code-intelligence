@@ -7,11 +7,11 @@ rules: true
 
 # 0044 — Un package, un module
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0068](../0068-modules-dependances-et-propriete-des-packages.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0068](../ARCH-0068-modules-dependances-et-propriete-des-packages.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Status: Accepted (2026-09-29) — mis en œuvre ; historique et preuves dans [`ARCHI-SUIVI.md`](../../../project/audits/archive/2026-09/ARCHI-SUIVI.md).
 
-Complète l'audit [`AUDIT-2026-09.md`](../../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constats A3 et A7). Amende l'[ADR 0022](0022-maven-reactor-and-module-boundaries.md) sur l'emplacement de `discovery`, `incremental`, `orchestration` et `MinosVersion`. Prolonge l'[ADR 0042](../0042-racine-de-composition.md), dont il garde toutes les frontières.
+Complète l'audit [`AUDIT-2026-09.md`](../../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constats A3 et A7). Amende l'[ADR 0022](0022-maven-reactor-and-module-boundaries.md) sur l'emplacement de `discovery`, `incremental`, `orchestration` et `MinosVersion`. Prolonge l'[ADR 0042](../ARCH-0042-racine-de-composition.md), dont il garde toutes les frontières.
 
 Amendé par l'[ADR 0055](0055-unifier-les-adaptateurs-de-stockage.md) (partition des artefacts de stockage) ; confirmé par l'[ADR 0062](0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md).
 

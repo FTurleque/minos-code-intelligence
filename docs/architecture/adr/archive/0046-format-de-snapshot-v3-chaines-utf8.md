@@ -7,11 +7,11 @@ rules: false
 
 # 0046 — Format de snapshot V3 : chaînes UTF-8, lecture de tous les formats antérieurs
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0066](../0066-port-de-connaissance-et-persistance-des-snapshots.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0066](../DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Status: Accepted (2026-09-29) — mis en œuvre ; mesures, preuves et journal dans [`ARCHI-SUIVI.md`](../../../project/audits/archive/2026-09/ARCHI-SUIVI.md) (lot 3, A6, § A6.10 et § A6.11).
 
-Complète l'audit [`AUDIT-2026-09.md`](../../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constat A6) et l'[ADR 0023](0023-decomposed-local-snapshot-persistence.md) (persistance locale décomposée, codecs versionnés, pointeur actif). Ne change ni l'[ADR 0024](../0024-active-snapshot-query-view-and-rebuildable-indexes.md) (vue de requête et cache) ni le plafond de 256 Mio.
+Complète l'audit [`AUDIT-2026-09.md`](../../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constat A6) et l'[ADR 0023](0023-decomposed-local-snapshot-persistence.md) (persistance locale décomposée, codecs versionnés, pointeur actif). Ne change ni l'[ADR 0024](../DATA-0024-active-snapshot-query-view-and-rebuildable-indexes.md) (vue de requête et cache) ni le plafond de 256 Mio.
 
 Prolongé par l'[ADR 0047](0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md), qui s'appuie sur ce format V3 (dédoublonnage et table de chaînes du snapshot en mémoire).
 

@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0062 — Confirmer les emplacements de l'ADR 0044 et ne créer de package que sous les racines de son module
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0068](../0068-modules-dependances-et-propriete-des-packages.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0068](../ARCH-0068-modules-dependances-et-propriete-des-packages.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 - **Statut** : Accepted
 - **Date** : 2026-10-22
@@ -106,6 +106,6 @@ Sortir `hosted` vers un module dédié, déplacer le service de route MCP dans u
 
 ## References
 
-- ADR liés : [0022](0022-maven-reactor-and-module-boundaries.md), [0042](../0042-racine-de-composition.md), [0044](0044-un-package-un-module.md), [0055](0055-unifier-les-adaptateurs-de-stockage.md), [0057](../0057-finaliser-les-frontieres-hexagonales.md), [0058](../0058-declarer-les-usages-de-modules.md)
+- ADR liés : [0022](0022-maven-reactor-and-module-boundaries.md), [0042](../ARCH-0042-racine-de-composition.md), [0044](0044-un-package-un-module.md), [0055](0055-unifier-les-adaptateurs-de-stockage.md), [0057](../ARCH-0057-finaliser-les-frontieres-hexagonales.md), [0058](../ARCH-0058-declarer-les-usages-de-modules.md)
 - Garde : `scripts/architecture/check-module-boundaries.py` ; description dans `docs/developer/quality-gates.md`
 - Plan : [chantier stockage et frontières hexagonales](../../../project/roadmap/storage-hexagonal-2026-10/README.md)

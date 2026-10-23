@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0005 — Aligner MINOS sur Java 24 avec l'environnement de développement
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0067](../0067-socle-d-execution-java-25-et-maven.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0067](../GEN-0067-socle-d-execution-java-25-et-maven.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 - Statut : **Superseded** — remplacée par l'[ADR 0059](0059-migrer-le-socle-vers-java-25-lts.md) le 13 octobre 2026
 - Date de décision : **22 juillet 2026**

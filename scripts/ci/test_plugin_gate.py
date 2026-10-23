@@ -45,7 +45,7 @@ class ScopeTest(unittest.TestCase):
                 self.assertTrue(gate.in_scope([path]))
 
     def test_a_change_elsewhere_is_out_of_scope(self):
-        self.assertFalse(gate.in_scope(["README.md", "docs/architecture/adr/0058-declarer-les-usages-de-modules.md",
+        self.assertFalse(gate.in_scope(["README.md", "docs/architecture/adr/ARCH-0058-declarer-les-usages-de-modules.md",
                                         "minos-engine/src/main/java/com/minos/store/InMemoryCodeKnowledgeStore.java"]))
 
     def test_one_file_in_scope_is_enough_and_windows_separators_are_understood(self):

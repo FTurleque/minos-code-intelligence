@@ -207,7 +207,7 @@ def main() -> int:
             "M21-S2/CI reste en pause jusqu’en août 2026",
         )
 
-        adr_path = "docs/architecture/adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md"
+        adr_path = "docs/architecture/adr/BE-0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md"
         adr = read(adr_path)
         require(
             adr_path,

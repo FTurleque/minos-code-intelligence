@@ -7,11 +7,11 @@ rules: false
 
 # 0045 — Constructeur unique et point d'entrée nommé ; racine de composition regroupée par domaine
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Archivé, reclassé : convention de code tenue par `.claude/rules/java-production.md` (constructeur unique, point d'entrée nommé) ; la refonte de la racine de composition est réalisée. Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Archivé, reclassé : convention de code tenue par `.claude/rules/java-production.md` (constructeur unique, point d'entrée nommé) ; la refonte de la racine de composition est réalisée. Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Status: Accepted (2026-09-29) — mis en œuvre ; historique, inventaire et preuves dans [`ARCHI-SUIVI.md`](../../../project/audits/archive/2026-09/ARCHI-SUIVI.md) (lot 2, A4).
 
-Complète l'audit [`AUDIT-2026-09.md`](../../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constat A4). Prolonge l'[ADR 0042](../0042-racine-de-composition.md) (racine de composition, ordre d'initialisation) et l'[ADR 0044](0044-un-package-un-module.md), dont il garde toutes les frontières.
+Complète l'audit [`AUDIT-2026-09.md`](../../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constat A4). Prolonge l'[ADR 0042](../ARCH-0042-racine-de-composition.md) (racine de composition, ordre d'initialisation) et l'[ADR 0044](0044-un-package-un-module.md), dont il garde toutes les frontières.
 
 ## Context
 

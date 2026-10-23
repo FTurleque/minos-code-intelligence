@@ -117,4 +117,4 @@ Puis tu me rends la main avec : les liens des trois PR, l'état de leur CI, et l
 
 ---
 
-*Références : `docs/audit/archive/2026-09/AUDIT-2026-09.md` (A3, A4, A6, A7), `docs/adr/0042-racine-de-composition.md`, `docs/adr/0043-retrait-des-artefacts-de-jalon.md`, `scripts/architecture/check-module-boundaries.py`, `benchmarks/`. Méthode et format de suivi : `SPRINT-2-SUIVI.md` et `CI-HYGIENE-SUIVI.md`.*
+*Références : `docs/audit/archive/2026-09/AUDIT-2026-09.md` (A3, A4, A6, A7), `docs/adr/ARCH-0042-racine-de-composition.md`, `docs/adr/GEN-0043-retrait-des-artefacts-de-jalon.md`, `scripts/architecture/check-module-boundaries.py`, `benchmarks/`. Méthode et format de suivi : `SPRINT-2-SUIVI.md` et `CI-HYGIENE-SUIVI.md`.*

@@ -239,7 +239,7 @@ Le snapshot persisté reste la source de vérité. Les indexes sont des dérivat
 
 Les comparateurs, filtres, limites et ordres historiques restent appliqués après sélection des candidats indexés.
 
-Décision S7/S8 : [ADR-0024](../../architecture/adr/0024-active-snapshot-query-view-and-rebuildable-indexes.md).
+Décision S7/S8 : [ADR-0024](../../architecture/adr/DATA-0024-active-snapshot-query-view-and-rebuildable-indexes.md).
 
 ---
 

@@ -7,7 +7,7 @@ rules: false
 
 # ADR-0028 — Capability-honest program graph and bounded advanced analysis
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](../0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0072](../0072-graphe-de-programme-honnete-sur-ses-capacites.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0072](../ARCH-0072-graphe-de-programme-honnete-sur-ses-capacites.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Status: Accepted for M19 implementation
 
