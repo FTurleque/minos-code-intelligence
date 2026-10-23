@@ -2,7 +2,7 @@
 id: ADR-0067
 title: "Socle d'exécution : Java 25, Maven par le wrapper, sans framework serveur"
 domain: general
-rules: false
+rules: true
 ---
 
 # ADR-0067 — Socle d'exécution : Java 25, Maven par le wrapper, sans framework serveur
@@ -80,8 +80,13 @@ Maven 3.9.x est retenu pour sa stabilité, son support des projets Java et de la
 
 - Gate `scripts/quality/check-toolchain-baseline.py` (job `invariants`, `.github/workflows/pr-ci.yml:100`) et son auto-test `scripts/quality/test_check_toolchain_baseline.py` (`.github/workflows/pr-ci.yml:103`) — règles 4 à 7 : l'enforcer exige exactement `[N,N+1)` pour `N` = `maven.compiler.release` ; chaque `java-version:` de workflow vaut `N`, hors liste fermée des étapes Java 21 du plugin ; chaque `FROM eclipse-temurin:` a le majeur `N` ; `TOOLCHAIN_POLICY.md` énonce `N` et la date de fin de support, `AGENTS.md` et `openspec/config.yaml` énoncent `N`. Le même gate garde le Gradle du plugin et ses verrous de dépendances (règles 1 à 3 et 8 à 12), qui relèvent de la politique de toolchain ; il ne garde pas la version de Maven.
 - Maven Enforcer (`pom.xml:215-216`) — `requireJavaVersion` `[25,26)` et `requireMavenVersion` `[3.9,4.0)` : un build hors de ces plages échoue.
-- Aucun contrôle automatique de l'absence de framework serveur, de la version de Maven que télécharge le wrapper, ni de la règle `ignore` de Dependabot (`.github/dependabot.yml:68-71`).
+- Aucun contrôle automatique de la version de Maven que télécharge le wrapper, ni de la règle `ignore` de Dependabot (`.github/dependabot.yml:68-71`).
 - Revue : aucun framework serveur dans le domaine ou les services ; adaptateurs d'indexeurs isolés du domaine ; règle `ignore` des majeurs d'`eclipse-temurin` toujours présente ; date de fin de support de la politique relue contre la page de l'éditeur.
+- Règle Archgate `0067-socle-d-execution-java-25-et-maven.rules.ts` / `enforcer-matches-java-release` : refuse une plage `requireJavaVersion` autre que `[N,N+1)`, `N` étant lu dans `maven.compiler.release` du POM racine ; second exécutant de `scripts/quality/check-toolchain-baseline.py` (règle 4).
+- Règle Archgate `0067-socle-d-execution-java-25-et-maven.rules.ts` / `workflow-java-steps-match-release` : refuse un `java-version:` de workflow autre que `N` hors des listes fermées `PLUGIN_JAVA_STEPS` (Java 21 du plugin) et `PREVIOUS_JAVA_STEPS`, lues dans le gate, et toute étape en surnombre ; second exécutant de `scripts/quality/check-toolchain-baseline.py` (règle 5).
+- Règle Archgate `0067-socle-d-execution-java-25-et-maven.rules.ts` / `temurin-images-match-release` : refuse un `FROM eclipse-temurin:` d'un autre majeur que `N` dans un Dockerfile du dépôt ; second exécutant de `scripts/quality/check-toolchain-baseline.py` (règle 6).
+- Règle Archgate `0067-socle-d-execution-java-25-et-maven.rules.ts` / `documents-state-java-release` : refuse que `TOOLCHAIN_POLICY.md` (version, plage et date de fin de support), `AGENTS.md` ou `openspec/config.yaml` énonce une autre version que `N` ou ne l'énonce pas ; second exécutant de `scripts/quality/check-toolchain-baseline.py` (règle 7).
+- Règle Archgate `0067-socle-d-execution-java-25-et-maven.rules.ts` / `no-server-framework-in-poms` : refuse un `groupId` Spring (`org.springframework*`), Quarkus (`io.quarkus*`) ou Micronaut (`io.micronaut*`) dans un `pom.xml` du dépôt ; contrôle propre à Archgate, aucun gate Python ne le fait.
 
 ## Écarts constatés
 

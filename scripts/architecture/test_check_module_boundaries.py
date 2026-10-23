@@ -1205,6 +1205,48 @@ class RuntimeServiceEdgeTest(RatchetTreeTestCase):
                       _MODULE.GENERATED_DEPENDENCY_DOC.read_text(encoding="utf-8").splitlines())
 
 
+class ArchitectureTestPolicyRuleTest(unittest.TestCase):
+    """A17 — ALLOWED_DEPENDENCIES and the ALLOWED table of ModuleArchitectureTest stay identical (ADR 0058)."""
+
+    ALLOWED = {"minos-a": frozenset(), "minos-b": frozenset({"minos-a"})}
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.test = Path(directory.name) / "ModuleArchitectureTest.java"
+
+    def write(self, entries):
+        body = ",\n".join(f'            Map.entry("{module}", Set.of({", ".join(chr(34) + d + chr(34) for d in deps)}))'
+                          for module, deps in entries)
+        self.test.write_text("class ModuleArchitectureTest {\n    private static final Map<String, Set<String>> ALLOWED = "
+                             f"Map.ofEntries(\n{body});\n}}\n", encoding="utf-8")
+
+    def check(self):
+        return _MODULE.check_architecture_test_policy(self.test, self.ALLOWED)
+
+    def test_identical_tables_are_accepted(self):
+        self.write([("minos-a", []), ("minos-b", ["minos-a"])])
+        self.assertEqual(2, self.check())
+
+    def test_an_extra_edge_in_the_java_table_is_refused(self):
+        self.write([("minos-a", ["minos-b"]), ("minos-b", ["minos-a"])])
+        with self.assertRaisesRegex(RuntimeError, r"A17 .*minos-a.*minos-b"):
+            self.check()
+
+    def test_a_module_missing_from_the_java_table_is_refused(self):
+        self.write([("minos-b", ["minos-a"])])
+        with self.assertRaisesRegex(RuntimeError, r"A17 .*minos-a"):
+            self.check()
+
+    def test_an_unreadable_table_is_refused_instead_of_passing(self):
+        self.test.write_text("class ModuleArchitectureTest { }\n", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, r"A17 .*ALLOWED"):
+            self.check()
+
+    def test_the_real_tables_are_identical(self):
+        self.assertEqual(len(_MODULE.ALLOWED_DEPENDENCIES), _MODULE.check_architecture_test_policy())
+
+
 class EveryRuleHasATest(unittest.TestCase):
 
     def test_every_check_function_of_the_script_is_referenced_by_a_test(self):
@@ -1268,7 +1310,8 @@ class MainWiringTest(unittest.TestCase):
 
     def test_main_runs_the_ratchet_rules_a11_to_a14(self):
         for name in ("check_engine_types_named_by_surfaces", "check_process_launchers",
-                     "check_adapter_types_named_by_adapters", "check_package_roots"):
+                     "check_adapter_types_named_by_adapters", "check_package_roots",
+                     "check_architecture_test_policy"):
             with self.subTest(rule=name):
                 calls: list[str] = []
                 code, error = self.run_main_with(**{name: self.spy(calls, name)})

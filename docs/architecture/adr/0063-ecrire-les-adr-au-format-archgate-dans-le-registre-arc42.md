@@ -2,7 +2,7 @@
 id: ADR-0063
 title: "Écrire les ADR au format Archgate dans le registre arc42"
 domain: general
-rules: false
+rules: true
 ---
 
 # ADR-0063 — Écrire les ADR au format Archgate dans le registre arc42
@@ -69,8 +69,12 @@ Options considérées :
 ## Compliance and Enforcement
 
 - `archgate adr list` liste chaque ADR du registre avec son `id`, son `domain` et `rules` ; un ADR absent de la liste a un en-tête invalide.
-- `archgate check` exécute les règles compagnons (aujourd'hui `0068-modules-dependances-et-propriete-des-packages.rules.ts`, invariant A7) ; il n'est pas lancé par la CI, le gate Python l'est.
+- `archgate check` exécute les règles compagnons `NNNN-*.rules.ts` du registre (liste dans `docs/developer/archgate.md`) ; il n'est pas lancé par la CI, les gates Python le sont.
 - Revue : un nouvel ADR part du gabarit, porte l'en-tête et les sections Archgate, et figure dans `README.md` et `docs/architecture/arc42/09-decisions.md`.
+- Règle Archgate `0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.rules.ts` / `adr-id-matches-file-number` : refuse un ADR `NNNN-*.md` du registre sans en-tête YAML en ligne 1, ou dont l'`id` n'est pas `ADR-` suivi des quatre chiffres de son nom de fichier ; contrôle propre à Archgate, aucun gate Python ne le fait.
+- Règle Archgate `0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.rules.ts` / `adr-listed-in-index` : refuse un ADR du registre sans lien dans `README.md` ; contrôle propre à Archgate, aucun gate Python ne le fait.
+- Règle Archgate `0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.rules.ts` / `adr-has-archgate-sections` : avertit quand un ADR du registre n'a pas de section `## Decision` ou `## Do's and Don'ts` (avertissement : l'ADR 0042 n'a pas de section `## Decision` titrée) ; contrôle propre à Archgate, aucun gate Python ne le fait.
+- Règle Archgate `0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.rules.ts` / `archgate-adrs-holds-only-gitkeep` : refuse tout fichier de `.archgate/adrs/` autre que `.gitkeep` ; contrôle propre à Archgate, aucun gate Python ne le fait.
 
 ## References
 

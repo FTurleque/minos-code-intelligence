@@ -2,7 +2,7 @@
 id: ADR-0061
 title: "Écrire un fichier privé à deux niveaux de confidentialité"
 domain: security
-rules: false
+rules: true
 ---
 
 # ADR-0061 — Écrire un fichier privé à deux niveaux de confidentialité
@@ -89,6 +89,8 @@ Option B. Le niveau « arbre privé » est **partiel** par construction : la con
 ## Compliance and Enforcement
 
 - Gate `scripts/architecture/check-private-io.py` (job `invariants`) et son auto-test `test_check_private_io.py` — aucun appel brut de création ou d'écriture hors des primitives ; les maxima de `PrivateLocalStorage` ne bougent pas.
+- Règle Archgate `0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.rules.ts` / `private-local-storage-garde-ses-entrees` : refuse que la liste de tolérance nommée par `check-private-io.py` (constante `ALLOWLIST`) porte pour `PrivateLocalStorage` un autre nombre d'entrées que les cinq énoncées ci-dessus ; contrôle propre à Archgate, il complète le cliquet de `check-private-io.py`, qui borne les occurrences de chaque entrée mais accepte une entrée ajoutée.
+- Règle Archgate `0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.rules.ts` / `trois-ouvertures-en-flux` : refuse l'absence de la déclaration `public static` de `openPrivateOutputStream`, `createPrivateOutputStream` ou `openNewTreeFile` dans `PrivateLocalStorage` ; contrôle propre à Archgate, aucun gate Python ne le fait.
 - Tests `PrivateLocalStorageStreamsTest`, `ConfinedFileOpenerChannelTest`, `DurableAtomicFileMoveDirectoryTest` (`minos-engine`, build Maven des jobs `Verify`).
 - Revue : tout appelant du niveau arbre nomme, dans son test, la racine privée dont il hérite.
 

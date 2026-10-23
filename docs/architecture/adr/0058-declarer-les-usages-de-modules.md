@@ -2,7 +2,7 @@
 id: ADR-0058
 title: "Déclarer chaque module utilisé"
 domain: architecture
-rules: false
+rules: true
 ---
 
 # ADR 0058 — Déclarer chaque module utilisé
@@ -52,7 +52,9 @@ Un usage transitif échappe aux deux contrôles de frontière : un module peut d
 
 - Test `ModuleArchitectureTest.everyModuleOnlyUsesItsAllowedModules` (`minos-app`, build Maven des jobs `Verify`) — une classe qui utilise un module non déclaré fait échouer le build.
 - Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — table `ALLOWED_DEPENDENCIES` (règle A2) et règle A11 (types de `minos-engine` nommés par chaque surface, table `ENGINE_TYPES_NAMED_BY_SURFACE`) ; auto-test `test_check_module_boundaries.py`.
-- Revue : l'identité des deux tables n'est vérifiée par aucun script ; un relecteur la contrôle à chaque modification de l'une d'elles.
+- Règle Archgate `0058-declarer-les-usages-de-modules.rules.ts` / `allowed-dependency-tables-identical` : refuse un module ou une arête présent dans `ALLOWED_DEPENDENCIES` (`check-module-boundaries.py`) et absent de la table `ALLOWED` de `ModuleArchitectureTest`, ou l'inverse ; contrôle propre à Archgate, aucun gate Python ne le fait (lancée par `archgate check`, pas par la CI).
+- Règle A17 de `scripts/architecture/check-module-boundaries.py` (job `invariants`) : `ModuleArchitectureTest.ALLOWED` égale `ALLOWED_DEPENDENCIES`, module par module ; la règle Archgate ci-dessus en est le second exécutant.
+- Revue : une arête ajoutée l'est dans les deux tables, dans le même changement.
 
 ## Mise en œuvre
 

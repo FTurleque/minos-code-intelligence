@@ -2,7 +2,7 @@
 id: ADR-0027
 title: "IntelliJ externe et protocole CLI versionné"
 domain: architecture
-rules: false
+rules: true
 ---
 
 # ADR-0027 — IntelliJ externe et protocole CLI versionné
@@ -88,6 +88,8 @@ Ce dernier point est explicitement measurement-gated : M18 ne crée pas un daemo
 
 - Workflow `.github/workflows/intellij-plugin.yml:79-85` (check exigé « IntelliJ plugin (gate) ») — refuse toute dépendance `implementation("com.minos:` dans `minos-intellij`.
 - Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — `minos-intellij` est une racine de sources externe (`EXTERNAL_SOURCE_ROOTS`) incluse dans la recherche de cycles de packages (A8).
+- Règle Archgate `0027-intellij-external-client-and-versioned-cli-protocol.rules.ts` / `plugin-declares-no-minos-artifact` : refuse toute coordonnée `com.minos:*` (ou `group = "com.minos",`) dans les scripts Gradle, les verrous de dépendances, les catalogues de versions et les métadonnées de vérification de `minos-intellij` ; second exécutant, élargi, du grep `implementation("com.minos:` du workflow `intellij-plugin.yml` (lancée par `archgate check`, pas par la CI).
+- Règle Archgate `0027-intellij-external-client-and-versioned-cli-protocol.rules.ts` / `plugin-imports-only-its-own-package` : refuse dans les sources de `minos-intellij` tout import d'un type `com.minos.*` hors de `com.minos.intellij` ; contrôle propre à Archgate, aucun gate Python ne le fait.
 - Tests `IdeCommandTest` (`minos-cli`) — handshake JSON stable — et `MinosCliClientTest` (`minos-intellij`, `gradlew test` du même workflow).
 - Revue : un champ consommé supprimé ou renommé, ou une commande obligatoire modifiée, s’accompagne d’une nouvelle version du protocole `minos-ide`.
 

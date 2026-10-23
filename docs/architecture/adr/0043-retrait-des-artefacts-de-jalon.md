@@ -2,7 +2,7 @@
 id: ADR-0043
 title: "Politique de retrait des scripts et workflows de jalon"
 domain: general
-rules: false
+rules: true
 ---
 
 # 0043 — Politique de retrait des scripts et workflows de jalon
@@ -75,6 +75,8 @@ Un contrôle (`scripts/quality/check-milestone-artifact-references.py` ou équiv
 - Gate `scripts/quality/check-milestone-artifact-references.py` et son `--self-test` (job `invariants`) — échoue sur un script de `scripts/` référencé par aucun workflow, script exécuté, document ni liste d'archives assumées.
 - Gate `scripts/quality/check-ci-wiring.py` (job `invariants`) — ancré sur la structure des workflows (§ 3).
 - Revue : un gate nouveau ou modifié s'ancre sur une structure ou un comportement et échoue si sa cible manque.
+- Règle Archgate `0043-retrait-des-artefacts-de-jalon.rules.ts` / `permanent-gates-carry-no-milestone-number` : refuse un fichier de `scripts/quality/`, `scripts/architecture/` ou `scripts/docs/`, ou une entrée d'`ACTIVE_MILESTONE_GATES` (`scripts/remediation/check-post-mne.py`, lue par son AST), dont le nom ou un répertoire porte un numéro de jalon `mNN` ; contrôle propre à Archgate, aucun gate Python ne le fait (`check-milestone-artifact-references.py` garde les références des scripts, pas leur nom).
+- Règle Archgate `0043-retrait-des-artefacts-de-jalon.rules.ts` / `milestone-workflows-are-manual-replays` : refuse un workflow dont le nom porte un numéro de jalon et qu'un autre déclencheur que `workflow_dispatch` lance ; contrôle propre à Archgate, aucun gate Python ne le fait.
 
 ## Limites connues
 

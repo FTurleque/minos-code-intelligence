@@ -2,7 +2,7 @@
 id: ADR-0019
 title: "Résoudre les relations cross-repository uniquement par identité exacte et séparer les faits Git"
 domain: data
-rules: false
+rules: true
 ---
 
 # ADR-0019 — Résoudre les relations cross-repository uniquement par identité exacte et séparer les faits Git
@@ -54,6 +54,7 @@ MINOS peut enrichir la connaissance multi-repo sans fabriquer de liens par resse
 
 - Test `McpAuthorEmailGuardTest` (`minos-app`, lancé par `mvnw verify`) — aucun outil du catalogue MCP ne rend l’adresse e-mail d’un auteur.
 - Test `GitIntelligenceServiceTest` (`minos-integration-git`) — l’adresse est masquée par défaut (`MASKED_AUTHOR_EMAIL`).
+- Règle Archgate `0019-cross-repository-identity-and-git-facts.rules.ts` / `mcp-sans-adresse-auteur` : refuse toute mention de l'adresse e-mail d'auteur (`authorEmail`, `author_email`…, littéraux compris, commentaires exclus) dans `minos-mcp/src/main` ; contrôle propre à Archgate, aucun gate Python ne le fait (un enregistrement sérialisé sans nommer le champ reste couvert par `McpAuthorEmailGuardTest`).
 - Aucun contrôle automatique de la résolution cross-repository par identité exacte.
 - Revue : une résolution entre dépôts n’utilise que l’identité exacte `providerId + externalId` ; une surface nouvelle ne reçoit l’adresse e-mail que sur demande explicite.
 

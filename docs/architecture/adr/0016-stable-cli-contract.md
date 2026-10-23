@@ -2,7 +2,7 @@
 id: ADR-0016
 title: "Stabiliser la CLI comme surface d’exposition du cœur métier"
 domain: architecture
-rules: false
+rules: true
 ---
 
 # ADR-0016 — Stabiliser la CLI comme surface d’exposition du cœur métier
@@ -47,6 +47,7 @@ Les scripts et intégrations peuvent dépendre d’un comportement CLI cohérent
 - Test `CliExitCodesTest` (`minos-cli`, lancé par `mvnw verify` dans les checks `Verify`) — les codes de sortie gardent leurs valeurs publiées.
 - Aucun contrôle automatique de la délégation au cœur métier ni du refus de simuler un runner absent.
 - Revue : une commande nouvelle ou modifiée délègue à un service existant, garde les formats `text` et `json` et un code de sortie documenté, et ne simule aucun runner.
+- Règle Archgate `0016-stable-cli-contract.rules.ts` / `exit-codes-match-cli-reference` : refuse un code de `CliExitCodes.java` absent de la section « Codes de sortie » de `docs/user/cli.md`, ou un code publié là qu'aucune constante ne déclare ; contrôle propre à Archgate, aucun gate Python ne le fait (`CliExitCodesTest` fige les valeurs, pas leur publication).
 
 ## Preuves
 

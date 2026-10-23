@@ -1292,6 +1292,39 @@ def check_architecture_documentation(graph: dict[str, frozenset[str]], document:
     return len(modules)
 
 
+# A17 / ADR 0058 — the ALLOWED table of the ArchUnit test and ALLOWED_DEPENDENCIES are one policy written twice: they
+# must stay identical, or the strict ArchUnit rule and this guard judge the same dependency differently.
+ARCHITECTURE_TEST = (ROOT / "minos-app" / "src" / "test" / "java" / "com" / "minos" / "app" / "architecture"
+                     / "ModuleArchitectureTest.java")
+ALLOWED_TABLE = re.compile(r"ALLOWED\s*=\s*Map\.ofEntries\((.*?)\);", re.S)
+ALLOWED_ENTRY = re.compile(r'Map\.entry\(\s*"([^"]+)"\s*,\s*Set\.of\(([^)]*)\)\s*\)', re.S)
+
+
+def check_architecture_test_policy(test: Path = ARCHITECTURE_TEST,
+                                   allowed: dict[str, frozenset[str]] = ALLOWED_DEPENDENCIES) -> int:
+    """A17 — ModuleArchitectureTest.ALLOWED equals ALLOWED_DEPENDENCIES, module by module (fail-closed if unreadable)."""
+    if not test.is_file():
+        fail(f"A17 ArchUnit policy table is missing: {test.name}")
+    table = ALLOWED_TABLE.search(COMMENTS_AND_LITERALS.sub(lambda m: m.group(0) if m.group(0).startswith('"') else " ",
+                                                            test.read_text(encoding="utf-8")))
+    if table is None:
+        fail(f"A17 cannot read the ALLOWED table of {test.name}: the ArchUnit policy cannot be compared")
+    java = {module: frozenset(re.findall(r'"([^"]+)"', deps)) for module, deps in ALLOWED_ENTRY.findall(table.group(1))}
+    problems = []
+    for module in sorted(set(allowed) | set(java)):
+        if module not in java:
+            problems.append(f"{module} is absent from {test.name}")
+        elif module not in allowed:
+            problems.append(f"{module} is absent from ALLOWED_DEPENDENCIES")
+        elif java[module] != allowed[module]:
+            problems.append(f"{module}: {test.name} allows {sorted(java[module])}, ALLOWED_DEPENDENCIES allows "
+                            f"{sorted(allowed[module])}")
+    if problems:
+        fail("A17 ArchUnit and guard dependency tables diverge (ADR 0058: one policy, two tables kept identical; edit "
+             "both in the same change): " + "; ".join(problems))
+    return len(allowed)
+
+
 def check_pom_rules(root: Path = ROOT) -> dict[str, dict[str, str]]:
     """Every POM rule over the governed modules; returns the scoped internal dependencies of each module."""
     group_id = repository_group_id(root)
@@ -1452,6 +1485,7 @@ def main() -> int:
         packages = check_package_ownership()
         cycles, cycle_packages = check_package_cycles()
         documented = check_architecture_documentation(graph)
+        architecture_test = check_architecture_test_policy()
         runtime_edges = runtime_service_edges()
         check_or_write_dependency_document(graph, write_doc, runtime_edges=runtime_edges)
         for module in MODULES:
@@ -1462,6 +1496,7 @@ def main() -> int:
               f"{sum(len(members) for members, _ in KNOWN_PACKAGE_CYCLES.values())} packages, none new "
               f"({cycle_packages} packages analysed, plugin included)")
         print(f"A9 architecture document: {documented} module sections match the POM dependencies")
+        print(f"A17 ArchUnit policy: {architecture_test} modules, ModuleArchitectureTest.ALLOWED equals ALLOWED_DEPENDENCIES")
         print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
               f"modules, none other is")
         print("A11 surface -> minos-engine types: "
