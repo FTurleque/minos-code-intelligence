@@ -17,9 +17,9 @@ import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
+import com.minos.store.CodeKnowledgeReader;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.InMemoryCodeKnowledgeStore;
 
 import java.io.IOException;
 import java.util.List;
@@ -53,18 +53,18 @@ public final class ProjectQueryService {
 
     public List<UsageResult> findUsages(String projectIdentifier, String symbolId, int limit) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        return new SymbolQueryService(loadQueryStore(project)).findUsageResults(project.id().toString(), symbolId, limit);
+        return new SymbolQueryService(loadReader(project)).findUsageResults(project.id().toString(), symbolId, limit);
     }
 
     public List<RelationshipResult> findRelationships(String projectIdentifier, RelationshipSearchCriteria criteria) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        return new RelationshipQueryService(loadQueryStore(project)).findRelationshipResults(project.id().toString(), Objects.requireNonNull(criteria, "criteria"));
+        return new RelationshipQueryService(loadReader(project)).findRelationshipResults(project.id().toString(), Objects.requireNonNull(criteria, "criteria"));
     }
 
     /** The limitations of relationship answers of the given kinds, computed on the active snapshot's content. */
     public List<String> relationshipLimitations(String projectIdentifier, Set<RelationshipKind> kinds) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveQueryView(project.id())
+        CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveReadView(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active symbol snapshot: " + project.id()))
                 .snapshot();
         return SnapshotCoverageLimitations.relationshipLimitations(snapshot, Objects.requireNonNull(kinds, "kinds"));
@@ -72,7 +72,7 @@ public final class ProjectQueryService {
 
     public CodeSearchResponse searchCode(String projectIdentifier, CodeSearchCriteria criteria) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        return new CodeSearchService(loadQueryStore(project), new LocalSourceReader(project.rootPath()))
+        return new CodeSearchService(loadReader(project), new LocalSourceReader(project.rootPath()))
                 .search(project.id().toString(), Objects.requireNonNull(criteria, "criteria"));
     }
 
@@ -82,12 +82,13 @@ public final class ProjectQueryService {
     }
 
     private SymbolQueryService loadQueryService(RegisteredProject project) throws IOException {
-        return new SymbolQueryService(loadQueryStore(project));
+        return new SymbolQueryService(loadReader(project));
     }
 
-    private InMemoryCodeKnowledgeStore loadQueryStore(RegisteredProject project) throws IOException {
-        return snapshotStore.loadActiveQueryView(project.id())
+    /** The reads of the active snapshot's view: the use case reaches no write (ADR 0056). */
+    private CodeKnowledgeReader loadReader(RegisteredProject project) throws IOException {
+        return snapshotStore.loadActiveReadView(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active symbol snapshot: " + project.id()))
-                .queryStore();
+                .reader();
     }
 }

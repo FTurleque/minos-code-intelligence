@@ -19,9 +19,9 @@ import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.InMemoryCodeKnowledgeStore;
 import com.minos.store.SnapshotDescriptor;
 import com.minos.store.SnapshotQueryView;
+import com.minos.store.SnapshotReadView;
 import com.minos.store.SymbolSnapshot;
 import jdk.jfr.Recording;
 import jdk.jfr.consumer.RecordedEvent;
@@ -240,13 +240,20 @@ final class ProgramGraphSourceFixture {
             return Optional.ofNullable(active.get(projectId));
         }
 
+        /** Ancien contrat, servi par la vue de lecture. */
+        @Deprecated(since = "1.3.0")
         @Override
         public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) {
-            return loadActiveKnowledge(projectId).map(snapshot -> new SnapshotQueryView(
+            return loadActiveReadView(projectId).map(SnapshotQueryView::of);
+        }
+
+        @Override
+        public Optional<SnapshotReadView> loadActiveReadView(UUID projectId) {
+            return loadActiveKnowledge(projectId).map(snapshot -> SnapshotReadView.indexed(
                     new SnapshotDescriptor(3, snapshot.snapshotId(), snapshot.snapshotId() + ".bin", "0".repeat(64),
                             snapshot.symbols().size(), snapshot.occurrences().size(),
                             snapshot.relationships().size()),
-                    snapshot, new InMemoryCodeKnowledgeStore(snapshot), 0L));
+                    snapshot));
         }
     }
 

@@ -7,10 +7,11 @@ import com.minos.domain.RelationshipKind;
 import com.minos.domain.ResolutionStatus;
 import com.minos.domain.Symbol;
 import com.minos.query.SnapshotCoverageLimitations;
+import com.minos.store.CodeKnowledgeReader;
 import com.minos.store.CodeKnowledgeSnapshot;
-import com.minos.store.InMemoryCodeKnowledgeStore;
-import com.minos.store.InMemoryCodeKnowledgeStore.SymbolEdgeIndex;
+import com.minos.store.IncomingRelationships;
 import com.minos.store.SnapshotQueryView;
+import com.minos.store.SnapshotReadView;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -27,7 +28,7 @@ import java.util.function.Function;
 /**
  * Analyse d'impact potentiel par traversée inverse, bornée et explicable, du graphe MINOS.
  *
- * <p>Sur une vue de requête, la table des symboles et l'index des arêtes entrantes sont ceux de la vue, construits
+ * <p>Sur une vue de lecture, la table des symboles et l'index des arêtes entrantes sont ceux de la vue, construits
  * une fois pour elle et partagés par toutes les analyses (AUD-PERF-11) ; sur un snapshot seul, ils sont construits
  * pour l'appel. Les deux chemins rendent le même rapport, ordre compris.</p>
  */
@@ -56,15 +57,25 @@ public final class ImpactAnalysisService {
             .thenComparing(Candidate::pathSignature)
             .thenComparing(Candidate::symbolId);
 
-    /** Analyse sur une vue de requête : index et recherche de symbole de la vue, sans parcours du snapshot. */
-    public ImpactAnalysisReport analyze(SnapshotQueryView view, ImpactAnalysisRequest request) {
+    /** Analyse sur une vue de lecture : index et recherche de symbole de la vue, sans parcours du snapshot. */
+    public ImpactAnalysisReport analyze(SnapshotReadView view, ImpactAnalysisRequest request) {
         Objects.requireNonNull(view, "view");
         Objects.requireNonNull(request, "request");
         CodeKnowledgeSnapshot snapshot = view.snapshot();
         String projectId = snapshot.projectId().toString();
-        InMemoryCodeKnowledgeStore store = view.queryStore();
-        return analyze(snapshot, store.symbolEdgeIndex(projectId),
-                symbolId -> store.findSymbolById(projectId, symbolId).orElse(null), request);
+        CodeKnowledgeReader reader = view.reader();
+        return analyze(snapshot, view.incomingRelationships(),
+                symbolId -> reader.findSymbolById(projectId, symbolId).orElse(null), request);
+    }
+
+    /**
+     * Analyse sur l'ancienne vue de requête : même rapport, par sa vue de lecture (même index, rien n'est reconstruit).
+     *
+     * @deprecated depuis 1.3.0 : appeler {@link #analyze(SnapshotReadView, ImpactAnalysisRequest)}.
+     */
+    @Deprecated(since = "1.3.0")
+    public ImpactAnalysisReport analyze(SnapshotQueryView view, ImpactAnalysisRequest request) {
+        return analyze(Objects.requireNonNull(view, "view").readView(), request);
     }
 
     /** Analyse sur un snapshot seul : la table des symboles et l'index sont construits pour cet appel. */
@@ -78,12 +89,12 @@ public final class ImpactAnalysisService {
                 throw new IllegalArgumentException("duplicate symbol id in snapshot: " + symbol.id());
             }
         }
-        return analyze(snapshot, SymbolEdgeIndex.of(snapshot), symbolsById::get, request);
+        return analyze(snapshot, IncomingRelationships.of(snapshot), symbolsById::get, request);
     }
 
     private ImpactAnalysisReport analyze(
             CodeKnowledgeSnapshot snapshot,
-            SymbolEdgeIndex edges,
+            IncomingRelationships edges,
             Function<String, Symbol> symbolsById,
             ImpactAnalysisRequest request
     ) {
@@ -224,7 +235,7 @@ public final class ImpactAnalysisService {
      * le filtrage d'une liste triée la garde triée. La cible est {@code symbolId}, symbole connu du snapshot.
      */
     private static List<Relationship> incomingRelationships(
-            SymbolEdgeIndex edges,
+            IncomingRelationships edges,
             String symbolId,
             Function<String, Symbol> symbolsById
     ) {
@@ -248,7 +259,7 @@ public final class ImpactAnalysisService {
 
     private static EnumSet<ImpactLimitation> baselineLimitations(
             CodeKnowledgeSnapshot snapshot,
-            SymbolEdgeIndex edges
+            IncomingRelationships edges
     ) {
         EnumSet<ImpactLimitation> limitations = EnumSet.of(
                 ImpactLimitation.DYNAMIC_DISPATCH_NOT_PROVEN,
