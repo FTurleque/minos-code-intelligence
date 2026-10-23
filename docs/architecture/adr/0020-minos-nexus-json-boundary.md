@@ -65,4 +65,4 @@ Voir [`../../project/history/milestones/m13/DECISION_M13.md`](../../project/hist
 
 ## Mise en œuvre — baseline Java 25
 
-La baseline de MINOS est **Java 25 LTS** ([ADR 0059](0059-migrer-le-socle-vers-java-25-lts.md)) ; les mentions de Java 24 ci-dessus décrivent le contexte de la décision. La décision est inchangée : les deux moteurs restent séparés par un contrat JSON local versionné, sans couplage Maven.
+La baseline de MINOS est **Java 25 LTS** ([ADR 0059](archive/0059-migrer-le-socle-vers-java-25-lts.md)) ; les mentions de Java 24 ci-dessus décrivent le contexte de la décision. La décision est inchangée : les deux moteurs restent séparés par un contrat JSON local versionné, sans couplage Maven.

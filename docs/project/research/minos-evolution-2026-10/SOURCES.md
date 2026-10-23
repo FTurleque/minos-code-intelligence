@@ -18,7 +18,7 @@ develop contient des changements de septembre/octobre absents de main. Les concl
 | Source | Observation utilisée |
 |---|---|
 | [docs/architecture/adr/0042-racine-de-composition.md](https://github.com/FTurleque/minos-code-intelligence/blob/c9a339088f81b6b31c65c7ad12bc718be2a98a7b/docs/adr/0042-racine-de-composition.md) | Composition minos-bootstrap, frontières et ports |
-| [docs/architecture/adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md](https://github.com/FTurleque/minos-code-intelligence/blob/c9a339088f81b6b31c65c7ad12bc718be2a98a7b/docs/adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) | Évolution mémoire conditionnée aux mesures ; ne pas imposer V4/mmap |
+| [docs/architecture/adr/archive/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md](https://github.com/FTurleque/minos-code-intelligence/blob/c9a339088f81b6b31c65c7ad12bc718be2a98a7b/docs/adr/archive/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) | Évolution mémoire conditionnée aux mesures ; ne pas imposer V4/mmap |
 | [docs/architecture/adr/0027-intellij-external-client-and-versioned-cli-protocol.md](https://github.com/FTurleque/minos-code-intelligence/blob/c9a339088f81b6b31c65c7ad12bc718be2a98a7b/docs/adr/0027-intellij-external-client-and-versioned-cli-protocol.md) | Plugin externe et protocole versionné |
 | [docs/architecture/adr/README.md](https://github.com/FTurleque/minos-code-intelligence/blob/c9a339088f81b6b31c65c7ad12bc718be2a98a7b/docs/adr/README.md) | Numérotation et statuts |
 | [docs/project/audits/S23-SUIVI.md](https://github.com/FTurleque/minos-code-intelligence/blob/c9a339088f81b6b31c65c7ad12bc718be2a98a7b/docs/audit/S23-SUIVI.md) | État des lots récents, qualification offline restante, blocage Windows Java |

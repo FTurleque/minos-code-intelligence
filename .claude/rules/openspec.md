@@ -9,7 +9,7 @@ paths:
 
 ## Rédiger un changement
 - **proposal.md** : Why, What Changes, Capabilities (nouvelles / modifiées, avec la raison si nouvelle), **Hors périmètre** (toujours), Impact (modules du reactor, surfaces publiques CLI/API/MCP/IntelliJ/NEXUS, ADR créé ou amendé, gates à rejouer, plateformes).
-- **design.md** : « État vérifié au HEAD » avec `fichier:ligne` relus, **écarts avec l'action proposée par l'audit** ; direction des dépendances (ADR 0022) ; chaque capacité qualifiée (qualifiée / partielle / non supportée) ; Windows **et** Linux ; décisions en attente du propriétaire, avec une recommandation.
+- **design.md** : « État vérifié au HEAD » avec `fichier:ligne` relus, **écarts avec l'action proposée par l'audit** ; direction des dépendances (ADR 0068) ; chaque capacité qualifiée (qualifiée / partielle / non supportée) ; Windows **et** Linux ; décisions en attente du propriétaire, avec une recommandation.
 - **specs** : `## ADDED/MODIFIED Requirements`, chaque exigence **≤ 500 caractères** (limite de `validate --strict`) avec au moins un `#### Scenario:` GIVEN/WHEN/THEN **vérifiable par une commande locale**, y compris le cas de refus fail-closed.
 - **tasks.md** : par section, d'abord le rouge, puis la correction, puis la preuve ; tests dans la même tâche que le code ; chaque tâche porte l'identifiant du constat (`AUD-…`) et nomme les `check-*.py` et scopes JaCoCo à rejouer ; tâches manuelles marquées **(manuelle)** ; section finale « Clôture » (mise à jour du suivi, `openspec validate --all --strict`, liste des `docs/` à mettre à jour avant archivage).
 

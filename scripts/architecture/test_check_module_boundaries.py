@@ -1119,7 +1119,7 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
 
 
 class PackageRootRuleTest(RatchetTreeTestCase):
-    """A14 — a module creates no new package root (AUD-ARC-12, ADR 0044)."""
+    """A14 — a module creates no new package root (AUD-ARC-12, ADR 0068)."""
 
     MODULES = ("minos-engine", "minos-cli")
     LISTED = {"minos-engine": frozenset({"io"}), "minos-cli": frozenset({"cli"})}

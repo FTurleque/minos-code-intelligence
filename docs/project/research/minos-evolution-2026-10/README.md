@@ -9,7 +9,7 @@ Commanditaire : Fabrice Turleque. Audience : propriétaire, développeurs et Cla
 - [Protocole d'évaluation et critères de passage](EVALUATION.md)
 - [Guide de reprise par Claude](CLAUDE-HANDOFF.md)
 - [Sources, révisions et observations](SOURCES.md)
-- ADR proposés [0048](../../../architecture/adr/0048-evaluation-comparative-reproductible.md) à [0054](../../../architecture/adr/0054-bridge-intellij-symbolique-optionnel.md)
+- ADR proposés [0048](../../../architecture/adr/archive/0048-evaluation-comparative-reproductible.md) à [0054](../../../architecture/adr/archive/0054-bridge-intellij-symbolique-optionnel.md)
 
 Cette étude complète la roadmap produit et les audits existants ; elle ne clôt aucun constat de l'audit de septembre. L'accord sur la direction ne constitue ni une preuve de performance ni une acceptation automatique de chaque option. Les ADR restent Proposed jusqu'à leur décision documentée.
 

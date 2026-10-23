@@ -214,12 +214,12 @@ def check_tests() -> None:
 def check_documents() -> None:
     """The roadmap, the ADR and the user and developer guides state the same facts."""
     execution = read("docs/project/roadmap/M25_EXECUTION.md")
-    adr = read("docs/architecture/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md")
+    adr = read("docs/architecture/adr/archive/0033-immutable-remote-revisions-and-verified-worker-artifacts.md")
     user = read("docs/user/remote-indexing.md")
     developer = read("docs/developer/remote-distributed-indexing.md")
     for relative, document in (
         ("docs/project/roadmap/M25_EXECUTION.md", execution),
-        ("docs/architecture/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", adr),
+        ("docs/architecture/adr/archive/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", adr),
         ("docs/user/remote-indexing.md", user),
         ("docs/developer/remote-distributed-indexing.md", developer),
     ):
@@ -234,7 +234,7 @@ def check_documents() -> None:
                   "M25 FINAL REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS",
                   "M25 LINUX REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS",
                   "M21-S2 / GitHub Actions reste strictement en pause jusqu’en août 2026")
-    require_facts("docs/architecture/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", adr,
+    require_facts("docs/architecture/adr/archive/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", adr,
                   "Status: Accepted — final M25 dispositions recorded from exact-head Windows + Linux evidence.",
                   "PROCESS_EPHEMERAL_WORKSPACE", "ScipSymbolSnapshotImporter",
                   "QUALIFIED_WITH_CONSTRAINTS", "BLOCKED/NOT_RUN")

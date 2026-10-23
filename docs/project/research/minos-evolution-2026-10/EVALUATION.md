@@ -1,7 +1,7 @@
 # Protocole d'évaluation proposé
 
 Statut : **à implémenter et exécuter**. Aucun résultat comparatif n'a été produit pour cette étude.
-Liens : [étude](README.md), [roadmap](ROADMAP.md), [ADR-0048](../../../architecture/adr/0048-evaluation-comparative-reproductible.md).
+Liens : [étude](README.md), [roadmap](ROADMAP.md), [ADR-0048](../../../architecture/adr/archive/0048-evaluation-comparative-reproductible.md).
 
 ## 1. Questions et périmètres comparables
 

@@ -2,7 +2,7 @@
 """Enforce MINOS source ownership, Maven dependency directions, and generated architecture facts.
 
 The governed module list is checked against the root reactor (A7), and every Java package belongs to
-exactly one module (A3 / ADR 0044). Architecture debt is held by ratchets (A8, A10 to A15); the generated
+exactly one module (A3 / ADR 0068). Architecture debt is held by ratchets (A8, A10 to A15); the generated
 dependency document also shows the execution edges created by META-INF/services files.
 Self-test: scripts/architecture/test_check_module_boundaries.py.
 """
@@ -85,7 +85,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     }),
 }
 
-# A3 / ADR 0044 — one package, one module. A Java package belongs to exactly one module: no package is
+# A3 / ADR 0068 — one package, one module. A Java package belongs to exactly one module: no package is
 # declared by the production sources of two modules, and no test is declared in a package whose production
 # sources live in another module. Either would let package-private visibility cross a jar boundary. No split
 # is tolerated (see check_package_ownership).
@@ -577,7 +577,7 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, frozenset[str]] = {
     }),
 }
 
-# A12 / AUD-ARC-05, ADR 0022 — classes of the inner layers that launch a process (module/name.Type).
+# A12 / AUD-ARC-05, ADR 0068 — classes of the inner layers that launch a process (module/name.Type).
 PROCESS_LAUNCHER_MODULES = ("minos-domain", ENGINE_MODULE, APPLICATION_MODULE)
 PROCESS_LAUNCHERS = frozenset({
     # Windows ACL primitive (icacls.exe); its extraction to a platform port is designed with AUD-SEC-06.
@@ -585,7 +585,7 @@ PROCESS_LAUNCHERS = frozenset({
 })
 PROCESS_LAUNCH = re.compile(r"\bProcessBuilder\b|\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\b")
 
-# A13 / AUD-ARC-08, ADR 0055 — the types of one adapter another adapter names, per (naming, named) couple.
+# A13 / AUD-ARC-08, ADR 0068 — the types of one adapter another adapter names, per (naming, named) couple.
 ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], frozenset[str]] = {
     ("minos-provider-scip", "minos-runtime-local"): frozenset({
         "runtime.local.StrongProcessOwnershipIndexerExecutor",
@@ -609,10 +609,10 @@ ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], frozenset[str]] = {
     }),
 }
 
-# A14 / AUD-ARC-12, ADR 0044 — the package roots (first segment under the groupId) each module owns. A new package
-# goes under one of its module's roots; a new root is a decision, written here by a visible edit (ADR 0062). A root may
+# A14 / AUD-ARC-12, ADR 0068 — the package roots (first segment under the groupId) each module owns. A new package
+# goes under one of its module's roots; a new root is a decision, written here by a visible edit (ADR 0068). A root may
 # be owned by several modules (runtime, storage, program, integration): A3 keeps each package in one module, and
-# ADR 0044 gives the adapters a module namespace below such a root (com.minos.runtime.local, com.minos.storage.local).
+# ADR 0068 gives the adapters a module namespace below such a root (com.minos.runtime.local, com.minos.storage.local).
 PACKAGE_ROOTS_BY_MODULE: dict[str, frozenset[str]] = {
     "minos-domain": frozenset({"domain", "program", "semantic"}),
     "minos-engine": frozenset({
@@ -732,7 +732,7 @@ def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
     problems += [f"PROCESS_LAUNCHERS entry {entry} launches no process any more; remove it (the ratchet only shrinks)"
                  for entry in sorted(listed - set(found))]
     if problems:
-        fail("A12 process launch outside minos-runtime-local (ADR 0022: the process runtime belongs to the local "
+        fail("A12 process launch outside minos-runtime-local (ADR 0068: the process runtime belongs to the local "
              "runtime adapter; inject a port it provides): " + "; ".join(problems))
     return len(listed)
 
@@ -751,7 +751,7 @@ def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | Non
                                                  root, naming, named, listed.get((naming, named), frozenset()),
                                                  group, qualified_name)
     if problems:
-        fail("A13 adapter -> adapter ratchet (ADR 0055: adapters meet through engine ports; a new coupling is "
+        fail("A13 adapter -> adapter ratchet (ADR 0068: adapters meet through engine ports; a new coupling is "
              "added to ADAPTER_TYPES_NAMED_BY_ADAPTER in a reviewed change): " + "; ".join(problems))
     return sum(len(types) for types in listed.values())
 
@@ -779,7 +779,7 @@ def check_package_roots(root: Path = ROOT, group_id: str | None = None,
         problems += [f"{module}: root {group}.{segment} holds no production source any more; remove it (the ratchet "
                      "only shrinks)" for segment in sorted(allowed - set(roots))]
     if problems:
-        fail("A14 package roots (ADR 0044: no rename of existing packages, no new root without a decision): "
+        fail("A14 package roots (ADR 0068: no rename of existing packages, no new root without a decision): "
              + "; ".join(problems))
     return sum(len(roots) for roots in listed.values())
 
@@ -852,7 +852,7 @@ UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
     "minos-api/com.minos.api.LocalSemanticCodeIntelligenceApi":
         "public Java API entry point (docs/user/java-api.md): its callers are outside the reactor",
     "minos-application/com.minos.application.StorageBackends":
-        "public storage facade kept by ADR 0042 and ADR 0044 (signature unchanged for external callers)",
+        "public storage facade kept by ADR 0042 and ADR 0068 (signature unchanged for external callers)",
     "minos-application/com.minos.program.analysis.ProgramGraphEvaluator":
         "ground-truth evaluation tool of the program-graph tests of two modules and of "
         "check-java-ast-provider-consistency.py; a test-jar would cost more (retirer-les-services-sans-appelant, D1)",
@@ -1046,7 +1046,7 @@ def declared_package(source: Path) -> str:
 
 
 def check_package_ownership(root: Path = ROOT, modules: tuple[str, ...] = MODULES) -> int:
-    """A3 / ADR 0044 — one package, one module. Returns the number of production packages."""
+    """A3 / ADR 0068 — one package, one module. Returns the number of production packages."""
     owners: dict[str, set[str]] = {}
     for module in modules:
         source_root = root / module / "src" / "main" / "java"
@@ -1481,7 +1481,7 @@ def main() -> int:
         print(
             f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "
             f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042, "
-            f"packagePolicy=A3-ADR-0044, cyclePolicy=A8-ratchet, documentation=A9-arc42-05, "
+            f"packagePolicy=A3-ADR-0068, cyclePolicy=A8-ratchet, documentation=A9-arc42-05, "
             f"reactor=root-pom-modules)"
         )
         return 0

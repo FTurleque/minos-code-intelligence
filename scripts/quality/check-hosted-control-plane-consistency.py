@@ -172,7 +172,7 @@ def main() -> int:
 
         documents = {
             "docs/project/roadmap/M27_EXECUTION.md": read("docs/project/roadmap/M27_EXECUTION.md"),
-            "docs/architecture/adr/0035-opt-in-tenant-control-plane-with-external-keys.md": read("docs/architecture/adr/0035-opt-in-tenant-control-plane-with-external-keys.md"),
+            "docs/architecture/adr/archive/0035-opt-in-tenant-control-plane-with-external-keys.md": read("docs/architecture/adr/archive/0035-opt-in-tenant-control-plane-with-external-keys.md"),
             "docs/user/team-hosted-mode.md": read("docs/user/team-hosted-mode.md"),
             "docs/developer/team-hosted-mode.md": read("docs/developer/team-hosted-mode.md"),
         }
@@ -185,7 +185,7 @@ def main() -> int:
                 "M27-S9", "QUALIFIED_WITH_CONSTRAINTS", "strictement en pause jusqu’en août 2026")
         forbid("M27_EXECUTION.md", execution, "CANDIDATE_FOR_QUALIFICATION",
                "Qualified HEAD : PENDING", "Merge develop  : PENDING")
-        adr = documents["docs/architecture/adr/0035-opt-in-tenant-control-plane-with-external-keys.md"]
+        adr = documents["docs/architecture/adr/archive/0035-opt-in-tenant-control-plane-with-external-keys.md"]
         require_pattern("ADR-0035", adr,
                         r"(?im)^\s*-\s*Status:\s*\*\*Accepted(?:\s+—[^*]+)?\*\*\s*$",
                         "accepted ADR status, with optional final-evidence qualifier")

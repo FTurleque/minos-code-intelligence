@@ -13,7 +13,7 @@ Statut : **Accepted — implémenté par M15-S7/S8**
 
 Origine : M15-S7 / M15-S8
 
-Relations : complété par [ADR 0047](0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) (snapshot en mémoire et table de chaînes) et [ADR 0056](0056-ports-de-lecture-des-snapshots.md) (ports de lecture des snapshots).
+Relations : complété par [ADR 0047](archive/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) (snapshot en mémoire et table de chaînes) et [ADR 0056](0056-ports-de-lecture-des-snapshots.md) (ports de lecture des snapshots).
 
 ## Context
 

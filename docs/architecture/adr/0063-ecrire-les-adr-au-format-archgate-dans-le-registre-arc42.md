@@ -17,7 +17,7 @@ rules: false
 
 Le registre des décisions de MINOS est `docs/architecture/adr/`, à l'emplacement que prévoit arc42 (section 9, `docs/architecture/arc42/09-decisions.md`). Archgate exécute des règles TypeScript rattachées à des ADR. Il lit par défaut `.archgate/adrs/`, mais `.archgate/config.json` accepte `paths.adrs` (chemin relatif à la racine du dépôt). Il exige, en ligne 1 de chaque ADR, un en-tête YAML `id`, `title`, `domain`, `rules`, et ses résumés pour agents (`archgate review-context`) lisent les sections intitulées exactement « Decision » et « Do's and Don'ts ».
 
-Avant cette décision, Archgate ne voyait qu'un fichier pont (`.archgate/adrs/ARCH-044-…`) recopiant l'identité de l'ADR 0044, et les 62 ADR suivaient trois formats d'en-tête de statut différents.
+Avant cette décision, Archgate ne voyait qu'un fichier pont (`.archgate/adrs/ARCH-044-…`) recopiant l'identité d'un ADR, et les 62 ADR suivaient trois formats d'en-tête de statut différents.
 
 Options considérées :
 
@@ -69,11 +69,11 @@ Options considérées :
 ## Compliance and Enforcement
 
 - `archgate adr list` liste chaque ADR du registre avec son `id`, son `domain` et `rules` ; un ADR absent de la liste a un en-tête invalide.
-- `archgate check` exécute les règles compagnons (aujourd'hui `0044-un-package-un-module.rules.ts`, invariant A7) ; il n'est pas lancé par la CI, le gate Python l'est.
+- `archgate check` exécute les règles compagnons (aujourd'hui `0068-modules-dependances-et-propriete-des-packages.rules.ts`, invariant A7) ; il n'est pas lancé par la CI, le gate Python l'est.
 - Revue : un nouvel ADR part du gabarit, porte l'en-tête et les sections Archgate, et figure dans `README.md` et `docs/architecture/arc42/09-decisions.md`.
 
 ## References
 
-- [ADR 0044](0044-un-package-un-module.md) (règle A7 portée par Archgate), [ADR 0062](0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md).
+- [ADR 0068](0068-modules-dependances-et-propriete-des-packages.md) (règle A7 portée par Archgate).
 - Fiche d'usage : `docs/developer/archgate.md`.
 - Documentation Archgate : `reference/configuration` (`paths.adrs`), `reference/adr-schema`, `guides/writing-adrs`.

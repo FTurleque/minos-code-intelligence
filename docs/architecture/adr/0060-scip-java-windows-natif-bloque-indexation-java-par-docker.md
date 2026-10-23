@@ -62,5 +62,5 @@ Le principe *capability-honest* interdit de déclarer prêt un provider dont l'e
 ## References
 
 - Changement OpenSpec : `openspec/changes/rendre-l-echec-de-scip-java-sous-windows-actionnable/`.
-- Frontières de production : ADR [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) ; confinement des ressources des workers : ADR [0038](0038-aggregate-worker-resource-containment.md) ; outils livrés : ADR [0040](0040-distribution-auto-portante-indexeurs-embarques.md).
+- Frontières de production : ADR [0036](archive/0036-fail-closed-production-boundaries-and-measured-program-graph.md) ; confinement des ressources des workers : ADR [0038](archive/0038-aggregate-worker-resource-containment.md) ; outils livrés : ADR [0040](archive/0040-distribution-auto-portante-indexeurs-embarques.md).
 - Constat antérieur : [`S15-REGRESSION-RUNTIME-GRANT.md`](../../project/audits/archive/2026-09/S15-REGRESSION-RUNTIME-GRANT.md) (points 1 et 2).

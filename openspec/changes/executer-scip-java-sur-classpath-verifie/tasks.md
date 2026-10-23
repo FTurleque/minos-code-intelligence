@@ -12,6 +12,6 @@ Ordre : rouge, correction, preuve. Tout `-pl` s'accompagne de `-am`. Gates litt�
 
 ## 2. Clôture
 
-- [x] 2.1 `docs/architecture/adr/0040-distribution-auto-portante-indexeurs-embarques.md` (limite (1) levée), `docs/user/polyglot-providers.md`, `docs/project/governance/STATUS.md` ; rejouer `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check`.
+- [x] 2.1 `docs/architecture/adr/archive/0040-distribution-auto-portante-indexeurs-embarques.md` (limite (1) levée), `docs/user/polyglot-providers.md`, `docs/project/governance/STATUS.md` ; rejouer `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check`.
 - [x] 2.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-SEC-02 : résidu D2 traité, preuves).
 - [ ] 2.3 `openspec validate --all --strict` ; archiver après 1.4 et 1.5 ; docs à relire avant archivage : `docs/project/governance/STATUS.md`, `docs/user/polyglot-providers.md`, ADR 0040.

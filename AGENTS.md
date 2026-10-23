@@ -34,7 +34,7 @@ openspec validate --all --strict              # spécifications
 
 ## Architecture (ne pas contourner)
 
-- Reactor de 14 modules, direction `domain → engine → runtime/storage → adapters → application → surfaces` (ADR 0022). **Ne jamais créer un module pour reproduire un package** ; un package appartient à un seul module (ADR 0044).
+- Reactor de 14 modules, direction `domain → engine → runtime/storage → adapters → application → surfaces` (ADR 0068). **Ne jamais créer un module pour reproduire un package** ; un package appartient à un seul module (ADR 0068).
 - Racine de composition : `minos-bootstrap`, découverte par `ServiceLoader` (ADR 0042) ; `minos-app` est l'assemblage final distribué. `application ↛ adaptateurs`, `surfaces ↛ adaptateurs`.
 - Aucun cycle de packages (règle A8 de `check-module-boundaries.py`, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris).
 - MCP en STDIO **lecture seule** (ADR 0017) : stdout est réservé au protocole, les journaux vont sur stderr. Surfaces publiques (CLI, API Java, MCP) **versionnées et additives**.

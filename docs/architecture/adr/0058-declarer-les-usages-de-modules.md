@@ -9,7 +9,7 @@ rules: false
 
 Date : 2026-10-09. Statut : **Accepted**.
 
-Constat : MINOS-AUD-H08 (`docs/developer/quality/code-audit-constats.md`). Complète : [0022](0022-maven-reactor-and-module-boundaries.md), [0042](0042-racine-de-composition.md)
+Constat : MINOS-AUD-H08 (`docs/developer/quality/code-audit-constats.md`). Complète : [0022](archive/0022-maven-reactor-and-module-boundaries.md), [0042](0042-racine-de-composition.md)
 
 ## Context
 
@@ -56,4 +56,4 @@ Un usage transitif échappe aux deux contrôles de frontière : un module peut d
 
 ## Mise en œuvre
 
-**Point 3 gardé (2026-10-22, audit AUD-ARC-01, changement OpenSpec `figer-la-dette-de-frontieres-par-des-cliquets`)** : la règle A11 de `scripts/architecture/check-module-boundaries.py` tient, par surface, la liste fermée des types de `minos-engine` que ses sources de production nomment (import ou nom qualifié ; table `ENGINE_TYPES_NAMED_BY_SURFACE`). Un type hors liste, une entrée que la surface ne nomme plus ou qui ne désigne aucun type font échouer le garde : la « justification » d'un nouvel usage est une ligne ajoutée à la table et relue. Les usages entre adaptateurs sont tenus de la même façon (règle A13, [ADR 0062](0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md)).
+**Point 3 gardé (2026-10-22, audit AUD-ARC-01, changement OpenSpec `figer-la-dette-de-frontieres-par-des-cliquets`)** : la règle A11 de `scripts/architecture/check-module-boundaries.py` tient, par surface, la liste fermée des types de `minos-engine` que ses sources de production nomment (import ou nom qualifié ; table `ENGINE_TYPES_NAMED_BY_SURFACE`). Un type hors liste, une entrée que la surface ne nomme plus ou qui ne désigne aucun type font échouer le garde : la « justification » d'un nouvel usage est une ligne ajoutée à la table et relue. Les usages entre adaptateurs sont tenus de la même façon (règle A13, [ADR 0062](archive/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md)).
