@@ -129,7 +129,7 @@ SCOPES = {
             "com/minos/runtime/local/LocalIsolatedIndexWorker", "com/minos/runtime/local/sandbox/WorkerSandboxBackend",
             "com/minos/runtime/local/sandbox/WorkerSandboxQualification", "com/minos/cli/operations/LocalRemoteIndexOperations",
             # AUD-ARC-01: the remote indexing use case (lease, registration, pin, distribution, rollback).
-            "com/minos/application/remote/",
+            "com/minos/application/remote/", "com/minos/application/remote/RemoteIndexingUseCase",
             # A2 / ADR 0042: the concrete M25 wiring of the composition root.
             "com/minos/bootstrap/LocalRemoteIndexingRuntime",
             "com/minos/cli/command/RemoteIndexCommand",
