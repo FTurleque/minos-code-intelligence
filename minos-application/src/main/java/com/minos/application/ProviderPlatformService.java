@@ -69,6 +69,20 @@ public final class ProviderPlatformService {
         return view(provider, status);
     }
 
+    /**
+     * Every managed provider runtime, as listed by the runtime manager. Listing inspects each runtime (under
+     * Windows it writes a launcher script): the read-only MCP never calls it (ADR 0017), it uses
+     * {@link #listStaticProfiles}.
+     */
+    public List<ProviderRuntimeSummary> runtimes() {
+        return runtimes.list().stream().map(ProviderRuntimeSummary::of).toList();
+    }
+
+    /** Installs the runtime of {@code providerId} through the runtime manager; never called by the read-only MCP. */
+    public ProviderRuntimeSummary installRuntime(String providerId) throws Exception {
+        return ProviderRuntimeSummary.of(runtimes.install(providerId));
+    }
+
     private ProviderView view(IndexerProvider provider, ProviderRuntimeStatus status) {
         return view(provider,
                 status == null ? "UNMANAGED" : status.state().name(),

@@ -553,8 +553,6 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, frozenset[str]] = {
         "remote.RemoteRepositoryMaterializer",
         "remote.RemoteRepositoryRequest",
         "runtime.MinosVersion",
-        "runtime.ProviderRuntimeManager",
-        "runtime.ProviderRuntimeStatus",
         "runtime.WorkerSandboxProbe",
     }),
     "minos-mcp": frozenset({

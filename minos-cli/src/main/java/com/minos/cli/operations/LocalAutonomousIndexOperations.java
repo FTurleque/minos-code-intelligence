@@ -1,12 +1,12 @@
 package com.minos.cli.operations;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.ProviderPlatformService;
+import com.minos.application.ProviderRuntimeSummary;
 import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.orchestration.IndexingResumePolicy;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.runtime.ProviderRuntimeManager;
-import com.minos.runtime.ProviderRuntimeStatus;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -18,7 +18,7 @@ import java.util.function.UnaryOperator;
 public final class LocalAutonomousIndexOperations
         implements AutonomousIndexOperations, AutoCloseable {
     private final MinosApplication ownedApplication;
-    private final ProviderRuntimeManager runtimeManager;
+    private final MinosApplication application;
     private final ProjectIndexingUseCase indexing;
 
     public LocalAutonomousIndexOperations(Path minosHome) throws IOException {
@@ -43,7 +43,7 @@ public final class LocalAutonomousIndexOperations
     ) {
         Objects.requireNonNull(application, "application");
         this.ownedApplication = ownsApplication ? application : null;
-        this.runtimeManager = application.providerRuntimeManager();
+        this.application = application;
         // AUD-ARC-02: the orchestration lives in the application use case; this surface only projects its result.
         this.indexing = ProjectIndexingUseCase.of(application, executorDecorator);
     }
@@ -76,10 +76,13 @@ public final class LocalAutonomousIndexOperations
     }
 
     @Override public List<ProviderView> providers() {
-        return runtimeManager.list().stream().map(LocalAutonomousIndexOperations::view).toList();
+        return ProviderPlatformService.defaults(application).runtimes().stream()
+                .map(LocalAutonomousIndexOperations::view).toList();
     }
 
-    @Override public ProviderView installProvider(String providerId) throws Exception { return view(runtimeManager.install(providerId)); }
+    @Override public ProviderView installProvider(String providerId) throws Exception {
+        return view(ProviderPlatformService.defaults(application).installRuntime(providerId));
+    }
 
     private static IndexPlanView view(ProjectIndexingUseCase.Preparation prepared) {
         var project = prepared.project();
@@ -88,13 +91,14 @@ public final class LocalAutonomousIndexOperations
                 prepared.discovery().languages().stream().map(Enum::name).sorted().toList(),
                 prepared.discovery().buildSystems().stream().map(Enum::name).sorted().toList(),
                 prepared.providerIds(),
-                prepared.providerRuntimes().stream().map(LocalAutonomousIndexOperations::view).toList(),
+                prepared.providerRuntimes().stream().map(ProviderRuntimeSummary::of)
+                        .map(LocalAutonomousIndexOperations::view).toList(),
                 prepared.effectiveMode(), prepared.reasons(), prepared.changedFiles(), prepared.forcedFull());
     }
 
-    private static ProviderView view(ProviderRuntimeStatus status) {
-        return new ProviderView(status.providerId(), status.version(), status.state().name(),
-                status.executable().map(Path::toString).orElse(null), status.diagnostics(), status.requiredByDefault());
+    private static ProviderView view(ProviderRuntimeSummary runtime) {
+        return new ProviderView(runtime.providerId(), runtime.version(), runtime.state(),
+                runtime.executable().orElse(null), runtime.diagnostics(), runtime.requiredByDefault());
     }
 
     @Override
