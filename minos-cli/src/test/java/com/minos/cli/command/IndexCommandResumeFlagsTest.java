@@ -2,8 +2,7 @@ package com.minos.cli.command;
 
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.application.ProjectOperations;
-import com.minos.orchestration.IndexingMode;
-import com.minos.orchestration.IndexingResumePolicy;
+import com.minos.application.indexing.IndexingResumeChoice;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -24,7 +23,7 @@ class IndexCommandResumeFlagsTest {
         assertEquals(0, command.run(new String[]{"demo"}, new StringBuilder(), new StringBuilder()));
         assertEquals(0, command.run(new String[]{"demo", "--no-resume"}, new StringBuilder(), new StringBuilder()));
         assertEquals(0, command.run(new String[]{"demo", "--resume-only"}, new StringBuilder(), new StringBuilder()));
-        assertEquals(List.of(IndexingResumePolicy.RESUME, IndexingResumePolicy.NO_RESUME, IndexingResumePolicy.RESUME_ONLY),
+        assertEquals(List.of(IndexingResumeChoice.RESUME, IndexingResumeChoice.NO_RESUME, IndexingResumeChoice.RESUME_ONLY),
                 autonomous.policies);
 
         StringBuilder error = new StringBuilder();
@@ -105,7 +104,7 @@ class IndexCommandResumeFlagsTest {
     }
 
     private static final class StubAutonomous implements AutonomousIndexOperations {
-        final List<IndexingResumePolicy> policies = new ArrayList<>();
+        final List<IndexingResumeChoice> policies = new ArrayList<>();
         String refusal;
         boolean noTrace;
         boolean failResumeOnly;
@@ -117,13 +116,13 @@ class IndexCommandResumeFlagsTest {
         }
 
         @Override public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) {
-            return execute(projectIdentifier, providerOverride, forceFull, IndexingResumePolicy.RESUME);
+            return execute(projectIdentifier, providerOverride, forceFull, IndexingResumeChoice.RESUME);
         }
 
         @Override public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull,
-                                                    IndexingResumePolicy policy) {
+                                                    IndexingResumeChoice policy) {
             policies.add(policy);
-            if (failResumeOnly && policy == IndexingResumePolicy.RESUME_ONLY) {
+            if (failResumeOnly && policy == IndexingResumeChoice.RESUME_ONLY) {
                 throw new IllegalStateException("resume-only indexing refused: no interrupted run to resume");
             }
             ResumeView resumed = noTrace ? null
@@ -140,7 +139,7 @@ class IndexCommandResumeFlagsTest {
         private static IndexPlanView plan() {
             return new IndexPlanView("project-id", "demo", "C:/demo", List.of("JAVA"), List.of("MAVEN"),
                     List.of("scip-java"), List.of(new ProviderView("scip-java", "1", "READY", "cs", List.of())),
-                    IndexingMode.FULL, List.of("NO_ACTIVE_INDEX"), List.of(), false);
+                    "FULL", List.of("NO_ACTIVE_INDEX"), List.of(), false);
         }
     }
 

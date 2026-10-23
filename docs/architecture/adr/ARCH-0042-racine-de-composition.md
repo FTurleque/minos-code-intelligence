@@ -334,8 +334,9 @@ trois classes concernées sont donc passées par la composition avant l'engageme
 - `DoctorCommand` (L2) sonde l'hôte par deux ports de `minos-engine`, `WorkerSandboxProbe` et
   `HostCommandLocator`, implémentés dans `minos-bootstrap` ; en production il sonde toujours l'hôte
   réel, seuls ses tests injectent un double (seam package-private), et un test prouve le câblage réel.
-- `LocalRemoteIndexOperations` (L3) reçoit le matérialiseur JGit et le port `RemoteIndexingRuntime`
-  (`LocalRemoteIndexingRuntime` dans `minos-bootstrap`) de la composition. Garde-fous A1 conservés :
+- `RemoteIndexingUseCase` (L3, `minos-application`, que `LocalRemoteIndexOperations` appelle) reçoit le
+  matérialiseur JGit et le port `RemoteIndexingRuntime` (`LocalRemoteIndexingRuntime` dans `minos-bootstrap`)
+  de la composition. Garde-fous A1 conservés :
   `remote index` refuse avant toute matérialisation, bail, enregistrement ou épinglage ; le constructeur
   de production n'a pas de sentinelle ; un test exerce le câblage de production réel ; aucun point
   d'injection public (§ « Consequences »).

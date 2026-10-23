@@ -62,7 +62,7 @@ class ApplicationOwnershipGuardTest {
                         List.of("this(MinosApplication.open(home), true)", "ownedApplication.close()")));
         OWNERS.put("minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java",
                 new Owner(1, "constructeur (Path) : possède l'application, close() la ferme",
-                        List.of("this(MinosApplication.open(minosHome), UnaryOperator.identity(), true)",
+                        List.of("this(MinosApplication.open(minosHome), true)",
                                 "ownedApplication.close()")));
         OWNERS.put("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java",
                 new Owner(1, "constructeur (Path) : possède l'application, close() la ferme",

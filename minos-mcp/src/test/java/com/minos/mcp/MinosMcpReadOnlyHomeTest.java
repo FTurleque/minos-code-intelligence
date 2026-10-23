@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.bootstrap.ResumableRunFixtures;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
@@ -53,6 +55,32 @@ class MinosMcpReadOnlyHomeTest {
                 }
 
                 assertEquals(0, runtimes.calls.get(), "no runtime inspection, listing or installation");
+                assertEquals(before, protectedHome.state(), "MINOS_HOME must be identical before and after");
+            }
+        }
+    }
+
+    /**
+     * AUD-ARC-01 : la lecture de l'état de reprise passe par l'application ; une fois l'application ouverte sur un
+     * vrai MINOS_HOME (magasin de fichiers), elle ne crée, ne modifie ni ne verrouille aucun fichier.
+     */
+    @Test
+    void theResumableRunIsReadFromARealHomeWithoutAnyTrace() throws Exception {
+        Path home = temp.resolve("home");
+        try (MinosApplication application = MinosApplication.open(home)) {
+            UUID runId = ResumableRunFixtures.seedInterruptedResumableRun(application, temp);
+            MinosMcpTools tools = new MinosMcpTools(new MinosApplicationMcpBackend(application));
+            try (WriteProtectedTree protectedHome = WriteProtectedTree.protect(home)) {
+                Map<String, String> before = protectedHome.state();
+
+                var result = McpToolCalls.call(tools, "minos_index_status",
+                        Map.of("project", ResumableRunFixtures.PROJECT_NAME));
+
+                String text = McpToolCalls.text(result);
+                assertFalse(McpToolCalls.isError(result), text);
+                assertTrue(text.contains("\"resumableRunId\":\"" + runId + "\""), text);
+                assertTrue(text.contains("\"resumableRunPhase\":\"PROVIDER_EXECUTION\""), text);
+                assertTrue(text.contains("\"resumableTargets\":1"), text);
                 assertEquals(before, protectedHome.state(), "MINOS_HOME must be identical before and after");
             }
         }

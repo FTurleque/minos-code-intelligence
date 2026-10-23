@@ -1,8 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.application.ProjectOperations;
-import com.minos.orchestration.IndexingRun;
-import com.minos.orchestration.ResumableRunSummary;
+import com.minos.application.ResumableRunStatus;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -22,7 +21,7 @@ class ProjectCommandResumeStatusTest {
 
     @Test
     void indexStatusRendersTheResumableRunInTextAndJson() throws Exception {
-        ResumableRunSummary summary = new ResumableRunSummary(RUN_ID, IndexingRun.Phase.PROVIDER_EXECUTION,
+        ResumableRunStatus summary = new ResumableRunStatus(RUN_ID, "PROVIDER_EXECUTION",
                 Instant.now().minusSeconds(90), 3, 4);
         ProjectCommand command = new ProjectCommand(new StubProjectOperations(), projectId -> Optional.of(summary));
 

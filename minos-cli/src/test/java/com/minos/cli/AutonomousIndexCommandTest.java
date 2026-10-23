@@ -3,7 +3,6 @@ package com.minos.cli;
 import com.minos.cli.command.IndexCommand;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.application.ProjectOperations;
-import com.minos.orchestration.IndexingMode;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -55,7 +54,7 @@ class AutonomousIndexCommandTest {
                     "project-id", "demo", "C:/demo",
                     List.of("JAVA"), List.of("MAVEN"), List.of("scip-java"),
                     List.of(new ProviderView("scip-java", "1", "READY", "cs", List.of())),
-                    IndexingMode.FULL, List.of("NO_ACTIVE_INDEX"), List.of(), false);
+                    "FULL", List.of("NO_ACTIVE_INDEX"), List.of(), false);
         }
     }
 

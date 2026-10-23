@@ -4,7 +4,6 @@ import com.minos.cli.operations.AutonomousIndexOperations;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.minos.application.ProjectOperations;
-import com.minos.orchestration.IndexingMode;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -98,7 +97,7 @@ class IndexCommandRefusalReasonTest {
 
         private static IndexPlanView plan() {
             return new IndexPlanView("project-id", "demo", "C:/demo", List.of("JAVA"), List.of("MAVEN"),
-                    List.of("scip-java"), List.of(), IndexingMode.FULL, List.of("NO_ACTIVE_INDEX"), List.of(), false);
+                    List.of("scip-java"), List.of(), "FULL", List.of("NO_ACTIVE_INDEX"), List.of(), false);
         }
     }
 

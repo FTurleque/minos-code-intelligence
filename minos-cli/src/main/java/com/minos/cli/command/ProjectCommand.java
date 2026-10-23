@@ -5,7 +5,7 @@ import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.application.ProjectOperations;
-import com.minos.orchestration.ResumableRunSummary;
+import com.minos.application.ResumableRunStatus;
 import com.minos.registry.UnreadableRegistryException;
 import com.minos.output.ProjectJson;
 import com.minos.output.SymbolOutputFormat;
@@ -206,7 +206,7 @@ public final class ProjectCommand {
     }
 
     private String renderIndexStatus(ProjectOperations.ProjectView project, SymbolOutputFormat format) {
-        Optional<ResumableRunSummary> resumable = resumeStatus.resumableRun(project.id());
+        Optional<ResumableRunStatus> resumable = resumeStatus.resumableRun(project.id());
         Instant now = Instant.now();
         Map<String, Object> status = ProjectJson.indexStatus(project, resumable, now);
         if (format == SymbolOutputFormat.JSON) {
@@ -221,7 +221,7 @@ public final class ProjectCommand {
                 "providerId: " + nullable(project.providerId()),
                 "providerVersion: " + nullable(project.providerVersion()),
                 "resumableRunId: " + resumable.map(summary -> summary.runId().toString()).orElse("none"),
-                "resumableRunPhase: " + resumable.map(summary -> summary.phase().name()).orElse("none"),
+                "resumableRunPhase: " + resumable.map(ResumableRunStatus::phase).orElse("none"),
                 "resumableCheckpointAgeSeconds: "
                         + resumable.map(summary -> Long.toString(summary.checkpointAgeSeconds(now))).orElse("none"),
                 "resumableTargets: " + resumable

@@ -128,7 +128,9 @@ SCOPES = {
             "com/minos/runtime/local/distributed/DistributedArtifactCachePolicy", "com/minos/runtime/local/distributed/DistributedIndexerExecutor",
             "com/minos/runtime/local/LocalIsolatedIndexWorker", "com/minos/runtime/local/sandbox/WorkerSandboxBackend",
             "com/minos/runtime/local/sandbox/WorkerSandboxQualification", "com/minos/cli/operations/LocalRemoteIndexOperations",
-            # A2 / ADR 0042: the M25 wiring LocalRemoteIndexOperations used to build moved here verbatim.
+            # AUD-ARC-01: the remote indexing use case (lease, registration, pin, distribution, rollback).
+            "com/minos/application/remote/", "com/minos/application/remote/RemoteIndexingUseCase",
+            # A2 / ADR 0042: the concrete M25 wiring of the composition root.
             "com/minos/bootstrap/LocalRemoteIndexingRuntime",
             "com/minos/cli/command/RemoteIndexCommand",
         ),
@@ -136,10 +138,10 @@ SCOPES = {
         "branch": 0.50,
         "prefixMinimums": {
             "com/minos/integration/git/JGitCloneDeadline": {"line": 0.48, "branch": 0.42},
-            # LocalRemoteIndexOperations owns the RemoteMaterialization release lifecycle (AUDIT-01):
+            # RemoteIndexingUseCase owns the RemoteMaterialization release lifecycle (AUDIT-01):
             # a per-class floor stops that specific coverage from being able to hide behind the
             # rest of this scope's well-covered siblings while quietly regressing itself.
-            "com/minos/cli/operations/LocalRemoteIndexOperations": {"line": 0.65, "branch": 0.35},
+            "com/minos/application/remote/RemoteIndexingUseCase": {"line": 0.65, "branch": 0.35},
         },
     },
     "provider-execution-trust-boundary": {

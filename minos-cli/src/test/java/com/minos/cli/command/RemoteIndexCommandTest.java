@@ -1,10 +1,9 @@
 package com.minos.cli.command;
 
+import com.minos.application.remote.RemoteSourceRequest;
+import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.operations.RemoteIndexOperations;
-import com.minos.orchestration.IndexingMode;
-import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
-import com.minos.remote.RemoteRepositoryRequest;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -20,10 +19,10 @@ class RemoteIndexCommandTest {
 
     @Test
     void materializeRendersCanonicalSecretFreeJsonAndPreservesCredentialReferenceOnly() throws Exception {
-        AtomicReference<RemoteRepositoryRequest> captured = new AtomicReference<>();
+        AtomicReference<RemoteSourceRequest> captured = new AtomicReference<>();
         RemoteIndexOperations operations = new StubOperations() {
             @Override
-            public RemoteMaterializationView materialize(RemoteRepositoryRequest request) {
+            public RemoteMaterializationView materialize(RemoteSourceRequest request) {
                 captured.set(request);
                 return materialization(false);
             }
@@ -60,15 +59,15 @@ class RemoteIndexCommandTest {
         assertEquals(2, usageExit);
         assertTrue(usageError.toString().contains("--worker-network is required"));
 
-        AtomicReference<WorkerNetworkPolicy> network = new AtomicReference<>();
+        AtomicReference<WorkerNetworkChoice> network = new AtomicReference<>();
         RemoteIndexOperations operations = new StubOperations() {
             @Override
             public RemoteIndexView index(
-                    RemoteRepositoryRequest request,
+                    RemoteSourceRequest request,
                     String displayName,
                     String providerOverride,
                     String workerId,
-                    WorkerNetworkPolicy policy
+                    WorkerNetworkChoice policy
             ) {
                 network.set(policy);
                 return indexView();
@@ -84,7 +83,7 @@ class RemoteIndexCommandTest {
         }, output, new StringBuilder());
 
         assertEquals(0, exit);
-        assertEquals(WorkerNetworkPolicy.ALLOW, network.get());
+        assertEquals(WorkerNetworkChoice.ALLOW, network.get());
         assertTrue(output.toString().contains("\"status\":\"SUCCEEDED\""));
         assertTrue(output.toString().contains("\"artifactSha256\":\"" + "a".repeat(64) + "\""));
         assertTrue(output.toString().contains("\"networkDenyEnforced\":false"));
@@ -97,11 +96,11 @@ class RemoteIndexCommandTest {
         RemoteIndexOperations operations = new StubOperations() {
             @Override
             public RemoteIndexView index(
-                    RemoteRepositoryRequest request,
+                    RemoteSourceRequest request,
                     String displayName,
                     String providerOverride,
                     String workerId,
-                    WorkerNetworkPolicy policy
+                    WorkerNetworkChoice policy
             ) {
                 throw new IllegalStateException(
                         "remote index is refused before any materialization: sandbox backend "
@@ -142,6 +141,24 @@ class RemoteIndexCommandTest {
         assertFalse(error.toString().contains("token@"));
     }
 
+    /** D9: {@code remote index} refuses a URL carrying a secret before the operations open the application. */
+    @Test
+    void rejectsUnsafeUrlBeforeCallingOperationsForRemoteIndex() throws Exception {
+        StringBuilder output = new StringBuilder();
+        StringBuilder error = new StringBuilder();
+        int exit = new RemoteIndexCommand(new StubOperations()).run(new String[]{
+                "index", "https://token@github.com/acme/demo",
+                "--ref", "main", "--commit", COMMIT,
+                "--name", "demo", "--worker-network", "deny"
+        }, output, error);
+
+        assertEquals(1, exit);
+        assertEquals("", output.toString());
+        assertTrue(error.toString().startsWith("error: remote index failed: "), error.toString());
+        assertTrue(error.toString().contains("must not contain credentials"), error.toString());
+        assertFalse(error.toString().contains("token@"));
+    }
+
     private static RemoteIndexOperations.RemoteMaterializationView materialization(boolean hit) {
         return new RemoteIndexOperations.RemoteMaterializationView(
                 "GITHUB",
@@ -169,7 +186,7 @@ class RemoteIndexCommandTest {
                 List.of("MAVEN"),
                 List.of("scip-java"),
                 List.of(),
-                IndexingMode.FULL,
+                "FULL",
                 List.of("FORCED_FULL"),
                 List.of(),
                 true
@@ -202,11 +219,11 @@ class RemoteIndexCommandTest {
         RemoteIndexOperations operations = new StubOperations() {
             @Override
             public RemoteIndexView index(
-                    RemoteRepositoryRequest request,
+                    RemoteSourceRequest request,
                     String displayName,
                     String providerOverride,
                     String workerId,
-                    WorkerNetworkPolicy policy
+                    WorkerNetworkChoice policy
             ) {
                 return indexViewWithScope("services/catalog");
             }
@@ -234,17 +251,17 @@ class RemoteIndexCommandTest {
 
     private static class StubOperations implements RemoteIndexOperations {
         @Override
-        public RemoteMaterializationView materialize(RemoteRepositoryRequest request) {
+        public RemoteMaterializationView materialize(RemoteSourceRequest request) {
             throw new AssertionError("unexpected materialize call");
         }
 
         @Override
         public RemoteIndexView index(
-                RemoteRepositoryRequest request,
+                RemoteSourceRequest request,
                 String displayName,
                 String providerOverride,
                 String workerId,
-                WorkerNetworkPolicy workerNetworkPolicy
+                WorkerNetworkChoice workerNetwork
         ) {
             throw new AssertionError("unexpected index call");
         }

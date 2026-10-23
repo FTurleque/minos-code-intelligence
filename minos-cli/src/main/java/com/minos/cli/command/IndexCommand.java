@@ -5,7 +5,7 @@ import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.application.ProjectOperations;
-import com.minos.orchestration.IndexingResumePolicy;
+import com.minos.application.indexing.IndexingResumeChoice;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
@@ -86,7 +86,7 @@ public final class IndexCommand {
                         options.project(), options.providerId(), options.forceFull()), options.format())).append('\n');
             } else {
                 output.append(renderExecution(autonomousOperations.execute(
-                        options.project(), options.providerId(), options.forceFull(), options.resumePolicy()),
+                        options.project(), options.providerId(), options.forceFull(), options.resumeChoice()),
                         options.format())).append('\n');
             }
             return FindSymbolCommand.SUCCESS;
@@ -173,7 +173,7 @@ public final class IndexCommand {
         map.put("languages", plan.languages());
         map.put("buildSystems", plan.buildSystems());
         map.put("providers", plan.providerIds());
-        map.put("mode", plan.mode().name());
+        map.put("mode", plan.mode());
         map.put("reasons", plan.reasons());
         map.put("changedFiles", plan.changedFiles());
         map.put("forcedFull", plan.forcedFull());
@@ -230,7 +230,7 @@ public final class IndexCommand {
             String providerVersion,
             String moduleId,
             String snapshotId,
-            IndexingResumePolicy resumePolicy
+            IndexingResumeChoice resumeChoice
     ) {
         private static Options parse(String[] arguments) {
             if (arguments.length < 1) {
@@ -266,10 +266,10 @@ public final class IndexCommand {
             } else if (providerVersion != null || module != null || snapshot != null) {
                 throw new IllegalArgumentException("--provider-version/--module/--snapshot require --scip");
             }
-            IndexingResumePolicy resumePolicy = noResume ? IndexingResumePolicy.NO_RESUME
-                    : resumeOnly ? IndexingResumePolicy.RESUME_ONLY : IndexingResumePolicy.RESUME;
+            IndexingResumeChoice resumeChoice = noResume ? IndexingResumeChoice.NO_RESUME
+                    : resumeOnly ? IndexingResumeChoice.RESUME_ONLY : IndexingResumeChoice.RESUME;
             return new Options(project, provider, forceFull, dryRun, options.format(), scip, providerVersion, module,
-                    snapshot, resumePolicy);
+                    snapshot, resumeChoice);
         }
     }
 }

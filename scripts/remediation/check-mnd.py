@@ -36,8 +36,8 @@ def forbid(relative: str, text: str, *needles: str) -> None:
 
 def main() -> int:
     try:
-        remote = read("minos-cli/src/main/java/com/minos/cli/operations/LocalRemoteIndexOperations.java")
-        remote_lease = read("minos-cli/src/main/java/com/minos/cli/operations/RemoteIndexLease.java")
+        remote = read("minos-application/src/main/java/com/minos/application/remote/RemoteIndexingUseCase.java")
+        remote_lease = read("minos-application/src/main/java/com/minos/application/remote/RemoteIndexLease.java")
         bounded_file_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
         linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend.java")
         windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java")
@@ -61,8 +61,8 @@ def main() -> int:
         pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/PinnedArtifactSource.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
 
-        require("LocalRemoteIndexOperations.java", remote,
-                "RemoteIndexLease.acquire(application.home(), source.cacheKey())",
+        require("RemoteIndexingUseCase.java", remote,
+                "RemoteIndexLease.acquire(home, source.cacheKey())",
                 "indexUnderSourceLease")
         require("RemoteIndexLease.java", remote_lease,
                 "BoundedFileLease", "LOCK_STRIPES", "ACQUIRE_TIMEOUT", "BoundedFileLease.acquire")

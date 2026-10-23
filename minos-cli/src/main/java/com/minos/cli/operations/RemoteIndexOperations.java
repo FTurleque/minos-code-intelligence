@@ -1,7 +1,7 @@
 package com.minos.cli.operations;
 
-import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
-import com.minos.remote.RemoteRepositoryRequest;
+import com.minos.application.remote.RemoteSourceRequest;
+import com.minos.application.remote.WorkerNetworkChoice;
 
 import java.util.List;
 import java.util.Objects;
@@ -11,14 +11,14 @@ import static com.minos.domain.Preconditions.requireText;
 /** CLI port for opt-in immutable remote materialization and worker-backed indexing. */
 public interface RemoteIndexOperations {
 
-    RemoteMaterializationView materialize(RemoteRepositoryRequest request) throws Exception;
+    RemoteMaterializationView materialize(RemoteSourceRequest request) throws Exception;
 
     RemoteIndexView index(
-            RemoteRepositoryRequest request,
+            RemoteSourceRequest request,
             String displayName,
             String providerOverride,
             String workerId,
-            WorkerNetworkPolicy workerNetworkPolicy
+            WorkerNetworkChoice workerNetwork
     ) throws Exception;
 
     record RemoteMaterializationView(

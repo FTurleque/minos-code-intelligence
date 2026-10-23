@@ -2,6 +2,9 @@ package com.minos.cli.operations;
 
 import com.minos.cli.QualifiedSandboxForTests;
 import com.minos.application.MinosApplication;
+import com.minos.application.remote.RemoteIndexingUseCase;
+import com.minos.application.remote.RemoteSourceRequest;
+import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.bootstrap.LocalRemoteIndexingRuntimeFixtures;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.Language;
@@ -71,16 +74,16 @@ class LocalRemoteIndexOperationsIntegrationTest {
                 request, repository, project, "b".repeat(64), false,
                 Instant.parse("2026-07-29T00:00:00Z"));
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
-        LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
+        LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(RemoteIndexingUseCase.of(
                 application,
                 ignored -> materialization,
                 LocalRemoteIndexingRuntimeFixtures.withSelection(
                         store,
                         (workerId, delegate, artifactStore) -> trustedFixtureWorker(workerId, delegate, artifactStore, temp),
-                        QualifiedSandboxForTests.selection()));
+                        QualifiedSandboxForTests.selection())));
 
         RemoteIndexOperations.RemoteIndexView result = operations.index(
-                request, "remote-fixture", "fixture-provider", "worker-one", WorkerNetworkPolicy.ALLOW);
+                source(request), "remote-fixture", "fixture-provider", "worker-one", WorkerNetworkChoice.ALLOW);
 
         assertEquals("SUCCEEDED", result.execution().status());
         assertTrue(result.execution().fingerprintPromoted());
@@ -137,12 +140,12 @@ class LocalRemoteIndexOperationsIntegrationTest {
         };
 
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
-        LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
+        LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(RemoteIndexingUseCase.of(
                 application, materializer, LocalRemoteIndexingRuntimeFixtures.withSelection(store,
                         (workerId, delegate, artifactStore) -> {
                             throw new AssertionError("worker must never be created when the lease is never acquired");
                         },
-                        QualifiedSandboxForTests.selection()));
+                        QualifiedSandboxForTests.selection())));
 
         // Force RemoteIndexLease.acquire(...) to fail deterministically and without waiting on its
         // real timeout: its lock directory cannot be created because a regular file already occupies
@@ -150,13 +153,21 @@ class LocalRemoteIndexOperationsIntegrationTest {
         Files.writeString(home.resolve("remote-index-leases"), "not a directory");
 
         Exception failure = assertThrows(Exception.class, () -> operations.index(
-                request, "remote-fixture", "fixture-provider", "worker-one", WorkerNetworkPolicy.ALLOW));
+                source(request), "remote-fixture", "fixture-provider", "worker-one", WorkerNetworkChoice.ALLOW));
 
         assertTrue(failure instanceof FileAlreadyExistsException,
                 "expected the lease directory creation failure to propagate unwrapped: " + failure);
         assertEquals(1, releaseCount.get(),
                 "a successful materialize() must be released exactly once even when lease acquisition fails");
         assertEquals(0, pinCount.get(), "pin must never run before the remote index lease is held");
+    }
+
+    /** The source the command passes for the fixture request, validated as the command validates it (D9). */
+    private static RemoteSourceRequest source(RemoteRepositoryRequest request) {
+        RemoteSourceRequest source = RemoteSourceRequest.of(
+                "https://github.com/acme/remote-fixture", "main", "a".repeat(40), "fixture", null);
+        assertEquals(request.canonicalRepositoryUri(), source.repository());
+        return source;
     }
 
     /** Test-only worker: transport/staging is under test here; OS sandbox qualification is covered separately. */

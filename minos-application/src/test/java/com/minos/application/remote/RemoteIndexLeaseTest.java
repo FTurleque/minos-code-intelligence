@@ -1,4 +1,4 @@
-package com.minos.cli.operations;
+package com.minos.application.remote;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

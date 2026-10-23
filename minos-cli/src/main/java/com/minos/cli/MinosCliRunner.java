@@ -18,6 +18,7 @@ import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.application.MinosApplication;
 import com.minos.application.MinosHome;
+import com.minos.application.ProjectInspectionService;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.git.GitIntelligence;
@@ -125,7 +126,9 @@ public final class MinosCliRunner {
                 .runtimeIntelligenceServiceSupplier(application.deferred(MinosApplication::runtimeIntelligenceService))
                 .hostedControlPlaneServiceSupplier(application.deferred(opened -> opened.hostedControlPlaneService()
                         .orElseThrow(MinosCli.ServiceNotConfigured::new)));
-        return cli.resumeStatus(projectId -> autonomousIndex.get().resumableRun(projectId)).build();
+        LazyApplication.Deferred<ProjectInspectionService> inspection =
+                application.deferred(MinosApplication::projectInspectionService);
+        return cli.resumeStatus(projectId -> inspection.get().resumableRun(projectId)).build();
     }
 
     /**

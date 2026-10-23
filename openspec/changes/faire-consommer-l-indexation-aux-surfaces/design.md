@@ -109,7 +109,7 @@ Après le lot : CLI 15, API 14, MCP 4, NEXUS 6 (39 entrées). `WorkerSandboxProb
 
 ## Decisions
 
-Décisions du propriétaire du 2026-10-22 : D1 = A, D2, D3, D4 = a, D5, D6, et l'extension d'A11 aux accesseurs avec le lot 4. Ajoutées par la contre-vérification : D7 (en attente, recommandation A), D8 et D9 (techniques, sans arbitrage).
+Décisions du propriétaire du 2026-10-22 : D1 = A, D2, D3, D4 = a, D5, D6, et l'extension d'A11 aux accesseurs avec le lot 4. Ajoutées par la contre-vérification : D7 (= A, décision du propriétaire du 2026-10-23), D8 et D9 (techniques, sans arbitrage).
 
 ### D1 — La CLI garde ses ports et ses vues ; la logique qui nomme le moteur monte dans l'application
 
@@ -136,12 +136,12 @@ SonarCloud juge la couverture du nouveau code **module par module** : le code mo
 
 Le cliquet échoue sur une entrée devenue inutile : les 21 lignes disparaissent avec le dernier usage, jamais avant.
 
-### D7 — Installation de runtime sur un service que le MCP utilise (en attente du propriétaire)
+### D7 — Installation de runtime sur un service que le MCP utilise (A, décision du propriétaire du 2026-10-23)
 
 `ProviderPlatformService` est construit par le MCP (`MinosApplicationMcpBackend.java:84`), en lecture seule (ADR 0017). Y ajouter `installRuntime` met une méthode qui écrit à portée du MCP ; y ajouter `runtimes()` aussi, puisque l'inspection d'un runtime écrit un script sous Windows.
-- **A (recommandée)** : les deux méthodes sur `ProviderPlatformService` ; le MCP ne les appelle pas et `MinosMcpReadOnlyHomeTest` (compte des appels au gestionnaire de runtimes, `:55`) l'atteste déjà. Un seul service des providers, aucun type de plus.
-- **B** : un petit service applicatif distinct (`ProviderRuntimeService`) que seule la CLI construit. Séparation plus visible, une classe et un test de plus, et deux services sur le même gestionnaire.
-Recommandation : **A**, parce que la garde existe déjà et qu'elle est exécutée par le job `Verify` sur les deux systèmes.
+- **A (retenue)** : les deux méthodes sur `ProviderPlatformService` ; le MCP ne les appelle pas et `MinosMcpReadOnlyHomeTest` (compte des appels au gestionnaire de runtimes, `:55`) l'atteste déjà. Un seul service des providers, aucun type de plus.
+- **B (écartée)** : un petit service applicatif distinct (`ProviderRuntimeService`) que seule la CLI construit. Séparation plus visible, une classe et un test de plus, et deux services sur le même gestionnaire.
+Décision : **A**, parce que la garde existe déjà et qu'elle est exécutée par le job `Verify` sur les deux systèmes. `runtimes()` et `installRuntime(String)` vivent sur `ProviderPlatformService` ; le MCP n'appelle ni l'une ni l'autre, ce que `MinosMcpReadOnlyHomeTest` atteste.
 
 ### D8 — `ProjectJson.indexStatus` change de paramètre au lieu d'être surchargé
 
@@ -209,4 +209,4 @@ Une PR vers `develop`, branche `refactor/`. Sections dans l'ordre des tâches : 
 
 ## Open Questions
 
-D7 attend la décision du propriétaire (recommandation : A) ; les tâches 2.1 et 2.2 sont écrites pour A et changent de service si B est retenue. L'extension d'A11 aux accesseurs de `MinosApplication` appelés par les surfaces (usages sans nom) est retenue et se spécifie avec le lot 4, pour ne pas changer la règle pendant qu'on vide sa table.
+Aucune décision en attente pour ce lot (D7 = A). L'extension d'A11 aux accesseurs de `MinosApplication` appelés par les surfaces (usages sans nom) est retenue et se spécifie avec le lot 4, pour ne pas changer la règle pendant qu'on vide sa table.

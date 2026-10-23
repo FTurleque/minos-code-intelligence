@@ -8,6 +8,7 @@ import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
+import com.minos.orchestration.ResumableRunSummary;
 import com.minos.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
@@ -141,6 +142,23 @@ public final class ProjectInspectionService {
     public ProjectView statusView(RegisteredProject project) throws IOException {
         Objects.requireNonNull(project, "project");
         return withIndexState(project, Files.isDirectory(project.rootPath()), List.of(), List.of(), 0);
+    }
+
+    /**
+     * The run {@code projectId} offers for resume (ADR 0039 sec. 6), or empty. It reads the project state and the run
+     * it references, nothing else: no write, no lease, no repair, so it leaves {@code MINOS_HOME} untouched once the
+     * application is open. An identifier that is not a project UUID offers nothing.
+     */
+    public Optional<ResumableRunStatus> resumableRun(String projectId) {
+        UUID id;
+        try {
+            id = UUID.fromString(Objects.requireNonNull(projectId, "projectId"));
+        } catch (IllegalArgumentException notAProjectId) {
+            return Optional.empty();
+        }
+        return ResumableRunSummary.of(stateStore, id).map(summary -> new ResumableRunStatus(summary.runId(),
+                summary.phase().name(), summary.checkpointAt(), summary.resumableTargets(),
+                summary.completedExecutions()));
     }
 
     public record Inspection(ProjectView project, List<DegradedEntry> unreadable) {
