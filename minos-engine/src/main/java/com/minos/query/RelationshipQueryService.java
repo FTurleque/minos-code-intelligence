@@ -5,7 +5,7 @@ import com.minos.domain.CodeEntityType;
 import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipKind;
 import com.minos.domain.RelationshipSearchCriteria;
-import com.minos.store.CodeKnowledgeStore;
+import com.minos.store.CodeKnowledgeReader;
 
 import java.util.List;
 import java.util.Objects;
@@ -16,9 +16,9 @@ import java.util.Set;
  */
 public final class RelationshipQueryService {
 
-    private final CodeKnowledgeStore knowledgeStore;
+    private final CodeKnowledgeReader knowledgeStore;
 
-    public RelationshipQueryService(CodeKnowledgeStore knowledgeStore) {
+    public RelationshipQueryService(CodeKnowledgeReader knowledgeStore) {
         this.knowledgeStore = Objects.requireNonNull(knowledgeStore, "knowledgeStore");
     }
 

@@ -3,7 +3,7 @@ package com.minos.query;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolSearchCriteria;
-import com.minos.store.CodeKnowledgeStore;
+import com.minos.store.CodeKnowledgeReader;
 
 import java.util.List;
 import java.util.Objects;
@@ -13,9 +13,9 @@ import java.util.Objects;
  */
 public final class SymbolQueryService {
 
-    private final CodeKnowledgeStore knowledgeStore;
+    private final CodeKnowledgeReader knowledgeStore;
 
-    public SymbolQueryService(CodeKnowledgeStore knowledgeStore) {
+    public SymbolQueryService(CodeKnowledgeReader knowledgeStore) {
         this.knowledgeStore = Objects.requireNonNull(knowledgeStore, "knowledgeStore");
     }
 

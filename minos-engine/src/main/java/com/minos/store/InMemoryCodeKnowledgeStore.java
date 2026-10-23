@@ -499,7 +499,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
      * <p>A list holds every relationship whose target is a symbol, whatever its kind, status or source, ordered by
      * source identifier, kind, then relationship identifier: a reader that filters it keeps that order.</p>
      */
-    public static final class SymbolEdgeIndex {
+    public static final class SymbolEdgeIndex implements IncomingRelationships {
 
         private static final Comparator<Relationship> INCOMING_ORDER = Comparator
                 .comparing((Relationship relationship) -> relationship.source().id())
@@ -570,11 +570,13 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
         }
 
         /** Relationships whose target is this symbol, ordered by source identifier, kind, then identifier. */
+        @Override
         public List<Relationship> incoming(String symbolId) {
             return incomingBySymbolId.getOrDefault(symbolId, List.of());
         }
 
         /** Whether a relationship of one of these kinds has no resolved target. */
+        @Override
         public boolean hasUnresolved(Set<RelationshipKind> kinds) {
             return kinds.stream().anyMatch(unresolvedKinds::contains);
         }
@@ -583,11 +585,13 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
          * Whether a relationship of one of these kinds has a target but does not join two symbols of the project:
          * a file or module end, or a symbol the project does not hold.
          */
+        @Override
         public boolean leavesProjectSymbols(Set<RelationshipKind> kinds) {
             return kinds.stream().anyMatch(kindsLeavingProjectSymbols::contains);
         }
 
         /** Number of symbols entered by at least one relationship. */
+        @Override
         public int targetCount() {
             return incomingBySymbolId.size();
         }
