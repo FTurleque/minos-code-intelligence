@@ -80,22 +80,22 @@ Tests existants de codecs, allocation, snapshots autoritatifs, ré-import et com
 
 ## SH-04 — Introduire un port de lecture neutre pour SnapshotQueryView
 
-- État : À faire
+- État : Implémenté (2026-10-23, changement OpenSpec `exposer-un-port-de-lecture-de-snapshot`) — port `CodeKnowledgeReader`, vue `SnapshotReadView` mise en cache par les deux stores, ancien contrat déprécié et conservé, cliquet A18 de `check-module-boundaries.py`
 - Priorité : P1
 - Dépendances : SH-01
 - Point d'entrée : `minos-engine/src/main/java/com/minos/store/SnapshotQueryView.java`, `minos-engine/src/main/java/com/minos/store/CodeKnowledgeStore.java`, `minos-engine/src/main/java/com/minos/store/InMemoryCodeKnowledgeStore.java`
 
 ### Actions
 
-- [ ] Recenser les appels à queryStore(), indexMetrics(), les constructions de la vue et les consommateurs Java potentiels.
-- [ ] Définir CodeKnowledgeReader et des métriques neutres minimales ; séparer l'interface de construction/mutation de celle de lecture.
-- [ ] Consigner avant code le plan de compatibilité des records et signatures ; privilégier une transition additive, sans remplacement binaire silencieux.
-- [ ] Migrer les cas d'usage de lecture, garder le snapshot autoritatif et vérifier identité/immutabilité logique pendant une promotion concurrente.
+- [x] Recenser les appels à queryStore(), indexMetrics(), les constructions de la vue et les consommateurs Java potentiels.
+- [x] Définir CodeKnowledgeReader et des métriques neutres minimales ; séparer l'interface de construction/mutation de celle de lecture. (Aucune métrique neutre : aucun consommateur de production, décision D3.)
+- [x] Consigner avant code le plan de compatibilité des records et signatures ; privilégier une transition additive, sans remplacement binaire silencieux.
+- [x] Migrer les cas d'usage de lecture, garder le snapshot autoritatif et vérifier identité/immutabilité logique pendant une promotion concurrente.
 
 ### Critères d'acceptation
 
-- [ ] Un double non mémoire peut servir les requêtes ; les consommateurs de lecture n'ont pas besoin de la classe concrète ni de mutateurs.
-- [ ] Résultats et budgets inchangés ; compatibilité vérifiée ou rupture explicitement versionnée et approuvée avant retrait.
+- [x] Un double non mémoire peut servir les requêtes ; les consommateurs de lecture n'ont pas besoin de la classe concrète ni de mutateurs.
+- [x] Résultats et budgets inchangés ; compatibilité vérifiée ou rupture explicitement versionnée et approuvée avant retrait.
 
 ### Vérification
 
