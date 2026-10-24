@@ -163,6 +163,15 @@ Pour chaque cache : tests existants verts avant, migration, tests verts après, 
 
 `scripts/quality/check-bounded-helpers.py` (nouveau, `--self-test` sur arbres temporaires, racine paramétrable, câblé dans le job `invariants` de `pr-ci.yml`) refuse dans `minos-*/src/main/**` : une déclaration de méthode `safeAdd` ou `safeMultiply` (toute signature) ; une déclaration `checkedAdd` dont le corps ne contient pas `throw` (lot 1) ; une construction `new LinkedHashMap<…>(…, true)` (espaces et retours à la ligne admis) hors de la classe partagée et hors de la liste fermée (lot 2). Une entrée de liste qui ne correspond plus à rien fait échouer le gate. Le gate affiche le nombre de helpers contrôlés et la liste fermée.
 
+### Écarts constatés à la mise en œuvre (2026-10-24)
+
+- **Code extérieur sous le verrou du cache** (D4) : le prédicat de `removeIf`, ainsi que `equals` et `hashCode` des clés, s'exécutent sous le verrou privé du cache. Ce sont des comparaisons de records sans effet de bord ; la Javadoc de `WeightedLruCache` interdit qu'ils rappellent le cache. Le poids, lui, est toujours calculé avant l'appel.
+- **Borne haute du plafond** : les constructeurs de visibilité package de `ProgramGraphService`, `FileSemanticVectorStore` et `FileSymbolSnapshotStore` acceptaient un plafond jusqu'à `Long.MAX_VALUE` ; au-delà de `Long.MAX_VALUE / 2`, le cache partagé lève désormais `IllegalArgumentException`. Aucun appelant ni test ne passe une telle valeur.
+- **Poids négatif au point d'appel** (tâche 4.2) et **entrée trop lourde de `SemanticSearchService`** (tâche 4.3) : inatteignables par l'API (sommes saturantes de termes positifs ; dimensions ≤ 16 384 et requête ≤ 64 Kio, soit ≤ ~200 Kio pour un plafond de 8 Mio). Le comportement est prouvé par `WeightedLruCacheTest`, pas par un test de la classe propriétaire.
+- **`FileSymbolSnapshotStore`** : le remplacement d'une entrée de même clé retranche maintenant le poids de l'ancienne (dérive vers le haut corrigée) ; le record `WeightedReadView`, qui refusait un poids < 1, disparaît (le poids estimé vaut au moins 64 Kio).
+- **`FileSemanticVectorStore`** : `removeCached(…, eviction)` est conservé (l'appel `removeCached(snapshot.projectId(), false)` est exigé par `check-semantic-retrieval-consistency.py`) ; une invalidation marquée éviction resterait comptée par le store, en plus des évictions du cache.
+- **`SemanticSearchService`** : la première lecture du cache ne prend plus le moniteur du propriétaire (le cache sérialise lui-même) ; la séquence relecture puis insertion reste sous ce moniteur.
+
 ## Direction des dépendances
 
 `minos-engine` reçoit la classe ; `minos-application`, `minos-storage-local` et `minos-storage-postgresql` l'importent, dans le sens de l'ADR 0022. Aucun adaptateur n'importe un autre adaptateur (A13 inchangée) ; aucune surface ne nomme la classe (A11 inchangée). Le lot 1 n'ajoute aucune dépendance.
