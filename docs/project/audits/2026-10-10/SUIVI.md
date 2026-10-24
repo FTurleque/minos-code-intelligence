@@ -588,6 +588,8 @@ Le workflow `code-audit` en mode bloquant (`spotbugs_blocking=true`) échouait s
 | `ENV_USE_PROPERTY_INSTEAD_OF_ENV` ×4, `UL_UNRELEASED_LOCK`, `EI_EXPOSE_REP` et `EI_EXPOSE_REP2` | **Figées dans la base** : la correction suggérée serait fausse ou sans objet | raisons par alerte : `docs/developer/quality/code-audit.md`, « SpotBugs : alertes figées après le 9 octobre » |
 | `PrivateLocalStorage.currentOwner` (NP), `ManagedScipProviderRuntimeManager.inspectJavaInstalled` (ENV), `ProcessIndexerExecutor.executePrepared` (`REC_CATCH_EXCEPTION`) | **Retirées de la base** : le code qui les portait a changé | — |
 
+Preuve : `code-audit` bloquant sur la branche, run 40048471322 vert (`0 new finding(s), 0 baseline finding(s) gone`) ; tests de `minos-engine`, `minos-storage-local` et `minos-storage-postgresql` verts ; [PR #551](https://github.com/FTurleque/minos-code-intelligence/pull/551) vers `develop`.
+
 ## Sprint 11 — Hygiène de fond (spécifié le 2026-10-13)
 
 Six changements OpenSpec, même branche. Aucun build, test ni gate exécuté.
