@@ -57,7 +57,7 @@ def enum_values(source: str, enum_name: str) -> list[str]:
 def qualified_descriptor_methods(source: str) -> list[str]:
     """Derive the current provider order from the authoritative qualified catalog methods."""
     methods: list[str] = []
-    for catalog in ("qualifiedM17Providers", "qualifiedM24Providers"):
+    for catalog in ("regressionReplayProviders", "qualifiedProviders"):
         body = require(
             rf"public static List<IndexerProvider> {catalog}\(\) \{{(.*?)\n    \}}",
             source,
@@ -68,7 +68,7 @@ def qualified_descriptor_methods(source: str) -> list[str]:
             if method not in methods:
                 methods.append(method)
     if len(methods) != 7:
-        raise RuntimeError(f"qualified M24 catalog must expose 7 providers, derived={methods}")
+        raise RuntimeError(f"qualified provider catalog must expose 7 providers, derived={methods}")
     return methods
 
 

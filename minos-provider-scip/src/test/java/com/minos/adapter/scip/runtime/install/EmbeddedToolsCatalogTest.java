@@ -20,7 +20,7 @@ class EmbeddedToolsCatalogTest {
 
     @Test
     void everyProviderVersionOfTheToolsCatalogueIsTheOneOfTheProviderCatalogue() {
-        for (IndexerDescriptor descriptor : ScipIndexerCatalog.qualifiedM24Descriptors()) {
+        for (IndexerDescriptor descriptor : ScipIndexerCatalog.qualifiedDescriptors()) {
             assertEquals(descriptor.version(), catalog.provider(descriptor.id()).version(),
                     "version of " + descriptor.id() + " differs between the two descriptions");
         }
@@ -32,7 +32,7 @@ class EmbeddedToolsCatalogTest {
     @Test
     void theCatalogueCoversTheSevenQualifiedProvidersAndNothingElse() {
         Set<String> expected = new HashSet<>();
-        ScipIndexerCatalog.qualifiedM24Descriptors().forEach(descriptor -> expected.add(descriptor.id()));
+        ScipIndexerCatalog.qualifiedDescriptors().forEach(descriptor -> expected.add(descriptor.id()));
         Set<String> actual = new HashSet<>();
         catalog.providers().forEach(provider -> actual.add(provider.id()));
         assertEquals(expected, actual);
