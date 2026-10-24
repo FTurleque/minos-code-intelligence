@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _MODULE_PATH = Path(__file__).parent / "check-compose-limits.py"
 _SPEC = importlib.util.spec_from_file_location("check_compose_limits", _MODULE_PATH)
@@ -210,6 +214,25 @@ class CheckComposeLimitsTest(unittest.TestCase):
     def test_a_tree_without_compose_files_does_not_pass_silently(self):
         failures = self.run_gate({"README.md": "x\n"})
         self.assertTrue(any("would check nothing" in failure for failure in failures), failures)
+
+    def test_the_ci_wiring_check_is_the_one_of_gate_cli(self):
+        sys.path.insert(0, str(_MODULE_PATH.parent))
+        import gate_cli
+        self.assertFalse(hasattr(gate, "find_ci_wiring_violations"), "the gate must not carry its own copy")
+        self.assertIs(gate_cli, gate.gate_cli)
+        with mock.patch.object(gate_cli, "find_ci_wiring_violations", return_value=["WIRING SENTINEL"]) as shared:
+            failures = self.run_gate({"docker/compose-mcp.prod.yaml": GOOD})
+        self.assertEqual(["WIRING SENTINEL"], failures)
+        self.assertEqual(gate.CI_STEPS, shared.call_args.args[1])
+
+    def test_without_gate_cli_the_gate_fails_instead_of_falling_back(self):
+        with tempfile.TemporaryDirectory() as directory:
+            copy = Path(directory) / "check-compose-limits.py"
+            shutil.copyfile(_MODULE_PATH, copy)
+            result = subprocess.run([sys.executable, "-I", str(copy), "--root", str(gate.DEFAULT_ROOT)],
+                                    capture_output=True, text=True, encoding="utf-8")
+        self.assertNotEqual(0, result.returncode, result.stdout)
+        self.assertIn("gate_cli", result.stderr)
 
     def test_the_real_repository_is_bounded_and_wired(self):
         failures, inspected = gate.check(gate.DEFAULT_ROOT)
