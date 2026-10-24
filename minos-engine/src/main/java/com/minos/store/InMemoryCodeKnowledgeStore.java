@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import static com.minos.domain.Preconditions.requireText;
 
@@ -49,6 +50,19 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
      */
     private static final long SYMBOL_EDGE_INDEX_BYTES_PER_RELATIONSHIP = 96L;
     private static final long SYMBOL_EDGE_INDEX_FIXED_BYTES = 1_024L;
+    /** Rank of a symbol that does not match the query text. */
+    private static final int NO_MATCH = Integer.MAX_VALUE;
+    /** Order of symbols of equal rank; the identifier, unique in a project, makes it total. */
+    private static final Comparator<Symbol> SYMBOL_TIE_BREAK = Comparator
+            .comparing(Symbol::external)
+            .thenComparing(Symbol::generated)
+            .thenComparing(Symbol::qualifiedName, Comparator.nullsLast(String::compareTo))
+            .thenComparing(Symbol::name)
+            .thenComparing(Symbol::signature, Comparator.nullsLast(String::compareTo))
+            .thenComparing(Symbol::id);
+    private static final Comparator<RankedSymbol> RANKED_ORDER = Comparator
+            .comparingInt(RankedSymbol::rank)
+            .thenComparing(RankedSymbol::symbol, SYMBOL_TIE_BREAK);
 
     private final Map<String, Symbol> symbolsByScopedId = new ConcurrentHashMap<>();
     private final Map<String, SymbolOccurrence> occurrencesByScopedId = new ConcurrentHashMap<>();
@@ -61,13 +75,21 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
     private final AtomicReference<ConcurrentHashMap<String, SymbolEdgeIndex>> symbolEdgeIndexes =
             new AtomicReference<>(new ConcurrentHashMap<>());
     private final AtomicLong symbolEdgeIndexBuilds = new AtomicLong();
+    private final SymbolMatchRank symbolMatchRank;
 
     public InMemoryCodeKnowledgeStore() {
+        this.symbolMatchRank = InMemoryCodeKnowledgeStore::matchRank;
     }
 
     /** Builds one complete indexed view from an immutable persisted snapshot. */
     public InMemoryCodeKnowledgeStore(CodeKnowledgeSnapshot snapshot) {
+        this(snapshot, InMemoryCodeKnowledgeStore::matchRank);
+    }
+
+    /** Builds the indexed view of a snapshot whose text search ranks candidates with the given function. */
+    InMemoryCodeKnowledgeStore(CodeKnowledgeSnapshot snapshot, SymbolMatchRank symbolMatchRank) {
         Objects.requireNonNull(snapshot, "snapshot");
+        this.symbolMatchRank = Objects.requireNonNull(symbolMatchRank, "symbolMatchRank");
         snapshot.symbols().forEach(symbol ->
                 symbolsByScopedId.put(scopedKey(symbol.projectId(), symbol.id()), symbol));
         snapshot.occurrences().forEach(occurrence ->
@@ -176,22 +198,26 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
         String normalizedQuery = normalize(criteria.text());
         List<Symbol> candidates = symbolCandidates(projectId, criteria, normalizedQuery);
 
-        return candidates.stream()
+        Stream<Symbol> filtered = candidates.stream()
                 .filter(symbol -> projectId.equals(symbol.projectId()))
                 .filter(symbol -> criteria.kind() == null || criteria.kind() == symbol.kind())
                 .filter(symbol -> criteria.moduleId() == null || criteria.moduleId().equals(symbol.moduleId()))
                 .filter(symbol -> criteria.qualifiedName() == null
-                        || criteria.qualifiedName().equals(symbol.qualifiedName()))
-                .filter(symbol -> normalizedQuery == null || matchRank(symbol, normalizedQuery) < Integer.MAX_VALUE)
-                .sorted(Comparator
-                        .comparingInt((Symbol symbol) -> matchRank(symbol, normalizedQuery))
-                        .thenComparing(Symbol::external)
-                        .thenComparing(Symbol::generated)
-                        .thenComparing(Symbol::qualifiedName, Comparator.nullsLast(String::compareTo))
-                        .thenComparing(Symbol::name)
-                        .thenComparing(Symbol::signature, Comparator.nullsLast(String::compareTo))
-                        .thenComparing(Symbol::id))
+                        || criteria.qualifiedName().equals(symbol.qualifiedName()));
+        if (normalizedQuery == null) {
+            // Without text every candidate has the same rank: the secondary keys alone order them.
+            return filtered
+                    .sorted(SYMBOL_TIE_BREAK)
+                    .limit(criteria.limit())
+                    .toList();
+        }
+        // The rank is computed once per remaining candidate, then shared by the filter and the sort.
+        return filtered
+                .map(symbol -> new RankedSymbol(symbolMatchRank.rank(symbol, normalizedQuery), symbol))
+                .filter(ranked -> ranked.rank() < NO_MATCH)
+                .sorted(RANKED_ORDER)
                 .limit(criteria.limit())
+                .map(RankedSymbol::symbol)
                 .toList();
     }
 
@@ -377,32 +403,36 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
         return List.copyOf(values.values());
     }
 
-    private static int matchRank(Symbol symbol, String normalizedQuery) {
-        if (normalizedQuery == null) {
+    /**
+     * Rank of a symbol for a lower-case query, from 0 (qualified name equal) to 6 (symbol key contains the
+     * query), or {@link #NO_MATCH}. Each field is lower-cased at most once, and the symbol key only when no
+     * name or qualified name matches.
+     */
+    static int matchRank(Symbol symbol, String normalizedQuery) {
+        String qualifiedName = normalize(symbol.qualifiedName());
+        if (normalizedQuery.equals(qualifiedName)) {
             return 0;
         }
-        if (equalsIgnoreCase(symbol.qualifiedName(), normalizedQuery)) {
-            return 0;
-        }
-        if (equalsIgnoreCase(symbol.name(), normalizedQuery)) {
+        String name = normalize(symbol.name());
+        if (name.equals(normalizedQuery)) {
             return 1;
         }
-        if (startsWithIgnoreCase(symbol.name(), normalizedQuery)) {
+        if (name.startsWith(normalizedQuery)) {
             return 2;
         }
-        if (startsWithIgnoreCase(symbol.qualifiedName(), normalizedQuery)) {
+        if (qualifiedName != null && qualifiedName.startsWith(normalizedQuery)) {
             return 3;
         }
-        if (containsIgnoreCase(symbol.name(), normalizedQuery)) {
+        if (name.contains(normalizedQuery)) {
             return 4;
         }
-        if (containsIgnoreCase(symbol.qualifiedName(), normalizedQuery)) {
+        if (qualifiedName != null && qualifiedName.contains(normalizedQuery)) {
             return 5;
         }
-        if (containsIgnoreCase(symbol.symbolKey(), normalizedQuery)) {
+        if (normalize(symbol.symbolKey()).contains(normalizedQuery)) {
             return 6;
         }
-        return Integer.MAX_VALUE;
+        return NO_MATCH;
     }
 
     private static boolean matchesDirection(
@@ -450,18 +480,6 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     private static String normalize(String value) {
         return value == null ? null : value.toLowerCase(Locale.ROOT);
-    }
-
-    private static boolean equalsIgnoreCase(String value, String normalizedQuery) {
-        return value != null && value.toLowerCase(Locale.ROOT).equals(normalizedQuery);
-    }
-
-    private static boolean startsWithIgnoreCase(String value, String normalizedQuery) {
-        return value != null && value.toLowerCase(Locale.ROOT).startsWith(normalizedQuery);
-    }
-
-    private static boolean containsIgnoreCase(String value, String normalizedQuery) {
-        return value != null && value.toLowerCase(Locale.ROOT).contains(normalizedQuery);
     }
 
     private static String scopedKey(String projectId, String id) {
@@ -595,6 +613,16 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
         public int targetCount() {
             return incomingBySymbolId.size();
         }
+    }
+
+    /** Rank of a symbol for a non-null lower-case query: 0 is the best match, {@link #NO_MATCH} no match. */
+    @FunctionalInterface
+    interface SymbolMatchRank {
+        int rank(Symbol symbol, String normalizedQuery);
+    }
+
+    /** A search candidate with its rank, computed once and kept for the filter and the sort of one search. */
+    private record RankedSymbol(int rank, Symbol symbol) {
     }
 
     public record IndexMetrics(
