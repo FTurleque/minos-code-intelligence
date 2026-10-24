@@ -6,12 +6,12 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Une réponse que le registre ne peut pas donner avec certitude parce que des entrées sont illisibles (Q24).
+ * An answer that the registry cannot give with certainty because some entries are unreadable (Q24).
  *
- * <p>Elle porte les {@link DegradedEntry} que le registre a déjà produites : il n'y a pas de seconde notion d'entrée
- * dégradée. Son message ne dit que le nombre d'entrées et la conséquence, jamais un chemin ni un texte lu dans un
- * fichier abîmé. C'est le signal ; la commande qui la reçoit décide du verdict : une résolution par nom en fait un
- * résultat partiel, une mutation un échec.</p>
+ * <p>It carries the {@link DegradedEntry} values that the registry has already produced: there is no second notion
+ * of degraded entry. Its message only states the number of entries and the consequence, never a path nor a text read
+ * from a damaged file. It is the signal; the command that receives it decides the verdict: a resolution by name makes
+ * it a partial result, a mutation a failure.</p>
  */
 public final class UnreadableRegistryException extends IOException {
 
@@ -23,7 +23,7 @@ public final class UnreadableRegistryException extends IOException {
         this.unreadable = unreadable;
     }
 
-    /** {@code consequence} dit ce que ce dénombrement empêche de garantir ; {@code unreadable} n'est pas vide. */
+    /** {@code consequence} says what this count prevents from guaranteeing; {@code unreadable} is not empty. */
     public static UnreadableRegistryException of(List<DegradedEntry> unreadable, String consequence) {
         List<DegradedEntry> copy = List.copyOf(Objects.requireNonNull(unreadable, "unreadable"));
         if (copy.isEmpty()) throw new IllegalArgumentException("unreadable must not be empty");
@@ -31,9 +31,9 @@ public final class UnreadableRegistryException extends IOException {
     }
 
     /**
-     * Ce qui explique l'échec d'une lecture stricte du registre : l'exception véridique si des entrées sont illisibles,
-     * vide sinon (l'échec est alors autre chose et l'appelant le relève tel quel). Une panne du registre lui-même,
-     * qui ne peut pas être inventoriée, n'est jamais présentée comme des entrées illisibles.
+     * What explains the failure of a strict read of the registry: the truthful exception if some entries are
+     * unreadable, empty otherwise (the failure is then something else and the caller reports it as is). A failure of
+     * the registry itself, which cannot be inventoried, is never presented as unreadable entries.
      */
     public static Optional<UnreadableRegistryException> explaining(ProjectRegistry registry, String consequence) {
         try {
@@ -44,12 +44,12 @@ public final class UnreadableRegistryException extends IOException {
         }
     }
 
-    /** Les entrées illisibles, telles que le registre les a décrites. */
+    /** The unreadable entries, as the registry described them. */
     public List<DegradedEntry> unreadable() {
         return unreadable;
     }
 
-    /** « 1 registry entry is unreadable » ou « N registry entries are unreadable », la forme du message et de l'avertissement. */
+    /** "1 registry entry is unreadable" or "N registry entries are unreadable": the form of the message and warning. */
     public static String describe(int count) {
         return count == 1 ? "1 registry entry is unreadable" : count + " registry entries are unreadable";
     }

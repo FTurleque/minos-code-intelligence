@@ -35,10 +35,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Exécute un run d'indexation sous le bail exclusif du projet : providers, mise en snapshot,
- * promotion, métadonnées. Depuis l'ADR 0039 un run {@code INTERRUPTED} offert par le projet est
- * rouvert par défaut (même {@code runId}, tentative suivante) : les cibles dont le point de contrôle
- * est valide sont réutilisées sans relancer leur provider, les autres sont réexécutées.
+ * Runs an indexing run under the exclusive lease of the project: providers, snapshot staging,
+ * promotion, metadata. Since ADR 0039 an {@code INTERRUPTED} run offered by the project is reopened
+ * by default (same {@code runId}, next attempt): the targets whose checkpoint is valid are reused
+ * without relaunching their provider, the others are run again.
  */
 final class IndexingRunExecutor {
     private static final System.Logger LOGGER = System.getLogger(IndexingRunExecutor.class.getName());
@@ -46,9 +46,9 @@ final class IndexingRunExecutor {
     private IndexingRunExecutor() { }
 
     /**
-     * Valide la demande (politique de reprise, puis racine, puis ports dans l'ordre de {@link Ports}), puis exécute le
-     * run, repris ou neuf. Aucun des deux records ne valide à sa construction : l'ordre et les messages des refus sont
-     * ceux de cette méthode.
+     * Validates the request (resume policy, then root, then ports in the order of {@link Ports}), then runs the run,
+     * resumed or new. Neither record validates at construction: the order and the messages of the refusals are those
+     * of this method.
      */
     static IndexingRun execute(RunRequest request, Collaborators collaborators) {
         UUID projectId = request.projectId();
@@ -126,10 +126,10 @@ final class IndexingRunExecutor {
     }
 
     /**
-     * Rouvre le run interrompu : ses cibles réutilisées sont injectées sans lancer leur provider, les
-     * autres sont exécutées, puis chaque artefact réutilisé est revérifié juste avant la mise en
-     * snapshot. Une revérification qui échoue annule la reprise (run FAILED) et l'appelant bascule
-     * sur un run complet.
+     * Reopens the interrupted run: its reused targets are injected without launching their provider,
+     * the others are run, then each reused artifact is verified again just before snapshot staging. A
+     * verification that fails cancels the resumption (run FAILED) and the caller falls back to a full
+     * run.
      */
     private static ResumedAttempt executeResumed(
             Outcome.Resume resume,
@@ -466,8 +466,8 @@ final class IndexingRunExecutor {
         String stagedId = context.ports.stager().stage(new IndexSnapshotStageRequest(
                 context.runId, context.projectId, context.artifacts(), context.ports.moduleAssignment()));
         if (stagedId == null || stagedId.isBlank()) {
-            // Etat interne invalide (le port de mise en scene a rendu un identifiant vide), pas un argument :
-            // IllegalStateException, dont le nom de classe figure dans le message du run persiste.
+            // Invalid internal state (the staging port returned a blank identifier), not an argument:
+            // IllegalStateException, whose class name appears in the message of the persisted run.
             throw new IllegalStateException("stagedSnapshotId must not be blank");
         }
         context.staged = Optional.of(stagedId);
@@ -862,9 +862,9 @@ final class IndexingRunExecutor {
     }
 
     /**
-     * Entrées propres à un run. Aucune validation ici : {@link #execute(RunRequest, Collaborators)}
-     * vérifie la politique de reprise, puis la racine, puis {@code moduleAssignment} et {@code rootScopeFingerprint}
-     * avec les autres ports.
+     * Inputs specific to one run. No validation here: {@link #execute(RunRequest, Collaborators)}
+     * checks the resume policy, then the root, then {@code moduleAssignment} and {@code rootScopeFingerprint}
+     * with the other ports.
      */
     record RunRequest(
             UUID projectId,
@@ -879,8 +879,8 @@ final class IndexingRunExecutor {
     }
 
     /**
-     * Collaborateurs du service de cycle de vie, construits une fois avec lui. Aucune validation ici :
-     * le service les vérifie à sa construction, et {@link #execute(RunRequest, Collaborators)} dans l'ordre de
+     * Collaborators of the lifecycle service, built once with it. No validation here: the service checks
+     * them at its construction, and {@link #execute(RunRequest, Collaborators)} in the order of
      * {@link Ports}.
      */
     record Collaborators(

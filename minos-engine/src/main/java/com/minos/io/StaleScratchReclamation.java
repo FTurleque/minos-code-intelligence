@@ -14,30 +14,30 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
- * Borne de vie des résidus de travail d'un run mort (MINOS-AUD-A02).
+ * Lifetime bound of the working leftovers of a dead run (MINOS-AUD-A02).
  *
- * <p>Un répertoire de travail ou un temporaire de clonage n'est supprimé que par son propriétaire, à la fin de
- * son run. Un run tué (arrêt brutal, plantage, coupure) ne passe jamais par cette fin : sa copie reste, sans
- * borne. Ce balayage, appelé au moment où MINOS crée un nouveau résidu du même genre, supprime les enfants directs
- * d'une racine dont la dernière modification est <strong>strictement</strong> antérieure à la durée de vie.</p>
+ * <p>A working directory or a clone temporary is deleted only by its owner, at the end of its run. A killed run
+ * (abrupt stop, crash, power cut) never reaches that end: its copy stays, without bound. This sweep, called when
+ * MINOS creates a new leftover of the same kind, deletes the direct children of a root whose last modification is
+ * <strong>strictly</strong> older than the lifetime.</p>
  *
- * <p>Garanties : il ne supprime que des enfants directs de la racine donnée, sans suivre un lien symbolique ni une
- * jonction (le lien lui-même est supprimé, jamais sa cible) ; il conserve les chemins protégés, les résidus
- * récents et ceux dont la date est dans le futur (saut d'horloge) ; son coût par appel est borné (entrées
- * examinées, candidats traités) ; il ne lève jamais d'exception, car une maintenance ne doit pas faire échouer
- * l'opération qui la déclenche : un résidu qui ne peut pas être supprimé est signalé par un avertissement qui
- * ne porte aucun chemin absolu, et laissé en place. Une date illisible n'est jamais une preuve d'ancienneté.</p>
+ * <p>Guarantees: it deletes only direct children of the given root, without following a symbolic link or a
+ * junction (the link itself is deleted, never its target); it keeps the protected paths, the recent leftovers and
+ * those whose date is in the future (clock jump); its cost per call is bounded (entries examined, candidates
+ * processed); it never throws, because a maintenance task must not make the operation that triggers it fail: a
+ * leftover that cannot be deleted is reported by a warning that carries no absolute path, and left in place. An
+ * unreadable date is never a proof of age.</p>
  */
 public final class StaleScratchReclamation {
 
     /**
-     * Durée de vie unique des résidus. Elle excède strictement la durée maximale d'un run de provider (30 minutes
-     * par défaut) et d'un clonage distant (2 heures), et vaut la durée de reprise d'un run interrompu.
+     * Single lifetime of the leftovers. It strictly exceeds the maximum duration of a provider run (30 minutes by
+     * default) and of a remote clone (2 hours), and equals the resume window of an interrupted run.
      */
     public static final Duration DEFAULT_LIFETIME = Duration.ofHours(24);
-    /** Nombre maximal d'entrées examinées par appel. */
+    /** Maximum number of entries examined per call. */
     public static final int DEFAULT_MAX_EXAMINED = 1_024;
-    /** Nombre maximal de candidats supprimés (ou tentés) par appel ; les suivants le seront aux déclenchements suivants. */
+    /** Maximum number of candidates deleted (or attempted) per call; the next ones are handled by the next triggers. */
     public static final int DEFAULT_MAX_RECLAIMED = 16;
 
     private static final System.Logger LOGGER = System.getLogger(StaleScratchReclamation.class.getName());
@@ -46,13 +46,13 @@ public final class StaleScratchReclamation {
     }
 
     /**
-     * Durée de vie, instant courant et bornes d'un balayage.
+     * Lifetime, current instant and bounds of a sweep.
      *
-     * @param lifetime     un enfant est ancien si sa dernière modification est strictement antérieure à
+     * @param lifetime     a child is old if its last modification is strictly older than
      *                     {@code now - lifetime}
-     * @param now          instant courant, injectable
-     * @param maxExamined  nombre maximal d'entrées examinées, au moins 1
-     * @param maxReclaimed nombre maximal de candidats traités, au moins 1
+     * @param now          current instant, injectable
+     * @param maxExamined  maximum number of entries examined, at least 1
+     * @param maxReclaimed maximum number of candidates processed, at least 1
      */
     public record Policy(Duration lifetime, Instant now, int maxExamined, int maxReclaimed) {
         public Policy {
@@ -66,33 +66,33 @@ public final class StaleScratchReclamation {
             }
         }
 
-        /** La durée de vie et les bornes par défaut, à l'instant donné. */
+        /** The default lifetime and bounds, at the given instant. */
         public static Policy defaults(Instant now) {
             return new Policy(DEFAULT_LIFETIME, now, DEFAULT_MAX_EXAMINED, DEFAULT_MAX_RECLAIMED);
         }
     }
 
-    /** Ce qu'un balayage a fait. {@code budgetExhausted} : des candidats peuvent rester pour un prochain appel. */
+    /** What a sweep did. {@code budgetExhausted}: candidates may remain for a later call. */
     public record Outcome(int examined, int reclaimed, int failed, boolean budgetExhausted) {
     }
 
-    /** Balayage avec la politique par défaut, l'horloge courante et un avertissement journalisé. */
+    /** Sweep with the default policy, the current clock and a logged warning. */
     public static Outcome reclaim(Path root, Predicate<String> childName, Set<Path> protectedChildren) {
         return reclaim(root, childName, protectedChildren, Instant.now());
     }
 
-    /** Comme {@link #reclaim(Path, Predicate, Set)} avec l'instant courant de l'appelant (horloge injectée). */
+    /** Like {@link #reclaim(Path, Predicate, Set)} with the caller's current instant (injected clock). */
     public static Outcome reclaim(Path root, Predicate<String> childName, Set<Path> protectedChildren, Instant now) {
         return reclaim(root, childName, protectedChildren, Policy.defaults(now), StaleScratchReclamation::logWarning);
     }
 
     /**
-     * @param root              racine dont seuls les enfants directs sont candidats ; absente, non répertoire ou
-     *                          lien : rien n'est fait
-     * @param childName         prédicat sur le nom d'un enfant direct
-     * @param protectedChildren enfants directs à ne jamais supprimer (le run courant)
-     * @param policy            durée de vie, instant courant et bornes
-     * @param warnings          reçoit un message sans chemin absolu à chaque résidu non supprimable
+     * @param root              root whose direct children only are candidates; missing, not a directory or a
+     *                          link: nothing is done
+     * @param childName         predicate on the name of a direct child
+     * @param protectedChildren direct children never to delete (the current run)
+     * @param policy            lifetime, current instant and bounds
+     * @param warnings          receives a message without absolute path for each leftover that cannot be deleted
      */
     public static Outcome reclaim(
             Path root,

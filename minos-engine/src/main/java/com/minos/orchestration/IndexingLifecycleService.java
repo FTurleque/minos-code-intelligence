@@ -30,10 +30,10 @@ public final class IndexingLifecycleService {
     private final IndexingLifecyclePlanSupport plans = new IndexingLifecyclePlanSupport();
 
     /**
-     * Cycle de vie sans port de marqueurs ni répertoire de run : réservé aux tests et aux stores
-     * en mémoire. Un run interrompu y est finalisé sans marqueur et aucune reprise n'est jamais
-     * possible (le port inerte ne connaît aucun répertoire de run). La racine de composition
-     * doit utiliser {@link #IndexingLifecycleService(Collection, SnapshotStager, SnapshotPromoter,
+     * Lifecycle without a marker port or run directory: reserved for tests and in-memory stores.
+     * An interrupted run is finalized there without a marker and no resumption is ever possible
+     * (the inert port knows no run directory). The composition root must use
+     * {@link #IndexingLifecycleService(Collection, SnapshotStager, SnapshotPromoter,
      * IndexStateStore, ResumableRunMarkers)}.
      */
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
@@ -41,7 +41,7 @@ public final class IndexingLifecycleService {
         this(executors, stager, promoter, stateStore, ResumableRunMarkers.none(), Clock.systemUTC());
     }
 
-    /** Câblage complet : le port des marqueurs protège les runs interrompus de la rétention (ADR 0039 §5). */
+    /** Full wiring: the marker port protects interrupted runs from retention (ADR 0039 §5). */
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                                     SnapshotPromoter promoter, IndexStateStore stateStore,
                                     ResumableRunMarkers markers) {
@@ -49,9 +49,9 @@ public final class IndexingLifecycleService {
     }
 
     /**
-     * Câblage de l'orchestration (AUD-PERF-04, D2) : {@code fingerprints} est le service d'empreinte de
-     * l'orchestration ; il capture l'empreinte de scope des points de contrôle et la recalcule à la vérification
-     * d'une reprise. Les autres constructeurs emploient un {@link ProjectFingerprintService} par défaut.
+     * Orchestration wiring (AUD-PERF-04, D2): {@code fingerprints} is the fingerprint service of the
+     * orchestration; it captures the scope fingerprint of the checkpoints and computes it again when a resumption
+     * is verified. The other constructors use a default {@link ProjectFingerprintService}.
      */
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                                     SnapshotPromoter promoter, IndexStateStore stateStore,
@@ -60,7 +60,7 @@ public final class IndexingLifecycleService {
                 fingerprints);
     }
 
-    /** Câblage complet avec une politique explicite des indexeurs dont l'artefact est réutilisable. */
+    /** Full wiring with an explicit policy of the indexers whose artifact is reusable. */
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                                     SnapshotPromoter promoter, IndexStateStore stateStore,
                                     ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy) {
@@ -101,7 +101,7 @@ public final class IndexingLifecycleService {
             if (id == null || id.isBlank()) throw new IllegalStateException("executor.indexerId must not be blank");
             if (byId.putIfAbsent(id, executor) != null) throw new IllegalArgumentException("Duplicate executor for indexer: " + id);
         }
-        // Les collaborateurs d'un run, vérifiés ci-dessus, sont regroupés une fois pour toutes.
+        // The collaborators of a run, checked above, are grouped once and for all.
         this.collaborators = new IndexingRunExecutor.Collaborators(Map.copyOf(byId), stager, promoter, stateStore,
                 markers, artifactPolicy, clock, fingerprints);
     }
@@ -123,7 +123,7 @@ public final class IndexingLifecycleService {
         return execute(id, root, negotiation, IndexingResumePolicy.RESUME);
     }
 
-    /** Run complet sur les cibles racine ; reprise selon {@code policy} (ADR 0039 §6, reprise par défaut). */
+    /** Full run on the root targets; resumption according to {@code policy} (ADR 0039 §6, resume by default). */
     public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
         return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of(), null, policy,
@@ -233,11 +233,11 @@ public final class IndexingLifecycleService {
     }
 
     /**
-     * Récupère l'état du projet sous le bail exclusif de cycle de vie. C'est une <em>mutation</em>, pas une
-     * lecture : elle finalise chaque run laissé RUNNING par un propriétaire mort, réécrit l'état, et attend
-     * le bail (de façon bornée) si une indexation est en cours. Une lecture de statut ne doit pas l'appeler :
-     * elle passe par {@code ProjectIndexStateReconciler.observeStatus}, qui ne prend aucun bail et n'écrit rien
-     * (lot 2, P1). Son seul appelant est le coordinateur incrémental, qui tient déjà le bail.
+     * Recovers the project state under the exclusive lifecycle lease. It is a <em>mutation</em>, not a
+     * read: it finalizes every run left RUNNING by a dead owner, rewrites the state, and waits for the
+     * lease (bounded) if an indexing is in progress. A status read must not call it: it goes through
+     * {@code ProjectIndexStateReconciler.observeStatus}, which takes no lease and writes nothing
+     * (batch 2, P1). Its only caller is the incremental coordinator, which already holds the lease.
      */
     public ProjectIndexState recoverProjectState(UUID id) {
         UUID projectId = Objects.requireNonNull(id, PROJECT_ID);

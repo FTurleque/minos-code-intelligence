@@ -23,7 +23,7 @@
     "minos-bootstrap": 6,
     "minos-cli": 13,
     "minos-domain": 21,
-    "minos-engine": 64,
+    "minos-engine": 55,
     "minos-intellij": 1,
     "minos-provider-scip": 17,
     "minos-runtime-local": 5,
@@ -37,7 +37,7 @@
     "minos-bootstrap": 1,
     "minos-cli": 9,
     "minos-domain": 3,
-    "minos-engine": 21,
+    "minos-engine": 20,
     "minos-integration-git": 1,
     "minos-intellij": 2,
     "minos-nexus": 3,
@@ -48,24 +48,15 @@
   "mixed": {
     "CommandLocator.java": "Relevé initial (minos-runtime-local) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "FileSymbolSnapshotStore.java": "Relevé initial (minos-storage-local) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "IndexStateStore.java": "Relevé initial (minos-engine) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "IndexerProcessPlanFactory.java": "Relevé initial (minos-runtime-local) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "IndexingLifecycleService.java": "Relevé initial (minos-engine) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "IndexingResumePlanner.java": "Relevé initial (minos-engine) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "IndexingRunExecutor.java": "Relevé initial (minos-engine) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "IndexingRuntimePorts.java": "Relevé initial (minos-engine) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "LocalProjectRegistry.java": "Relevé initial (minos-storage-local) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "PostgresCodeKnowledgeSnapshotStore.java": "Relevé initial (minos-storage-postgresql) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "ProjectFingerprintService.java": "Relevé initial (minos-engine) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "ScipIndexReader.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "ScipJavaProcessPlanFactory.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "ScipProjectSnapshotLifecycle.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "ScipSymbolCatalog.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "ScipSymbolNormalizer.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "ScipSymbolSnapshotImporter.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "ScipSymbolSnapshotReport.java": "Relevé initial (minos-engine) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "ScipTypeScriptProcessPlanFactory.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "StaleScratchReclamation.java": "Relevé initial (minos-engine) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "UnreadableRegistryException.java": "Relevé initial (minos-engine) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »)."
+    "ScipTypeScriptProcessPlanFactory.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »)."
   }
 }

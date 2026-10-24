@@ -13,7 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Ports d'exécution utilisés par le cycle de vie M1 sans exposer de type fournisseur.
+ * Execution ports used by the indexing lifecycle without exposing a provider type.
  */
 public final class IndexingRuntimePorts {
 
@@ -86,7 +86,7 @@ public final class IndexingRuntimePorts {
     }
 
     /**
-     * La promotion fournie par ce port doit être atomique au sens de l'ADR-0006.
+     * The promotion supplied by this port must be atomic in the sense of ADR-0006.
      */
     public interface SnapshotPromoter {
         void promote(UUID projectId, UUID runId, String stagedSnapshotId) throws Exception;
@@ -365,9 +365,9 @@ public final class IndexingRuntimePorts {
     }
 
     /**
-     * Demande de mise en scène d'un snapshot de projet. {@code moduleAssignment} est la règle qui rattache un
-     * fichier au module découvert qui le contient (MINOS-AUD-F04) : vide quand l'indexation n'a pas de découverte,
-     * auquel cas les symboles restent sans module.
+     * Request to stage a project snapshot. {@code moduleAssignment} is the rule that assigns a file to the
+     * discovered module that contains it (MINOS-AUD-F04): empty when the indexing has no discovery, in which case
+     * the symbols stay without a module.
      */
     public record IndexSnapshotStageRequest(
             UUID runId,
