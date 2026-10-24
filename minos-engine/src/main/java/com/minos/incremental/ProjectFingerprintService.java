@@ -41,7 +41,7 @@ public final class ProjectFingerprintService {
     private final SourceBudgetPolicy sourceBudgetPolicy;
 
     public ProjectFingerprintService() {
-        this(BuildDescriptorPolicy.m24Defaults(), SourceBudgetPolicy.DEFAULT);
+        this(BuildDescriptorPolicy.currentDefaults(), SourceBudgetPolicy.DEFAULT);
     }
 
     public ProjectFingerprintService(BuildDescriptorPolicy buildDescriptorPolicy) {

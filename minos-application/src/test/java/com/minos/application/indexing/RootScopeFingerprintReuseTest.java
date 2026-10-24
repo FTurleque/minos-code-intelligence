@@ -49,7 +49,7 @@ class RootScopeFingerprintReuseTest {
         // D2: the engine keeps no service of its own. A service with other rules than the engine defaults is still
         // the one the run checkpoints and verifies a resume with, so the reference it captured is reused as is.
         IndexingFixture fixture = new IndexingFixture(temp);
-        fixture.fingerprintService = new ProjectFingerprintService(BuildDescriptorPolicy.m17Defaults());
+        fixture.fingerprintService = new ProjectFingerprintService(BuildDescriptorPolicy.legacyDefaults());
         fixture.extraDetectors = List.of(new SourceChangedAtDiscovery(fixture.root));
 
         var outcome = fixture.useCase().execute(fixture.id(), null, false, IndexingResumePolicy.RESUME);

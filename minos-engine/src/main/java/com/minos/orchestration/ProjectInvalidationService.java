@@ -33,7 +33,7 @@ import java.util.TreeSet;
  */
 public final class ProjectInvalidationService {
 
-    private static final BuildDescriptorPolicy BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m24Defaults();
+    private static final BuildDescriptorPolicy BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.currentDefaults();
     private static final Set<String> ROOT_IGNORE_FILES = Set.of(
             ".gitignore",
             ".minosignore"
