@@ -21,14 +21,12 @@ import java.util.UUID;
 public final class IndexingLifecycleService {
     private static final String PROJECT_ID = "projectId";
 
-    private final Map<String, IndexerExecutor> executors;
-    private final SnapshotStager stager;
     private final SnapshotPromoter promoter;
     private final IndexStateStore stateStore;
     private final ResumableRunMarkers markers;
-    private final ResumableArtifactPolicy artifactPolicy;
     private final Clock clock;
     private final ProjectFingerprintService fingerprints;
+    private final IndexingRunExecutor.Collaborators collaborators;
     private final IndexingLifecyclePlanSupport plans = new IndexingLifecyclePlanSupport();
 
     /**
@@ -91,11 +89,11 @@ public final class IndexingLifecycleService {
                              ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy, Clock clock,
                              ProjectFingerprintService fingerprints) {
         this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints");
-        this.stager = Objects.requireNonNull(stager, "stager");
+        Objects.requireNonNull(stager, "stager");
         this.promoter = Objects.requireNonNull(promoter, "promoter");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
         this.markers = Objects.requireNonNull(markers, "markers");
-        this.artifactPolicy = Objects.requireNonNull(artifactPolicy, "artifactPolicy");
+        Objects.requireNonNull(artifactPolicy, "artifactPolicy");
         this.clock = Objects.requireNonNull(clock, "clock");
         Map<String, IndexerExecutor> byId = new LinkedHashMap<>();
         for (IndexerExecutor executor : Objects.requireNonNull(executors, "executors")) {
@@ -103,7 +101,9 @@ public final class IndexingLifecycleService {
             if (id == null || id.isBlank()) throw new IllegalStateException("executor.indexerId must not be blank");
             if (byId.putIfAbsent(id, executor) != null) throw new IllegalArgumentException("Duplicate executor for indexer: " + id);
         }
-        this.executors = Map.copyOf(byId);
+        // AUD-QUA-07 (D2) : les collaborateurs d'un run, vérifiés ci-dessus, sont regroupés une fois pour toutes.
+        this.collaborators = new IndexingRunExecutor.Collaborators(Map.copyOf(byId), stager, promoter, stateStore,
+                markers, artifactPolicy, clock, fingerprints);
     }
 
     /**
@@ -206,10 +206,10 @@ public final class IndexingLifecycleService {
         Objects.requireNonNull(policy, "policy");
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
             if (plan != null) validatePlanStillCurrent(id, plan);
-            return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
-                    executors, stager, promoter, stateStore, markers, artifactPolicy, policy, moduleAssignment, clock,
-                    fingerprints,
-                    reference == null ? Optional.empty() : reference.reusableRootScopeFingerprint(fingerprints));
+            return IndexingRunExecutor.execute(new IndexingRunExecutor.RunRequest(id, root, targets, mode, changedFiles,
+                    policy, moduleAssignment,
+                    reference == null ? Optional.empty() : reference.reusableRootScopeFingerprint(fingerprints)),
+                    collaborators);
         }
     }
 

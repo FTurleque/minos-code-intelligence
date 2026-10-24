@@ -45,27 +45,33 @@ final class IndexingRunExecutor {
 
     private IndexingRunExecutor() { }
 
-    static IndexingRun execute(UUID projectId, Path projectRoot, List<IndexingExecutionTarget> targets,
-                               IndexingMode mode, List<String> changedFiles,
-                               Map<String, IndexerExecutor> executors, SnapshotStager stager,
-                               SnapshotPromoter promoter, IndexStateStore stateStore,
-                               ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy,
-                               IndexingResumePolicy resumePolicy, ModuleAssignmentRule moduleAssignment,
-                               Clock clock, ProjectFingerprintService fingerprints,
-                               Optional<String> rootScopeFingerprint) {
+    /**
+     * Valide la demande (politique de reprise, puis racine, puis ports dans l'ordre de {@link Ports}), puis exécute le
+     * run, repris ou neuf. Aucun des deux records ne valide à sa construction : l'ordre et les messages des refus sont
+     * ceux de cette méthode.
+     */
+    static IndexingRun execute(RunRequest request, Collaborators collaborators) {
+        UUID projectId = request.projectId();
+        List<IndexingExecutionTarget> targets = request.targets();
+        IndexingMode mode = request.mode();
+        List<String> changedFiles = request.changedFiles();
+        IndexingResumePolicy resumePolicy = request.resumePolicy();
+        IndexStateStore stateStore = collaborators.stateStore();
+        ResumableRunMarkers markers = collaborators.markers();
+        Clock clock = collaborators.clock();
         Objects.requireNonNull(resumePolicy, "resumePolicy");
-        ValidatedProjectRoot root = validateExecutionRoot(projectRoot, targets, mode);
-        Ports ports = new Ports(executors, stager, promoter, stateStore, markers, moduleAssignment, clock,
-                fingerprints, rootScopeFingerprint);
+        ValidatedProjectRoot root = validateExecutionRoot(request.projectRoot(), targets, mode);
+        Ports ports = new Ports(collaborators.executors(), collaborators.stager(), collaborators.promoter(), stateStore,
+                markers, request.moduleAssignment(), clock, collaborators.fingerprints(), request.rootScopeFingerprint());
         Instant createdAt = clock.instant();
         ProjectIndexState previous = reconcilePreviousState(projectId, ports, createdAt);
 
         Optional<ResumeTrace> trace = Optional.empty();
         if (resumePolicy != IndexingResumePolicy.NO_RESUME) {
             // The resume plan is requested under the exclusive lease, before any supersession.
-            Outcome outcome = IndexingResumePlanner.plan(stateStore, markers, artifactPolicy,
+            Outcome outcome = IndexingResumePlanner.plan(stateStore, markers, collaborators.artifactPolicy(),
                     new IndexingResumePlanner.Request(previous, root.lexicalRoot(), targets, mode, changedFiles,
-                            createdAt, IndexingResumePlanner.DEFAULT_RESUME_TTL, fingerprints));
+                            createdAt, IndexingResumePlanner.DEFAULT_RESUME_TTL, ports.fingerprints()));
             Optional<String> refusal;
             switch (outcome) {
                 case Outcome.Resume resume -> {
@@ -853,6 +859,40 @@ final class IndexingRunExecutor {
             Objects.requireNonNull(lexicalRoot, "lexicalRoot");
             Objects.requireNonNull(realRoot, "realRoot");
         }
+    }
+
+    /**
+     * Entrées propres à un run (AUD-QUA-07, D2). Aucune validation ici : {@link #execute(RunRequest, Collaborators)}
+     * vérifie la politique de reprise, puis la racine, puis {@code moduleAssignment} et {@code rootScopeFingerprint}
+     * avec les autres ports.
+     */
+    record RunRequest(
+            UUID projectId,
+            Path projectRoot,
+            List<IndexingExecutionTarget> targets,
+            IndexingMode mode,
+            List<String> changedFiles,
+            IndexingResumePolicy resumePolicy,
+            ModuleAssignmentRule moduleAssignment,
+            Optional<String> rootScopeFingerprint
+    ) {
+    }
+
+    /**
+     * Collaborateurs du service de cycle de vie, construits une fois avec lui (AUD-QUA-07, D2). Aucune validation ici :
+     * le service les vérifie à sa construction, et {@link #execute(RunRequest, Collaborators)} dans l'ordre de
+     * {@link Ports}.
+     */
+    record Collaborators(
+            Map<String, IndexerExecutor> executors,
+            SnapshotStager stager,
+            SnapshotPromoter promoter,
+            IndexStateStore stateStore,
+            ResumableRunMarkers markers,
+            ResumableArtifactPolicy artifactPolicy,
+            Clock clock,
+            ProjectFingerprintService fingerprints
+    ) {
     }
 
     private record Ports(
