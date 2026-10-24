@@ -40,17 +40,15 @@ Le job `publish` appelle `actions/attest-build-provenance` (épinglée par SHA) 
 
 Livrable **seule** : le lot 1 des tâches ne dépend pas de D2.
 
-### D2. Mode de signature — **tranchée le 2026-10-15 : option C de fait, A recommandée dès qu'un abonnement existe**
+### D2. Mode de signature — **tranchée le 2026-10-24 : option C, définitive jusqu'à révision du risque**
 
-Le propriétaire a retenu l'option recommandée de chaque changement. Ici, la recommandation A est conditionnée à un abonnement à un service de signature, qui n'existe pas au 2026-10-15 : l'option C s'applique (release non signée, et dite telle), avec le garde-fou D3 livré. Brancher A demandera un ADR et l'ajout du mode à `$script:MinosSigningModes` de `scripts/release/release-signature.ps1` (tâche 3.1).
+Décision du propriétaire : la release n'est pas signée. Aucun service de signature n'est accessible à un mainteneur individuel établi en France : Azure Artifact Signing n'est ouvert qu'aux particuliers des États-Unis et du Canada et aux organisations, SignPath Foundation exige une licence OSI pour tout le projet, et un certificat OV demande un module matériel (option B). Le risque est accepté au registre (R-28 de `docs/architecture/risks/register.md`), avec ses conditions de révision : création d'une structure juridique dans l'Union européenne, utilisateurs bloqués par SmartScreen, au plus tard le 2027-10-24. L'attestation de provenance D1 et les sommes SHA-256 publiées sont la preuve d'origine ; le texte de la release le dit (`Get-ReleaseIntegrityNotes`, `scripts/release/release-integrity-notes-unsigned.md`). Le garde-fou D3 reste en place : à la révision, brancher un mode sera l'ajout de ce mode à `$script:MinosSigningModes` de `scripts/release/release-signature.ps1`, avec son ADR, puis un réglage de variable.
 
 **Écart d'implémentation.** Le test du garde-fou est un script PowerShell (`scripts/release/test-release-signature.ps1`, sur le modèle de `test-iscc-provenance.ps1`) et non `test_release_signature_gate.py` : les fonctions du garde-fou se chargent sans effet de bord et la signature est décrite par un lecteur injecté, ce qui les éprouve aussi sous Linux ; un cas lit la vraie signature d'un fichier non signé sous Windows. La qualification recalculait **déjà** les sommes dans les deux modes (`Verify-Sha256`, `publish-windows-release.ps1`) : le test exécute cette fonction réelle, extraite par l'analyseur PowerShell, au lieu d'en ajouter une seconde.
 
-- **Option A (recommandée si un abonnement est possible) : service de signature** (Azure Trusted Signing ou équivalent), appelé depuis le job `build` par une identité fédérée (OIDC), sans secret de longue durée. Demande un compte, une validation d'identité et un ADR.
+- **Option A : service de signature** (Azure Trusted Signing ou équivalent), appelé depuis le job `build` par une identité fédérée (OIDC), sans secret de longue durée. Demande un compte, une validation d'identité et un ADR.
 - **Option B : certificat sur matériel, runner auto-hébergé.** `sign-windows-artifact.ps1` fonctionne alors tel quel ; demande d'exploiter un runner de confiance.
-- **Option C : pas de signature pour l'instant.** La release reste non signée et **le dit** (D4) ; l'attestation D1 est la seule preuve d'origine. Le garde-fou fail-closed (D3) est livré quand même, pour que l'activation future soit un réglage et non un chantier.
-
-Tant que D2 n'est pas tranchée, l'option C s'applique de fait.
+- **Option C (retenue) : pas de signature.** La release reste non signée et **le dit** (D4) ; l'attestation D1 est la seule preuve d'origine. Le garde-fou fail-closed (D3) est livré quand même, pour que l'activation future soit un réglage et non un chantier.
 
 ### D3. Garde-fou fail-closed
 

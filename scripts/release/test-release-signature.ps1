@@ -118,6 +118,23 @@ try {
         Assert-Throws { Get-ReleaseSignatureState -Required $true -Mode '' -Executable @($Setup) -Reader { throw 'must not be read' } } 'no signing mode is configured'
     }
 
+    Write-Host 'Release text (Get-ReleaseIntegrityNotes)'
+    Test-Case 'an unsigned release says it is not signed and how to verify a download' {
+        $Notes = Get-ReleaseIntegrityNotes -State 'unsigned' -Repository 'owner/repo'
+        if ($Notes -notlike '*pas sign*Authenticode*') { throw "the unsigned text does not say unsigned: $Notes" }
+        if ($Notes -notlike '*gh attestation verify <fichier> --repo owner/repo*') { throw "no verification command: $Notes" }
+        if ($Notes -like '*{repository}*') { throw 'a placeholder is left in the text' }
+    }
+    Test-Case 'a signed release never says it is unsigned' {
+        $Notes = Get-ReleaseIntegrityNotes -State 'signed' -Repository 'owner/repo'
+        if ($Notes -like '*pas sign*') { throw "the signed text says unsigned: $Notes" }
+        if ($Notes -notlike '*gh attestation verify <fichier> --repo owner/repo*') { throw "no verification command: $Notes" }
+    }
+    Test-Case 'an unknown state or a malformed repository is refused' {
+        Assert-Throws { Get-ReleaseIntegrityNotes -State 'maybe' -Repository 'owner/repo' } 'State'
+        Assert-Throws { Get-ReleaseIntegrityNotes -State 'unsigned' -Repository 'owner/repo --flag' } 'Repository'
+    }
+
     Write-Host 'Published checksums (Verify-Sha256 of publish-windows-release.ps1, run in -ValidateOnly and -PublishOnly)'
     $Hash = (Get-FileHash -LiteralPath $Setup -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath "$Setup.sha256" -Value "$Hash  $([System.IO.Path]::GetFileName($Setup))" -Encoding ascii
