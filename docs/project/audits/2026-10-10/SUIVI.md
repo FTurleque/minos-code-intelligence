@@ -548,7 +548,7 @@ Six changements OpenSpec, une PR chacun (#526 à #531), tous fusionnés dans `de
 
 Sprint clos. Plugin IntelliJ : `ArchitectureGraphPanelTest.countsAnEvidenceWithoutLocationLikeAnyOther` vert sur le poste (Gradle lancé sous JDK 25 ; sous le JDK 21 Microsoft, `:instrumentCode` cherche un dossier `Packages` absent) ; `minos-nexus` : 10 tests verts. AUD-ARC-01 (sprint 10) n'a plus l'orchestration dans une surface comme prérequis.
 
-## Sprint 10 — Frontières d'architecture (spécifié le 2026-10-13, implémenté le 2026-10-22)
+## Sprint 10 — Frontières d'architecture (spécifié le 2026-10-13, implémenté le 2026-10-22, clos le 2026-10-24)
 
 Deux changements OpenSpec, même branche. Les six constats sont confirmés mais **aucun chantier de fond n'est spécifié** : leurs prérequis (sprints 4, 8 et 9) ne sont pas implémentés et quatre actions de l'audit contredisent un ADR accepté.
 
@@ -575,6 +575,26 @@ Les deux changements sont implémentés sur une même branche ; aucun fichier de
 | AUD-ARC-12 | **Dette figée** (règle A14) ; D4 : convention pour les nouveaux packages seulement (ADR 0062, `.claude/rules/java-production.md`) | 37 racines sur 14 modules | aucun sans nouvelle décision |
 
 Preuves : rouge prouvé sur une copie mutée (six mutations : garde du HEAD code 0, garde modifié code 1 ; document versionné du HEAD refusé en nommant les quatre arêtes manquantes) ; `python scripts/architecture/check-module-boundaries.py` vert ; `python scripts/architecture/test_check_module_boundaries.py` 154 tests verts ; `check-current-docs.py` et `product-facts.py --check` verts. ADR : 0062 créé (Accepted), notes de mise en œuvre des ADR 0022 (A12), 0047 (ordre confirmé) et 0058 (A11) ; registre `arc42/09-decisions.md` complété (0047, 0058, 0060, 0062). Ordre des chantiers : `docs/project/roadmap/storage-hexagonal-2026-10/README.md`. **Fusionné** ([PR #534](https://github.com/FTurleque/minos-code-intelligence/pull/534), commit de fusion `6b60790e`, les treize checks verts dont `Verify (ubuntu-24.04)`, `Verify (windows-2022)` et `SonarCloud Code Analysis`) ; les deux changements sont archivés le 2026-10-22 (`openspec/changes/archive/2026-10-22-…`), la capacité `frontieres-de-modules` reçoit les cinq exigences.
+
+### Clôture du sprint 10 (2026-10-24)
+
+Les quatre changements sont fusionnés dans `develop` et archivés : `figer-la-dette-de-frontieres-par-des-cliquets` et `trancher-les-decisions-d-architecture-du-sprint-10` (PR #534, archivés le 2026-10-22), `exposer-un-port-de-lecture-de-snapshot` (PR #547) et `faire-consommer-l-indexation-aux-surfaces` (PR #548), archivés le 2026-10-24 (PR #549).
+
+| Constat | PR | Preuve de CI ou mesure du 2026-10-24 |
+|---|---|---|
+| AUD-ARC-01, -05, -08, -11, -12 | #534 | treize checks verts, commit de fusion `6b60790e` ; cliquets A11 à A14 et arêtes d'exécution dans `check-module-boundaries.py` |
+| AUD-ARC-07 | #547 | treize checks verts ; SonarCloud corrigé (S3077, verrou de `SnapshotReadView`) avant fusion ; cliquet A18 |
+| AUD-ARC-01 (lot 1) | #548 | treize checks verts à `12bd969f` ; couverture SonarCloud du nouveau code : `minos-application` 93,3 %, `minos-cli` 89,5 %, `minos-api` 100 %, `minos-mcp` 100 % ; A11 passe de 60 à 39 entrées |
+| AUD-ARC-01 (tâche 6.5, SpotBugs) | — | `code-audit.yml` sur `develop` `3a3f2b70`, `spotbugs_blocking` (run 40046950803) : **job rouge**, 22 alertes hors base et 3 alertes de la base disparues. **Aucune ne porte sur une classe modifiée par le sprint 10.** L'alerte `EI_EXPOSE_REP` de `ProviderPlatformApi$ProviderDto` est toujours signalée : elle reste dans la base |
+
+**Écart de la base SpotBugs, antérieur au sprint 10** (constat, non corrigé ici ; base non élargie) :
+
+- 20 alertes viennent de SpotBugs 4.10.5 (montée de dépendances `0fbed0e3` du 2026-10-19), dont les nouveaux détecteurs signalent du code plus ancien : `USO_UNSAFE_METHOD_SYNCHRONIZATION` (11, `LocalProjectRegistry`), `ENV_USE_PROPERTY_INSTEAD_OF_ENV` (4, `PrivateLocalStorage`, `ManagedScipProviderRuntimeManager`, `ScipJavaProcessPlanFactory`), `AT_STALE_THREAD_WRITE_OF_PRIMITIVE` (3, `PostgresConnectionFactory`), `UL_UNRELEASED_LOCK` (1, `InMemoryIndexStateStore`), `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` (1, `PrivateLocalStorage`).
+- 2 alertes (`EI_EXPOSE_REP`, `EI_EXPOSE_REP2`) portent sur le record `ProjectIndexingUseCase.Dependencies`, créé au sprint 9 (AUD-ARC-02, PR #526).
+- Alertes disparues : `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` de `PrivateLocalStorage.currentOwner` et `ENV_USE_PROPERTY_INSTEAD_OF_ENV` de `ManagedScipProviderRuntimeManager.inspectJavaInstalled` (déplacées dans leur classe : elles réapparaissent sous une autre empreinte), `REC_CATCH_EXCEPTION` de `ProcessIndexerExecutor.executePrepared`.
+- Les derniers runs de `code-audit` avant celui-ci (2026-10-16 et 2026-10-20) étaient non bloquants : l'écart n'avait pas été vu.
+
+Sprint clos. Restent hors du sprint : l'écart de la base SpotBugs ci-dessus (trier chaque alerte : corriger, ou figer avec une raison écrite) ; les lots 2 à 6 d'AUD-ARC-01, SH-08 (AUD-ARC-05) et SH-02, SH-03, SH-06 (AUD-ARC-08), suivis dans le [plan du chantier hexagonal](../../roadmap/storage-hexagonal-2026-10/README.md) ; le coût de l'index mémoire par vue d'AUD-ARC-07 (ADR 0047, options B et C).
 
 ## Sprint 11 — Hygiène de fond (spécifié le 2026-10-13)
 
