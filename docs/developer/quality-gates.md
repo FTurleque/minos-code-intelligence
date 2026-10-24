@@ -85,6 +85,16 @@ Le gate `python scripts/quality/check-single-execution.py` (auto-test `test_chec
 
 Chaque échec nomme le fichier et la ligne. Limites : le gate ne prouve pas qu'un helper fait ce que dit son nom au-delà de la présence d'un `throw` (ses tests le font) ; il ne voit ni les appels `Math.addExact` / `Math.multiplyExact` écrits en ligne, ni une carte à ordre d'accès construite par un drapeau variable ou par une sous-classe de `LinkedHashMap`.
 
+## Garde des numéros de jalon dans les noms de production (`check-milestone-identifiers.py`)
+
+`python scripts/quality/check-milestone-identifiers.py` (job `invariants`, auto-test `--self-test` sur arbres temporaires, racine paramétrable par `--root`) étend aux noms de production la règle de l'[ADR 0043](../architecture/adr/GEN-0043-retrait-des-artefacts-de-jalon.md) (AUD-QUA-08) : un nom dit ce que fait le code, pas le jalon qui l'a introduit.
+
+- **Segment à jalon** : `M` ou `m` suivi d'un chiffre ou plus, en début de segment (début du mot, après `_` ou `$`, ou `M` majuscule après une minuscule ou un chiffre), suivi de la fin du mot, de `_`, de `$` ou d'une majuscule. `arm64`, `ARM64`, `MACOS_ARM64`, `System32` et `windowsSystem32` n'en sont pas.
+- **Lu sous `minos-*/src/main`** : chaque composant de chemin ; les identifiants Java et Kotlin hors littéraux et commentaires ; les références de classe des descripteurs XML (`class=`, `implementation=`, `serviceImplementation=`…) et des fichiers `META-INF/services` ; dans les `.ps1`, `.ps1frag` et `.ps1.template`, tout nom `MINOS_*` (variables d'environnement, C# embarqué compris).
+- **Liste décroissante `KNOWN_MILESTONE_IDENTIFIERS`** (`fichier::nom` → raison) : vide. Une entrée sans raison, une entrée qui ne correspond plus à rien ou qui nomme un fichier introuvable, et un fichier illisible en UTF-8 font échouer le gate.
+
+Chaque échec nomme le fichier, la première ligne et le nom ; le succès affiche le nombre de fichiers lus et d'entrées restantes. Ce qu'il ne prouve pas : qu'un nom décrit bien le code ; il ne lit ni les chaînes publiques (descriptions MCP, limitations du catalogue, messages, figées par les goldens), ni les commentaires, ni les sources de test, ni les fixtures, ni les scopes JaCoCo et sorties des gates, qui sont des données citées ailleurs.
+
 ## Garde de la baseline d'outillage (`check-toolchain-baseline.py`)
 
 `python scripts/quality/check-job-object-launcher-parity.py` (job `invariants`, auto-test `test_check_job_object_launcher_parity.py`) compare la copie du lanceur Job Object du plugin (`windows-cli-job-owner-v1.ps1`) au lanceur que le moteur assemble (gabarit et `windows-fragments/`, par `scripts/remediation/windows_launcher.py`) : sept fragments doivent s'y trouver mot pour mot, et toute autre zone divergente doit appartenir à une des trois différences assumées de la liste fermée (`raw-cmd-mode`, `owned-process-name`, `plan-deletion-point`), chacune avec sa raison et un maximum de lignes ; une entrée sans objet est refusée. Un alignement de forme se fait dans la copie du plugin, **jamais dans un fragment** (`WindowsContainmentScriptTest` fige les fragments). Un fragment ou le gabarit modifié fait entrer le plugin dans la portée de sa CI (`scripts/ci/plugin-gate.py`) (AUD-QUA-01).

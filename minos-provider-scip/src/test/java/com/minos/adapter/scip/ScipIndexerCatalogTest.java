@@ -100,7 +100,7 @@ class ScipIndexerCatalogTest {
 
     private static IndexerRegistry qualifiedRegistry() {
         IndexerRegistry registry = new IndexerRegistry();
-        ScipIndexerCatalog.registerQualifiedM1(registry);
+        ScipIndexerCatalog.registerJavaTypeScript(registry);
         return registry;
     }
 }

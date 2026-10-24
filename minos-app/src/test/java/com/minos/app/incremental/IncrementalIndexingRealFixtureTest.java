@@ -47,7 +47,7 @@ class IncrementalIndexingRealFixtureTest {
         AtomicReference<MinosApplication> self = new AtomicReference<>();
 
         try (MinosApplication application = MinosApplication.builder(temp.resolve("home"))
-                .indexerDescriptors(ScipIndexerCatalog.qualifiedM1Descriptors())
+                .indexerDescriptors(ScipIndexerCatalog.javaTypeScriptDescriptors())
                 .providerRuntimeManager(new ReadyRuntime(executor))
                 .snapshotLifecycle(
                         request -> "snapshot-" + snapshots.incrementAndGet(),

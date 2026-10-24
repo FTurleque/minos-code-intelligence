@@ -71,8 +71,8 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static final int MAX_INITIAL_LIST_CAPACITY = 16_384;
     private static final String ACTIVE_FILE = "active.pointer";
     private static final String FILE_PREFIX = "fingerprint-";
-    private static final BuildDescriptorPolicy CURRENT_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m24Defaults();
-    private static final BuildDescriptorPolicy LEGACY_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m17Defaults();
+    private static final BuildDescriptorPolicy CURRENT_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.currentDefaults();
+    private static final BuildDescriptorPolicy LEGACY_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.legacyDefaults();
     private static final HexFormat HEX = HexFormat.of();
     private static final String FIELD_PROJECT_SHA256 = "projectSha256";
     private static final String FIELD_BUILD_SHA256 = "buildSha256";

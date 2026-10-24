@@ -29,7 +29,7 @@ class M17ProviderPlatformTest {
 
     @Test
     void exposesExhaustiveCapabilityProfilesAndLimitations() {
-        List<IndexerProvider> providers = ScipIndexerCatalog.qualifiedM17Providers();
+        List<IndexerProvider> providers = ScipIndexerCatalog.regressionReplayProviders();
         assertEquals(List.of("scip-java", "scip-typescript", "scip-python"),
                 providers.stream().map(value -> value.descriptor().id()).toList());
         for (IndexerProvider provider : providers) {
@@ -72,7 +72,7 @@ class M17ProviderPlatformTest {
 
     private static IndexerRegistry negotiationRegistry() {
         IndexerRegistry registry = new IndexerRegistry();
-        registry.registerAll(ScipIndexerCatalog.qualifiedM17Providers().stream().map(IndexerProvider::descriptor).toList());
+        registry.registerAll(ScipIndexerCatalog.regressionReplayProviders().stream().map(IndexerProvider::descriptor).toList());
         return registry;
     }
 

@@ -39,7 +39,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
 
     public ScipProjectSnapshotLifecycle(Path minosHome) throws IOException {
         this(minosHome, new FileSymbolSnapshotStore(normalizedHome(minosHome).resolve("symbol-snapshots")),
-                ScipIndexerCatalog.qualifiedM1Descriptors());
+                ScipIndexerCatalog.javaTypeScriptDescriptors());
     }
 
     public ScipProjectSnapshotLifecycle(

@@ -62,13 +62,13 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
 
     @Override
     public List<IndexerDescriptor> qualifiedIndexerDescriptors() {
-        return ScipIndexerCatalog.qualifiedM24Descriptors();
+        return ScipIndexerCatalog.qualifiedDescriptors();
     }
 
     /** Référence de méthode : le catalogue n'est lu qu'à la demande. */
     @Override
     public IndexerProviderCatalog providerCatalog() {
-        return ScipIndexerCatalog::qualifiedM24Providers;
+        return ScipIndexerCatalog::qualifiedProviders;
     }
 
     /** Gestionnaires dans l'ordre scip-java, python, polyglotte. */

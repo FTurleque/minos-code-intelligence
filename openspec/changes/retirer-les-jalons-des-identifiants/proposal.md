@@ -37,7 +37,7 @@ Rien ne garde la convention : aucun gate ne lit les identifiants de `src/main`.
 
 - **Plugin IntelliJ** : les identifiants d'action `Minos.*` et les libellés de menu sont conservés.
 - Les **chaînes publiques** qui citent un jalon (descriptions MCP, limitations et diagnostics du catalogue, messages d'erreur, en-tête de manifeste) tant que D3 n'est pas tranchée ; les valeurs de données `"M3"` et `"M5"` (version d'`Origin`) dans tous les cas.
-- Les **112 lignes de commentaires** : non gardées ici ni par `fixer-la-langue-des-commentaires`.
+- Les **commentaires citant un jalon** (111 lignes au HEAD `349e4246`) : rattachés à `fixer-la-langue-des-commentaires` par décision du propriétaire du 2026-10-24 ; ce changement n'en réécrit aucun.
 - Les **21 classes de test** nommées par jalon (`M17ProviderPlatformTest`, `M24PolyglotProviderTest`, etc.) : leurs appels sont mis à jour, leurs noms ne changent pas (`check-polyglot-provider-consistency.py` en exige quatre par chemin).
 - Les **9 scopes JaCoCo** à jalon (`m24-polyglot-provider-platform`, etc.), les **sorties des gates** (« M21 MODULE BOUNDARY … ») et le chemin de sortie `target/m21-quality/` : ce sont des données et des sorties de gates, citées par la CI, `AGENTS.md`, `openspec/config.yaml` et la documentation.
 - Les **fichiers livrés hors `src/main`** : `docker/scripts/configure-m30-docker-services.ps1`, la variable `$M30Services` de `configure-docker-mcp.ps1`, le workflow `m0-java-ci.yml`.

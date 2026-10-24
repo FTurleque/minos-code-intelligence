@@ -38,16 +38,16 @@ public final class ScipIndexerCatalog {
     }
 
     /** Historical M1 catalog preserved for compatibility/replay. */
-    public static List<IndexerDescriptor> qualifiedM1Descriptors() {
+    public static List<IndexerDescriptor> javaTypeScriptDescriptors() {
         return List.of(scipJava(), scipTypeScript());
     }
 
-    public static void registerQualifiedM1(IndexerRegistry registry) {
-        registry.registerAll(qualifiedM1Descriptors());
+    public static void registerJavaTypeScript(IndexerRegistry registry) {
+        registry.registerAll(javaTypeScriptDescriptors());
     }
 
     /** Historical M17 catalog preserved for exact regression replays. */
-    public static List<IndexerProvider> qualifiedM17Providers() {
+    public static List<IndexerProvider> regressionReplayProviders() {
         return List.of(
                 provider(scipJava(), scipJavaProfile(), scipJavaOperationalProfile()),
                 provider(scipTypeScript(), scipTypeScriptProfile(), scipTypeScriptOperationalProfile()),
@@ -55,13 +55,9 @@ public final class ScipIndexerCatalog {
         );
     }
 
-    public static List<IndexerDescriptor> qualifiedM17Descriptors() {
-        return qualifiedM17Providers().stream().map(IndexerProvider::descriptor).toList();
-    }
-
     /** M24 catalog with final dispositions derived from exact-head platform evidence. */
-    public static List<IndexerProvider> qualifiedM24Providers() {
-        List<IndexerProvider> providers = new ArrayList<>(qualifiedM17Providers());
+    public static List<IndexerProvider> qualifiedProviders() {
+        List<IndexerProvider> providers = new ArrayList<>(regressionReplayProviders());
         providers.add(provider(scipClang(), scipClangProfile(), scipClangOperationalProfile()));
         providers.add(provider(scipDotnet(), scipDotnetProfile(), scipDotnetOperationalProfile()));
         providers.add(provider(scipGo(), scipGoProfile(), scipGoOperationalProfile()));
@@ -69,8 +65,8 @@ public final class ScipIndexerCatalog {
         return List.copyOf(providers);
     }
 
-    public static List<IndexerDescriptor> qualifiedM24Descriptors() {
-        return qualifiedM24Providers().stream().map(IndexerProvider::descriptor).toList();
+    public static List<IndexerDescriptor> qualifiedDescriptors() {
+        return qualifiedProviders().stream().map(IndexerProvider::descriptor).toList();
     }
 
     public static IndexerDescriptor scipJava() {

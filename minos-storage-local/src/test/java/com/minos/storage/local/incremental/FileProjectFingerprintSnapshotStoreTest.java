@@ -218,7 +218,7 @@ class FileProjectFingerprintSnapshotStoreTest {
         Files.writeString(project.resolve("go.mod"), "module example.com/minos/m24\n");
         Files.writeString(project.resolve("main.go"), "package main\n");
 
-        ProjectFingerprint legacy = new ProjectFingerprintService(BuildDescriptorPolicy.m17Defaults())
+        ProjectFingerprint legacy = new ProjectFingerprintService(BuildDescriptorPolicy.legacyDefaults())
                 .capture(project);
         ProjectFingerprint current = fingerprintService.capture(project);
         assertEquals(legacy.projectSha256(), current.projectSha256());

@@ -387,3 +387,20 @@ Deux classes publiques internes n'ont plus qu'un constructeur, privé, et un poi
 | `new MinosCli(ProjectSymbolQuery, ProjectOperations, ProjectArchitectureQuery, ProjectImpactQuery)` | `MinosCli.builder(symbolQuery).projectOperations(...).architectureQuery(...).impactQuery(...).build()` |
 
 Un collaborateur de `MinosCli` que l'on ne fournit pas laisse sa commande « not configured in this CLI bootstrap », comme l'ancien `null` ; les mutateurs du `Builder` refusent `null`. Le contrat de la ligne de commande (`MinosCli.run`) ne change pas.
+
+### Identifiants internes sans numéro de jalon ([ADR 0043](../architecture/adr/GEN-0043-retrait-des-artefacts-de-jalon.md)), version 1.3.0
+
+Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change, et aucune sortie de la CLI, du serveur MCP ni du plugin IntelliJ (les identifiants d'action `Minos.*` sont conservés). Des méthodes et constantes publiques de classes internes perdent leur numéro de jalon, sans alias déprécié : un code qui les appelait directement doit être modifié et recompilé (rupture de source et binaire). Les listes et ensembles rendus sont identiques, dans le même ordre.
+
+| Signature retirée | Remplaçant |
+|---|---|
+| `ScipIndexerCatalog.qualifiedM24Providers()` | `ScipIndexerCatalog.qualifiedProviders()` |
+| `ScipIndexerCatalog.qualifiedM24Descriptors()` | `ScipIndexerCatalog.qualifiedDescriptors()` |
+| `ScipIndexerCatalog.qualifiedM17Providers()` | `ScipIndexerCatalog.regressionReplayProviders()` |
+| `ScipIndexerCatalog.qualifiedM17Descriptors()` | aucun (méthode sans appelant) : `regressionReplayProviders().stream().map(IndexerProvider::descriptor).toList()` |
+| `ScipIndexerCatalog.qualifiedM1Descriptors()` | `ScipIndexerCatalog.javaTypeScriptDescriptors()` |
+| `ScipIndexerCatalog.registerQualifiedM1(IndexerRegistry)` | `ScipIndexerCatalog.registerJavaTypeScript(IndexerRegistry)` |
+| `BuildDescriptorPolicy.m24Defaults()` | `BuildDescriptorPolicy.currentDefaults()` |
+| `BuildDescriptorPolicy.m17Defaults()` | `BuildDescriptorPolicy.legacyDefaults()` |
+
+`ScipIndexerCatalog` est dans `com.minos.adapter.scip` (`minos-provider-scip`), `BuildDescriptorPolicy` dans `com.minos.incremental` (`minos-engine`). Le gate `scripts/quality/check-milestone-identifiers.py` refuse désormais un numéro de jalon dans un nom de production.

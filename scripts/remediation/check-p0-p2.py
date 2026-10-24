@@ -239,7 +239,7 @@ def main() -> int:
 
         require("product-facts.py", product_facts, "qualified_descriptor_methods")
         require("product-facts.py", product_facts,
-                'qualified M24 catalog must expose 7 providers')
+                'qualified provider catalog must expose 7 providers')
         forbid("product-facts.py", product_facts,
                '("scipJava", "scipTypeScript", "scipPython")')
         provider_headings = re.findall(r"^### `([^`]+)`", generated_facts, re.MULTILINE)

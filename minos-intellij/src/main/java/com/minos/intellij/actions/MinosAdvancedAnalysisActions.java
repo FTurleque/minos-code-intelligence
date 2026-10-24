@@ -12,7 +12,7 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.psi.PsiFile;
-import com.minos.intellij.protocol.MinosM21Client;
+import com.minos.intellij.protocol.MinosAdvancedAnalysisClient;
 import com.minos.intellij.protocol.MinosJsonFields;
 import com.minos.intellij.service.MinosProjectService;
 import com.minos.intellij.settings.MinosSettingsState;
@@ -21,11 +21,11 @@ import com.minos.intellij.ui.MinosUiController;
 import org.jetbrains.annotations.NotNull;
 
 /** Native IntelliJ entry points for M21-S6 surface parity. */
-public final class MinosM21Actions {
+public final class MinosAdvancedAnalysisActions {
 
     private static final MinosBackgroundTask TASKS = MinosBackgroundTask.withIdeLog();
 
-    private MinosM21Actions() {
+    private MinosAdvancedAnalysisActions() {
     }
 
     private abstract static class ProjectAction extends AnAction {
@@ -125,7 +125,7 @@ public final class MinosM21Actions {
         protected JsonObject execute(Project project, MinosProjectService.Context context, String query) throws Exception {
             int maxNodes = Math.max(1, MinosSettingsState.getInstance(project).value().maxGraphNodes);
             int maxEdges = Math.min(50_000, Math.max(100, maxNodes * 8));
-            return MinosM21Client.getInstance(project).programGraph(context.projectId(), maxNodes, maxEdges);
+            return MinosAdvancedAnalysisClient.getInstance(project).programGraph(context.projectId(), maxNodes, maxEdges);
         }
     }
 
@@ -134,7 +134,7 @@ public final class MinosM21Actions {
 
         @Override
         protected JsonObject execute(Project project, MinosProjectService.Context context, JsonObject symbol) throws Exception {
-            return MinosM21Client.getInstance(project).impactV2(context.projectId(), required(symbol, "id"));
+            return MinosAdvancedAnalysisClient.getInstance(project).impactV2(context.projectId(), required(symbol, "id"));
         }
     }
 
@@ -143,7 +143,7 @@ public final class MinosM21Actions {
 
         @Override
         protected JsonObject execute(Project project, MinosProjectService.Context context, String query) throws Exception {
-            return MinosM21Client.getInstance(project).securityPaths(context.projectId());
+            return MinosAdvancedAnalysisClient.getInstance(project).securityPaths(context.projectId());
         }
     }
 
@@ -152,7 +152,7 @@ public final class MinosM21Actions {
 
         @Override
         protected JsonObject execute(Project project, MinosProjectService.Context context, String query) throws Exception {
-            return MinosM21Client.getInstance(project).semanticIndexStatus(context.projectId());
+            return MinosAdvancedAnalysisClient.getInstance(project).semanticIndexStatus(context.projectId());
         }
     }
 
@@ -161,7 +161,7 @@ public final class MinosM21Actions {
 
         @Override
         protected JsonObject execute(Project project, MinosProjectService.Context context, String query) throws Exception {
-            return MinosM21Client.getInstance(project).synchronizeSemanticIndex(context.projectId());
+            return MinosAdvancedAnalysisClient.getInstance(project).synchronizeSemanticIndex(context.projectId());
         }
     }
 
@@ -170,7 +170,7 @@ public final class MinosM21Actions {
 
         @Override
         protected JsonObject execute(Project project, MinosProjectService.Context context, String query) throws Exception {
-            return MinosM21Client.getInstance(project).semanticSearch(context.projectId(), query, 50);
+            return MinosAdvancedAnalysisClient.getInstance(project).semanticSearch(context.projectId(), query, 50);
         }
     }
 
@@ -179,7 +179,7 @@ public final class MinosM21Actions {
 
         @Override
         protected JsonObject execute(Project project, MinosProjectService.Context context, String query) throws Exception {
-            return MinosM21Client.getInstance(project).hybridSearch(context.projectId(), query, 50);
+            return MinosAdvancedAnalysisClient.getInstance(project).hybridSearch(context.projectId(), query, 50);
         }
     }
 
@@ -188,7 +188,7 @@ public final class MinosM21Actions {
 
         @Override
         protected JsonObject execute(Project project, MinosProjectService.Context context, String query) throws Exception {
-            return MinosM21Client.getInstance(project).hybridContext(context.projectId(), query, 10, 4_000);
+            return MinosAdvancedAnalysisClient.getInstance(project).hybridContext(context.projectId(), query, 10, 4_000);
         }
     }
 
