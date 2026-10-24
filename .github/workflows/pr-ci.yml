@@ -274,6 +274,17 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
+      # AUD-DEP-13: the images Testcontainers starts are listed before the Docker Hub login, so no code of the
+      # repository runs while the token is on disk.
+      - name: List the Testcontainers images
+        id: testcontainers-images
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          images="$(python3 scripts/quality/check-image-pins.py --testcontainers-images | tr '\n' ' ')"
+          echo "images=${images}" >> "$GITHUB_OUTPUT"
+
       # Docker Hub limits anonymous pulls per runner address (429 toomanyrequests on 2026-10-09 stopped base images,
       # pgvector for the PostgreSQL tests, and the Docker qualifications). With the repository secrets
       # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), the next step pulls the Testcontainers
@@ -286,18 +297,19 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # AUD-DEP-13 (option B of decision D4 of durcir-les-workflows-github): the images Testcontainers starts (the
-      # pinned compose defaults the tests read) are pulled here, then the Docker Hub token is removed before any
-      # Maven plugin or test runs. A failed logout fails the step.
+      # AUD-DEP-13: the listed images are pulled, then the Docker Hub token is removed before any Maven plugin or
+      # test runs. A failed logout fails the step.
       - name: Pull the Testcontainers images, then log out of Docker Hub
         if: ${{ runner.os == 'Linux' }}
         shell: bash
+        env:
+          IMAGES: ${{ steps.testcontainers-images.outputs.images }}
         run: |
           set -euo pipefail
           log_out() { docker logout || { echo "logging out of Docker Hub failed: the token would stay readable" >&2; exit 1; }; }
           trap log_out EXIT
-          images="$(python3 scripts/quality/check-image-pins.py --testcontainers-images)"
-          for image in $images; do docker pull "$image"; done
+          test -n "$IMAGES"
+          for image in $IMAGES; do docker pull "$image"; done
 
       - name: Assert exact candidate HEAD (Unix)
         if: runner.os != 'Windows'

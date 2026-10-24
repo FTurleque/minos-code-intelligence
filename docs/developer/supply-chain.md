@@ -229,7 +229,7 @@ Jobs concernés : `Verify (ubuntu-24.04)` de `pr-ci.yml`, `docker-release-valida
 **Durée de la connexion (AUD-DEP-13).** Un job connecté tire ce dont il a besoin puis exécute `docker logout` dans la première étape `run:` qui suit la connexion, avant tout plugin Maven, test ou script de qualification :
 
 - `docker-release-validation.yml` tire les `FROM` épinglés de `docker/Dockerfile.mcp.release` ;
-- `pr-ci.yml` `verify` (Linux) et `code-audit.yml` `mutation` tirent les images de Testcontainers, listées par `python scripts/quality/check-image-pins.py --testcontainers-images` : les défauts épinglés des compose que lisent les tests (aujourd'hui `MINOS_POSTGRES_IMAGE`, l'image `pgvector` que lit `PostgresTestSupport`). Ces deux jobs déclarent dans leur `env:` `TESTCONTAINERS_PULL_POLICY: com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy` et `TESTCONTAINERS_RYUK_DISABLED: 'true'` : les tests ne tirent plus rien, refusent par son nom toute image hors de la liste (au lieu d'un tirage anonyme qui échouerait sur le quota) et ne démarrent pas Ryuk, le conteneur de nettoyage de Testcontainers (le runner est jetable). Une image nouvelle s'ajoute à `TESTCONTAINERS_IMAGE_VARIABLES` de `check-image-pins.py`.
+- `pr-ci.yml` `verify` (Linux) et `code-audit.yml` `mutation` tirent les images de Testcontainers, listées avant la connexion par `python scripts/quality/check-image-pins.py --testcontainers-images` : les défauts épinglés des compose que lisent les tests (aujourd'hui `MINOS_POSTGRES_IMAGE`, l'image `pgvector` que lit `PostgresTestSupport`). Ces deux jobs déclarent dans leur `env:` `TESTCONTAINERS_PULL_POLICY: com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy` et `TESTCONTAINERS_RYUK_DISABLED: 'true'` : les tests ne tirent plus rien, refusent par son nom toute image hors de la liste (au lieu d'un tirage anonyme qui échouerait sur le quota) et ne démarrent pas Ryuk, le conteneur de nettoyage de Testcontainers (le runner est jetable). Une image nouvelle s'ajoute à `TESTCONTAINERS_IMAGE_VARIABLES` de `check-image-pins.py`.
 
 Restent connectés, nommément et avec leur raison dans `DOCKER_LOGIN_KEPT` de `scripts/quality/check-workflow-pins.py` :
 
@@ -238,7 +238,7 @@ Restent connectés, nommément et avec leur raison dans `DOCKER_LOGIN_KEPT` de `
 | `docker-upgrade-qualification.yml` `real-docker-upgrade` | le candidat A est construit depuis un autre commit, dont le Dockerfile peut nommer d'autres empreintes |
 | `release-promotion-gate.yml` `docker-upgrade-qualification` | le candidat A est `main`, même raison |
 
-Le gate refuse tout autre job qui exécute du code connecté, toute entrée de la liste qui ne désigne plus un job connecté, et un job qui tire la liste de Testcontainers sans déclarer les deux variables ci-dessus.
+Le gate refuse tout autre job qui exécute du code connecté, toute entrée de la liste qui ne désigne plus un job connecté, l'étape de déconnexion qui lance du code du dépôt (un script de `scripts/`, le wrapper Maven), et un job qui tire la liste de Testcontainers sans déclarer les deux variables ci-dessus.
 
 **Vérifier la liste sans la CI.** Sur un poste dont Docker n'est pas connecté à Docker Hub (`docker logout`), tirer chaque image de la liste, puis lancer les tests PostgreSQL avec le garde, hors ligne :
 

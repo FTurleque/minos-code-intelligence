@@ -11,7 +11,9 @@ is refused anywhere in a workflow, so a matrix cannot reintroduce it through `${
 Job hardening (AUD-DEP-12, AUD-DEP-13): every `actions/checkout` says `persist-credentials: false` (this repository
 is public: its `git fetch` calls are anonymous; a private repository would authenticate them explicitly); every job
 that runs on a runner declares `timeout-minutes`; a job that logs in to Docker Hub logs out in its first `run:` step
-after the login, unless DOCKER_LOGIN_KEPT names it with a reason, and a stale entry of that list is refused. A job that
+after the login, unless DOCKER_LOGIN_KEPT names it with a reason, and a stale entry of that list is refused; that
+logout step runs no repository code (a script under scripts/, the Maven wrapper), which goes in a step before the
+login. A job that
 pulls the Testcontainers images before logging out (`check-image-pins.py --testcontainers-images`) declares, in its
 `env:`, the pull policy that refuses any other image and disables Ryuk (TESTCONTAINERS_GUARD_ENV): without them a test
 needing a new image would pull it anonymously, under Docker Hub's quota.
@@ -132,6 +134,9 @@ DOCKER_LOGIN_KEPT = {
 # A job that pulls the Testcontainers images, then logs out (AUD-DEP-13, option B of decision D4), lets the tests start
 # those images only: the pull policy refuses any other by name, and Ryuk (an image outside the list) is not started.
 TESTCONTAINERS_PREPULL = "--testcontainers-images"
+# Code of the repository in the step that logs out: a script under scripts/ or the Maven wrapper. That step runs while
+# the token is on disk, so it only pulls what an earlier step computed.
+REPOSITORY_CODE = re.compile(r"(?:^|[\s\"'./\\])scripts[/\\]|\bmvnw\b")
 TESTCONTAINERS_GUARD_ENV = {
     "TESTCONTAINERS_PULL_POLICY": "com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy",
     "TESTCONTAINERS_RYUK_DISABLED": "true",
@@ -253,6 +258,11 @@ def find_job_hardening_violations(label: str, text: str) -> tuple[list[str], set
                         f"{label}:{step_line}: job '{job}' runs code while logged in to Docker Hub -- pull the pinned "
                         f"images, then 'docker logout' in the first run: step after the login, or name the job in "
                         f"DOCKER_LOGIN_KEPT with its reason."
+                    )
+                elif any(REPOSITORY_CODE.search(line) for line in step):
+                    failures.append(
+                        f"{label}:{step_line}: job '{job}' runs repository code in the step that logs out of Docker "
+                        f"Hub -- compute what it needs in a step before the login; after the login, only pull."
                     )
         if any(_step_runs(step) and any(TESTCONTAINERS_PREPULL in line for line in step) for _line, step in _steps(body)):
             env = _job_mapping(body, "env")
