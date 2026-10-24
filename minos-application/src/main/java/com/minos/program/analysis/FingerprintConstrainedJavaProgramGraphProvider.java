@@ -9,6 +9,7 @@ import com.minos.io.Sha256;
 import com.minos.program.ProgramGraph;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.store.cache.WeightedLruCache;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,8 +18,6 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -42,10 +41,8 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
 
     private final ProjectFingerprintSnapshotStore fingerprints;
     private final JavaSourceProgramGraphProvider delegate;
-    private final LinkedHashMap<UUID, CachedFingerprint> immutableFingerprintCache =
-            new LinkedHashMap<>(16, 0.75f, true);
-    private long cacheWeightBytes;
-    private long cacheEvictions;
+    private final WeightedLruCache<UUID, CachedFingerprint> immutableFingerprintCache = new WeightedLruCache<>(
+            DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES, DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES);
     private final SourceStateKeyMemo sourceStateKeys;
 
     public FingerprintConstrainedJavaProgramGraphProvider(ProjectFingerprintSnapshotStore fingerprints) {
@@ -103,9 +100,9 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
     public FingerprintCacheStats fingerprintCacheStats() {
         synchronized (immutableFingerprintCache) {
             return new FingerprintCacheStats(
-                    immutableFingerprintCache.size(), cacheWeightBytes,
+                    immutableFingerprintCache.size(), immutableFingerprintCache.weight(),
                     DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES, DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES,
-                    cacheEvictions);
+                    immutableFingerprintCache.evictions());
         }
     }
 
@@ -122,45 +119,26 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
         synchronized (immutableFingerprintCache) {
             CachedFingerprint current = immutableFingerprintCache.get(projectId);
             if (current != null && current.snapshotId().equals(snapshotId)) return Optional.of(current.snapshot());
-            if (current != null) cacheWeightBytes -= current.weightBytes();
-            if (weight <= DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES) {
-                immutableFingerprintCache.put(projectId, new CachedFingerprint(snapshotId, value, weight));
-                cacheWeightBytes = safeAdd(cacheWeightBytes, weight);
-                trimCache();
-            } else {
-                immutableFingerprintCache.remove(projectId);
-            }
+            immutableFingerprintCache.put(projectId, new CachedFingerprint(snapshotId, value), weight);
         }
         return Optional.of(value);
-    }
-
-    private void trimCache() {
-        Iterator<Map.Entry<UUID, CachedFingerprint>> iterator = immutableFingerprintCache.entrySet().iterator();
-        while ((immutableFingerprintCache.size() > DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES
-                || cacheWeightBytes > DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES) && iterator.hasNext()) {
-            Map.Entry<UUID, CachedFingerprint> eldest = iterator.next();
-            cacheWeightBytes -= eldest.getValue().weightBytes();
-            iterator.remove();
-            cacheEvictions++;
-        }
-        if (cacheWeightBytes < 0L) cacheWeightBytes = 0L;
     }
 
     private static long estimateWeight(ProjectFingerprintSnapshot snapshot) {
         long weight = 4_096L;
         for (FileFingerprint file : snapshot.fingerprint().files()) {
-            weight = safeAdd(weight, 256L);
-            weight = safeAdd(weight, stringWeight(file.relativePath()));
-            weight = safeAdd(weight, stringWeight(file.sha256()));
+            weight = saturatingAdd(weight, 256L);
+            weight = saturatingAdd(weight, stringWeight(file.relativePath()));
+            weight = saturatingAdd(weight, stringWeight(file.sha256()));
         }
         return weight;
     }
 
     private static long stringWeight(String value) {
-        return value == null ? 0L : safeAdd(40L, (long) value.length() * Character.BYTES);
+        return value == null ? 0L : saturatingAdd(40L, (long) value.length() * Character.BYTES);
     }
 
-    private static long safeAdd(long left, long right) {
+    private static long saturatingAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 
@@ -226,7 +204,7 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
         return Sha256.hex(digest);
     }
 
-    private record CachedFingerprint(String snapshotId, ProjectFingerprintSnapshot snapshot, long weightBytes) { }
+    private record CachedFingerprint(String snapshotId, ProjectFingerprintSnapshot snapshot) { }
     public record FingerprintCacheStats(int entries, long weightBytes, int maximumEntries,
                                         long maximumWeightBytes, long evictions) { }
 }

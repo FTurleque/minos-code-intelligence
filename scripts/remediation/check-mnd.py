@@ -99,11 +99,13 @@ def main() -> int:
         require("PostgresCodeKnowledgeSnapshotStore.java", postgres,
                 "activeMetadata(projectId)", "queryCache", "MAX_QUERY_CACHE_WEIGHT_BYTES", "buildLocks")
         require("ProgramGraphService.java", graph_service,
-                "WeightedGraph", "evidenceWeight", "stringWeight", "maximumWeight")
+                "WeightedLruCache<CacheKey, GraphEntry> cache", "evidenceWeight", "stringWeight", "maximumWeight")
         require("FingerprintConstrainedJavaProgramGraphProvider.java", fingerprints,
-                "DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES", "trimCache", "fingerprintCacheStats")
+                "DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES", "WeightedLruCache<UUID, CachedFingerprint> immutableFingerprintCache",
+                "fingerprintCacheStats")
         require("HybridSearchService.java", hybrid,
-                "DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES", "trimCorpusCache", "MAX_QUERY_UTF8_BYTES")
+                "DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES", "WeightedLruCache<UUID, CachedCorpus> corpusCache",
+                "MAX_QUERY_UTF8_BYTES")
 
         require("ManagedPolyglotScipRuntimeManager.java", polyglot,
                 "GOSUMDB", "sum.golang.org", "<clear/>", "INTEGRITY_MARKER", "directoryDigest")

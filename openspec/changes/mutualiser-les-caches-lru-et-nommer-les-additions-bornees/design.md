@@ -20,6 +20,12 @@ HEAD relu : `5ce7b79b` (`develop` du 2026-10-22). La première rédaction (HEAD 
 
 **Non vérifié** : aucun build, test, gate ni rapport JaCoCo exécuté pendant cette relecture ; seules des recherches textuelles (`git grep`), la lecture des sources et des scripts, et la résolution des préfixes JaCoCo par le dictionnaire `SCOPES` de `check-jacoco.py`.
 
+**Relecture au HEAD de la branche d'implémentation** (tâche 1.1, `0c470fb7`, branche `refactor/mutualiser-les-caches-lru-et-nommer-les-additions-bornees` empilée sur `perf/calculer-le-rang-de-symbole-une-fois`, 2026-10-24). Depuis `5ce7b79b`, `exposer-un-port-de-lecture-de-snapshot` met en cache la vue de lecture (`SnapshotReadView`, enveloppée dans `WeightedReadView`) dans les deux stores, et la base SpotBugs a été réalignée. Décomptes refaits : **9** cartes à ordre d'accès (aucune nouvelle ; la vue de lecture est rangée dans la carte `queryCache` déjà comptée de chaque store, pas dans une carte de plus) et **21** déclarations des cinq noms. `grep -rnE 'safeAdd|checkedAdd|safeMultiply|trimCache|trimCorpusCache|WeightedGraph' scripts/ quality/ .github/ .claude/scripts/` : `check-mne.py:86`, `check-mnd.py:102`, `:104`, `:106`, rien d'autre (la base SpotBugs ne nomme aucun de ces helpers). Les numéros de ligne qui ont bougé sont corrigés en place (« relu au HEAD d'implémentation »). Trois constats nouveaux :
+
+- `FileSemanticVectorStore.removeCached(…, eviction)` (`:315-323`) n'est appelé qu'avec `false` (`:83`, `:98`, `:226`, `:265`) : au HEAD, **aucune** invalidation ne compte comme éviction (la première rédaction le supposait possible).
+- `FileSymbolSnapshotStore.publishBuiltView` (`:254-279`) remplace une entrée de même clé (même projet, même instantané, descripteur différent) **sans** retrancher son poids : une dérive de comptage, vers le haut, est possible sur ce chemin de course. Le cache partagé retranche le poids de l'ancienne valeur à chaque remplacement : la dérive disparaît avec la migration (tâche 4.4).
+- Les deux stores, sur une entrée trop lourde, laissent en place l'ancienne valeur de la même clé (`FileSymbolSnapshotStore` : jamais servie, car son descripteur diffère ; `PostgresCodeKnowledgeSnapshotStore` : même clé, donc même contenu). Le cache partagé la retire (D4) : sans effet observable.
+
 ### Cartes à ordre d'accès
 
 Recherche `git grep -nE 'new LinkedHashMap<[^>]*>\([^)]*true\)' -- 'minos-*/src/main/**'` : **9** occurrences (corrigé : 8). Sept caches bornés en poids, deux structures sans poids.
@@ -30,9 +36,9 @@ Recherche `git grep -nE 'new LinkedHashMap<[^>]*>\([^)]*true\)' -- 'minos-*/src/
 | `FingerprintConstrainedJavaProgramGraphProvider` | `:45-46` (corrigé : `:44`) | 64 (`:39`) | 128 Mio (`:40`) | non mise en cache, ancienne valeur de la clé retirée (`:125-132`) | `synchronized (immutableFingerprintCache)` | oui (`trimCache`, `:137-147`) |
 | `SemanticSearchService` | `:27` | 256 (`:20`) | 8 Mio (`:22`) | **aucun test** : insérée, puis l'éviction part de la plus ancienne (`:102-120`) ; chemin inatteignable (requête ≤ 64 Kio, `:21` ; poids d'entrée ≈ 128 o + requête + 8 o par dimension) | `synchronized (queryCache)` | non |
 | `HybridSearchService` | `:42` | 64 (`:33`) | 256 Mio (`:34`) | non mise en cache, ancienne valeur retirée (`:163-170`) | `synchronized (corpusCache)` | oui (`trimCorpusCache`, `:174-184`) |
-| `FileSemanticVectorStore` | `:61` | **aucune** (corrigé : la borne en entrées était supposée partout) | 256 Mio (`:56`, paramétrable) | non mise en cache, ancienne valeur retirée (`:299-313`) | `synchronized (cacheLock)` | oui ; une invalidation peut compter comme éviction (`removeCached(…, eviction)`, `:315-323`) |
-| `FileSymbolSnapshotStore` | `:65-66` (corrigé : `:59`) | 32 (`:40`, paramétrable) | 512 Mio (`:41`, paramétrable) | non mise en cache ; autres entrées du projet retirées avant (`removeProjectEntries`, `:254-266`, `:343-352`) | `synchronized (cacheLock)` | oui (`trimCache`, `:358-365`) |
-| `PostgresCodeKnowledgeSnapshotStore` | `:72-73` (corrigé : `:59`) | 32 (`:61`) | 512 Mio (`:62`) | non mise en cache ; autres entrées du projet retirées avant (`:210-225`) | `synchronized (cacheLock)` | oui (boucle en ligne, `:217-224`) |
+| `FileSemanticVectorStore` | `:61` | **aucune** (corrigé : la borne en entrées était supposée partout) | 256 Mio (`:56`, paramétrable) | non mise en cache, ancienne valeur retirée (`:299-313`) | `synchronized (cacheLock)` | oui ; `removeCached(…, eviction)` (`:315-323`) n'est appelé qu'avec `false` : aucune invalidation n'est comptée (relu au HEAD d'implémentation) |
+| `FileSymbolSnapshotStore` | `:65-66` (corrigé : `:59`) | 32 (`:40`, paramétrable) | 512 Mio (`:41`, paramétrable) | non mise en cache ; autres entrées du projet retirées avant (`removeProjectEntries`, `publishBuiltView` `:254-279`, `:348-357` ; relu au HEAD d'implémentation) ; valeur : `WeightedReadView` (vue de lecture) | `synchronized (cacheLock)` | oui (`trimCache`, `:363-370`) |
+| `PostgresCodeKnowledgeSnapshotStore` | `:72-73` (corrigé : `:59`) | 32 (`:61`) | 512 Mio (`:62`) | non mise en cache ; autres entrées du projet retirées avant (`cache`, `:214-230`) ; valeur : `WeightedReadView` | `synchronized (cacheLock)` | oui (boucle en ligne, `:222-229`) |
 
 Sans poids : `HostedDenialThrottle.java:28` (fenêtres de refus `ArrayDeque<Instant>`) et **`SourceStateKeyMemo.java:35`** (corrigé : absent de la première rédaction ; mémo borné à `MAX_ENTRIES = 64` avec délai de réutilisation sur horloge monotone, arrivé avec `ne-plus-hacher-les-sources-avant-le-cache-du-graphe`).
 
@@ -44,14 +50,14 @@ Recherche des déclarations `private static long <nom>(` : **21**, décompte con
 
 | Nom | Sites | Comportement au dépassement |
 |---|---|---|
-| `safeAdd` (8) | `HybridSearchService.java:249`, `SemanticIndexService.java:236`, `FingerprintConstrainedJavaProgramGraphProvider.java:163`, `FileSemanticVectorStore.java:474`, `FileSymbolSnapshotStore.java:388`, `PostgresCodeKnowledgeSnapshotStore.java:503` (corrigés : `:234`, `:204`, `:138`, `:471`, `:371`, `:456`) | sature à `Long.MAX_VALUE` (comparaison `right > Long.MAX_VALUE - left`) |
+| `safeAdd` (8) | `HybridSearchService.java:249`, `SemanticIndexService.java:236`, `FingerprintConstrainedJavaProgramGraphProvider.java:163`, `FileSemanticVectorStore.java:474`, `FileSymbolSnapshotStore.java:393`, `PostgresCodeKnowledgeSnapshotStore.java:507` (corrigés : `:234`, `:204`, `:138`, `:471`, `:371`, `:456` ; puis `:388` → `:393` et `:503` → `:507` au HEAD d'implémentation) | sature à `Long.MAX_VALUE` (comparaison `right > Long.MAX_VALUE - left`) |
 | | `DeterministicJson.java:241` (classe imbriquée) | lève `OutputBudgetExceededException` |
 | | `RuntimeIntelligenceService.java:311` (corrigé : `:303` ; trois paramètres, dont `label`) | lève `IllegalStateException` sur `Math.addExact` |
 | `checkedAdd` (3) | `SemanticSearchService.java:129` | sature (`Math.addExact` rattrapé) |
 | | `RemoteCloneBudget.java:143` | lève `IOException` |
 | | `FileSemanticVectorStore.java:444` (corrigé : `:441` ; classe imbriquée `DecodeBudget`, trois paramètres) | lève `IOException` |
 | `saturatingAdd` (5) | `ProgramGraphService.java:289` (`Math.addExact` rattrapé) ; `JGitRemoteRepositoryMaterializer.java:391`, `ProviderWriteQuotaSupervisor.java:302`, `RunDirectoryRetention.java:361` (comparaison) ; `ScipIngestionLimits.java:258` (comparaison, **refuse un opérande négatif**) | sature |
-| `safeMultiply` (3) | `SemanticIndexService.java:240`, `FileSymbolSnapshotStore.java:392`, `PostgresCodeKnowledgeSnapshotStore.java:507` (relus : `Math.multiplyExact` rattrapé) | sature |
+| `safeMultiply` (3) | `SemanticIndexService.java:240`, `FileSymbolSnapshotStore.java:397`, `PostgresCodeKnowledgeSnapshotStore.java:511` (relus : `Math.multiplyExact` rattrapé ; `:392` → `:397` et `:507` → `:511` au HEAD d'implémentation) | sature |
 | `saturatingMultiply` (2) | `SourceBudgetPolicy.java:106` (`Math.multiplyExact` rattrapé) ; `ScipIngestionLimits.java:263` (division, refuse un opérande négatif) | sature |
 
 Deux constats nouveaux :
@@ -110,19 +116,33 @@ Tests existants des caches : `FileSymbolSnapshotStoreCacheTest`, `-RetryTest`, `
 
 `saturatingAdd` / `saturatingMultiply` pour ce qui sature ; `addOrThrow` (suffixé si utile) pour ce qui lève ; `checkedAdd` n'est gardé que pour ce qui lève. Les huit `safeAdd`, le `checkedAdd` de `SemanticSearchService` et les trois `safeMultiply` sont renommés dans leur classe, sans extraction ni ligne de calcul modifiée. `check-mne.py:86` passe de `safeMultiply` à `saturatingMultiply(Files.size(snapshot)` dans la même tâche : l'ancre est plus forte (l'appel, pas seulement le nom). La première rédaction gardait `safeMultiply` dans `FileSymbolSnapshotStore` à cause de `ramener-le-poids-des-vues-a-la-mesure`, archivé depuis : cette exception n'a plus de raison.
 
-### D2. Module et package du cache partagé — **décision en attente du propriétaire**
+Table de renommage (tâche 1.1, relue au HEAD d'implémentation `0c470fb7`) :
 
-Recommandation : **`minos-engine`, package neuf `com.minos.store.cache`**, classe `WeightedLruCache` (nom indicatif).
+| Site | Nom actuel | Comportement au dépassement | Nom cible |
+|---|---|---|---|
+| `HybridSearchService.java:249`, `SemanticIndexService.java:236`, `FingerprintConstrainedJavaProgramGraphProvider.java:163`, `FileSemanticVectorStore.java:474`, `FileSymbolSnapshotStore.java:393`, `PostgresCodeKnowledgeSnapshotStore.java:507` | `safeAdd` | sature à `Long.MAX_VALUE` | `saturatingAdd` |
+| `DeterministicJson.java:241` | `safeAdd` | lève `OutputBudgetExceededException` | `addOrThrow` |
+| `RuntimeIntelligenceService.java:311` | `safeAdd(…, label)` | lève `IllegalStateException` | `addOrThrow` |
+| `SemanticSearchService.java:129` | `checkedAdd` | sature à `Long.MAX_VALUE` | `saturatingAdd` |
+| `SemanticIndexService.java:240`, `FileSymbolSnapshotStore.java:397`, `PostgresCodeKnowledgeSnapshotStore.java:511` | `safeMultiply` | sature à `Long.MAX_VALUE` | `saturatingMultiply` |
+| `RemoteCloneBudget.java:143`, `FileSemanticVectorStore.java:444` | `checkedAdd` | lève `IOException` | inchangé (le nom dit l'échec) |
+| `saturatingAdd` (5), `saturatingMultiply` (2) | — | sature | inchangés |
+
+### D2. Module et package du cache partagé — **décidé par le propriétaire le 2026-10-24**
+
+Décision : **`minos-engine`, package neuf `com.minos.store.cache`**, classe `WeightedLruCache` (la recommandation est retenue).
 
 - Direction (ADR 0022) : les trois modules consommateurs (`minos-application`, `minos-storage-local`, `minos-storage-postgresql`) dépendent déjà de `minos-engine` (POM relus) ; aucune arête nouvelle. `minos-application` est exclu (les stores n'en dépendent pas : ce serait inverser la direction) ; `minos-storage-local` aussi (l'application n'en dépend pas, et le store PostgreSQL ne nomme que les quatre types de sa liste A13, `check-module-boundaries.py:604-609`).
 - Propriété (ADR 0044, ADR 0062, A14) : la racine `store` n'appartient qu'à `minos-engine` (`:618-621`) ; le sous-package ne crée ni racine ni package partagé. Il est une feuille (JDK seul) : A8 reste à zéro cycle.
 - Alternative : `minos-domain`. Plus en amont, mais le domaine porte le modèle, pas une structure de données technique, et sa liste A14 (`domain`, `program`, `semantic`) imposerait une racine nouvelle, donc une décision au sens de l'ADR 0062.
 
-**D2b. Arithmétique bornée partagée** (action de l'audit, `BoundedArithmetic`) — **décision en attente du propriétaire**. Recommandation : **ne pas la créer dans ce changement**. Le lot 1 suffit à lever l'ambiguïté ; une classe partagée toucherait sept modules (dont `minos-runtime-local`, `minos-provider-scip`, `minos-integration-git`) pour des fonctions d'une ligne et devrait trancher la sémantique des négatifs (écart 2). Si le propriétaire la veut, elle vit dans `minos-engine` (seul module en amont de tous ses appelants, hors domaine) et fait l'objet d'un changement distinct.
+**D2b. Arithmétique bornée partagée** (action de l'audit, `BoundedArithmetic`) — **décidé par le propriétaire le 2026-10-24** : **aucune classe `BoundedArithmetic` partagée dans ce changement** (la recommandation est retenue). Le lot 1 suffit à lever l'ambiguïté ; une classe partagée toucherait sept modules (dont `minos-runtime-local`, `minos-provider-scip`, `minos-integration-git`) pour des fonctions d'une ligne et devrait trancher la sémantique des négatifs (écart 2). Si le propriétaire la veut, elle vit dans `minos-engine` (seul module en amont de tous ses appelants, hors domaine) et fait l'objet d'un changement distinct.
 
-### D3. Structures sans poids — **décision en attente du propriétaire**
+### D3. Structures sans poids — **décidé par le propriétaire le 2026-10-24**
 
-Recommandation : **exclure `HostedDenialThrottle` et `SourceStateKeyMemo`**, inscrits dans la liste fermée du gate avec leur raison (« fenêtres de refus glissantes, sans poids » ; « mémo à délai de réutilisation, borné en nombre, sans poids »). Alternative : leur donner un poids unitaire ; cela ne partage que l'éviction par nombre, au prix d'un couplage et d'une sémantique de délai que le cache n'a pas.
+Décision : **exclure `HostedDenialThrottle` et `SourceStateKeyMemo`**, inscrits dans la liste fermée du gate avec leur raison (« fenêtres de refus glissantes, sans poids » ; « mémo à délai de réutilisation, borné en nombre, sans poids »). Alternative écartée : leur donner un poids unitaire ; cela ne partage que l'éviction par nombre, au prix d'un couplage et d'une sémantique de délai que le cache n'a pas.
+
+Les autres décisions (D1, D4, D5, D6) suivent les recommandations de ce document, sur instruction du propriétaire du 2026-10-24.
 
 ### D4. Contrat du cache partagé
 
@@ -142,6 +162,15 @@ Pour chaque cache : tests existants verts avant, migration, tests verts après, 
 ### D6. Un gate neuf, à liste fermée
 
 `scripts/quality/check-bounded-helpers.py` (nouveau, `--self-test` sur arbres temporaires, racine paramétrable, câblé dans le job `invariants` de `pr-ci.yml`) refuse dans `minos-*/src/main/**` : une déclaration de méthode `safeAdd` ou `safeMultiply` (toute signature) ; une déclaration `checkedAdd` dont le corps ne contient pas `throw` (lot 1) ; une construction `new LinkedHashMap<…>(…, true)` (espaces et retours à la ligne admis) hors de la classe partagée et hors de la liste fermée (lot 2). Une entrée de liste qui ne correspond plus à rien fait échouer le gate. Le gate affiche le nombre de helpers contrôlés et la liste fermée.
+
+### Écarts constatés à la mise en œuvre (2026-10-24)
+
+- **Code extérieur sous le verrou du cache** (D4) : le prédicat de `removeIf`, ainsi que `equals` et `hashCode` des clés, s'exécutent sous le verrou privé du cache. Ce sont des comparaisons de records sans effet de bord ; la Javadoc de `WeightedLruCache` interdit qu'ils rappellent le cache. Le poids, lui, est toujours calculé avant l'appel.
+- **Borne haute du plafond** : les constructeurs de visibilité package de `ProgramGraphService`, `FileSemanticVectorStore` et `FileSymbolSnapshotStore` acceptaient un plafond jusqu'à `Long.MAX_VALUE` ; au-delà de `Long.MAX_VALUE / 2`, le cache partagé lève désormais `IllegalArgumentException`. Aucun appelant ni test ne passe une telle valeur.
+- **Poids négatif au point d'appel** (tâche 4.2) et **entrée trop lourde de `SemanticSearchService`** (tâche 4.3) : inatteignables par l'API (sommes saturantes de termes positifs ; dimensions ≤ 16 384 et requête ≤ 64 Kio, soit ≤ ~200 Kio pour un plafond de 8 Mio). Le comportement est prouvé par `WeightedLruCacheTest`, pas par un test de la classe propriétaire.
+- **`FileSymbolSnapshotStore`** : le remplacement d'une entrée de même clé retranche maintenant le poids de l'ancienne (dérive vers le haut corrigée) ; le record `WeightedReadView`, qui refusait un poids < 1, disparaît (le poids estimé vaut au moins 64 Kio).
+- **`FileSemanticVectorStore`** : `removeCached(…, eviction)` est conservé (l'appel `removeCached(snapshot.projectId(), false)` est exigé par `check-semantic-retrieval-consistency.py`) ; une invalidation marquée éviction resterait comptée par le store, en plus des évictions du cache.
+- **`SemanticSearchService`** : la première lecture du cache ne prend plus le moniteur du propriétaire (le cache sérialise lui-même) ; la séquence relecture puis insertion reste sous ce moniteur.
 
 ## Direction des dépendances
 

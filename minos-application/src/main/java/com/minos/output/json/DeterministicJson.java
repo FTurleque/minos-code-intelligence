@@ -212,10 +212,10 @@ public final class DeterministicJson {
                 if (Character.isHighSurrogate(current)
                         && index + 1 < value.length()
                         && Character.isLowSurrogate(value.charAt(index + 1))) {
-                    bytes = safeAdd(bytes, 4L);
+                    bytes = addOrThrow(bytes, 4L);
                     index++;
                 } else {
-                    bytes = safeAdd(bytes, Character.isSurrogate(current) ? 1L : utf8Bytes(current));
+                    bytes = addOrThrow(bytes, Character.isSurrogate(current) ? 1L : utf8Bytes(current));
                 }
             }
             account(bytes);
@@ -223,7 +223,7 @@ public final class DeterministicJson {
         }
 
         private void account(long bytes) {
-            utf8Bytes = safeAdd(utf8Bytes, bytes);
+            utf8Bytes = addOrThrow(utf8Bytes, bytes);
             if (utf8Bytes > maximumUtf8Bytes) throw new OutputBudgetExceededException();
         }
 
@@ -238,7 +238,7 @@ public final class DeterministicJson {
             return 4;
         }
 
-        private static long safeAdd(long left, long right) {
+        private static long addOrThrow(long left, long right) {
             if (right > Long.MAX_VALUE - left) throw new OutputBudgetExceededException();
             return left + right;
         }

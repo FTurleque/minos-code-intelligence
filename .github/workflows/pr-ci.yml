@@ -183,6 +183,12 @@ jobs:
       - name: Milestone artifact reference guard self-test
         run: python scripts/quality/check-milestone-artifact-references.py --self-test
 
+      - name: Bounded helpers gate (a bounded-arithmetic helper is named after its overflow behaviour)
+        run: python scripts/quality/check-bounded-helpers.py
+
+      - name: Bounded helpers gate self-test
+        run: python scripts/quality/check-bounded-helpers.py --self-test
+
       - name: Partial-result consumer gate (heuristic, see its docstring for what it cannot see)
         run: python scripts/quality/check-partial-result-consumers.py
 
