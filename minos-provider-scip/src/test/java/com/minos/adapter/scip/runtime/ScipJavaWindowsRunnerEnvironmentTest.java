@@ -13,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -70,7 +71,7 @@ class ScipJavaWindowsRunnerEnvironmentTest {
     }
 
     private static void assertRefused(String original, String mutated, String name) {
-        assertTrue(!mutated.equals(original), "the mutation did not apply for " + name);
+        assertNotEquals(original, mutated, "the mutation did not apply for " + name);
         List<String> found = violations(mutated);
         assertTrue(found.stream().anyMatch(violation -> violation.contains(name)), found.toString());
     }
