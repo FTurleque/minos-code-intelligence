@@ -144,7 +144,7 @@ public final class SemanticIndexService {
         boolean reusableMetadata = previousMetadata.isPresent() && sameModel(previousMetadata.orElseThrow(), provider);
         long persistedBytes = previousMetadata.isPresent() ? sizeBytes(projectId) : 0L;
         boolean reuseFitsWorkingSet = reusableMetadata
-                && safeAdd(currentWorkingSetBytes, safeMultiply(persistedBytes, PERSISTED_INDEX_AMPLIFICATION))
+                && saturatingAdd(currentWorkingSetBytes, saturatingMultiply(persistedBytes, PERSISTED_INDEX_AMPLIFICATION))
                     <= MAX_SYNCHRONIZE_WORKING_SET_BYTES;
         // Reuse is decided on stable keys and checksums alone: the stored vectors are neither read nor sent
         // back, the store keeps them for the documents marked as reused and refuses a reuse it cannot honour.
@@ -233,11 +233,11 @@ public final class SemanticIndexService {
         return bytes;
     }
 
-    private static long safeAdd(long left, long right) {
+    private static long saturatingAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 
-    private static long safeMultiply(long left, long right) {
+    private static long saturatingMultiply(long left, long right) {
         try { return Math.multiplyExact(left, right); }
         catch (ArithmeticException exception) { return Long.MAX_VALUE; }
     }

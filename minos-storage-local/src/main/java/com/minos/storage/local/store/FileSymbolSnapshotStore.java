@@ -267,7 +267,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             removeProjectEntries(projectId, key);
             if (weight <= maxQueryCacheWeightBytes) {
                 queryCache.put(key, new WeightedReadView(built, weight));
-                cacheWeightBytes = safeAdd(cacheWeightBytes, weight);
+                cacheWeightBytes = saturatingAdd(cacheWeightBytes, weight);
                 trimCache();
             }
             return QueryResolution.complete(Optional.of(built));
@@ -380,21 +380,21 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
     private long estimateQueryViewWeight(UUID projectId, SnapshotDescriptor descriptor) throws IOException {
         long countWeight = 64L * 1024L;
-        countWeight = safeAdd(countWeight, (long) descriptor.symbolCount() * 1024L);
-        countWeight = safeAdd(countWeight, (long) descriptor.occurrenceCount() * 640L);
-        countWeight = safeAdd(countWeight, (long) descriptor.relationshipCount() * 1024L);
+        countWeight = saturatingAdd(countWeight, (long) descriptor.symbolCount() * 1024L);
+        countWeight = saturatingAdd(countWeight, (long) descriptor.occurrenceCount() * 640L);
+        countWeight = saturatingAdd(countWeight, (long) descriptor.relationshipCount() * 1024L);
         Path snapshot = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
-        long persistedWeight = safeMultiply(Files.size(snapshot), QUERY_VIEW_PERSISTED_AMPLIFICATION);
+        long persistedWeight = saturatingMultiply(Files.size(snapshot), QUERY_VIEW_PERSISTED_AMPLIFICATION);
         // AUD-PERF-11 : l'index dérivé des arêtes entrantes, construit plus tard, vit autant que la vue en cache.
-        return safeAdd(Math.max(countWeight, persistedWeight),
+        return saturatingAdd(Math.max(countWeight, persistedWeight),
                 SnapshotReadView.incomingRelationshipsWeightBytes(descriptor.relationshipCount()));
     }
 
-    private static long safeAdd(long left, long right) {
+    private static long saturatingAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 
-    private static long safeMultiply(long left, long right) {
+    private static long saturatingMultiply(long left, long right) {
         try {
             return Math.multiplyExact(left, right);
         } catch (ArithmeticException exception) {

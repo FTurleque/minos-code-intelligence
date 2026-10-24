@@ -164,7 +164,7 @@ public final class HybridSearchService {
             if (previous != null) corpusCacheWeightBytes -= previous.weightBytes();
             if (weight <= DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES) {
                 corpusCache.put(project.id(), new WeightedCorpus(next, weight));
-                corpusCacheWeightBytes = safeAdd(corpusCacheWeightBytes, weight);
+                corpusCacheWeightBytes = saturatingAdd(corpusCacheWeightBytes, weight);
                 trimCorpusCache();
             }
         }
@@ -213,18 +213,18 @@ public final class HybridSearchService {
         long weight = 4_096L;
         for (int index = 0; index < corpus.documents().size(); index++) {
             SemanticDocument document = corpus.documents().get(index);
-            weight = safeAdd(weight, 256L);
-            weight = safeAdd(weight, stringWeight(document.id()));
-            weight = safeAdd(weight, stringWeight(document.stableKey()));
-            weight = safeAdd(weight, stringWeight(document.sourceId()));
-            weight = safeAdd(weight, stringWeight(document.fileId()));
-            weight = safeAdd(weight, stringWeight(document.content()));
-            weight = safeAdd(weight, stringWeight(document.checksum()));
-            weight = safeAdd(weight, stringWeight(corpus.normalizedContents().get(index)));
+            weight = saturatingAdd(weight, 256L);
+            weight = saturatingAdd(weight, stringWeight(document.id()));
+            weight = saturatingAdd(weight, stringWeight(document.stableKey()));
+            weight = saturatingAdd(weight, stringWeight(document.sourceId()));
+            weight = saturatingAdd(weight, stringWeight(document.fileId()));
+            weight = saturatingAdd(weight, stringWeight(document.content()));
+            weight = saturatingAdd(weight, stringWeight(document.checksum()));
+            weight = saturatingAdd(weight, stringWeight(corpus.normalizedContents().get(index)));
         }
         for (String key : corpus.graphDegree().keySet()) {
-            weight = safeAdd(weight, 64L);
-            weight = safeAdd(weight, stringWeight(key));
+            weight = saturatingAdd(weight, 64L);
+            weight = saturatingAdd(weight, stringWeight(key));
         }
         return weight;
     }
@@ -236,7 +236,7 @@ public final class HybridSearchService {
      */
     private static long stringWeight(String value) {
         if (value == null) return 0L;
-        return safeAdd(40L, (long) value.length() * (isLatin1(value) ? Byte.BYTES : Character.BYTES));
+        return saturatingAdd(40L, (long) value.length() * (isLatin1(value) ? Byte.BYTES : Character.BYTES));
     }
 
     private static boolean isLatin1(String value) {
@@ -246,7 +246,7 @@ public final class HybridSearchService {
         return true;
     }
 
-    private static long safeAdd(long left, long right) {
+    private static long saturatingAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 

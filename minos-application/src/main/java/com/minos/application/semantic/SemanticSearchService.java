@@ -103,7 +103,7 @@ public final class SemanticSearchService {
             SemanticVector existing = queryCache.get(key);
             if (existing != null) return existing;
             queryCache.put(key, embedded);
-            queryCacheWeightBytes = checkedAdd(queryCacheWeightBytes, cacheWeight(key, embedded));
+            queryCacheWeightBytes = saturatingAdd(queryCacheWeightBytes, cacheWeight(key, embedded));
             evictQueryCache();
         }
         return embedded;
@@ -126,7 +126,7 @@ public final class SemanticSearchService {
                 + (long) vector.dimensions() * Double.BYTES;
     }
 
-    private static long checkedAdd(long left, long right) {
+    private static long saturatingAdd(long left, long right) {
         try {
             return Math.addExact(left, right);
         } catch (ArithmeticException exception) {

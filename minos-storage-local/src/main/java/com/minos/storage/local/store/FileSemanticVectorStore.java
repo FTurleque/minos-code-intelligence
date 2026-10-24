@@ -302,7 +302,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             if (previous != null) cacheWeightBytes -= previous.weightBytes();
             if (entry.weightBytes() > maxCacheWeightBytes) return;
             cache.put(projectId, entry);
-            cacheWeightBytes = safeAdd(cacheWeightBytes, entry.weightBytes());
+            cacheWeightBytes = saturatingAdd(cacheWeightBytes, entry.weightBytes());
             while (cacheWeightBytes > maxCacheWeightBytes && !cache.isEmpty()) {
                 String eldest = cache.keySet().iterator().next();
                 CacheEntry removed = cache.remove(eldest);
@@ -455,23 +455,23 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         long weight = 1024L;
         for (IndexedDocument indexed : snapshot.documents()) {
             SemanticDocument document = indexed.document();
-            weight = safeAdd(weight, 256L);
-            weight = safeAdd(weight, (long) indexed.vector().dimensions() * Double.BYTES);
-            weight = safeAdd(weight, stringWeight(document.id()));
-            weight = safeAdd(weight, stringWeight(document.stableKey()));
-            weight = safeAdd(weight, stringWeight(document.sourceId()));
-            weight = safeAdd(weight, stringWeight(document.fileId()));
-            weight = safeAdd(weight, stringWeight(document.content()));
-            weight = safeAdd(weight, stringWeight(document.checksum()));
+            weight = saturatingAdd(weight, 256L);
+            weight = saturatingAdd(weight, (long) indexed.vector().dimensions() * Double.BYTES);
+            weight = saturatingAdd(weight, stringWeight(document.id()));
+            weight = saturatingAdd(weight, stringWeight(document.stableKey()));
+            weight = saturatingAdd(weight, stringWeight(document.sourceId()));
+            weight = saturatingAdd(weight, stringWeight(document.fileId()));
+            weight = saturatingAdd(weight, stringWeight(document.content()));
+            weight = saturatingAdd(weight, stringWeight(document.checksum()));
         }
         return weight;
     }
 
     private static long stringWeight(String value) {
-        return value == null ? 0L : safeAdd(40L, (long) value.length() * Character.BYTES);
+        return value == null ? 0L : saturatingAdd(40L, (long) value.length() * Character.BYTES);
     }
 
-    private static long safeAdd(long left, long right) {
+    private static long saturatingAdd(long left, long right) {
         if (right > Long.MAX_VALUE - left) return Long.MAX_VALUE;
         return left + right;
     }

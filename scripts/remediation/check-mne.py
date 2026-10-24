@@ -83,7 +83,7 @@ def main() -> int:
         require("SnapshotBinaryCodecSupport.java", snapshot_codec,
                 "MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L", "requireSnapshotFileSize")
         require("FileSymbolSnapshotStore.java", file_snapshot,
-                "QUERY_VIEW_PERSISTED_AMPLIFICATION", "Files.size(snapshot)", "safeMultiply")
+                "QUERY_VIEW_PERSISTED_AMPLIFICATION", "saturatingMultiply(Files.size(snapshot)")
         require("PostgresCodeKnowledgeSnapshotStore.java", postgres_snapshot,
                 "QUERY_VIEW_PERSISTED_AMPLIFICATION", "estimateWeight(metadata, payloadBytes)")
 

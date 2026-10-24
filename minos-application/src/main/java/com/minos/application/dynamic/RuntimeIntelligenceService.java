@@ -134,8 +134,8 @@ public final class RuntimeIntelligenceService {
             for (CorrelatedRuntimeObservation correlated : session.observations()) {
                 all.add(correlated);
                 RuntimeObservation observation = correlated.observation();
-                totalHits = safeAdd(totalHits, observation.hits(), "total runtime hits");
-                totalDuration = safeAdd(totalDuration, observation.totalDurationNanos(), "total runtime duration");
+                totalHits = addOrThrow(totalHits, observation.hits(), "total runtime hits");
+                totalDuration = addOrThrow(totalDuration, observation.totalDurationNanos(), "total runtime duration");
                 addResolved(observedSymbolIds, correlated.source());
                 addResolved(observedSymbolIds, correlated.target());
                 if (observation.type() == RuntimeObservationType.LINE_COVERAGE) {
@@ -197,10 +197,10 @@ public final class RuntimeIntelligenceService {
                 boolean source = resolvedAs(value.source(), symbolId);
                 boolean target = resolvedAs(value.target(), symbolId);
                 if (observation.type() == RuntimeObservationType.SYMBOL_EXECUTION && source) {
-                    executionHits = safeAdd(executionHits, observation.hits(), "symbol execution hits");
-                    totalDuration = safeAdd(totalDuration, observation.totalDurationNanos(), "symbol runtime duration");
+                    executionHits = addOrThrow(executionHits, observation.hits(), "symbol execution hits");
+                    totalDuration = addOrThrow(totalDuration, observation.totalDurationNanos(), "symbol runtime duration");
                 } else if (observation.type() == RuntimeObservationType.LINE_COVERAGE && source) {
-                    coveredLineHits = safeAdd(coveredLineHits, observation.hits(), "covered line hits");
+                    coveredLineHits = addOrThrow(coveredLineHits, observation.hits(), "covered line hits");
                 } else if (observation.type() == RuntimeObservationType.CALL) {
                     if (source) {
                         String key = value.source().reference().display() + " -> " + value.target().reference().display();
@@ -308,7 +308,7 @@ public final class RuntimeIntelligenceService {
                 .limit(limit).toList();
     }
 
-    private static long safeAdd(long left, long right, String label) {
+    private static long addOrThrow(long left, long right, String label) {
         try {
             return Math.addExact(left, right);
         } catch (ArithmeticException exception) {
@@ -373,8 +373,8 @@ public final class RuntimeIntelligenceService {
         private MutableHotPath(CorrelatedRuntimeObservation sample) { this.sample = sample; }
 
         private void add(long valueHits, long valueDuration) {
-            hits = safeAdd(hits, valueHits, "hot path hits");
-            duration = safeAdd(duration, valueDuration, "hot path duration");
+            hits = addOrThrow(hits, valueHits, "hot path hits");
+            duration = addOrThrow(duration, valueDuration, "hot path duration");
         }
 
         private HotPath view() {
@@ -394,8 +394,8 @@ public final class RuntimeIntelligenceService {
         private MutableCall(CorrelatedRuntimeObservation sample) { this.sample = sample; }
 
         private void add(long valueHits, long valueDuration) {
-            hits = safeAdd(hits, valueHits, "observed call hits");
-            duration = safeAdd(duration, valueDuration, "observed call duration");
+            hits = addOrThrow(hits, valueHits, "observed call hits");
+            duration = addOrThrow(duration, valueDuration, "observed call duration");
         }
 
         private ObservedCall view() {

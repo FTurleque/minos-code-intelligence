@@ -125,7 +125,7 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
             if (current != null) cacheWeightBytes -= current.weightBytes();
             if (weight <= DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES) {
                 immutableFingerprintCache.put(projectId, new CachedFingerprint(snapshotId, value, weight));
-                cacheWeightBytes = safeAdd(cacheWeightBytes, weight);
+                cacheWeightBytes = saturatingAdd(cacheWeightBytes, weight);
                 trimCache();
             } else {
                 immutableFingerprintCache.remove(projectId);
@@ -149,18 +149,18 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
     private static long estimateWeight(ProjectFingerprintSnapshot snapshot) {
         long weight = 4_096L;
         for (FileFingerprint file : snapshot.fingerprint().files()) {
-            weight = safeAdd(weight, 256L);
-            weight = safeAdd(weight, stringWeight(file.relativePath()));
-            weight = safeAdd(weight, stringWeight(file.sha256()));
+            weight = saturatingAdd(weight, 256L);
+            weight = saturatingAdd(weight, stringWeight(file.relativePath()));
+            weight = saturatingAdd(weight, stringWeight(file.sha256()));
         }
         return weight;
     }
 
     private static long stringWeight(String value) {
-        return value == null ? 0L : safeAdd(40L, (long) value.length() * Character.BYTES);
+        return value == null ? 0L : saturatingAdd(40L, (long) value.length() * Character.BYTES);
     }
 
-    private static long safeAdd(long left, long right) {
+    private static long saturatingAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 

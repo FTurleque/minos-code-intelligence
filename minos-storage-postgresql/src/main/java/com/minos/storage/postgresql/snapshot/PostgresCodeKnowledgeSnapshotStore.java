@@ -217,7 +217,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             if (weight > MAX_QUERY_CACHE_WEIGHT_BYTES) return;
             WeightedReadView previous = queryCache.put(key, new WeightedReadView(view, weight));
             if (previous != null) cacheWeightBytes -= previous.weightBytes();
-            cacheWeightBytes = safeAdd(cacheWeightBytes, weight);
+            cacheWeightBytes = saturatingAdd(cacheWeightBytes, weight);
             Iterator<Map.Entry<CacheKey, WeightedReadView>> iterator = queryCache.entrySet().iterator();
             while ((queryCache.size() > MAX_QUERY_CACHE_ENTRIES || cacheWeightBytes > MAX_QUERY_CACHE_WEIGHT_BYTES)
                     && iterator.hasNext()) {
@@ -495,20 +495,20 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
 
     private static long estimateWeight(ActiveMetadata metadata, long persistedBytes) {
         long countWeight = 64L * 1024L;
-        countWeight = safeAdd(countWeight, metadata.symbolCount() * 1024L);
-        countWeight = safeAdd(countWeight, metadata.occurrenceCount() * 640L);
-        countWeight = safeAdd(countWeight, metadata.relationshipCount() * 1024L);
-        long persistedWeight = safeMultiply(Math.max(0L, persistedBytes), QUERY_VIEW_PERSISTED_AMPLIFICATION);
+        countWeight = saturatingAdd(countWeight, metadata.symbolCount() * 1024L);
+        countWeight = saturatingAdd(countWeight, metadata.occurrenceCount() * 640L);
+        countWeight = saturatingAdd(countWeight, metadata.relationshipCount() * 1024L);
+        long persistedWeight = saturatingMultiply(Math.max(0L, persistedBytes), QUERY_VIEW_PERSISTED_AMPLIFICATION);
         // AUD-PERF-11 : l'index dérivé des arêtes entrantes, construit plus tard, vit autant que la vue en cache.
-        return safeAdd(Math.max(countWeight, persistedWeight),
+        return saturatingAdd(Math.max(countWeight, persistedWeight),
                 SnapshotReadView.incomingRelationshipsWeightBytes(metadata.relationshipCount()));
     }
 
-    private static long safeAdd(long left, long right) {
+    private static long saturatingAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 
-    private static long safeMultiply(long left, long right) {
+    private static long saturatingMultiply(long left, long right) {
         try {
             return Math.multiplyExact(left, right);
         } catch (ArithmeticException exception) {
