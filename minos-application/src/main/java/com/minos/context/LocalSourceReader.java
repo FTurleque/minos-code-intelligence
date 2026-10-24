@@ -22,7 +22,7 @@ import java.util.Optional;
 import static com.minos.domain.Preconditions.requireText;
 
 /**
- * Lecteur UTF-8 confiné à la racine réelle d'un projet enregistré.
+ * UTF-8 reader confined to the real root of a registered project.
  */
 public final class LocalSourceReader implements SourceReader {
 

@@ -31,6 +31,7 @@ Conventions relevées dans les gates, les ADR et les revues du dépôt. La conve
 ## Hygiène
 - `Locale.ROOT` sur toute comparaison ou transformation de casse.
 - Aucun numéro de jalon (`m24`, `s5`…) dans un nom de fichier, de classe ou de script (ADR 0043).
+- Commentaires et Javadoc en **anglais**, sans numéro de jalon ; un fichier ne mêle pas deux langues. Reprendre un commentaire français d'un fichier touché abaisse le maximum de son module (`scripts/quality/comment-language.json`, gate `check-comment-language.py`, `CONTRIBUTING.md`).
 - Sorties « déterministes » : ordre de clés stable, pas de `NaN`/`Infinity`, échappement JSON par l'encodeur unique `DeterministicJson`.
 - Une capacité n'est annoncée que si le provider produit réellement les faits correspondants ; une limite se déclare dans la sortie (limitations), pas seulement en documentation.
 

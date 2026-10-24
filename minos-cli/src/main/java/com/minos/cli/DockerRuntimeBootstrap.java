@@ -56,7 +56,7 @@ public final class DockerRuntimeBootstrap {
             return CliExitCodes.USAGE_ERROR;
         }
 
-        // ADR 0042 : magasin fourni par la racine de composition, créé au même moment qu'avant.
+        // ADR 0042: store supplied by the composition root, created at the same moment as before.
         ProjectPathMappings store = MinosApplicationComposers.resolve().projectPathMappings(home);
         Optional<ProjectPathMapping> existing = store.loadOptional();
         if (existing.isPresent() && !existing.orElseThrow().equals(desired)) {

@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
 
 import static com.minos.domain.Preconditions.requireText;
 
-/** Résolution déterministe des exécutables externes sans passer par un shell implicite. */
+/** Deterministic resolution of external executables without going through an implicit shell. */
 public final class CommandLocator {
 
     private static final Set<String> LINUX_SECURITY_AUTHORITY_COMMANDS = Set.of("bwrap", "prlimit", "sh");

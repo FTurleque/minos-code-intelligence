@@ -20,16 +20,16 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Plan de reprise d'un run {@code INTERRUPTED} (ADR 0039 §3 et §7).
+ * Resume plan of an {@code INTERRUPTED} run (ADR 0039 §3 and §7).
  *
- * <p>Le plan part toujours des cibles négociées <em>maintenant</em>, jamais de la liste des
- * exécutions du run interrompu. Pour chaque cible, le point de contrôle de même clé
- * ({@link IndexingRun#targetKey}) n'est retenu que si toutes les conditions de l'ADR sont vraies.
- * Une cible sans point de contrôle valable pour une raison attendue (indexeur non qualifié, mode ou
- * fichiers ciblés différents, sources du scope modifiées) est simplement réexécutée ; tout écart
- * inattendu (artefact absent, hors du répertoire de run, lien symbolique, taille ou SHA-256
- * différents, empreinte incalculable, TTL dépassé) annule la reprise entière. Fail-closed : au
- * moindre doute, run complet.</p>
+ * <p>The plan always starts from the targets negotiated <em>now</em>, never from the list of
+ * executions of the interrupted run. For each target, the checkpoint with the same key
+ * ({@link IndexingRun#targetKey}) is kept only if all the conditions of the ADR hold.
+ * A target without a valid checkpoint for an expected reason (indexer not qualified, different mode
+ * or targeted files, modified sources of the scope) is simply run again; any unexpected gap
+ * (missing artifact, outside the run directory, symbolic link, different size or SHA-256,
+ * fingerprint that cannot be computed, TTL exceeded) cancels the whole resumption. Fail-closed: at
+ * the slightest doubt, full run.</p>
  */
 final class IndexingResumePlanner {
 
@@ -65,7 +65,7 @@ final class IndexingResumePlanner {
         }
     }
 
-    /** Cible du plan courant dont l'artefact du run interrompu est réutilisé tel quel. */
+    /** Target of the current plan whose artifact from the interrupted run is reused as is. */
     record ReusedTarget(IndexingExecutionTarget target, IndexerExecution execution) {
         ReusedTarget {
             Objects.requireNonNull(target, "target");
@@ -77,7 +77,7 @@ final class IndexingResumePlanner {
     }
 
     sealed interface Outcome permits Outcome.Resume, Outcome.Refused, Outcome.NotOffered {
-        /** Le run est rouvert : {@code reused} tel quel, {@code remaining} réexécuté. */
+        /** The run is reopened: {@code reused} as is, {@code remaining} run again. */
         record Resume(IndexingRun run, int attempt, List<ReusedTarget> reused, List<IndexingExecutionTarget> remaining)
                 implements Outcome {
             public Resume {
@@ -88,18 +88,18 @@ final class IndexingResumePlanner {
                 if (reused.isEmpty()) throw new IllegalArgumentException("a resume reuses at least one target");
             }
 
-            /** Vrai quand la tentative interrompue avait déjà préparé un snapshot, en phase de promotion. */
+            /** True when the interrupted attempt had already staged a snapshot, in the promotion phase. */
             boolean stagedSnapshotKnown() {
                 return run.phase() == IndexingRun.Phase.PROMOTION && run.stagedSnapshotId().isPresent();
             }
 
             /**
-             * Vrai seulement quand la reprise couvre <em>exactement</em> ce que le run interrompu avait mis
-             * en snapshot : aucune cible à réexécuter, et l'ensemble des clés de cible des exécutions du
-             * run égal à celui des cibles courantes (R4). Le snapshot préparé par la tentative interrompue
-             * contient l'index de chacune de ses exécutions ; si un module a disparu depuis, le promouvoir
-             * publierait un index qu'un run complet ne produirait jamais. Fail-closed : une exécution sans
-             * point de contrôle n'a pas de clé de cible, donc n'est pas prouvée présente dans le plan.
+             * True only when the resumption covers <em>exactly</em> what the interrupted run had put in
+             * the snapshot: no target to run again, and the set of target keys of the run's executions
+             * equal to the set of current targets (R4). The snapshot staged by the interrupted attempt
+             * contains the index of each of its executions; if a module has disappeared since, promoting it
+             * would publish an index that a full run would never produce. Fail-closed: an execution without
+             * a checkpoint has no target key, so it is not proven present in the plan.
              */
             boolean stagedSnapshotCoversThePlan() {
                 if (!remaining.isEmpty()) return false;
@@ -115,14 +115,14 @@ final class IndexingResumePlanner {
             }
         }
 
-        /** Un run était offert mais la reprise est refusée ; {@code reason} est publique (aucun chemin). */
+        /** A run was offered but the resumption is refused; {@code reason} is public (no path). */
         record Refused(String reason) implements Outcome {
             public Refused {
                 if (reason == null || reason.isBlank()) throw new IllegalArgumentException("reason must not be blank");
             }
         }
 
-        /** Le projet n'offre aucun run à la reprise. */
+        /** The project offers no run for resumption. */
         record NotOffered() implements Outcome {
         }
     }
@@ -202,14 +202,14 @@ final class IndexingResumePlanner {
                 .findFirst();
     }
 
-    /** Clé de la cible courante : celle que le point de contrôle d'une exécution a portée si elle a réussi. */
+    /** Key of the current target: the one that the checkpoint of an execution carried if it succeeded. */
     private static String targetKey(IndexingExecutionTarget target) {
         IndexerSelection selection = target.selection();
         return IndexingRun.targetKey(
                 selection.indexer().id(), selection.indexer().version(), target.projectRelativeRoot());
     }
 
-    /** Clé de cible d'une exécution du run, vide quand elle ne porte aucun point de contrôle. */
+    /** Target key of an execution of the run, empty when it carries no checkpoint. */
     private static Optional<String> executionKey(IndexerExecution execution) {
         return execution.checkpoint().map(checkpoint -> IndexingRun.targetKey(
                 execution.indexerId(), checkpoint.providerVersion(), checkpoint.projectRelativeRoot()));

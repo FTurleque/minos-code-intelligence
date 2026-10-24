@@ -38,7 +38,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
-/** Pont explicite entre un artefact SCIP et le snapshot persistant MINOS. */
+/** Explicit bridge between a SCIP artifact and the persistent MINOS snapshot. */
 public final class ScipSymbolSnapshotImporter {
 
     private static final Pattern HASH_DERIVED_SNAPSHOT_ID = Pattern.compile("scip-[0-9a-f]{24}");

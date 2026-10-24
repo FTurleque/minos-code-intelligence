@@ -17,11 +17,11 @@ import java.util.Set;
 import static com.minos.domain.Preconditions.requireText;
 
 /**
- * Normalisation des symboles SCIP vers le domaine MINOS.
+ * Normalization of SCIP symbols into the MINOS domain.
  *
- * <p>M2 extrait les noms qualifiés depuis la grammaire standard des descripteurs.
- * La qualité d'identité reste néanmoins un repli explicite tant que l'équivalence
- * des signatures et symboles entre fournisseurs n'est pas mesurée.</p>
+ * <p>Qualified names are extracted from the standard descriptor grammar.
+ * The identity quality nevertheless remains an explicit fallback as long as the equivalence
+ * of signatures and symbols across providers is not measured.</p>
  */
 final class ScipSymbolNormalizer {
 

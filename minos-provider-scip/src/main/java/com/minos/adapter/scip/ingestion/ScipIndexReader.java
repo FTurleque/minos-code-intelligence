@@ -14,12 +14,12 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 /**
- * Lit un fichier binaire SCIP à la frontière infrastructure de MINOS.
+ * Reads a binary SCIP file at the infrastructure boundary of MINOS.
  *
- * <p>Le type {@link Index} ne doit pas franchir le package d'adaptation SCIP.
- * La taille brute est imposée pendant la lecture protobuf, pas uniquement via un précheck. Avant
- * la matérialisation complète du protobuf, un préflight streaming borne aussi l'amplification
- * mémoire estimée de l'object graph par rapport au heap disponible.</p>
+ * <p>The {@link Index} type must not cross the SCIP adaptation package.
+ * The raw size is enforced during the protobuf read, not only through a pre-check. Before the
+ * full materialization of the protobuf, a streaming preflight also bounds the estimated memory
+ * amplification of the object graph relative to the available heap.</p>
  */
 public final class ScipIndexReader {
 

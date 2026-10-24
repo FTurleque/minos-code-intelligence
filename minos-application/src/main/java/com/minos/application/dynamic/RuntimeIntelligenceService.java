@@ -180,7 +180,7 @@ public final class RuntimeIntelligenceService {
         requireText(symbolId, "symbolId");
         if (callLimit < 1 || callLimit > MAX_HOT_PATHS) throw new IllegalArgumentException("call limit is invalid");
         RegisteredProject project = projects.resolve(projectReference);
-        // AUD-PERF-13 : recherche par l'index de la vue active, en temps constant, sans parcourir les symboles.
+        // AUD-PERF-13: lookup through the index of the active view, in constant time, without scanning the symbols.
         SnapshotReadView view = activeReadView(project);
         CodeKnowledgeSnapshot snapshot = view.snapshot();
         Symbol symbol = view.reader().findSymbolById(project.id().toString(), symbolId)

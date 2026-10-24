@@ -17,7 +17,7 @@ import static com.minos.output.json.DeterministicJson.object;
 import static com.minos.output.json.DeterministicJson.quote;
 
 /**
- * Rendu déterministe TEXT/JSON des résultats d'occurrences et de relations M3.
+ * Deterministic TEXT/JSON rendering of occurrence and relation results.
  */
 public final class CodeIntelligenceResultRenderer {
 

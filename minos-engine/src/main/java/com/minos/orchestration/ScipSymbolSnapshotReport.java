@@ -2,7 +2,7 @@ package com.minos.orchestration;
 
 import java.util.Objects;
 
-/** Résultat public de la publication d'un snapshot de connaissance SCIP. */
+/** Public result of the publication of a SCIP knowledge snapshot. */
 public record ScipSymbolSnapshotReport(
         String snapshotId,
         int catalogSymbolCount,

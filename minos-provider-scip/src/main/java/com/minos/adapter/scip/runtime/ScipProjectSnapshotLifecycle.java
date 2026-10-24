@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Staging et promotion projet pour les artefacts SCIP exécutés par M14. */
+/** Project staging and promotion for the SCIP artifacts produced during indexing. */
 public final class ScipProjectSnapshotLifecycle implements SnapshotStager, SnapshotPromoter {
 
     private final Path stagingRoot;
@@ -163,9 +163,9 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
     }
 
     /**
-     * MINOS-AUD-F04 : rattache un symbole local au module de son fichier, avec la règle de l'architecture. Une portée
-     * à la racine peut couvrir plusieurs modules (réacteur) : l'attribution se fait donc par symbole, jamais par portée.
-     * Les symboles externes et ceux hors de tout module restent sans module.
+     * MINOS-AUD-F04: assigns a local symbol to the module of its file, with the architecture rule. A scope at the
+     * root can cover several modules (reactor): the assignment is therefore made per symbol, never per scope.
+     * External symbols and those outside any module stay without a module.
      */
     private static Symbol withModule(Symbol symbol, ModuleAssignmentRule rule) {
         if (rule.isEmpty() || symbol.external() || symbol.moduleId() != null) {

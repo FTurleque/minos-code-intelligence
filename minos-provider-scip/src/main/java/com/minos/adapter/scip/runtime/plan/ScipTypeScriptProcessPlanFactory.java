@@ -9,7 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Plan d'exécution du provider scip-typescript. */
+/** Execution plan of the scip-typescript provider. */
 public final class ScipTypeScriptProcessPlanFactory extends AbstractScipProcessPlanFactory {
 
     private final Path mainScript;

@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Catalogue interne des identités SCIP rencontrées dans un index.
+ * Internal catalog of the SCIP identities met in an index.
  */
 final class ScipSymbolCatalog {
 

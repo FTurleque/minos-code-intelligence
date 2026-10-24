@@ -3,7 +3,7 @@ package com.minos.impact;
 import com.minos.query.SnapshotCoverageLimitations;
 
 /**
- * Limites explicites de couverture de l'analyse d'impact.
+ * Explicit coverage limits of the impact analysis.
  */
 public enum ImpactLimitation {
     UNRESOLVED_RELATIONSHIPS_IGNORED,

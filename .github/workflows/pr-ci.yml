@@ -195,6 +195,12 @@ jobs:
       - name: Milestone identifiers gate self-test
         run: python scripts/quality/check-milestone-identifiers.py --self-test
 
+      - name: Comment language gate (no file mixes French and English comments; per-module counters only go down)
+        run: python scripts/quality/check-comment-language.py
+
+      - name: Comment language gate self-test
+        run: python scripts/quality/check-comment-language.py --self-test
+
       - name: Partial-result consumer gate (heuristic, see its docstring for what it cannot see)
         run: python scripts/quality/check-partial-result-consumers.py
 

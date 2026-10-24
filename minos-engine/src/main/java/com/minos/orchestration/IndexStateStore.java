@@ -6,7 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Port de stockage des états de run et de projet.
+ * Storage port for run and project states.
  *
  * <p>The store also owns the project-scoped lifecycle lease. This places the
  * single-writer invariant next to the durable state it protects instead of in
