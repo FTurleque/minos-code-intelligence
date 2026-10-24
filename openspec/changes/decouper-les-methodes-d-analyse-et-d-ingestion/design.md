@@ -71,7 +71,7 @@ Le `Ports` privé est conservé et construit dans `execute` à partir des deux r
 
 ### D4. Ordre et isolement des lots
 
-Une PR par classe (sections 2, 3, 4), indépendantes entre elles. La section 2 (`ImpactAnalysisService`) passe **avant** la tâche 3.2 de `exposer-un-port-de-lecture-de-snapshot`, comme ce changement le prévoit (`openspec/changes/exposer-un-port-de-lecture-de-snapshot/design.md:108`). La dépendance envers AUD-PERF-11 est levée : le changement est archivé et son code est au HEAD.
+Une PR par classe (sections 2, 3, 4), indépendantes entre elles. La section 2 (`ImpactAnalysisService`) passe **avant** la tâche 3.2 de `exposer-un-port-de-lecture-de-snapshot`, comme ce changement le prévoit (`openspec/changes/archive/2026-10-24-exposer-un-port-de-lecture-de-snapshot/design.md:108`). La dépendance envers AUD-PERF-11 est levée : le changement est archivé et son code est au HEAD.
 
 ### Recouvrements avec les changements actifs
 
