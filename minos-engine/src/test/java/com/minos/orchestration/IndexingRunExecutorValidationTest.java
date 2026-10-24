@@ -37,9 +37,11 @@ class IndexingRunExecutorValidationTest {
     @Test
     void theResumePolicyIsCheckedBeforeTheRoot(@TempDir Path temp) {
         InMemoryIndexStateStore store = new InMemoryIndexStateStore();
+        Path missing = temp.resolve("missing");
+        ProjectFingerprintService fingerprints = new ProjectFingerprintService();
 
-        NullPointerException refusal = assertThrows(NullPointerException.class, () -> run(store,
-                temp.resolve("missing"), null, null, new ProjectFingerprintService()));
+        NullPointerException refusal = assertThrows(NullPointerException.class,
+                () -> run(store, missing, null, null, fingerprints));
 
         assertEquals("resumePolicy", refusal.getMessage());
         assertTrue(store.listRuns(PROJECT_ID).isEmpty());
@@ -49,9 +51,10 @@ class IndexingRunExecutorValidationTest {
     void anInvalidRootIsRefusedBeforeAMissingModuleAssignment(@TempDir Path temp) {
         InMemoryIndexStateStore store = new InMemoryIndexStateStore();
         Path missing = temp.resolve("missing");
+        ProjectFingerprintService fingerprints = new ProjectFingerprintService();
 
-        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () -> run(store,
-                missing, IndexingResumePolicy.RESUME, null, new ProjectFingerprintService()));
+        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                () -> run(store, missing, IndexingResumePolicy.RESUME, null, fingerprints));
 
         assertEquals("projectRoot must be an existing directory: " + missing, refusal.getMessage());
         assertTrue(store.listRuns(PROJECT_ID).isEmpty());
@@ -60,9 +63,10 @@ class IndexingRunExecutorValidationTest {
     @Test
     void aMissingModuleAssignmentIsRefusedByNameOnAValidRoot(@TempDir Path temp) {
         InMemoryIndexStateStore store = new InMemoryIndexStateStore();
+        ProjectFingerprintService fingerprints = new ProjectFingerprintService();
 
-        NullPointerException refusal = assertThrows(NullPointerException.class, () -> run(store,
-                temp, IndexingResumePolicy.RESUME, null, new ProjectFingerprintService()));
+        NullPointerException refusal = assertThrows(NullPointerException.class,
+                () -> run(store, temp, IndexingResumePolicy.RESUME, null, fingerprints));
 
         assertEquals("moduleAssignment", refusal.getMessage());
         assertTrue(store.listRuns(PROJECT_ID).isEmpty());
@@ -85,8 +89,10 @@ class IndexingRunExecutorValidationTest {
         IndexingLifecycleService service = new IndexingLifecycleService(
                 List.of(executor()), request -> "unused", (projectId, runId, staged) -> { }, store, CLOCK);
 
-        IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> service.execute(
-                PROJECT_ID, temp, negotiation(), IndexingResumePolicy.RESUME_ONLY));
+        var negotiation = negotiation();
+
+        IllegalStateException refusal = assertThrows(IllegalStateException.class,
+                () -> service.execute(PROJECT_ID, temp, negotiation, IndexingResumePolicy.RESUME_ONLY));
 
         assertEquals("resume-only indexing refused: no interrupted run to resume", refusal.getMessage());
         assertTrue(store.listRuns(PROJECT_ID).isEmpty());
@@ -98,8 +104,10 @@ class IndexingRunExecutorValidationTest {
         IndexingLifecycleService service = new IndexingLifecycleService(
                 List.of(executor()), request -> "unused", (projectId, runId, staged) -> { }, store, CLOCK);
 
-        NullPointerException refusal = assertThrows(NullPointerException.class, () -> service.execute(
-                PROJECT_ID, temp, negotiation(), null));
+        var negotiation = negotiation();
+
+        NullPointerException refusal = assertThrows(NullPointerException.class,
+                () -> service.execute(PROJECT_ID, temp, negotiation, null));
 
         assertEquals("policy", refusal.getMessage());
         assertTrue(store.listRuns(PROJECT_ID).isEmpty());

@@ -238,8 +238,9 @@ class ImpactAnalysisServiceTest {
         CodeKnowledgeSnapshot snapshot = snapshot(List.of(symbol("root", "src/main/java/Root.java")), List.of());
 
         for (BiFunction<CodeKnowledgeSnapshot, ImpactAnalysisRequest, ImpactAnalysisReport> path : paths()) {
+            ImpactAnalysisRequest request = ImpactAnalysisRequest.defaults("missing");
             IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                    () -> path.apply(snapshot, ImpactAnalysisRequest.defaults("missing")));
+                    () -> path.apply(snapshot, request));
 
             assertEquals("unknown symbol in snapshot: missing", refusal.getMessage());
         }
@@ -254,8 +255,9 @@ class ImpactAnalysisServiceTest {
 
         for (BiFunction<CodeKnowledgeSnapshot, ImpactAnalysisRequest, ImpactAnalysisReport> path : paths()) {
             for (Symbol root : List.of(external, generated)) {
+                ImpactAnalysisRequest request = ImpactAnalysisRequest.defaults(root.id());
                 IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                        () -> path.apply(snapshot, ImpactAnalysisRequest.defaults(root.id())));
+                        () -> path.apply(snapshot, request));
 
                 assertEquals("impact root must be a local non-generated symbol: " + root.id(), refusal.getMessage());
             }

@@ -457,8 +457,12 @@ class ScipIngestionAdapterTest {
             IllegalStateException failure = new IllegalStateException("store refused " + failing);
             CodeKnowledgeStore store = spyStore(new InMemoryCodeKnowledgeStore(), writes, Map.entry(failing, failure));
 
+            ScipIngestionAdapter adapter = new ScipIngestionAdapter();
+            var index = skippingIndex();
+            var request = skippingRequest();
+
             IllegalStateException thrown = assertThrows(IllegalStateException.class,
-                    () -> new ScipIngestionAdapter().ingest(skippingIndex(), skippingRequest(), store));
+                    () -> adapter.ingest(index, request, store));
 
             assertSame(failure, thrown);
             assertEquals(failing, writes.getLast().substring(0, writes.getLast().indexOf(':')), writes.toString());

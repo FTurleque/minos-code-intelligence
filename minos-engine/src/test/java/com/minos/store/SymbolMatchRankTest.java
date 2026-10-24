@@ -159,7 +159,9 @@ class SymbolMatchRankTest {
         CountingRank rank = new CountingRank();
         InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore(snapshot(PROJECT, rankedFixture()), rank);
 
-        assertThrows(IllegalArgumentException.class, () -> store.findSymbols(PROJECT.toString(), null));
+        String projectId = PROJECT.toString();
+
+        assertThrows(IllegalArgumentException.class, () -> store.findSymbols(projectId, null));
         assertEquals(0, rank.calls());
     }
 

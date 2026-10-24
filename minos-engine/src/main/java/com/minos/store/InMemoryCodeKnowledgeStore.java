@@ -406,14 +406,15 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
     /**
      * Rank of a symbol for a lower-case query, from 0 (qualified name equal) to 6 (symbol key contains the
      * query), or {@link #NO_MATCH}. Each field is lower-cased at most once, and the symbol key only when no
-     * name or qualified name matches.
+     * name or qualified name matches. The name and the symbol key are never null ({@link Symbol} requires them);
+     * the qualified name may be.
      */
     static int matchRank(Symbol symbol, String normalizedQuery) {
         String qualifiedName = normalize(symbol.qualifiedName());
         if (normalizedQuery.equals(qualifiedName)) {
             return 0;
         }
-        String name = normalize(symbol.name());
+        String name = symbol.name().toLowerCase(Locale.ROOT);
         if (name.equals(normalizedQuery)) {
             return 1;
         }
@@ -429,7 +430,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
         if (qualifiedName != null && qualifiedName.contains(normalizedQuery)) {
             return 5;
         }
-        if (normalize(symbol.symbolKey()).contains(normalizedQuery)) {
+        if (symbol.symbolKey().toLowerCase(Locale.ROOT).contains(normalizedQuery)) {
             return 6;
         }
         return NO_MATCH;
