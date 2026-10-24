@@ -1,5 +1,5 @@
 {
-  "description": "Langue des commentaires et de la Javadoc du code de production, par module (CONTRIBUTING.md, « Langue des commentaires »). Lu par scripts/quality/check-comment-language.py. Les deux maximums par module et la liste « mixed » sont des cliquets : ils ne font que baisser. Un module à zéro n'a pas d'entrée de maximum.",
+  "description": "Langue des commentaires et de la Javadoc du code de production, par module (CONTRIBUTING.md, section « Comment language »). Lu par scripts/quality/check-comment-language.py. Les deux maximums par module et la liste « mixed » sont des cliquets : ils ne font que baisser. Un module à zéro n'a pas d'entrée de maximum.",
   "languages": {
     "minos-api": "en",
     "minos-app": "en",

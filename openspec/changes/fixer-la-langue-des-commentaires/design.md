@@ -167,4 +167,4 @@ Le gate ouvre les sources en UTF-8 explicite : la page de code par défaut d'un 
 
 ## Non vérifié
 
-Aucun build, test ni gate exécuté. Non mesurés : la présence d'une chaîne exigée par un gate littéral dans un commentaire d'un fichier mixte ; la stabilité réelle de `instanceHash` après modification de commentaires (seule la docstring de `audit-report-summary.py:124` est relue) ; le décompte sous Linux (mesures faites sous Windows, Git Bash et Python).
+À la spécification, aucun build, test ni gate exécuté. À la mise en œuvre (2026-10-24), sous Windows seulement : gate, auto-test, `run_gates.py`, `openspec validate`, build Maven (tâches). Non mesurés : la stabilité réelle de `instanceHash` après modification de commentaires (seule la docstring de `audit-report-summary.py:124` est relue ; `code-audit.yml` n'est pas lancé) ; le décompte sous Linux (job `invariants` de la PR) ; la validité HTML de la Javadoc reprise par l'outil `javadoc` (aucun module repris ne génère sa Javadoc au build ; `minos-api` n'est pas touché) ; la qualité des traductions au-delà de la relecture, faite fichier par fichier sans outil de traduction.
