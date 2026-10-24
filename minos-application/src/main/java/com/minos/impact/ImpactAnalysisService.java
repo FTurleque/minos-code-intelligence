@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.function.Function;
@@ -92,131 +93,180 @@ public final class ImpactAnalysisService {
         return analyze(snapshot, IncomingRelationships.of(snapshot), symbolsById::get, request);
     }
 
+    /**
+     * Analyse commune aux surcharges publiques : refus de la racine, parcours inverse borné, sélection dans la limite
+     * de résultats, puis assemblage du rapport. Les limitations s'accumulent dans cet ordre.
+     */
     private ImpactAnalysisReport analyze(
             CodeKnowledgeSnapshot snapshot,
             IncomingRelationships edges,
             Function<String, Symbol> symbolsById,
             ImpactAnalysisRequest request
     ) {
-        Symbol root = symbolsById.apply(request.symbolId());
+        Symbol root = requireLocalRoot(symbolsById, request.symbolId());
+        EnumSet<ImpactLimitation> limitations = baselineLimitations(snapshot, edges);
+        Traversal traversal = traverse(root, edges, symbolsById, request.maxDepth(), limitations);
+        List<Candidate> ordered = rankWithinLimit(traversal.selected, root.id(), request.maxResults(), limitations);
+        return new ImpactAnalysisReport(
+                snapshot.projectId(),
+                snapshot.snapshotId(),
+                root,
+                request,
+                impactedSymbols(ordered, traversal.testCandidates, symbolsById),
+                impactedTests(ordered, traversal.testCandidates, symbolsById),
+                List.copyOf(limitations)
+        );
+    }
+
+    /** Racine connue du snapshot, locale et non générée ; sinon refus. */
+    private static Symbol requireLocalRoot(Function<String, Symbol> symbolsById, String symbolId) {
+        Symbol root = symbolsById.apply(symbolId);
         if (root == null) {
-            throw new IllegalArgumentException("unknown symbol in snapshot: " + request.symbolId());
+            throw new IllegalArgumentException("unknown symbol in snapshot: " + symbolId);
         }
         if (root.external() || root.generated()) {
             throw new IllegalArgumentException(
-                    "impact root must be a local non-generated symbol: " + request.symbolId());
+                    "impact root must be a local non-generated symbol: " + symbolId);
         }
+        return root;
+    }
 
+    /**
+     * Parcours inverse par file de priorité ({@link #CANDIDATE_ORDER}) : un candidat dépassé par un meilleur chemin
+     * déjà retenu est ignoré ; à la profondeur maximale, un impact encore possible est déclaré, pas suivi.
+     */
+    private static Traversal traverse(
+            Symbol root,
+            IncomingRelationships edges,
+            Function<String, Symbol> symbolsById,
+            int maxDepth,
+            EnumSet<ImpactLimitation> limitations
+    ) {
         Candidate rootCandidate = Candidate.root(root.id());
         PriorityQueue<Candidate> queue = new PriorityQueue<>(CANDIDATE_ORDER);
         queue.add(rootCandidate);
-
-        Map<String, Candidate> selected = new HashMap<>();
-        Map<String, Candidate> testCandidates = new HashMap<>();
-        selected.put(root.id(), rootCandidate);
-        EnumSet<ImpactLimitation> limitations = baselineLimitations(snapshot, edges);
+        Traversal traversal = new Traversal();
+        traversal.selected.put(root.id(), rootCandidate);
 
         while (!queue.isEmpty()) {
             Candidate current = queue.poll();
-            Candidate bestKnown = selected.get(current.symbolId());
+            Candidate bestKnown = traversal.selected.get(current.symbolId());
             if (bestKnown != current && compareCandidate(current, bestKnown) > 0) {
                 continue;
             }
 
             List<Relationship> incoming = incomingRelationships(edges, current.symbolId(), symbolsById);
-            if (current.depth() >= request.maxDepth()) {
-                if (hasFurtherImpact(incoming, selected)) {
+            if (current.depth() >= maxDepth) {
+                if (hasFurtherImpact(incoming, traversal.selected)) {
                     limitations.add(ImpactLimitation.MAX_DEPTH_REACHED);
                 }
                 continue;
             }
 
             for (Relationship relationship : incoming) {
-                String impactedId = relationship.source().id();
-                if (impactedId.equals(root.id())) {
-                    continue;
-                }
-                Symbol impacted = symbolsById.apply(impactedId);
-                if (impacted == null || impacted.external()) {
-                    limitations.add(ImpactLimitation.EXTERNAL_TARGETS_NOT_TRAVERSED);
-                    continue;
-                }
-                if (impacted.generated()) {
-                    limitations.add(ImpactLimitation.GENERATED_SYMBOLS_NOT_TRAVERSED);
-                    continue;
-                }
-
-                double edgeConfidence = relationshipConfidence(relationship);
-                double pathConfidence = Math.min(current.confidence(), edgeConfidence);
-                List<ImpactPathStep> path = append(
-                        current.path(),
-                        new ImpactPathStep(
-                                current.symbolId(),
-                                impactedId,
-                                relationship.id(),
-                                relationship.kind(),
-                                relationship.nature(),
-                                edgeConfidence
-                        )
-                );
-                Candidate candidate = new Candidate(
-                        impactedId,
-                        current.depth() + 1,
-                        pathConfidence,
-                        path,
-                        pathSignature(path)
-                );
-
-                if (relationship.kind() == RelationshipKind.RELATED_TEST) {
-                    Candidate previousTest = testCandidates.get(impactedId);
-                    if (previousTest == null || compareCandidate(candidate, previousTest) < 0) {
-                        testCandidates.put(impactedId, candidate);
-                    }
-                }
-
-                Candidate previous = selected.get(impactedId);
-                if (previous == null || compareCandidate(candidate, previous) < 0) {
-                    selected.put(impactedId, candidate);
-                    queue.add(candidate);
-                }
+                follow(current, relationship, root.id(), symbolsById, limitations)
+                        .ifPresent(candidate -> traversal.retain(candidate, relationship.kind(), queue));
             }
         }
+        return traversal;
+    }
 
-        selected.remove(root.id());
+    /**
+     * Candidat atteint depuis {@code current} par {@code relationship} ; aucun pour la racine elle-même, ni pour un
+     * symbole externe ou généré, qui ne sont pas traversés et le déclarent.
+     */
+    private static Optional<Candidate> follow(
+            Candidate current,
+            Relationship relationship,
+            String rootId,
+            Function<String, Symbol> symbolsById,
+            EnumSet<ImpactLimitation> limitations
+    ) {
+        String impactedId = relationship.source().id();
+        if (impactedId.equals(rootId)) {
+            return Optional.empty();
+        }
+        Symbol impacted = symbolsById.apply(impactedId);
+        if (impacted == null || impacted.external()) {
+            limitations.add(ImpactLimitation.EXTERNAL_TARGETS_NOT_TRAVERSED);
+            return Optional.empty();
+        }
+        if (impacted.generated()) {
+            limitations.add(ImpactLimitation.GENERATED_SYMBOLS_NOT_TRAVERSED);
+            return Optional.empty();
+        }
+
+        double edgeConfidence = relationshipConfidence(relationship);
+        double pathConfidence = Math.min(current.confidence(), edgeConfidence);
+        List<ImpactPathStep> path = append(
+                current.path(),
+                new ImpactPathStep(
+                        current.symbolId(),
+                        impactedId,
+                        relationship.id(),
+                        relationship.kind(),
+                        relationship.nature(),
+                        edgeConfidence
+                )
+        );
+        return Optional.of(new Candidate(
+                impactedId,
+                current.depth() + 1,
+                pathConfidence,
+                path,
+                pathSignature(path)
+        ));
+    }
+
+    /** Candidats retenus hors racine, triés, coupés à {@code maxResults} (coupure déclarée). */
+    private static List<Candidate> rankWithinLimit(
+            Map<String, Candidate> selected,
+            String rootId,
+            int maxResults,
+            EnumSet<ImpactLimitation> limitations
+    ) {
+        selected.remove(rootId);
         List<Candidate> ordered = selected.values().stream()
                 .sorted(CANDIDATE_ORDER)
                 .toList();
-        if (ordered.size() > request.maxResults()) {
+        if (ordered.size() > maxResults) {
             limitations.add(ImpactLimitation.MAX_RESULTS_REACHED);
-            ordered = ordered.subList(0, request.maxResults());
+            ordered = ordered.subList(0, maxResults);
         }
+        return ordered;
+    }
 
-        Set<String> includedIds = new HashSet<>();
+    private static List<ImpactedSymbol> impactedSymbols(
+            List<Candidate> ordered,
+            Map<String, Candidate> testCandidates,
+            Function<String, Symbol> symbolsById
+    ) {
         List<ImpactedSymbol> impacts = new ArrayList<>();
         for (Candidate candidate : ordered) {
-            includedIds.add(candidate.symbolId());
             impacts.add(toImpactedSymbol(
                     symbolsById.apply(candidate.symbolId()),
                     candidate,
                     testCandidates.containsKey(candidate.symbolId())
             ));
         }
+        return impacts;
+    }
 
-        List<ImpactedSymbol> impactedTests = testCandidates.values().stream()
+    /** Meilleur chemin de test de chaque symbole retenu dans la limite de résultats. */
+    private static List<ImpactedSymbol> impactedTests(
+            List<Candidate> ordered,
+            Map<String, Candidate> testCandidates,
+            Function<String, Symbol> symbolsById
+    ) {
+        Set<String> includedIds = new HashSet<>();
+        for (Candidate candidate : ordered) {
+            includedIds.add(candidate.symbolId());
+        }
+        return testCandidates.values().stream()
                 .filter(candidate -> includedIds.contains(candidate.symbolId()))
                 .sorted(CANDIDATE_ORDER)
                 .map(candidate -> toImpactedSymbol(symbolsById.apply(candidate.symbolId()), candidate, true))
                 .toList();
-
-        return new ImpactAnalysisReport(
-                snapshot.projectId(),
-                snapshot.snapshotId(),
-                root,
-                request,
-                impacts,
-                impactedTests,
-                List.copyOf(limitations)
-        );
     }
 
     private static ImpactedSymbol toImpactedSymbol(Symbol symbol, Candidate candidate, boolean testImpact) {
@@ -305,6 +355,30 @@ public final class ImpactAnalysisService {
 
     private static String pathSignature(List<ImpactPathStep> path) {
         return path.stream().map(ImpactPathStep::relationshipId).reduce((left, right) -> left + "\u0000" + right).orElse("");
+    }
+
+    /** État du parcours : meilleur candidat par symbole atteint, et meilleur chemin de test par symbole de test. */
+    private static final class Traversal {
+
+        private final Map<String, Candidate> selected = new HashMap<>();
+        private final Map<String, Candidate> testCandidates = new HashMap<>();
+
+        /** Retient {@code candidate} s'il améliore le meilleur connu, et le remet alors dans la file. */
+        private void retain(Candidate candidate, RelationshipKind kind, PriorityQueue<Candidate> queue) {
+            String impactedId = candidate.symbolId();
+            if (kind == RelationshipKind.RELATED_TEST) {
+                Candidate previousTest = testCandidates.get(impactedId);
+                if (previousTest == null || compareCandidate(candidate, previousTest) < 0) {
+                    testCandidates.put(impactedId, candidate);
+                }
+            }
+
+            Candidate previous = selected.get(impactedId);
+            if (previous == null || compareCandidate(candidate, previous) < 0) {
+                selected.put(impactedId, candidate);
+                queue.add(candidate);
+            }
+        }
     }
 
     private record Candidate(

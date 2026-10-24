@@ -19,14 +19,20 @@ import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.store.SnapshotDescriptor;
+import com.minos.store.SnapshotQueryView;
+import com.minos.store.SnapshotReadView;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ImpactAnalysisServiceTest {
@@ -226,6 +232,126 @@ class ImpactAnalysisServiceTest {
         }
     }
 
+    /** AUD-QUA-07 (caractérisation) : une racine absente du snapshot est refusée, sur chaque surcharge publique. */
+    @Test
+    void refusesAnUnknownRootOnEveryPublicOverload() {
+        CodeKnowledgeSnapshot snapshot = snapshot(List.of(symbol("root", "src/main/java/Root.java")), List.of());
+
+        for (BiFunction<CodeKnowledgeSnapshot, ImpactAnalysisRequest, ImpactAnalysisReport> path : paths()) {
+            IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                    () -> path.apply(snapshot, ImpactAnalysisRequest.defaults("missing")));
+
+            assertEquals("unknown symbol in snapshot: missing", refusal.getMessage());
+        }
+    }
+
+    /** AUD-QUA-07 (caractérisation) : une racine externe, puis une racine générée, sont refusées avec le même message. */
+    @Test
+    void refusesAnExternalOrGeneratedRootOnEveryPublicOverload() {
+        Symbol external = symbol("external", "src/main/java/External.java", true, false);
+        Symbol generated = symbol("generated", "target/generated/Generated.java", false, true);
+        CodeKnowledgeSnapshot snapshot = snapshot(List.of(external, generated), List.of());
+
+        for (BiFunction<CodeKnowledgeSnapshot, ImpactAnalysisRequest, ImpactAnalysisReport> path : paths()) {
+            for (Symbol root : List.of(external, generated)) {
+                IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                        () -> path.apply(snapshot, ImpactAnalysisRequest.defaults(root.id())));
+
+                assertEquals("impact root must be a local non-generated symbol: " + root.id(), refusal.getMessage());
+            }
+        }
+    }
+
+    /**
+     * AUD-QUA-07 (caractérisation) : un identifiant de symbole dupliqué est refusé par le snapshot lui-même, avec le
+     * message que porterait le chemin « snapshot seul » du service ; ce refus du service n'est donc pas atteignable.
+     */
+    @Test
+    void duplicateSymbolIdsAreRefusedBeforeTheServiceIsReached() {
+        Symbol first = symbol("dup", "src/main/java/First.java");
+        Symbol second = symbol("dup", "src/main/java/Second.java");
+        List<Symbol> symbols = List.of(first, second);
+
+        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                () -> snapshot(symbols, List.of()));
+
+        assertEquals("duplicate symbol id in snapshot: dup", refusal.getMessage());
+    }
+
+    /** AUD-QUA-07 (caractérisation) : un symbole externe qui dépend de la racine n'est pas traversé, et c'est déclaré. */
+    @Test
+    void anExternalDependentIsDeclaredAndNotTraversedOnEveryPublicOverload() {
+        Symbol root = symbol("root", "src/main/java/Root.java");
+        Symbol local = symbol("local", "src/main/java/Local.java");
+        Symbol external = symbol("external", "lib/External.java", true, false);
+        CodeKnowledgeSnapshot withExternal = snapshot(List.of(root, local, external), List.of(
+                factual("local-root", local, root, RelationshipKind.CALLS),
+                factual("external-root", external, root, RelationshipKind.REFERENCES)));
+        CodeKnowledgeSnapshot withoutExternal = snapshot(List.of(root, local, external), List.of(
+                factual("local-root", local, root, RelationshipKind.CALLS)));
+
+        for (BiFunction<CodeKnowledgeSnapshot, ImpactAnalysisRequest, ImpactAnalysisReport> path : paths()) {
+            ImpactAnalysisReport report = path.apply(withExternal, ImpactAnalysisRequest.defaults(root.id()));
+            ImpactAnalysisReport control = path.apply(withoutExternal, ImpactAnalysisRequest.defaults(root.id()));
+
+            assertEquals(List.of(local.id()), report.impacts().stream().map(impact -> impact.symbol().id()).toList());
+            assertTrue(report.limitations().contains(ImpactLimitation.EXTERNAL_TARGETS_NOT_TRAVERSED),
+                    limitationNames(report).toString());
+            assertFalse(control.limitations().contains(ImpactLimitation.EXTERNAL_TARGETS_NOT_TRAVERSED),
+                    limitationNames(control).toString());
+        }
+    }
+
+    /**
+     * AUD-QUA-07 (caractérisation) : un test atteint par deux chemins garde le meilleur ; un test au-delà de la limite
+     * de résultats ne figure pas dans la liste des tests ; les trois surcharges rendent le même rapport, ordre compris.
+     */
+    @Test
+    void keepsTheBestTestPathAndOnlyListsIncludedTestsOnEveryPublicOverload() {
+        Symbol root = symbol("root", "src/main/java/Root.java");
+        Symbol service = symbol("service", "src/main/java/Service.java");
+        Symbol test = symbol("service-test", "src/test/java/ServiceTest.java");
+        Symbol lateTest = symbol("z-late-test", "src/test/java/LateTest.java");
+        CodeKnowledgeSnapshot snapshot = snapshot(List.of(root, service, test, lateTest), List.of(
+                factual("service-root", service, root, RelationshipKind.CALLS),
+                heuristic("test-service", test, service, RelationshipKind.RELATED_TEST, 0.90),
+                heuristic("test-root", test, root, RelationshipKind.RELATED_TEST, 0.40),
+                heuristic("late-test-service", lateTest, service, RelationshipKind.RELATED_TEST, 0.30)));
+
+        List<String> rendered = new ArrayList<>();
+        for (BiFunction<CodeKnowledgeSnapshot, ImpactAnalysisRequest, ImpactAnalysisReport> path : paths()) {
+            ImpactAnalysisReport report = path.apply(snapshot, new ImpactAnalysisRequest(root.id(), 4, 2));
+
+            assertEquals(List.of(service.id(), test.id()),
+                    report.impacts().stream().map(impact -> impact.symbol().id()).toList());
+            assertFalse(report.impacts().getFirst().testImpact());
+            assertTrue(report.impacts().get(1).testImpact());
+            assertEquals(List.of("test-root"), report.impacts().get(1).path().stream()
+                    .map(ImpactPathStep::relationshipId).toList());
+            assertEquals(List.of(test.id()), report.potentiallyImpactedTests().stream()
+                    .map(impact -> impact.symbol().id()).toList());
+            assertTrue(report.limitations().contains(ImpactLimitation.MAX_RESULTS_REACHED));
+            rendered.add(report.toString());
+        }
+        assertEquals(1, rendered.stream().distinct().count(), rendered.toString());
+    }
+
+    /** Les trois surcharges publiques : snapshot seul, vue de lecture, ancienne vue de requête. */
+    @SuppressWarnings("deprecation")
+    private static List<BiFunction<CodeKnowledgeSnapshot, ImpactAnalysisRequest, ImpactAnalysisReport>> paths() {
+        ImpactAnalysisService service = new ImpactAnalysisService();
+        return List.of(
+                service::analyze,
+                (snapshot, request) -> service.analyze(readView(snapshot), request),
+                (snapshot, request) -> service.analyze(SnapshotQueryView.of(readView(snapshot)), request));
+    }
+
+    private static SnapshotReadView readView(CodeKnowledgeSnapshot snapshot) {
+        return SnapshotReadView.indexed(new SnapshotDescriptor(3, snapshot.snapshotId(), snapshot.snapshotId() + ".bin",
+                "0".repeat(64), snapshot.symbols().size(), snapshot.occurrences().size(),
+                snapshot.relationships().size()), snapshot);
+    }
+
     private static List<String> limitationNames(ImpactAnalysisReport report) {
         return report.limitations().stream().map(Enum::name).toList();
     }
@@ -252,6 +378,10 @@ class ImpactAnalysisServiceTest {
     }
 
     private static Symbol symbol(String id, String fileId, boolean generated) {
+        return symbol(id, fileId, false, generated);
+    }
+
+    private static Symbol symbol(String id, String fileId, boolean external, boolean generated) {
         return new Symbol(
                 id,
                 "key:" + id,
@@ -268,7 +398,7 @@ class ImpactAnalysisServiceTest {
                 null,
                 ResolutionStatus.RESOLVED,
                 FACTUAL_ORIGIN,
-                false,
+                external,
                 generated,
                 Set.of()
         );
