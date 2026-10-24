@@ -133,6 +133,19 @@ Le workflow `code-audit` en mode SpotBugs bloquant (2026-10-24) est vert sur la 
 
 Les constats AUD-ARC-01, -05, -08, -11 et -12 restent ouverts, comme le coût de l'index mémoire par vue d'AUD-ARC-07 (ADR 0047, options B et C) : leurs chantiers et prérequis sont dans [le plan du chantier hexagonal](../roadmap/storage-hexagonal-2026-10/README.md). Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 
+## Audit 2026-10-10 — sprint 11 (2026-10-24)
+
+Les six changements du sprint 11 (« hygiène de fond ») sont **fusionnés dans `develop`** (PR #552 à #558) ; cinq sont archivés. Aucune sortie CLI, API Java, MCP ni du plugin ne change.
+
+- **Méthodes découpées** : `ImpactAnalysisService.analyze` et `ScipIngestionAdapter.ingest` en étapes nommées ; `IndexingRunExecutor.execute` prend deux records (`RunRequest`, `Collaborators`) au lieu de 16 paramètres.
+- **Recherche de symboles** : le rang de correspondance est calculé une fois par candidat, aucun sans texte ; ordre des résultats inchangé.
+- **Caches** : un cache partagé `WeightedLruCache` (`com.minos.store.cache`) porte l'éviction de sept caches ; les helpers d'addition et de multiplication bornées sont nommés d'après leur comportement (`saturatingAdd`, `addOrThrow`, `saturatingMultiply`) et gardés par `check-bounded-helpers.py`.
+- **Jalons** : aucun numéro de jalon dans un nom de production (gate `check-milestone-identifiers.py`), plugin compris ; les variables du runner scip-java Windows s'appellent `MINOS_SCIP_JAVA_*`.
+- **Scripts jumeaux** : les fonctions PowerShell recopiées entre scripts livrés restent identiques (gate `check-twin-script-functions.py`).
+- **Langue des commentaires** : anglais pour tout le code, plugin compris ; aucun fichier ne mêle deux langues, et les fichiers hors langue et ceux qui citent un jalon sont tolérés par des cliquets décroissants (gate `check-comment-language.py`).
+
+Reste : la preuve Windows réelle du runner scip-java renommé (`retirer-les-jalons-des-identifiants`, tâche 4.2), sans laquelle ce changement n'est pas archivé. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
+
 ## État produit
 
 - **C0 → M30** : terminés et intégrés.
