@@ -594,7 +594,19 @@ Les quatre changements sont fusionnés dans `develop` et archivés : `figer-la-d
 - Alertes disparues : `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` de `PrivateLocalStorage.currentOwner` et `ENV_USE_PROPERTY_INSTEAD_OF_ENV` de `ManagedScipProviderRuntimeManager.inspectJavaInstalled` (déplacées dans leur classe : elles réapparaissent sous une autre empreinte), `REC_CATCH_EXCEPTION` de `ProcessIndexerExecutor.executePrepared`.
 - Les derniers runs de `code-audit` avant celui-ci (2026-10-16 et 2026-10-20) étaient non bloquants : l'écart n'avait pas été vu.
 
-Sprint clos. Restent hors du sprint : l'écart de la base SpotBugs ci-dessus (trier chaque alerte : corriger, ou figer avec une raison écrite) ; les lots 2 à 6 d'AUD-ARC-01, SH-08 (AUD-ARC-05) et SH-02, SH-03, SH-06 (AUD-ARC-08), suivis dans le [plan du chantier hexagonal](../../roadmap/storage-hexagonal-2026-10/README.md) ; le coût de l'index mémoire par vue d'AUD-ARC-07 (ADR 0047, options B et C).
+**Tri de l'écart** (branche `fix/aligner-spotbugs-sur-la-base`) : chaque alerte est corrigée ou figée avec une raison écrite, et les trois disparues sont retirées de la base.
+
+| Alertes | Décision | Preuve |
+|---|---|---|
+| `USO_UNSAFE_METHOD_SYNCHRONIZATION` ×11, `LocalProjectRegistry` | **Corrigées** : verrou privé à la place des méthodes `synchronized` | `LocalProjectRegistryLockTest` : rouge avant correction (`TimeoutException` après 30 s quand un appelant tient le moniteur du registre), vert après |
+| `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE`, `PrivateLocalStorage.probeOwner` | **Corrigée** : `getParent()` lu une seule fois | rapport SpotBugs du module |
+| `AT_STALE_THREAD_WRITE_OF_PRIMITIVE` ×3, baux de `PostgresConnectionFactory` | **Corrigées** : champs `volatile`, lus par `close()` avant le contrôle du thread propriétaire | rapport SpotBugs du module |
+| `ENV_USE_PROPERTY_INSTEAD_OF_ENV` ×4, `UL_UNRELEASED_LOCK`, `EI_EXPOSE_REP` et `EI_EXPOSE_REP2` | **Figées dans la base** : la correction suggérée serait fausse ou sans objet | raisons par alerte : `docs/developer/quality/code-audit.md`, « SpotBugs : alertes figées après le 9 octobre » |
+| `PrivateLocalStorage.currentOwner` (NP), `ManagedScipProviderRuntimeManager.inspectJavaInstalled` (ENV), `ProcessIndexerExecutor.executePrepared` (`REC_CATCH_EXCEPTION`) | **Retirées de la base** : le code qui les portait a changé | — |
+
+Preuve : `code-audit` bloquant sur la branche, run 40048471322 vert (`0 new finding(s), 0 baseline finding(s) gone`) ; tests de `minos-engine`, `minos-storage-local` et `minos-storage-postgresql` verts ; [PR #551](https://github.com/FTurleque/minos-code-intelligence/pull/551) vers `develop`.
+
+Sprint clos. Restent hors du sprint : les lots 2 à 6 d'AUD-ARC-01, SH-08 (AUD-ARC-05) et SH-02, SH-03, SH-06 (AUD-ARC-08), suivis dans le [plan du chantier hexagonal](../../roadmap/storage-hexagonal-2026-10/README.md) ; le coût de l'index mémoire par vue d'AUD-ARC-07 (ADR 0047, options B et C).
 
 ## Sprint 11 — Hygiène de fond (spécifié le 2026-10-13)
 

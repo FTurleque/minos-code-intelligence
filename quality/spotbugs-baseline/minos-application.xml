@@ -122,4 +122,53 @@
       <Message>Known null at FileProgramGraphProvider.java:[line 336]</Message>
     </SourceLine>
   </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="bfaada0e72e95d8119479e25964cbe7" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>May expose internal representation by returning reference to mutable object</ShortMessage>
+    <LongMessage>com.minos.application.indexing.ProjectIndexingUseCase$Dependencies.projectRegistry() may expose internal representation by returning ProjectIndexingUseCase$Dependencies.projectRegistry</LongMessage>
+    <Class classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" primary="true">
+      <SourceLine classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" start="88" end="121" sourcepath="com/minos/application/indexing/ProjectIndexingUseCase.java" sourcefile="ProjectIndexingUseCase.java">
+        <Message>At ProjectIndexingUseCase.java:[lines 88-121]</Message>
+      </SourceLine>
+      <Message>In class com.minos.application.indexing.ProjectIndexingUseCase$Dependencies</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" signature="()Lcom/minos/registry/ProjectRegistry;" name="projectRegistry" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" start="88" end="88" sourcepath="com/minos/application/indexing/ProjectIndexingUseCase.java" sourcefile="ProjectIndexingUseCase.java" startBytecode="0" />
+      <Message>In method com.minos.application.indexing.ProjectIndexingUseCase$Dependencies.projectRegistry()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" signature="Lcom/minos/registry/ProjectRegistry;" name="projectRegistry" primary="true">
+      <SourceLine classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" sourcepath="com/minos/application/indexing/ProjectIndexingUseCase.java" sourcefile="ProjectIndexingUseCase.java">
+        <Message>In ProjectIndexingUseCase.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.application.indexing.ProjectIndexingUseCase$Dependencies.projectRegistry</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" start="88" end="88" sourcepath="com/minos/application/indexing/ProjectIndexingUseCase.java" sourcefile="ProjectIndexingUseCase.java" startBytecode="4" primary="true">
+      <Message>At ProjectIndexingUseCase.java:[line 88]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="140102aa0b63888728906b6fccf29373" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
+    <ShortMessage>May expose internal representation by incorporating reference to mutable object</ShortMessage>
+    <LongMessage>new com.minos.application.indexing.ProjectIndexingUseCase$Dependencies(ProjectRegistry, CodeKnowledgeSnapshotStore, IndexStateStore, ProjectFingerprintSnapshotStore, ProviderRuntimeManager, IndexingRuntimePorts$SnapshotStager, IndexingRuntimePorts$SnapshotPromoter, ResumableRunMarkers, ProjectDiscoveryService, ProjectFingerprintService, ProjectInvalidationService, IncrementalIndexingPlanner, Function, StorageRetentionService, ProjectIndexingUseCase$SemanticRefresh) may expose internal representation by storing an externally mutable object into ProjectIndexingUseCase$Dependencies.projectRegistry</LongMessage>
+    <Class classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" primary="true">
+      <SourceLine classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" start="88" end="121" sourcepath="com/minos/application/indexing/ProjectIndexingUseCase.java" sourcefile="ProjectIndexingUseCase.java">
+        <Message>At ProjectIndexingUseCase.java:[lines 88-121]</Message>
+      </SourceLine>
+      <Message>In class com.minos.application.indexing.ProjectIndexingUseCase$Dependencies</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" signature="(Lcom/minos/registry/ProjectRegistry;Lcom/minos/store/CodeKnowledgeSnapshotStore;Lcom/minos/orchestration/IndexStateStore;Lcom/minos/incremental/ProjectFingerprintSnapshotStore;Lcom/minos/runtime/ProviderRuntimeManager;Lcom/minos/orchestration/IndexingRuntimePorts$SnapshotStager;Lcom/minos/orchestration/IndexingRuntimePorts$SnapshotPromoter;Lcom/minos/orchestration/ResumableRunMarkers;Lcom/minos/discovery/ProjectDiscoveryService;Lcom/minos/incremental/ProjectFingerprintService;Lcom/minos/orchestration/ProjectInvalidationService;Lcom/minos/orchestration/IncrementalIndexingPlanner;Ljava/util/function/Function;Lcom/minos/storage/StorageRetentionService;Lcom/minos/application/indexing/ProjectIndexingUseCase$SemanticRefresh;)V" name="&lt;init&gt;" primary="true">
+      <SourceLine endBytecode="486" classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" start="105" end="121" sourcepath="com/minos/application/indexing/ProjectIndexingUseCase.java" sourcefile="ProjectIndexingUseCase.java" startBytecode="0" />
+      <Message>In method new com.minos.application.indexing.ProjectIndexingUseCase$Dependencies(ProjectRegistry, CodeKnowledgeSnapshotStore, IndexStateStore, ProjectFingerprintSnapshotStore, ProviderRuntimeManager, IndexingRuntimePorts$SnapshotStager, IndexingRuntimePorts$SnapshotPromoter, ResumableRunMarkers, ProjectDiscoveryService, ProjectFingerprintService, ProjectInvalidationService, IncrementalIndexingPlanner, Function, StorageRetentionService, ProjectIndexingUseCase$SemanticRefresh)</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" signature="Lcom/minos/registry/ProjectRegistry;" name="projectRegistry" primary="true">
+      <SourceLine classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" sourcepath="com/minos/application/indexing/ProjectIndexingUseCase.java" sourcefile="ProjectIndexingUseCase.java">
+        <Message>In ProjectIndexingUseCase.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.application.indexing.ProjectIndexingUseCase$Dependencies.projectRegistry</Message>
+    </Field>
+    <LocalVariable role="LOCAL_VARIABLE_NAMED" pc="123" name="projectRegistry" register="1">
+      <Message>Local variable named projectRegistry</Message>
+    </LocalVariable>
+    <SourceLine endBytecode="123" classname="com.minos.application.indexing.ProjectIndexingUseCase$Dependencies" start="105" end="105" sourcepath="com/minos/application/indexing/ProjectIndexingUseCase.java" sourcefile="ProjectIndexingUseCase.java" startBytecode="123" primary="true">
+      <Message>At ProjectIndexingUseCase.java:[line 105]</Message>
+    </SourceLine>
+  </BugInstance>
 </BugCollection>

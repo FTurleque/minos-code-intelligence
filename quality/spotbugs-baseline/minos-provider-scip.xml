@@ -47,29 +47,6 @@
       <Message>Known null at ManagedPolyglotScipRuntimeManager.java:[line 393]</Message>
     </SourceLine>
   </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="931ef65509f2ec6471eb3797907ad00f" rank="16" abbrev="ENV" category="BAD_PRACTICE" priority="2" type="ENV_USE_PROPERTY_INSTEAD_OF_ENV" instanceOccurrenceMax="0">
-    <ShortMessage>It is preferable to use portable Java property instead of environment variable.</ShortMessage>
-    <LongMessage>It is preferable to use portable Java property 'java.home' instead of environment variable 'JAVA_HOME' in method com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager.inspectJavaInstalled().</LongMessage>
-    <Class classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" primary="true">
-      <SourceLine classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" start="85" end="819" sourcepath="com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java">
-        <Message>At ManagedScipProviderRuntimeManager.java:[lines 85-819]</Message>
-      </SourceLine>
-      <Message>In class com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager</Message>
-    </Class>
-    <Method isStatic="false" classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" signature="()Lcom/minos/runtime/ProviderRuntimeStatus;" name="inspectJavaInstalled" primary="true">
-      <SourceLine endBytecode="671" classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" start="229" end="252" sourcepath="com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="0" />
-      <Message>In method com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager.inspectJavaInstalled()</Message>
-    </Method>
-    <String value="JAVA_HOME">
-      <Message>Value JAVA_HOME</Message>
-    </String>
-    <String value="java.home">
-      <Message>Value java.home</Message>
-    </String>
-    <SourceLine endBytecode="182" classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" start="241" end="241" sourcepath="com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="182" primary="true">
-      <Message>At ManagedScipProviderRuntimeManager.java:[line 241]</Message>
-    </SourceLine>
-  </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="ba0c283759fde0e4ced927985a9529cd" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
     <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager.extractZipBounded(Path, Path, long, long)</LongMessage>
@@ -327,6 +304,52 @@
     </SourceLine>
     <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="105" classname="com.minos.adapter.scip.runtime.plan.ScipPythonProcessPlanFactory" start="47" end="47" sourcepath="com/minos/adapter/scip/runtime/plan/ScipPythonProcessPlanFactory.java" sourcefile="ScipPythonProcessPlanFactory.java" startBytecode="105">
       <Message>Known null at ScipPythonProcessPlanFactory.java:[line 47]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="121ea919e6c7d7e295f4bbbb78107d6f" rank="16" abbrev="ENV" category="BAD_PRACTICE" priority="2" type="ENV_USE_PROPERTY_INSTEAD_OF_ENV" instanceOccurrenceMax="0">
+    <ShortMessage>It is preferable to use portable Java property instead of environment variable.</ShortMessage>
+    <LongMessage>It is preferable to use portable Java property 'java.home' instead of environment variable 'JAVA_HOME' in method com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager.addProjectJdkDiagnostics(List).</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" start="87" end="1003" sourcepath="com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java">
+        <Message>At ManagedScipProviderRuntimeManager.java:[lines 87-1003]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" signature="(Ljava/util/List;)V" name="addProjectJdkDiagnostics" primary="true">
+      <SourceLine endBytecode="248" classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" start="295" end="304" sourcepath="com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager.addProjectJdkDiagnostics(List)</Message>
+    </Method>
+    <String value="JAVA_HOME">
+      <Message>Value JAVA_HOME</Message>
+    </String>
+    <String value="java.home">
+      <Message>Value java.home</Message>
+    </String>
+    <SourceLine endBytecode="3" classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" start="295" end="295" sourcepath="com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="3" primary="true">
+      <Message>At ManagedScipProviderRuntimeManager.java:[line 295]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="43f9f91ae7aea783dcb4d8a1a998729d" rank="16" abbrev="ENV" category="BAD_PRACTICE" priority="2" type="ENV_USE_PROPERTY_INSTEAD_OF_ENV" instanceOccurrenceMax="0">
+    <ShortMessage>It is preferable to use portable Java property instead of environment variable.</ShortMessage>
+    <LongMessage>It is preferable to use portable Java property 'java.home' instead of environment variable 'JAVA_HOME' in method com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory.projectJava().</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory" start="44" end="365" sourcepath="com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java">
+        <Message>At ScipJavaProcessPlanFactory.java:[lines 44-365]</Message>
+      </SourceLine>
+      <Message>In class com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory" signature="()Ljava/nio/file/Path;" name="projectJava" primary="true">
+      <SourceLine endBytecode="90" classname="com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory" start="345" end="345" sourcepath="com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory.projectJava()</Message>
+    </Method>
+    <String value="JAVA_HOME">
+      <Message>Value JAVA_HOME</Message>
+    </String>
+    <String value="java.home">
+      <Message>Value java.home</Message>
+    </String>
+    <SourceLine endBytecode="3" classname="com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory" start="345" end="345" sourcepath="com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java" sourcefile="ScipJavaProcessPlanFactory.java" startBytecode="3" primary="true">
+      <Message>At ScipJavaProcessPlanFactory.java:[line 345]</Message>
     </SourceLine>
   </BugInstance>
 </BugCollection>
