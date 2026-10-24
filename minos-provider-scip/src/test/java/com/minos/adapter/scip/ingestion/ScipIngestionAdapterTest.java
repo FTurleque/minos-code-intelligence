@@ -11,6 +11,7 @@ import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.query.RelationshipQueryService;
 import com.minos.query.SymbolQueryService;
+import com.minos.store.CodeKnowledgeStore;
 import com.minos.store.InMemoryCodeKnowledgeStore;
 import org.junit.jupiter.api.Test;
 import org.scip_code.scip.Document;
@@ -20,11 +21,18 @@ import org.scip_code.scip.SingleLineRange;
 import org.scip_code.scip.SymbolInformation;
 import org.scip_code.scip.SymbolRole;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScipIngestionAdapterTest {
@@ -423,6 +431,97 @@ class ScipIngestionAdapterTest {
         assertEquals(1, report.derivedRelationshipCount());
         assertEquals(1, report.duplicateRelationshipCount());
         assertEquals(0, report.skippedRelationshipFactCount());
+    }
+
+    /**
+     * AUD-QUA-07 (caractérisation) : occurrence sans symbole, occurrence sans plage convertible et symbole externe sans
+     * langage sont comptés comme ignorés ; le rapport est figé champ pour champ et les écritures se font dans l'ordre
+     * symboles, occurrences, relations, chacune une seule fois.
+     */
+    @Test
+    void countsSkippedFactsAndWritesSymbolsThenOccurrencesThenRelationships() {
+        List<String> writes = new ArrayList<>();
+        CodeKnowledgeStore store = spyStore(new InMemoryCodeKnowledgeStore(), writes, null);
+
+        ScipIngestionReport report = new ScipIngestionAdapter().ingest(skippingIndex(), skippingRequest(), store);
+
+        assertEquals(new ScipIngestionReport(2, 1, 1, 3, 2, 1, 2, 1, 1, 1, 1, 0, 0, 1, 0, 0), report);
+        assertEquals(List.of("putSymbols:1", "putOccurrences:3", "putRelationships:2"), writes);
+    }
+
+    /** AUD-QUA-07 (caractérisation) : l'échec d'une écriture sort tel quel et aucune écriture suivante n'a lieu. */
+    @Test
+    void aFailingWriteIsPropagatedAndStopsTheFollowingWrites() {
+        for (String failing : List.of("putSymbols", "putOccurrences", "putRelationships")) {
+            List<String> writes = new ArrayList<>();
+            IllegalStateException failure = new IllegalStateException("store refused " + failing);
+            CodeKnowledgeStore store = spyStore(new InMemoryCodeKnowledgeStore(), writes, Map.entry(failing, failure));
+
+            IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                    () -> new ScipIngestionAdapter().ingest(skippingIndex(), skippingRequest(), store));
+
+            assertSame(failure, thrown);
+            assertEquals(failing, writes.getLast().substring(0, writes.getLast().indexOf(':')), writes.toString());
+            assertEquals(List.of("putSymbols", "putOccurrences", "putRelationships")
+                    .indexOf(failing) + 1, writes.size(), writes.toString());
+        }
+    }
+
+    private static Index skippingIndex() {
+        String rawA = "scip-java maven fixture 1.0 io/example/A#";
+        SymbolInformation a = SymbolInformation.newBuilder()
+                .setSymbol(rawA)
+                .setDisplayName("A")
+                .setKind(SymbolInformation.Kind.Class)
+                .addRelationships(org.scip_code.scip.Relationship.newBuilder()
+                        .setSymbol("scip-java maven fixture 1.0 io/example/Missing#")
+                        .setIsImplementation(true))
+                .build();
+        Document document = Document.newBuilder()
+                .setLanguage("java")
+                .setRelativePath("src/main/java/io/example/A.java")
+                .setPositionEncoding(org.scip_code.scip.PositionEncoding.UTF16CodeUnitOffsetFromLineStart)
+                .addSymbols(a)
+                .addOccurrences(occurrence(rawA, 0, 13, 14, SymbolRole.Definition_VALUE))
+                .addOccurrences(occurrence(rawA, 4, 8, 9, SymbolRole.ReadAccess_VALUE))
+                .addOccurrences(occurrence("", 5, 0, 3, SymbolRole.ReadAccess_VALUE))
+                .addOccurrences(Occurrence.newBuilder().setSymbol(rawA).setSymbolRoles(SymbolRole.ReadAccess_VALUE))
+                .addOccurrences(occurrence("scip-java maven fixture 1.0 io/example/Other#", 6, 0, 5,
+                        SymbolRole.ReadAccess_VALUE))
+                .build();
+        SymbolInformation externalWithoutLanguage = SymbolInformation.newBuilder()
+                .setSymbol("scip-java maven external 1.0 ext/External#")
+                .setDisplayName("External")
+                .setKind(SymbolInformation.Kind.Class)
+                .build();
+        return Index.newBuilder().addDocuments(document).addExternalSymbols(externalWithoutLanguage).build();
+    }
+
+    private static ScipIngestionRequest skippingRequest() {
+        return new ScipIngestionRequest("project-skips", "module-main", "scip-java", "0.13.1", "run-skips", Map.of());
+    }
+
+    /** Store espion : note chaque écriture (nom et taille) avant de la déléguer, et peut en faire échouer une. */
+    private static CodeKnowledgeStore spyStore(
+            CodeKnowledgeStore delegate,
+            List<String> writes,
+            Map.Entry<String, RuntimeException> failure) {
+        return (CodeKnowledgeStore) Proxy.newProxyInstance(
+                CodeKnowledgeStore.class.getClassLoader(),
+                new Class<?>[]{CodeKnowledgeStore.class},
+                (proxy, method, arguments) -> {
+                    if (method.getName().startsWith("put")) {
+                        writes.add(method.getName() + ":" + ((Collection<?>) arguments[0]).size());
+                        if (failure != null && failure.getKey().equals(method.getName())) {
+                            throw failure.getValue();
+                        }
+                    }
+                    try {
+                        return method.invoke(delegate, arguments);
+                    } catch (InvocationTargetException invocation) {
+                        throw invocation.getCause();
+                    }
+                });
     }
 
     private static Document localSymbolDocument(String relativePath, String displayName) {
