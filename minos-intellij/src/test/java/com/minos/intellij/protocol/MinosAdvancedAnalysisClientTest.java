@@ -8,13 +8,13 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class MinosM21ClientTest {
+class MinosAdvancedAnalysisClientTest {
 
     @Test
     void acceptsAdvertisedCapability() {
-        JsonObject handshake = handshake(MinosM21Client.PROGRAM_GRAPH, MinosM21Client.HYBRID_SEARCH);
+        JsonObject handshake = handshake(MinosAdvancedAnalysisClient.PROGRAM_GRAPH, MinosAdvancedAnalysisClient.HYBRID_SEARCH);
 
-        assertDoesNotThrow(() -> MinosM21Client.requireCapability(handshake, MinosM21Client.PROGRAM_GRAPH));
+        assertDoesNotThrow(() -> MinosAdvancedAnalysisClient.requireCapability(handshake, MinosAdvancedAnalysisClient.PROGRAM_GRAPH));
     }
 
     @Test
@@ -23,7 +23,7 @@ class MinosM21ClientTest {
 
         MinosProtocolException failure = assertThrows(
                 MinosProtocolException.class,
-                () -> MinosM21Client.requireCapability(handshake, MinosM21Client.SEMANTIC_SEARCH));
+                () -> MinosAdvancedAnalysisClient.requireCapability(handshake, MinosAdvancedAnalysisClient.SEMANTIC_SEARCH));
 
         assertTrue(failure.getMessage().contains("semantic-search"));
         assertTrue(failure.getMessage().contains("update MINOS"));
@@ -33,7 +33,7 @@ class MinosM21ClientTest {
     void rejectsMissingCapabilityArray() {
         MinosProtocolException failure = assertThrows(
                 MinosProtocolException.class,
-                () -> MinosM21Client.requireCapability(new JsonObject(), MinosM21Client.IMPACT_V2));
+                () -> MinosAdvancedAnalysisClient.requireCapability(new JsonObject(), MinosAdvancedAnalysisClient.IMPACT_V2));
 
         assertTrue(failure.getMessage().contains("impact-v2"));
     }

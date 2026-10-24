@@ -11,7 +11,7 @@ import java.util.List;
 
 /** Thin IntelliJ transport adapter for additive M19/M20 capabilities exposed by minos-ide v1. */
 @Service(Service.Level.PROJECT)
-public final class MinosM21Client {
+public final class MinosAdvancedAnalysisClient {
 
     public static final String PROGRAM_GRAPH = "program-graph";
     public static final String IMPACT_V2 = "impact-v2";
@@ -24,12 +24,12 @@ public final class MinosM21Client {
 
     private final MinosCliClient client;
 
-    public MinosM21Client(Project project) {
+    public MinosAdvancedAnalysisClient(Project project) {
         this.client = MinosCliClient.getInstance(project);
     }
 
-    public static MinosM21Client getInstance(Project project) {
-        return project.getService(MinosM21Client.class);
+    public static MinosAdvancedAnalysisClient getInstance(Project project) {
+        return project.getService(MinosAdvancedAnalysisClient.class);
     }
 
     public JsonObject programGraph(String projectId, int maxNodes, int maxEdges) throws MinosProtocolException {
