@@ -164,6 +164,13 @@ jobs:
       - name: Job Object launcher parity gate self-test
         run: python scripts/quality/test_check_job_object_launcher_parity.py -v
 
+      # AUD-QUA-09: functions copied between shipped, install, release and CI scripts stay identical.
+      - name: Twin script functions gate
+        run: python scripts/quality/check-twin-script-functions.py
+
+      - name: Twin script functions gate self-test
+        run: python scripts/quality/test_check_twin_script_functions.py -v
+
       - name: CI wiring, ruleset comparison and plugin gate self-tests
         run: |
           python scripts/quality/test_check_ci_wiring.py -v

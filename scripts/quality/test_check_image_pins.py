@@ -5,6 +5,9 @@ from __future__ import annotations
 import importlib.util
 import os
 import re
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -300,6 +303,25 @@ class CheckImagePinsTest(unittest.TestCase):
         for label in ("tag without digest", "digest without tag", "short digest"):
             with self.subTest(generic=label):
                 self.assertNotEqual([], self.run_gate({"docker/Dockerfile.mcp": red[label]}))
+
+    def test_the_ci_wiring_check_is_the_one_of_gate_cli(self):
+        sys.path.insert(0, str(_MODULE_PATH.parent))
+        import gate_cli
+        self.assertFalse(hasattr(gate, "find_ci_wiring_violations"), "the gate must not carry its own copy")
+        self.assertIs(gate_cli, gate.gate_cli)
+        with mock.patch.object(gate_cli, "find_ci_wiring_violations", return_value=["WIRING SENTINEL"]) as shared:
+            failures = self.run_gate({"docker/Dockerfile.mcp": PINNED_DOCKERFILE, "docker/compose-mcp.prod.yaml": PINNED_COMPOSE})
+        self.assertEqual(["WIRING SENTINEL"], failures)
+        self.assertEqual(gate.CI_STEPS, shared.call_args.args[1])
+
+    def test_without_gate_cli_the_gate_fails_instead_of_falling_back(self):
+        with tempfile.TemporaryDirectory() as directory:
+            copy = Path(directory) / "check-image-pins.py"
+            shutil.copyfile(_MODULE_PATH, copy)
+            result = subprocess.run([sys.executable, "-I", str(copy), "--root", str(gate.DEFAULT_ROOT)],
+                                    capture_output=True, text=True, encoding="utf-8")
+        self.assertNotEqual(0, result.returncode, result.stdout)
+        self.assertIn("gate_cli", result.stderr)
 
     def test_the_real_repository_is_pinned(self):
         failures, inspected = gate.check(gate.DEFAULT_ROOT)

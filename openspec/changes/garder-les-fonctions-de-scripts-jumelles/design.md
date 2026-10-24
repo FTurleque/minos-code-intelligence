@@ -14,7 +14,7 @@ Sprint 11 « Hygiène de fond » de l'audit du 10 octobre 2026 : **AUD-QUA-09**.
 4. Empreinte SHA-256 de chaque corps ; regroupement par nom (insensible à la casse pour PowerShell) ; un groupe compte s'il couvre au moins deux fichiers.
 5. Contrôle croisé sur les jumelles retenues : extraction « `function` en colonne 0 jusqu'à la première ligne `}` en colonne 0 » ; mêmes bornes et mêmes regroupements que l'étape 2 pour les 25 copies PowerShell des 12 entrées de D5. Les 39 scripts du périmètre (D5) portent 280 définitions en colonne 0 et 4 définitions imbriquées (`docker/scripts/configure-docker-mcp.ps1:77`, `scripts/install/verify-windows-upgrade-transaction.ps1:365,383,448`).
 
-Résultat : 42 noms PowerShell et 24 noms Python sont définis dans au moins deux fichiers ; 23 des noms PowerShell le sont dans au moins deux scripts du périmètre.
+Résultat : 42 noms PowerShell et 24 noms Python sont définis dans au moins deux fichiers ; 23 des noms PowerShell le sont dans au moins deux scripts du périmètre. La méthode rejouée au HEAD de départ de l'implémentation, `a8288b43` (`develop` du 2026-10-24), donne les mêmes comptes et les mêmes jumelles identiques ; aucun script du périmètre n'a changé entre les deux HEAD.
 
 ### Jumelles identiques dans les scripts vivants
 
@@ -85,7 +85,7 @@ Les quatre fonctions d'ACL du fichier de secret et `Read-BoundedUtf8` sont des f
 
 ## Decisions
 
-### D1. Garde d'identité plutôt que bibliothèque livrée — **décision en attente du propriétaire, option A recommandée**
+### D1. Garde d'identité plutôt que bibliothèque livrée — **option A, décidée par le propriétaire le 2026-10-24**
 
 **Option A (recommandée) : gate d'identité.** Les copies restent dans leurs scripts ; le gate de D5 les compare.
 
@@ -96,7 +96,9 @@ Les quatre fonctions d'ACL du fichier de secret et `Read-BoundedUtf8` sont des f
 - `check-post-mne.py:197-202` et `test_secret_file_acl.py:28-29,133` seraient réécrits ; ce dernier note que les scripts ne peuvent pas être dot-sourcés (ils configurent une installation au chargement).
 - `mcp-lifecycle.ps1` (livré) ne dot-source rien ; `prod-mcp.ps1` (non livré) dot-source déjà `scripts/windows/MinosWindows.ps1`, qui n'est pas livré.
 
-Recommandation : **A**. B ajoute un fichier dont l'absence casse l'installateur et la mise à jour, pour des fonctions de 3 à 24 lignes.
+Décision : **A** (propriétaire, 2026-10-24) ; aucune bibliothèque livrée. B ajoute un fichier dont l'absence casse l'installateur et la mise à jour, pour des fonctions de 3 à 24 lignes.
+
+D2, D3, D4 (câblage CI dans `scripts/quality/gate_cli.py`) et D5 sont retenues telles qu'écrites ci-dessous (propriétaire, 2026-10-24).
 
 ### D2. `Require-Identifier` : aligner
 
