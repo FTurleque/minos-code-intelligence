@@ -29,13 +29,13 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Plan d'exécution local de scip-java.
+ * Local execution plan of scip-java.
  *
- * <p>Le classpath exécuté est celui que l'installation a vérifié et rangé dans {@code MINOS_HOME/tools}
- * ({@link ScipJavaClasspath}) : chaque jar est comparé de nouveau au verrou avant le plan, sous Windows comme
- * sous Linux. Rien n'est résolu par coordonnée au moment de l'indexation. Seule exception, hors Windows et sans
- * classpath installé : un lanceur autonome {@code scip-java} présent dans le {@code PATH} (celui que construit l'image
- * Docker, ou un outil choisi par l'opérateur, comme {@code node} pour les autres providers).</p>
+ * <p>The classpath that runs is the one the installation verified and stored in {@code MINOS_HOME/tools}
+ * ({@link ScipJavaClasspath}): each jar is compared again with the lock before the plan, on Windows as on Linux.
+ * Nothing is resolved by coordinate at indexing time. The only exception, outside Windows and without an installed
+ * classpath: a standalone {@code scip-java} launcher found in the {@code PATH} (the one the Docker image builds, or a
+ * tool chosen by the operator, like {@code node} for the other providers).</p>
  */
 public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFactory {
     private static final String REPAIR = "run `minos tools install scip-java`";

@@ -25,7 +25,7 @@
     "minos-domain": 21,
     "minos-engine": 55,
     "minos-intellij": 1,
-    "minos-provider-scip": 17,
+    "minos-provider-scip": 10,
     "minos-runtime-local": 5,
     "minos-storage-local": 2,
     "minos-storage-postgresql": 1
@@ -41,7 +41,7 @@
     "minos-integration-git": 1,
     "minos-intellij": 2,
     "minos-nexus": 3,
-    "minos-provider-scip": 5,
+    "minos-provider-scip": 3,
     "minos-runtime-local": 1,
     "minos-storage-local": 6
   },
@@ -50,13 +50,6 @@
     "FileSymbolSnapshotStore.java": "Relevé initial (minos-storage-local) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "IndexerProcessPlanFactory.java": "Relevé initial (minos-runtime-local) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
     "LocalProjectRegistry.java": "Relevé initial (minos-storage-local) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "PostgresCodeKnowledgeSnapshotStore.java": "Relevé initial (minos-storage-postgresql) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "ScipIndexReader.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "ScipJavaProcessPlanFactory.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "ScipProjectSnapshotLifecycle.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "ScipSymbolCatalog.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "ScipSymbolNormalizer.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "ScipSymbolSnapshotImporter.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »).",
-    "ScipTypeScriptProcessPlanFactory.java": "Relevé initial (minos-provider-scip) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »)."
+    "PostgresCodeKnowledgeSnapshotStore.java": "Relevé initial (minos-storage-postgresql) : commentaires français et anglais mêlés ; repris dans la langue du module (lot « mixtes »)."
   }
 }
