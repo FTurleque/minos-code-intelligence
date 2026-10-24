@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** M19 Impact v2: preserves M8 as baseline and adds only program-graph paths not already reported. */
+/** Impact v2: preserves the baseline impact analysis and adds only program-graph paths not already reported. */
 public final class AdvancedImpactService {
 
     private final ProjectImpactQuery baselineImpact;
@@ -31,7 +31,7 @@ public final class AdvancedImpactService {
     public AdvancedImpactReport analyze(String projectIdentifier, ImpactAnalysisRequest request) throws IOException {
         Objects.requireNonNull(request, "request");
         ImpactAnalysisReport baseline = baselineImpact.analyzeImpact(projectIdentifier, request);
-        // AUD-PERF-11 : l'adjacence triée est celle de l'entrée de cache du graphe, construite une fois pour lui.
+        // AUD-PERF-11: the sorted adjacency is the one of the graph's cache entry, built once for it.
         ProgramGraphService.ImpactGraph impactGraph = programGraphs.impactGraph(projectIdentifier);
         ProgramGraph graph = impactGraph.graph();
         ProgramGraphService.ImpactAdjacency adjacency = impactGraph.adjacency();

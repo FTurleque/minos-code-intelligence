@@ -8,9 +8,9 @@ import java.io.IOException;
 /**
  * Resolves the configured MINOS storage backend without compile-time coupling to any backend.
  *
- * <p>ADR 0042 : la sélection (backend {@code local} intégré, puis fournisseurs découverts par
- * {@code ServiceLoader}) vit dans la racine de composition {@code minos-bootstrap} ; cette façade
- * garde le point d'entrée public et délègue à l'unique racine de composition.</p>
+ * <p>ADR 0042: the selection (built-in {@code local} backend, then providers discovered by
+ * {@code ServiceLoader}) lives in the composition root {@code minos-bootstrap}; this facade keeps the
+ * public entry point and delegates to the single composition root.</p>
  */
 public final class StorageBackends {
     private StorageBackends() { }

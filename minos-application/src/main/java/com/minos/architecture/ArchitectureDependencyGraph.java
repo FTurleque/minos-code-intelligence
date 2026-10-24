@@ -9,10 +9,10 @@ import java.util.Objects;
 import static com.minos.domain.Preconditions.requireText;
 
 /**
- * Vue compacte des dépendances persistées agrégées au niveau module.
+ * Compact view of the persisted dependencies aggregated at module level.
  *
- * <p>{@code limitations} dit ce que le graphe ne voit pas (voir {@code SnapshotCoverageLimitations}) : vide quand
- * rien n'est à déclarer, jamais nulle.</p>
+ * <p>{@code limitations} says what the graph does not see (see {@code SnapshotCoverageLimitations}): empty when
+ * there is nothing to declare, never null.</p>
  */
 public record ArchitectureDependencyGraph(
         String projectId,

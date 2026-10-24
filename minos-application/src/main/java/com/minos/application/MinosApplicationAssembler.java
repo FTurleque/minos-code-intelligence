@@ -38,8 +38,8 @@ final class MinosApplicationAssembler {
     }
 
     static MinosApplication build(MinosApplication.Builder builder) throws IOException {
-        // ADR 0042 : adaptateurs par défaut fournis par la racine de composition (minos-bootstrap),
-        // résolue avant tout effet de bord ; chaque défaut reste créé au même point qu'auparavant.
+        // ADR 0042: default adapters supplied by the composition root (minos-bootstrap), resolved before
+        // any side effect; each default is still created at the same point as before.
         MinosApplicationComposer composer = builder.resolvedComposer();
         Path home = builder.home;
         // Builder is a direct public entry point, so it independently enforces private MINOS_HOME
@@ -86,10 +86,10 @@ final class MinosApplicationAssembler {
                     ? builder.incrementalIndexingPlanner : new IncrementalIndexingPlanner();
             List<IndexerDescriptor> effectiveDescriptors = builder.indexerDescriptors != null
                     ? builder.indexerDescriptors : List.copyOf(composer.qualifiedIndexerDescriptors());
-            // Le catalogue n'est lu qu'à la demande (ProviderPlatformService.defaults).
+            // The catalog is read only on demand (ProviderPlatformService.defaults).
             IndexerProviderCatalog effectiveProviderCatalog = builder.providerCatalog != null
                     ? builder.providerCatalog : composer.providerCatalog();
-            // Un importeur neuf par import (voir le composer).
+            // A new importer for each import (see the composer).
             ScipArtifactImporter effectiveScipImporter = builder.scipArtifactImporter != null
                     ? builder.scipArtifactImporter : composer.scipArtifactImporter();
             ProviderRuntimeManager effectiveProviderRuntime = builder.providerRuntimeManager != null

@@ -4,7 +4,7 @@ import com.minos.semantic.SemanticVector;
 import java.io.IOException;
 import java.util.List;
 
-/** Optional M20 embedding provider SPI. Implementations may be local models or deterministic test providers. */
+/** Optional embedding provider SPI. Implementations may be local models or deterministic test providers. */
 public interface EmbeddingProvider {
 
     String id();
@@ -16,8 +16,8 @@ public interface EmbeddingProvider {
     SemanticVector embed(String stableKey, String text) throws IOException;
 
     /**
-     * Limitations propres à ce fournisseur, ajoutées dans cet ordre, après celles de l'état de l'index,
-     * aux statuts et rapports sémantiques. Aucune par défaut : un fournisseur n'en déclare que s'il en a.
+     * Limitations specific to this provider, added in this order, after those of the index state, to the
+     * semantic statuses and reports. None by default: a provider declares some only if it has any.
      */
     default List<String> limitations() {
         return List.of();

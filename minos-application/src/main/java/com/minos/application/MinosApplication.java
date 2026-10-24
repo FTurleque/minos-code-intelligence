@@ -215,8 +215,8 @@ public final class MinosApplication implements AutoCloseable {
      * MINOS has not yet confirmed it can protect.</p>
      */
     public static MinosApplication open(Path home) throws IOException {
-        // ADR 0042 : la racine de composition est résolue d'abord, sans effet de bord ; absente ou
-        // ambiguë, l'ouverture échoue avant de toucher au MINOS_HOME.
+        // ADR 0042: the composition root is resolved first, without side effects; when it is missing or
+        // ambiguous, opening fails before touching MINOS_HOME.
         MinosApplicationComposer composer = MinosApplicationComposers.resolve();
         Path validatedHome = PrivateLocalStorage.ensurePrivateDirectory(home);
         MinosRuntimeSettings settings = MinosRuntimeSettings.load(validatedHome);
@@ -248,8 +248,8 @@ public final class MinosApplication implements AutoCloseable {
     public String storageBackendId() { return storageBackendId; }
 
     /**
-     * Racine de composition qui a construit cette application (ADR 0042) : les surfaces lui demandent
-     * les adaptateurs qu'elles créent elles-mêmes, au moment où elles les créaient.
+     * Composition root that built this application (ADR 0042): the surfaces ask it for the adapters they
+     * create themselves, at the point where they used to create them.
      */
     public MinosApplicationComposer compositionRoot() { return compositionRoot; }
 
@@ -269,9 +269,9 @@ public final class MinosApplication implements AutoCloseable {
     public IncrementalIndexingPlanner incrementalIndexingPlanner() { return indexing.incrementalIndexingPlanner(); }
     public ProviderRuntimeManager providerRuntimeManager() { return indexing.providerRuntimeManager(); }
     public List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
-    /** Port du catalogue de providers ; consulté à la demande, jamais figé à la composition. */
+    /** Provider catalog port; consulted on demand, never frozen at composition. */
     public IndexerProviderCatalog providerCatalog() { return indexing.providerCatalog(); }
-    /** Port d'import SCIP explicite (import-scip) ; l'adaptateur est instancié à chaque import. */
+    /** Explicit SCIP import port (import-scip); the adapter is instantiated for each import. */
     public ScipArtifactImporter scipArtifactImporter() { return indexing.scipArtifactImporter(); }
     public SnapshotStager snapshotStager() { return indexing.snapshotStager(); }
     public SnapshotPromoter snapshotPromoter() { return indexing.snapshotPromoter(); }
@@ -358,7 +358,7 @@ public final class MinosApplication implements AutoCloseable {
         EmbeddingProvider embeddingProvider;
         HostedTenantKeyProvider hostedTenantKeyProvider;
         Clock hostedClock = Clock.systemUTC();
-        /** Racine de composition résolue une fois par construction (ADR 0042). */
+        /** Composition root resolved once per build (ADR 0042). */
         MinosApplicationComposer composer;
 
         private Builder(Path home) {
