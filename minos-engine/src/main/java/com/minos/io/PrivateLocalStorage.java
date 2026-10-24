@@ -457,7 +457,8 @@ public final class PrivateLocalStorage {
         // The probe lives next to the object being checked, never in a publicly writable directory: the owner the
         // system gives a new file does not depend on the directory it is created in. When the parent cannot be written
         // (the parent of a MINOS home is often another account's), the checked directory itself is used.
-        Path directory = near.getParent() != null ? near.getParent() : near;
+        Path parent = near.getParent();
+        Path directory = parent != null ? parent : near;
         Path probe;
         try {
             probe = Files.createTempFile(directory, "minos-owner-", ".probe");
