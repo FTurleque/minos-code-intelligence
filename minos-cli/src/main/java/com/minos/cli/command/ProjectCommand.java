@@ -21,7 +21,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiFunction;
 
-/** Commandes stables d'administration du registre projet. */
+/** Stable administration commands of the project registry. */
 public final class ProjectCommand {
 
     public static final String NAME = "project";
@@ -54,7 +54,7 @@ public final class ProjectCommand {
         this(operations, projectId -> Optional.empty());
     }
 
-    /** R1 (ADR 0039 §6) : `index-status` expose le run reprenable fourni par {@code resumeStatus}. */
+    /** R1 (ADR 0039 §6): `index-status` exposes the resumable run supplied by {@code resumeStatus}. */
     public ProjectCommand(ProjectOperations operations, IndexResumeStatusSource resumeStatus) {
         this.operations = Objects.requireNonNull(operations, "operations");
         this.resumeStatus = Objects.requireNonNull(resumeStatus, "resumeStatus");
