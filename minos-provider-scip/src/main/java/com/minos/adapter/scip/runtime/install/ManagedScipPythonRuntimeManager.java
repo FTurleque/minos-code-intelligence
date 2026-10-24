@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Managed runtime extension for @sourcegraph/scip-python. */
 public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeManager {
@@ -135,13 +136,13 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
             Path installed = partial.resolve("node_modules").resolve(".bin")
                     .resolve(CommandLocator.isWindows() ? "scip-python.cmd" : "scip-python");
             if (!Files.isRegularFile(installed)) {
-                throw new IllegalStateException("scip-python executable was not created: " + installed);
+                throw new IllegalStateException("scip-python executable was not created: " + leafName(installed));
             }
             if (CommandLocator.isWindows()) {
                 Path entryPoint = partial.resolve("node_modules").resolve("@sourcegraph")
                         .resolve("scip-python").resolve("index.js");
                 if (!Files.isRegularFile(entryPoint)) {
-                    throw new IllegalStateException("scip-python package entry point was not created: " + entryPoint);
+                    throw new IllegalStateException("scip-python package entry point was not created: " + leafName(entryPoint));
                 }
                 PrivateLocalStorage.writePrivateFile(partial.resolve(WINDOWS_COMPATIBILITY_PRELOAD),
                         WINDOWS_COMPATIBILITY_SOURCE.getBytes(StandardCharsets.UTF_8));
@@ -267,11 +268,11 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
             if (process.isAlive()) process.destroyForcibly();
             process.waitFor(5, TimeUnit.SECONDS);
             capture.await();
-            throw new IllegalStateException("tool command timed out; see " + log);
+            throw new IllegalStateException("tool command timed out; see the tool log " + leafName(log));
         }
         capture.await();
         if (process.exitValue() != 0) {
-            throw new IllegalStateException("tool command failed with code " + process.exitValue() + "; see " + log);
+            throw new IllegalStateException("tool command failed with code " + process.exitValue() + "; see the tool log " + leafName(log));
         }
     }
 

@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Local application adapter over the selected MINOS storage backend. */
 public final class LocalProjectOperations implements ProjectOperations, AutoCloseable {
@@ -110,7 +111,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
             throws IOException {
         Path artifact = Objects.requireNonNull(indexFile, "indexFile").toAbsolutePath().normalize();
         if (Files.isSymbolicLink(artifact) || !Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("SCIP artifact must be an existing regular file: " + artifact);
+            throw new IllegalArgumentException("SCIP artifact must be an existing regular file: " + leafName(artifact));
         }
         String safeProviderId = ProviderId.require(providerId);
         String effectiveSnapshotId = snapshotId == null || snapshotId.isBlank()

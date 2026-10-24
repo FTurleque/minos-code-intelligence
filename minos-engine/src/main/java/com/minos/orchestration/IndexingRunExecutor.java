@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Runs an indexing run under the exclusive lease of the project: providers, snapshot staging,
@@ -255,7 +256,7 @@ final class IndexingRunExecutor {
     ) {
         Path lexicalRoot = projectRoot.toAbsolutePath().normalize();
         if (!Files.isDirectory(lexicalRoot)) {
-            throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+            throw new IllegalArgumentException("projectRoot must be an existing directory: " + leafName(projectRoot));
         }
         long scopes = targets.stream().map(IndexingExecutionTarget::projectRelativeRoot).distinct().count();
         if (mode == IndexingMode.INCREMENTAL && scopes > 1) {
@@ -266,7 +267,7 @@ final class IndexingRunExecutor {
             return new ValidatedProjectRoot(lexicalRoot, lexicalRoot.toRealPath());
         } catch (IOException failure) {
             throw new IllegalArgumentException(
-                    "projectRoot could not be resolved to a canonical directory: " + projectRoot, failure);
+                    "projectRoot could not be resolved to a canonical directory: " + leafName(projectRoot), failure);
         }
     }
 

@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Durable MINOS runtime configuration resolved with explicit precedence:
@@ -161,7 +162,7 @@ public final class MinosRuntimeSettings {
     private String readConfinedRelativeSecret(Path configuredSecretPath) throws IOException {
         Path candidate = home.resolve(configuredSecretPath).normalize();
         if (!candidate.startsWith(home)) {
-            throw new IOException("relative MINOS secret file must stay inside MINOS_HOME: " + configuredSecretPath);
+            throw new IOException("relative MINOS secret file must stay inside MINOS_HOME: " + leafName(configuredSecretPath));
         }
         if (!Files.isRegularFile(candidate)) {
             throw new IOException(SECRET_DOES_NOT_EXIST);
@@ -174,7 +175,7 @@ public final class MinosRuntimeSettings {
         Path physicalSecret = candidate.toRealPath();
         if (!physicalSecret.startsWith(physicalHome)) {
             throw new IOException("relative MINOS secret file escapes MINOS_HOME through a symbolic link: "
-                    + configuredSecretPath);
+                    + leafName(configuredSecretPath));
         }
 
         Path relative = home.relativize(candidate);
@@ -183,7 +184,7 @@ public final class MinosRuntimeSettings {
             return BoundedProperties.readUtf8(stream, MAX_SECRET_BYTES, "MINOS secret file");
         } catch (ConfinedFileOpener.ConfinementException exception) {
             throw new IOException("relative MINOS secret file failed physical confinement: "
-                    + configuredSecretPath, exception);
+                    + leafName(configuredSecretPath), exception);
         }
     }
 

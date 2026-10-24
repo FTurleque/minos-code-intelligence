@@ -6,6 +6,7 @@ import com.minos.runtime.local.process.CommandLocator;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Fail-closed process plan for scip-clang. */
 public final class ScipClangProcessPlanFactory extends AbstractScipProcessPlanFactory {
@@ -43,6 +44,6 @@ public final class ScipClangProcessPlanFactory extends AbstractScipProcessPlanFa
             }
         }
         throw new IllegalArgumentException(
-                "scip-clang requires compile_commands.json at project root or build/compile_commands.json: " + root);
+                "scip-clang requires compile_commands.json at project root or build/compile_commands.json: " + leafName(root));
     }
 }

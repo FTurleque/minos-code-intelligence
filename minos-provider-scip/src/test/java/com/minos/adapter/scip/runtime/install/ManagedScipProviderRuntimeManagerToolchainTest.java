@@ -151,6 +151,24 @@ class ManagedScipProviderRuntimeManagerToolchainTest {
         assertFalse(Files.exists(manager().typeScriptMainScript()));
     }
 
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void onLinuxAnNpmInstallThatCreatesNoExecutableIsRefusedByItsNameAndLeavesNothingBehind() throws Exception {
+        FakeTools.succeeding(tools, "node");
+        FakeTools.succeeding(tools, "npm");
+
+        ChildJvm.Outcome outcome = child(TYPESCRIPT, "install");
+
+        String failure = outcome.get("install.failure");
+        assertNotNull(failure, outcome.stderr());
+        assertTrue(failure.endsWith("scip-typescript executable was not created: scip-typescript"), failure);
+        assertFalse(failure.contains(home.toString()), failure);
+        assertFalse(Files.exists(manager().typeScriptMainScript()));
+        assertFalse(Files.exists(home.resolve("tools").resolve(TYPESCRIPT)
+                .resolve(ManagedScipProviderRuntimeManager.SCIP_TYPESCRIPT_VERSION + ".partial")),
+                "no partial tree is left behind");
+    }
+
     // ------------------------------------------------------------------ scip-java
 
     @Test

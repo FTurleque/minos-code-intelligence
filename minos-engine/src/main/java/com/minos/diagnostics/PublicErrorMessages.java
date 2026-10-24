@@ -1,5 +1,6 @@
 package com.minos.diagnostics;
 
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
@@ -55,6 +56,17 @@ public final class PublicErrorMessages {
         String flattened = stripControl(message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')).trim();
         if (flattened.length() > MAX_LENGTH) flattened = flattened.substring(0, MAX_LENGTH);
         return looksSensitive(flattened) ? fallback : flattened;
+    }
+
+    /**
+     * The last name element of {@code path}, the form under which an exception or log message names a
+     * file or directory: a message may reach a public output and never carries the absolute path.
+     * Returns {@code <root>} for a path without a name element and {@code <none>} for {@code null}.
+     */
+    public static String leafName(Path path) {
+        if (path == null) return "<none>";
+        Path name = path.getFileName();
+        return name == null ? "<root>" : name.toString();
     }
 
     /**

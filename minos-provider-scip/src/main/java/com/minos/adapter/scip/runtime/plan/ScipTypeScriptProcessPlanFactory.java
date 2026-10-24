@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Execution plan of the scip-typescript provider. */
 public final class ScipTypeScriptProcessPlanFactory extends AbstractScipProcessPlanFactory {
@@ -34,7 +35,7 @@ public final class ScipTypeScriptProcessPlanFactory extends AbstractScipProcessP
     protected void validateProject(Path root) {
         if (!Files.isRegularFile(root.resolve("tsconfig.json"))
                 && !Files.isRegularFile(root.resolve("package.json"))) {
-            throw new IllegalArgumentException("scip-typescript requires tsconfig.json or package.json: " + root);
+            throw new IllegalArgumentException("scip-typescript requires tsconfig.json or package.json: " + leafName(root));
         }
     }
 

@@ -37,6 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Windows worker sandbox backed by an AppContainer token and a Job Object.
@@ -590,7 +591,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         if (!normalized.startsWith(normalizedTools)) return normalized;
         Path relative = normalizedTools.relativize(normalized);
         if (relative.getNameCount() < 2) {
-            throw new IllegalArgumentException("managed provider path does not identify provider/version: " + value);
+            throw new IllegalArgumentException("managed provider path does not identify provider/version: " + leafName(value));
         }
         return normalizedTools.resolve(relative.subpath(0, 2)).normalize();
     }
@@ -803,13 +804,13 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Path candidate = Path.of(value);
         if (candidate.isAbsolute() && Files.isRegularFile(candidate)) return candidate.toAbsolutePath().normalize();
         return CommandLocator.find(value).orElseThrow(
-                () -> new IllegalArgumentException("sandbox provider executable cannot be resolved: " + value));
+                () -> new IllegalArgumentException("sandbox provider executable cannot be resolved: " + leafName(candidate)));
     }
 
     private static Path regularExecutable(Path value, String label) {
         Path path = Objects.requireNonNull(value, label).toAbsolutePath().normalize();
         if (!Files.isRegularFile(path)) {
-            throw new IllegalArgumentException(label + " must be a regular file: " + path);
+            throw new IllegalArgumentException(label + " must be a regular file: " + leafName(path));
         }
         return path;
     }

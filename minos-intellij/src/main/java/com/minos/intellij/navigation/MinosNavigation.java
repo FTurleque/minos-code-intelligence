@@ -23,11 +23,11 @@ public final class MinosNavigation {
             throw new IllegalArgumentException("MINOS location escapes the registered project root: " + location.fileId());
         }
         if (!Files.isRegularFile(target)) {
-            throw new IllegalArgumentException("MINOS source file does not exist: " + target);
+            throw new IllegalArgumentException("MINOS source file does not exist: " + target.getFileName());
         }
         VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(target);
         if (file == null) {
-            throw new IllegalArgumentException("IntelliJ VFS cannot resolve MINOS source file: " + target);
+            throw new IllegalArgumentException("IntelliJ VFS cannot resolve MINOS source file: " + target.getFileName());
         }
         Document document = FileDocumentManager.getInstance().getDocument(file);
         int offset = 0;

@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Fail-closed process plan for rust-analyzer's native SCIP command. */
 public final class RustAnalyzerScipProcessPlanFactory extends AbstractScipProcessPlanFactory {
@@ -19,7 +20,7 @@ public final class RustAnalyzerScipProcessPlanFactory extends AbstractScipProces
     @Override
     protected void validateProject(Path root) {
         if (!Files.isRegularFile(root.resolve("Cargo.toml"))) {
-            throw new IllegalArgumentException("rust-analyzer scip requires Cargo.toml: " + root);
+            throw new IllegalArgumentException("rust-analyzer scip requires Cargo.toml: " + leafName(root));
         }
     }
 
