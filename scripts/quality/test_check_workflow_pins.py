@@ -338,7 +338,8 @@ class RepositoryTest(TreeTest):
     def copy_repository(self) -> None:
         shutil.rmtree(self.root / gate.WORKFLOWS)
         shutil.copytree(REPOSITORY / gate.WORKFLOWS, self.root / gate.WORKFLOWS)
-        for relative in RELEASE_SCRIPTS:
+        for relative in RELEASE_SCRIPTS + (gate.TESTCONTAINERS_GUARD_CLASS,):
+            (self.root / relative).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(REPOSITORY / relative, self.root / relative)
 
     def mutate(self, name: str, old: str, new: str) -> None:
@@ -380,9 +381,30 @@ class RepositoryTest(TreeTest):
 
     def test_a_kept_login_that_disappears_from_the_repository_is_a_stale_entry(self):
         self.copy_repository()
-        self.mutate("code-audit.yml", "uses: docker/login-action@", "uses: example/not-a-login@")
-        self.assertEqual([".github/workflows/code-audit.yml: job 'mutation' is listed in DOCKER_LOGIN_KEPT but no "
-                          "longer logs in to Docker Hub -- remove the entry."], self.failures())
+        self.mutate("docker-upgrade-qualification.yml", "uses: docker/login-action@", "uses: example/not-a-login@")
+        self.assertEqual([".github/workflows/docker-upgrade-qualification.yml: job 'real-docker-upgrade' is listed in "
+                          "DOCKER_LOGIN_KEPT but no longer logs in to Docker Hub -- remove the entry."], self.failures())
+
+    def test_the_test_jobs_log_out_after_pulling_the_testcontainers_images(self):
+        self.assertNotIn(("pr-ci.yml", "verify"), gate.DOCKER_LOGIN_KEPT)
+        self.assertNotIn(("code-audit.yml", "mutation"), gate.DOCKER_LOGIN_KEPT)
+        self.copy_repository()
+        self.mutate("pr-ci.yml", "          trap log_out EXIT\n", "")
+        self.mutate("pr-ci.yml", "log_out() { docker logout || ", "log_out() { true || ")
+        self.mutate("code-audit.yml", "      TESTCONTAINERS_RYUK_DISABLED: 'true'\n", "")
+        failures = self.failures()
+        for expected in ("job 'verify' runs code while logged in to Docker Hub",
+                         "job 'mutation' pulls the Testcontainers images, then logs out, without "
+                         "'TESTCONTAINERS_RYUK_DISABLED: true' in its env"):
+            self.assertTrue(any(expected in failure for failure in failures), (expected, failures))
+        self.assertEqual(2, len(failures), failures)
+
+    def test_the_pull_policy_class_the_workflows_select_must_exist(self):
+        self.copy_repository()
+        (self.root / gate.TESTCONTAINERS_GUARD_CLASS).unlink()
+        self.assertEqual([f"{gate.TESTCONTAINERS_GUARD_CLASS} is missing: the workflows select it as the "
+                          "Testcontainers pull policy, so the tests would fail to start any container."],
+                         self.failures())
 
 
 CHECKOUT_STEP = f"      - name: Checkout\n        uses: actions/checkout@{SHA} # v7\n"
