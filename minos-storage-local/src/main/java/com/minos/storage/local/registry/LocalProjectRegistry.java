@@ -57,6 +57,11 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     private final ProjectPathMapping.RuntimeLocation runtimeLocation;
     /** False for an instance that only reads: a legacy entry is then resolved in memory, never rewritten. */
     private final boolean migrateLegacyEntriesOnRead;
+    /**
+     * Serialises the operations of this instance. Private, so that code holding a reference to the registry cannot
+     * take it and stall every other caller (SpotBugs USO_UNSAFE_METHOD_SYNCHRONIZATION).
+     */
+    private final Object lock = new Object();
 
     public LocalProjectRegistry(Path storageRoot) throws IOException {
         this(
@@ -108,119 +113,139 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     @Override
-    public synchronized RegisteredProject registerProject(Path rootPath, String displayName) throws IOException {
-        Path canonicalRoot = canonicalExistingDirectory(rootPath);
-        validateName(displayName, "displayName");
+    public RegisteredProject registerProject(Path rootPath, String displayName) throws IOException {
+        synchronized (lock) {
+            Path canonicalRoot = canonicalExistingDirectory(rootPath);
+            validateName(displayName, "displayName");
 
-        Optional<RegisteredProject> existing = listProjects().stream()
-                .filter(project -> project.rootPath().equals(canonicalRoot))
-                .findFirst();
-        if (existing.isPresent()) return existing.get();
+            Optional<RegisteredProject> existing = listProjects().stream()
+                    .filter(project -> project.rootPath().equals(canonicalRoot))
+                    .findFirst();
+            if (existing.isPresent()) return existing.get();
 
-        Instant now = Instant.now();
-        RegisteredProject project = new RegisteredProject(
-                UUID.randomUUID(), canonicalRoot, displayName, Optional.empty(), now, now);
-        writeProject(project);
-        return project;
-    }
-
-    @Override
-    public synchronized RegisteredWorkspace createWorkspace(String name) throws IOException {
-        return createWorkspaceWithResult(name).workspace();
-    }
-
-    @Override
-    public synchronized WorkspaceRegistrationResult createWorkspaceWithResult(String name) throws IOException {
-        ProjectRegistryLimits.requireName(name, "name");
-        List<RegisteredWorkspace> matches = listWorkspaces().stream()
-                .filter(workspace -> workspace.name().equals(name))
-                .toList();
-        if (matches.size() > 1) {
-            throw new IOException("duplicate workspace names in local registry: " + name);
+            Instant now = Instant.now();
+            RegisteredProject project = new RegisteredProject(
+                    UUID.randomUUID(), canonicalRoot, displayName, Optional.empty(), now, now);
+            writeProject(project);
+            return project;
         }
-        if (!matches.isEmpty()) {
-            return new WorkspaceRegistrationResult(matches.getFirst(), false);
+    }
+
+    @Override
+    public RegisteredWorkspace createWorkspace(String name) throws IOException {
+        synchronized (lock) {
+            return createWorkspaceWithResult(name).workspace();
         }
-        Instant now = Instant.now();
-        RegisteredWorkspace workspace = new RegisteredWorkspace(
-                UUID.randomUUID(), name, List.of(), now, now);
-        writeWorkspace(workspace);
-        return new WorkspaceRegistrationResult(workspace, true);
     }
 
     @Override
-    public synchronized RegisteredProject assignProjectToWorkspace(UUID projectId, UUID workspaceId) throws IOException {
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(workspaceId, "workspaceId");
-        RegisteredProject project = findProject(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
-        findWorkspace(workspaceId)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown workspace: " + workspaceId));
-        if (project.workspaceId().filter(workspaceId::equals).isPresent()) return project;
-        RegisteredProject updated = new RegisteredProject(
-                project.id(), project.rootPath(), project.displayName(), Optional.of(workspaceId),
-                project.createdAt(), Instant.now());
-        writeProject(updated);
-        return updated;
-    }
-
-    @Override
-    public synchronized RegisteredProject removeProjectFromWorkspace(UUID projectId) throws IOException {
-        Objects.requireNonNull(projectId, "projectId");
-        RegisteredProject project = findProject(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
-        if (project.workspaceId().isEmpty()) return project;
-        RegisteredProject updated = new RegisteredProject(
-                project.id(), project.rootPath(), project.displayName(), Optional.empty(),
-                project.createdAt(), Instant.now());
-        writeProject(updated);
-        return updated;
-    }
-
-    @Override
-    public synchronized Optional<RegisteredProject> findProject(UUID projectId) throws IOException {
-        Objects.requireNonNull(projectId, "projectId");
-        Path file = projectsDirectory.resolve(projectId + PROPERTIES_SUFFIX);
-        if (!Files.isRegularFile(file)) return Optional.empty();
-        return Optional.of(readProject(file, projectId));
-    }
-
-    @Override
-    public synchronized Optional<RegisteredWorkspace> findWorkspace(UUID workspaceId) throws IOException {
-        Objects.requireNonNull(workspaceId, "workspaceId");
-        Path file = workspacesDirectory.resolve(workspaceId + PROPERTIES_SUFFIX);
-        if (!Files.isRegularFile(file)) return Optional.empty();
-        WorkspaceMetadata metadata = readWorkspaceMetadata(file, workspaceId);
-        List<UUID> projectIds = listProjects().stream()
-                .filter(project -> project.workspaceId().filter(workspaceId::equals).isPresent())
-                .map(RegisteredProject::id)
-                .toList();
-        return Optional.of(new RegisteredWorkspace(
-                metadata.id(), metadata.name(), projectIds, metadata.createdAt(), metadata.updatedAt()));
-    }
-
-    @Override
-    public synchronized List<RegisteredProject> listProjects() throws IOException {
-        Scan scan = scanProjects();
-        scan.rethrowFirstReadFailure();
-        return scan.projects();
-    }
-
-    @Override
-    public synchronized Inventory inventory() throws IOException {
-        Scan scan = scanProjects();
-        return new Inventory(scan.projects(), scan.degraded());
-    }
-
-    @Override
-    public synchronized List<RegisteredWorkspace> listWorkspaces() throws IOException {
-        List<RegisteredProject> projects = listProjects();
-        List<RegisteredWorkspace> workspaces = new ArrayList<>();
-        for (Path file : propertyFiles(workspacesDirectory)) {
-            workspaces.add(workspaceOf(readWorkspaceMetadata(file, idFromPropertiesFile(file)), projects));
+    public WorkspaceRegistrationResult createWorkspaceWithResult(String name) throws IOException {
+        synchronized (lock) {
+            ProjectRegistryLimits.requireName(name, "name");
+            List<RegisteredWorkspace> matches = listWorkspaces().stream()
+                    .filter(workspace -> workspace.name().equals(name))
+                    .toList();
+            if (matches.size() > 1) {
+                throw new IOException("duplicate workspace names in local registry: " + name);
+            }
+            if (!matches.isEmpty()) {
+                return new WorkspaceRegistrationResult(matches.getFirst(), false);
+            }
+            Instant now = Instant.now();
+            RegisteredWorkspace workspace = new RegisteredWorkspace(
+                    UUID.randomUUID(), name, List.of(), now, now);
+            writeWorkspace(workspace);
+            return new WorkspaceRegistrationResult(workspace, true);
         }
-        workspaces.sort(Comparator.comparing(workspace -> workspace.id().toString()));
-        return List.copyOf(workspaces);
+    }
+
+    @Override
+    public RegisteredProject assignProjectToWorkspace(UUID projectId, UUID workspaceId) throws IOException {
+        synchronized (lock) {
+            Objects.requireNonNull(projectId, "projectId");
+            Objects.requireNonNull(workspaceId, "workspaceId");
+            RegisteredProject project = findProject(projectId)
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
+            findWorkspace(workspaceId)
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown workspace: " + workspaceId));
+            if (project.workspaceId().filter(workspaceId::equals).isPresent()) return project;
+            RegisteredProject updated = new RegisteredProject(
+                    project.id(), project.rootPath(), project.displayName(), Optional.of(workspaceId),
+                    project.createdAt(), Instant.now());
+            writeProject(updated);
+            return updated;
+        }
+    }
+
+    @Override
+    public RegisteredProject removeProjectFromWorkspace(UUID projectId) throws IOException {
+        synchronized (lock) {
+            Objects.requireNonNull(projectId, "projectId");
+            RegisteredProject project = findProject(projectId)
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
+            if (project.workspaceId().isEmpty()) return project;
+            RegisteredProject updated = new RegisteredProject(
+                    project.id(), project.rootPath(), project.displayName(), Optional.empty(),
+                    project.createdAt(), Instant.now());
+            writeProject(updated);
+            return updated;
+        }
+    }
+
+    @Override
+    public Optional<RegisteredProject> findProject(UUID projectId) throws IOException {
+        synchronized (lock) {
+            Objects.requireNonNull(projectId, "projectId");
+            Path file = projectsDirectory.resolve(projectId + PROPERTIES_SUFFIX);
+            if (!Files.isRegularFile(file)) return Optional.empty();
+            return Optional.of(readProject(file, projectId));
+        }
+    }
+
+    @Override
+    public Optional<RegisteredWorkspace> findWorkspace(UUID workspaceId) throws IOException {
+        synchronized (lock) {
+            Objects.requireNonNull(workspaceId, "workspaceId");
+            Path file = workspacesDirectory.resolve(workspaceId + PROPERTIES_SUFFIX);
+            if (!Files.isRegularFile(file)) return Optional.empty();
+            WorkspaceMetadata metadata = readWorkspaceMetadata(file, workspaceId);
+            List<UUID> projectIds = listProjects().stream()
+                    .filter(project -> project.workspaceId().filter(workspaceId::equals).isPresent())
+                    .map(RegisteredProject::id)
+                    .toList();
+            return Optional.of(new RegisteredWorkspace(
+                    metadata.id(), metadata.name(), projectIds, metadata.createdAt(), metadata.updatedAt()));
+        }
+    }
+
+    @Override
+    public List<RegisteredProject> listProjects() throws IOException {
+        synchronized (lock) {
+            Scan scan = scanProjects();
+            scan.rethrowFirstReadFailure();
+            return scan.projects();
+        }
+    }
+
+    @Override
+    public Inventory inventory() throws IOException {
+        synchronized (lock) {
+            Scan scan = scanProjects();
+            return new Inventory(scan.projects(), scan.degraded());
+        }
+    }
+
+    @Override
+    public List<RegisteredWorkspace> listWorkspaces() throws IOException {
+        synchronized (lock) {
+            List<RegisteredProject> projects = listProjects();
+            List<RegisteredWorkspace> workspaces = new ArrayList<>();
+            for (Path file : propertyFiles(workspacesDirectory)) {
+                workspaces.add(workspaceOf(readWorkspaceMetadata(file, idFromPropertiesFile(file)), projects));
+            }
+            workspaces.sort(Comparator.comparing(workspace -> workspace.id().toString()));
+            return List.copyOf(workspaces);
+        }
     }
 
     /**
@@ -230,25 +255,27 @@ public final class LocalProjectRegistry implements ProjectRegistry {
      * répertoire qu'on ne peut pas lister échoue ici aussi.
      */
     @Override
-    public synchronized WorkspaceInventory workspaceInventory() throws IOException {
-        Scan projects = scanProjects();
-        List<RegisteredWorkspace> workspaces = new ArrayList<>();
-        List<EntryFailure> failures = new ArrayList<>();
-        for (Path file : propertyEntries(workspacesDirectory)) {
-            if (!Files.isRegularFile(file)) {
-                failures.add(new EntryFailure(file, null));
-                continue;
+    public WorkspaceInventory workspaceInventory() throws IOException {
+        synchronized (lock) {
+            Scan projects = scanProjects();
+            List<RegisteredWorkspace> workspaces = new ArrayList<>();
+            List<EntryFailure> failures = new ArrayList<>();
+            for (Path file : propertyEntries(workspacesDirectory)) {
+                if (!Files.isRegularFile(file)) {
+                    failures.add(new EntryFailure(file, null));
+                    continue;
+                }
+                try {
+                    workspaces.add(workspaceOf(readWorkspaceMetadata(file, idFromPropertiesFile(file)), projects.projects()));
+                } catch (IOException | RuntimeException failure) {
+                    // Une interruption n'est pas une entrée abîmée (voir scanProjects).
+                    if (Thread.currentThread().isInterrupted()) throw failure;
+                    failures.add(new EntryFailure(file, failure));
+                }
             }
-            try {
-                workspaces.add(workspaceOf(readWorkspaceMetadata(file, idFromPropertiesFile(file)), projects.projects()));
-            } catch (IOException | RuntimeException failure) {
-                // Une interruption n'est pas une entrée abîmée (voir scanProjects).
-                if (Thread.currentThread().isInterrupted()) throw failure;
-                failures.add(new EntryFailure(file, failure));
-            }
+            workspaces.sort(Comparator.comparing(workspace -> workspace.id().toString()));
+            return new WorkspaceInventory(workspaces, failures.stream().map(Scan::describe).toList(), projects.degraded());
         }
-        workspaces.sort(Comparator.comparing(workspace -> workspace.id().toString()));
-        return new WorkspaceInventory(workspaces, failures.stream().map(Scan::describe).toList(), projects.degraded());
     }
 
     private static RegisteredWorkspace workspaceOf(WorkspaceMetadata metadata, List<RegisteredProject> projects) {
