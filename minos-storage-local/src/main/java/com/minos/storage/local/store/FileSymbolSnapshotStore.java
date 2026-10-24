@@ -356,9 +356,9 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
     private long estimateQueryViewWeight(UUID projectId, SnapshotDescriptor descriptor) throws IOException {
         long countWeight = 64L * 1024L;
-        countWeight = saturatingAdd(countWeight, (long) descriptor.symbolCount() * 1024L);
-        countWeight = saturatingAdd(countWeight, (long) descriptor.occurrenceCount() * 640L);
-        countWeight = saturatingAdd(countWeight, (long) descriptor.relationshipCount() * 1024L);
+        countWeight = saturatingAdd(countWeight, descriptor.symbolCount() * 1024L);
+        countWeight = saturatingAdd(countWeight, descriptor.occurrenceCount() * 640L);
+        countWeight = saturatingAdd(countWeight, descriptor.relationshipCount() * 1024L);
         Path snapshot = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
         long persistedWeight = saturatingMultiply(Files.size(snapshot), QUERY_VIEW_PERSISTED_AMPLIFICATION);
         // AUD-PERF-11 : l'index dérivé des arêtes entrantes, construit plus tard, vit autant que la vue en cache.
