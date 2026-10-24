@@ -31,11 +31,11 @@ import java.util.Properties;
 import java.util.UUID;
 
 /**
- * Registre local file-backed pour les identités projet/workspace de M1.
+ * Local file-backed registry for project/workspace identities.
  *
- * <p>Depuis M29, lorsqu'un mapping runtime est configuré, les UUID restent les identités
- * autoritatives et le registre persiste uniquement une racine projet relative portable.
- * Le chemin physique est résolu à l'ouverture pour le runtime natif ou Docker courant.</p>
+ * <p>When a runtime mapping is configured, the UUIDs remain the authoritative identities
+ * and the registry persists only a portable relative project root. The physical path is
+ * resolved when opening, for the current native or Docker runtime.</p>
  */
 public final class LocalProjectRegistry implements ProjectRegistry {
 
@@ -249,10 +249,10 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     /**
-     * Les espaces de travail comme inventaire (Q26) : un fichier de projet abîmé borne son dégât à son entrée (le
-     * rattachement des autres reste établi, l'entrée est comptée), un fichier d'espace abîmé est un espace qui manque
-     * à la liste et qui est compté. {@link #listWorkspaces()} échoue sur la première entrée abîmée comme avant ; un
-     * répertoire qu'on ne peut pas lister échoue ici aussi.
+     * The workspaces as an inventory (Q26): a damaged project file bounds its damage to its entry (the membership
+     * of the others stays established, the entry is counted), a damaged workspace file is a workspace missing from
+     * the list and counted. {@link #listWorkspaces()} fails on the first damaged entry as before; a directory that
+     * cannot be listed fails here too.
      */
     @Override
     public WorkspaceInventory workspaceInventory() throws IOException {
@@ -268,7 +268,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
                 try {
                     workspaces.add(workspaceOf(readWorkspaceMetadata(file, idFromPropertiesFile(file)), projects.projects()));
                 } catch (IOException | RuntimeException failure) {
-                    // Une interruption n'est pas une entrée abîmée (voir scanProjects).
+                    // An interruption is not a damaged entry (see scanProjects).
                     if (Thread.currentThread().isInterrupted()) throw failure;
                     failures.add(new EntryFailure(file, failure));
                 }
@@ -475,7 +475,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         return value;
     }
 
-    /** Toute entrée nommée {@code *.properties}, quelle qu'elle soit : ce qui n'est pas un fichier régulier est signalé, pas écarté. */
+    /** Every entry named {@code *.properties}, whatever it is: what is not a regular file is reported, not skipped. */
     private static List<Path> propertyEntries(Path directory) throws IOException {
         try (var paths = Files.list(directory)) {
             return paths.filter(path -> path.getFileName().toString().endsWith(PROPERTIES_SUFFIX))
@@ -489,8 +489,8 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     /**
-     * Le seul endroit qui lit toutes les entrées de projet et borne le dégât à l'entrée qui le porte (Q8) :
-     * {@link #listProjects()} échoue sur la première entrée abîmée comme avant, {@link #inventory()} la signale.
+     * The only place that reads every project entry and bounds the damage to the entry that carries it (Q8):
+     * {@link #listProjects()} fails on the first damaged entry as before, {@link #inventory()} reports it.
      */
     private Scan scanProjects() throws IOException {
         List<RegisteredProject> projects = new ArrayList<>();
@@ -503,8 +503,8 @@ public final class LocalProjectRegistry implements ProjectRegistry {
             try {
                 projects.add(readProject(file, idFromPropertiesFile(file)));
             } catch (IOException | RuntimeException failure) {
-                // Une interruption n'est pas une entrée abîmée : lire toutes les entrées thread interrompu les
-                // dégraderait toutes, en silence.
+                // An interruption is not a damaged entry: reading every entry with an interrupted thread would
+                // degrade them all, silently.
                 if (Thread.currentThread().isInterrupted()) throw failure;
                 failures.add(new EntryFailure(file, failure));
             }
@@ -550,7 +550,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     private record WorkspaceMetadata(UUID id, String name, Instant createdAt, Instant updatedAt) {
     }
 
-    /** {@code cause == null} : l'entrée porte un nom d'entrée de registre sans être un fichier régulier. */
+    /** {@code cause == null}: the entry has the name of a registry entry without being a regular file. */
     private record EntryFailure(Path file, Exception cause) {
     }
 
@@ -560,7 +560,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
             return failures.stream().map(Scan::describe).toList();
         }
 
-        /** Listage strict : ce qui a échoué à la lecture d'une entrée est relancé tel qu'il l'a toujours été. */
+        /** Strict listing: what failed while reading an entry is rethrown as it always was. */
         private void rethrowFirstReadFailure() throws IOException {
             for (EntryFailure failure : failures) {
                 if (failure.cause() instanceof IOException io) throw io;

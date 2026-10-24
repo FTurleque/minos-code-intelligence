@@ -6,8 +6,8 @@ import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import java.nio.file.Path;
 
 /**
- * Construit la commande concrète d'un provider sans faire fuiter cette logique
- * dans l'orchestration MINOS.
+ * Builds the concrete command of a provider without leaking that logic into the
+ * MINOS orchestration.
  */
 @FunctionalInterface
 public interface IndexerProcessPlanFactory {

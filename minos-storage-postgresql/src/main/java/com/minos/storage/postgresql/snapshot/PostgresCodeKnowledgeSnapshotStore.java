@@ -477,7 +477,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         countWeight = saturatingAdd(countWeight, metadata.occurrenceCount() * 640L);
         countWeight = saturatingAdd(countWeight, metadata.relationshipCount() * 1024L);
         long persistedWeight = saturatingMultiply(Math.max(0L, persistedBytes), QUERY_VIEW_PERSISTED_AMPLIFICATION);
-        // AUD-PERF-11 : l'index dérivé des arêtes entrantes, construit plus tard, vit autant que la vue en cache.
+        // AUD-PERF-11: the derived index of incoming edges, built later, lives as long as the cached view.
         return saturatingAdd(Math.max(countWeight, persistedWeight),
                 SnapshotReadView.incomingRelationshipsWeightBytes(metadata.relationshipCount()));
     }

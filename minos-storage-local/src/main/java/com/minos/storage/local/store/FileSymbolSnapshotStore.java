@@ -361,7 +361,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         countWeight = saturatingAdd(countWeight, descriptor.relationshipCount() * 1024L);
         Path snapshot = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
         long persistedWeight = saturatingMultiply(Files.size(snapshot), QUERY_VIEW_PERSISTED_AMPLIFICATION);
-        // AUD-PERF-11 : l'index dérivé des arêtes entrantes, construit plus tard, vit autant que la vue en cache.
+        // AUD-PERF-11: the derived index of incoming edges, built later, lives as long as the cached view.
         return saturatingAdd(Math.max(countWeight, persistedWeight),
                 SnapshotReadView.incomingRelationshipsWeightBytes(descriptor.relationshipCount()));
     }
