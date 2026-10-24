@@ -50,3 +50,21 @@ Un fichier Java de production dont les commentaires mêlent français et anglais
 - **GIVEN** un fichier dont les commentaires sont en anglais et dont un littéral de chaîne ou un `{@code …}` contient une lettre accentuée
 - **WHEN** `python scripts/quality/check-comment-language.py --self-test` est exécuté
 - **THEN** le cas est accepté : le fichier n'est pas tenu pour mixte
+
+### Requirement: Le nombre de fichiers dont un commentaire cite un jalon ne peut que baisser
+Le gate de langue SHALL compter, par module, les fichiers Java de production dont un commentaire cite un jalon (`M` suivi de chiffres en mot entier), et SHALL échouer si ce nombre dépasse le maximum déclaré pour le module ou s'il lui est inférieur. Un fichier dont les commentaires sont repris SHALL perdre ses mentions de jalon, et le maximum de son module SHALL baisser dans le même commit.
+
+#### Scenario: Nouveau commentaire citant un jalon
+- **GIVEN** une copie du dépôt où un commentaire d'un fichier de `src/main` sans jalon cite `M17`
+- **WHEN** `python scripts/quality/check-comment-language.py --root <copie>` est exécuté
+- **THEN** il échoue en nommant le module, son décompte et son maximum
+
+#### Scenario: Fichier repris sans abaisser le maximum
+- **GIVEN** une copie du dépôt où le seul commentaire à jalon d'un fichier est réécrit sans le jalon, le maximum de son module restant inchangé
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en donnant la valeur à inscrire
+
+#### Scenario: Nom qui contient un chiffre sans être un jalon
+- **GIVEN** un fichier dont les commentaires citent `arm64`, `System32` ou `qualifiedM24Providers`, sans autre jalon
+- **WHEN** `python scripts/quality/check-comment-language.py --self-test` est exécuté
+- **THEN** le cas est accepté : le fichier n'est pas compté
