@@ -16,6 +16,17 @@ Bug reports, questions and feature suggestions may be submitted through the repo
 
 Do not include confidential information, proprietary third-party source code, credentials, personal data or material you do not have the right to disclose.
 
+## Comment language
+
+Comments and Javadoc of the code (every `minos-*` module, the IntelliJ plugin included) are written in **English**; repository artifacts (documentation, ADRs, OpenSpec changes, commit messages, pull requests) stay in French (`AGENTS.md`). The rule applies to every new or modified comment, and a comment does not cite a milestone number (`M17`, `M21-S6`): it says what the code does.
+
+The language of each module is declared in `scripts/quality/comment-language.json`, read by `python scripts/quality/check-comment-language.py` (job `invariants`). The gate holds two ratchets:
+
+- a production file whose comments mix French and English fails unless the `mixed` list names it; the list only shrinks;
+- per module, the number of files with a French comment (`outOfLanguageMaximum`) and of files whose comments cite a milestone (`milestoneCommentMaximum`) can only go down: a pull request that rewrites such a file lowers the maximum, and the gate gives the value.
+
+Files written entirely in French are not translated in bulk: they are counted and rewritten when they are next modified.
+
 ## Licensing requests
 
 Requests for evaluation, internal use, execution, deployment, redistribution, integration, commercial use or contribution authorization require prior written permission from the copyright holder.

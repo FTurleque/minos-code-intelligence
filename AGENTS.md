@@ -6,7 +6,7 @@ Ce fichier est la source commune pour tout agent (Claude Code, Codex, etc.). `CL
 
 ## Langue
 
-Artefacts du dépôt (docs, ADR, OpenSpec, messages de commit, PR, commentaires de gouvernance) **en français**. Identifiants, noms de classes et messages de code suivent la convention du module touché (Javadoc sans mélange de langues dans un même fichier).
+Artefacts du dépôt (docs, ADR, OpenSpec, messages de commit, PR, commentaires de gouvernance) **en français**. Identifiants, noms de classes et messages de code suivent la convention du module touché. **Commentaires et Javadoc du code** (tous les modules `minos-*`, plugin compris) **en anglais**, sans numéro de jalon : règle de tout commentaire nouveau ou modifié, aucun fichier ne mêle deux langues (`CONTRIBUTING.md`, gate `scripts/quality/check-comment-language.py`, langue déclarée dans `scripts/quality/comment-language.json`).
 
 ## Toolchain (`docs/developer/TOOLCHAIN_POLICY.md`)
 
