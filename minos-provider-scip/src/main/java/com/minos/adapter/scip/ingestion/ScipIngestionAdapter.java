@@ -48,6 +48,10 @@ final class ScipIngestionAdapter {
     private final RelatedTestDerivationService relatedTestDerivationService =
             new RelatedTestDerivationService();
 
+    /**
+     * Ingère l'index en cinq étapes : métadonnées de définition, symboles, occurrences, relations, rapport. Le store
+     * reçoit les symboles, puis les occurrences, puis les relations ; une écriture qui échoue arrête l'ingestion.
+     */
     ScipIngestionReport ingest(
             Index index,
             ScipIngestionRequest request,
@@ -62,6 +66,36 @@ final class ScipIngestionAdapter {
 
         collectDefinitionMetadata(index, request, definitionLocations, generatedSymbols);
 
+        NormalizedSymbols symbols = normalizeSymbols(catalog, request, definitionLocations, generatedSymbols);
+        store.putSymbols(symbols.byCatalogKey().values());
+
+        OccurrenceAccumulator occurrences = normalizeOccurrences(index, request, catalog, symbols.byCatalogKey());
+        store.putOccurrences(occurrences.normalized);
+
+        RelationshipAccumulator relationships = collectRelationships(
+                index,
+                catalog,
+                symbols.byCatalogKey()
+        );
+        DerivedRelationships derived = deriveRelationships(
+                relationships,
+                symbols.byCatalogKey(),
+                occurrences.normalized
+        );
+        List<Relationship> allRelationships = new ArrayList<>(relationships.values());
+        allRelationships.addAll(derived.dependencies());
+        allRelationships.addAll(derived.relatedTests());
+        store.putRelationships(allRelationships);
+
+        return report(catalog, symbols, occurrences, relationships, derived);
+    }
+
+    /** Symboles du catalogue normalisés, par clé de catalogue et dans son ordre ; un symbole non normalisé est compté. */
+    private NormalizedSymbols normalizeSymbols(
+            ScipSymbolCatalog catalog,
+            ScipIngestionRequest request,
+            Map<String, SymbolLocation> definitionLocations,
+            Set<String> generatedSymbols) {
         Map<String, Symbol> normalizedByCatalogKey = new LinkedHashMap<>();
         int skippedSymbols = 0;
 
@@ -93,20 +127,25 @@ final class ScipIngestionAdapter {
                 skippedSymbols++;
             }
         }
+        return new NormalizedSymbols(normalizedByCatalogKey, skippedSymbols);
+    }
 
-        store.putSymbols(normalizedByCatalogKey.values());
-
-        List<SymbolOccurrence> normalizedOccurrences = new ArrayList<>();
-        int resolvedOccurrences = 0;
-        int unresolvedOccurrences = 0;
-        int skippedOccurrences = 0;
-
+    /**
+     * Occurrences des documents, dans l'ordre de l'index : une occurrence sans symbole ou sans plage convertible est
+     * comptée comme ignorée ; les autres deviennent des références résolues ou non résolues.
+     */
+    private OccurrenceAccumulator normalizeOccurrences(
+            Index index,
+            ScipIngestionRequest request,
+            ScipSymbolCatalog catalog,
+            Map<String, Symbol> normalizedByCatalogKey) {
+        OccurrenceAccumulator accumulator = new OccurrenceAccumulator();
         for (Document document : index.getDocumentsList()) {
             String fileId = fileIdFor(request, document.getRelativePath());
 
             for (Occurrence occurrence : document.getOccurrencesList()) {
                 if (occurrence.getSymbol().isBlank()) {
-                    skippedOccurrences++;
+                    accumulator.skippedOccurrences++;
                     continue;
                 }
 
@@ -116,7 +155,7 @@ final class ScipIngestionAdapter {
                         document.getPositionEncoding()
                 );
                 if (location.isEmpty()) {
-                    skippedOccurrences++;
+                    accumulator.skippedOccurrences++;
                     continue;
                 }
 
@@ -132,25 +171,15 @@ final class ScipIngestionAdapter {
                 if (resolved != null) {
                     symbolReference = new ResolvedSymbolReference(resolved.id());
                     status = ResolutionStatus.RESOLVED;
-                    resolvedOccurrences++;
+                    accumulator.resolvedOccurrences++;
                 } else {
-                    ScipSymbolFact knownFact = catalog.find(
-                            document.getRelativePath(),
-                            occurrence.getSymbol()
-                    ).orElse(null);
-                    symbolReference = new UnresolvedSymbolReference(
-                            knownFact == null ? null : blankToNull(knownFact.displayName()),
-                            null,
-                            blankToNull(document.getLanguage()),
-                            "SCIP occurrence has no normalized MINOS symbol",
-                            Set.of(new ProviderReference(request.providerId(), occurrence.getSymbol()))
-                    );
+                    symbolReference = unresolvedReference(document, occurrence, catalog, request);
                     status = ResolutionStatus.UNRESOLVED;
-                    unresolvedOccurrences++;
+                    accumulator.unresolvedOccurrences++;
                 }
 
                 SymbolLocation normalizedLocation = location.orElseThrow();
-                normalizedOccurrences.add(new SymbolOccurrence(
+                accumulator.normalized.add(new SymbolOccurrence(
                         occurrenceId(request.projectId(), fileId, normalizedLocation, occurrence.getSymbol()),
                         request.projectId(),
                         symbolReference,
@@ -162,14 +191,32 @@ final class ScipIngestionAdapter {
                 ));
             }
         }
+        return accumulator;
+    }
 
-        store.putOccurrences(normalizedOccurrences);
-
-        RelationshipAccumulator relationships = collectRelationships(
-                index,
-                catalog,
-                normalizedByCatalogKey
+    private static UnresolvedSymbolReference unresolvedReference(
+            Document document,
+            Occurrence occurrence,
+            ScipSymbolCatalog catalog,
+            ScipIngestionRequest request) {
+        ScipSymbolFact knownFact = catalog.find(
+                document.getRelativePath(),
+                occurrence.getSymbol()
+        ).orElse(null);
+        return new UnresolvedSymbolReference(
+                knownFact == null ? null : blankToNull(knownFact.displayName()),
+                null,
+                blankToNull(document.getLanguage()),
+                "SCIP occurrence has no normalized MINOS symbol",
+                Set.of(new ProviderReference(request.providerId(), occurrence.getSymbol()))
         );
+    }
+
+    /** Dépendances dérivées des relations fournies, puis relations de test dérivées, dans cet ordre. */
+    private DerivedRelationships deriveRelationships(
+            RelationshipAccumulator relationships,
+            Map<String, Symbol> normalizedByCatalogKey,
+            List<SymbolOccurrence> normalizedOccurrences) {
         List<Relationship> derivedDependencies = dependencyDerivationService.derive(
                 relationships.values()
         );
@@ -178,24 +225,28 @@ final class ScipIngestionAdapter {
                 normalizedOccurrences,
                 relationships.values()
         );
-        List<Relationship> allRelationships = new ArrayList<>(relationships.values());
-        allRelationships.addAll(derivedDependencies);
-        allRelationships.addAll(relatedTests);
-        store.putRelationships(allRelationships);
+        return new DerivedRelationships(derivedDependencies, relatedTests);
+    }
 
+    private static ScipIngestionReport report(
+            ScipSymbolCatalog catalog,
+            NormalizedSymbols symbols,
+            OccurrenceAccumulator occurrences,
+            RelationshipAccumulator relationships,
+            DerivedRelationships derived) {
         return new ScipIngestionReport(
                 catalog.size(),
-                normalizedByCatalogKey.size(),
-                skippedSymbols,
-                normalizedOccurrences.size(),
-                resolvedOccurrences,
-                unresolvedOccurrences,
-                skippedOccurrences,
+                symbols.byCatalogKey().size(),
+                symbols.skipped(),
+                occurrences.normalized.size(),
+                occurrences.resolvedOccurrences,
+                occurrences.unresolvedOccurrences,
+                occurrences.skippedOccurrences,
                 relationships.providerRelationshipCount,
                 relationships.providerRelationshipFactCount,
                 relationships.size(),
-                derivedDependencies.size() + relatedTests.size(),
-                relatedTests.size(),
+                derived.dependencies().size() + derived.relatedTests().size(),
+                derived.relatedTests().size(),
                 relationships.resolvedCount(),
                 relationships.unresolvedCount(),
                 relationships.skippedRelationshipFactCount,
@@ -370,6 +421,22 @@ final class ScipIngestionAdapter {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
+    }
+
+    /** Symboles normalisés par clé de catalogue (ordre du catalogue) et nombre de symboles non normalisés. */
+    private record NormalizedSymbols(Map<String, Symbol> byCatalogKey, int skipped) {
+    }
+
+    /** Dépendances dérivées et relations de test dérivées, ajoutées dans cet ordre aux relations fournies. */
+    private record DerivedRelationships(List<Relationship> dependencies, List<Relationship> relatedTests) {
+    }
+
+    private static final class OccurrenceAccumulator {
+
+        private final List<SymbolOccurrence> normalized = new ArrayList<>();
+        private int resolvedOccurrences;
+        private int unresolvedOccurrences;
+        private int skippedOccurrences;
     }
 
     private static final class RelationshipAccumulator {
