@@ -12,12 +12,18 @@ Rules, on every Java source of a `minos-*/src/main` tree (comments and string li
    called `saturatingAdd` / `saturatingMultiply`, one that throws says so (`addOrThrow`, `checkedAdd`).
 2. A method named `checkedAdd` throws: its body contains a `throw` statement. A `checkedAdd` that saturates is a
    `saturatingAdd`.
+3. An access-ordered map (`new LinkedHashMap<...>(capacity, loadFactor, true)`, spaces and line breaks allowed) is
+   built only by the shared weighted LRU cache (SHARED_CACHE) or by a file of the closed list
+   ACCESS_ORDER_EXCEPTIONS, each with its reason: a weighted LRU cache is written once, the exceptions are
+   structures without a weight. The shared cache or a listed file that no longer builds such a map fails: the list
+   only shrinks.
 
-Each failure names the file and the line of the declaration. On success the gate prints how many bounded helpers
-it checked.
+Each failure names the file and the line. On success the gate prints how many bounded helpers it checked and the
+closed list.
 
 What this gate does not prove: that a helper does what its name says beyond the presence of a `throw` (its tests
-do), nor anything about inline `Math.addExact` / `Math.multiplyExact` calls.
+do), nor anything about inline `Math.addExact` / `Math.multiplyExact` calls; an access-ordered map built through a
+variable flag, or by a subclass of LinkedHashMap, is not seen.
 
 `--root` points the gate at another tree (default: this repository). `--self-test` runs the gate on temporary
 trees: every refusal and every acceptance below has its own fixture.
@@ -50,6 +56,16 @@ DECLARATION = re.compile(
     r"\b(?:void|boolean|byte|char|short|int|long|float|double|[A-Z][\w.]*(?:<[^;(){}]*>)?)"
     r"(?:\s*\[\s*\])*\s+(" + "|".join(CHECKED_NAMES) + r")\s*\(")
 THROW = re.compile(r"\bthrow\b")
+
+SHARED_CACHE = "minos-engine/src/main/java/com/minos/store/cache/WeightedLruCache.java"
+# Closed list: production files allowed to build an access-ordered map outside the shared cache, with the reason.
+ACCESS_ORDER_EXCEPTIONS: dict[str, str] = {
+    "minos-engine/src/main/java/com/minos/hosted/HostedDenialThrottle.java":
+        "sliding refusal windows (one ArrayDeque<Instant> per key), no weight",
+    "minos-application/src/main/java/com/minos/program/analysis/SourceStateKeyMemo.java":
+        "memo with a reuse delay on a monotonic clock, bounded by count, no weight",
+}
+NEW_LINKED_HASH_MAP = re.compile(r"\bnew\s+(?:java\.util\.)?LinkedHashMap\s*(?:<[^;(){}]*>)?\s*\(")
 
 
 def blank_comments_and_literals(code: str) -> str:
@@ -88,6 +104,38 @@ def method_body(code: str, open_parenthesis: int) -> str | None:
     return code[opening + 1:end] if end >= 0 else None
 
 
+def top_level_arguments(code: str, open_parenthesis: int) -> list[str] | None:
+    """The stripped arguments of the call whose parameter list opens at `open_parenthesis`; None if unbalanced."""
+    close = closing_index(code, open_parenthesis)
+    if close < 0:
+        return None
+    arguments: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for character in code[open_parenthesis + 1:close]:
+        if character in "([{":
+            depth += 1
+        elif character in ")]}":
+            depth -= 1
+        if character == "," and depth == 0:
+            arguments.append("".join(current).strip())
+            current = []
+        else:
+            current.append(character)
+    arguments.append("".join(current).strip())
+    return arguments
+
+
+def access_order_map_lines(code: str) -> list[int]:
+    """Lines where a blanked source builds a LinkedHashMap whose third argument is the literal `true`."""
+    lines: list[int] = []
+    for match in NEW_LINKED_HASH_MAP.finditer(code):
+        arguments = top_level_arguments(code, match.end() - 1)
+        if arguments is not None and len(arguments) == 3 and arguments[2] == "true":
+            lines.append(code.count("\n", 0, match.start()) + 1)
+    return lines
+
+
 def java_sources(root: Path) -> list[Path]:
     """Production Java sources of every `minos-*` module under `root`, sorted."""
     sources: list[Path] = []
@@ -120,16 +168,33 @@ def check_helper_names(relative: str, code: str) -> tuple[list[str], int]:
     return failures, checked
 
 
-def check(root: Path) -> tuple[list[str], int]:
-    """(failures, bounded helpers checked) for the tree under `root`."""
-    failures: list[str] = []
+def check(root: Path, shared_cache: str | None = SHARED_CACHE,
+          exceptions: dict[str, str] | None = None) -> tuple[list[str], int]:
+    """(failures, bounded helpers checked) for the tree under `root`. `shared_cache` and `exceptions` default to the
+    real ones; a self-test passes None and {} to look at helper names alone."""
+    exceptions = ACCESS_ORDER_EXCEPTIONS if exceptions is None else exceptions
+    allowed = set(exceptions) | ({shared_cache} if shared_cache else set())
+    failures: list[str] = [f"ACCESS_ORDER_EXCEPTIONS entry {entry} needs a written reason"
+                           for entry, reason in sorted(exceptions.items()) if not reason.strip()]
     checked = 0
+    used: set[str] = set()
     for source in java_sources(root):
         relative = source.relative_to(root).as_posix()
         code = blank_comments_and_literals(source.read_text(encoding="utf-8"))
         found, count = check_helper_names(relative, code)
         failures.extend(found)
         checked += count
+        for line in access_order_map_lines(code):
+            if relative in allowed:
+                used.add(relative)
+            else:
+                failures.append(f"{relative}:{line} builds an access-ordered LinkedHashMap; a weighted LRU cache "
+                                f"uses {SHARED_CACHE}, a structure without weight is listed in "
+                                f"ACCESS_ORDER_EXCEPTIONS with its reason")
+    for entry in sorted(allowed - used):
+        kind = "SHARED_CACHE" if entry == shared_cache else "ACCESS_ORDER_EXCEPTIONS entry"
+        failures.append(f"{kind} {entry} is absent or builds no access-ordered map; remove the entry "
+                        f"(the list only shrinks)")
     return failures, checked
 
 
@@ -228,7 +293,7 @@ def run_case(text: str, name: str = "Sample.java", module: str = "minos-sample")
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         relative = write_source(root, module, name, text)
-        failures, checked = check(root)
+        failures, checked = check(root, None, {})
         return failures, checked, relative
 
 
@@ -270,24 +335,107 @@ def self_test() -> int:
             copy = root / REAL_THROWING_CHECKED_ADD
             copy.parent.mkdir(parents=True)
             shutil.copyfile(real, copy)
-            failures, checked = check(root)
+            failures, checked = check(root, None, {})
             problems += expect("the real throwing checkedAdd is accepted", failures == [] and checked == 1,
                                (failures, checked))
             original = copy.read_text(encoding="utf-8")
             mutated = re.sub(r"throw new IOException\(\"remote cache byte counter overflow\", exception\);",
                              "return Long.MAX_VALUE;", original)
             copy.write_text(mutated, encoding="utf-8")
-            failures, _ = check(root)
+            failures, _ = check(root, None, {})
             problems += expect("the real checkedAdd mutated to saturate is refused",
                                mutated != original and len(failures) == 1
                                and failures[0].startswith(REAL_THROWING_CHECKED_ADD + ":"), failures)
     else:
         problems.append(f"missing witness file {REAL_THROWING_CHECKED_ADD}")
 
+    problems += self_test_access_order_maps()
+
     if gate_cli.report_failures(LABEL + " SELF-TEST", problems):
         return 1
-    print(f"{LABEL} SELF-TEST SUCCESS (ambiguous names, saturating and throwing checkedAdd, comments, real witness)")
+    print(f"{LABEL} SELF-TEST SUCCESS (ambiguous names, saturating and throwing checkedAdd, comments, real witness, "
+          f"access-ordered maps, closed list, stale and unreasoned entries)")
     return 0
+
+
+HAND_WRITTEN_CACHE = """package com.example;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+final class Cache {
+    private final Map<String, Long> insertionOrdered = new LinkedHashMap<>(16, 0.75f, false);
+    private final Map<String, Long> plain = new LinkedHashMap<>();
+    private final Map<String, Long> accessOrdered = new LinkedHashMap<>(
+            32, 0.75f,
+            true);
+    // new LinkedHashMap<>(16, 0.75f, true) in a comment is not code.
+}
+"""
+ACCESS_ORDERED_LINE = 9
+ACCESS_ORDERED_ONE_LINER = (
+    "final class X { java.util.Map<String, String> m = new java.util.LinkedHashMap<>(16, 0.75f, true); }\n")
+WITNESS_EXCEPTION = "minos-engine/src/main/java/com/minos/hosted/HostedDenialThrottle.java"
+
+
+def write_at(root: Path, relative: str, text: str) -> None:
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def self_test_access_order_maps() -> list[str]:
+    """Rule 3 on temporary trees: shared cache and closed list accepted, any other access-ordered map refused at its
+    line, stale or unreasoned entries refused; then a copy of a real listed file moved outside the list."""
+    problems: list[str] = []
+    shared = "minos-sample/src/main/java/com/example/SharedCache.java"
+    listed = "minos-sample/src/main/java/com/example/Throttle.java"
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        write_at(root, shared, ACCESS_ORDERED_ONE_LINER)
+        write_at(root, listed, ACCESS_ORDERED_ONE_LINER)
+        failures, _ = check(root, shared, {listed: "no weight"})
+        problems += expect("the shared cache and a listed file are accepted", failures == [], failures)
+
+        hand_written = "minos-sample/src/main/java/com/example/Cache.java"
+        write_at(root, hand_written, HAND_WRITTEN_CACHE)
+        failures, _ = check(root, shared, {listed: "no weight"})
+        problems += expect("a hand-written access-ordered map is refused at its line, other maps and comments are not",
+                           refused_at(failures, hand_written, ACCESS_ORDERED_LINE), failures)
+        (root / hand_written).unlink()
+
+        gone = "minos-sample/src/main/java/com/example/Gone.java"
+        failures, _ = check(root, shared, {listed: "no weight", gone: "no weight"})
+        problems += expect("an entry whose file is absent is refused",
+                           len(failures) == 1 and gone in failures[0], failures)
+        failures, _ = check(root, shared, {listed: " "})
+        problems += expect("an entry without a reason is refused",
+                           len(failures) == 1 and "needs a written reason" in failures[0], failures)
+        write_at(root, listed, "final class Throttle { }\n")
+        failures, _ = check(root, shared, {listed: "no weight"})
+        problems += expect("an entry that no longer builds an access-ordered map is refused",
+                           len(failures) == 1 and listed in failures[0], failures)
+        write_at(root, shared, "final class SharedCache { }\n")
+        failures, _ = check(root, shared, {})
+        problems += expect("a shared cache that builds no access-ordered map is refused",
+                           len(failures) == 1 and failures[0].startswith("SHARED_CACHE "), failures)
+
+    real = DEFAULT_ROOT / WITNESS_EXCEPTION
+    if real.is_file():
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            text = real.read_text(encoding="utf-8")
+            write_at(root, WITNESS_EXCEPTION, text)
+            failures, _ = check(root, None, {WITNESS_EXCEPTION: "no weight"})
+            problems += expect("the real listed exception is accepted", failures == [], failures)
+            copy = WITNESS_EXCEPTION.replace("HostedDenialThrottle.java", "CopiedThrottle.java")
+            write_at(root, copy, text)
+            failures, _ = check(root, None, {WITNESS_EXCEPTION: "no weight"})
+            problems += expect("a copy of the real exception outside the list is refused",
+                               len(failures) == 1 and failures[0].startswith(copy + ":"), failures)
+    else:
+        problems.append(f"missing witness file {WITNESS_EXCEPTION}")
+    return problems
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -300,7 +448,10 @@ def main(argv: list[str] | None = None) -> int:
     failures, checked = check(arguments.root)
     if gate_cli.report_failures(LABEL, failures):
         return 1
-    print(f"{LABEL} SUCCESS (bounded helpers checked={checked})")
+    print(f"{LABEL} SUCCESS (bounded helpers checked={checked}, access-ordered maps only in {SHARED_CACHE} and in "
+          f"the closed list below)")
+    for entry, reason in sorted(ACCESS_ORDER_EXCEPTIONS.items()):
+        print(f" - {entry}: {reason}")
     return 0
 
 

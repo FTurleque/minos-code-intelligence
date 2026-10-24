@@ -16,6 +16,7 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotDescriptor;
 import com.minos.store.SnapshotQueryView;
 import com.minos.store.SnapshotReadView;
+import com.minos.store.cache.WeightedLruCache;
 import com.minos.store.SymbolSnapshot;
 
 import java.io.IOException;
@@ -34,10 +35,7 @@ import java.sql.SQLException;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -69,13 +67,11 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     private final Consumer<Path> afterScratchFileCreated;
     private final PostgresSnapshotPayloadCodec codec = new PostgresSnapshotPayloadCodec();
     private final Object cacheLock = new Object();
-    private final LinkedHashMap<CacheKey, WeightedReadView> queryCache =
-            new LinkedHashMap<>(16, 0.75f, true);
+    private final WeightedLruCache<CacheKey, SnapshotReadView> queryCache =
+            new WeightedLruCache<>(MAX_QUERY_CACHE_ENTRIES, MAX_QUERY_CACHE_WEIGHT_BYTES);
     private final ReentrantLock[] buildLocks = buildLocks();
-    private long cacheWeightBytes;
     private long cacheHits;
     private long cacheMisses;
-    private long cacheEvictions;
 
     public PostgresCodeKnowledgeSnapshotStore(PostgresConnectionFactory connections, Path minosHome) throws IOException {
         this(connections, minosHome, created -> { });
@@ -197,35 +193,24 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
 
     QueryCacheStats queryCacheStats() {
         synchronized (cacheLock) {
-            return new QueryCacheStats(cacheHits, cacheMisses, cacheEvictions, queryCache.size(),
-                    cacheWeightBytes, MAX_QUERY_CACHE_WEIGHT_BYTES);
+            return new QueryCacheStats(cacheHits, cacheMisses, queryCache.evictions(), queryCache.size(),
+                    queryCache.weight(), MAX_QUERY_CACHE_WEIGHT_BYTES);
         }
     }
 
     private Optional<SnapshotReadView> cached(CacheKey key) {
         synchronized (cacheLock) {
-            WeightedReadView value = queryCache.get(key);
+            SnapshotReadView value = queryCache.get(key);
             if (value == null) return Optional.empty();
             cacheHits++;
-            return Optional.of(value.view());
+            return Optional.of(value);
         }
     }
 
     private void cache(UUID projectId, CacheKey key, SnapshotReadView view, long weight) {
         synchronized (cacheLock) {
             removeProjectEntries(projectId, key);
-            if (weight > MAX_QUERY_CACHE_WEIGHT_BYTES) return;
-            WeightedReadView previous = queryCache.put(key, new WeightedReadView(view, weight));
-            if (previous != null) cacheWeightBytes -= previous.weightBytes();
-            cacheWeightBytes = saturatingAdd(cacheWeightBytes, weight);
-            Iterator<Map.Entry<CacheKey, WeightedReadView>> iterator = queryCache.entrySet().iterator();
-            while ((queryCache.size() > MAX_QUERY_CACHE_ENTRIES || cacheWeightBytes > MAX_QUERY_CACHE_WEIGHT_BYTES)
-                    && iterator.hasNext()) {
-                Map.Entry<CacheKey, WeightedReadView> eldest = iterator.next();
-                cacheWeightBytes -= eldest.getValue().weightBytes();
-                iterator.remove();
-                cacheEvictions++;
-            }
+            queryCache.put(key, view, weight);
         }
     }
 
@@ -234,14 +219,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     }
 
     private void removeProjectEntries(UUID projectId, CacheKey except) {
-        Iterator<Map.Entry<CacheKey, WeightedReadView>> iterator = queryCache.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<CacheKey, WeightedReadView> entry = iterator.next();
-            if (entry.getKey().projectId().equals(projectId) && !entry.getKey().equals(except)) {
-                cacheWeightBytes -= entry.getValue().weightBytes();
-                iterator.remove();
-            }
-        }
+        queryCache.removeIf(key -> key.projectId().equals(projectId) && !key.equals(except));
     }
 
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot) throws IOException {
@@ -534,7 +512,6 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     private record ActiveMetadata(String snapshotId, String sha256, int symbolCount,
                                   int occurrenceCount, int relationshipCount) { }
     private record CacheKey(UUID projectId, String snapshotId, String sha256) { }
-    private record WeightedReadView(SnapshotReadView view, long weightBytes) { }
     record QueryCacheStats(long hits, long misses, long evictions, int entries,
                            long weightBytes, long maximumWeightBytes) { }
 }

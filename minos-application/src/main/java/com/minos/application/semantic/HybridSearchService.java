@@ -10,6 +10,7 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.cache.WeightedLruCache;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -17,8 +18,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -39,9 +38,8 @@ public final class HybridSearchService {
     private final SemanticDocumentFactory documentFactory;
     private final SemanticIndexService semanticIndex;
     private final SemanticSearchService semanticSearch;
-    private final LinkedHashMap<UUID, WeightedCorpus> corpusCache = new LinkedHashMap<>(16, 0.75f, true);
-    private long corpusCacheWeightBytes;
-    private long corpusCacheEvictions;
+    private final WeightedLruCache<UUID, CachedCorpus> corpusCache =
+            new WeightedLruCache<>(DEFAULT_MAX_CORPUS_CACHE_ENTRIES, DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES);
 
     public HybridSearchService(ProjectResolver projects, CodeKnowledgeSnapshotStore snapshots,
                                SemanticIndexService semanticIndex, SemanticSearchService semanticSearch) {
@@ -118,9 +116,9 @@ public final class HybridSearchService {
 
     public CorpusCacheStats corpusCacheStats() {
         synchronized (corpusCache) {
-            return new CorpusCacheStats(corpusCache.size(), corpusCacheWeightBytes,
+            return new CorpusCacheStats(corpusCache.size(), corpusCache.weight(),
                     DEFAULT_MAX_CORPUS_CACHE_ENTRIES, DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES,
-                    corpusCacheEvictions);
+                    corpusCache.evictions());
         }
     }
 
@@ -134,8 +132,8 @@ public final class HybridSearchService {
     private CachedCorpus corpus(RegisteredProject project, CodeKnowledgeSnapshot snapshot,
                                 boolean semantic, String requestedIdentity) throws IOException {
         synchronized (corpusCache) {
-            WeightedCorpus cached = corpusCache.get(project.id());
-            if (cached != null && cached.corpus().identity().equals(requestedIdentity)) return cached.corpus();
+            CachedCorpus cached = corpusCache.get(project.id());
+            if (cached != null && cached.identity().equals(requestedIdentity)) return cached;
         }
         List<SemanticDocument> documents;
         String corpusIdentity = requestedIdentity;
@@ -158,29 +156,11 @@ public final class HybridSearchService {
         CachedCorpus next = new CachedCorpus(corpusIdentity, documents, normalizedContents, graphDegree, maxDegree);
         long weight = estimateCorpusWeight(next);
         synchronized (corpusCache) {
-            WeightedCorpus raced = corpusCache.get(project.id());
-            if (raced != null && raced.corpus().identity().equals(corpusIdentity)) return raced.corpus();
-            WeightedCorpus previous = corpusCache.remove(project.id());
-            if (previous != null) corpusCacheWeightBytes -= previous.weightBytes();
-            if (weight <= DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES) {
-                corpusCache.put(project.id(), new WeightedCorpus(next, weight));
-                corpusCacheWeightBytes = saturatingAdd(corpusCacheWeightBytes, weight);
-                trimCorpusCache();
-            }
+            CachedCorpus raced = corpusCache.get(project.id());
+            if (raced != null && raced.identity().equals(corpusIdentity)) return raced;
+            corpusCache.put(project.id(), next, weight);
         }
         return next;
-    }
-
-    private void trimCorpusCache() {
-        Iterator<Map.Entry<UUID, WeightedCorpus>> iterator = corpusCache.entrySet().iterator();
-        while ((corpusCache.size() > DEFAULT_MAX_CORPUS_CACHE_ENTRIES
-                || corpusCacheWeightBytes > DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES) && iterator.hasNext()) {
-            Map.Entry<UUID, WeightedCorpus> eldest = iterator.next();
-            corpusCacheWeightBytes -= eldest.getValue().weightBytes();
-            iterator.remove();
-            corpusCacheEvictions++;
-        }
-        if (corpusCacheWeightBytes < 0L) corpusCacheWeightBytes = 0L;
     }
 
     private Map<String, Double> semanticScores(String projectReference, HybridRequest request, int documentCount,
@@ -316,7 +296,6 @@ public final class HybridSearchService {
             graphDegree = Map.copyOf(graphDegree);
         }
     }
-    private record WeightedCorpus(CachedCorpus corpus, long weightBytes) { }
     private record LexicalQuery(Set<String> terms, String normalizedQuery) {
         static LexicalQuery compile(String query) { String normalized = normalize(requireQuery(query)); return new LexicalQuery(Set.copyOf(HybridSearchService.terms(normalized)), normalized); }
         double score(String content) {

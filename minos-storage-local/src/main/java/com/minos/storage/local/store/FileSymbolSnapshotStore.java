@@ -8,6 +8,7 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotDescriptor;
 import com.minos.store.SnapshotQueryView;
 import com.minos.store.SnapshotReadView;
+import com.minos.store.cache.WeightedLruCache;
 import com.minos.store.SymbolSnapshot;
 
 import java.io.IOException;
@@ -16,10 +17,7 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -62,15 +60,12 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     private final ActiveQueryBuildHook activeQueryBuildHook;
     private final Object cacheLock = new Object();
     private final ReentrantLock[] buildLocks = buildLocks();
-    private final LinkedHashMap<CacheKey, WeightedReadView> queryCache =
-            new LinkedHashMap<>(16, 0.75f, true);
+    private final WeightedLruCache<CacheKey, SnapshotReadView> queryCache;
 
     private long cacheHits;
     private long cacheMisses;
     private long fullSnapshotLoads;
     private long queryViewBuilds;
-    private long cacheWeightBytes;
-    private long cacheEvictions;
 
     public FileSymbolSnapshotStore(Path storageRoot) throws IOException {
         this(storageRoot, DEFAULT_MAX_QUERY_CACHE_ENTRIES, DEFAULT_MAX_QUERY_CACHE_WEIGHT_BYTES);
@@ -113,6 +108,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         this.codecV1 = new SnapshotCodecV1();
         this.maxQueryCacheEntries = maxQueryCacheEntries;
         this.maxQueryCacheWeightBytes = maxQueryCacheWeightBytes;
+        this.queryCache = new WeightedLruCache<>(maxQueryCacheEntries, maxQueryCacheWeightBytes);
         this.maxActiveQueryRetries = maxActiveQueryRetries;
         this.activeQueryBuildHook = Objects.requireNonNull(activeQueryBuildHook, "activeQueryBuildHook");
     }
@@ -238,10 +234,10 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
     private Optional<SnapshotReadView> cachedView(CacheKey key, SnapshotDescriptor descriptor) {
         synchronized (cacheLock) {
-            WeightedReadView cached = queryCache.get(key);
-            if (cached != null && cached.view().descriptor().equals(descriptor)) {
+            SnapshotReadView cached = queryCache.get(key);
+            if (cached != null && cached.descriptor().equals(descriptor)) {
                 cacheHits++;
-                return Optional.of(cached.view());
+                return Optional.of(cached);
             }
             return Optional.empty();
         }
@@ -259,17 +255,13 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     ) throws IOException {
         long weight = estimateQueryViewWeight(projectId, descriptor);
         synchronized (cacheLock) {
-            WeightedReadView raced = queryCache.get(key);
-            if (raced != null && raced.view().descriptor().equals(descriptor)) {
+            SnapshotReadView raced = queryCache.get(key);
+            if (raced != null && raced.descriptor().equals(descriptor)) {
                 cacheHits++;
-                return QueryResolution.complete(Optional.of(raced.view()));
+                return QueryResolution.complete(Optional.of(raced));
             }
             removeProjectEntries(projectId, key);
-            if (weight <= maxQueryCacheWeightBytes) {
-                queryCache.put(key, new WeightedReadView(built, weight));
-                cacheWeightBytes = saturatingAdd(cacheWeightBytes, weight);
-                trimCache();
-            }
+            queryCache.put(key, built, weight);
             return QueryResolution.complete(Optional.of(built));
         }
     }
@@ -283,7 +275,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             return new CacheStats(
                     cacheHits, cacheMisses, fullSnapshotLoads, queryViewBuilds,
                     queryCache.size(), maxQueryCacheEntries,
-                    cacheWeightBytes, maxQueryCacheWeightBytes, cacheEvictions);
+                    queryCache.weight(), maxQueryCacheWeightBytes, queryCache.evictions());
         }
     }
 
@@ -346,27 +338,11 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     }
 
     private void removeProjectEntries(UUID projectId, CacheKey except) {
-        Iterator<Map.Entry<CacheKey, WeightedReadView>> iterator = queryCache.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<CacheKey, WeightedReadView> entry = iterator.next();
-            if (entry.getKey().projectId().equals(projectId) && !entry.getKey().equals(except)) {
-                cacheWeightBytes -= entry.getValue().weightBytes();
-                iterator.remove();
-            }
-        }
+        queryCache.removeIf(key -> key.projectId().equals(projectId) && !key.equals(except));
     }
 
     private ReentrantLock buildLock(UUID projectId) {
         return buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
-    }
-
-    private void trimCache() {
-        while (queryCache.size() > maxQueryCacheEntries || cacheWeightBytes > maxQueryCacheWeightBytes) {
-            CacheKey eldest = queryCache.keySet().iterator().next();
-            WeightedReadView removed = queryCache.remove(eldest);
-            cacheWeightBytes -= removed.weightBytes();
-            cacheEvictions++;
-        }
     }
 
     private SnapshotCodec codecFor(int version) throws IOException {
@@ -436,13 +412,6 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         private CacheKey {
             Objects.requireNonNull(projectId, "projectId");
             requireText(snapshotId, "snapshotId");
-        }
-    }
-
-    private record WeightedReadView(SnapshotReadView view, long weightBytes) {
-        private WeightedReadView {
-            Objects.requireNonNull(view, "view");
-            if (weightBytes < 1L) throw new IllegalArgumentException("weightBytes must be positive");
         }
     }
 

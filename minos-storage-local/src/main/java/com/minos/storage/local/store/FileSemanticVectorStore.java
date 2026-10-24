@@ -9,6 +9,7 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.semantic.StaleSemanticSyncException;
+import com.minos.store.cache.WeightedLruCache;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -26,7 +27,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -58,11 +58,10 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     private final Path root;
     private final long maxCacheWeightBytes;
     private final Object cacheLock = new Object();
-    private final LinkedHashMap<String, CacheEntry> cache = new LinkedHashMap<>(16, 0.75f, true);
-    private long cacheWeightBytes;
+    private final WeightedLruCache<String, CacheEntry> cache;
     private long cacheHits;
     private long cacheMisses;
-    private long cacheEvictions;
+    private long invalidationEvictions;
 
     public FileSemanticVectorStore(Path root) throws IOException {
         this(root, DEFAULT_MAX_CACHE_WEIGHT_BYTES);
@@ -72,6 +71,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         this.root = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
         if (maxCacheWeightBytes < 1L) throw new IllegalArgumentException("maxCacheWeightBytes must be positive");
         this.maxCacheWeightBytes = maxCacheWeightBytes;
+        this.cache = new WeightedLruCache<>(Integer.MAX_VALUE, maxCacheWeightBytes);
         DurableAtomicFile.ensureDirectory(this.root, "semantic index root");
     }
 
@@ -288,7 +288,8 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
 
     public CacheStats cacheStats() {
         synchronized (cacheLock) {
-            return new CacheStats(cacheHits, cacheMisses, cacheEvictions, cache.size(), cacheWeightBytes, maxCacheWeightBytes);
+            return new CacheStats(cacheHits, cacheMisses, cache.evictions() + invalidationEvictions, cache.size(),
+                    cache.weight(), maxCacheWeightBytes);
         }
     }
 
@@ -298,27 +299,13 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
 
     private void putCached(String projectId, CacheEntry entry) {
         synchronized (cacheLock) {
-            CacheEntry previous = cache.remove(projectId);
-            if (previous != null) cacheWeightBytes -= previous.weightBytes();
-            if (entry.weightBytes() > maxCacheWeightBytes) return;
-            cache.put(projectId, entry);
-            cacheWeightBytes = saturatingAdd(cacheWeightBytes, entry.weightBytes());
-            while (cacheWeightBytes > maxCacheWeightBytes && !cache.isEmpty()) {
-                String eldest = cache.keySet().iterator().next();
-                CacheEntry removed = cache.remove(eldest);
-                cacheWeightBytes -= removed.weightBytes();
-                cacheEvictions++;
-            }
+            cache.put(projectId, entry, entry.weightBytes());
         }
     }
 
     private void removeCached(String projectId, boolean eviction) {
         synchronized (cacheLock) {
-            CacheEntry removed = cache.remove(projectId);
-            if (removed != null) {
-                cacheWeightBytes -= removed.weightBytes();
-                if (eviction) cacheEvictions++;
-            }
+            if (cache.remove(projectId) != null && eviction) invalidationEvictions++;
         }
     }
 
