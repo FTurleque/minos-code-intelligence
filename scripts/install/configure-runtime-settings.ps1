@@ -54,7 +54,7 @@ if ($env:OS -ne 'Windows_NT') {
 
 function Require-Identifier([string] $Value, [string] $Name) {
     if ([string]::IsNullOrWhiteSpace($Value) -or $Value -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,62}$') {
-        throw "$Name must be a safe identifier."
+        throw "$Name must be a safe identifier (letter/underscore first, then letters/digits/underscore)."
     }
 }
 

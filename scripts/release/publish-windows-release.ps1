@@ -41,7 +41,9 @@ function Invoke-NativeChecked {
         & $File @Arguments
         $Exit = $LASTEXITCODE
     }
-    finally { $ErrorActionPreference = $Previous }
+    finally {
+        $ErrorActionPreference = $Previous
+    }
     if ($Exit -ne 0) { throw "$Failure (exit=$Exit)" }
 }
 
