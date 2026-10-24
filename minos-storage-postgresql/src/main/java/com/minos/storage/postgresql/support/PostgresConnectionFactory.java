@@ -344,7 +344,8 @@ public final class PostgresConnectionFactory implements AutoCloseable {
         private final Connection connection;
         private final LeaseContext context;
         private final Thread owner;
-        private boolean closedLease;
+        // Written by the owner thread only; volatile because close() reads it before checking the caller.
+        private volatile boolean closedLease;
 
         private ScopedConnectionLease(LeaseContext context, Thread owner) {
             this.connection = context.connection;
@@ -391,8 +392,10 @@ public final class PostgresConnectionFactory implements AutoCloseable {
     public final class DedicatedConnectionLease implements AutoCloseable {
         private final Connection connection;
         private final Thread owner;
-        private boolean reusable = true;
-        private boolean closedLease;
+        // Written by the owner thread only; volatile so that a read from another thread, as close() does before
+        // checking its caller, sees the last write.
+        private volatile boolean reusable = true;
+        private volatile boolean closedLease;
 
         private DedicatedConnectionLease(Connection connection, Thread owner) {
             this.connection = connection;
