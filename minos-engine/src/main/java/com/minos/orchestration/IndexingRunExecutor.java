@@ -862,7 +862,7 @@ final class IndexingRunExecutor {
     }
 
     /**
-     * Entrées propres à un run (AUD-QUA-07, D2). Aucune validation ici : {@link #execute(RunRequest, Collaborators)}
+     * Entrées propres à un run. Aucune validation ici : {@link #execute(RunRequest, Collaborators)}
      * vérifie la politique de reprise, puis la racine, puis {@code moduleAssignment} et {@code rootScopeFingerprint}
      * avec les autres ports.
      */
@@ -879,7 +879,7 @@ final class IndexingRunExecutor {
     }
 
     /**
-     * Collaborateurs du service de cycle de vie, construits une fois avec lui (AUD-QUA-07, D2). Aucune validation ici :
+     * Collaborateurs du service de cycle de vie, construits une fois avec lui. Aucune validation ici :
      * le service les vérifie à sa construction, et {@link #execute(RunRequest, Collaborators)} dans l'ordre de
      * {@link Ports}.
      */

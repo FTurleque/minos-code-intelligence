@@ -101,7 +101,7 @@ public final class IndexingLifecycleService {
             if (id == null || id.isBlank()) throw new IllegalStateException("executor.indexerId must not be blank");
             if (byId.putIfAbsent(id, executor) != null) throw new IllegalArgumentException("Duplicate executor for indexer: " + id);
         }
-        // AUD-QUA-07 (D2) : les collaborateurs d'un run, vérifiés ci-dessus, sont regroupés une fois pour toutes.
+        // Les collaborateurs d'un run, vérifiés ci-dessus, sont regroupés une fois pour toutes.
         this.collaborators = new IndexingRunExecutor.Collaborators(Map.copyOf(byId), stager, promoter, stateStore,
                 markers, artifactPolicy, clock, fingerprints);
     }
