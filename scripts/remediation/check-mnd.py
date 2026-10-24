@@ -101,7 +101,8 @@ def main() -> int:
         require("ProgramGraphService.java", graph_service,
                 "WeightedGraph", "evidenceWeight", "stringWeight", "maximumWeight")
         require("FingerprintConstrainedJavaProgramGraphProvider.java", fingerprints,
-                "DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES", "trimCache", "fingerprintCacheStats")
+                "DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES", "WeightedLruCache<UUID, CachedFingerprint> immutableFingerprintCache",
+                "fingerprintCacheStats")
         require("HybridSearchService.java", hybrid,
                 "DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES", "trimCorpusCache", "MAX_QUERY_UTF8_BYTES")
 
