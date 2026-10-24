@@ -2,7 +2,7 @@
 
 ## Context
 
-Sprint 11 « Hygiène de fond » de l'audit du 10 octobre 2026 : **AUD-QUA-08** (statut « Spécifié », `docs/project/audits/2026-10-10/SUIVI.md:587`). HEAD analysé : `5ce7b79b` (`develop` du 2026-10-22). Chemins complets des fichiers cités par leur nom :
+Sprint 11 « Hygiène de fond » de l'audit du 10 octobre 2026 : **AUD-QUA-08** (statut « Spécifié », `docs/project/audits/2026-10-10/SUIVI.md:619` au HEAD `349e4246`). HEAD analysé : `5ce7b79b` (`develop` du 2026-10-22). Chemins complets des fichiers cités par leur nom :
 
 - `minos-intellij/src/main/java/com/minos/intellij/actions/MinosM21Actions.java`, `minos-intellij/src/main/java/com/minos/intellij/protocol/MinosM21Client.java`, `minos-intellij/src/test/java/com/minos/intellij/protocol/MinosM21ClientTest.java`, `minos-intellij/src/main/resources/META-INF/plugin.xml` ;
 - `minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIndexerCatalog.java` ;
@@ -16,6 +16,31 @@ Sprint 11 « Hygiène de fond » de l'audit du 10 octobre 2026 : **AUD-QUA-08** 
 Fichiers suivis par Git sous `*/src/main/**` (`git ls-files '*/src/main/*'`). Un **segment à jalon** est `M` ou `m` suivi d'un ou plusieurs chiffres, placé en début de segment d'identifiant (début du mot, après `_`, ou `M` majuscule après une minuscule ou un chiffre) et suivi de la fin du mot, de `_`, de `$` ou d'une majuscule. Sont lus : le nom de chaque fichier ; les identifiants Java hors littéraux et commentaires (une seule passe lexicale qui reconnaît chaînes, blocs de texte, caractères et commentaires) ; les attributs `class=` des descripteurs XML ; dans les `.ps1`, les noms `MINOS_*` écrits dans des littéraux (variables d'environnement, y compris dans le C# embarqué). Les littéraux de chaîne et les commentaires ne sont pas lus.
 
 Résultat au HEAD : **2 fichiers**, **16 identifiants distincts** et **8 références** `class=` de `plugin.xml`, **aucun faux positif** : `arm64`, `ARM64`, `MACOS_ARM64`, `System32`, `windowsSystem32` et les empreintes base64 ne sont pas retenus, alors qu'un motif naïf `[Mm][0-9]+` retient 30 occurrences de `arm64` et 26 de `System32`/`system32`.
+
+### Revérification au HEAD `349e4246` (tâche 1.1, 2026-10-24)
+
+Branche `refactor/retirer-les-jalons-des-identifiants`, empilée sur `refactor/mutualiser-les-caches-lru-et-nommer-les-additions-bornees` (75 commits depuis `5ce7b79b`). La méthode d'inventaire est désormais exécutée par le gate `scripts/quality/check-milestone-identifiers.py` (D6), lancé avec une liste vide. Sortie (une ligne par couple fichier-nom, première ligne et nombre d'occurrences dans le fichier), résumée :
+
+| Fichier | Ligne | Nom | Occurrences |
+|---|---|---|---|
+| `minos-bootstrap/…/DefaultMinosApplicationComposer.java` | 65, 71 | `qualifiedM24Descriptors`, `qualifiedM24Providers` | 1, 1 |
+| `minos-engine/…/BuildDescriptorPolicy.java` | 15, 29, 54, 59 | `M17_DEFAULT_FILE_NAMES`, `M24_ADDITIONAL_FILE_NAMES`, `m17Defaults`, `m24Defaults` | 3, 2, 1, 1 |
+| `minos-engine/…/ProjectFingerprintService.java` | 44 | `m24Defaults` | 1 |
+| `minos-engine/…/ProjectInvalidationService.java` | 36 | `m24Defaults` | 1 |
+| `minos-intellij/…/actions/MinosM21Actions.java` | nom de fichier, 15 | `MinosM21Actions`, `MinosM21Client` | 3, 9 |
+| `minos-intellij/…/protocol/MinosM21Client.java` | nom de fichier | `MinosM21Client` | 5 |
+| `minos-intellij/…/META-INF/plugin.xml` | 39 | `MinosM21Actions` (`class=`) | 8 |
+| `minos-provider-scip/…/runtime/ScipProjectSnapshotLifecycle.java` | 42 | `qualifiedM1Descriptors` | 1 |
+| `minos-provider-scip/…/ScipIndexerCatalog.java` | 41, 45, 50, 58, 63, 72 | `qualifiedM1Descriptors`, `registerQualifiedM1`, `qualifiedM17Providers`, `qualifiedM17Descriptors`, `qualifiedM24Providers`, `qualifiedM24Descriptors` | 2, 1, 3, 1, 2, 1 |
+| `minos-provider-scip/…/runtime/scip-java-windows-runner.ps1` | 101, 123, 129, 172 | `MINOS_M14_MAVEN_CMD`, `MINOS_M14_SCIP_JAVAC_EXE`, `MINOS_M14_SCIP_JAVAC_SCRIPT`, `MINOS_M14_BASH_EXE` | 4, 4, 2, 4 |
+| `minos-storage-local/…/FileProjectFingerprintSnapshotStore.java` | 74, 75 | `m24Defaults`, `m17Defaults` | 1, 1 |
+
+Résultat : **2 fichiers**, **16 identifiants distincts**, **8 références** `class=`, **0 faux positif** : identique au relevé de `5ce7b79b`. Les numéros de ligne cités plus bas (catalogue `:40-73`, `BuildDescriptorPolicy` `:15-59`, appelants, runner `:101-447`, `plugin.xml:38-49`, `DefaultMinosApplicationComposer.java:65,71,89`, `product-facts.py:58-71`) sont inchangés au HEAD. Écarts relevés :
+
+1. **Commentaires citant un jalon** : 111 lignes Java, pas 112 (même commande).
+2. **`check-jacoco.py`** cite `ScipIndexerCatalog` à la ligne `:106`, pas `:105` ; `FileProjectFingerprintSnapshotStore` reste à `:31`.
+3. **Périmètre lu par le gate** : `minos-*/src/main/**` et non `*/src/main/**` ; les 23 fichiers de `fixtures/*/src/main/**` sont des données de test (projets indexés par les tests), pas du code de production. Le gate lit en plus les fichiers `META-INF/services/*` (noms de classes) et les attributs de référence de classe autres que `class=` (`implementation=`, `serviceImplementation=`…), et tout `MINOS_*` d'un `.ps1`, `.ps1frag` ou `.ps1.template`, commentaires compris : aucun résultat supplémentaire au HEAD.
+4. **Noms cibles (D1)** : la table est retenue telle quelle après relecture des corps (voir D1).
 
 ### AUD-QUA-08 — confirmé, périmètre plus large que l'audit
 
@@ -75,15 +100,19 @@ Résultat au HEAD : **2 fichiers**, **16 identifiants distincts** et **8 référ
 | `M17_DEFAULT_FILE_NAMES` / `M24_ADDITIONAL_FILE_NAMES` | `LEGACY_FILE_NAMES` / `POLYGLOT_ADDITIONAL_FILE_NAMES` | idem ; contenu `:30-36` |
 | `MINOS_M14_*` | `MINOS_SCIP_JAVA_*` | D4 |
 
-Les noms définitifs sont arrêtés en tâche 1.1 ; la table est la proposition par défaut. Comportement constant : mêmes ensembles, même ordre, mêmes empreintes.
+Les noms définitifs sont arrêtés en tâche 1.1 : **la table est retenue telle quelle** (2026-10-24, relecture des corps au HEAD `349e4246` ; D2 tranchée, donc `javaTypeScriptDescriptors` / `registerJavaTypeScript`). Comportement constant : mêmes ensembles, même ordre, mêmes empreintes.
 
-### D2. Motif du gate et sort de `qualifiedM1Descriptors` — **décision en attente du propriétaire**
+### D2. Motif du gate et sort de `qualifiedM1Descriptors` — **tranchée le 2026-10-24 : un chiffre ou plus**
+
+**Décision du propriétaire (2026-10-24)** : motif à un chiffre ou plus. `qualifiedM1Descriptors` et `registerQualifiedM1` sont renommés avec les autres ; la liste décroissante du gate est vide à la fin du changement. Le scénario « Jalon à un seul chiffre » de la spécification est conservé.
 
 **Recommandation** : le motif « segment à jalon » de la méthode d'inventaire, **un chiffre ou plus**. Mesuré au HEAD : 0 faux positif. `qualifiedM1Descriptors` et `registerQualifiedM1` sont renommés avec les autres ; la liste décroissante est **vide** à la fin du changement.
 
 Alternative : deux chiffres seulement (lettre de l'audit) ; les deux méthodes `M1` restent, non gardées.
 
-### D3. Chaînes publiques citant un jalon — **décision en attente du propriétaire**
+### D3. Chaînes publiques citant un jalon — **tranchée le 2026-10-24 : hors lot**
+
+**Décision du propriétaire (2026-10-24)** : les chaînes publiques restent hors de ce lot ; la tâche 5.1 est cochée « sans objet » et la décision est dite dans `SUIVI.md`. Aucun second lot n'est ouvert par ce changement.
 
 **Recommandation** : **hors de ce lot**. Ce sont des sorties publiques (descriptions d'outils MCP, limitations du catalogue, messages), figées par quatre goldens et un gate ; une description changée n'est pas un ajout : elle demande une note de version et la régénération des goldens. Les valeurs `"M3"` et `"M5"` sont des **données** (version d'`Origin`) et restent exclues de tout lot. Le gate ne lit pas les littéraux.
 
@@ -107,7 +136,7 @@ Règle : le renommage d'une surface publique (CLI, API Java, MCP, variable docum
 
 ## Recouvrements avec d'autres changements actifs
 
-- **`fixer-la-langue-des-commentaires`** : exclut aussi les commentaires qui citent un jalon (`proposal.md:33`, `design.md:149`) : aucun des deux changements ne les garde, risque assumé des deux côtés. Sa liste de fichiers `mixed` cite `ProjectFingerprintService` et `ScipProjectSnapshotLifecycle` (`design.md:125`), que ce changement modifie sans les renommer ; si elle venait à citer un fichier renommé ici (`MinosM21Actions.java`, `MinosM21Client.java`), l'entrée est renommée dans la même PR.
+- **`fixer-la-langue-des-commentaires`** : **décision transverse du propriétaire (2026-10-24)** : les commentaires Java qui citent un jalon (111 lignes au HEAD `349e4246`) sont rattachés à `fixer-la-langue-des-commentaires`, pas à ce changement ; ce changement ne réécrit aucun commentaire, y compris la Javadoc des méthodes qu'il renomme (« Historical M17 policy… »). Sa liste de fichiers `mixed` cite `ProjectFingerprintService` et `ScipProjectSnapshotLifecycle` (`design.md:125`), que ce changement modifie sans les renommer ; si elle venait à citer un fichier renommé ici (`MinosM21Actions.java`, `MinosM21Client.java`), l'entrée est renommée dans la même PR.
 - **`garder-les-fonctions-de-scripts-jumelles`** : ne touche ni aux scripts de jalon gelés ni à `scripts/history/` ; aucun fichier commun.
 - **`decouper-les-classes-de-plus-de-800-lignes`** : modifie `DefaultMinosApplicationComposer` (construction de `ManagedScipProviderRuntimeManager`), près de `:65,71` : conflit textuel possible, sans conflit de fond. Aucune classe renommée ici ne dépasse 800 lignes (`FileProjectFingerprintSnapshotStore` : 766).
 - **`faire-consommer-l-indexation-aux-surfaces`** : modifie `MinosMcpTools` et `LocalMinosMultiRepositoryApi`, qui portent des chaînes à jalon ; recouvrement seulement si D3 retient un second lot, à ordonner après lui.

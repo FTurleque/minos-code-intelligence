@@ -189,6 +189,12 @@ jobs:
       - name: Bounded helpers gate self-test
         run: python scripts/quality/check-bounded-helpers.py --self-test
 
+      - name: Milestone identifiers gate (no milestone number in a production name)
+        run: python scripts/quality/check-milestone-identifiers.py
+
+      - name: Milestone identifiers gate self-test
+        run: python scripts/quality/check-milestone-identifiers.py --self-test
+
       - name: Partial-result consumer gate (heuristic, see its docstring for what it cannot see)
         run: python scripts/quality/check-partial-result-consumers.py
 
