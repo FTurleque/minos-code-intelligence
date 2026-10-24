@@ -576,6 +576,18 @@ Les deux changements sont implémentés sur une même branche ; aucun fichier de
 
 Preuves : rouge prouvé sur une copie mutée (six mutations : garde du HEAD code 0, garde modifié code 1 ; document versionné du HEAD refusé en nommant les quatre arêtes manquantes) ; `python scripts/architecture/check-module-boundaries.py` vert ; `python scripts/architecture/test_check_module_boundaries.py` 154 tests verts ; `check-current-docs.py` et `product-facts.py --check` verts. ADR : 0062 créé (Accepted), notes de mise en œuvre des ADR 0022 (A12), 0047 (ordre confirmé) et 0058 (A11) ; registre `arc42/09-decisions.md` complété (0047, 0058, 0060, 0062). Ordre des chantiers : `docs/project/roadmap/storage-hexagonal-2026-10/README.md`. **Fusionné** ([PR #534](https://github.com/FTurleque/minos-code-intelligence/pull/534), commit de fusion `6b60790e`, les treize checks verts dont `Verify (ubuntu-24.04)`, `Verify (windows-2022)` et `SonarCloud Code Analysis`) ; les deux changements sont archivés le 2026-10-22 (`openspec/changes/archive/2026-10-22-…`), la capacité `frontieres-de-modules` reçoit les cinq exigences.
 
+### Clôture du sprint 10 (2026-10-24, branche `fix/aligner-spotbugs-sur-la-base`)
+
+Le workflow `code-audit` en mode bloquant (`spotbugs_blocking=true`) échouait sur `develop` `3a3f2b70` (run 40046950803) : 22 alertes hors de la base `quality/spotbugs-baseline/`, signalées par les nouveaux détecteurs de SpotBugs 4.10.5, et 3 alertes de la base disparues. Les runs non bloquants ne l'avaient pas montré.
+
+| Alertes | Décision | Preuve |
+|---|---|---|
+| `USO_UNSAFE_METHOD_SYNCHRONIZATION` ×11, `LocalProjectRegistry` | **Corrigées** : verrou privé à la place des méthodes `synchronized` | `LocalProjectRegistryLockTest` : rouge avant correction (`TimeoutException` après 30 s quand un appelant tient le moniteur du registre), vert après |
+| `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE`, `PrivateLocalStorage.probeOwner` | **Corrigée** : `getParent()` lu une seule fois | rapport SpotBugs du module |
+| `AT_STALE_THREAD_WRITE_OF_PRIMITIVE` ×3, baux de `PostgresConnectionFactory` | **Corrigées** : champs `volatile`, lus par `close()` avant le contrôle du thread propriétaire | rapport SpotBugs du module |
+| `ENV_USE_PROPERTY_INSTEAD_OF_ENV` ×4, `UL_UNRELEASED_LOCK`, `EI_EXPOSE_REP` et `EI_EXPOSE_REP2` | **Figées dans la base** : la correction suggérée serait fausse ou sans objet | raisons par alerte : `docs/developer/quality/code-audit.md`, « SpotBugs : alertes figées après le 9 octobre » |
+| `PrivateLocalStorage.currentOwner` (NP), `ManagedScipProviderRuntimeManager.inspectJavaInstalled` (ENV), `ProcessIndexerExecutor.executePrepared` (`REC_CATCH_EXCEPTION`) | **Retirées de la base** : le code qui les portait a changé | — |
+
 ## Sprint 11 — Hygiène de fond (spécifié le 2026-10-13)
 
 Six changements OpenSpec, même branche. Aucun build, test ni gate exécuté.

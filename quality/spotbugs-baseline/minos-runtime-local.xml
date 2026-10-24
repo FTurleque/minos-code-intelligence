@@ -266,23 +266,6 @@
       <Message>Known null at ProcessIndexerExecutor.java:[line 621]</Message>
     </SourceLine>
   </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="8c514ba9502820b2f9c3677a6de8753c" cweid="396" rank="17" abbrev="REC" category="STYLE" priority="2" type="REC_CATCH_EXCEPTION" instanceOccurrenceMax="0">
-    <ShortMessage>java.lang.Exception est intercepté alors qu'Exception n'est jamais lancé</ShortMessage>
-    <LongMessage>La méthode com.minos.runtime.local.process.ProcessIndexerExecutor.executePrepared(IndexingRuntimePorts$IndexingExecutionRequest, ProcessIndexerExecutor$ProcessPlanTransformer, Path) intercepte Exception, mais Exception n'est pas lancé dans le bloc try/catch et RuntimeException n'est pas appelé</LongMessage>
-    <Class classname="com.minos.runtime.local.process.ProcessIndexerExecutor" primary="true">
-      <SourceLine classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="45" end="630" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java">
-        <Message>At ProcessIndexerExecutor.java:[lines 45-630]</Message>
-      </SourceLine>
-      <Message>In class com.minos.runtime.local.process.ProcessIndexerExecutor</Message>
-    </Class>
-    <Method isStatic="false" classname="com.minos.runtime.local.process.ProcessIndexerExecutor" signature="(Lcom/minos/orchestration/IndexingRuntimePorts$IndexingExecutionRequest;Lcom/minos/runtime/local/process/ProcessIndexerExecutor$ProcessPlanTransformer;Ljava/nio/file/Path;)Lcom/minos/orchestration/IndexingRuntimePorts$IndexingArtifact;" name="executePrepared" primary="true">
-      <SourceLine endBytecode="2567" classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="95" end="180" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="0" />
-      <Message>In method com.minos.runtime.local.process.ProcessIndexerExecutor.executePrepared(IndexingRuntimePorts$IndexingExecutionRequest, ProcessIndexerExecutor$ProcessPlanTransformer, Path)</Message>
-    </Method>
-    <SourceLine endBytecode="661" classname="com.minos.runtime.local.process.ProcessIndexerExecutor" start="165" end="165" sourcepath="com/minos/runtime/local/process/ProcessIndexerExecutor.java" sourcefile="ProcessIndexerExecutor.java" startBytecode="661" primary="true">
-      <Message>At ProcessIndexerExecutor.java:[line 165]</Message>
-    </SourceLine>
-  </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="7e07a46e43d289d0446f7d8555096e9b" cweid="440" rank="17" abbrev="DMI" category="STYLE" priority="2" type="DMI_HARDCODED_ABSOLUTE_FILENAME" instanceOccurrenceMax="0">
     <ShortMessage>Chemin absolu codé en dur dans le code</ShortMessage>
     <LongMessage>Chemin de fichier codé en dur dans le code de com.minos.runtime.local.sandbox.LinuxBubblewrapWorkerSandboxBackend.&lt;static initializer for LinuxBubblewrapWorkerSandboxBackend&gt;()</LongMessage>

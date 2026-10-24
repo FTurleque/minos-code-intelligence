@@ -82,7 +82,18 @@ python scripts/quality/audit-report-summary.py spotbugs --baseline-dir quality/s
 
 Une alerte est identifiée par son `instanceHash`, que SpotBugs conserve quand des lignes bougent ou que le reste de la classe change. La commande échoue sur toute alerte absente de la base (`NEW <module>: <motif> at <fichier>:<ligne>`) et compte les alertes de la base qui ont disparu. Vérifié le 9 octobre : 0 nouvelle sur le code courant, et une méthode `Boolean` renvoyant `null` ajoutée exprès est signalée (`NP_BOOLEAN_RETURN_NULL`, code de sortie 1). Le mode bloquant de `code-audit.yml` (`spotbugs_blocking`) applique cette comparaison.
 
-Une alerte corrigée doit être retirée de la base (régénérer le fichier du module avec le rapport du jour, réduit aux `BugInstance`). Une nouvelle alerte ne s'y ajoute pas en silence : on la corrige, ou on la justifie dans `quality/spotbugs-exclude.xml`. L'option `excludeBugsFile` du plugin Maven 4.10.4.1, essayée d'abord, n'excluait aucune alerte : la comparaison est faite par le script.
+Une alerte corrigée doit être retirée de la base (régénérer le fichier du module avec le rapport du jour, réduit aux `BugInstance`). Une nouvelle alerte ne s'y ajoute pas en silence : on la corrige, on exclut un faux positif dans `quality/spotbugs-exclude.xml`, ou on la fige dans la base avec sa raison écrite dans la table ci-dessous. L'option `excludeBugsFile` du plugin Maven 4.10.4.1, essayée d'abord, n'excluait aucune alerte : la comparaison est faite par le script.
+
+### SpotBugs : alertes figées après le 9 octobre
+
+Alertes ajoutées à la base parce que la correction suggérée par SpotBugs serait fausse ou sans objet ; chacune garde son `instanceHash` dans le fichier du module.
+
+| Module | Alerte | Emplacement | Raison |
+|---|---|---|---|
+| `minos-engine` | `ENV_USE_PROPERTY_INSTEAD_OF_ENV` (`TEMP`, `TMP`) | `PrivateLocalStorage.WindowsDacl.requireNoConditionalDeny(Path)` | Le fichier écrit par `icacls /save` doit aller dans le dossier temporaire du compte Windows. `java.io.tmpdir` peut être redéfini au lancement, et sans ces variables Windows peut le faire retomber sur son propre répertoire, partagé. |
+| `minos-provider-scip` | `ENV_USE_PROPERTY_INSTEAD_OF_ENV` (`JAVA_HOME`) | `ManagedScipProviderRuntimeManager.addProjectJdkDiagnostics`, `ScipJavaProcessPlanFactory.projectJava` | `JAVA_HOME` désigne le JDK du projet analysé, que scip-java doit utiliser. `java.home` est le JVM qui exécute MINOS : ce n'est pas le même JDK. |
+| `minos-engine` | `UL_UNRELEASED_LOCK` | `InMemoryIndexStateStore.acquireProjectLease(UUID)` | Le verrou est pris pour la durée d'un bail. C'est le `close()` du bail renvoyé qui le relâche, et seul son thread propriétaire peut l'appeler. |
+| `minos-application` | `EI_EXPOSE_REP`, `EI_EXPOSE_REP2` | `ProjectIndexingUseCase.Dependencies.projectRegistry` | Le record transporte des ports de service : il doit partager l'instance du registre, et un port ne se copie pas. Les autres ports injectés de la base ont la même raison. |
 
 ### SpotBugs : prouver le périmètre analysé
 
