@@ -352,7 +352,8 @@ if ($ExistingTag.Count -gt 0) { throw "Git tag $Tag already exists on origin wit
 $ReleaseArguments = @(
     'release','create',$Tag,$Setup,$SetupChecksum,$Zip,$ZipChecksum,$Sbom,$SbomChecksum,$Notices,$NoticesChecksum,
     $LiteZip,$LiteZipChecksum,$LiteSbom,$LiteSbomChecksum,$LiteNotices,$LiteNoticesChecksum,
-    '--repo',$Repository,'--target',$TargetCommit,'--title',"MINOS $Version",'--generate-notes'
+    '--repo',$Repository,'--target',$TargetCommit,'--title',"MINOS $Version",
+    '--notes',(Get-ReleaseIntegrityNotes -State $SetupSignatureState -Repository $Repository),'--generate-notes'
 )
 if ($Version -match '-') { $ReleaseArguments += '--prerelease' }
 Invoke-NativeChecked -File $Gh.Source -Arguments $ReleaseArguments -Failure "GitHub Release $Tag publication failed"

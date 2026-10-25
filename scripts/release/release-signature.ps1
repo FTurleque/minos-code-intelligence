@@ -4,14 +4,15 @@
 # exercised directly by scripts/release/test-release-signature.ps1 without a certificate or a built distribution.
 #
 # MINOS_REQUIRE_SIGNED_RELEASE says whether the release must be Authenticode-signed ('1') or not ('0' or unset).
-# MINOS_SIGNING_MODE names how it is signed. No mode is implemented yet (decision D2 of
-# attester-et-signer-la-release-windows): requiring a signature therefore fails before anything is built, instead of
-# publishing an unsigned release that would claim otherwise. Without the requirement nothing is signed half-way and
-# the release manifest records "unsigned".
+# MINOS_SIGNING_MODE names how it is signed. No mode is implemented: the release is not signed (decision D2 of
+# attester-et-signer-la-release-windows, accepted risk R-28 of docs/architecture/risks/register.md). Requiring a
+# signature therefore fails before anything is built, instead of publishing an unsigned release that would claim
+# otherwise. Without the requirement nothing is signed half-way, the release manifest records "unsigned" and the
+# release text says so (Get-ReleaseIntegrityNotes).
 
 Set-StrictMode -Version Latest
 
-# The signing modes this repository can actually perform. Empty until D2 is decided and wired (with its ADR).
+# The signing modes this repository can actually perform. Empty while R-28 is accepted; a mode comes with its ADR.
 $script:MinosSigningModes = @()
 
 function Get-ReleaseSignatureRequirement {
@@ -91,4 +92,26 @@ function Get-ReleaseSignatureState {
     Assert-ReleaseSigningConfigured -Required $true -Mode $Mode
     Assert-AuthenticodeSigned -Path $Executable -Reader $Reader
     return 'signed'
+}
+
+function Get-ReleaseIntegrityNotes {
+    <#
+    .SYNOPSIS
+        The text the GitHub release opens with: its Authenticode state, then how to verify a download.
+    .DESCRIPTION
+        The state comes from Get-ReleaseSignatureState and is written, never presumed: an unsigned release says it
+        is unsigned. The text lives in release-integrity-notes-<state>.md, read as UTF-8 by Windows PowerShell 5.1
+        and PowerShell 7 alike; the generated release notes follow it.
+    #>
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)][ValidateSet('signed', 'unsigned')][string] $State,
+        [Parameter(Mandatory = $true)][ValidatePattern('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')][string] $Repository
+    )
+
+    $template = Join-Path $PSScriptRoot "release-integrity-notes-$State.md"
+    if (-not (Test-Path -LiteralPath $template -PathType Leaf)) { throw "Release integrity notes are missing: $template" }
+    $text = [System.IO.File]::ReadAllText($template, [System.Text.Encoding]::UTF8)
+    if (-not $text.Contains('{repository}')) { throw "Release integrity notes name no repository to verify against: $template" }
+    return $text.Replace('{repository}', $Repository).Trim()
 }
