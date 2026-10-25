@@ -21,8 +21,9 @@ class MinosMcpHandshakeProbeRefusalTest {
         Path launcher = temp.resolve("missing-launcher");
         Path home = temp.resolve("home");
 
-        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                () -> MinosMcpHandshakeProbe.main(new String[] {launcher.toString(), home.toString()}));
+        String[] arguments = {launcher.toString(), home.toString()};
+
+        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () -> MinosMcpHandshakeProbe.main(arguments));
 
         assertEquals("MINOS launcher is missing: missing-launcher", refusal.getMessage());
         assertFalse(refusal.getMessage().contains(temp.toString()), refusal.getMessage());
@@ -35,8 +36,9 @@ class MinosMcpHandshakeProbeRefusalTest {
         Path blocker = Files.writeString(temp.resolve("regular-file"), "x");
         Path home = blocker.resolve("home");
 
-        IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> MinosMcpHandshakeProbe.main(new String[] {launcher.toString(), home.toString()}));
+        String[] arguments = {launcher.toString(), home.toString()};
+
+        IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> MinosMcpHandshakeProbe.main(arguments));
 
         assertEquals("Unable to create MINOS_HOME: home", refusal.getMessage());
         assertFalse(refusal.getMessage().contains(temp.toString()), refusal.getMessage());

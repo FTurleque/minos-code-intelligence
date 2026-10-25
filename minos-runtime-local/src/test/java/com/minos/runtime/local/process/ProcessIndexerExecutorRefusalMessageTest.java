@@ -43,8 +43,9 @@ class ProcessIndexerExecutorRefusalMessageTest {
         Path generated = project.resolve("out").resolve("index.scip");
         ProcessIndexerExecutor executor = executor(project, generated, "empty");
 
-        IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> UnboundedProcessForTests.run(executor, request(project)));
+        IndexingExecutionRequest indexing = request(project);
+
+        IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> UnboundedProcessForTests.run(executor, indexing));
 
         assertEquals("provider did not produce a valid SCIP artifact: size=0/"
                 + IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES + " file=index.scip", refusal.getMessage());
@@ -60,8 +61,9 @@ class ProcessIndexerExecutorRefusalMessageTest {
                         command(project.resolve("elsewhere.scip"), "empty"), project, Map.of(), generated,
                         Duration.ofSeconds(30)));
 
-        IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> UnboundedProcessForTests.run(executor, request(project)));
+        IndexingExecutionRequest indexing = request(project);
+
+        IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> UnboundedProcessForTests.run(executor, indexing));
 
         assertEquals("provider did not produce a valid SCIP artifact: index.scip", refusal.getMessage());
         assertFalse(refusal.getMessage().contains(temp.toString()), refusal.getMessage());
@@ -76,8 +78,9 @@ class ProcessIndexerExecutorRefusalMessageTest {
                 (request, runDirectory) -> new IndexerProcessPlan(
                         command(generated, null), missing, Map.of(), generated, Duration.ofSeconds(30)));
 
-        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                () -> UnboundedProcessForTests.run(executor, request(project)));
+        IndexingExecutionRequest indexing = request(project);
+
+        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () -> UnboundedProcessForTests.run(executor, indexing));
 
         assertEquals("provider working directory is missing: missing-workdir", refusal.getMessage());
         assertFalse(refusal.getMessage().contains(temp.toString()), refusal.getMessage());
@@ -92,8 +95,8 @@ class ProcessIndexerExecutorRefusalMessageTest {
         Path generated = output.resolve("index.scip");
         ProcessIndexerExecutor executor = executor(project, generated, null);
         try {
-            IOException refusal = assertThrows(IOException.class,
-                    () -> UnboundedProcessForTests.run(executor, request(project)));
+            IndexingExecutionRequest indexing = request(project);
+            IOException refusal = assertThrows(IOException.class, () -> UnboundedProcessForTests.run(executor, indexing));
 
             assertEquals("MINOS post-execution cleanup failed for run directory " + PROVIDER
                     + "; a preserved provider artifact backup may remain as preexisting-artifact.scip",
@@ -113,7 +116,7 @@ class ProcessIndexerExecutorRefusalMessageTest {
         }
     }
 
-    private ProcessIndexerExecutor executor(Path project, Path generated, String mode) throws IOException {
+    private ProcessIndexerExecutor executor(Path project, Path generated, String mode) {
         return new ProcessIndexerExecutor(PROVIDER, temp.resolve("home"),
                 (request, runDirectory) -> new IndexerProcessPlan(
                         command(generated, mode), project, Map.of(), generated, Duration.ofSeconds(30)));

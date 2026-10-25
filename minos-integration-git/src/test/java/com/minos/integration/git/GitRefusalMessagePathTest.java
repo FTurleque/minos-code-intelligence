@@ -20,8 +20,10 @@ class GitRefusalMessagePathTest {
     void aProjectRootThatIsAFileIsRefusedByItsName() throws Exception {
         Path file = Files.writeString(temp.resolve("not-a-repository.txt"), "x");
 
+        GitIntelligenceService service = new GitIntelligenceService();
+
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                () -> new GitIntelligenceService().inspect(file));
+                () -> service.inspect(file));
 
         assertEquals("projectRoot must be an existing directory: not-a-repository.txt", refusal.getMessage());
         assertFalse(refusal.getMessage().contains(temp.toString()), refusal.getMessage());

@@ -10,6 +10,8 @@ import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import com.minos.storage.local.store.SnapshotRetentionPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -23,6 +25,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -38,29 +41,20 @@ class StorageEntryRefusalMessagePathTest {
     @TempDir
     Path temp;
 
-    @Test
-    void aRegistryEntryWithBothRootsIsRefusedByItsFileName() throws Exception {
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            rootRelativePath=project;rootPath=/legacy/project | registry project contains both legacy and portable roots: %s
+            rootRelativePath=project                          | portable project registry requires runtime path mapping: %s
+            displayName=Project                               | missing registry project root in %s
+            """)
+    void aRegistryEntryWithoutAUsableRootIsRefusedByItsFileName(String properties, String expected) throws Exception {
         LocalProjectRegistry registry = new LocalProjectRegistry(temp.resolve("registry"));
         UUID id = UUID.randomUUID();
-        writeEntry(id, "rootRelativePath=project\nrootPath=/legacy/project\n");
+        writeEntry(id, properties.replace(';', '\n') + "\n");
 
         IOException refusal = assertThrows(IOException.class, () -> registry.findProject(id));
 
-        assertEquals("registry project contains both legacy and portable roots: " + id + ".properties",
-                refusal.getMessage());
-        assertNoAbsolutePath(refusal);
-    }
-
-    @Test
-    void aPortableEntryWithoutPathMappingIsRefusedByItsFileName() throws Exception {
-        LocalProjectRegistry registry = new LocalProjectRegistry(temp.resolve("registry"));
-        UUID id = UUID.randomUUID();
-        writeEntry(id, "rootRelativePath=project\n");
-
-        IOException refusal = assertThrows(IOException.class, () -> registry.findProject(id));
-
-        assertEquals("portable project registry requires runtime path mapping: " + id + ".properties",
-                refusal.getMessage());
+        assertEquals(expected.formatted(id + ".properties"), refusal.getMessage());
         assertNoAbsolutePath(refusal);
     }
 
@@ -77,18 +71,6 @@ class StorageEntryRefusalMessagePathTest {
         IOException refusal = assertThrows(IOException.class, () -> registry.findProject(id));
 
         assertEquals("invalid portable project root in " + id + ".properties", refusal.getMessage());
-        assertNoAbsolutePath(refusal);
-    }
-
-    @Test
-    void anEntryWithoutRootIsRefusedByItsFileName() throws Exception {
-        LocalProjectRegistry registry = new LocalProjectRegistry(temp.resolve("registry"));
-        UUID id = UUID.randomUUID();
-        writeEntry(id, "displayName=Project\n");
-
-        IOException refusal = assertThrows(IOException.class, () -> registry.findProject(id));
-
-        assertEquals("missing registry project root in " + id + ".properties", refusal.getMessage());
         assertNoAbsolutePath(refusal);
     }
 
@@ -199,7 +181,7 @@ class StorageEntryRefusalMessagePathTest {
                 Files.delete(file);
             }
         }
-        assertTrue(deleted != null, "a published snapshot file was expected");
+        assertNotNull(deleted, "a published snapshot file was expected");
         return deleted;
     }
 
@@ -211,7 +193,7 @@ class StorageEntryRefusalMessagePathTest {
                 Files.delete(file);
             }
         }
-        assertTrue(deleted != null, "a published snapshot file was expected");
+        assertNotNull(deleted, "a published snapshot file was expected");
         return deleted;
     }
 

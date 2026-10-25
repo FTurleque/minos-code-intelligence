@@ -21,8 +21,10 @@ class ProjectRootRefusalMessageTest {
     void discoveryRefusesARegularFileByItsName() throws Exception {
         Path file = Files.writeString(temp.resolve("not-a-project.txt"), "x");
 
+        ProjectDiscoveryService discovery = new ProjectDiscoveryService();
+
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                () -> new ProjectDiscoveryService().discover(file));
+                () -> discovery.discover(file));
 
         assertEquals("projectRoot must be an existing directory: not-a-project.txt", refusal.getMessage());
         assertFalse(refusal.getMessage().contains(temp.toString()), refusal.getMessage());
@@ -32,8 +34,11 @@ class ProjectRootRefusalMessageTest {
     void fingerprintRefusesAMissingRootByItsName() {
         Path missing = temp.resolve("missing-project");
 
+        ProjectFingerprintService fingerprints = new ProjectFingerprintService();
+        Path scope = Path.of("");
+
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                () -> new ProjectFingerprintService().captureScope(missing, Path.of("")));
+                () -> fingerprints.captureScope(missing, scope));
 
         assertEquals("projectRoot must be an existing directory: missing-project", refusal.getMessage());
         assertFalse(refusal.getMessage().contains(temp.toString()), refusal.getMessage());
