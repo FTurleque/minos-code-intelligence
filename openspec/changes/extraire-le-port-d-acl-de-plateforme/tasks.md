@@ -27,10 +27,10 @@ Ordre dans chaque section : rouge, correction, preuve. Les tests vivent dans la 
 
 - [x] 4.1 [AUD-ARC-05] Retirer `WindowsDacl` de `PrivateLocalStorage`. `PROCESS_LAUNCHERS` = `{}` ; `test_the_real_private_storage_has_its_two_icacls_sites` devient « aucun lanceur ». `RUNTIME_LOCAL_GUARDED_PACKAGES` + `acl`, avec un cas refusé et un cas accepté dans l'auto-test (D4). Mutation sur copie : un `new ProcessBuilder` remis dans `PrivateLocalStorage` fait échouer A12.
 - [x] 4.2 [SH-08] `private-io-allowlist.json` : `PrivateLocalStorage` `Files.createTempFile` 4 → 3, nouvelle entrée de 1 pour `WindowsIcaclsAccessControl` avec sa raison (D6). Base SpotBugs : 8 entrées déplacées (D6), raisons dans `docs/developer/quality/code-audit.md`. Preuve : `check-private-io.py` et son auto-test verts.
-- [ ] 4.3 [SH-08] JaCoCo : re-mesurer `confined-io-primitives` sur les deux systèmes, et placer `com/minos/runtime/local/acl/` dans une portée avec plancher mesuré. Preuve : `check-jacoco.py` vert sur les rapports agrégés Linux et Windows.
+- [x] 4.3 [SH-08] JaCoCo : re-mesurer `confined-io-primitives` sur les deux systèmes, et placer `com/minos/runtime/local/acl/` dans une portée avec plancher mesuré. Preuve : `check-jacoco.py` vert sur les rapports agrégés Linux et Windows.
 
 ## 5. Clôture
 
 - [x] 5.1 ADR 0068 : note de mise en œuvre (A12 vide, port découvert par `ServiceLoader`, cartographie de `hosted` sans mécanisme d'E/S de plateforme). `docs/developer/quality-gates.md` (A10, A12). Rejouer `python .claude/scripts/run_gates.py`, `check-current-docs.py` et `product-facts.py --check`.
 - [x] 5.2 Mesure de non-régression : rejouer, sous Windows, le premier `minos index` de `fixtures/typescript/typescript-inheritance` sous JFR (80 objets durcis attendus, aucun `icacls` lancé depuis `com.minos.io`). Rejouer aussi un `MINOS_HOME` de 140 caractères, où l'index doit réussir.
-- [ ] 5.3 `docs/project/audits/2026-10-10/SUIVI.md` (AUD-ARC-05 fermable, compteurs A12 2 → 0) et plan du chantier (SH-08). `openspec validate --all --strict`, `archgate check`, `mvnw verify` complet (Windows ; Linux en conteneur ou par la CI).
+- [x] 5.3 `docs/project/audits/2026-10-10/SUIVI.md` (AUD-ARC-05 fermable, compteurs A12 2 → 0) et plan du chantier (SH-08). `openspec validate --all --strict`, `archgate check`, `mvnw verify` complet (Windows ; Linux en conteneur ou par la CI).
