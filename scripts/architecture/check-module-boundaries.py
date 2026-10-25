@@ -395,10 +395,11 @@ def check_source_boundaries(root: Path = ROOT, group_id: str | None = None) -> N
 
 RUNTIME_LOCAL_MODULE = "minos-runtime-local"
 RUNTIME_LOCAL_PACKAGE = "runtime.local"
-RUNTIME_LOCAL_GUARDED_PACKAGES = ("process", "sandbox", "workspace")
+RUNTIME_LOCAL_GUARDED_PACKAGES = ("acl", "process", "sandbox", "workspace")
 # The only types of the guarded packages another module may name. The list only grows by a visible edit:
-# every other public type there (process environment, sandbox plan transformer, workspace deletion, cgroup
-# and Job Object ownership) is public for the sub-packages of the module, not for its callers.
+# every other public type there (icacls launcher and platform access control, process environment, sandbox plan
+# transformer, workspace deletion, cgroup and Job Object ownership) is public for the sub-packages of the module or
+# for ServiceLoader, not for its callers.
 RUNTIME_LOCAL_EXPORTED_TYPES = frozenset({
     "process.BoundedProcessOutput",
     "process.CommandLocator",
@@ -571,13 +572,10 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
 }
 
 # A12 / AUD-ARC-05, ADR 0068 — classes of the inner layers that launch a process (module/name.Type), with their number
-# of launch sites.
+# of launch sites. Empty: the Windows ACL mechanism of private storage is the PlatformAccessControl port, provided by
+# minos-runtime-local (com.minos.runtime.local.acl).
 PROCESS_LAUNCHER_MODULES = ("minos-domain", ENGINE_MODULE, APPLICATION_MODULE)
-PROCESS_LAUNCHERS: dict[str, int] = {
-    # Windows ACL primitive: icacls /inheritance:d (protect) and icacls /save (read the DACL). ADR 0068 moves it to a
-    # platform port provided by minos-runtime-local.
-    "minos-engine/io.PrivateLocalStorage": 2,
-}
+PROCESS_LAUNCHERS: dict[str, int] = {}
 PROCESS_LAUNCH = re.compile(r"\bProcessBuilder\b|\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\b")
 PROCESS_LAUNCH_SITE = re.compile(r"\bnew\s+ProcessBuilder\b|\bProcessBuilder\s*::\s*new\b"
                                  r"|\bProcessBuilder\s*\.\s*startPipeline\b"

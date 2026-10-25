@@ -658,7 +658,7 @@ Quatre phases, chacune spécifiée en OpenSpec, implémentée par lots et valid�
 | Constat | Phase | Changement OpenSpec | Statut | PR / commit |
 |---|---|---|---|---|
 | AUD-ARC-01, -05, -08 | 1 | `rendre-les-cliquets-d-architecture-etanches` | **fusionné** le 2026-10-25, treize checks verts (SonarCloud : 0 nouveau problème) | [PR #563](https://github.com/FTurleque/minos-code-intelligence/pull/563), fusion `6566ddda` |
-| AUD-ARC-05 | 2 | `extraire-le-port-d-acl-de-plateforme` (SH-08) | spécifié, mesure faite (ci-dessous) | — |
+| AUD-ARC-05 | 2 | `extraire-le-port-d-acl-de-plateforme` (SH-08) | implémenté en local, non poussé ; A12 passe de 1 classe et 2 sites à 0 | — |
 | AUD-ARC-12 | — | aucun | **clos par décision documentée** : la convention de préfixe de module ne vaut que pour les nouveaux packages ([ADR 0068](../../../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 5, décision D4 du 2026-10-22) ; renommer les racines existantes contredirait l'ADR 0044. La règle A14 empêche toute nouvelle racine | — |
 
 ### Phase 1 — cliquets étanches (2026-10-25, HEAD de départ `dedb219e`)
@@ -709,6 +709,41 @@ Mesuré sous Windows 10 (poste du propriétaire) sur `develop` `6566ddda`, avec 
 - **Non mesuré** : un dépôt Java réel sous Windows (voie Docker de l'ADR 0060, où le durcissement est POSIX et ne lance aucun processus).
 
 **Pondération de SH-08** : environ 80 objets et 164 appels `icacls` par index, refaits à chaque processus, pour environ 12 % du temps d'un petit index. Le port sort ce mécanisme du moteur (A12 vide), ce qui est le but de SH-08. Il permet aussi de remplacer `icacls` plus tard, par exemple par un appel natif, sans toucher au moteur ; ce remplacement est hors de SH-08. Le défaut des chemins longs entre dans SH-08, parce que le lanceur déplacé est le seul endroit où le corriger.
+
+### Phase 2 — SH-08 implémenté (2026-10-25, branche `refactor/extraire-le-port-d-acl-de-plateforme`)
+
+Décisions du propriétaire du 2026-10-25 : D1, le port est découvert par `ServiceLoader` ; D2, la doublure de test vit dans le `test-jar` du moteur.
+
+| Cliquet | Avant | Après |
+|---|---|---|
+| A12 | 1 classe (`PrivateLocalStorage`), 2 sites | **0 classe, 0 site** : le moteur ne lance plus aucun processus |
+| A10 | 3 packages gardés | 4 : `acl` s'ajoute, sans type exporté |
+| A16 | 4 appels `ServiceLoader.load` | 5 : la découverte du port, avec le chargeur de `PrivateLocalStorage` |
+| A11, A13 | inchangés | inchangés |
+
+Preuves (poste Windows, worktree `minos-wt-sh08`) :
+
+- **Rouges** :
+  - le test de découverte ne compile pas contre le moteur de `develop` ;
+  - sans le préfixe `\\?\`, les tests de forme longue échouent et le durcissement d'un dossier sous un chemin de plus de 260 caractères tombe en erreur ;
+  - une doublure altérée (`/inheritance:e`) fait échouer le test de parité ;
+  - `new ProcessBuilder("icacls.exe")` remis dans `PrivateLocalStorage` fait échouer A12 (auto-test).
+- **Verts sous Windows** :
+  - `minos-engine` 857 tests, dont `PrivateLocalStorageWindowsAclTest` 20/20 ;
+  - `minos-runtime-local`, dont `WindowsIcaclsAccessControlTest` 10/10 (le test de lecture de DACL déplacé), `WindowsIcaclsParityTest` 2/2, `WindowsIcaclsTest` 7/7 (1 sauté, réservé à POSIX), `WindowsAclGrantsTest` 10/10 et `WindowsAppContainerWorkerSandboxBackendTest` 15/15 ;
+  - `minos-storage-local` 405, `minos-storage-postgresql` 362, `minos-application` 395, `minos-integration-git` 50 et `minos-bootstrap` 120 tests, dont `PlatformAccessControlRegistrationTest` (une seule implémentation découverte) ;
+  - les 95 classes qui échouaient sans mécanisme passent avec la doublure.
+- **Garde d'E/S privées** : l'entrée `Files.createTempFile` de `PrivateLocalStorage` passe de 4 à 3, et une entrée de 1 est créée pour `WindowsIcaclsAccessControl` (fichier SDDL).
+- **SpotBugs** (profil `audit-spotbugs`, moteur et runtime local) : 0 nouvelle alerte et 0 disparue, après le déplacement des 2 entrées `ENV_USE_PROPERTY_INSTEAD_OF_ENV` (`TEMP`, `TMP`) de la base du moteur vers celle du runtime local.
+- **Gates** : `run_gates.py` 54/54, `openspec validate --all --strict`, `archgate check` 20/20.
+- **Bout en bout avec l'implémentation réelle** : `WindowsPrivateStorageEndToEndTest` 5/5 (refus conditionnel explicite et hérité conservés, autorisation conditionnelle héritée retirée, protection contre un octroi héritable ajouté plus tard).
+- **`mvnw verify` complet sous Windows** : vert, 33 min. `check-jacoco.py` est vert sur le rapport agrégé Windows. `confined-io-primitives` est à 0,849 / 0,748 (planchers 0,78 / 0,68), et `com/minos/runtime/local/acl/` à 1,000 / 0,848 (83 lignes, 46 branches).
+- **Mesure de non-régression** (JAR de la branche, JFR, `MINOS_HOME` de 144 caractères) : le premier `minos index` de `fixtures/typescript/typescript-inheritance` réussit, alors que le même cas échouait avant le changement. Il durcit 81 objets ; la réindexation en durcit 33. Les 172 lancements d'`icacls` du premier index ont tous pour cadre `com.minos.runtime.local.acl.WindowsIcacls.run`, et aucun n'est lancé depuis `com.minos.io`.
+- **Revue de sécurité** (agent `minos-security-reviewer`), un défaut reproduit et corrigé : avec le préfixe `\\?\`, `icacls` ne normalise plus les noms. Pour `foo.`, Java agissait sur `foo` et `icacls` sur `foo.`. Le lanceur refuse donc avant tout processus un nom qui finit par un point ou une espace, ainsi que les noms de périphériques (`CON`, `NUL`, `COM1`…). Corrigés au passage :
+  - `icacls` ne reçoit plus que `SystemRoot` dans son environnement. Le test a montré qu'un `environment().get("SystemRoot")` rend `null` sous Windows, ce qui aurait lancé `icacls` sans aucune variable ;
+  - les erreurs du fichier SDDL ne portent plus de chemin, et sa suppression ne masque plus le résultat de la lecture.
+- **Revue d'architecture** (agent `minos-architecture-reviewer`) : aucun constat bloquant sur le code. Le design, la tâche 3.2, la vue des blocs (arc42 § 5) et la note PIT de `code-audit.md` sont alignés sur l'enregistrement réel de la doublure.
+- **Non vérifié en local** : la mesure Linux de couverture du package `acl`, nécessaire au plancher de sa portée JaCoCo (tâche 4.3, à faire avec le rapport agrégé Linux de la CI). `OrphanAppContainerGrantDiagnosticTest` échoue dans un shell sans `powershell.exe` dans le `PATH` (le test lance l'exécutable par son nom), et passe quand il y est ; le fait est antérieur au changement.
 
 ## Seconde contre-vérification des changements non implémentés (2026-10-22, HEAD `5ce7b79b`)
 

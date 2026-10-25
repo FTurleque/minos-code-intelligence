@@ -184,6 +184,12 @@ L'ordre des tâches et leurs prérequis sont dans [le plan du chantier stockage]
 - Aucun contrôle automatique du confinement de JGit à `minos-integration-git`, ni des critères propres à la fusion du stockage (un seul module de stockage, aucune dépendance directe entre backends), vérifiables seulement une fois la fusion réalisée.
 - Revue : un module nouveau protège un invariant réel ; un nouveau package est déclaré par un seul module, sous l'espace de noms de ce module ; toute ligne ajoutée à `PACKAGE_ROOTS_BY_MODULE`, `PROCESS_LAUNCHERS`, `ENGINE_TYPES_NAMED_BY_SURFACE` ou `ADAPTER_TYPES_NAMED_BY_ADAPTER` cite sa raison ; la fusion du stockage ne crée aucune classe de production dans `com.minos.storage` ni de second bootstrap, et le mode local reste utilisable sans PostgreSQL.
 
+## Mise en œuvre
+
+**§ 2, port d'E/S de plateforme (SH-08, AUD-ARC-05, changement OpenSpec `extraire-le-port-d-acl-de-plateforme`)** : `minos-domain`, `minos-engine` et `minos-application` ne lancent aucun processus ; `PROCESS_LAUNCHERS` (A12) est vide. Le mécanisme d'ACL Windows du stockage privé est le port `com.minos.io.PlatformAccessControl`. Son implémentation `com.minos.runtime.local.acl.WindowsIcaclsAccessControl` est fournie par `minos-runtime-local` et enregistrée dans `META-INF/services`. `PrivateLocalStorage` la découvre une fois par processus, avec son propre chargeur de classes : c'est l'injection retenue, parce que le stockage privé sert avant toute composition (`MinosLauncher`, pont NEXUS). Sur un système de fichiers à ACL, aucune implémentation, ou plusieurs, fait échouer le durcissement. Le lanceur d'`icacls` est unique dans `minos-runtime-local`, partagé avec les octrois du bac à sable, et passe la cible sous sa forme longue (`\\?\`). Le package `acl` est gardé par A10. Les modules qui ne voient pas `minos-runtime-local` testent avec la doublure `com.minos.testsupport.IcaclsTestAccessControl` du `test-jar` du moteur, qu'un test de parité garde alignée.
+
+**§ 3, `hosted`** : la cartographie de SH-08 ne trouve dans `com.minos.hosted` ni lancement de processus, ni ACL, ni écriture de fichier. Le package reste dans `minos-engine`.
+
 ## Écarts constatés
 
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.

@@ -109,7 +109,7 @@ Ces arêtes sont en pointillés dans le diagramme et ne comptent pas dans la pol
 |---|---|---|
 | `minos-application` | `minos-bootstrap` | `com.minos.application.MinosApplicationComposer` |
 | `minos-cli` | `minos-app` | `com.minos.cli.McpLaunchRoute` |
-| `minos-engine` | `minos-runtime-local` | `com.minos.orchestration.ExecutionPathIdentityProvider` |
+| `minos-engine` | `minos-runtime-local` | `com.minos.io.PlatformAccessControl`, `com.minos.orchestration.ExecutionPathIdentityProvider` |
 | `minos-engine` | `minos-storage-postgresql` | `com.minos.storage.StorageBackendProvider` |
 
 Le sens d'une flèche pleine est **module → dépendance directe** ; une flèche en pointillés va

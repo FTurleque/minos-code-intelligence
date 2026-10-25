@@ -1,5 +1,6 @@
 package com.minos.runtime.local.sandbox;
 
+import com.minos.runtime.local.acl.WindowsIcacls;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -31,6 +32,8 @@ class WindowsAclGrantsTest {
 
     private static final String SID = "S-1-5-21-1111111111-2222222222-3333333333-1001";
     private static final String SYSTEM_ROOT = "SYSROOT";
+    private static final Path TARGET = Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath()
+            .resolve("target-dir");
 
     @Test
     void aGrantIsAdditiveAndNamesTheIdentityBySid() {
@@ -40,11 +43,11 @@ class WindowsAclGrantsTest {
             return new FinishedProcess(0);
         });
 
-        assertTrue(grants.grant(Path.of("target-dir"), SID, "(OI)(CI)F"));
+        assertTrue(grants.grant(TARGET, SID, "(OI)(CI)F"));
 
         assertEquals(List.of(
                 Path.of(SYSTEM_ROOT, "System32", "icacls.exe").toString(),
-                Path.of("target-dir").toString(), "/grant", "*" + SID + ":(OI)(CI)F", "/q"), launched.getFirst());
+                WindowsIcacls.extendedLength(TARGET.toString()), "/grant", "*" + SID + ":(OI)(CI)F", "/q"), launched.getFirst());
     }
 
     @Test
@@ -55,11 +58,11 @@ class WindowsAclGrantsTest {
             return new FinishedProcess(0);
         });
 
-        assertTrue(grants.remove(Path.of("target-dir"), SID));
+        assertTrue(grants.remove(TARGET, SID));
 
         assertEquals(List.of(
                 Path.of(SYSTEM_ROOT, "System32", "icacls.exe").toString(),
-                Path.of("target-dir").toString(), "/remove:g", "*" + SID, "/q"), launched.getFirst());
+                WindowsIcacls.extendedLength(TARGET.toString()), "/remove:g", "*" + SID, "/q"), launched.getFirst());
     }
 
     @Test
@@ -71,8 +74,8 @@ class WindowsAclGrantsTest {
                 return new FinishedProcess(0);
             });
 
-            assertFalse(grants.grant(Path.of("target-dir"), SID, "(RX)"), "SystemRoot=" + systemRoot);
-            assertFalse(grants.remove(Path.of("target-dir"), SID), "SystemRoot=" + systemRoot);
+            assertFalse(grants.grant(TARGET, SID, "(RX)"), "SystemRoot=" + systemRoot);
+            assertFalse(grants.remove(TARGET, SID), "SystemRoot=" + systemRoot);
             assertFalse(launched.get(), "no process may start without a known Windows directory");
         }
     }
@@ -83,7 +86,7 @@ class WindowsAclGrantsTest {
         WindowsAclGrants grants = new WindowsAclGrants(() -> SYSTEM_ROOT, command -> process, Duration.ofMillis(100));
 
         long started = System.nanoTime();
-        boolean granted = grants.grant(Path.of("target-dir"), SID, "(RX)");
+        boolean granted = grants.grant(TARGET, SID, "(RX)");
 
         assertFalse(granted);
         assertTrue(process.killed.get(), "the process must be killed once the deadline has passed");
@@ -93,8 +96,8 @@ class WindowsAclGrantsTest {
 
     @Test
     void aNonZeroExitCodeIsNotGranted() {
-        assertFalse(grants(SYSTEM_ROOT, command -> new FinishedProcess(5)).grant(Path.of("d"), SID, "(RX)"));
-        assertFalse(grants(SYSTEM_ROOT, command -> new FinishedProcess(5)).remove(Path.of("d"), SID));
+        assertFalse(grants(SYSTEM_ROOT, command -> new FinishedProcess(5)).grant(TARGET, SID, "(RX)"));
+        assertFalse(grants(SYSTEM_ROOT, command -> new FinishedProcess(5)).remove(TARGET, SID));
     }
 
     @Test
@@ -103,14 +106,14 @@ class WindowsAclGrantsTest {
             throw new IOException("cannot start");
         });
 
-        assertFalse(grants.grant(Path.of("d"), SID, "(RX)"));
+        assertFalse(grants.grant(TARGET, SID, "(RX)"));
     }
 
     @Test
     void anInterruptedWaitIsNotGrantedAndKeepsTheInterruption() {
         WindowsAclGrants grants = grants(SYSTEM_ROOT, command -> new InterruptedProcess());
         try {
-            assertFalse(grants.grant(Path.of("d"), SID, "(RX)"));
+            assertFalse(grants.grant(TARGET, SID, "(RX)"));
             assertTrue(Thread.currentThread().isInterrupted(), "the interruption must be preserved");
         } finally {
             Thread.interrupted();
@@ -125,10 +128,23 @@ class WindowsAclGrantsTest {
             return new FinishedProcess(0);
         });
 
-        assertFalse(grants.grant(Path.of("d"), "Everyone", "(RX)"));
-        assertFalse(grants.grant(Path.of("d"), "*S-1-1-0", "(RX)"));
-        assertFalse(grants.grant(Path.of("d"), SID, "F /T"));
-        assertFalse(grants.remove(Path.of("d"), "S-1-1-0 /T"));
+        assertFalse(grants.grant(TARGET, "Everyone", "(RX)"));
+        assertFalse(grants.grant(TARGET, "*S-1-1-0", "(RX)"));
+        assertFalse(grants.grant(TARGET, SID, "F /T"));
+        assertFalse(grants.remove(TARGET, "S-1-1-0 /T"));
+        assertFalse(launched.get());
+    }
+
+    @Test
+    void aRelativeTargetIsNotGrantedAndStartsNoProcess() {
+        AtomicBoolean launched = new AtomicBoolean();
+        WindowsAclGrants grants = grants(SYSTEM_ROOT, command -> {
+            launched.set(true);
+            return new FinishedProcess(0);
+        });
+
+        assertFalse(grants.grant(Path.of("target-dir"), SID, "(RX)"));
+        assertFalse(grants.remove(Path.of("target-dir"), SID));
         assertFalse(launched.get());
     }
 
@@ -155,7 +171,7 @@ class WindowsAclGrantsTest {
 
     // ------------------------------------------------------------------------------ helpers
 
-    private static WindowsAclGrants grants(String systemRoot, WindowsAclGrants.Launcher launcher) {
+    private static WindowsAclGrants grants(String systemRoot, WindowsIcacls.Launcher launcher) {
         return new WindowsAclGrants(() -> systemRoot, launcher, Duration.ofSeconds(5));
     }
 

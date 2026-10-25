@@ -66,7 +66,7 @@ Décisions du propriétaire du 2026-10-22 : [ADR 0062](../../../architecture/adr
 | Chantier | Constat | Prérequis | État du prérequis | À spécifier |
 |---|---|---|---|---|
 | Surfaces consommant des cas d'usage (suite de SH-05, puis SH-09) | AUD-ARC-01 | AUD-ARC-02 | fait (SH-05, 2026-10-21) | lot 1 fusionné (PR #548) et archivé le 2026-10-24 : `faire-consommer-l-indexation-aux-surfaces` (indexation locale et distante dans `minos-application`, 60 → 39 entrées de `ENGINE_TYPES_NAMED_BY_SURFACE`, A11) ; lots suivants inventoriés dans son design |
-| Port d'ACL de plateforme (SH-08) | AUD-ARC-05 | AUD-SEC-06 | fusionné (PR #491) ; reste la mesure du nombre d'objets durcis pendant une indexation | avec cette mesure ; retire `PrivateLocalStorage` de `PROCESS_LAUNCHERS` (A12) |
+| Port d'ACL de plateforme (SH-08) | AUD-ARC-05 | AUD-SEC-06 | fusionné (PR #491) ; objets durcis mesurés le 2026-10-25 (80 au premier index, 33 à la réindexation) | implémenté : changement `extraire-le-port-d-acl-de-plateforme` (port `com.minos.io.PlatformAccessControl`, implémentation dans `com.minos.runtime.local.acl`, `PROCESS_LAUNCHERS` vide, chemins longs acceptés) |
 | Port de lecture des snapshots (SH-04) | AUD-ARC-07 | AUD-PERF-03 | fait (ADR 0047, option A mesurée sur corpus réel) | implémenté le 2026-10-23 : changement OpenSpec `exposer-un-port-de-lecture-de-snapshot` (règle A18) |
 | Fusion `minos-storage`, codec commun (SH-02, SH-03), staging injecté (SH-06) | AUD-ARC-08 | SH-05 pour SH-06 | SH-05 fait | après SH-04 ; réduit `ADAPTER_TYPES_NAMED_BY_ADAPTER` (A13) |
 | Arête d'exécution et nommage des packages | AUD-ARC-11, AUD-ARC-12 | — | couverts par le document généré et la règle A14 | rien d'autre sans nouvelle décision |

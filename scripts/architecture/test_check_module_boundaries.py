@@ -893,6 +893,15 @@ class RuntimeLocalExportRuleTest(unittest.TestCase):
                    [f"{self.PREFIX}.distributed.BundleStore"])
         self.assertEqual(2, self.check())
 
+    def test_the_acl_package_is_guarded_and_exports_nothing(self):
+        # SH-08: the platform access control of private storage is reached through ServiceLoader only.
+        self.write("minos-runtime-local", f"{self.PREFIX}.acl", "WindowsIcacls", "public final class WindowsIcacls { }")
+        self.write("minos-runtime-local", f"{self.PREFIX}.sandbox", "Grants", "final class Grants { }",
+                   [f"{self.PREFIX}.acl.WindowsIcacls"])
+        self.assertEqual(2, self.check())
+        self.write("minos-engine", "com.minos.io", "Leak", "final class Leak { }", [f"{self.PREFIX}.acl.WindowsIcacls"])
+        self.refused("minos-engine/src/main/java/com/minos/io/Leak.java", f"{self.PREFIX}.acl.WindowsIcacls")
+
     def test_an_export_entry_that_names_no_existing_type_is_refused(self):
         self.refused("does not exist", "process.Gone", exported=self.EXPORTED | {"process.Gone"})
 
@@ -944,7 +953,7 @@ class ServiceLoaderClassLoaderTest(unittest.TestCase):
         self.assertEqual(0, self.check())
 
     def test_the_real_tree_passes_a_loader_at_every_site(self):
-        self.assertEqual(4, _MODULE.check_service_loader_class_loaders())
+        self.assertEqual(5, _MODULE.check_service_loader_class_loaders())
 
 
 class RatchetTreeTestCase(unittest.TestCase):
@@ -1267,9 +1276,15 @@ class ProcessLauncherRuleTest(RatchetTreeTestCase):
     def test_the_real_tree_has_only_the_listed_launchers(self):
         self.assertEqual(len(_MODULE.PROCESS_LAUNCHERS), _MODULE.check_process_launchers())
 
-    def test_the_real_private_storage_has_its_two_icacls_sites(self):
-        # inheritance:d (protect) and /save (read the DACL); the six mentions include four Redirect constants.
-        self.assertEqual({"minos-engine/io.PrivateLocalStorage": 2}, dict(_MODULE.PROCESS_LAUNCHERS))
+    def test_the_real_tree_launches_no_process_in_the_inner_layers(self):
+        # SH-08: the icacls launches of private storage live in minos-runtime-local.
+        self.assertEqual({}, dict(_MODULE.PROCESS_LAUNCHERS))
+
+    def test_icacls_back_in_private_storage_is_refused_against_the_real_empty_list(self):
+        self.write("minos-engine", "com.minos.io", "PrivateLocalStorage",
+                   'public final class PrivateLocalStorage { Object p = new ProcessBuilder("icacls.exe"); }')
+        self.refused(lambda: self.check(dict(_MODULE.PROCESS_LAUNCHERS)), "A12",
+                     "minos-engine/io.PrivateLocalStorage", "is not in PROCESS_LAUNCHERS")
 
 
 class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):

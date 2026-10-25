@@ -64,9 +64,10 @@ Alternative écartée : un point d'installation statique appelé par `minos-boot
 ### D2 — Doublure de test dans le `test-jar` du moteur, enregistrée par les seuls modules inférieurs
 
 - La doublure `com.minos.testsupport.IcaclsTestAccessControl` lance `icacls` dans du code de test. A12 ne compte que la production. Elle est publiée dans le `test-jar` de `minos-engine`, qui existe déjà (`com.minos.testsupport`, `minos-engine/pom.xml:26-37`).
-- Seuls `minos-engine`, `minos-storage-local`, `minos-storage-postgresql`, `minos-application` et `minos-integration-git` l'enregistrent, chacun dans son `src/test/resources/META-INF/services/com.minos.io.PlatformAccessControl`.
-- Le `test-jar` exclut ce fichier de services. Sans cette exclusion, un module supérieur qui voit à la fois le `test-jar` et `minos-runtime-local` trouverait deux implémentations, et le durcissement échouerait (D1).
-- `minos-application` et `minos-integration-git` gagnent la dépendance de test au `test-jar`. Elle n'ajoute aucune arête, comme pour les modules qui l'ont déjà.
+- Seuls `minos-engine`, `minos-storage-local`, `minos-storage-postgresql`, `minos-application` et `minos-integration-git` l'enregistrent. Chacun a un fichier `src/test/platform-access-control/META-INF/services/com.minos.io.PlatformAccessControl`, dans un dossier que seul son Surefire ajoute au classpath (`additionalClasspathElements`).
+- L'enregistrement n'est ni dans `src/test/resources`, ni donc dans `target/test-classes` ou un `test-jar`. Une exclusion dans la configuration du `test-jar` ne suffirait pas : un build `-pl … -am test` résout le `test-jar` d'un module du réacteur vers son dossier `target/test-classes`, et non vers le JAR. Un module supérieur qui voit à la fois le `test-jar` et `minos-runtime-local` trouverait alors deux implémentations, et le durcissement échouerait (D1).
+- `minos-application`, `minos-integration-git` et `minos-storage-postgresql` gagnent la dépendance de test au `test-jar` du moteur. Elle n'ajoute aucune arête, comme pour les modules qui l'ont déjà.
+- Limite : un outil qui ne reprend pas la configuration de Surefire n'a pas la doublure. C'est le cas de PIT et d'un IDE qui lance les tests lui-même. Sous Windows, les tests ACL de ces cinq modules y refusent ; la CI de mutation tourne sous Linux, où le port n'est pas consulté.
 - Un **test de parité** dans `minos-runtime-local` (Windows) applique la doublure et l'implémentation réelle à deux objets identiques et compare les SDDL relus. Les deux ne peuvent pas diverger sans faire échouer la CI Windows.
 
 Alternatives écartées :
@@ -125,7 +126,7 @@ Sous Linux et macOS, `harden` prend la branche POSIX et ne consulte jamais le po
 ## Risks / Trade-offs
 
 - **Divergence entre la doublure et le mécanisme réel** : le test de parité (D2) la refuse.
-- **Deux implémentations visibles dans un module supérieur** : l'exclusion du fichier de services du `test-jar` l'empêche (D2). Un test de `minos-bootstrap` affirme qu'une seule implémentation est découverte.
+- **Deux implémentations visibles dans un module supérieur** : l'enregistrement de la doublure hors de `target/test-classes` l'empêche (D2). Un test de `minos-bootstrap` affirme qu'une seule implémentation est découverte.
 - **Une JVM qui embarque MINOS sans `minos-runtime-local`, sous Windows** : le durcissement refuse, par construction (fail-closed). Le JAR distribué embarque le runtime local.
 - **Récursion** : le fichier SDDL ne doit pas passer par les primitives qui appellent le port (D6). Un test le vérifie : écrire dans un dossier privé neuf ne lance qu'un `/save` par objet.
 - **Préfixe `\\?\`** : il désactive la normalisation des chemins. La cible est déjà absolue et normalisée par `PrivateLocalStorage` (`toAbsolutePath().normalize()`), et un test couvre un chemin UNC.

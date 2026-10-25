@@ -19,14 +19,13 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.nio.file.attribute.UserPrincipal;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
+import java.util.ServiceConfigurationError;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Single owner-only policy for every local location that can hold user code or its derivatives.
@@ -61,8 +60,9 @@ import java.util.concurrent.TimeUnit;
  *
  * <h2>What hardening writes, and how often</h2>
  * <p>The first time a JVM touches an object, its DACL is rewritten (the owner entry and the DENY entries
- * kept) and then protected against inheritance with {@code icacls /inheritance:d}: one short process per
- * object and per JVM. Java cannot read the protected bit, and its {@code getAcl()} does not show conditional
+ * kept) and then protected against inheritance by the {@link PlatformAccessControl} port (on Windows, the local
+ * runtime runs {@code icacls /inheritance:d}: one short process per object and per JVM). This class launches no
+ * process itself. Java cannot read the protected bit, and its {@code getAcl()} does not show conditional
  * (XA) entries, so neither can be assumed already right. After that, in the same JVM, a call rewrites the
  * entries only if they are no longer the expected ones. Both writes need WRITE_DAC, which an owner always
  * holds. The memory of what was protected is forgotten when this class creates an object again at the same
@@ -72,7 +72,8 @@ import java.util.concurrent.TimeUnit;
  * <p>Conditional entries. Java sees no conditional entry and cannot write one back. A conditional ALLOW (XA)
  * is a right granted to someone else: it is dropped. A conditional DENY (XD) is a restriction an
  * administrator put there: it is never dropped. Before its first rewrite of an object's DACL, this class
- * reads the whole DACL ({@code icacls /save}, one more short process per object and per JVM) and, if an XD
+ * reads the whole DACL through the same port ({@code icacls /save} on Windows, one more short process per
+ * object and per JVM) and, if an XD
  * entry is present or the DACL cannot be read, <b>refuses</b> without writing: the error says that a
  * conditional restriction on the data location prevents MINOS from making it private, without naming the
  * path, and the administrator removes the restriction or moves {@code MINOS_HOME}. Residual limit: a
@@ -799,129 +800,56 @@ public final class PrivateLocalStorage {
         return CAPABILITY_PROBE.get().supportsPosix(target);
     }
 
+    // ---------------------------------------------------------------- platform access control (ADR 0068)
+
+    /** The port of this process, discovered on first use and kept. */
+    private static final class DiscoveredPlatformAccessControl {
+        static final PlatformAccessControl INSTANCE =
+                discoverPlatformAccessControl(PrivateLocalStorage.class.getClassLoader());
+
+        private DiscoveredPlatformAccessControl() {
+        }
+    }
+
+    /** The platform access control of this process (see {@link PlatformAccessControl}). */
+    static PlatformAccessControl platformAccessControl() {
+        return DiscoveredPlatformAccessControl.INSTANCE;
+    }
+
     /**
-     * Switches inheritance off on a Windows DACL. Java writes a DACL ({@link AclFileAttributeView#setAcl})
-     * but cannot mark it protected, so an inheritable grant added later to a parent would flow back
-     * into the location (measured: {@code icacls <parent> /grant Everyone:(OI)(CI)R} reached every
-     * hardened child). {@code icacls /inheritance:d} is the smallest reliable way to set that bit; it runs
-     * without a shell, by absolute path, on a path checked beforehand. It is {@code :d}, not {@code :r}:
-     * a file just created in a private directory holds nothing but an inherited owner entry, which Java
-     * reads back as equal to the expected one; {@code :r} would drop it and leave an empty DACL (measured),
-     * {@code :d} turns it into an explicit entry.
+     * The single implementation registered for {@code loader}, or one that refuses every operation when there is
+     * none, more than one, or one that cannot be loaded: choosing between two would let either decide what private
+     * storage means. The thread context class loader is never used (ADR 0042, AUD-ARC-04).
      */
-    static final class WindowsDacl {
-        private static final long TIMEOUT_SECONDS = 10L;
-
-        private WindowsDacl() {
+    static PlatformAccessControl discoverPlatformAccessControl(ClassLoader loader) {
+        List<PlatformAccessControl> found = new ArrayList<>();
+        try {
+            ServiceLoader.load(PlatformAccessControl.class, loader).forEach(found::add);
+        } catch (ServiceConfigurationError broken) {
+            return refusing("a platform access control for private storage cannot be loaded");
         }
-
-        static void protect(Path target) throws IOException {
-            if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) return;
-            String path = target.toString();
-            if (!target.isAbsolute() || path.chars().anyMatch(c -> c < 0x20 || "*?\"<>|".indexOf(c) >= 0)) {
-                throw new IOException("cannot protect private storage from inheritance: unsupported path");
-            }
-            String systemRoot = System.getenv("SystemRoot");
-            if (systemRoot == null || systemRoot.isBlank()) {
-                throw new IOException("cannot protect private storage from inheritance: Windows directory unknown");
-            }
-            Process process = new ProcessBuilder(
-                    Path.of(systemRoot, "System32", "icacls.exe").toString(), path, "/inheritance:d", "/L", "/q")
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .redirectError(ProcessBuilder.Redirect.DISCARD)
-                    .start();
-            awaitSuccess(process, "cannot protect private storage from inheritance");
+        if (found.isEmpty()) {
+            return refusing("no platform access control is available to make private storage private on this "
+                    + "file system");
         }
-
-        /**
-         * Waits a bounded time for an {@code icacls} child to end and fails the call unless it exits with 0. The
-         * child is killed on a timeout or an interruption; the refusal names the operation, never the child output.
-         */
-        private static void awaitSuccess(Process process, String refusal) throws IOException {
-            try {
-                if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    throw new IOException(refusal + ": timed out");
-                }
-            } catch (InterruptedException _) {
-                process.destroyForcibly();
-                Thread.currentThread().interrupt();
-                throw new IOException(refusal + ": interrupted");
-            }
-            if (process.exitValue() != 0) {
-                throw new IOException(refusal + " (exit " + process.exitValue() + ")");
-            }
+        if (found.size() > 1) {
+            return refusing("several platform access controls are registered for private storage; none is chosen");
         }
+        return found.getFirst();
+    }
 
-        /**
-         * Refuses an object whose DACL holds a conditional DENY entry, or whose DACL cannot be read: the text is
-         * the one {@code icacls /save} writes, searched for an XD entry without being parsed further. Runs
-         * without a shell, by absolute path, on a path checked beforehand, with a bounded wait; any failure to
-         * obtain the text fails the call, never lets it through.
-         */
-        static void requireNoConditionalDeny(Path target) throws IOException {
-            if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) return;
-            requireNoConditionalDeny(target, System.getenv("SystemRoot"),
-                    Arrays.asList(System.getenv("TEMP"), System.getenv("TMP"), System.getProperty("user.home")),
-                    command -> new ProcessBuilder(command)
-                            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                            .redirectError(ProcessBuilder.Redirect.DISCARD)
-                            .start());
-        }
+    private static PlatformAccessControl refusing(String reason) {
+        return new PlatformAccessControl() {
+            @Override
+            public void protectFromInheritance(Path target) throws IOException {
+                throw new IOException(reason);
+            }
 
-        /** Starts the process; a seam so that every refusal can be exercised on any system. */
-        @FunctionalInterface
-        interface Launcher {
-            Process start(List<String> command) throws IOException;
-        }
-
-        static void requireNoConditionalDeny(Path target, String systemRoot, List<String> saveDirectories,
-                                             Launcher launcher) throws IOException {
-            String path = target.toString();
-            if (!target.isAbsolute() || path.chars().anyMatch(c -> c < 0x20 || "*?\"<>|".indexOf(c) >= 0)) {
-                throw new IOException("cannot read the access rules of private storage: unsupported path");
+            @Override
+            public void requireNoConditionalDeny(Path target) throws IOException {
+                throw new IOException(reason);
             }
-            if (systemRoot == null || systemRoot.isBlank()) {
-                throw new IOException("cannot read the access rules of private storage: Windows directory unknown");
-            }
-            Path saved = createSddlFile(saveDirectories);
-            try {
-                Process process = launcher.start(List.of(
-                        Path.of(systemRoot, "System32", "icacls.exe").toString(), path, "/save", saved.toString(),
-                        "/L", "/q"));
-                awaitSuccess(process, "cannot read the access rules of private storage");
-                String text = new String(Files.readAllBytes(saved), java.nio.charset.StandardCharsets.UTF_16LE);
-                String byteOrderMark = String.valueOf((char) 0xFEFF);
-                if (text.lines().map(line -> line.replace(byteOrderMark, "")).noneMatch(line -> line.startsWith("D:"))) {
-                    throw new IOException("cannot read the access rules of private storage: no DACL in the answer");
-                }
-                if (text.contains("(XD;")) {
-                    throw new IOException("a conditional deny entry on private storage prevents MINOS from making it "
-                            + "private; an administrator must remove that restriction, or MINOS_HOME must be moved");
-                }
-            } finally {
-                Files.deleteIfExists(saved);
-            }
-        }
-
-        /**
-         * The file {@code icacls /save} writes: in the first usable directory of {@code candidates} -- in practice
-         * the temporary directory of the current Windows account ({@code TEMP}, then {@code TMP}), else the
-         * profile of the account ({@code user.home}) -- never in a directory shared by all. A process started with
-         * a sanitized environment has neither variable. Beside or inside the object itself does not work: its
-         * parent may deny the write (the case this class exists for) and {@code icacls} refuses a save file inside
-         * the tree it saves (measured: exit 87). Nothing is kept: the caller deletes it.
-         */
-        private static Path createSddlFile(List<String> candidates) throws IOException {
-            for (String value : candidates) {
-                if (value == null || value.isBlank()) continue;
-                Path directory = Path.of(value);
-                if (directory.isAbsolute() && Files.isDirectory(directory)) {
-                    return Files.createTempFile(directory, "minos-dacl-", ".sddl");
-                }
-            }
-            throw new IOException("cannot read the access rules of private storage: no place to save them");
-        }
+        };
     }
 
     // ---------------------------------------------------------------- fault-injection seam (tests)
@@ -975,12 +903,12 @@ public final class PrivateLocalStorage {
 
                 @Override
                 public void protectFromInheritance(Path target) throws IOException {
-                    WindowsDacl.protect(target);
+                    platformAccessControl().protectFromInheritance(target);
                 }
 
                 @Override
                 public void requireNoConditionalDeny(Path target) throws IOException {
-                    WindowsDacl.requireNoConditionalDeny(target);
+                    platformAccessControl().requireNoConditionalDeny(target);
                 }
             };
         }
