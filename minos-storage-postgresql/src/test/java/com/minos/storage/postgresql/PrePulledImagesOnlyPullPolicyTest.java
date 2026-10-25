@@ -6,7 +6,6 @@ import org.testcontainers.utility.DockerImageName;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,9 +34,9 @@ class PrePulledImagesOnlyPullPolicyTest {
         for (String unlisted : new String[] {
                 "testcontainers/ryuk:0.14.0", "alpine:3.17", "example/database:1.0-test",
                 "example/database:1.0-test@sha256:" + "b".repeat(64)}) {
-            IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                    () -> policy.shouldPull(DockerImageName.parse(unlisted)));
-            assertTrue(refusal.getMessage().contains(DockerImageName.parse(unlisted).asCanonicalNameString()),
+            DockerImageName image = DockerImageName.parse(unlisted);
+            IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> policy.shouldPull(image));
+            assertTrue(refusal.getMessage().contains(image.asCanonicalNameString()),
                     refusal.getMessage());
             assertTrue(refusal.getMessage().contains(PrePulledImagesOnlyPullPolicy.LIST_SOURCE), refusal.getMessage());
         }
@@ -48,8 +47,8 @@ class PrePulledImagesOnlyPullPolicyTest {
     void aListedImageThatWasNotPulledFailsInsteadOfBeingPulledAnonymously() {
         PrePulledImagesOnlyPullPolicy policy = new PrePulledImagesOnlyPullPolicy(Set.of(PINNED), image -> false);
 
-        IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> policy.shouldPull(DockerImageName.parse(PINNED)));
+        DockerImageName pinned = DockerImageName.parse(PINNED);
+        IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> policy.shouldPull(pinned));
 
         assertTrue(refusal.getMessage().contains("was not pulled before the tests"), refusal.getMessage());
     }
@@ -57,11 +56,11 @@ class PrePulledImagesOnlyPullPolicyTest {
     @Test
     void theDefaultPolicyAllowsTheImageThePostgresqlTestsStart() throws Exception {
         String pinned = PostgresTestSupport.pinnedPostgresImage();
-        PrePulledImagesOnlyPullPolicy policy = assertDoesNotThrow(() -> new PrePulledImagesOnlyPullPolicy());
+        PrePulledImagesOnlyPullPolicy policy = new PrePulledImagesOnlyPullPolicy();
 
         // Only the name check is exercised here: the local lookup needs Docker, which this test does not require.
-        IllegalStateException unlisted = assertThrows(IllegalStateException.class,
-                () -> policy.shouldPull(DockerImageName.parse("alpine:3.17")));
+        DockerImageName alpine = DockerImageName.parse("alpine:3.17");
+        IllegalStateException unlisted = assertThrows(IllegalStateException.class, () -> policy.shouldPull(alpine));
         assertTrue(unlisted.getMessage().contains("is not in the pre-pulled list"), unlisted.getMessage());
         assertTrue(pinned.contains("@sha256:"), "the PostgreSQL image of the tests is pinned by digest: " + pinned);
     }

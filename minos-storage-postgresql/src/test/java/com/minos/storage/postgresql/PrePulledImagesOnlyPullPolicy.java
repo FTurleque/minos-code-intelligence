@@ -66,7 +66,7 @@ public final class PrePulledImagesOnlyPullPolicy implements ImagePullPolicy {
         try {
             DockerClientFactory.instance().client().inspectImageCmd(imageName.asCanonicalNameString()).exec();
             return true;
-        } catch (NotFoundException absent) {
+        } catch (NotFoundException _) {
             return false;
         }
     }
