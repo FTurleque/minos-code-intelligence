@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Objects;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Reads a binary SCIP file at the infrastructure boundary of MINOS.
@@ -48,11 +49,11 @@ public final class ScipIndexReader {
 
         if (Files.isSymbolicLink(indexFile)
                 || !Files.isRegularFile(indexFile, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("SCIP index does not exist or is not a regular file: " + indexFile);
+            throw new IOException("SCIP index does not exist or is not a regular file: " + leafName(indexFile));
         }
         long observedSize = Files.size(indexFile);
         if (observedSize < 1L) {
-            throw new IOException("SCIP index is empty: " + indexFile);
+            throw new IOException("SCIP index is empty: " + leafName(indexFile));
         }
         if (observedSize > limits.maxArtifactBytes()) {
             throw new IOException("SCIP artifact exceeds configured byte limit: " + observedSize
@@ -65,7 +66,7 @@ public final class ScipIndexReader {
             // path checks above.
             observedSize = channel.size();
             if (observedSize < 1L) {
-                throw new IOException("SCIP index is empty: " + indexFile);
+                throw new IOException("SCIP index is empty: " + leafName(indexFile));
             }
             if (observedSize > limits.maxArtifactBytes()) {
                 throw new IOException("SCIP artifact exceeds configured byte limit: " + observedSize

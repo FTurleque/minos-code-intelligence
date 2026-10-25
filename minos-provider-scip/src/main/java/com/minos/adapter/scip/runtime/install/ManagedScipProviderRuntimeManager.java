@@ -40,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Local manager for MINOS-qualified SCIP runtimes. */
 public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeManager {
@@ -332,7 +333,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     home, toolsRoot.resolve("scip-typescript-install.log"), Duration.ofMinutes(10));
             Path installed = partial.resolve(NODE_MODULES_DIR).resolve(".bin")
                     .resolve(CommandLocator.isWindows() ? "scip-typescript.cmd" : "scip-typescript");
-            if (!Files.isRegularFile(installed)) throw new IllegalStateException("scip-typescript executable was not created: " + installed);
+            if (!Files.isRegularFile(installed)) throw new IllegalStateException("scip-typescript executable was not created: " + leafName(installed));
             deleteRecursively(destination);
             moveDirectory(partial, destination);
         } finally {
@@ -616,7 +617,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 MAX_MAVEN_EXTRACTED_BYTES, MAX_MAVEN_ARCHIVE_ENTRIES);
         Path mvn = mavenExecutable();
         if (!Files.isRegularFile(mvn)) {
-            throw new IllegalStateException("Maven distribution archive did not contain " + mvn);
+            throw new IllegalStateException("Maven distribution archive did not contain " + leafName(mvn));
         }
         if (!CommandLocator.isWindows()) {
             try {
@@ -653,7 +654,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         extractDistribution(archive, root, nodeDistributionId(), MAX_NODE_EXTRACTED_BYTES, MAX_NODE_ARCHIVE_ENTRIES);
         Path node = nodeExecutable();
         if (!Files.isRegularFile(node)) {
-            throw new IllegalStateException("Node.js distribution archive did not contain " + node);
+            throw new IllegalStateException("Node.js distribution archive did not contain " + leafName(node));
         }
         origins.record(NODE_ID, origin);
         return node;
@@ -866,7 +867,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(archive); ZipInputStream zip = new ZipInputStream(input)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
-                if (++entries > maxEntries) throw new IOException("archive has too many entries: " + archive);
+                if (++entries > maxEntries) throw new IOException("archive has too many entries: " + leafName(archive));
                 Path target = root.resolve(entry.getName()).normalize();
                 if (!target.startsWith(root)) {
                     throw new IOException("archive entry escapes destination: " + entry.getName());
@@ -883,7 +884,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                         if (read == 0) continue;
                         totalBytes += read;
                         if (totalBytes > maxTotalBytes) {
-                            throw new IOException("archive exceeds extraction size budget: " + archive);
+                            throw new IOException("archive exceeds extraction size budget: " + leafName(archive));
                         }
                         output.write(buffer, 0, read);
                     }
@@ -981,10 +982,10 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             if (process.isAlive()) process.destroyForcibly();
             process.waitFor(5, TimeUnit.SECONDS);
             capture.await();
-            throw new IllegalStateException("tool command timed out; see " + log);
+            throw new IllegalStateException("tool command timed out; see the tool log " + leafName(log));
         }
         capture.await();
-        if (process.exitValue() != 0) throw new IllegalStateException("tool command failed with code " + process.exitValue() + "; see " + log);
+        if (process.exitValue() != 0) throw new IllegalStateException("tool command failed with code " + process.exitValue() + "; see the tool log " + leafName(log));
     }
 
     private static void deleteRecursively(Path path) throws IOException {

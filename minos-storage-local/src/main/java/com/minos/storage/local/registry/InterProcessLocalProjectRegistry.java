@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Cross-process serialization wrapper for the file-backed project registry.
@@ -169,7 +170,7 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
 
     private static void requireDirectory(Path directory, String label) throws IOException {
         if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException(label + " must be a non-symlink directory: " + directory);
+            throw new IOException(label + " must be a non-symlink directory: " + leafName(directory));
         }
     }
 

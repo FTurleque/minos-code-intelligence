@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Atomic, fail-closed persistence for the MCP runtime backend selection. */
 public final class McpBackendConfigurationStore {
@@ -105,7 +106,7 @@ public final class McpBackendConfigurationStore {
 
     private void secureExistingConfigurationFile() throws IOException {
         if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("MCP backend configuration is not a real regular file: " + file);
+            throw new IOException("MCP backend configuration is not a real regular file: " + leafName(file));
         }
         PrivateLocalStorage.hardenExistingFile(file);
     }

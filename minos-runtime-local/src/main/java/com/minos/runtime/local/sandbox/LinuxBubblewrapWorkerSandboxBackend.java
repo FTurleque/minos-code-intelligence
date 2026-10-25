@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Linux worker sandbox backed by bubblewrap namespaces, a cgroup v2 job boundary and prlimit.
@@ -476,7 +477,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     private static Path regularExecutable(Path value, String label) {
         Path path = Objects.requireNonNull(value, label).toAbsolutePath().normalize();
         if (!Files.isRegularFile(path) || !Files.isExecutable(path)) {
-            throw new IllegalArgumentException(label + " must be an executable regular file: " + path);
+            throw new IllegalArgumentException(label + " must be an executable regular file: " + leafName(path));
         }
         return path;
     }

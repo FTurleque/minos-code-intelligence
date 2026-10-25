@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Local application adapter over the selected MINOS storage backend. */
 public final class LocalProjectOperations implements ProjectOperations, AutoCloseable {
@@ -105,13 +106,19 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         }
     }
 
+    /** The SCIP artifact to import, absolute and normalized; a link or anything but a regular file is refused by name. */
+    static Path requireRegularArtifact(Path indexFile) {
+        Path artifact = Objects.requireNonNull(indexFile, "indexFile").toAbsolutePath().normalize();
+        if (Files.isSymbolicLink(artifact) || !Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException("SCIP artifact must be an existing regular file: " + leafName(artifact));
+        }
+        return artifact;
+    }
+
     private IndexImportResult importScipLocked(RegisteredProject project, Path indexFile, String providerId,
                                                 String providerVersion, String moduleId, String snapshotId)
             throws IOException {
-        Path artifact = Objects.requireNonNull(indexFile, "indexFile").toAbsolutePath().normalize();
-        if (Files.isSymbolicLink(artifact) || !Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("SCIP artifact must be an existing regular file: " + artifact);
-        }
+        Path artifact = requireRegularArtifact(indexFile);
         String safeProviderId = ProviderId.require(providerId);
         String effectiveSnapshotId = snapshotId == null || snapshotId.isBlank()
                 ? "scip-" + BoundedFileDigest.sha256Exact(

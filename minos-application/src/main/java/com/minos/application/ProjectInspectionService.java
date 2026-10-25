@@ -30,6 +30,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static com.minos.domain.Preconditions.requireText;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Shared read-only project/index view used by transport adapters. */
 public final class ProjectInspectionService {
@@ -249,7 +250,7 @@ public final class ProjectInspectionService {
 
     private static String required(Properties properties, String key, Path file) {
         String value = properties.getProperty(key);
-        if (value == null || value.isBlank()) throw new IllegalStateException("missing index property '" + key + "' in " + file);
+        if (value == null || value.isBlank()) throw new IllegalStateException("missing index property '" + key + "' in " + leafName(file));
         return value;
     }
 

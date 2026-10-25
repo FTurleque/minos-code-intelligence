@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Local file-backed registry for project/workspace identities.
@@ -337,21 +338,21 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         String relativeRoot = properties.getProperty(PORTABLE_ROOT_PATH, "").trim();
         String legacyRoot = properties.getProperty(LEGACY_ROOT_PATH, "").trim();
         if (!relativeRoot.isEmpty() && !legacyRoot.isEmpty()) {
-            throw new IOException("registry project contains both legacy and portable roots: " + file);
+            throw new IOException("registry project contains both legacy and portable roots: " + leafName(file));
         }
 
         Path rootPath;
         boolean migrateLegacy = false;
         if (!relativeRoot.isEmpty()) {
             ProjectPathMapping mapping = pathMapping.orElseThrow(() ->
-                    new IOException("portable project registry requires runtime path mapping: " + file));
+                    new IOException("portable project registry requires runtime path mapping: " + leafName(file)));
             try {
                 rootPath = mapping.resolve(relativeRoot, runtimeLocation);
             } catch (IllegalArgumentException exception) {
-                throw new IOException("invalid portable project root in " + file, exception);
+                throw new IOException("invalid portable project root in " + leafName(file), exception);
             }
         } else {
-            if (legacyRoot.isEmpty()) throw new IOException("missing registry project root in " + file);
+            if (legacyRoot.isEmpty()) throw new IOException("missing registry project root in " + leafName(file));
             if (pathMapping.isPresent()) {
                 try {
                     String migratedRelative = pathMapping.orElseThrow().relativeForLegacyPath(legacyRoot);
@@ -440,18 +441,18 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         String name = file.getFileName().toString();
         String suffix = PROPERTIES_SUFFIX;
         if (!name.endsWith(suffix)) {
-            throw new IOException("unexpected registry metadata filename: " + file);
+            throw new IOException("unexpected registry metadata filename: " + leafName(file));
         }
         try {
             return UUID.fromString(name.substring(0, name.length() - suffix.length()));
         } catch (IllegalArgumentException exception) {
-            throw new IOException("registry metadata filename is not a UUID: " + file, exception);
+            throw new IOException("registry metadata filename is not a UUID: " + leafName(file), exception);
         }
     }
 
     private static void requireIdentity(UUID expected, UUID actual, Path file, String label) throws IOException {
         if (!expected.equals(actual)) {
-            throw new IOException(label + " identity mismatch in " + file
+            throw new IOException(label + " identity mismatch in " + leafName(file)
                     + ": expected=" + expected + " persisted=" + actual);
         }
     }
@@ -470,7 +471,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     private static String required(Properties properties, String key, Path file) {
         String value = properties.getProperty(key);
         if (value == null || value.isBlank()) {
-            throw new IllegalStateException("Missing registry property '" + key + "' in " + file);
+            throw new IllegalStateException("Missing registry property '" + key + "' in " + leafName(file));
         }
         return value;
     }
@@ -532,7 +533,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         Objects.requireNonNull(rootPath, "rootPath");
         Path canonical = rootPath.toRealPath();
         if (!Files.isDirectory(canonical)) {
-            throw new IllegalArgumentException("rootPath must be an existing directory: " + rootPath);
+            throw new IllegalArgumentException("rootPath must be an existing directory: " + leafName(rootPath));
         }
         return canonical;
     }

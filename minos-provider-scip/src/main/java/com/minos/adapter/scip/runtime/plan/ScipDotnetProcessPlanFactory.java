@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Fail-closed process plan for the managed scip-dotnet provider. */
 public final class ScipDotnetProcessPlanFactory extends AbstractScipProcessPlanFactory {
@@ -18,7 +19,7 @@ public final class ScipDotnetProcessPlanFactory extends AbstractScipProcessPlanF
     @Override
     protected void validateProject(Path root) throws IOException {
         if (!containsDotnetProject(root)) {
-            throw new IllegalArgumentException("scip-dotnet requires a .csproj or .sln project: " + root);
+            throw new IllegalArgumentException("scip-dotnet requires a .csproj or .sln project: " + leafName(root));
         }
     }
 

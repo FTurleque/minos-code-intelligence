@@ -37,6 +37,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Explicit bridge between a SCIP artifact and the persistent MINOS snapshot. */
 public final class ScipSymbolSnapshotImporter {
@@ -144,7 +145,7 @@ public final class ScipSymbolSnapshotImporter {
     private FrozenArtifact freeze(Path indexFile) throws IOException {
         Path source = indexFile.toAbsolutePath().normalize();
         if (Files.isSymbolicLink(source) || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("SCIP index does not exist or is not a regular file: " + source);
+            throw new IOException("SCIP index does not exist or is not a regular file: " + leafName(source));
         }
         Path frozen = createScratchFile();
         boolean success = false;

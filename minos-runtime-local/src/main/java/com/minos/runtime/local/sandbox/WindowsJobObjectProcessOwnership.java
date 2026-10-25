@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Ownership-only Windows launcher. It does not impose AppContainer ACL/network restrictions. */
 public final class WindowsJobObjectProcessOwnership {
@@ -101,7 +102,7 @@ public final class WindowsJobObjectProcessOwnership {
         if (first.isAbsolute()) {
             executable = first.toAbsolutePath().normalize();
             if (!Files.isRegularFile(executable)) {
-                throw new IOException("provider executable is missing: " + executable);
+                throw new IOException("provider executable is missing: " + leafName(executable));
             }
         } else {
             executable = CommandLocator.find(command.getFirst())

@@ -38,6 +38,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static com.minos.domain.Preconditions.requireText;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** M24 runtime extension for C/C++, C#, Go and Rust SCIP providers. */
 public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeManager {
@@ -278,7 +279,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         Path executable = managedExecutable(partial, "scip-dotnet");
         if (!Files.isRegularFile(executable)) {
             deleteRecursively(partial);
-            throw new IllegalStateException("scip-dotnet installation completed without executable: " + executable);
+            throw new IllegalStateException("scip-dotnet installation completed without executable: " + leafName(executable));
         }
         writeManagedMarkers(partial, ScipIndexerCatalog.SCIP_DOTNET_VERSION, DOTNET_SOURCE_ID);
         replaceDirectory(partial, destination);
@@ -309,7 +310,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         Path executable = managedExecutable(partial, "scip-go");
         if (!Files.isRegularFile(executable)) {
             deleteRecursively(partial);
-            throw new IllegalStateException("scip-go installation completed without executable: " + executable);
+            throw new IllegalStateException("scip-go installation completed without executable: " + leafName(executable));
         }
         writeManagedMarkers(partial, ScipIndexerCatalog.SCIP_GO_VERSION, GO_SOURCE_ID);
         replaceDirectory(partial, destination);
