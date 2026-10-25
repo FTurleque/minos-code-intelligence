@@ -658,7 +658,8 @@ Quatre phases, chacune spécifiée en OpenSpec, implémentée par lots et valid�
 | Constat | Phase | Changement OpenSpec | Statut | PR / commit |
 |---|---|---|---|---|
 | AUD-ARC-01, -05, -08 | 1 | `rendre-les-cliquets-d-architecture-etanches` | **fusionné** le 2026-10-25, treize checks verts (SonarCloud : 0 nouveau problème) | [PR #563](https://github.com/FTurleque/minos-code-intelligence/pull/563), fusion `6566ddda` |
-| AUD-ARC-05 | 2 | `extraire-le-port-d-acl-de-plateforme` (SH-08) | implémenté ; A12 passe de 1 classe et 2 sites à 0 ; CI verte (15 checks, SonarCloud 0 nouveau problème, couverture du nouveau code 93,6 %) | [PR #564](https://github.com/FTurleque/minos-code-intelligence/pull/564), en attente de fusion |
+| AUD-ARC-05 | 2 | `extraire-le-port-d-acl-de-plateforme` (SH-08) | **fusionné** le 2026-10-25 et archivé ; A12 passe de 1 classe et 2 sites à 0 ; CI verte (15 checks, SonarCloud 0 nouveau problème, couverture du nouveau code 93,6 %). Constat **fermable** : le moteur ne lance plus aucun processus | [PR #564](https://github.com/FTurleque/minos-code-intelligence/pull/564), fusion `47c02b89` |
+| AUD-ARC-01 (lot 2) | 2 | `faire-consommer-le-diagnostic-de-l-hote` | spécifié | — |
 | AUD-ARC-12 | — | aucun | **clos par décision documentée** : la convention de préfixe de module ne vaut que pour les nouveaux packages ([ADR 0068](../../../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 5, décision D4 du 2026-10-22) ; renommer les racines existantes contredirait l'ADR 0044. La règle A14 empêche toute nouvelle racine | — |
 
 ### Phase 1 — cliquets étanches (2026-10-25, HEAD de départ `dedb219e`)
