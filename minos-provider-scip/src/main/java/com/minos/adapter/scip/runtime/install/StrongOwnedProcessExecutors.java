@@ -100,7 +100,7 @@ final class StrongOwnedProcessExecutors {
 
     /**
      * {@code minos.runtime.location} system property first, then {@code MINOS_RUNTIME_LOCATION} --
-     * matching {@code com.minos.registry.ProjectPathMapping}'s established precedence. Read directly
+     * matching {@code com.minos.domain.registry.ProjectPathMapping}'s established precedence. Read directly
      * rather than shared with that class: it lives in minos-application, which does not sit below
      * minos-provider-scip/minos-runtime-local in the module graph.
      */

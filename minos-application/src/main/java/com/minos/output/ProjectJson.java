@@ -2,7 +2,7 @@ package com.minos.output;
 
 import com.minos.application.ProjectSummary;
 import com.minos.application.ResumableRunStatus;
-import com.minos.registry.DegradedEntry;
+import com.minos.domain.registry.DegradedEntry;
 
 import java.time.Instant;
 import java.util.List;

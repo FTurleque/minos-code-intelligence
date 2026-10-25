@@ -4,7 +4,7 @@ import com.minos.incremental.ProjectFingerprint;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.PrivateLocalStorage.Privacy;
 import com.minos.orchestration.ProjectIndexState;
-import com.minos.registry.ProjectPathMapping;
+import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.storage.local.registry.LocalProjectRegistry;

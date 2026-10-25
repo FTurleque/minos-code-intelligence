@@ -1,6 +1,6 @@
 package com.minos.storage;
 
-import com.minos.registry.ProjectPathMapping.RuntimeLocation;
+import com.minos.domain.registry.ProjectPathMapping.RuntimeLocation;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

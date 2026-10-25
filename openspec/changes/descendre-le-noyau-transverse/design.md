@@ -58,7 +58,7 @@ Aucun de ces types n'apparaît dans une signature publique de `minos-api`. `docs
 
 - **`PublicErrorMessages`** : étape 1, déplacement sans changer le nom complet. Le paquet entier passe dans `minos-domain`, le module le plus bas qui peut l'accueillir. La racine `diagnostics` passe de `minos-engine` à `minos-domain` dans `PACKAGE_ROOTS_BY_MODULE` ; c'est un déplacement, et la modification de la table en cite la raison.
 - **Types du registre** : `com.minos.registry` garde ses ports dans le moteur, donc un déplacement du paquet entier est impossible. On applique l'étape 3 : le côté interne prend l'espace de noms de son module, `com.minos.domain.registry`. Le dernier segment reprend le nom du paquet d'origine, pour que la correspondance soit évidente.
-- **Code de production** : aucune classe ne change, hors paquet, imports et langue des commentaires.
+- **Code de production** : aucune classe ne change, hors paquet, imports et langue des commentaires, à une exception près. `UnreadableRegistryException` portait une fabrique statique `explaining(ProjectRegistry, String)`, qui interroge le port du moteur. Elle était dans le même paquet, sans import, et l'inventaire au HEAD ne l'a pas vue. Cette fabrique devient la méthode par défaut `ProjectRegistry.explainUnreadable(String)`, au même comportement, et ses trois appelants (`LocalProjectOperations`, `ProjectResolver`, `NexusExportService`) l'appellent sur le registre. L'exception reste ainsi sans dépendance au moteur, et son test (`ProjectRegistryExplainUnreadableTest`) vit dans le moteur avec la méthode.
 
 ### D2 — `minos-integration-git` déclare `minos-domain`
 

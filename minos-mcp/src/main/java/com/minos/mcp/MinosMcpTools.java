@@ -4,7 +4,7 @@ import com.minos.application.MinosApplication;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.output.json.DeterministicJson;
-import com.minos.registry.UnreadableRegistryException;
+import com.minos.domain.registry.UnreadableRegistryException;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;

@@ -660,7 +660,7 @@ Quatre phases, chacune spécifiée en OpenSpec, implémentée par lots et valid�
 | AUD-ARC-01, -05, -08 | 1 | `rendre-les-cliquets-d-architecture-etanches` | **fusionné** le 2026-10-25, treize checks verts (SonarCloud : 0 nouveau problème) | [PR #563](https://github.com/FTurleque/minos-code-intelligence/pull/563), fusion `6566ddda` |
 | AUD-ARC-05 | 2 | `extraire-le-port-d-acl-de-plateforme` (SH-08) | **fusionné** le 2026-10-25 et archivé ; A12 passe de 1 classe et 2 sites à 0 ; CI verte (15 checks, SonarCloud 0 nouveau problème, couverture du nouveau code 93,6 %). Constat **fermable** : le moteur ne lance plus aucun processus | [PR #564](https://github.com/FTurleque/minos-code-intelligence/pull/564), fusion `47c02b89` |
 | AUD-ARC-01 (lot 2) | 2 | `faire-consommer-le-diagnostic-de-l-hote` | **fusionné** le 2026-10-25 et archivé ; A11 passe de 43 à 41 types (garde Python) et de 39 à 36 (bytecode) ; CI verte, SonarCloud 0 nouveau problème, couverture du nouveau code 95,2 % | [PR #565](https://github.com/FTurleque/minos-code-intelligence/pull/565), fusion `9b710cbe` |
-| AUD-ARC-01 (lot 6) | 3 | `descendre-le-noyau-transverse` | spécifié | — |
+| AUD-ARC-01 (lot 6) | 3 | `descendre-le-noyau-transverse` | implémenté en local, non poussé ; A11 passe de 41 à 33 types (garde Python) et de 36 à 28 (bytecode) | — |
 | AUD-ARC-12 | — | aucun | **clos par décision documentée** : la convention de préfixe de module ne vaut que pour les nouveaux packages ([ADR 0068](../../../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 5, décision D4 du 2026-10-22) ; renommer les racines existantes contredirait l'ADR 0044. La règle A14 empêche toute nouvelle racine | — |
 
 ### Phase 1 — cliquets étanches (2026-10-25, HEAD de départ `dedb219e`)
@@ -770,6 +770,37 @@ Preuves (poste Windows, worktree `minos-wt-lot2`) :
 - **SpotBugs** (profil `audit-spotbugs`, application et CLI) : 0 nouvelle alerte, 0 disparue.
 - **Gates** : `run_gates.py --fast` 25/25, `openspec validate --all --strict`.
 - **Revue d'architecture** (agent `minos-architecture-reviewer`) : conforme, sans constat bloquant. Le constructeur à sonde et localisateur est rendu privé au package, et la vue d'exécution de `doctor` (arc42 § 6) cite le service.
+
+### Phase 3 — lot 6 d'AUD-ARC-01 implémenté (2026-10-26, branche `refactor/descendre-le-noyau-transverse`)
+
+Décision du propriétaire du 2026-10-25 : Q1 = A. `MinosVersion` reste dans le moteur, comme le fixe l'ADR 0068 § 3.
+
+**Ce qui descend dans `minos-domain`**
+- `com.minos.diagnostics` (`PublicErrorMessages`) : le paquet entier, nom complet inchangé. La racine `diagnostics` passe du moteur au domaine (A14), et `minos-integration-git` déclare `minos-domain`.
+- `UnreadableRegistryException`, `DegradedEntry` et `ProjectPathMapping` : dans `com.minos.domain.registry`, avec 43 fichiers mis à jour.
+
+**Écart avec la spécification**, consigné dans le design (D1) : `UnreadableRegistryException.explaining(ProjectRegistry, …)` interrogeait le port du moteur. Cette fabrique devient la méthode par défaut `ProjectRegistry.explainUnreadable(String)`, au même comportement.
+
+**Restent dans le moteur, justifiés dans les deux tables** : `ProjectPathMappings` (port d'E/S persisté) et `MinosVersion` (ADR 0068 § 3).
+
+| Cliquet A11 | Avant | Après |
+|---|---|---|
+| Garde Python | 41 (API 16, CLI 15, MCP 4, NEXUS 6) | **33** (API 15, CLI 11, MCP 2, NEXUS 5) |
+| Bytecode | 36 (API 14, CLI 12, MCP 4, NEXUS 6) | **28** (API 13, CLI 8, MCP 2, NEXUS 5) |
+
+Preuves (poste Windows, worktree `minos-wt-lot6`) :
+
+- **Rouges** :
+  - garde, après le déplacement : A11 signale les entrées devenues inutiles, puis A14 refuse la racine `diagnostics` dans le domaine ;
+  - `ModuleArchitectureTest` signale l'usage non déclaré `minos-integration-git` → `minos-domain` (2 dépendances) et l'entrée bytecode périmée ;
+  - la compilation refuse tout ancien nom complet.
+- **Verts** :
+  - tests ciblés : domaine 48 tests, dont `ProjectPathMappingTest` 9/9 ajouté ; `ProjectRegistryExplainUnreadableTest` 3/3 ;
+  - gardes : `test_check_module_boundaries.py` 205 cas ;
+  - `mvnw verify` complet sous Windows (30 min 42) : `ModuleArchitectureTest` 9/9, `A2SurfaceCharacterizationTest` 12/12, aucun golden régénéré ;
+  - `check-jacoco.py` : `domain-invariants` à 0,977 / 0,842.
+- **Langue des commentaires** : les commentaires de `DegradedEntry` sont traduits, et les mentions de jalon des fichiers déplacés retirées. Les maximums du moteur baissent : 55 → 54 fichiers hors langue, 20 → 19 qui citent un jalon.
+- **SpotBugs** : l'entrée `EI_EXPOSE_REP` d'`UnreadableRegistryException` passe de `minos-engine.xml` à `minos-domain.xml`. Résultat : 0 nouvelle, 0 disparue.
 
 ## Seconde contre-vérification des changements non implémentés (2026-10-22, HEAD `5ce7b79b`)
 

@@ -15,7 +15,7 @@ import com.minos.orchestration.ScipSymbolSnapshotReport;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.registry.UnreadableRegistryException;
+import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.ByteArrayOutputStream;
@@ -71,7 +71,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
             if (Thread.currentThread().isInterrupted()) throw failure;
             // A path that is not a directory is its own failure, whatever the state of the registry.
             if (!Files.isDirectory(rootPath)) throw failure;
-            Optional<UnreadableRegistryException> explained = UnreadableRegistryException.explaining(registry,
+            Optional<UnreadableRegistryException> explained = registry.explainUnreadable(
                     "the uniqueness of the registration cannot be guaranteed");
             if (explained.isEmpty()) throw failure;
             explained.get().addSuppressed(failure);
