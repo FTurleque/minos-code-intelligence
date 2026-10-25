@@ -973,7 +973,7 @@ class RatchetTreeTestCase(unittest.TestCase):
 class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
     """A11 — each surface names only the minos-engine types of its list (AUD-ARC-01, ADR 0058 section 3)."""
 
-    LISTED = {"minos-cli": frozenset({"query.SymbolResult"})}
+    LISTED = {"minos-cli": {"query.SymbolResult": 1}}
 
     def setUp(self):
         super().setUp()
@@ -984,6 +984,26 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
 
     def check(self, listed=None):
         return _MODULE.check_engine_types_named_by_surfaces(self.root, listed=self.LISTED if listed is None else listed)
+
+    def test_a_second_file_naming_a_listed_type_is_refused_with_both_counts_and_files(self):
+        # AUD-ARC-01: the ratchet counts the files that use a type, not only the type.
+        self.write("minos-cli", "com.minos.cli.command", "Again", "final class Again { SymbolResult r; }",
+                   ["com.minos.query.SymbolResult"])
+        message = self.refused(self.check, "A11", "minos-cli", "query.SymbolResult", "listed for 1 file(s)",
+                               "used by 2", "minos-cli/src/main/java/com/minos/cli/Search.java",
+                               "minos-cli/src/main/java/com/minos/cli/command/Again.java")
+        self.assertNotIn("no longer named", message)
+
+    def test_a_count_above_the_observed_files_is_refused_with_the_count_to_write(self):
+        listed = {"minos-cli": {"query.SymbolResult": 2}}
+        self.refused(lambda: self.check(listed), "A11", "query.SymbolResult", "listed for 2 file(s)", "used by 1",
+                     "write 1")
+
+    def test_moving_a_use_to_another_file_keeps_the_count(self):
+        self.write("minos-cli", "com.minos.cli", "Search", "final class Search { }")
+        self.write("minos-cli", "com.minos.cli", "Moved", "final class Moved { SymbolResult r; }",
+                   ["com.minos.query.SymbolResult"])
+        self.assertEqual(1, self.check()["minos-cli"])
 
     def test_a_conforming_tree_is_accepted_with_the_count_per_surface(self):
         self.assertEqual({"minos-api": 0, "minos-cli": 1, "minos-mcp": 0, "minos-nexus": 0}, self.check())
@@ -1000,19 +1020,23 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
 
     def test_a_nested_type_counts_as_its_listed_top_level_type(self):
         self.write("minos-cli", "com.minos.cli", "Nested", "final class Nested { }", ["com.minos.query.SymbolResult.Kind"])
-        self.assertEqual(1, self.check()["minos-cli"])
+        self.assertEqual(1, self.check({"minos-cli": {"query.SymbolResult": 2}})["minos-cli"])
 
     def test_a_wildcard_import_of_an_engine_package_is_refused(self):
         self.write("minos-api", "com.minos.api", "Wide", "final class Wide { }", ["com.minos.hosted.*"])
         self.refused(self.check, "A11", "wildcard", "com.minos.hosted.*")
 
     def test_a_dead_entry_is_refused(self):
-        listed = {"minos-cli": frozenset({"query.SymbolResult", "hosted.HostedRole"})}
+        listed = {"minos-cli": {"query.SymbolResult": 1, "hosted.HostedRole": 1}}
         self.refused(lambda: self.check(listed), "A11", "hosted.HostedRole", "no longer named")
 
     def test_an_entry_naming_no_existing_type_is_refused(self):
-        listed = {"minos-cli": frozenset({"query.SymbolResult", "query.Gone"})}
+        listed = {"minos-cli": {"query.SymbolResult": 1, "query.Gone": 1}}
         self.refused(lambda: self.check(listed), "A11", "query.Gone", "names no production type")
+
+    def test_a_count_that_is_not_a_positive_integer_is_refused(self):
+        listed = {"minos-cli": {"query.SymbolResult": 0}}
+        self.refused(lambda: self.check(listed), "A11", "query.SymbolResult", "positive")
 
     def test_comments_literals_and_test_sources_do_not_count(self):
         self.write("minos-cli", "com.minos.cli", "Quiet",
@@ -1025,13 +1049,13 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
         # AUD-ARC-01, lot 1: the remote indexing left the CLI; naming its engine port again fails A11.
         cli = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"]
         imports = []
-        for entry in sorted(cli | {"remote.RemoteIndexingRuntime"}):
+        for entry in sorted(set(cli) | {"remote.RemoteIndexingRuntime"}):
             package, name = entry.rsplit(".", 1)
             self.write("minos-engine", "com.minos." + package, name, f"public interface {name} {{ }}")
             imports.append(f"com.minos.{entry}")
         self.write("minos-cli", "com.minos.cli", "Search", "final class Search { }",
                    [name for name in imports if name != "com.minos.remote.RemoteIndexingRuntime"])
-        listed = {"minos-cli": cli}
+        listed = {"minos-cli": {entry: 1 for entry in cli}}
         self.assertEqual(len(cli), self.check(listed)["minos-cli"])
 
         self.write("minos-cli", "com.minos.cli.operations", "RemoteLeak", "final class RemoteLeak { }",
@@ -1046,22 +1070,179 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
         self.assertEqual({surface: len(types) for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items()},
                          counts)
 
+    def test_a_new_cli_file_importing_the_listed_private_storage_is_refused_against_the_real_cli_list(self):
+        # A type ratchet lets a new CLI file import io.PrivateLocalStorage; the file count refuses it.
+        cli = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"]
+        self.assertEqual(1, cli["io.PrivateLocalStorage"])
+        self.write("minos-engine", "com.minos.io", "PrivateLocalStorage", "public final class PrivateLocalStorage { }")
+        self.write("minos-cli", "com.minos.cli.command", "DoctorCommand", "final class DoctorCommand { }",
+                   ["com.minos.io.PrivateLocalStorage"])
+        listed = {"minos-cli": {"io.PrivateLocalStorage": 1}}
+        self.write("minos-cli", "com.minos.cli", "Search", "final class Search { }")
+        self.assertEqual(1, self.check(listed)["minos-cli"])
+        self.write("minos-cli", "com.minos.cli.command", "NewCommand", "final class NewCommand { }",
+                   ["com.minos.io.PrivateLocalStorage"])
+        self.refused(lambda: self.check(listed), "A11", "io.PrivateLocalStorage", "used by 2",
+                     "minos-cli/src/main/java/com/minos/cli/command/NewCommand.java")
+
+
+class MinosApplicationAccessorRuleTest(RatchetTreeTestCase):
+    """A11 — a MinosApplication accessor called by a surface uses the engine type it returns (AUD-ARC-01)."""
+
+    APPLICATION = """public final class MinosApplication {
+    public static MinosApplication open(java.nio.file.Path home) { return null; }
+    public String storageBackendId() { return ""; }
+    public CodeKnowledgeSnapshotStore snapshotStore() { return null; }
+    public GitIntelligence gitIntelligence() { return null; }
+    public Optional<HostedControlPlaneService> hostedControlPlaneService() { return Optional.empty(); }
+    public SnapshotStager snapshotStager() { return null; }
+    public IndexerRegistry indexerRegistry(String providerOverride) { return null; }
+    private GitIntelligence hidden() { return null; }
+}"""
+
+    def setUp(self):
+        super().setUp()
+        for package, name in (("store", "CodeKnowledgeSnapshotStore"), ("git", "GitIntelligence"),
+                              ("hosted", "HostedControlPlaneService"), ("orchestration", "IndexingRuntimePorts"),
+                              ("orchestration", "IndexerRegistry")):
+            self.write("minos-engine", f"com.minos.{package}", name, f"public interface {name} {{ }}")
+        self.write("minos-application", "com.minos.application", "MinosApplication", self.APPLICATION,
+                   ["com.minos.store.CodeKnowledgeSnapshotStore", "com.minos.git.GitIntelligence",
+                    "com.minos.hosted.HostedControlPlaneService",
+                    "com.minos.orchestration.IndexingRuntimePorts.SnapshotStager",
+                    "com.minos.orchestration.IndexerRegistry", "java.util.Optional"])
+
+    def surface(self, module, name, body, imports=()):
+        self.write(module, f"com.minos.{module.removeprefix('minos-')}", name, body, imports)
+
+    def check(self, listed):
+        return _MODULE.check_engine_types_named_by_surfaces(self.root, listed=listed)
+
+    def test_the_accessors_returning_an_engine_type_are_read_from_the_application_source(self):
+        self.assertEqual({"snapshotStore": (0, "store.CodeKnowledgeSnapshotStore"),
+                          "gitIntelligence": (0, "git.GitIntelligence"),
+                          "hostedControlPlaneService": (0, "hosted.HostedControlPlaneService"),
+                          "snapshotStager": (0, "orchestration.IndexingRuntimePorts"),
+                          "indexerRegistry": (1, "orchestration.IndexerRegistry")},
+                         _MODULE.minos_application_accessors(self.root, "com.minos"))
+
+    def test_an_accessor_called_without_naming_the_type_is_refused(self):
+        self.surface("minos-api", "Reader", "final class Reader { Reader(MinosApplication app) { use(app.snapshotStore()); } }",
+                     ["com.minos.application.MinosApplication"])
+        self.refused(lambda: self.check({}), "A11", "minos-api", "minos-api/src/main/java/com/minos/api/Reader.java",
+                     "com.minos.store.CodeKnowledgeSnapshotStore")
+
+    def test_an_accessor_call_is_accepted_when_the_type_is_listed_for_the_file(self):
+        self.surface("minos-api", "Reader", "final class Reader { Reader(MinosApplication app) { use(app.snapshotStore()); } }",
+                     ["com.minos.application.MinosApplication"])
+        self.assertEqual(1, self.check({"minos-api": {"store.CodeKnowledgeSnapshotStore": 1}})["minos-api"])
+
+    def test_replacing_the_import_by_var_keeps_the_count(self):
+        listed = {"minos-cli": {"git.GitIntelligence": 1}}
+        self.surface("minos-cli", "Activity", "final class Activity { void r(MinosApplication app) { "
+                     "GitIntelligence g = app.gitIntelligence(); } }",
+                     ["com.minos.application.MinosApplication", "com.minos.git.GitIntelligence"])
+        self.assertEqual(1, self.check(listed)["minos-cli"])
+        self.surface("minos-cli", "Activity", "final class Activity { void r(MinosApplication app) { "
+                     "var g = app.gitIntelligence(); } }", ["com.minos.application.MinosApplication"])
+        self.assertEqual(1, self.check(listed)["minos-cli"])
+
+    def test_a_method_reference_counts_as_a_use(self):
+        self.surface("minos-cli", "Runner", "final class Runner { Object s = defer(MinosApplication::gitIntelligence); }",
+                     ["com.minos.application.MinosApplication"])
+        self.refused(lambda: self.check({}), "A11", "minos-cli", "com.minos.git.GitIntelligence")
+
+    def test_a_homonym_with_another_arity_is_ignored(self):
+        self.surface("minos-cli", "Runner", "final class Runner { void r(Builder b) { b.gitIntelligence(() -> null); "
+                     "b.snapshotStore(1, 2); } }")
+        self.assertEqual(0, self.check({})["minos-cli"])
+
+    def test_an_accessor_with_a_parameter_is_matched_by_its_arity(self):
+        self.surface("minos-mcp", "Registry", "final class Registry { Object r(MinosApplication app) { "
+                     "return app.indexerRegistry(\"scip\"); } }", ["com.minos.application.MinosApplication"])
+        self.refused(lambda: self.check({}), "A11", "minos-mcp", "com.minos.orchestration.IndexerRegistry")
+
+    def test_a_generic_return_and_a_nested_return_resolve_to_their_engine_type(self):
+        self.surface("minos-cli", "Team", "final class Team { Object t(MinosApplication app) { "
+                     "return app.hostedControlPlaneService().orElseThrow(); } "
+                     "Object s(MinosApplication app) { return app.snapshotStager(); } }",
+                     ["com.minos.application.MinosApplication"])
+        listed = {"minos-cli": {"hosted.HostedControlPlaneService": 1, "orchestration.IndexingRuntimePorts": 1}}
+        self.assertEqual(2, self.check(listed)["minos-cli"])
+
+    def test_a_static_method_a_private_method_and_a_jdk_return_are_not_accessors(self):
+        accessors = _MODULE.minos_application_accessors(self.root, "com.minos")
+        self.assertNotIn("open", accessors)
+        self.assertNotIn("hidden", accessors)
+        self.assertNotIn("storageBackendId", accessors)
+
+    def test_an_accessor_call_in_a_comment_a_literal_or_a_test_does_not_count(self):
+        self.surface("minos-cli", "Quiet", 'final class Quiet { // app.snapshotStore()\n String s = "app.gitIntelligence()"; }')
+        self.write("minos-cli", "com.minos.cli", "QuietTest", "final class QuietTest { Object o = app.snapshotStore(); }",
+                   kind="test")
+        self.assertEqual(0, self.check({})["minos-cli"])
+
+    def test_a_missing_application_source_fails_closed(self):
+        (self.root / "minos-application" / "src" / "main" / "java" / "com" / "minos" / "application"
+         / "MinosApplication.java").unlink()
+        self.write("minos-application", "com.minos.application", "Other", "final class Other { }")
+        self.refused(lambda: self.check({}), "A11", "MinosApplication")
+
+    def test_the_real_application_exposes_the_accessors_the_surfaces_call(self):
+        accessors = _MODULE.minos_application_accessors()
+        for name, engine_type in (("projectRegistry", "registry.ProjectRegistry"),
+                                  ("snapshotStore", "store.CodeKnowledgeSnapshotStore"),
+                                  ("gitIntelligence", "git.GitIntelligence"),
+                                  ("hostedControlPlaneService", "hosted.HostedControlPlaneService"),
+                                  ("snapshotStager", "orchestration.IndexingRuntimePorts")):
+            self.assertEqual((0, engine_type), accessors[name])
+
 
 class ProcessLauncherRuleTest(RatchetTreeTestCase):
     """A12 — in the domain, the engine and the application, only listed classes launch a process (AUD-ARC-05)."""
 
-    LISTED = frozenset({"minos-engine/io.PrivateLocalStorage"})
+    LISTED = {"minos-engine/io.PrivateLocalStorage": 1}
 
     def setUp(self):
         super().setUp()
         self.write("minos-engine", "com.minos.io", "PrivateLocalStorage",
-                   'public final class PrivateLocalStorage { Object p = new ProcessBuilder("icacls.exe"); }')
+                   'public final class PrivateLocalStorage { Object p = new ProcessBuilder("icacls.exe")'
+                   '.redirectOutput(ProcessBuilder.Redirect.DISCARD); }')
 
     def check(self, listed=None):
         return _MODULE.check_process_launchers(self.root, listed=self.LISTED if listed is None else listed)
 
     def test_the_listed_launcher_is_accepted(self):
         self.assertEqual(1, self.check())
+
+    def test_a_further_site_in_the_listed_class_is_refused_with_both_counts(self):
+        # AUD-ARC-05: a third icacls call in PrivateLocalStorage passed the class ratchet.
+        self.write("minos-engine", "com.minos.io", "PrivateLocalStorage",
+                   'public final class PrivateLocalStorage { Object p = new ProcessBuilder("icacls.exe"); '
+                   'Object q = new ProcessBuilder("icacls.exe", "/save"); }')
+        self.refused(self.check, "A12", "minos-engine/io.PrivateLocalStorage", "listed with 1 launch site(s)",
+                     "has 2")
+
+    def test_a_count_above_the_observed_sites_is_refused_with_the_count_to_write(self):
+        self.refused(lambda: self.check({"minos-engine/io.PrivateLocalStorage": 2}), "A12", "listed with 2",
+                     "has 1", "write 1")
+
+    def test_a_constructor_reference_a_pipeline_and_runtime_exec_are_sites_a_redirect_is_not(self):
+        self.write("minos-engine", "com.minos.io", "PrivateLocalStorage",
+                   "public final class PrivateLocalStorage { Object f = ProcessBuilder::new; "
+                   "Object g = ProcessBuilder.startPipeline(java.util.List.of()); "
+                   "Object r = ProcessBuilder.Redirect.DISCARD; "
+                   'void e() throws Exception { Runtime.getRuntime().exec(new String[] {"x"}); } }')
+        self.assertEqual(1, self.check({"minos-engine/io.PrivateLocalStorage": 3}))
+
+    def test_a_class_naming_only_the_redirect_is_still_a_launcher(self):
+        self.write("minos-engine", "com.minos.io", "Redirects",
+                   "final class Redirects { Object r = ProcessBuilder.Redirect.DISCARD; }")
+        self.refused(self.check, "A12", "minos-engine/io.Redirects")
+        self.assertEqual(2, self.check({**self.LISTED, "minos-engine/io.Redirects": 0}))
+
+    def test_a_negative_count_is_refused(self):
+        self.refused(lambda: self.check({"minos-engine/io.PrivateLocalStorage": -1}), "A12", "not a count")
 
     def test_a_process_builder_in_an_unlisted_engine_class_is_refused(self):
         self.write("minos-engine", "com.minos.io", "Second", 'final class Second { Object p = new ProcessBuilder("x"); }')
@@ -1086,12 +1267,16 @@ class ProcessLauncherRuleTest(RatchetTreeTestCase):
     def test_the_real_tree_has_only_the_listed_launchers(self):
         self.assertEqual(len(_MODULE.PROCESS_LAUNCHERS), _MODULE.check_process_launchers())
 
+    def test_the_real_private_storage_has_its_two_icacls_sites(self):
+        # inheritance:d (protect) and /save (read the DACL); the six mentions include four Redirect constants.
+        self.assertEqual({"minos-engine/io.PrivateLocalStorage": 2}, dict(_MODULE.PROCESS_LAUNCHERS))
+
 
 class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
     """A13 — an adapter names another adapter's types only through the list of the couple (AUD-ARC-08)."""
 
     COUPLE = ("minos-storage-postgresql", "minos-storage-local")
-    LISTED = {COUPLE: frozenset({"storage.local.store.SnapshotCodec"})}
+    LISTED = {COUPLE: {"storage.local.store.SnapshotCodec": 1}}
 
     def setUp(self):
         super().setUp()
@@ -1126,11 +1311,37 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
         self.refused(self.check, "A13", "minos-provider-scip -> minos-storage-local")
 
     def test_a_dead_entry_is_refused(self):
-        listed = {self.COUPLE: frozenset({"storage.local.store.SnapshotCodec", "storage.local.store.SnapshotIntegrityService"})}
+        listed = {self.COUPLE: {"storage.local.store.SnapshotCodec": 1, "storage.local.store.SnapshotIntegrityService": 1}}
         self.refused(lambda: self.check(listed), "A13", "storage.local.store.SnapshotIntegrityService", "no longer named")
 
+    def test_a_second_file_naming_a_listed_type_is_refused_with_both_counts(self):
+        # AUD-ARC-08: a new adapter file naming an already listed type passed the type ratchet.
+        self.write("minos-storage-postgresql", "com.minos.storage.postgresql.snapshot", "Payload",
+                   "final class Payload { SnapshotCodec c; }", ["com.minos.storage.local.store.SnapshotCodec"])
+        self.refused(self.check, "A13", "minos-storage-postgresql -> minos-storage-local",
+                     "storage.local.store.SnapshotCodec", "listed for 1 file(s)", "used by 2",
+                     "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/snapshot/Payload.java")
+
+    def test_a_count_above_the_observed_files_is_refused(self):
+        listed = {self.COUPLE: {"storage.local.store.SnapshotCodec": 3}}
+        self.refused(lambda: self.check(listed), "A13", "listed for 3 file(s)", "used by 1", "write 1")
+
+    def test_a_new_scip_file_naming_the_listed_command_locator_is_refused_against_the_real_list(self):
+        couple = ("minos-provider-scip", "minos-runtime-local")
+        listed = {couple: {"runtime.local.process.CommandLocator": 1}}
+        self.write("minos-runtime-local", "com.minos.runtime.local.process", "CommandLocator",
+                   "public final class CommandLocator { }")
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Plan", "final class Plan { CommandLocator l; }",
+                   ["com.minos.runtime.local.process.CommandLocator"])
+        self.write("minos-storage-postgresql", "com.minos.storage.postgresql", "Store", "final class Store { }")
+        self.assertEqual(1, self.check(listed))
+        self.write("minos-provider-scip", "com.minos.adapter.scip.go", "GoPlan", "final class GoPlan { CommandLocator l; }",
+                   ["com.minos.runtime.local.process.CommandLocator"])
+        self.refused(lambda: self.check(listed), "A13", "minos-provider-scip -> minos-runtime-local", "used by 2")
+        self.assertEqual(10, _MODULE.ADAPTER_TYPES_NAMED_BY_ADAPTER[couple]["runtime.local.process.CommandLocator"])
+
     def test_a_table_key_that_is_not_a_couple_of_adapters_is_refused(self):
-        listed = {**self.LISTED, ("minos-cli", "minos-storage-local"): frozenset()}
+        listed = {**self.LISTED, ("minos-cli", "minos-storage-local"): {}}
         self.refused(lambda: self.check(listed), "A13", "minos-cli -> minos-storage-local", "not a couple of adapters")
 
     def test_the_real_tree_names_only_listed_adapter_types(self):

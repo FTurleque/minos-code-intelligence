@@ -500,92 +500,112 @@ def check_runtime_local_exports(root: Path = ROOT, group_id: str | None = None,
 
 
 # A11 to A14 — debt held by ratchets (AUD-ARC-01, -05, -08, -12). Each table lists, from the production sources, what
-# exists today and nothing more: a name outside the table fails, and so does an entry nobody uses any more. The tables
-# only shrink, by a visible edit, when a structural change removes a use. Names are written relative to the reactor
-# groupId (read from the root POM). Test sources are not concerned.
+# exists today and nothing more: a name outside the table fails, and so does an entry nobody uses any more. A11 and A13
+# count, per type, the production files that use it, and A12 counts, per class, its launch sites: one more use fails,
+# and one less fails until the count is lowered. The tables only shrink, by a visible edit, when a structural change
+# removes a use; a `var` or a chained call is not a removal. Names are written relative to the reactor groupId (read
+# from the root POM). Test sources are not concerned.
 ENGINE_MODULE = "minos-engine"
 
-# A11 / AUD-ARC-01, ADR 0058 § 3 — the minos-engine types each surface names (import or fully qualified name).
-ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, frozenset[str]] = {
-    "minos-api": frozenset({
-        "diagnostics.PublicErrorMessages",
-        "git.GitIntelligence",
-        "hosted.HostedAuditEvent",
-        "hosted.HostedControlPlaneService",
-        "hosted.HostedPrincipal",
-        "hosted.HostedProjectBinding",
-        "hosted.HostedRetentionPlan",
-        "hosted.HostedRetentionPolicy",
-        "hosted.HostedRole",
-        "hosted.HostedTenantState",
-        "hosted.SharedWorkspace",
-        "query.RelationshipResult",
-        "query.SymbolResult",
-        "query.UsageResult",
-    }),
-    "minos-cli": frozenset({
-        "diagnostics.PublicErrorMessages",
-        "git.GitIntelligence",
-        "hosted.HostedControlPlaneService",
-        "hosted.HostedRetentionPolicy",
-        "hosted.HostedRole",
-        "io.PrivateLocalStorage",
-        "query.RelationshipResult",
-        "query.SymbolResult",
-        "query.UsageResult",
-        "registry.DegradedEntry",
-        "registry.ProjectPathMapping",
-        "registry.ProjectPathMappings",
-        "registry.UnreadableRegistryException",
-        "runtime.MinosVersion",
-        "runtime.WorkerSandboxProbe",
-    }),
-    "minos-mcp": frozenset({
-        "diagnostics.PublicErrorMessages",
-        "hosted.HostedControlPlaneService",
-        "registry.UnreadableRegistryException",
-        "runtime.MinosVersion",
-    }),
-    "minos-nexus": frozenset({
-        "io.Sha256",
-        "registry.ProjectRegistry",
-        "registry.RegisteredProject",
-        "registry.UnreadableRegistryException",
-        "store.CodeKnowledgeSnapshot",
-        "store.CodeKnowledgeSnapshotStore",
-    }),
+# A11 / AUD-ARC-01, ADR 0058 § 3 — the minos-engine types each surface uses, with the number of its production files
+# that use each: by import, by fully qualified name, or by calling a MinosApplication accessor that returns the type
+# (minos_application_accessors). The bytecode view of the same debt is ENGINE_TYPES_USED_BY_SURFACE_BYTECODE in
+# minos-app ModuleArchitectureTest: a lot that removes a use updates both tables.
+ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
+    "minos-api": {
+        "diagnostics.PublicErrorMessages": 1,
+        "git.GitIntelligence": 1,
+        "hosted.HostedAuditEvent": 1,
+        "hosted.HostedControlPlaneService": 1,
+        "hosted.HostedPrincipal": 1,
+        "hosted.HostedProjectBinding": 1,
+        "hosted.HostedRetentionPlan": 1,
+        "hosted.HostedRetentionPolicy": 1,
+        "hosted.HostedRole": 1,
+        "hosted.HostedTenantState": 1,
+        "hosted.SharedWorkspace": 1,
+        "query.RelationshipResult": 1,
+        "query.SymbolResult": 1,
+        "query.UsageResult": 1,
+        # Accessor uses without a name: LocalMinosApi passes app.projectRegistry() and app.snapshotStore() to
+        # LocalProjectSymbolQuery. Removed by the export and query lots of AUD-ARC-01.
+        "registry.ProjectRegistry": 1,
+        "store.CodeKnowledgeSnapshotStore": 1,
+    },
+    "minos-cli": {
+        "diagnostics.PublicErrorMessages": 3,
+        "git.GitIntelligence": 3,
+        "hosted.HostedControlPlaneService": 3,
+        "hosted.HostedRetentionPolicy": 1,
+        "hosted.HostedRole": 1,
+        "io.PrivateLocalStorage": 1,
+        "query.RelationshipResult": 1,
+        "query.SymbolResult": 1,
+        "query.UsageResult": 1,
+        "registry.DegradedEntry": 1,
+        "registry.ProjectPathMapping": 1,
+        "registry.ProjectPathMappings": 1,
+        # Accessor use without a name: MinosCliRunner passes opened.projectRegistry() and opened.snapshotStore() to
+        # NexusExportService. Removed by the NEXUS export lot of AUD-ARC-01.
+        "registry.ProjectRegistry": 1,
+        "registry.UnreadableRegistryException": 2,
+        "runtime.MinosVersion": 1,
+        "runtime.WorkerSandboxProbe": 1,
+        # Same accessor use as registry.ProjectRegistry above.
+        "store.CodeKnowledgeSnapshotStore": 1,
+    },
+    "minos-mcp": {
+        "diagnostics.PublicErrorMessages": 2,
+        "hosted.HostedControlPlaneService": 1,
+        "registry.UnreadableRegistryException": 1,
+        "runtime.MinosVersion": 1,
+    },
+    "minos-nexus": {
+        "io.Sha256": 1,
+        "registry.ProjectRegistry": 1,
+        "registry.RegisteredProject": 1,
+        "registry.UnreadableRegistryException": 1,
+        "store.CodeKnowledgeSnapshot": 1,
+        "store.CodeKnowledgeSnapshotStore": 1,
+    },
 }
 
-# A12 / AUD-ARC-05, ADR 0068 — classes of the inner layers that launch a process (module/name.Type).
+# A12 / AUD-ARC-05, ADR 0068 — classes of the inner layers that launch a process (module/name.Type), with their number
+# of launch sites.
 PROCESS_LAUNCHER_MODULES = ("minos-domain", ENGINE_MODULE, APPLICATION_MODULE)
-PROCESS_LAUNCHERS = frozenset({
-    # Windows ACL primitive (icacls.exe); its extraction to a platform port is designed with AUD-SEC-06.
-    "minos-engine/io.PrivateLocalStorage",
-})
+PROCESS_LAUNCHERS: dict[str, int] = {
+    # Windows ACL primitive: icacls /inheritance:d (protect) and icacls /save (read the DACL). ADR 0068 moves it to a
+    # platform port provided by minos-runtime-local.
+    "minos-engine/io.PrivateLocalStorage": 2,
+}
 PROCESS_LAUNCH = re.compile(r"\bProcessBuilder\b|\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\b")
+PROCESS_LAUNCH_SITE = re.compile(r"\bnew\s+ProcessBuilder\b|\bProcessBuilder\s*::\s*new\b"
+                                 r"|\bProcessBuilder\s*\.\s*startPipeline\b"
+                                 r"|\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\b")
 
-# A13 / AUD-ARC-08, ADR 0068 — the types of one adapter another adapter names, per (naming, named) couple.
-ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], frozenset[str]] = {
-    ("minos-provider-scip", "minos-runtime-local"): frozenset({
-        "runtime.local.StrongProcessOwnershipIndexerExecutor",
-        "runtime.local.process.BoundedProcessOutput",
-        "runtime.local.process.CommandLocator",
-        "runtime.local.process.IndexerProcessPlan",
-        "runtime.local.process.IndexerProcessPlanFactory",
-        "runtime.local.process.InstallationProcessEnvironment",
-        "runtime.local.process.ProcessIndexerExecutor",
-        "runtime.local.sandbox.WorkerSandboxBackend",
-        "runtime.local.sandbox.WorkerSandboxBackends",
-    }),
-    ("minos-provider-scip", "minos-storage-local"): frozenset({
-        "storage.local.store.FileSymbolSnapshotStore",
-    }),
-    ("minos-storage-postgresql", "minos-storage-local"): frozenset({
-        "storage.local.registry.ProjectPathMappingStore",
-        "storage.local.store.KnowledgeSnapshotCodecs",
-        "storage.local.store.SnapshotCodec",
-        "storage.local.store.SnapshotIntegrityService",
-    }),
+# A13 / AUD-ARC-08, ADR 0068 — the types of one adapter another adapter names, per (naming, named) couple, with the
+# number of files of the naming adapter that name each.
+ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], dict[str, int]] = {
+    ("minos-provider-scip", "minos-runtime-local"): {
+        "runtime.local.StrongProcessOwnershipIndexerExecutor": 1,
+        "runtime.local.process.BoundedProcessOutput": 3,
+        "runtime.local.process.CommandLocator": 10,
+        "runtime.local.process.IndexerProcessPlan": 4,
+        "runtime.local.process.IndexerProcessPlanFactory": 4,
+        "runtime.local.process.InstallationProcessEnvironment": 3,
+        "runtime.local.process.ProcessIndexerExecutor": 1,
+        "runtime.local.sandbox.WorkerSandboxBackend": 1,
+        "runtime.local.sandbox.WorkerSandboxBackends": 1,
+    },
+    ("minos-provider-scip", "minos-storage-local"): {
+        "storage.local.store.FileSymbolSnapshotStore": 1,
+    },
+    ("minos-storage-postgresql", "minos-storage-local"): {
+        "storage.local.registry.ProjectPathMappingStore": 1,
+        "storage.local.store.KnowledgeSnapshotCodecs": 2,
+        "storage.local.store.SnapshotCodec": 2,
+        "storage.local.store.SnapshotIntegrityService": 1,
+    },
 }
 
 # A14 / AUD-ARC-12, ADR 0068 — the package roots (first segment under the groupId) each module owns. A new package
@@ -624,11 +644,82 @@ def production_types(root: Path, module: str) -> dict[str, str]:
             ".".join(source.relative_to(source_root).parts[:-1]) for source in sorted(source_root.rglob("*.java"))}
 
 
-def types_named_by_module(root: Path, module: str, targets: dict[str, str],
-                          qualified_name: re.Pattern[str]) -> tuple[dict[str, set[str]], list[str]]:
-    """Target types the production sources of one module name, by single or static import or fully qualified name
-    (type -> files), and every wildcard import of a target package ('file -> package.*'). Comments and string literals
-    are ignored; a nested type counts as its top-level type."""
+PUBLIC_METHOD = re.compile(
+    r"\bpublic\s+((?:(?:static|final|synchronized|abstract|default)\s+)*)([A-Za-z_][\w.<>,?\[\] ]*?)\s+([a-z]\w*)\s*\(")
+RETURN_TYPE_WORD = re.compile(r"\b[A-Z]\w*(?:\.[A-Z]\w*)*")
+ACCESSOR_USE = re.compile(r"(::|\.)\s*([A-Za-z_]\w*)\b(\s*\()?")
+
+
+def literals_as_tokens(text: str) -> str:
+    """Blanks comments and replaces each string or character literal by one token, so that a literal argument still
+    counts as an argument."""
+    return COMMENTS_AND_LITERALS.sub(lambda match: " " if match.group(0).startswith("/") else "0", text)
+
+
+def minos_application_accessors(root: Path = ROOT, group_id: str | None = None) -> dict[str, tuple[int, str]]:
+    """A11 — the public instance methods of MinosApplication whose return type names a minos-engine type: method name
+    -> (parameter count, engine type relative to the groupId). Read from the source, never written in this guard. A
+    type argument (Optional<T>, List<T>) counts; a nested type counts as its top-level type. The application source is
+    required as soon as minos-application has production sources (fail-closed)."""
+    group = group_id or repository_group_id(root)
+    source_root = root / APPLICATION_MODULE / "src" / "main" / "java"
+    source = source_root / Path(*group.split(".")) / "application" / "MinosApplication.java"
+    if not source.is_file():
+        if source_root.is_dir():
+            fail(f"A11 cannot read the accessors of MinosApplication: {source.relative_to(root).as_posix()} is "
+                 "missing (the ratchet would stop counting the uses without a name)")
+        return {}
+    code = literals_as_tokens(source.read_text(encoding="utf-8"))
+    imported = {name.rsplit(".", 1)[-1]: name for static, name, wildcard in SOURCE_IMPORT.findall(code)
+                if not static and not wildcard}
+    engine = production_types(root, ENGINE_MODULE)
+    qualified_name = qualified_name_pattern(group)
+    accessors: dict[str, tuple[int, str]] = {}
+    depth = 0
+    position = 0
+    for match in PUBLIC_METHOD.finditer(code):
+        depth += code.count("{", position, match.start()) - code.count("}", position, match.start())
+        position = match.start()
+        modifiers, returned, name = match.groups()
+        if depth != 1 or re.search(r"\bstatic\b", modifiers):
+            continue
+        candidates = qualified_name.findall(returned)
+        for word in RETURN_TYPE_WORD.findall(returned):
+            head, _, tail = word.partition(".")
+            if head in imported:
+                candidates.append(imported[head] + ("." + tail if tail else ""))
+        types = sorted({resolved.removeprefix(group + ".") for resolved in
+                        (resolve_adapter_class(candidate, engine) for candidate in candidates) if resolved})
+        if len(types) > 1:
+            fail(f"A11 accessor MinosApplication.{name} returns several minos-engine types ({', '.join(types)}); "
+                 "the ratchet counts one type per accessor")
+        if types:
+            accessors[name] = (call_argument_count(code, match.end() - 1, "A11 unbalanced MinosApplication method"),
+                               types[0])
+    return accessors
+
+
+def accessor_types_used(code: str, accessors: dict[str, tuple[int, str]], group: str) -> set[str]:
+    """Engine types (qualified) a source reaches through a MinosApplication accessor: a call with the accessor's arity,
+    or a method reference. The code is the output of literals_as_tokens, imports removed."""
+    used: set[str] = set()
+    for match in ACCESSOR_USE.finditer(code):
+        accessor = accessors.get(match.group(2))
+        if accessor is None:
+            continue
+        if match.group(1) == "::" or (match.group(3) and accessor[0] == call_argument_count(
+                code, match.end() - 1, "A11 unbalanced accessor call")):
+            used.add(f"{group}.{accessor[1]}")
+    return used
+
+
+def types_named_by_module(root: Path, module: str, targets: dict[str, str], qualified_name: re.Pattern[str],
+                          accessors: dict[str, tuple[int, str]] | None = None, group: str = ""
+                          ) -> tuple[dict[str, set[str]], list[str]]:
+    """Target types the production sources of one module use (type -> files): by single or static import, by fully
+    qualified name and, when accessors are given, by a call of a MinosApplication accessor that returns the type. Also
+    every wildcard import of a target package ('file -> package.*'). Comments and string literals are ignored; a nested
+    type counts as its top-level type."""
     named: dict[str, set[str]] = {}
     wildcards: list[str] = []
     packages = set(targets.values())
@@ -636,7 +727,8 @@ def types_named_by_module(root: Path, module: str, targets: dict[str, str],
     if not source_root.is_dir():
         return named, wildcards
     for source in sorted(source_root.rglob("*.java")):
-        code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+        text = source.read_text(encoding="utf-8")
+        code = COMMENTS_AND_LITERALS.sub(" ", text)
         relative = source.relative_to(root).as_posix()
         names = []
         for static, name, wildcard in SOURCE_IMPORT.findall(code):
@@ -646,6 +738,8 @@ def types_named_by_module(root: Path, module: str, targets: dict[str, str],
                 continue
             names.append(name)
         names += qualified_name.findall(SOURCE_IMPORT.sub(" ", code))
+        if accessors:
+            names += sorted(accessor_types_used(SOURCE_IMPORT.sub(" ", literals_as_tokens(text)), accessors, group))
         for name in names:
             resolved = resolve_adapter_class(name, targets)
             if resolved:
@@ -654,18 +748,29 @@ def types_named_by_module(root: Path, module: str, targets: dict[str, str],
 
 
 def named_type_ratchet_problems(rule: str, label: str, table: str, root: Path, naming: str, target: str,
-                             listed: frozenset[str], group: str, qualified_name: re.Pattern[str]) -> list[str]:
-    """Problems of one (naming module, target module) list: unknown entry, type outside the list, dead entry."""
+                                listed: dict[str, int], group: str, qualified_name: re.Pattern[str],
+                                accessors: dict[str, tuple[int, str]] | None = None) -> list[str]:
+    """Problems of one (naming module, target module) list: unknown entry, invalid count, type outside the list, count
+    different from the number of files that use the type, dead entry."""
     targets = production_types(root, target)
     prefix = group + "."
     problems = [f"{label}: {table} entry {name} names no production type of {target}"
                 for name in sorted(listed) if prefix + name not in targets]
-    named, wildcards = types_named_by_module(root, naming, targets, qualified_name)
+    problems += [f"{label}: {table} entry {name} has the count {count!r}; write the positive number of files that "
+                 "use it" for name, count in sorted(listed.items())
+                 if isinstance(count, bool) or not isinstance(count, int) or count < 1]
+    named, wildcards = types_named_by_module(root, naming, targets, qualified_name, accessors, group)
     problems += [f"{label}: wildcard import of a {target} package {wildcard}" for wildcard in wildcards]
     for qualified in sorted(named):
-        if qualified.removeprefix(prefix) not in listed:
-            problems.append(f"{label}: {', '.join(sorted(named[qualified]))} names {qualified}, "
-                            f"absent from {table}")
+        name = qualified.removeprefix(prefix)
+        files = sorted(named[qualified])
+        if name not in listed:
+            problems.append(f"{label}: {', '.join(files)} uses {qualified}, absent from {table}")
+        elif listed[name] != len(files):
+            advice = ("a new use goes through a port, not into the table" if len(files) > listed[name]
+                      else f"write {len(files)} (the ratchet only shrinks)")
+            problems.append(f"{label}: {table} entry {name} is listed for {listed[name]} file(s) and used by "
+                            f"{len(files)} ({', '.join(files)}); {advice}")
     used = {qualified.removeprefix(prefix) for qualified in named}
     problems += [f"{label}: {table} entry {name} is no longer named; remove it (the ratchet only shrinks)"
                  for name in sorted(listed) if prefix + name in targets and name not in used]
@@ -673,30 +778,36 @@ def named_type_ratchet_problems(rule: str, label: str, table: str, root: Path, n
 
 
 def check_engine_types_named_by_surfaces(root: Path = ROOT, group_id: str | None = None,
-                                         listed: dict[str, frozenset[str]] | None = None) -> dict[str, int]:
-    """A11 — each surface names only the minos-engine types of its ENGINE_TYPES_NAMED_BY_SURFACE list."""
+                                         listed: dict[str, dict[str, int]] | None = None) -> dict[str, int]:
+    """A11 — each surface uses only the minos-engine types of its ENGINE_TYPES_NAMED_BY_SURFACE list, each from the
+    listed number of files; a call of a MinosApplication accessor counts as a use of the engine type it returns."""
     listed = ENGINE_TYPES_NAMED_BY_SURFACE if listed is None else listed
     group = group_id or repository_group_id(root)
     qualified_name = qualified_name_pattern(group)
+    accessors = minos_application_accessors(root, group)
     unknown = sorted(set(listed) - SURFACE_MODULES)
     problems = [f"ENGINE_TYPES_NAMED_BY_SURFACE names {module}, which is not a surface" for module in unknown]
     for surface in sorted(SURFACE_MODULES):
         problems += named_type_ratchet_problems("A11", surface, "ENGINE_TYPES_NAMED_BY_SURFACE", root, surface,
-                                             ENGINE_MODULE, listed.get(surface, frozenset()), group, qualified_name)
+                                                ENGINE_MODULE, listed.get(surface, {}), group, qualified_name,
+                                                accessors)
     if problems:
         fail("A11 surface -> minos-engine ratchet (ADR 0058 section 3: a new engine type used by a surface needs a "
              "justification; go through an application port, or add the type to ENGINE_TYPES_NAMED_BY_SURFACE in "
              "a reviewed change): " + "; ".join(problems))
-    return {surface: len(listed.get(surface, frozenset())) for surface in sorted(SURFACE_MODULES)}
+    return {surface: len(listed.get(surface, {})) for surface in sorted(SURFACE_MODULES)}
 
 
 def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
-                            listed: frozenset[str] = PROCESS_LAUNCHERS,
+                            listed: dict[str, int] | None = None,
                             modules: tuple[str, ...] = PROCESS_LAUNCHER_MODULES) -> int:
-    """A12 — in the domain, the engine and the application, only the PROCESS_LAUNCHERS classes launch a process
-    (ProcessBuilder, Runtime.getRuntime().exec). Comments and string literals are ignored."""
+    """A12 — in the domain, the engine and the application, only the PROCESS_LAUNCHERS classes launch a process (a
+    class that mentions ProcessBuilder or Runtime.getRuntime().exec), each with its listed number of launch sites (new
+    ProcessBuilder, ProcessBuilder::new, ProcessBuilder.startPipeline, Runtime.getRuntime().exec). Comments and string
+    literals are ignored."""
+    listed = PROCESS_LAUNCHERS if listed is None else listed
     prefix = (group_id or repository_group_id(root)) + "."
-    found: dict[str, str] = {}
+    found: dict[str, tuple[str, int]] = {}
     for module in modules:
         source_root = root / module / "src" / "main" / "java"
         if not source_root.is_dir():
@@ -705,11 +816,21 @@ def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
             code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
             if PROCESS_LAUNCH.search(code):
                 name = ".".join(source.relative_to(source_root).with_suffix("").parts).removeprefix(prefix)
-                found[f"{module}/{name}"] = source.relative_to(root).as_posix()
+                found[f"{module}/{name}"] = (source.relative_to(root).as_posix(),
+                                             len(PROCESS_LAUNCH_SITE.findall(code)))
     problems = [f"{path} launches a process and is not in PROCESS_LAUNCHERS ({entry})"
-                for entry, path in sorted(found.items()) if entry not in listed]
+                for entry, (path, _) in sorted(found.items()) if entry not in listed]
+    problems += [f"PROCESS_LAUNCHERS entry {entry} has the count {count!r}, which is not a count of launch sites"
+                 for entry, count in sorted(listed.items())
+                 if isinstance(count, bool) or not isinstance(count, int) or count < 0]
+    for entry, (path, sites) in sorted(found.items()):
+        if entry in listed and listed[entry] != sites:
+            advice = ("a new launch goes through a port provided by minos-runtime-local" if sites > listed[entry]
+                      else f"write {sites} (the ratchet only shrinks)")
+            problems.append(f"{path}: PROCESS_LAUNCHERS entry {entry} is listed with {listed[entry]} launch site(s) "
+                            f"and has {sites}; {advice}")
     problems += [f"PROCESS_LAUNCHERS entry {entry} launches no process any more; remove it (the ratchet only shrinks)"
-                 for entry in sorted(listed - set(found))]
+                 for entry in sorted(set(listed) - set(found))]
     if problems:
         fail("A12 process launch outside minos-runtime-local (ADR 0068: the process runtime belongs to the local "
              "runtime adapter; inject a port it provides): " + "; ".join(problems))
@@ -717,8 +838,9 @@ def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
 
 
 def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | None = None,
-                                          listed: dict[tuple[str, str], frozenset[str]] | None = None) -> int:
-    """A13 — an adapter names the types of another adapter only through ADAPTER_TYPES_NAMED_BY_ADAPTER."""
+                                          listed: dict[tuple[str, str], dict[str, int]] | None = None) -> int:
+    """A13 — an adapter names the types of another adapter only through ADAPTER_TYPES_NAMED_BY_ADAPTER, each from the
+    listed number of files."""
     listed = ADAPTER_TYPES_NAMED_BY_ADAPTER if listed is None else listed
     group = group_id or repository_group_id(root)
     qualified_name = qualified_name_pattern(group)
@@ -727,8 +849,8 @@ def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | Non
     for naming in sorted(ADAPTER_MODULES):
         for named in sorted(ADAPTER_MODULES - {naming}):
             problems += named_type_ratchet_problems("A13", f"{naming} -> {named}", "ADAPTER_TYPES_NAMED_BY_ADAPTER",
-                                                 root, naming, named, listed.get((naming, named), frozenset()),
-                                                 group, qualified_name)
+                                                    root, naming, named, listed.get((naming, named), {}),
+                                                    group, qualified_name)
     if problems:
         fail("A13 adapter -> adapter ratchet (ADR 0068: adapters meet through engine ports; a new coupling is "
              "added to ADAPTER_TYPES_NAMED_BY_ADAPTER in a reviewed change): " + "; ".join(problems))
@@ -771,8 +893,9 @@ def blank_comments_and_literals(code: str) -> str:
     return COMMENTS_AND_LITERALS.sub(lambda match: re.sub(r"[^\n]", " ", match.group(0)), code)
 
 
-def call_argument_count(code: str, open_parenthesis: int) -> int:
-    """Top-level arguments of the call whose opening parenthesis is at the given index (0 for an empty call)."""
+def call_argument_count(code: str, open_parenthesis: int, label: str = "A16 unbalanced ServiceLoader.load call") -> int:
+    """Top-level arguments of the call whose opening parenthesis is at the given index (0 for an empty call); an
+    unbalanced call fails the guard with the given label."""
     depth = 0
     commas = 0
     empty = True
@@ -787,7 +910,7 @@ def call_argument_count(code: str, open_parenthesis: int) -> int:
             commas += 1
         if not character.isspace():
             empty = False
-    fail("A16 unbalanced ServiceLoader.load call")
+    fail(label)
     return 0
 
 
@@ -1541,11 +1664,13 @@ def main() -> int:
         print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
               f"modules, none other is")
         print("A11 surface -> minos-engine types: "
-              + ", ".join(f"{surface}={count}" for surface, count in engine_types.items())
-              + " listed in ENGINE_TYPES_NAMED_BY_SURFACE, none other is named")
-        print(f"A12 process launchers: {launchers} class(es) of domain, engine and application listed, none other "
-              f"launches a process")
-        print(f"A13 adapter -> adapter types: {adapter_types} listed in ADAPTER_TYPES_NAMED_BY_ADAPTER, none other "
+              + ", ".join(f"{surface}={count} ({sum(ENGINE_TYPES_NAMED_BY_SURFACE.get(surface, {}).values())} files)"
+                          for surface, count in engine_types.items())
+              + " listed in ENGINE_TYPES_NAMED_BY_SURFACE (names and MinosApplication accessors), none other is used")
+        print(f"A12 process launchers: {launchers} class(es) of domain, engine and application listed with "
+              f"{sum(PROCESS_LAUNCHERS.values())} launch site(s), none other launches a process")
+        print(f"A13 adapter -> adapter types: {adapter_types} listed in ADAPTER_TYPES_NAMED_BY_ADAPTER "
+              f"({sum(sum(types.values()) for types in ADAPTER_TYPES_NAMED_BY_ADAPTER.values())} files), none other "
               f"is named")
         print(f"A14 package roots: {package_roots} roots over {len(MODULES)} modules, no new root")
         print(f"AUD-ARC-11 execution edges by service: "

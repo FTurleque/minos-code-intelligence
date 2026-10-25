@@ -61,7 +61,7 @@ Chaque tâche possède actions, fichiers, critères et vérifications dans [TASK
 
 ## Ordre de spécification issu du sprint 10 de l'audit du 10 octobre 2026
 
-Décisions du propriétaire du 2026-10-22 : [ADR 0062](../../../architecture/adr/archive/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) et ordre de l'[ADR 0047](../../../architecture/adr/archive/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md). En attendant chaque chantier, la dette qu'il résorbe est figée par les règles A11 à A14 de `scripts/architecture/check-module-boundaries.py` : chaque lot livré retire des lignes de ces tables.
+Décisions du propriétaire du 2026-10-22 : [ADR 0062](../../../architecture/adr/archive/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) et ordre de l'[ADR 0047](../../../architecture/adr/archive/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md). En attendant chaque chantier, la dette qu'il résorbe est figée par les règles A11 à A14 de `scripts/architecture/check-module-boundaries.py`. A11 et A13 comptent les fichiers qui utilisent chaque type, A12 les sites de lancement de chaque classe, et A11 a une seconde table sur le bytecode (`ModuleArchitectureTest`) : changement `rendre-les-cliquets-d-architecture-etanches`, préparation de SH-11. Chaque lot livré baisse un compteur ou retire une ligne de ces tables ; un `var` ou un chaînage n'en retire aucune. Compteurs de départ des lots : [suivi de l'audit](../../audits/2026-10-10/SUIVI.md), section « Résorption de la dette d'architecture figée ».
 
 | Chantier | Constat | Prérequis | État du prérequis | À spécifier |
 |---|---|---|---|---|
