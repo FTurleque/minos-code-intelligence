@@ -116,7 +116,7 @@
   {
     "file": "minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java",
     "method": "Files.createTempFile",
-    "max": 4,
+    "max": 3,
     "justification": "Primitive de création à droits privés : ce fichier crée lui-même les fichiers et répertoires avec les droits du propriétaire seul (D2 du changement etendre-le-garde-d-e-s-privees-aux-ecritures-brutes) ; entrée durable."
   },
   {
@@ -124,6 +124,12 @@
     "method": "Files.newOutputStream",
     "max": 1,
     "justification": "Primitive de création à droits privés : ce fichier crée lui-même les fichiers et répertoires avec les droits du propriétaire seul (D2 du changement etendre-le-garde-d-e-s-privees-aux-ecritures-brutes) ; entrée durable."
+  },
+  {
+    "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/acl/WindowsIcaclsAccessControl.java",
+    "method": "Files.createTempFile",
+    "max": 1,
+    "justification": "Fichier où icacls /save écrit la DACL lue avant tout durcissement (SH-08, AUD-SEC-06) : il est créé dans le dossier temporaire du compte et supprimé aussitôt lu. Il ne peut pas passer par PrivateLocalStorage, qui appelle ce port et rentrerait en boucle ; entrée durable."
   },
   {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java",

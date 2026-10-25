@@ -884,52 +884,6 @@
       <Message>At SnapshotQueryView.java:[line 17]</Message>
     </SourceLine>
   </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="2824b748b3b96be671048cf516e37926" rank="16" abbrev="ENV" category="BAD_PRACTICE" priority="2" type="ENV_USE_PROPERTY_INSTEAD_OF_ENV" instanceOccurrenceMax="0">
-    <ShortMessage>It is preferable to use portable Java property instead of environment variable.</ShortMessage>
-    <LongMessage>It is preferable to use portable Java property 'java.io.tmpdir' instead of environment variable 'TEMP' in method com.minos.io.PrivateLocalStorage$WindowsDacl.requireNoConditionalDeny(Path).</LongMessage>
-    <Class classname="com.minos.io.PrivateLocalStorage$WindowsDacl" primary="true">
-      <SourceLine classname="com.minos.io.PrivateLocalStorage$WindowsDacl" start="814" end="922" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java">
-        <Message>At PrivateLocalStorage.java:[lines 814-922]</Message>
-      </SourceLine>
-      <Message>In class com.minos.io.PrivateLocalStorage$WindowsDacl</Message>
-    </Class>
-    <Method isStatic="true" classname="com.minos.io.PrivateLocalStorage$WindowsDacl" signature="(Ljava/nio/file/Path;)V" name="requireNoConditionalDeny" primary="true">
-      <SourceLine endBytecode="134" classname="com.minos.io.PrivateLocalStorage$WindowsDacl" start="862" end="869" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java" startBytecode="0" />
-      <Message>In method com.minos.io.PrivateLocalStorage$WindowsDacl.requireNoConditionalDeny(Path)</Message>
-    </Method>
-    <String value="TEMP">
-      <Message>Value TEMP</Message>
-    </String>
-    <String value="java.io.tmpdir">
-      <Message>Value java.io.tmpdir</Message>
-    </String>
-    <SourceLine endBytecode="36" classname="com.minos.io.PrivateLocalStorage$WindowsDacl" start="864" end="864" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java" startBytecode="36" primary="true">
-      <Message>At PrivateLocalStorage.java:[line 864]</Message>
-    </SourceLine>
-  </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="b96525d92a0994efaf42ec5345f00314" rank="16" abbrev="ENV" category="BAD_PRACTICE" priority="2" type="ENV_USE_PROPERTY_INSTEAD_OF_ENV" instanceOccurrenceMax="0">
-    <ShortMessage>It is preferable to use portable Java property instead of environment variable.</ShortMessage>
-    <LongMessage>It is preferable to use portable Java property 'java.io.tmpdir' instead of environment variable 'TMP' in method com.minos.io.PrivateLocalStorage$WindowsDacl.requireNoConditionalDeny(Path).</LongMessage>
-    <Class classname="com.minos.io.PrivateLocalStorage$WindowsDacl" primary="true">
-      <SourceLine classname="com.minos.io.PrivateLocalStorage$WindowsDacl" start="814" end="922" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java">
-        <Message>At PrivateLocalStorage.java:[lines 814-922]</Message>
-      </SourceLine>
-      <Message>In class com.minos.io.PrivateLocalStorage$WindowsDacl</Message>
-    </Class>
-    <Method isStatic="true" classname="com.minos.io.PrivateLocalStorage$WindowsDacl" signature="(Ljava/nio/file/Path;)V" name="requireNoConditionalDeny" primary="true">
-      <SourceLine endBytecode="134" classname="com.minos.io.PrivateLocalStorage$WindowsDacl" start="862" end="869" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java" startBytecode="0" />
-      <Message>In method com.minos.io.PrivateLocalStorage$WindowsDacl.requireNoConditionalDeny(Path)</Message>
-    </Method>
-    <String value="TMP">
-      <Message>Value TMP</Message>
-    </String>
-    <String value="java.io.tmpdir">
-      <Message>Value java.io.tmpdir</Message>
-    </String>
-    <SourceLine endBytecode="44" classname="com.minos.io.PrivateLocalStorage$WindowsDacl" start="864" end="864" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java" startBytecode="44" primary="true">
-      <Message>At PrivateLocalStorage.java:[line 864]</Message>
-    </SourceLine>
-  </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="60e2d9779d463ba1c63f3e6e292d012" cweid="459" rank="12" abbrev="UL" category="MT_CORRECTNESS" priority="1" type="UL_UNRELEASED_LOCK" instanceOccurrenceMax="0">
     <ShortMessage>Method does not release lock on all paths</ShortMessage>
     <LongMessage>com.minos.orchestration.InMemoryIndexStateStore.acquireProjectLease(UUID) does not release lock on all paths</LongMessage>

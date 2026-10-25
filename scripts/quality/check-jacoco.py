@@ -50,6 +50,14 @@ SCOPES = {
         "prefixes": ("com/minos/runtime/local/workspace/RunDirectoryRetention",),
         "line": 0.87, "branch": 0.82,
     },
+    # SH-08 / AUD-ARC-05: the icacls launcher and the Windows platform access control of private storage. Linux line
+    # 0.865 / branch 0.893, Windows 0.952 / 0.839 (pr-ci.yml run 40219944047, head 465f3bb7, 2026-10-25, module report
+    # of minos-runtime-local on each system; the aggregate report adds the callers of other modules). Floor = the
+    # lower measure minus 2 points.
+    "platform-access-control": {
+        "prefixes": ("com/minos/runtime/local/acl/",),
+        "line": 0.84, "branch": 0.81,
+    },
     "domain-invariants": {"prefixes": ("com/minos/domain/",), "line": 0.80, "branch": 0.60},
     "persistence-cache-indexes": {
         "prefixes": (

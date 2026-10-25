@@ -28,5 +28,31 @@
             <artifactId>minos-engine</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <!-- SH-08: IcaclsTestAccessControl (com.minos.testsupport), the platform access control of the Windows tests of
+                 a module that cannot see minos-runtime-local; test scope adds no edge (compile edge to minos-engine already exists) -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-engine</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- SH-08: registers IcaclsTestAccessControl (minos-engine test-jar) as the platform access control of this
+                         module's tests, which cannot see minos-runtime-local; kept out of target/test-classes so that no
+                         module using a test-jar of this one finds a second implementation -->
+                    <additionalClasspathElements>
+                        <additionalClasspathElement>${project.basedir}/src/test/platform-access-control</additionalClasspathElement>
+                    </additionalClasspathElements>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

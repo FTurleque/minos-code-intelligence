@@ -444,4 +444,50 @@
       <Message>Known null at ProviderWorkspaceFiles.java:[line 81]</Message>
     </SourceLine>
   </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="b862b907171049e57cddb2293fc46fca" rank="16" abbrev="ENV" category="BAD_PRACTICE" priority="2" type="ENV_USE_PROPERTY_INSTEAD_OF_ENV" instanceOccurrenceMax="0">
+    <ShortMessage>It is preferable to use portable Java property instead of environment variable.</ShortMessage>
+    <LongMessage>It is preferable to use portable Java property 'java.io.tmpdir' instead of environment variable 'TEMP' in method com.minos.runtime.local.acl.WindowsIcaclsAccessControl.lambda$new$0().</LongMessage>
+    <Class classname="com.minos.runtime.local.acl.WindowsIcaclsAccessControl" primary="true">
+      <SourceLine classname="com.minos.runtime.local.acl.WindowsIcaclsAccessControl" start="42" end="97" sourcepath="com/minos/runtime/local/acl/WindowsIcaclsAccessControl.java" sourcefile="WindowsIcaclsAccessControl.java">
+        <Message>At WindowsIcaclsAccessControl.java:[lines 42-97]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.acl.WindowsIcaclsAccessControl</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.runtime.local.acl.WindowsIcaclsAccessControl" signature="()Ljava/util/List;" name="lambda$new$0" primary="true">
+      <SourceLine endBytecode="55" classname="com.minos.runtime.local.acl.WindowsIcaclsAccessControl" start="43" end="43" sourcepath="com/minos/runtime/local/acl/WindowsIcaclsAccessControl.java" sourcefile="WindowsIcaclsAccessControl.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.acl.WindowsIcaclsAccessControl.lambda$new$0()</Message>
+    </Method>
+    <String value="TEMP">
+      <Message>Value TEMP</Message>
+    </String>
+    <String value="java.io.tmpdir">
+      <Message>Value java.io.tmpdir</Message>
+    </String>
+    <SourceLine endBytecode="8" classname="com.minos.runtime.local.acl.WindowsIcaclsAccessControl" start="43" end="43" sourcepath="com/minos/runtime/local/acl/WindowsIcaclsAccessControl.java" sourcefile="WindowsIcaclsAccessControl.java" startBytecode="8" primary="true">
+      <Message>At WindowsIcaclsAccessControl.java:[line 43]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="95dbf91068fc961abf3fcd07755d6049" rank="16" abbrev="ENV" category="BAD_PRACTICE" priority="2" type="ENV_USE_PROPERTY_INSTEAD_OF_ENV" instanceOccurrenceMax="0">
+    <ShortMessage>It is preferable to use portable Java property instead of environment variable.</ShortMessage>
+    <LongMessage>It is preferable to use portable Java property 'java.io.tmpdir' instead of environment variable 'TMP' in method com.minos.runtime.local.acl.WindowsIcaclsAccessControl.lambda$new$0().</LongMessage>
+    <Class classname="com.minos.runtime.local.acl.WindowsIcaclsAccessControl" primary="true">
+      <SourceLine classname="com.minos.runtime.local.acl.WindowsIcaclsAccessControl" start="42" end="97" sourcepath="com/minos/runtime/local/acl/WindowsIcaclsAccessControl.java" sourcefile="WindowsIcaclsAccessControl.java">
+        <Message>At WindowsIcaclsAccessControl.java:[lines 42-97]</Message>
+      </SourceLine>
+      <Message>In class com.minos.runtime.local.acl.WindowsIcaclsAccessControl</Message>
+    </Class>
+    <Method isStatic="true" classname="com.minos.runtime.local.acl.WindowsIcaclsAccessControl" signature="()Ljava/util/List;" name="lambda$new$0" primary="true">
+      <SourceLine endBytecode="55" classname="com.minos.runtime.local.acl.WindowsIcaclsAccessControl" start="43" end="43" sourcepath="com/minos/runtime/local/acl/WindowsIcaclsAccessControl.java" sourcefile="WindowsIcaclsAccessControl.java" startBytecode="0" />
+      <Message>In method com.minos.runtime.local.acl.WindowsIcaclsAccessControl.lambda$new$0()</Message>
+    </Method>
+    <String value="TMP">
+      <Message>Value TMP</Message>
+    </String>
+    <String value="java.io.tmpdir">
+      <Message>Value java.io.tmpdir</Message>
+    </String>
+    <SourceLine endBytecode="16" classname="com.minos.runtime.local.acl.WindowsIcaclsAccessControl" start="43" end="43" sourcepath="com/minos/runtime/local/acl/WindowsIcaclsAccessControl.java" sourcefile="WindowsIcaclsAccessControl.java" startBytecode="16" primary="true">
+      <Message>At WindowsIcaclsAccessControl.java:[line 43]</Message>
+    </SourceLine>
+  </BugInstance>
 </BugCollection>
