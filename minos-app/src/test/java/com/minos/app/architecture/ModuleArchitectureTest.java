@@ -82,6 +82,60 @@ class ModuleArchitectureTest {
             "minos-storage-postgresql", "minos-provider-scip", "minos-integration-git");
     private static final Set<String> SURFACES = Set.of("minos-cli", "minos-api", "minos-mcp", "minos-nexus");
 
+    /**
+     * A11 on the bytecode (AUD-ARC-01, ADR 0058 § 3): per surface, the top-level minos-engine types its compiled classes
+     * depend on, with the number of top-level surface classes that depend on each. The source view of the same debt is
+     * ENGINE_TYPES_NAMED_BY_SURFACE in scripts/architecture/check-module-boundaries.py; the bytecode also sees the calls
+     * chained on an engine result, which name no type, and misses a type used only as a type argument. A change that
+     * removes a use updates both tables; the tables only shrink.
+     */
+    private static final Map<String, Map<String, Integer>> ENGINE_TYPES_USED_BY_SURFACE_BYTECODE = Map.of(
+            "minos-api", Map.ofEntries(
+                    Map.entry("diagnostics.PublicErrorMessages", 1),
+                    Map.entry("git.GitIntelligence", 1),
+                    Map.entry("hosted.HostedAuditEvent", 1),
+                    Map.entry("hosted.HostedControlPlaneService", 1),
+                    Map.entry("hosted.HostedPrincipal", 1),
+                    Map.entry("hosted.HostedProjectBinding", 1),
+                    Map.entry("hosted.HostedRetentionPlan", 1),
+                    Map.entry("hosted.HostedRetentionPolicy", 1),
+                    Map.entry("hosted.HostedRole", 1),
+                    Map.entry("hosted.HostedTenantState", 1),
+                    Map.entry("hosted.SharedWorkspace", 1),
+                    Map.entry("query.RelationshipResult", 1),
+                    Map.entry("query.SymbolResult", 1),
+                    Map.entry("query.UsageResult", 1)),
+            "minos-cli", Map.ofEntries(
+                    Map.entry("diagnostics.PublicErrorMessages", 3),
+                    Map.entry("git.GitIntelligence", 3),
+                    Map.entry("hosted.HostedControlPlaneService", 2),
+                    Map.entry("hosted.HostedProjectBinding", 1),
+                    Map.entry("hosted.HostedRetentionPolicy", 1),
+                    Map.entry("hosted.HostedRole", 1),
+                    Map.entry("hosted.HostedTenantState", 1),
+                    Map.entry("io.PrivateLocalStorage", 1),
+                    Map.entry("registry.DegradedEntry", 2),
+                    Map.entry("registry.ProjectPathMapping", 1),
+                    Map.entry("registry.ProjectPathMappings", 1),
+                    Map.entry("registry.UnreadableRegistryException", 2),
+                    Map.entry("runtime.HostCommandLocator", 1),
+                    Map.entry("runtime.MinosVersion", 1),
+                    Map.entry("runtime.WorkerSandboxProbe", 1)),
+            "minos-mcp", Map.ofEntries(
+                    Map.entry("diagnostics.PublicErrorMessages", 2),
+                    Map.entry("hosted.HostedControlPlaneService", 1),
+                    Map.entry("registry.UnreadableRegistryException", 1),
+                    Map.entry("runtime.MinosVersion", 1)),
+            "minos-nexus", Map.ofEntries(
+                    Map.entry("io.Sha256", 1),
+                    Map.entry("registry.ProjectRegistry", 1),
+                    Map.entry("registry.RegisteredProject", 1),
+                    Map.entry("registry.UnreadableRegistryException", 1),
+                    Map.entry("store.CodeKnowledgeSnapshot", 1),
+                    Map.entry("store.CodeKnowledgeSnapshotStore", 1)));
+
+    private static final String GROUP_PREFIX = "com.minos.";
+
     private static final Map<String, Set<String>> CLASSES_BY_MODULE = new LinkedHashMap<>();
     private static final Map<String, String> MODULE_BY_CLASS = new HashMap<>();
     private static JavaClasses all;
@@ -207,6 +261,87 @@ class ModuleArchitectureTest {
         }
         System.out.println("undeclared module uses (module -> used module = dependencies): " + undeclared);
         assertTrue(undeclared.isEmpty(), "undeclared module uses " + undeclared + "\n" + String.join("\n", details));
+    }
+
+    /**
+     * A11 on the bytecode: each surface depends only on the minos-engine types of its
+     * ENGINE_TYPES_USED_BY_SURFACE_BYTECODE list, each from the listed number of top-level classes.
+     */
+    @Test
+    void surfacesUseOnlyListedEngineTypes() {
+        Map<String, Map<String, Set<String>>> observed = new TreeMap<>();
+        for (JavaClass javaClass : all) {
+            String surface = MODULE_BY_CLASS.get(javaClass.getName());
+            if (!SURFACES.contains(surface)) {
+                continue;
+            }
+            for (Dependency dependency : javaClass.getDirectDependenciesFromSelf()) {
+                String target = dependency.getTargetClass().getName();
+                if ("minos-engine".equals(MODULE_BY_CLASS.get(target))) {
+                    observed.computeIfAbsent(surface, ignored -> new TreeMap<>())
+                            .computeIfAbsent(topLevel(target).substring(GROUP_PREFIX.length()), ignored -> new TreeSet<>())
+                            .add(topLevel(javaClass.getName()));
+                }
+            }
+        }
+        List<String> problems = ratchetProblems(ENGINE_TYPES_USED_BY_SURFACE_BYTECODE, observed);
+        assertTrue(problems.isEmpty(), "A11 bytecode ratchet (ADR 0058 section 3: a surface reaches the engine through "
+                + "application ports; ENGINE_TYPES_USED_BY_SURFACE_BYTECODE only shrinks): " + String.join("; ", problems));
+    }
+
+    /** The comparison of the A11 bytecode ratchet refuses a new type, a changed count and a dead entry. */
+    @Test
+    void theBytecodeRatchetRefusesANewTypeAChangedCountAndADeadEntry() {
+        Map<String, Map<String, Integer>> listed = Map.of("minos-cli", Map.of("hosted.HostedRole", 1, "io.Gone", 1));
+        Map<String, Map<String, Set<String>>> observed = Map.of("minos-cli", Map.of(
+                "hosted.HostedRole", Set.of("com.minos.cli.A", "com.minos.cli.B"),
+                "hosted.HostedTenantState", Set.of("com.minos.cli.A")));
+
+        List<String> problems = ratchetProblems(listed, observed);
+
+        assertEquals(3, problems.size(), problems::toString);
+        assertTrue(problems.stream().anyMatch(problem -> problem.contains("hosted.HostedTenantState")
+                && problem.contains("absent from")), problems::toString);
+        assertTrue(problems.stream().anyMatch(problem -> problem.contains("hosted.HostedRole")
+                && problem.contains("listed for 1") && problem.contains("used by 2")), problems::toString);
+        assertTrue(problems.stream().anyMatch(problem -> problem.contains("io.Gone")
+                && problem.contains("no longer used")), problems::toString);
+        assertTrue(ratchetProblems(Map.of("minos-cli", Map.of("hosted.HostedRole", 2)),
+                Map.of("minos-cli", Map.of("hosted.HostedRole", Set.of("com.minos.cli.A", "com.minos.cli.B"))))
+                .isEmpty());
+    }
+
+    private static List<String> ratchetProblems(Map<String, Map<String, Integer>> listed,
+                                                Map<String, Map<String, Set<String>>> observed) {
+        List<String> problems = new ArrayList<>();
+        for (String surface : new TreeSet<>(SURFACES)) {
+            Map<String, Integer> expected = listed.getOrDefault(surface, Map.of());
+            Map<String, Set<String>> used = observed.getOrDefault(surface, Map.of());
+            for (Map.Entry<String, Set<String>> type : new TreeMap<>(used).entrySet()) {
+                Integer count = expected.get(type.getKey());
+                Set<String> classes = new TreeSet<>(type.getValue());
+                if (count == null) {
+                    problems.add(surface + ": " + classes + " use " + type.getKey()
+                            + ", absent from ENGINE_TYPES_USED_BY_SURFACE_BYTECODE");
+                } else if (count != classes.size()) {
+                    problems.add(surface + ": entry " + type.getKey() + " is listed for " + count
+                            + " class(es) and used by " + classes.size() + " " + classes
+                            + (classes.size() > count ? "; a new use goes through an application port"
+                                    : "; write " + classes.size() + " (the ratchet only shrinks)"));
+                }
+            }
+            for (String type : new TreeSet<>(expected.keySet())) {
+                if (!used.containsKey(type)) {
+                    problems.add(surface + ": entry " + type + " is no longer used; remove it (the ratchet only shrinks)");
+                }
+            }
+        }
+        return problems;
+    }
+
+    private static String topLevel(String className) {
+        int nested = className.indexOf('$');
+        return nested < 0 ? className : className.substring(0, nested);
     }
 
     private static DescribedPredicate<JavaClass> inModules(Set<String> modules) {

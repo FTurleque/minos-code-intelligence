@@ -651,6 +651,42 @@ Cinq changements archivés le 2026-10-24 (`openspec/changes/archive/2026-10-24-�
 
 Capacités nouvelles créées à l'archivage des sprints 6 à 11 : aucune (les exigences s'ajoutent aux capacités existantes et à `recherche-semantique`, créée par le sprint 4). Preuve de la spécification : `openspec validate --all --strict` → 66 passés, 0 échec.
 
+## Résorption de la dette d'architecture figée (AUD-ARC-01, -05, -08, -12 ; ouverte le 2026-10-25)
+
+Quatre phases, chacune spécifiée en OpenSpec, implémentée par lots et validée en CI avant la suivante : phase 1, cliquets étanches ; phase 2, SH-08 puis lot 2 d'AUD-ARC-01 ; phase 3, lots 6, 3, 4 et 5 d'AUD-ARC-01 ; phase 4, SH-02, SH-03 puis SH-06. Plan : [plan du chantier hexagonal](../../roadmap/storage-hexagonal-2026-10/README.md).
+
+| Constat | Phase | Changement OpenSpec | Statut | PR / commit |
+|---|---|---|---|---|
+| AUD-ARC-01, -05, -08 | 1 | `rendre-les-cliquets-d-architecture-etanches` (branche `ci/rendre-les-cliquets-d-architecture-etanches`) | implémenté en local, non poussé | — |
+| AUD-ARC-12 | — | aucun | **clos par décision documentée** : la convention de préfixe de module ne vaut que pour les nouveaux packages ([ADR 0068](../../../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 5, décision D4 du 2026-10-22) ; renommer les racines existantes contredirait l'ADR 0044. La règle A14 empêche toute nouvelle racine | — |
+
+### Phase 1 — cliquets étanches (2026-10-25, HEAD de départ `dedb219e`)
+
+Les cliquets A11 et A13 comptent les fichiers qui utilisent chaque type, et A12 les sites de lancement de chaque classe. A11 compte aussi les appels d'accesseurs de `MinosApplication`, et existe en ArchUnit sur le bytecode (`ModuleArchitectureTest.surfacesUseOnlyListedEngineTypes`). Les deux vues d'A11 sont disjointes au HEAD : le bytecode voit 3 types de la CLI appelés par chaînage (`HostedProjectBinding`, `HostedTenantState`, `HostCommandLocator`), les sources voient 4 types passés par accesseur sans appel et 3 types employés seulement en argument générique (décision D4 du design). Aucun fichier de `src/main` modifié.
+
+| Cliquet | Avant | Après |
+|---|---|---|
+| A11, garde Python | 39 types (CLI 15, API 14, MCP 4, NEXUS 6), usages par fichier non comptés | 43 types (CLI 17, API 16, MCP 4, NEXUS 6), 51 couples (fichier, type). Les 4 types ajoutés (`registry.ProjectRegistry` et `store.CodeKnowledgeSnapshotStore`, pour l'API et la CLI) sont de la dette existante passée par accesseur |
+| A11, bytecode | non mesuré | 39 types (CLI 15, API 14, MCP 4, NEXUS 6), 47 couples (classe, type) |
+| A12 | 1 classe, sites non comptés | 1 classe, 2 sites (`PrivateLocalStorage` : `icacls /inheritance:d`, `icacls /save`) ; « 6 `ProcessBuilder` » comptait les mentions |
+| A13 | 14 types, usages par fichier non comptés | 14 types, 35 couples (SCIP → runtime local 9 types / 28 fichiers ; SCIP → stockage local 1/1 ; PostgreSQL → stockage local 4/6) |
+
+Preuves :
+
+- **Rouge sur les fixtures** : 28 nouveaux cas de `test_check_module_boundaries.py` échouent contre le garde du HEAD (10 échecs, 18 erreurs) ; après correction, 201 cas sont verts.
+- **Rouge sur copie mutée de `develop`** : cinq mutations, chacune passe le garde du HEAD (code 0) et fait échouer le garde modifié (code 1). Ce sont un nouveau fichier de la CLI qui importe `io.PrivateLocalStorage`, `app.snapshotStore()` dans un nouveau fichier de NEXUS, `app.gitIntelligence()` sans import dans un nouveau fichier de l'API, un troisième `new ProcessBuilder` dans `PrivateLocalStorage`, et un nouveau fichier SCIP qui importe `CommandLocator`.
+- **Rouge ArchUnit** : sans l'entrée `runtime.HostCommandLocator`, `surfacesUseOnlyListedEngineTypes` échoue en nommant `DoctorCommand`. Avec la table, `mvnw -pl minos-app -am test "-Dtest=ModuleArchitectureTest"` est vert (9 tests).
+- **Garde** : `python scripts/architecture/check-module-boundaries.py` est vert.
+
+**Compteurs de départ des phases suivantes** :
+
+| Phase | Cliquet visé | Départ | Critère de sortie |
+|---|---|---|---|
+| 2 (SH-08, lot 2) | A12 | 1 classe, 2 sites | vide, ou sans `PrivateLocalStorage` |
+| 2 (lot 2) | A11 | Python 43 types, bytecode 39 | Python 41 au plus (sans `io.PrivateLocalStorage` ni `runtime.WorkerSandboxProbe` pour la CLI) ; bytecode sans ces deux types ni `runtime.HostCommandLocator` |
+| 3 (lots 6, 3, 4, 5) | A11 | Python 41, bytecode 36 (après la phase 2) | seules restent des entrées justifiées par écrit (modèles de lecture publiés D4 = a, types gardés dans le moteur par D5) |
+| 4 (SH-02, SH-03, SH-06) | A13 | 14 types, 35 fichiers | vide, ou seulement des entrées justifiées (propriété des processus SCIP) |
+
 ## Seconde contre-vérification des changements non implémentés (2026-10-22, HEAD `5ce7b79b`)
 
 Les neuf changements actifs sans implémentation ont été relus au HEAD, un par un, indépendamment de leur auteur : chaque `fichier:ligne`, décompte, gate littéral, scope JaCoCo et recouvrement. Les « État vérifié au HEAD » sont mis à jour en place ; la méthode de chaque décompte est écrite dans le design. Aucun build ni test n'a été exécuté : ce sont des preuves de lecture.
