@@ -1,13 +1,12 @@
 package com.minos.cli.command;
 
+import com.minos.application.HostDiagnosticsService;
+import com.minos.application.WorkerSandboxDiagnosis;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
-import com.minos.io.PrivateLocalStorage;
 import com.minos.output.SymbolOutputFormat;
-import com.minos.application.MinosApplicationComposers;
-import com.minos.runtime.WorkerSandboxProbe;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -44,8 +43,9 @@ public final class DoctorCommand {
     private final Function<String, Optional<Path>> commandLocator;
 
     /**
-     * Production wiring: the sandbox probe and the command lookup are the real host ones supplied by
-     * the composition root (ADR 0042) — there is no production path that injects another probe.
+     * Production wiring: the sandbox probe and the command lookup are the real host ones, through the host
+     * diagnostics service of the application (ADR 0042, ADR 0058) — there is no production path that injects
+     * another probe.
      */
     public DoctorCommand(Path home, AutonomousIndexOperations operations) {
         this(home, operations, DoctorCommand::probeWorkerSandbox);
@@ -67,7 +67,7 @@ public final class DoctorCommand {
      * @param managedLocalAvailable whether that backend honours the managed-local contract here
      * @param untrustedCodeBackend  backend the strict (remote) selector ends on
      * @param remoteIndexingAvailable whether untrusted remote execution is qualified here
-     * @param cause                 selection cause name ({@link WorkerSandboxProbe.UntrustedCodeSandbox#cause()}): why it is (un)available
+     * @param cause                 selection cause name ({@link WorkerSandboxDiagnosis#cause()}): why it is (un)available
      * @param rejectedBackend       OS backend discovered but rejected for untrusted code, if any
      * @param reasons               exact unmet dimension codes (decision) or missing prerequisite codes
      * @param reason                single-line, path-free explanation of the refusal ("" when available)
@@ -92,28 +92,26 @@ public final class DoctorCommand {
         }
 
         boolean closedByDecision() {
-            return WorkerSandboxProbe.CAUSE_REJECTED_BY_DECISION.equals(cause);
+            return WorkerSandboxDiagnosis.CAUSE_REJECTED_BY_DECISION.equals(cause);
         }
     }
 
-    /** Real host probe (managed-local first, then untrusted code), through the composition root. */
+    /** Real host probe (managed-local first, then untrusted code), through the host diagnostics service. */
     static WorkerSandboxReport probeWorkerSandbox(Path home) {
-        WorkerSandboxProbe probe = MinosApplicationComposers.resolve().workerSandboxProbe();
-        WorkerSandboxProbe.ManagedLocalSandbox managedLocal = probe.managedLocalProvider(home);
-        WorkerSandboxProbe.UntrustedCodeSandbox untrusted = probe.untrustedCode(home);
+        WorkerSandboxDiagnosis diagnosis = HostDiagnosticsService.defaults().workerSandbox(home);
         return new WorkerSandboxReport(
-                managedLocal.backendId(),
-                managedLocal.available(),
-                untrusted.backendId(),
-                untrusted.supportsUntrustedCode(),
-                untrusted.cause(),
-                untrusted.rejectedBackendId(),
-                untrusted.rejectionReasons(),
-                untrusted.refusalReport());
+                diagnosis.managedLocalBackend(),
+                diagnosis.managedLocalAvailable(),
+                diagnosis.untrustedCodeBackend(),
+                diagnosis.remoteIndexingAvailable(),
+                diagnosis.cause(),
+                diagnosis.rejectedBackend(),
+                diagnosis.reasons(),
+                diagnosis.reason());
     }
 
     private static Optional<Path> locateCommand(String command) {
-        return MinosApplicationComposers.resolve().hostCommandLocator().find(command);
+        return HostDiagnosticsService.defaults().locateCommand(command);
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -239,20 +237,7 @@ public final class DoctorCommand {
      * model to enforce, which is surfaced rather than silently treated as private.</p>
      */
     private Map<String, String> privateStorageDiagnostics() {
-        Map<String, String> report = new LinkedHashMap<>();
-        for (String relative : List.of(
-                "", "snapshots", "projects", "runs", "semantic-vectors", "runtime-observations",
-                "remote-cache", "remote-cache/repositories", "distributed-artifacts",
-                "postgresql-snapshot-scratch")) {
-            Path target = relative.isEmpty() ? home : home.resolve(relative);
-            String label = relative.isEmpty() ? "MINOS_HOME" : relative;
-            try {
-                report.put(label, PrivateLocalStorage.privacyOf(target).name());
-            } catch (IOException unreadable) {
-                report.put(label, "UNKNOWN");
-            }
-        }
-        return report;
+        return HostDiagnosticsService.defaults().privateStorage(home);
     }
 
     private static SymbolOutputFormat parse(String[] arguments) {

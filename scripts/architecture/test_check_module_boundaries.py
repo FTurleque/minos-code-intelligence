@@ -1079,20 +1079,26 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
         self.assertEqual({surface: len(types) for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items()},
                          counts)
 
-    def test_a_new_cli_file_importing_the_listed_private_storage_is_refused_against_the_real_cli_list(self):
-        # A type ratchet lets a new CLI file import io.PrivateLocalStorage; the file count refuses it.
+    def test_a_new_cli_file_importing_a_listed_type_is_refused_against_the_real_cli_list(self):
+        # A type ratchet lets a new CLI file import a type already listed; the file count refuses it.
         cli = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"]
-        self.assertEqual(1, cli["io.PrivateLocalStorage"])
-        self.write("minos-engine", "com.minos.io", "PrivateLocalStorage", "public final class PrivateLocalStorage { }")
-        self.write("minos-cli", "com.minos.cli.command", "DoctorCommand", "final class DoctorCommand { }",
-                   ["com.minos.io.PrivateLocalStorage"])
-        listed = {"minos-cli": {"io.PrivateLocalStorage": 1}}
+        self.assertEqual(1, cli["registry.DegradedEntry"])
+        self.write("minos-engine", "com.minos.registry", "DegradedEntry", "public record DegradedEntry() { }")
+        self.write("minos-cli", "com.minos.cli.support", "CliCommandSupport", "final class CliCommandSupport { }",
+                   ["com.minos.registry.DegradedEntry"])
+        listed = {"minos-cli": {"registry.DegradedEntry": 1}}
         self.write("minos-cli", "com.minos.cli", "Search", "final class Search { }")
         self.assertEqual(1, self.check(listed)["minos-cli"])
         self.write("minos-cli", "com.minos.cli.command", "NewCommand", "final class NewCommand { }",
-                   ["com.minos.io.PrivateLocalStorage"])
-        self.refused(lambda: self.check(listed), "A11", "io.PrivateLocalStorage", "used by 2",
+                   ["com.minos.registry.DegradedEntry"])
+        self.refused(lambda: self.check(listed), "A11", "registry.DegradedEntry", "used by 2",
                      "minos-cli/src/main/java/com/minos/cli/command/NewCommand.java")
+
+    def test_the_cli_no_longer_uses_the_host_mechanisms_of_the_engine(self):
+        # AUD-ARC-01, lot 2: minos doctor reads them through HostDiagnosticsService.
+        cli = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"]
+        self.assertNotIn("io.PrivateLocalStorage", cli)
+        self.assertNotIn("runtime.WorkerSandboxProbe", cli)
 
 
 class MinosApplicationAccessorRuleTest(RatchetTreeTestCase):

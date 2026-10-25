@@ -50,7 +50,7 @@ Le design du lot 1 prévoyait que « `privacyOf` change de forme avec SH-08 ». 
 `HostDiagnosticsService` (`com.minos.application`, à côté de `ProviderPlatformService`, ce qui évite un cycle de packages : A8) se construit de deux façons :
 
 - `defaults()`, à partir de `MinosApplicationComposers.resolve()`, pour la production ;
-- un constructeur public, à partir d'un `WorkerSandboxProbe` et d'un `HostCommandLocator`, pour les tests de `minos-application`.
+- un constructeur privé au package, à partir d'un `WorkerSandboxProbe` et d'un `HostCommandLocator`, pour les tests de `minos-application` ; aucun appelant hors du module n'en a besoin.
 
 Les types du moteur restent dans la signature du constructeur, mais seul le code de l'application les nomme. La CLI n'appelle que `defaults()`.
 

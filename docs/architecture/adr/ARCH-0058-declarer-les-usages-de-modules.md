@@ -70,3 +70,5 @@ Un usage transitif échappe aux deux contrôles de frontière : un module peut d
 - les mêmes types pour la CLI : `MinosCliRunner` les passe à `NexusExportService`.
 
 Le test `ModuleArchitectureTest.surfacesUseOnlyListedEngineTypes` tient la même dette sur le bytecode (39 types), appels chaînés compris.
+
+**Point 3, lot 2 résorbé (2026-10-25, audit AUD-ARC-01, changement OpenSpec `faire-consommer-le-diagnostic-de-l-hote`)** : `minos doctor` obtient la sélection des bacs à sable, la localisation des commandes et la confidentialité des emplacements de `MINOS_HOME` par le service applicatif `HostDiagnosticsService`, en types JDK et applicatifs. La CLI ne nomme plus `io.PrivateLocalStorage` ni `runtime.WorkerSandboxProbe`, et n'utilise plus `runtime.HostCommandLocator`. `ENGINE_TYPES_NAMED_BY_SURFACE` compte 41 entrées (CLI 15, API 16, MCP 4, NEXUS 6), et la table bytecode 36 (CLI 12, API 14, MCP 4, NEXUS 6).

@@ -539,7 +539,6 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
         "hosted.HostedControlPlaneService": 3,
         "hosted.HostedRetentionPolicy": 1,
         "hosted.HostedRole": 1,
-        "io.PrivateLocalStorage": 1,
         "query.RelationshipResult": 1,
         "query.SymbolResult": 1,
         "query.UsageResult": 1,
@@ -551,7 +550,6 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
         "registry.ProjectRegistry": 1,
         "registry.UnreadableRegistryException": 2,
         "runtime.MinosVersion": 1,
-        "runtime.WorkerSandboxProbe": 1,
         # Same accessor use as registry.ProjectRegistry above.
         "store.CodeKnowledgeSnapshotStore": 1,
     },

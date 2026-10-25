@@ -17,7 +17,7 @@ Au HEAD `47c02b89`, `minos doctor` (`minos-cli/src/main/java/com/minos/cli/comma
   - la sélection des bacs à sable, dans un résumé `WorkerSandboxDiagnosis` ;
   - la localisation des commandes de l'hôte.
 
-  Il est construit à partir de la racine de composition (`defaults()`), ou à partir de la sonde et du localisateur injectés, ce qui permet de le tester dans `minos-application`.
+  Il est construit à partir de la racine de composition (`defaults()`) ou, dans ses tests, à partir de la sonde et du localisateur injectés par un constructeur privé au package.
 - **`DoctorCommand`** consomme ce service. La CLI garde sa vue `WorkerSandboxReport` et son point d'injection pour les tests (décision D1 du lot 1). La liste des emplacements contrôlés passe dans le service.
 - **Cliquets A11** :
   - garde Python, liste de la CLI : `io.PrivateLocalStorage` et `runtime.WorkerSandboxProbe` sont retirés (**43 → 41 types**) ;
