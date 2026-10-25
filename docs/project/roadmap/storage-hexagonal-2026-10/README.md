@@ -65,8 +65,8 @@ Décisions du propriétaire du 2026-10-22 : [ADR 0062](../../../architecture/adr
 
 | Chantier | Constat | Prérequis | État du prérequis | À spécifier |
 |---|---|---|---|---|
-| Surfaces consommant des cas d'usage (suite de SH-05, puis SH-09) | AUD-ARC-01 | AUD-ARC-02 | fait (SH-05, 2026-10-21) | lot 1 fusionné (PR #548) et archivé le 2026-10-24 : `faire-consommer-l-indexation-aux-surfaces` (indexation locale et distante dans `minos-application`, 60 → 39 entrées de `ENGINE_TYPES_NAMED_BY_SURFACE`, A11) ; lots suivants inventoriés dans son design |
-| Port d'ACL de plateforme (SH-08) | AUD-ARC-05 | AUD-SEC-06 | fusionné (PR #491) ; objets durcis mesurés le 2026-10-25 (80 au premier index, 33 à la réindexation) | implémenté : changement `extraire-le-port-d-acl-de-plateforme` (port `com.minos.io.PlatformAccessControl`, implémentation dans `com.minos.runtime.local.acl`, `PROCESS_LAUNCHERS` vide, chemins longs acceptés) |
+| Surfaces consommant des cas d'usage (suite de SH-05, puis SH-09) | AUD-ARC-01 | AUD-ARC-02 | fait (SH-05, 2026-10-21) | lot 1 fusionné (PR #548) et archivé le 2026-10-24 : `faire-consommer-l-indexation-aux-surfaces` (indexation locale et distante dans `minos-application`, 60 → 39 entrées de `ENGINE_TYPES_NAMED_BY_SURFACE`, A11) ; lot 2, diagnostic de l'hôte : `faire-consommer-le-diagnostic-de-l-hote` (`HostDiagnosticsService`, 43 → 41 types après l'élargissement de la mesure aux accesseurs) ; lots 3 à 6 inventoriés dans le design du lot 1 |
+| Port d'ACL de plateforme (SH-08) | AUD-ARC-05 | AUD-SEC-06 | fusionné (PR #491) ; objets durcis mesurés le 2026-10-25 (80 au premier index, 33 à la réindexation) | fusionné (PR #564, `47c02b89`) et archivé le 2026-10-25 : changement `extraire-le-port-d-acl-de-plateforme` (port `com.minos.io.PlatformAccessControl`, implémentation dans `com.minos.runtime.local.acl`, `PROCESS_LAUNCHERS` vide, chemins longs acceptés) |
 | Port de lecture des snapshots (SH-04) | AUD-ARC-07 | AUD-PERF-03 | fait (ADR 0047, option A mesurée sur corpus réel) | implémenté le 2026-10-23 : changement OpenSpec `exposer-un-port-de-lecture-de-snapshot` (règle A18) |
 | Fusion `minos-storage`, codec commun (SH-02, SH-03), staging injecté (SH-06) | AUD-ARC-08 | SH-05 pour SH-06 | SH-05 fait | après SH-04 ; réduit `ADAPTER_TYPES_NAMED_BY_ADAPTER` (A13) |
 | Arête d'exécution et nommage des packages | AUD-ARC-11, AUD-ARC-12 | — | couverts par le document généré et la règle A14 | rien d'autre sans nouvelle décision |
@@ -138,7 +138,7 @@ Chantier parent : [#334](https://github.com/FTurleque/minos-code-intelligence/is
 | SH-05 | [#339](https://github.com/FTurleque/minos-code-intelligence/issues/339) | Fait (2026-10-21) |
 | SH-06 | [#340](https://github.com/FTurleque/minos-code-intelligence/issues/340) | À faire |
 | SH-07 | [#341](https://github.com/FTurleque/minos-code-intelligence/issues/341) | À faire |
-| SH-08 | [#342](https://github.com/FTurleque/minos-code-intelligence/issues/342) | À faire |
+| SH-08 | [#342](https://github.com/FTurleque/minos-code-intelligence/issues/342) | Port d'ACL de plateforme fait (2026-10-25, PR #564) ; les autres mécanismes d'E/S du moteur ne sont pas traités |
 | SH-09 | [#343](https://github.com/FTurleque/minos-code-intelligence/issues/343) | À faire |
 | SH-10 | [#344](https://github.com/FTurleque/minos-code-intelligence/issues/344) | À faire |
 | SH-11 | [#345](https://github.com/FTurleque/minos-code-intelligence/issues/345) | À faire |

@@ -658,7 +658,8 @@ Quatre phases, chacune spécifiée en OpenSpec, implémentée par lots et valid�
 | Constat | Phase | Changement OpenSpec | Statut | PR / commit |
 |---|---|---|---|---|
 | AUD-ARC-01, -05, -08 | 1 | `rendre-les-cliquets-d-architecture-etanches` | **fusionné** le 2026-10-25, treize checks verts (SonarCloud : 0 nouveau problème) | [PR #563](https://github.com/FTurleque/minos-code-intelligence/pull/563), fusion `6566ddda` |
-| AUD-ARC-05 | 2 | `extraire-le-port-d-acl-de-plateforme` (SH-08) | implémenté ; A12 passe de 1 classe et 2 sites à 0 ; CI verte (15 checks, SonarCloud 0 nouveau problème, couverture du nouveau code 93,6 %) | [PR #564](https://github.com/FTurleque/minos-code-intelligence/pull/564), en attente de fusion |
+| AUD-ARC-05 | 2 | `extraire-le-port-d-acl-de-plateforme` (SH-08) | **fusionné** le 2026-10-25 et archivé ; A12 passe de 1 classe et 2 sites à 0 ; CI verte (15 checks, SonarCloud 0 nouveau problème, couverture du nouveau code 93,6 %). Constat **fermable** : le moteur ne lance plus aucun processus | [PR #564](https://github.com/FTurleque/minos-code-intelligence/pull/564), fusion `47c02b89` |
+| AUD-ARC-01 (lot 2) | 2 | `faire-consommer-le-diagnostic-de-l-hote` | implémenté en local, non poussé ; A11 passe de 43 à 41 types (garde Python) et de 39 à 36 (bytecode) | — |
 | AUD-ARC-12 | — | aucun | **clos par décision documentée** : la convention de préfixe de module ne vaut que pour les nouveaux packages ([ADR 0068](../../../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 5, décision D4 du 2026-10-22) ; renommer les racines existantes contredirait l'ADR 0044. La règle A14 empêche toute nouvelle racine | — |
 
 ### Phase 1 — cliquets étanches (2026-10-25, HEAD de départ `dedb219e`)
@@ -745,6 +746,29 @@ Preuves (poste Windows, worktree `minos-wt-sh08`) :
 - **Revue d'architecture** (agent `minos-architecture-reviewer`) : aucun constat bloquant sur le code. Le design, la tâche 3.2, la vue des blocs (arc42 § 5) et la note PIT de `code-audit.md` sont alignés sur l'enregistrement réel de la doublure.
 - **Portée JaCoCo `platform-access-control`** (`com/minos/runtime/local/acl/`) : mesurée par le run 40219944047 de la PR #564 (rapport du module sur chaque système) à 0,865 / 0,893 sous Linux et 0,952 / 0,839 sous Windows ; plancher 0,84 / 0,81.
 - **Non vérifié en local** : `OrphanAppContainerGrantDiagnosticTest` échoue dans un shell sans `powershell.exe` dans le `PATH` (le test lance l'exécutable par son nom), et passe quand il y est ; le fait est antérieur au changement.
+
+### Phase 2 — lot 2 d'AUD-ARC-01 implémenté (2026-10-25, branche `refactor/faire-consommer-le-diagnostic-de-l-hote`)
+
+`minos doctor` obtient la sélection des bacs à sable, la localisation des commandes et la confidentialité des emplacements de `MINOS_HOME` par le service applicatif `HostDiagnosticsService` (`minos-application`). Le résumé `WorkerSandboxDiagnosis` y est en types JDK. La CLI garde sa vue `WorkerSandboxReport` et son point d'injection pour les tests.
+
+| Cliquet A11 | Avant | Après |
+|---|---|---|
+| Garde Python (`ENGINE_TYPES_NAMED_BY_SURFACE`) | 43 types (CLI 17) | **41** (CLI 15) : `io.PrivateLocalStorage` et `runtime.WorkerSandboxProbe` retirés |
+| Bytecode (`ENGINE_TYPES_USED_BY_SURFACE_BYTECODE`) | 39 types (CLI 15) | **36** (CLI 12) : les deux mêmes et `runtime.HostCommandLocator` retirés |
+
+Preuves (poste Windows, worktree `minos-wt-lot2`) :
+
+- **Rouges** :
+  - le test du service ne compile pas sans le service ;
+  - `PrivateLocalStorage` réimporté dans `DoctorCommand` fait sortir le garde en 1 ;
+  - avec la `DoctorCommand` de `develop`, `ModuleArchitectureTest` refuse les trois types en nommant `DoctorCommand`.
+- **Verts** :
+  - `HostDiagnosticsServiceTest` 7/7, `DoctorCommandTest` 7/7, `ProviderVerdictConsistencyTest` 3/3, `StableCliHelpTest` 8/8, `ModuleArchitectureTest` 9/9 ;
+  - `A2SurfaceCharacterizationTest` 12/12 : `cli-doctor.golden` est inchangé, et aucun golden n'est régénéré.
+- **`mvnw verify` complet sous Windows** : vert (29 min), et `check-jacoco.py` vert.
+- **SpotBugs** (profil `audit-spotbugs`, application et CLI) : 0 nouvelle alerte, 0 disparue.
+- **Gates** : `run_gates.py --fast` 25/25, `openspec validate --all --strict`.
+- **Revue d'architecture** (agent `minos-architecture-reviewer`) : conforme, sans constat bloquant. Le constructeur à sonde et localisateur est rendu privé au package, et la vue d'exécution de `doctor` (arc42 § 6) cite le service.
 
 ## Seconde contre-vérification des changements non implémentés (2026-10-22, HEAD `5ce7b79b`)
 
