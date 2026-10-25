@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * M12 factual Git intelligence over a local repository.
@@ -206,14 +207,14 @@ public final class GitIntelligenceService implements GitIntelligence {
         Objects.requireNonNull(projectRoot, "projectRoot");
         Path root = projectRoot.toRealPath();
         if (!Files.isDirectory(root)) {
-            throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+            throw new IllegalArgumentException("projectRoot must be an existing directory: " + leafName(projectRoot));
         }
         // No readEnvironment(): GIT_DIR, GIT_WORK_TREE and GIT_CEILING_DIRECTORIES must not redirect
         // the analysis to a repository other than the one under the requested root.
         FileRepositoryBuilder builder = new FileRepositoryBuilder()
                 .findGitDir(root.toFile());
         if (builder.getGitDir() == null) {
-            throw new IllegalArgumentException("projectRoot is not inside a Git repository: " + root);
+            throw new IllegalArgumentException("projectRoot is not inside a Git repository: " + leafName(root));
         }
         Repository repository = builder.build();
         try {

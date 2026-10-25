@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Local execution plan of scip-java.
@@ -87,7 +88,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         Path root = request.projectRoot().toAbsolutePath().normalize();
         if (!Files.isRegularFile(root.resolve("pom.xml"), LinkOption.NOFOLLOW_LINKS)) {
             throw new IllegalArgumentException(
-                    "qualified MINOS scip-java runtime currently requires Maven pom.xml: " + root);
+                    "qualified MINOS scip-java runtime currently requires Maven pom.xml: " + leafName(root));
         }
         if (request.mode() == IndexingMode.INCREMENTAL) {
             throw new IllegalStateException("scip-java incremental execution is not qualified");
@@ -106,10 +107,10 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
     private IndexerProcessPlan windowsPlan(IndexingExecutionRequest request, Path root, Path normalizedRunDirectory)
             throws IOException {
         if (!Files.isRegularFile(coursier)) {
-            throw new IllegalStateException("Coursier executable is missing: " + coursier);
+            throw new IllegalStateException("Coursier executable is missing: " + leafName(coursier));
         }
         if (!Files.isRegularFile(windowsRunner)) {
-            throw new IllegalStateException("managed scip-java Windows runner is missing: " + windowsRunner);
+            throw new IllegalStateException("managed scip-java Windows runner is missing: " + leafName(windowsRunner));
         }
         Path powershell = powerShellExecutable()
                 .orElseThrow(() -> new IllegalStateException(
@@ -117,7 +118,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                                 + "for scip-java on Windows"));
         if (windowsManagedMaven == null || !Files.isRegularFile(windowsManagedMaven)) {
             throw new IllegalStateException(
-                    "MINOS-managed Maven is missing; run `minos tools install scip-java`: " + windowsManagedMaven);
+                    "MINOS-managed Maven is missing; run `minos tools install scip-java`: " + leafName(windowsManagedMaven));
         }
         verifiedClasspath(false);
         Path providerOutput = normalizedRunDirectory.resolve("scip-java-output");
@@ -235,11 +236,11 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         BasicFileAttributes rootAttributes = Files.readAttributes(
                 root, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
         if (!FileTreeOperations.isRecursableDirectory(rootAttributes)) {
-            throw new IOException("scip-java staging root is not a physical directory: " + root);
+            throw new IOException("scip-java staging root is not a physical directory: " + leafName(root));
         }
         Path workspace = run.resolve("workspace").normalize();
         if (workspace.startsWith(root)) {
-            throw new IllegalArgumentException("scip-java staging workspace must be outside the source project: " + workspace);
+            throw new IllegalArgumentException("scip-java staging workspace must be outside the source project: " + leafName(workspace));
         }
         FileTreeOperations.deleteRecursively(workspace);
         Files.createDirectories(workspace);
@@ -260,7 +261,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                         }
                     }
                     if (!FileTreeOperations.isRecursableDirectory(attributes)) {
-                        throw new IOException("scip-java staging rejects non-recursable directory: " + directory);
+                        throw new IOException("scip-java staging rejects non-recursable directory: " + leafName(directory));
                     }
                     Path target = stagedTarget(root, workspace, directory);
                     Files.createDirectories(target);
@@ -304,7 +305,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
 
         if (!Files.isRegularFile(workspace.resolve("pom.xml"), LinkOption.NOFOLLOW_LINKS)) {
             FileTreeOperations.deleteRecursively(workspace);
-            throw new IllegalStateException("scip-java staging did not preserve the root pom.xml: " + workspace);
+            throw new IllegalStateException("scip-java staging did not preserve the root pom.xml: " + leafName(workspace));
         }
         return workspace;
     }
@@ -335,7 +336,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
     private static Path stagedTarget(Path root, Path workspace, Path source) {
         Path target = workspace.resolve(root.relativize(source)).normalize();
         if (!target.startsWith(workspace)) {
-            throw new IllegalArgumentException("project staging path escapes workspace: " + source);
+            throw new IllegalArgumentException("project staging path escapes workspace: " + leafName(source));
         }
         return target;
     }

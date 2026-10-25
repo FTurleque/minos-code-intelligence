@@ -69,7 +69,7 @@ public final class NexusExportService {
     public NexusExportContract.ExportSnapshot export(Path projectRoot) throws IOException {
         Path root = canonicalProjectRoot(projectRoot);
         RegisteredProject project = registeredProjects().stream().filter(candidate -> candidate.rootPath().equals(root)).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("project root is not registered in MINOS: " + root));
+                .orElseThrow(() -> new IllegalArgumentException("project root is not registered in MINOS: " + root.getFileName()));
         CodeKnowledgeSnapshot snapshot = snapshots.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active MINOS knowledge snapshot: " + project.displayName()));
         Set<String> limitations = new LinkedHashSet<>();
@@ -318,7 +318,7 @@ public final class NexusExportService {
     private static Path canonicalProjectRoot(Path projectRoot) throws IOException {
         Objects.requireNonNull(projectRoot, "projectRoot");
         Path root = projectRoot.toRealPath();
-        if (!Files.isDirectory(root)) throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+        if (!Files.isDirectory(root)) throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot.getFileName());
         return root;
     }
 

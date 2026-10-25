@@ -55,7 +55,10 @@ WITNESSES = {
     "FileChannel.lock": ("", "lockChannel.tryLock();"),
     "LOGGER.log(Path)": ("", 'Path target = root; LOGGER.log(Level.WARNING, "could not reclaim " + target);'),
     "LOGGER.log(cause)": ("", 'LOGGER.log(Level.WARNING, "could not reclaim a run", failure);'),
+    "message(Path)": ("", 'Path target = root; throw new IOException("not a directory: " + target);'),
 }
+PLUGIN = "minos-intellij/src/main/java/com/minos/intellij/protocol/Launcher.java"
+REAL_FIXED_SITE = "minos-storage-local/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java"
 
 
 def java(body: str, header: str = "") -> str:
@@ -230,7 +233,8 @@ class PrivateIoGateTest(unittest.TestCase):
         self.repo.put(PRIMITIVE, body)
         violations, scanned, _ = self.repo.check()
         self.assertEqual([], violations)
-        self.assertEqual(1, scanned)  # only the primitive's file is under src/main/java and scanned
+        # The primitive and the plugin are scanned for the path rules only; their raw I/O is not a finding.
+        self.assertEqual(2, scanned)
 
     def test_only_the_four_justified_primitives_are_exempt(self):
         self.assertEqual({"BoundedFileLease", "BoundedProperties", "ConfinedFileOpener", "DurableAtomicFile"},
@@ -408,6 +412,107 @@ class PrivateIoGateTest(unittest.TestCase):
     def test_logging_inside_comments_and_literals_is_ignored(self):
         self.assertEqual([], self.violations(java(
             '// LOGGER.log(Level.WARNING, "x", failure);\n        String s = "LOGGER.log(a, b, failure)";')))
+
+    # ------------------------------------------------------------------------- the message rule
+
+    def test_a_path_rendered_into_an_exception_message_fails(self):
+        for body in ('Path target = root; throw new IOException("x: " + target);',
+                     'Path target = root; throw new IOException(target + " is missing");',
+                     'Path target = root; throw new IllegalStateException("x " + target.toString());',
+                     'Path target = root; throw new IllegalArgumentException("x " + String.valueOf(target));',
+                     'Path target = root; throw new IOException(String.format("x %s", target));',
+                     'Path target = root; throw new IOException("x %s".formatted(target));',
+                     'File target = root; throw new IOException("x " + target);',
+                     'throw new IOException("x " + root.toAbsolutePath());',
+                     'throw new IOException("x " + file.toFile().getAbsolutePath());',
+                     'throw new IOException(root.toRealPath() + " escapes");',
+                     'Path target = root; throw new UncheckedIOException("x " + target, failure);',
+                     'Path target = root; throw new AssertionError("x " + target);',
+                     'Path target = root; return () -> new IllegalArgumentException("x: " + target);',
+                     'Path target = root; throw new IOException("x: "\n                + target);'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("message(Path)", violations[0])
+
+    def test_a_path_field_or_a_level_log_call_is_caught(self):
+        field = ("package p;\nclass C {\n    private final Path directory = null;\n"
+                 '    void m() throws Exception { throw new IOException("x " + this.directory); }\n}\n')
+        self.assertIn("message(Path)", self.violations(field)[0])
+        for body in ('Path target = root; LOG.warn("x " + target);',
+                     'Path target = root; logger.error("x " + target, failure);',
+                     'Path target = root; LOG.debug("x " + target);'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("message(Path)", violations[0])
+
+    def test_a_message_naming_the_entry_by_role_or_file_name_passes(self):
+        for body in ('Path target = root; throw new IOException("x: " + leafName(target));',
+                     'Path target = root; throw new IOException("x: " + PublicErrorMessages.leafName(target));',
+                     'Path target = root; throw new IOException("x: " + target.getFileName());',
+                     'Path target = root; throw new IOException("project root is not a directory");',
+                     'Path relativePath = root; throw new IOException("x: " + relativePath);',
+                     'Path target = root; throw new IOException("x: " + root.relativize(target));',
+                     'Path target = root; throw new IOException("x: " + count, failure);',
+                     'Path target = root; throw new IOException(String.format("x %d", count));',
+                     'Path target = root; String s = "throw new IOException(\\"x\\" + target)";'):
+            with self.subTest(body=body):
+                self.assertEqual([], self.violations(java(body)))
+
+    def test_the_message_rule_applies_to_the_plugin_and_to_the_primitives(self):
+        message = java('Path target = root; throw new IOException("x: " + target);')
+        for file in (PLUGIN, PRIMITIVE):
+            with self.subTest(file=file):
+                self.repo.put(file, message)
+                violations, _, _ = self.repo.check()
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn(file, violations[0])
+                self.assertIn("message(Path)", violations[0])
+                (self.repo.root / file).unlink()
+
+    def test_an_internal_site_takes_a_justified_entry_and_the_entry_is_a_ratchet(self):
+        self.repo.put(SOURCE, java('Path target = root; throw new IOException("x: " + target);'))
+        self.repo.allow(entry(method="message(Path)", why="Diagnostic interne jamais rendu : le chemin sert au débogage."))
+        violations, _, listed = self.repo.check()
+        self.assertEqual(([], 1), (violations, listed))
+        self.repo.put(SOURCE, java('Path target = root; throw new IOException("x: " + leafName(target));'))
+        violations = self.repo.check()[0]
+        self.assertEqual(1, len(violations))
+        self.assertIn("ratchet", violations[0])
+
+    def test_a_plugin_entry_for_an_io_rule_is_refused_and_a_primitive_takes_a_path_entry(self):
+        self.repo.put(PLUGIN, java("int x;"))
+        self.repo.allow(entry(file=PLUGIN))
+        with self.assertRaises(ValueError):
+            self.repo.check()
+        self.repo.put(PRIMITIVE, java('Path target = root; throw new IOException("x: " + target);'))
+        self.repo.allow(entry(file=PRIMITIVE, method="message(Path)",
+                              why="Diagnostic interne de la primitive, jamais rendu en sortie publique."))
+        self.assertEqual([], self.repo.check()[0])
+
+    def test_a_violation_names_the_lines(self):
+        violations = self.violations(java('Path target = root;\n        throw new IOException("x: " + target);'))
+        self.assertIn("at line(s) 6", violations[0])
+
+    def test_the_inventory_classifies_each_site_by_exposure(self):
+        self.repo.put(SOURCE, java('Path target = root; LOG.debug("x " + target);\n'
+                                   '        LOG.warn("x " + target);\n'
+                                   '        throw new IOException("x " + target);'))
+        lines = _MODULE.inventory(self.repo.root, self.repo.allowlist)
+        self.assertEqual(4, len(lines), lines)
+        self.assertIn(f"{SOURCE}:5\tmessage(Path)\tlog.debug\t(b)", lines[0])
+        self.assertIn(f"{SOURCE}:6\tmessage(Path)\tlog.warn\t(a)", lines[1])
+        self.assertIn(f"{SOURCE}:7\tmessage(Path)\tnew IOException\t(a)", lines[2])
+        self.assertEqual("TOTAL 3 site(s): 2 (a) public, 1 (b) internal", lines[3])
+
+    def test_a_real_fixed_site_reverted_to_its_absolute_path_is_caught(self):
+        real = (Path(__file__).resolve().parents[2] / REAL_FIXED_SITE).read_text(encoding="utf-8")
+        self.assertEqual({}, {k: v for k, v in _MODULE.count_occurrences(real).items() if k == "message(Path)"})
+        reverted = real.replace('non-symlink directory: " + leafName(directory));',
+                                'non-symlink directory: " + directory);')
+        self.assertNotEqual(real, reverted, "the fixed site moved: update this witness")
+        self.assertEqual(1, _MODULE.count_occurrences(reverted)["message(Path)"])
 
     # ------------------------------------------------------------------------------------- the CLI
 

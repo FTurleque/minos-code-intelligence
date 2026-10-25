@@ -27,7 +27,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -281,9 +280,9 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
 
     private static void requireCapabilityForAnyEdge(Set<ProgramGraphCapability> capabilities,
                                                     Set<ProgramEdgeKind> kinds,
-                                                    Set<ProgramEdgeKind> edges,
+                                                    Set<ProgramEdgeKind> presentEdges,
                                                     ProgramGraphCapability capability) throws IOException {
-        if (edges.stream().anyMatch(kinds::contains) && !capabilities.contains(capability)) throw new IOException("sidecar contains " + edges + " facts without declaring capability " + capability);
+        if (presentEdges.stream().anyMatch(kinds::contains) && !capabilities.contains(capability)) throw new IOException("sidecar contains " + presentEdges + " facts without declaring capability " + capability);
     }
 
     private static void requireFactsForCapability(Set<ProgramGraphCapability> capabilities,

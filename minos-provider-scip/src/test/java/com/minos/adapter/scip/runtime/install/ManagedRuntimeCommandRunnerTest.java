@@ -89,6 +89,8 @@ class ManagedRuntimeCommandRunnerTest {
                 () -> runner.run(command, directory, log, timeout));
 
         assertTrue(failure.getMessage().startsWith("tool command failed with code 1; see "), failure.getMessage());
+        assertTrue(failure.getMessage().endsWith("see the tool log tool.log"), failure.getMessage());
+        assertFalse(failure.getMessage().contains(directory.toString()), failure.getMessage());
         assertTrue(Files.isRegularFile(log), "the log of the failed command remains readable");
     }
 
@@ -105,6 +107,8 @@ class ManagedRuntimeCommandRunnerTest {
                 () -> runner.run(command, directory, log, timeout));
 
         assertTrue(failure.getMessage().startsWith("tool command timed out; see "), failure.getMessage());
+        assertTrue(failure.getMessage().endsWith("see the tool log tool.log"), failure.getMessage());
+        assertFalse(failure.getMessage().contains(directory.toString()), failure.getMessage());
     }
 
     @ParameterizedTest

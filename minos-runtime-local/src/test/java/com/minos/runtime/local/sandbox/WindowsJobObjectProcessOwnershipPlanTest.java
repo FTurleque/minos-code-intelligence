@@ -94,6 +94,8 @@ class WindowsJobObjectProcessOwnershipPlanTest {
         IOException refusal = assertThrows(IOException.class, () -> transformer.transform(original, run));
 
         assertTrue(refusal.getMessage().startsWith("provider executable is missing"), refusal.getMessage());
+        assertTrue(refusal.getMessage().endsWith(": missing-provider.exe"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(temporary.toString()), refusal.getMessage());
         assertFalse(Files.exists(run.resolve(PLAN_FILE)), "a refused plan is never written");
     }
 

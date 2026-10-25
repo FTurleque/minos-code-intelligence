@@ -80,6 +80,7 @@ class WindowsAppContainerBackendContractTest {
                 () -> new WindowsAppContainerWorkerSandboxBackend(home, missing));
 
         assertTrue(refusal.getMessage().startsWith("powershell must be a regular file"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(temporary.toString()), refusal.getMessage());
         assertNothingUnder(home);
     }
 
@@ -92,6 +93,7 @@ class WindowsAppContainerBackendContractTest {
                 () -> new WindowsAppContainerWorkerSandboxBackend(home, directory));
 
         assertTrue(refusal.getMessage().startsWith("powershell must be a regular file"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(temporary.toString()), refusal.getMessage());
         assertNothingUnder(home);
     }
 

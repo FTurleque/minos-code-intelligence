@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * SDK-backed end-to-end handshake probe for an installed/packaged MINOS launcher.
@@ -45,13 +46,13 @@ public final class MinosMcpHandshakeProbe {
             throw new IllegalArgumentException("timeout-seconds must be between 1 and 120");
         }
         if (!Files.isRegularFile(launcher)) {
-            throw new IllegalArgumentException("MINOS launcher is missing: " + launcher);
+            throw new IllegalArgumentException("MINOS launcher is missing: " + leafName(launcher));
         }
 
         try {
             Files.createDirectories(home);
         } catch (IOException exception) {
-            throw new IllegalStateException("Unable to create MINOS_HOME: " + home, exception);
+            throw new IllegalStateException("Unable to create MINOS_HOME: " + leafName(home), exception);
         }
 
         runHandshake(launcher, home, timeoutSeconds);

@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -32,5 +33,18 @@ class McpBackendStoreSymlinkTest {
         assertThrows(IOException.class, store::loadOrMigrate);
         assertFalse(Files.exists(outsideRuntime.resolve(McpBackendConfigurationStore.FILE_NAME)),
                 "migration must not write through a runtime-directory symlink");
+    }
+
+    @Test
+    void aConfigurationOfTheWrongTypeIsRefusedByItsNameNotItsAbsolutePath(@TempDir Path root) throws Exception {
+        Path home = root.resolve("home");
+        Files.createDirectories(home.resolve(McpBackendConfigurationStore.RUNTIME_DIRECTORY)
+                .resolve(McpBackendConfigurationStore.FILE_NAME));
+
+        IOException refusal = assertThrows(IOException.class, new McpBackendConfigurationStore(home)::loadOrMigrate);
+
+        assertEquals("MCP backend configuration is not a real regular file: " + McpBackendConfigurationStore.FILE_NAME,
+                refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(root.toString()), refusal.getMessage());
     }
 }
