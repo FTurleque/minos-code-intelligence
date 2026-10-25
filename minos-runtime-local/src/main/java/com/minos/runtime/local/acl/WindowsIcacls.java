@@ -29,6 +29,7 @@ public final class WindowsIcacls {
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
 
     private static final String EXTENDED_PREFIX = "\\\\?\\";
+    private static final String WINDOWS_DIRECTORY_VARIABLE = "SystemRoot";
 
     /** Starts a process; a seam so that every refusal can be exercised on any system. */
     @FunctionalInterface
@@ -37,7 +38,8 @@ public final class WindowsIcacls {
     }
 
     private static final WindowsIcacls SYSTEM = new WindowsIcacls(
-            () -> System.getenv("SystemRoot"), WindowsIcacls::startWithoutInheritedEnvironment, DEFAULT_TIMEOUT);
+            () -> System.getenv(WINDOWS_DIRECTORY_VARIABLE), WindowsIcacls::startWithoutInheritedEnvironment,
+            DEFAULT_TIMEOUT);
 
     private final Supplier<String> systemRoot;
     private final Launcher launcher;
@@ -145,9 +147,9 @@ public final class WindowsIcacls {
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD);
         Map<String, String> environment = builder.environment();
         // System.getenv ignores the case of the name on Windows; the builder's map does not find "SystemRoot" there.
-        String windows = System.getenv("SystemRoot");
+        String windows = System.getenv(WINDOWS_DIRECTORY_VARIABLE);
         environment.clear();
-        if (windows != null) environment.put("SystemRoot", windows);
+        if (windows != null) environment.put(WINDOWS_DIRECTORY_VARIABLE, windows);
         return builder;
     }
 

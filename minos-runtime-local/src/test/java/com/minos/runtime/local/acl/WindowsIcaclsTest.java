@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -105,7 +106,8 @@ class WindowsIcaclsTest {
         WindowsIcacls finished = icacls("SYSROOT", command -> new FinishedProcess(0));
 
         for (String name : new String[]{"console", "com10", "lpt", "nul-data", ".minos", "a.b"}) {
-            finished.run(temporary.toAbsolutePath().resolve(name), List.of("/q"), "refused");
+            Path target = temporary.toAbsolutePath().resolve(name);
+            assertDoesNotThrow(() -> finished.run(target, List.of("/q"), "refused"), name);
         }
     }
 

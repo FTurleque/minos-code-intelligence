@@ -28,6 +28,7 @@ public final class IcaclsTestAccessControl implements PlatformAccessControl {
     private static final long TIMEOUT_SECONDS = 10L;
 
     public IcaclsTestAccessControl() {
+        // ServiceLoader needs a public constructor without arguments.
     }
 
     @Override

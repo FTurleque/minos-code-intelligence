@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -60,8 +61,9 @@ class WindowsIcaclsAccessControlTest {
     }
 
     @Test
-    void aByteOrderMarkBeforeTheDaclLineIsTolerated() throws Exception {
-        read(target(), SYSTEM_ROOT, directories(), launcherWriting((char) 0xFEFF + ORDINARY, 0, null));
+    void aByteOrderMarkBeforeTheDaclLineIsTolerated() {
+        assertDoesNotThrow(() -> read(target(), SYSTEM_ROOT, directories(),
+                launcherWriting((char) 0xFEFF + ORDINARY, 0, null)));
     }
 
     @Test

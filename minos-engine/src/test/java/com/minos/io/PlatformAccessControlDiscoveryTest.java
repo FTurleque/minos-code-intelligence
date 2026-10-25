@@ -128,6 +128,7 @@ class PlatformAccessControlDiscoveryTest {
         final List<String> calls = new ArrayList<>();
 
         public RecordingAccessControl() {
+            // ServiceLoader needs a public constructor without arguments.
         }
 
         @Override
@@ -144,14 +145,17 @@ class PlatformAccessControlDiscoveryTest {
     /** A second implementation, for the refusal of an ambiguous registration. */
     public static final class OtherAccessControl implements PlatformAccessControl {
         public OtherAccessControl() {
+            // ServiceLoader needs a public constructor without arguments.
         }
 
         @Override
         public void protectFromInheritance(Path target) {
+            // Only its registration matters: two implementations must be refused.
         }
 
         @Override
         public void requireNoConditionalDeny(Path target) {
+            // Only its registration matters: two implementations must be refused.
         }
     }
 

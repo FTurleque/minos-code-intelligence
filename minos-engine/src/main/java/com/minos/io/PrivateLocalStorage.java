@@ -825,7 +825,7 @@ public final class PrivateLocalStorage {
         List<PlatformAccessControl> found = new ArrayList<>();
         try {
             ServiceLoader.load(PlatformAccessControl.class, loader).forEach(found::add);
-        } catch (ServiceConfigurationError broken) {
+        } catch (ServiceConfigurationError _) {
             return refusing("a platform access control for private storage cannot be loaded");
         }
         if (found.isEmpty()) {
