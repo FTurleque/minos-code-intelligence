@@ -102,7 +102,7 @@ class WindowsIcaclsTest {
     }
 
     @Test
-    void ordinaryNamesThatOnlyLookLikeDeviceNamesAreAccepted() throws Exception {
+    void ordinaryNamesThatOnlyLookLikeDeviceNamesAreAccepted() {
         WindowsIcacls finished = icacls("SYSROOT", command -> new FinishedProcess(0));
 
         for (String name : new String[]{"console", "com10", "lpt", "nul-data", ".minos", "a.b"}) {
