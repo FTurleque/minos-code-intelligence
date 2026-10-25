@@ -657,7 +657,8 @@ Quatre phases, chacune spécifiée en OpenSpec, implémentée par lots et valid�
 
 | Constat | Phase | Changement OpenSpec | Statut | PR / commit |
 |---|---|---|---|---|
-| AUD-ARC-01, -05, -08 | 1 | `rendre-les-cliquets-d-architecture-etanches` (branche `ci/rendre-les-cliquets-d-architecture-etanches`) | implémenté en local, non poussé | — |
+| AUD-ARC-01, -05, -08 | 1 | `rendre-les-cliquets-d-architecture-etanches` | **fusionné** le 2026-10-25, treize checks verts (SonarCloud : 0 nouveau problème) | [PR #563](https://github.com/FTurleque/minos-code-intelligence/pull/563), fusion `6566ddda` |
+| AUD-ARC-05 | 2 | `extraire-le-port-d-acl-de-plateforme` (SH-08) | spécifié, mesure faite (ci-dessous) | — |
 | AUD-ARC-12 | — | aucun | **clos par décision documentée** : la convention de préfixe de module ne vaut que pour les nouveaux packages ([ADR 0068](../../../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 5, décision D4 du 2026-10-22) ; renommer les racines existantes contredirait l'ADR 0044. La règle A14 empêche toute nouvelle racine | — |
 
 ### Phase 1 — cliquets étanches (2026-10-25, HEAD de départ `dedb219e`)
@@ -686,6 +687,28 @@ Preuves :
 | 2 (lot 2) | A11 | Python 43 types, bytecode 39 | Python 41 au plus (sans `io.PrivateLocalStorage` ni `runtime.WorkerSandboxProbe` pour la CLI) ; bytecode sans ces deux types ni `runtime.HostCommandLocator` |
 | 3 (lots 6, 3, 4, 5) | A11 | Python 41, bytecode 36 (après la phase 2) | seules restent des entrées justifiées par écrit (modèles de lecture publiés D4 = a, types gardés dans le moteur par D5) |
 | 4 (SH-02, SH-03, SH-06) | A13 | 14 types, 35 fichiers | vide, ou seulement des entrées justifiées (propriété des processus SCIP) |
+
+### Phase 2 — mesure des objets durcis pendant une indexation (reste d'AUD-SEC-06, 2026-10-25)
+
+Mesuré sous Windows 10 (poste du propriétaire) sur `develop` `6566ddda`, avec le JAR ombré du HEAD lancé sous JFR. Chaque lancement de processus est un événement `jdk.ProcessStart`, qui porte sa ligne de commande et sa pile d'appel. Un objet durci est un objet dont `PrivateLocalStorage.harden` lance `icacls /inheritance:d`, toujours précédé d'un `icacls /save`, la lecture de la DACL. Le `MINOS_HOME` est neuf et court (`N:\minos-mesure-home`), et le provider `scip-typescript` 0.4.0 est copié depuis l'installation du poste. Aucun code n'est modifié.
+
+| Commande | Objets durcis | Appels `icacls` (durcissement) | Autres processus | Durée |
+|---|---|---|---|---|
+| ouverture (`project list`, `MINOS_HOME` neuf) | 19 | 38 | 1 | 3 s |
+| `project add` (fixture TypeScript) | 28 | 57 | 5 (dont 2 `icacls /grant`, `/remove:g`) | 5 s |
+| **premier `minos index`** (`fixtures/typescript/typescript-inheritance`, réussi) | **80** | **164** | 19 (10 `icacls /grant`, `/remove:g` ; 7 `powershell.exe`) | 15 s |
+| réindexation sans changement | 33 | 68 | 5 | 6 s |
+| réindexation complète (`--force-full`) | 79 | 162 | 19 | 16 s |
+
+- **Par processus, pas par objet** : la mémoire des objets déjà protégés (`PROTECTED_LOCATIONS`) vit dans le processus. Chaque commande CLI durcit donc à nouveau tout ce qu'elle touche.
+- **Répartition du premier index** : `index-state` 17, `staged-snapshots` 16, `runs` 9, `sandbox` 6, `local-provider-workspaces`, `symbol-snapshots` et `fingerprint-snapshots` 4 chacun, et 13 dans le reste du `MINOS_HOME`. S'y ajoutent 7 objets hors du `MINOS_HOME` : 5 sous `%LOCALAPPDATA%\minos-launchers` et 2 sous `%USERPROFILE%\.minos-scip-import-scratch`.
+- **Coût** : `icacls /save` coûte 11,0 ms en médiane et `/inheritance:d` 10,5 ms (40 essais chacun). Le durcissement pèse donc environ 1,8 s sur les 15 s du premier index et 0,75 s sur les 6 s de la réindexation, soit 12 % environ.
+- **L'index du dépôt entier est impossible sur ce poste.** Ses fixtures couvrent 9 langages, et un index exige un provider qualifié pour chacun. Or scip-java n'est pas qualifié sous AppContainer (ADR 0060), et les prérequis de Rust, Go, .NET et C/C++ manquent. La tentative durcit 34 objets avant le refus. Le provider forcé (`--provider`) ne restreint pas les langages.
+- **Défaut relevé : chemin de plus de 260 caractères.** Sous un `MINOS_HOME` de 140 caractères, le fichier de plan du bac à sable (`runs\<run>\scip-typescript\scopes\<module>\windows-appcontainer-plan.txt`) mesure 261 caractères. `icacls` sort alors en code 3 et l'index échoue en refusant (« cannot read the access rules of private storage »). Ce refus est fail-closed, mais il rend l'outil inutilisable. Avec le préfixe `\\?\`, les deux appels réussissent sur un chemin de 335 caractères, et `/save` écrit bien le SDDL (102 octets). Le `MINOS_HOME` par défaut (`~/.minos`, 17 caractères) laisse environ 120 caractères de marge.
+- **Hors périmètre, relevé en passant** : la fixture `fixtures/typescript/typescript-modules` étend un `tsconfig.base.json` absent du dépôt, et son index échoue (`TS5083`).
+- **Non mesuré** : un dépôt Java réel sous Windows (voie Docker de l'ADR 0060, où le durcissement est POSIX et ne lance aucun processus).
+
+**Pondération de SH-08** : environ 80 objets et 164 appels `icacls` par index, refaits à chaque processus, pour environ 12 % du temps d'un petit index. Le port sort ce mécanisme du moteur (A12 vide), ce qui est le but de SH-08. Il permet aussi de remplacer `icacls` plus tard, par exemple par un appel natif, sans toucher au moteur ; ce remplacement est hors de SH-08. Le défaut des chemins longs entre dans SH-08, parce que le lanceur déplacé est le seul endroit où le corriger.
 
 ## Seconde contre-vérification des changements non implémentés (2026-10-22, HEAD `5ce7b79b`)
 
