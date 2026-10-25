@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -40,6 +41,7 @@ class MinosStrongProcessLauncherHomeTest {
                     () -> MinosStrongProcessLauncher.refuseSharedLocation(refused, home, "MINOS ownership home"));
             assertTrue(failure.getMessage().startsWith("MINOS ownership home must be a directory dedicated to MINOS"),
                     failure.getMessage());
+            assertFalse(failure.getMessage().contains(temp.toString()), failure.getMessage());
         }
         assertDoesNotThrow(() -> MinosStrongProcessLauncher.refuseSharedLocation(
                 home.resolve(".minos"), home, "MINOS ownership home"));
@@ -82,6 +84,7 @@ class MinosStrongProcessLauncherHomeTest {
 
         assertTrue(failure.getMessage().startsWith("MINOS ownership home already exists and belongs to another account"),
                 failure.getMessage());
+        assertFalse(failure.getMessage().contains(temp.toString()), failure.getMessage());
         assertEquals(before, acl(shared), "a refused directory keeps its DACL");
     }
 

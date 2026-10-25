@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Captures and compares the observable visible fingerprint of a project. */
 public final class ProjectFingerprintService {
@@ -76,7 +77,7 @@ public final class ProjectFingerprintService {
         Objects.requireNonNull(projectRelativeScope, "projectRelativeScope");
         Path root = projectRoot.toAbsolutePath().normalize();
         if (!Files.isDirectory(root)) {
-            throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+            throw new IllegalArgumentException("projectRoot must be an existing directory: " + leafName(projectRoot));
         }
         Path scope = projectRelativeScope.normalize();
         if (scope.isAbsolute() || scope.startsWith("..")) {

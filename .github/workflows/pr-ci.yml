@@ -263,6 +263,9 @@ jobs:
 
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      # AUD-DEP-13: the tests start only the pre-pulled images (any other is refused by name) and no Ryuk sidecar.
+      TESTCONTAINERS_PULL_POLICY: com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy
+      TESTCONTAINERS_RYUK_DISABLED: 'true'
     steps:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -271,16 +274,42 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
+      # AUD-DEP-13: the images Testcontainers starts are listed before the Docker Hub login, so no code of the
+      # repository runs while the token is on disk.
+      - name: List the Testcontainers images
+        id: testcontainers-images
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          images="$(python3 scripts/quality/check-image-pins.py --testcontainers-images | tr '\n' ' ')"
+          echo "images=${images}" >> "$GITHUB_OUTPUT"
+
       # Docker Hub limits anonymous pulls per runner address (429 toomanyrequests on 2026-10-09 stopped base images,
       # pgvector for the PostgreSQL tests, and the Docker qualifications). With the repository secrets
-      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), pulls are authenticated, Testcontainers
-      # included; without them (forks, secrets not created) this step is skipped and pulls stay anonymous.
+      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), the next step pulls the Testcontainers
+      # images authenticated, then logs out before any test runs; without them (forks, secrets not created) this step
+      # is skipped and the next one pulls anonymously.
       - name: Log in to Docker Hub (when the secrets exist)
         if: ${{ runner.os == 'Linux' && env.DOCKERHUB_USERNAME != '' }}
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # AUD-DEP-13: the listed images are pulled, then the Docker Hub token is removed before any Maven plugin or
+      # test runs. A failed logout fails the step.
+      - name: Pull the Testcontainers images, then log out of Docker Hub
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        env:
+          IMAGES: ${{ steps.testcontainers-images.outputs.images }}
+        run: |
+          set -euo pipefail
+          log_out() { docker logout || { echo "logging out of Docker Hub failed: the token would stay readable" >&2; exit 1; }; }
+          trap log_out EXIT
+          test -n "$IMAGES"
+          for image in $IMAGES; do docker pull "$image"; done
 
       - name: Assert exact candidate HEAD (Unix)
         if: runner.os != 'Windows'

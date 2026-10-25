@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ScipIndexReaderTest {
@@ -44,6 +45,20 @@ class ScipIndexReaderTest {
     void rejectsMissingIndexFile() {
         Path missing = tempDir.resolve("missing.scip");
 
-        assertThrows(IOException.class, () -> new ScipIndexReader().read(missing));
+        IOException refusal = assertThrows(IOException.class, () -> new ScipIndexReader().read(missing));
+
+        // AUD-SEC-04: the index is named by its file name, never by its absolute path.
+        assertEquals("SCIP index does not exist or is not a regular file: missing.scip", refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(tempDir.toString()), refusal.getMessage());
+    }
+
+    @Test
+    void rejectsAnEmptyIndexFileByItsName() throws IOException {
+        Path empty = Files.createFile(tempDir.resolve("empty.scip"));
+
+        IOException refusal = assertThrows(IOException.class, () -> new ScipIndexReader().read(empty));
+
+        assertEquals("SCIP index is empty: empty.scip", refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(tempDir.toString()), refusal.getMessage());
     }
 }

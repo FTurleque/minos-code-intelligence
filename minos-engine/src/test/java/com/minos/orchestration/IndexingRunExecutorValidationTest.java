@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,7 +57,9 @@ class IndexingRunExecutorValidationTest {
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
                 () -> run(store, missing, IndexingResumePolicy.RESUME, null, fingerprints));
 
-        assertEquals("projectRoot must be an existing directory: " + missing, refusal.getMessage());
+        // AUD-SEC-04: the refusal names the root by its file name, never by its absolute path.
+        assertEquals("projectRoot must be an existing directory: missing", refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(temp.toString()), refusal.getMessage());
         assertTrue(store.listRuns(PROJECT_ID).isEmpty());
     }
 

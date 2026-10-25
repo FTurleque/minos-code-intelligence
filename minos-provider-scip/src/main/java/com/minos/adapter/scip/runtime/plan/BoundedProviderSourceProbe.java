@@ -14,6 +14,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.function.Predicate;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Shared bounded, ignore-aware source probe used before starting managed providers. */
 final class BoundedProviderSourceProbe {
@@ -60,7 +61,7 @@ final class BoundedProviderSourceProbe {
                             return FileVisitResult.SKIP_SUBTREE;
                         }
                         if (!FileTreeOperations.isRecursableDirectory(attributes)) {
-                            throw new IOException("provider source probe rejects non-recursable directory: " + directory);
+                            throw new IOException("provider source probe rejects non-recursable directory: " + leafName(directory));
                         }
                         return FileVisitResult.CONTINUE;
                     }

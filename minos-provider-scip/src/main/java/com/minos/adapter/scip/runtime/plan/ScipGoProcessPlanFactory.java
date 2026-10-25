@@ -6,6 +6,7 @@ import com.minos.runtime.local.process.CommandLocator;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Fail-closed process plan for the managed scip-go provider. */
 public final class ScipGoProcessPlanFactory extends AbstractScipProcessPlanFactory {
@@ -17,7 +18,7 @@ public final class ScipGoProcessPlanFactory extends AbstractScipProcessPlanFacto
     @Override
     protected void validateProject(Path root) {
         if (!Files.isRegularFile(root.resolve("go.mod"))) {
-            throw new IllegalArgumentException("scip-go M24 qualification requires a canonical go.mod project: " + root);
+            throw new IllegalArgumentException("scip-go M24 qualification requires a canonical go.mod project: " + leafName(root));
         }
     }
 

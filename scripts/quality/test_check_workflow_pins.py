@@ -338,7 +338,8 @@ class RepositoryTest(TreeTest):
     def copy_repository(self) -> None:
         shutil.rmtree(self.root / gate.WORKFLOWS)
         shutil.copytree(REPOSITORY / gate.WORKFLOWS, self.root / gate.WORKFLOWS)
-        for relative in RELEASE_SCRIPTS:
+        for relative in RELEASE_SCRIPTS + (gate.TESTCONTAINERS_GUARD_CLASS,):
+            (self.root / relative).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(REPOSITORY / relative, self.root / relative)
 
     def mutate(self, name: str, old: str, new: str) -> None:
@@ -380,9 +381,39 @@ class RepositoryTest(TreeTest):
 
     def test_a_kept_login_that_disappears_from_the_repository_is_a_stale_entry(self):
         self.copy_repository()
-        self.mutate("code-audit.yml", "uses: docker/login-action@", "uses: example/not-a-login@")
-        self.assertEqual([".github/workflows/code-audit.yml: job 'mutation' is listed in DOCKER_LOGIN_KEPT but no "
-                          "longer logs in to Docker Hub -- remove the entry."], self.failures())
+        self.mutate("docker-upgrade-qualification.yml", "uses: docker/login-action@", "uses: example/not-a-login@")
+        self.assertEqual([".github/workflows/docker-upgrade-qualification.yml: job 'real-docker-upgrade' is listed in "
+                          "DOCKER_LOGIN_KEPT but no longer logs in to Docker Hub -- remove the entry."], self.failures())
+
+    def test_the_test_jobs_log_out_after_pulling_the_testcontainers_images(self):
+        self.assertNotIn(("pr-ci.yml", "verify"), gate.DOCKER_LOGIN_KEPT)
+        self.assertNotIn(("code-audit.yml", "mutation"), gate.DOCKER_LOGIN_KEPT)
+        self.copy_repository()
+        self.mutate("pr-ci.yml", "          trap log_out EXIT\n", "")
+        self.mutate("pr-ci.yml", "log_out() { docker logout || ", "log_out() { true || ")
+        self.mutate("code-audit.yml", "      TESTCONTAINERS_RYUK_DISABLED: 'true'\n", "")
+        failures = self.failures()
+        for expected in ("job 'verify' runs code while logged in to Docker Hub",
+                         "job 'mutation' pulls the Testcontainers images, then logs out, without "
+                         "'TESTCONTAINERS_RYUK_DISABLED: true' in its env"):
+            self.assertTrue(any(expected in failure for failure in failures), (expected, failures))
+        self.assertEqual(2, len(failures), failures)
+
+    def test_the_logout_step_of_a_test_job_runs_no_repository_code(self):
+        self.copy_repository()
+        self.mutate("pr-ci.yml", '          for image in $IMAGES; do docker pull "$image"; done\n',
+                    '          for image in $(python3 scripts/quality/check-image-pins.py --testcontainers-images); '
+                    'do docker pull "$image"; done\n')
+        failures = self.failures()
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("job 'verify' runs repository code in the step that logs out of Docker Hub", failures[0])
+
+    def test_the_pull_policy_class_the_workflows_select_must_exist(self):
+        self.copy_repository()
+        (self.root / gate.TESTCONTAINERS_GUARD_CLASS).unlink()
+        self.assertEqual([f"{gate.TESTCONTAINERS_GUARD_CLASS} is missing: the workflows select it as the "
+                          "Testcontainers pull policy, so the tests would fail to start any container."],
+                         self.failures())
 
 
 CHECKOUT_STEP = f"      - name: Checkout\n        uses: actions/checkout@{SHA} # v7\n"
@@ -455,6 +486,16 @@ class JobHardeningTest(TreeTest):
         text = self.job(LOGIN_STEP + f"      - uses: actions/setup-java@{SHA}\n"
                         "      - name: Pull, then log out\n        run: |\n          docker pull a@sha256:0\n"
                         "          docker logout\n      - run: ./build.sh\n")
+        self.assertEqual(([], set()), self.hardening(text))
+
+    def test_repository_code_in_the_logout_step_is_refused(self):
+        for code in ("python3 scripts/list.py", "./scripts/list.sh", "./mvnw -q help:evaluate"):
+            with self.subTest(code=code):
+                text = self.job(LOGIN_STEP + f"      - run: |\n          {code}\n          docker logout\n")
+                failures, _kept = self.hardening(text)
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn("runs repository code in the step that logs out of Docker Hub", failures[0])
+        text = self.job(LOGIN_STEP + '      - run: |\n          docker pull "$IMAGES"\n          docker logout\n')
         self.assertEqual(([], set()), self.hardening(text))
 
     def test_code_run_while_logged_in_is_refused(self):

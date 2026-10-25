@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Versioned runtime-only persistence for host/container physical project roots. */
 public final class ProjectPathMappingStore implements ProjectPathMappings {
@@ -44,7 +45,7 @@ public final class ProjectPathMappingStore implements ProjectPathMappings {
         validateExistingContainer(runtimeDirectory, "project path mapping directory");
         if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
         if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("project path mapping is not a regular non-symlink file: " + file);
+            throw new IOException("project path mapping is not a regular non-symlink file: " + leafName(file));
         }
         Properties properties = BoundedProperties.load(
                 file,
@@ -102,7 +103,7 @@ public final class ProjectPathMappingStore implements ProjectPathMappings {
     private static void validateExistingContainer(Path directory, String label) throws IOException {
         if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) return;
         if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException(label + " must be a non-symlink directory: " + directory);
+            throw new IOException(label + " must be a non-symlink directory: " + leafName(directory));
         }
     }
 

@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Process plan for the managed scip-python provider. */
 public final class ScipPythonProcessPlanFactory implements IndexerProcessPlanFactory {
@@ -37,7 +38,7 @@ public final class ScipPythonProcessPlanFactory implements IndexerProcessPlanFac
     public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws Exception {
         Path root = request.projectRoot().toAbsolutePath().normalize();
         if (!containsPythonSource(root)) {
-            throw new IllegalArgumentException("scip-python requires at least one .py source: " + root);
+            throw new IllegalArgumentException("scip-python requires at least one .py source: " + leafName(root));
         }
         if (request.mode() == IndexingMode.INCREMENTAL) {
             throw new IllegalStateException("scip-python incremental execution is not qualified by MINOS M17");

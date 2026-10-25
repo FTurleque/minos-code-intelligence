@@ -2,7 +2,9 @@
 """Self-test of check-image-pins.py: one witness per way a container image can escape its pin."""
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import os
 import re
 import shutil
@@ -327,6 +329,55 @@ class CheckImagePinsTest(unittest.TestCase):
         failures, inspected = gate.check(gate.DEFAULT_ROOT)
         self.assertEqual([], failures)
         self.assertGreaterEqual(inspected, 4)
+
+    # ------------------------------------------------------------ the Testcontainers image list (AUD-DEP-13)
+
+    def images(self, compose: str | None) -> list[str]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            if compose is not None:
+                (root / "docker").mkdir()
+                (root / "docker" / "compose-mcp.connected.yaml").write_text(compose, encoding="utf-8")
+            return gate.testcontainers_images(root)
+
+    def test_the_testcontainers_list_is_the_pinned_compose_default(self):
+        self.assertEqual([f"pgvector/pgvector:0.8.2-pg17@{DIGEST}"], self.images(PINNED_COMPOSE))
+
+    def test_two_services_with_the_same_default_give_one_image(self):
+        twice = PINNED_COMPOSE + f'  db2:\n    image: "${{MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17@{DIGEST}}}"\n'
+        self.assertEqual(1, len(self.images(twice)))
+
+    def test_a_missing_unpinned_or_ambiguous_default_is_refused(self):
+        other = "sha256:" + "b" * 64
+        refused = {
+            "no compose file": None,
+            "no such variable": 'services:\n  db:\n    image: "postgres:17@' + DIGEST + '"\n',
+            "a tag without a digest": 'services:\n  db:\n    image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:pg17}"\n',
+            "two different defaults": PINNED_COMPOSE
+            + f'  db2:\n    image: "${{MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17@{other}}}"\n',
+            "a commented line only": '# image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17@' + DIGEST + '}"\n',
+        }
+        for label, compose in refused.items():
+            with self.subTest(case=label):
+                with self.assertRaises(ValueError):
+                    self.images(compose)
+
+    def test_the_cli_prints_the_list_and_fails_without_a_pin(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(0, gate.main(["--root", str(gate.DEFAULT_ROOT), "--testcontainers-images"]))
+        self.assertEqual(gate.testcontainers_images(gate.DEFAULT_ROOT), output.getvalue().split())
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(1, gate.main(["--root", directory, "--testcontainers-images"]))
+
+    def test_the_real_list_is_the_image_the_postgresql_tests_read(self):
+        support = (gate.DEFAULT_ROOT / "minos-storage-postgresql/src/test/java/com/minos/storage/postgresql"
+                   / "PostgresTestSupport.java").read_text(encoding="utf-8")
+        self.assertIn("MINOS_POSTGRES_IMAGE:-(", support,
+                      "PostgresTestSupport no longer reads the default of MINOS_POSTGRES_IMAGE: update the list")
+        compose = (gate.DEFAULT_ROOT / "docker" / "compose-mcp.connected.yaml").read_text(encoding="utf-8")
+        read_by_the_tests = re.search(r'MINOS_POSTGRES_IMAGE:-([^}"\s]+)', compose).group(1)
+        self.assertEqual([read_by_the_tests], gate.testcontainers_images(gate.DEFAULT_ROOT))
 
 
 if __name__ == "__main__":

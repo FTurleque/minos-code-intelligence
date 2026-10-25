@@ -34,6 +34,7 @@ import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static com.minos.domain.Preconditions.requireText;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Local versioned vector store. Rebuild from active snapshots is always authoritative. */
 public final class FileSemanticVectorStore implements SemanticVectorStore {
@@ -102,7 +103,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         DecodeBudget budget = new DecodeBudget();
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 ConfinedFileOpener.openRegularFileNoFollow(file)))) {
-            if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
+            if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + leafName(file));
             int version = input.readInt();
             if (version != LEGACY_FORMAT_VERSION && version != FORMAT_VERSION) {
                 throw new IOException("unsupported semantic index version: " + version);
@@ -139,7 +140,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             putCached(projectId, CacheEntry.capture(file, snapshot));
             return Optional.of(snapshot);
         } catch (EOFException exception) {
-            throw new IOException("truncated semantic index: " + file, exception);
+            throw new IOException("truncated semantic index: " + leafName(file), exception);
         }
     }
 
@@ -152,7 +153,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         DecodeBudget budget = new DecodeBudget();
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 ConfinedFileOpener.openRegularFileNoFollow(file)))) {
-            if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
+            if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + leafName(file));
             int version = input.readInt();
             if (version != LEGACY_FORMAT_VERSION && version != FORMAT_VERSION) {
                 throw new IOException("unsupported semantic index version: " + version);
@@ -170,7 +171,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             }
             return Optional.of(new IndexMetadata(storedProject, snapshotId, providerId, modelId, dimensions, builtAt, count));
         } catch (EOFException exception) {
-            throw new IOException("truncated semantic index metadata: " + file, exception);
+            throw new IOException("truncated semantic index metadata: " + leafName(file), exception);
         }
     }
 
@@ -281,7 +282,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         if (file == null) return 0;
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 ConfinedFileOpener.openRegularFileNoFollow(file)))) {
-            if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
+            if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + leafName(file));
             return input.readInt();
         }
     }
@@ -328,7 +329,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         Path directory = projectDirectory(projectId);
         if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) return null;
         if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("semantic project entry must be a non-symlink directory: " + directory);
+            throw new IOException("semantic project entry must be a non-symlink directory: " + leafName(directory));
         }
         return directory;
     }
@@ -345,12 +346,12 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
 
     private static BasicFileAttributes requireIndexFileAttributes(Path file) throws IOException {
         if (Files.isSymbolicLink(file)) {
-            throw new IOException("semantic index entry must not be a symbolic link: " + file);
+            throw new IOException("semantic index entry must not be a symbolic link: " + leafName(file));
         }
         BasicFileAttributes attributes = Files.readAttributes(
                 file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
         if (!attributes.isRegularFile()) {
-            throw new IOException("semantic index entry must be a regular file: " + file);
+            throw new IOException("semantic index entry must be a regular file: " + leafName(file));
         }
         return attributes;
     }

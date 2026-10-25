@@ -76,6 +76,8 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
                 () -> ManagedScipProviderRuntimeManager.extractZipBounded(archive, destination, 1024, 1));
 
         assertTrue(refusal.getMessage().contains("too many entries"), refusal.getMessage());
+        assertTrue(refusal.getMessage().endsWith(": many.zip"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(directory.toString()), refusal.getMessage());
     }
 
     @Test

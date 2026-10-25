@@ -88,6 +88,8 @@ class ScipJavaProcessPlanFactoryRefusalTest {
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () -> factory.create(request, run));
 
         assertTrue(refusal.getMessage().contains("requires Maven pom.xml"), refusal.getMessage());
+        assertTrue(refusal.getMessage().endsWith(": gradle-project"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(temporaryDirectory.toString()), refusal.getMessage());
         assertFalse(Files.exists(run), "a refused plan must not prepare the run directory");
     }
 

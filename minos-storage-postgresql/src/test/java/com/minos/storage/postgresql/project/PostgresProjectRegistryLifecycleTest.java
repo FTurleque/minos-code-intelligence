@@ -169,6 +169,7 @@ class PostgresProjectRegistryLifecycleTest extends PostgresTestSupport {
 
         assertTrue(notADirectory.getMessage().startsWith("rootPath must be an existing directory: "),
                 "unexpected refusal: " + notADirectory.getClass());
+        assertFalse(notADirectory.getMessage().contains(temp.toString()), notADirectory.getMessage());
         assertEquals("displayName must not contain NUL", badName.getMessage());
         assertEquals("name must not contain NUL", badWorkspace.getMessage());
         assertEquals(List.of(), registry.listProjects());

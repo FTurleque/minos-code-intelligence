@@ -25,6 +25,13 @@ Why both a tag and a digest: the digest is the immutable pin, the tag is what De
 ecosystem) follows to propose a new digest. A reference with a digest and no tag is moved to
 ``latest`` by Dependabot; a tag without a digest is mutable.
 
+``--testcontainers-images`` prints, one per line, the images Testcontainers starts during the Maven
+tests and PIT (AUD-DEP-13, option B of decision D4 of durcir-les-workflows-github): the pinned
+compose defaults named by TESTCONTAINERS_IMAGE_VARIABLES, the single source the tests read too
+(``PostgresTestSupport.pinnedPostgresImage``). The CI pulls them while logged in to Docker Hub,
+then logs out before any test runs; the tests refuse every other image
+(``PrePulledImagesOnlyPullPolicy``). A default that is missing, unpinned or ambiguous fails.
+
 Self-test: scripts/quality/test_check_image_pins.py.
 """
 from __future__ import annotations
@@ -49,6 +56,11 @@ VARIABLE_WITH_DEFAULT = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:-(?P<default>[^
 # ${VAR} or ${VAR:?message} (a required variable, MINOS-AUD-H20): the value comes from the launcher.
 VARIABLE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?::\?[^}]*)?\}$")
 UNPINNED_ALLOWED_VARIABLES = frozenset({"MINOS_IMAGE", "MINOS_QUERY_IMAGE"})
+NAMED_VARIABLE_WITH_DEFAULT = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*):-(?P<default>[^}]+)\}$")
+
+# The images Testcontainers starts: (compose file under docker/, variable whose pinned default the tests read).
+# Ryuk, Testcontainers' cleanup sidecar, is not one of them: the jobs that pull this list disable it.
+TESTCONTAINERS_IMAGE_VARIABLES = (("compose-mcp.connected.yaml", "MINOS_POSTGRES_IMAGE"),)
 
 # dependabot-core, docker/lib/dependabot/docker_compose/file_fetcher.rb (read 2026-10-02): the fetcher keeps a file of the
 # configured directory when ``f.name.match?(FILENAME_REGEX)`` (a search, not a full match). Python >= 3.11 for the
@@ -212,10 +224,40 @@ def check(root: Path) -> tuple[list[str], int]:
     return failures, inspected
 
 
+def testcontainers_images(root: Path) -> list[str]:
+    """The pinned images Testcontainers starts, in TESTCONTAINERS_IMAGE_VARIABLES order; ValueError when one cannot
+    be read as exactly one pinned default."""
+    images: list[str] = []
+    for file, variable in TESTCONTAINERS_IMAGE_VARIABLES:
+        path = root / "docker" / file
+        if not path.is_file():
+            raise ValueError(f"docker/{file} is missing: the default of {variable} cannot be read")
+        defaults = {match.group("default")
+                    for _number, value in compose_images(path)
+                    if (match := NAMED_VARIABLE_WITH_DEFAULT.match(value)) and match.group("name") == variable}
+        if len(defaults) != 1:
+            raise ValueError(f"docker/{file} must give {variable} exactly one default, found {len(defaults)}")
+        image = defaults.pop()
+        if not PINNED.match(image):
+            raise ValueError(f"docker/{file}: the default of {variable} is not <image>:<tag>@sha256:<64 hex>: {image}")
+        if image not in images:
+            images.append(image)
+    return images
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--testcontainers-images", action="store_true",
+                        help="print the pinned images Testcontainers starts, one per line, and exit")
     arguments = parser.parse_args(argv)
+    if arguments.testcontainers_images:
+        try:
+            print("\n".join(testcontainers_images(arguments.root.resolve())))
+        except ValueError as error:
+            print(f"TESTCONTAINERS IMAGE LIST FAILED: {error}", file=sys.stderr)
+            return 1
+        return 0
     failures, inspected = check(arguments.root.resolve())
     if failures:
         print("CONTAINER IMAGE PIN GATE FAILED")

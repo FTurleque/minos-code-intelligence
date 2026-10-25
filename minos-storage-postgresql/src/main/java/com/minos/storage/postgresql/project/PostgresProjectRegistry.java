@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 public final class PostgresProjectRegistry implements ProjectRegistry {
     private static final String PROJECT_ID_LABEL = "projectId";
@@ -392,7 +393,7 @@ public final class PostgresProjectRegistry implements ProjectRegistry {
         Objects.requireNonNull(rootPath, "rootPath");
         Path canonical = rootPath.toRealPath();
         if (!Files.isDirectory(canonical)) {
-            throw new IllegalArgumentException("rootPath must be an existing directory: " + rootPath);
+            throw new IllegalArgumentException("rootPath must be an existing directory: " + leafName(rootPath));
         }
         return canonical;
     }

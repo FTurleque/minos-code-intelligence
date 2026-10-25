@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Discovers observable local project structure by composing discovery extensions.
@@ -73,7 +74,7 @@ public final class ProjectDiscoveryService {
         try {
             Path root = projectRoot.toAbsolutePath().normalize();
             if (!Files.isDirectory(root)) {
-                throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+                throw new IllegalArgumentException("projectRoot must be an existing directory: " + leafName(projectRoot));
             }
 
             SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("project discovery");

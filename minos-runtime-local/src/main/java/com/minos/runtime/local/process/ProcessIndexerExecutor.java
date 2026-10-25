@@ -37,6 +37,7 @@ import java.util.UUID;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Provider-independent process executor with optional qualified OS sandbox plan transformation. */
 public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
@@ -149,7 +150,8 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
                 artifactOutsideRun, generatedArtifact, preservedArtifact, preserveExisting, writeQuota, runDirectory);
         if (!cleanupFailures.isEmpty()) {
             IOException failure = new IOException("MINOS post-execution cleanup failed for run directory "
-                    + runDirectory + "; a preserved provider artifact backup may remain at " + preservedArtifact);
+                    + leafName(runDirectory) + "; a preserved provider artifact backup may remain as "
+                    + leafName(preservedArtifact));
             cleanupFailures.forEach(failure::addSuppressed);
             throw failure;
         }
@@ -315,7 +317,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
     private static void quarantineHostileDirectory(Path directory) throws IOException {
         Path parent = directory.getParent();
         if (parent == null) {
-            throw new IOException("cannot quarantine provider-controlled directory without a parent: " + directory);
+            throw new IOException("cannot quarantine provider-controlled directory without a parent: " + leafName(directory));
         }
         Path quarantined = parent.resolve(directory.getFileName() + ".quarantined-" + System.nanoTime());
         DurableAtomicFile.moveDirectory(directory, quarantined, "provider directory quarantine");
@@ -493,7 +495,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
             throw new IllegalArgumentException("provider command must contain non-null arguments");
         }
         if (!Files.isDirectory(plan.workingDirectory())) {
-            throw new IllegalArgumentException("provider working directory is missing: " + plan.workingDirectory());
+            throw new IllegalArgumentException("provider working directory is missing: " + leafName(plan.workingDirectory()));
         }
         return plan;
     }
@@ -576,12 +578,12 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
 
     private static void requireValidArtifact(Path artifact, String message) throws IOException {
         if (!regularFileNoFollow(artifact)) {
-            throw new IllegalStateException(message + ": " + artifact);
+            throw new IllegalStateException(message + ": " + leafName(artifact));
         }
         long size = Files.size(artifact);
         if (size < 1L || size > IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES) {
             throw new IllegalStateException(message + ": size=" + size + "/"
-                    + IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES + " path=" + artifact);
+                    + IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES + " file=" + leafName(artifact));
         }
     }
 

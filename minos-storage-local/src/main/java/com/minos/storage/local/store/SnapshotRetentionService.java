@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Snapshot-retention mechanism separated from persistence. */
 public final class SnapshotRetentionService {
@@ -157,7 +158,7 @@ public final class SnapshotRetentionService {
         List<Path> files = new ArrayList<>(repository.listSnapshotFiles(projectId));
         Path active = repository.resolveSnapshotFile(projectId, activeFileName);
         if (!Files.isRegularFile(active)) {
-            throw new IOException("active snapshot file is missing: " + active);
+            throw new IOException("active snapshot file is missing: " + leafName(active));
         }
 
         files.removeIf(path -> path.getFileName().toString().equals(activeFileName));

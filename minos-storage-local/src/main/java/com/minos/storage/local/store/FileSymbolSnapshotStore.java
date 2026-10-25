@@ -26,6 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 import static com.minos.domain.Preconditions.requireText;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Compatibility facade for local versioned snapshot persistence and active read views.
@@ -282,7 +283,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     private SnapshotReadView buildReadView(UUID projectId, SnapshotDescriptor descriptor) throws IOException {
         Path snapshotFile = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
         if (!Files.isRegularFile(snapshotFile)) {
-            throw new IOException("active symbol snapshot file is missing: " + snapshotFile);
+            throw new IOException("active symbol snapshot file is missing: " + leafName(snapshotFile));
         }
         // One pass: the codec hashes what it decodes and returns nothing unless the SHA-256 is the pointer's.
         CodeKnowledgeSnapshot snapshot =

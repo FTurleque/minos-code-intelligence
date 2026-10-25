@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static com.minos.domain.Preconditions.requireText;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Shared fail-closed skeleton for executable-backed SCIP process plans. */
 abstract class AbstractScipProcessPlanFactory implements IndexerProcessPlanFactory {
@@ -39,7 +40,7 @@ abstract class AbstractScipProcessPlanFactory implements IndexerProcessPlanFacto
         }
         validateProject(root);
         if (!Files.isRegularFile(executable)) {
-            throw new IllegalStateException(providerId + " executable is missing: " + executable);
+            throw new IllegalStateException(providerId + " executable is missing: " + leafName(executable));
         }
         Path runRoot = Objects.requireNonNull(runDirectory, "runDirectory").toAbsolutePath().normalize();
         Path output = runRoot.resolve("index.scip");

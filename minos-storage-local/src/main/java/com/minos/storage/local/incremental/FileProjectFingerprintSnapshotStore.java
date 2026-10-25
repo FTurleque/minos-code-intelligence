@@ -45,6 +45,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static com.minos.domain.Preconditions.requireText;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Local, versioned and verified persistence of the fingerprint snapshots.
@@ -237,7 +238,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         ActivePointer pointer = readPointer(pointerFile);
         Path snapshotFile = resolveFile(projectDirectory, pointer.fileName());
         if (!regularFileExists(snapshotFile, "active fingerprint snapshot")) {
-            throw new IOException("active fingerprint snapshot file is missing: " + snapshotFile);
+            throw new IOException("active fingerprint snapshot file is missing: " + leafName(snapshotFile));
         }
         String actualChecksum = checksum(snapshotFile);
         if (!actualChecksum.equals(pointer.sha256())) {
@@ -307,7 +308,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         ActivePointer pointer = readPointer(activePointer);
         Path activeFile = resolveFile(projectDirectory, pointer.fileName());
         if (!regularFileExists(activeFile, "active fingerprint snapshot")) {
-            throw new IOException("active fingerprint snapshot file is missing: " + activeFile);
+            throw new IOException("active fingerprint snapshot file is missing: " + leafName(activeFile));
         }
         return pointer.fileName();
     }
