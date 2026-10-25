@@ -224,18 +224,32 @@ Les jobs Linux qui téléchargent des images passent par `docker/login-action` (
 | `DOCKERHUB_USERNAME` | nom du compte Docker Hub |
 | `DOCKERHUB_TOKEN` | jeton d'accès Docker Hub en **lecture seule** (*Account settings → Personal access tokens*, droits « Public Repo Read-only ») |
 
-Jobs concernés : `Verify (ubuntu-24.04)` de `pr-ci.yml` (Testcontainers réutilise la connexion du démon Docker), `docker-release-validation.yml`, `release-promotion-gate.yml`, `docker-upgrade-qualification.yml` et le job PIT de `code-audit.yml`. Sans ces secrets (dépôt non configuré, PR depuis un fork), l'étape est sautée et les téléchargements restent anonymes : rien ne casse, la limite s'applique.
+Jobs concernés : `Verify (ubuntu-24.04)` de `pr-ci.yml`, `docker-release-validation.yml`, `release-promotion-gate.yml`, `docker-upgrade-qualification.yml` et le job PIT de `code-audit.yml`. Sans ces secrets (dépôt non configuré, PR depuis un fork), l'étape est sautée et les téléchargements restent anonymes : rien ne casse, la limite s'applique.
 
-**Durée de la connexion (AUD-DEP-13).** Un job connecté tire ce dont il a besoin puis exécute `docker logout` dans la première étape `run:` qui suit la connexion, avant tout script du dépôt : c'est le cas de `docker-release-validation.yml`, dont la liste d'images est fermée (les `FROM` épinglés de `docker/Dockerfile.mcp.release`). Restent connectés, nommément et avec leur raison dans `DOCKER_LOGIN_KEPT` de `scripts/quality/check-workflow-pins.py` :
+**Durée de la connexion (AUD-DEP-13).** Un job connecté tire ce dont il a besoin puis exécute `docker logout` dans la première étape `run:` qui suit la connexion, avant tout plugin Maven, test ou script de qualification :
+
+- `docker-release-validation.yml` tire les `FROM` épinglés de `docker/Dockerfile.mcp.release` ;
+- `pr-ci.yml` `verify` (Linux) et `code-audit.yml` `mutation` tirent les images de Testcontainers, listées avant la connexion par `python scripts/quality/check-image-pins.py --testcontainers-images` : les défauts épinglés des compose que lisent les tests (aujourd'hui `MINOS_POSTGRES_IMAGE`, l'image `pgvector` que lit `PostgresTestSupport`). Ces deux jobs déclarent dans leur `env:` `TESTCONTAINERS_PULL_POLICY: com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy` et `TESTCONTAINERS_RYUK_DISABLED: 'true'` : les tests ne tirent plus rien, refusent par son nom toute image hors de la liste (au lieu d'un tirage anonyme qui échouerait sur le quota) et ne démarrent pas Ryuk, le conteneur de nettoyage de Testcontainers (le runner est jetable). Une image nouvelle s'ajoute à `TESTCONTAINERS_IMAGE_VARIABLES` de `check-image-pins.py`.
+
+Restent connectés, nommément et avec leur raison dans `DOCKER_LOGIN_KEPT` de `scripts/quality/check-workflow-pins.py` :
 
 | Job | Raison |
 |---|---|
-| `pr-ci.yml` `verify` | Testcontainers tire `pgvector` pendant `mvnw verify` : la liste n'est pas close avant les tests |
-| `code-audit.yml` `mutation` | PIT rejoue les tests du module choisi, Testcontainers compris |
 | `docker-upgrade-qualification.yml` `real-docker-upgrade` | le candidat A est construit depuis un autre commit, dont le Dockerfile peut nommer d'autres empreintes |
 | `release-promotion-gate.yml` `docker-upgrade-qualification` | le candidat A est `main`, même raison |
 
-Le gate refuse tout autre job qui exécute du code connecté, et toute entrée de la liste qui ne désigne plus un job connecté. **Portée du jeton : non vérifiée par le dépôt.** « Lecture seule » n'est écrit que dans ce document et dans les commentaires des workflows ; l'API de Docker Hub ne permet pas de la lire. La vérification revient au propriétaire du compte (tâche 4.1 de `durcir-les-workflows-github`), qui la date ici une fois faite.
+Le gate refuse tout autre job qui exécute du code connecté, toute entrée de la liste qui ne désigne plus un job connecté, l'étape de déconnexion qui lance du code du dépôt (un script de `scripts/`, le wrapper Maven), et un job qui tire la liste de Testcontainers sans déclarer les deux variables ci-dessus.
+
+**Vérifier la liste sans la CI.** Sur un poste dont Docker n'est pas connecté à Docker Hub (`docker logout`), tirer chaque image de la liste, puis lancer les tests PostgreSQL avec le garde, hors ligne :
+
+```bash
+for image in $(python scripts/quality/check-image-pins.py --testcontainers-images); do docker pull "$image"; done
+TESTCONTAINERS_PULL_POLICY=com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy TESTCONTAINERS_RYUK_DISABLED=true ./mvnw -o -B -ntp test -pl minos-storage-postgresql -am -Dminos.postgresql.tests.required=true "-Dtest=com/minos/storage/postgresql/**/*Test" -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+Une image manquante à la liste fait échouer le démarrage du conteneur avec le message « is not in the pre-pulled list ». Les tests des autres modules ne démarrent aucun conteneur.
+
+**Portée du jeton : non vérifiée par le dépôt.** « Lecture seule » n'est écrit que dans ce document et dans les commentaires des workflows ; l'API de Docker Hub ne permet pas de la lire. La vérification revient au propriétaire du compte (tâche 4.1 de `durcir-les-workflows-github`), qui la date ici une fois faite. Elle borne ce que peuvent lire les deux jobs de la liste fermée ; les jobs de test ne lisent plus le jeton.
 
 ## Jeton du dépôt et délais des jobs (AUD-DEP-12)
 
