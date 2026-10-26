@@ -1112,6 +1112,11 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
         self.assertNotIn("io.PrivateLocalStorage", cli)
         self.assertNotIn("runtime.WorkerSandboxProbe", cli)
 
+    def test_no_surface_uses_the_hosted_control_plane_of_the_engine(self):
+        # AUD-ARC-01, lot 3: the surfaces reach the team control plane through TeamControlPlane.
+        for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items():
+            self.assertEqual([], [entry for entry in types if entry.startswith("hosted.")], surface)
+
     def test_the_nexus_export_no_longer_uses_the_engine(self):
         # AUD-ARC-01, lot 5: the export goes through KnowledgeExportUseCase, and the CLI passes the application.
         self.assertEqual({}, _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-nexus"])

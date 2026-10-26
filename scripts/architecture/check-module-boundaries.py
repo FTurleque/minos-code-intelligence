@@ -515,15 +515,6 @@ ENGINE_MODULE = "minos-engine"
 ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
     "minos-api": {
         "git.GitIntelligence": 1,
-        "hosted.HostedAuditEvent": 1,
-        "hosted.HostedControlPlaneService": 1,
-        "hosted.HostedPrincipal": 1,
-        "hosted.HostedProjectBinding": 1,
-        "hosted.HostedRetentionPlan": 1,
-        "hosted.HostedRetentionPolicy": 1,
-        "hosted.HostedRole": 1,
-        "hosted.HostedTenantState": 1,
-        "hosted.SharedWorkspace": 1,
         "query.RelationshipResult": 1,
         "query.SymbolResult": 1,
         "query.UsageResult": 1,
@@ -534,9 +525,6 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
     },
     "minos-cli": {
         "git.GitIntelligence": 3,
-        "hosted.HostedControlPlaneService": 3,
-        "hosted.HostedRetentionPolicy": 1,
-        "hosted.HostedRole": 1,
         "query.RelationshipResult": 1,
         "query.SymbolResult": 1,
         "query.UsageResult": 1,
@@ -548,7 +536,6 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
         "runtime.MinosVersion": 1,
     },
     "minos-mcp": {
-        "hosted.HostedControlPlaneService": 1,
         # Kept: see minos-cli, ADR 0068 section 3.
         "runtime.MinosVersion": 1,
     },

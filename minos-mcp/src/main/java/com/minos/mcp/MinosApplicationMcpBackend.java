@@ -7,6 +7,7 @@ import com.minos.application.ProviderPlatformService;
 import com.minos.application.semantic.HybridContextBuilder;
 import com.minos.application.semantic.HybridSearchService;
 import com.minos.application.semantic.SemanticSearchService;
+import com.minos.application.team.TeamControlPlane;
 import com.minos.architecture.ArchitectureIntelligenceView;
 import com.minos.architecture.ArchitectureModuleSelection;
 import com.minos.context.CodeSearchCriteria;
@@ -311,8 +312,8 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         return HostedControlPlaneRenderer.renderAudit(hosted().audit(hostedToken(), limit));
     }
 
-    private com.minos.hosted.HostedControlPlaneService hosted() {
-        return application.hostedControlPlaneService()
+    private TeamControlPlane hosted() {
+        return application.teamControlPlane()
                 .orElseThrow(() -> new McpClientFailure.TeamModeDisabled("MINOS team mode is disabled"));
     }
 

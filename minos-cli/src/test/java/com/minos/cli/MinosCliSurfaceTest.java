@@ -72,8 +72,8 @@ class MinosCliSurfaceTest {
                 Map.entry("remoteIndexOperations", "package"),
                 Map.entry("runtimeIntelligenceService", "package"),
                 Map.entry("runtimeIntelligenceServiceSupplier", "package"),
-                Map.entry("hostedControlPlaneService", "package"),
-                Map.entry("hostedControlPlaneServiceSupplier", "package"),
+                Map.entry("teamControlPlane", "package"),
+                Map.entry("teamControlPlaneSupplier", "package"),
                 Map.entry("resumeStatus", "package")));
 
         assertEquals(expected, visibility);

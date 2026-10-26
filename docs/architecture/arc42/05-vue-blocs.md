@@ -146,11 +146,14 @@ flowchart TB
     semantic["<b>Sémantique</b><br/>SemanticIndexService · SemanticSearchService<br/>HybridSearchService · HybridContextBuilder"]
     engine["<b>Exposés depuis minos-engine</b><br/>ProjectDiscoveryService · HostedControlPlaneService"]
     indexing["<b>Cas d'usage d'indexation</b><br/>ProjectIndexingUseCase (com.minos.application.indexing)"]
+    team["<b>Plan de contrôle de l'équipe</b><br/>TeamControlPlane (com.minos.application.team)"]
 
     facade --> queries
     facade --> semantic
     facade --> engine
     facade --> indexing
+    facade --> team
+    team --> engine
 ```
 
 Dépendances internes relevées dans le code : `ProjectQueryService` → `CodeSearchService` ;

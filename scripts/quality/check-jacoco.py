@@ -214,6 +214,7 @@ SCOPES = {
         "prefixes": (
             "com/minos/hosted/", "com/minos/storage/local/store/FileHostedControlPlaneStore", "com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider",
             "com/minos/cli/command/TeamCommand", "com/minos/api/LocalMinosTeamApi", "com/minos/output/HostedControlPlaneRenderer",
+            "com/minos/application/team/",
         ), "line": 0.45, "branch": 0.25,
     },
     "m29-backend-routing": {

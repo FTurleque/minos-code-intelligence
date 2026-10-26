@@ -122,7 +122,7 @@ public final class MinosCliRunner {
                 .remoteIndexOperations(LazyApplication.lazy(RemoteIndexOperations.class,
                         application.deferred(LocalRemoteIndexOperations::new)))
                 .runtimeIntelligenceServiceSupplier(application.deferred(MinosApplication::runtimeIntelligenceService))
-                .hostedControlPlaneServiceSupplier(application.deferred(opened -> opened.hostedControlPlaneService()
+                .teamControlPlaneSupplier(application.deferred(opened -> opened.teamControlPlane()
                         .orElseThrow(MinosCli.ServiceNotConfigured::new)));
         LazyApplication.Deferred<ProjectInspectionService> inspection =
                 application.deferred(MinosApplication::projectInspectionService);

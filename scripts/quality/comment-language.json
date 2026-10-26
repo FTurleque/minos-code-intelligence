@@ -29,9 +29,9 @@
     "minos-runtime-local": 3
   },
   "milestoneCommentMaximum": {
-    "minos-api": 11,
+    "minos-api": 10,
     "minos-app": 2,
-    "minos-application": 30,
+    "minos-application": 29,
     "minos-bootstrap": 1,
     "minos-cli": 9,
     "minos-domain": 3,
