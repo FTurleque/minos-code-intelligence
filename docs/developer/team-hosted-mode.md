@@ -10,6 +10,7 @@ M27 adds an opt-in tenant control plane without changing the local-first code-in
 - `HmacHostedIdentityProvider` is a bounded reference adapter for `mht1` tokens, not a requirement that operators use HMAC as their external IdP.
 - `HostedControlPlaneService` derives tenant/principal only from authenticated claims, enforces RBAC and records HMAC-chained audit decisions.
 - CLI/API are administration surfaces; MCP is read-only and has no token arguments.
+- The surfaces reach the control plane through `TeamControlPlane` (`minos-application`, package `com.minos.application.team`), returned by `MinosApplication.teamControlPlane()`. It delegates every operation to `HostedControlPlaneService` and returns application read models in JDK types; it adds no check and lets every refusal of the service through unchanged. No surface names a `com.minos.hosted` type (A11).
 
 `ProjectDiscoveryService` and provider negotiation remain language/provider agnostic. Hosted metadata does not modify snapshots, capabilities, semantic scores or runtime observations.
 

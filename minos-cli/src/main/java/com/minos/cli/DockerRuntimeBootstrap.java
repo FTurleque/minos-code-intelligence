@@ -4,7 +4,7 @@ import com.minos.cli.support.CliExitCodes;
 import com.minos.application.MinosApplicationComposers;
 import com.minos.application.MinosHome;
 import com.minos.diagnostics.PublicErrorMessages;
-import com.minos.registry.ProjectPathMapping;
+import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.registry.ProjectPathMappings;
 
 import java.io.IOException;

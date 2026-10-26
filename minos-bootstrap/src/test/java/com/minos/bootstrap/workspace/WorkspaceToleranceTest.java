@@ -1,10 +1,10 @@
 package com.minos.bootstrap.workspace;
 
-import com.minos.registry.DegradedEntry;
+import com.minos.domain.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
-import com.minos.registry.UnreadableRegistryException;
+import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import com.minos.workspace.WorkspaceIntelligenceService;

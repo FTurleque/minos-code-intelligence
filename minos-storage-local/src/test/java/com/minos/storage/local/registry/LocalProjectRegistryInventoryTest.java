@@ -1,7 +1,7 @@
 package com.minos.storage.local.registry;
 
 import com.minos.diagnostics.PublicErrorMessages;
-import com.minos.registry.DegradedEntry;
+import com.minos.domain.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import org.junit.jupiter.api.Test;

@@ -4,11 +4,11 @@ import com.minos.application.resolution.ProjectResolver;
 import com.minos.domain.ProviderReference;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
-import com.minos.registry.DegradedEntry;
+import com.minos.domain.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
-import com.minos.registry.UnreadableRegistryException;
+import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 

@@ -1,5 +1,8 @@
 package com.minos.registry;
 
+import com.minos.domain.registry.DegradedEntry;
+import com.minos.domain.registry.UnreadableRegistryException;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
@@ -53,6 +56,21 @@ public interface ProjectRegistry {
      */
     default Inventory inventory() throws IOException {
         return new Inventory(listProjects(), List.of());
+    }
+
+    /**
+     * What explains the failure of a strict read of this registry: the truthful exception if some entries are
+     * unreadable, empty otherwise (the failure is then something else and the caller reports it as is). A failure of
+     * the registry itself, which cannot be inventoried, is never presented as unreadable entries.
+     */
+    default Optional<UnreadableRegistryException> explainUnreadable(String consequence) {
+        try {
+            List<DegradedEntry> unreadable = inventory().unreadable();
+            return unreadable.isEmpty() ? Optional.empty()
+                    : Optional.of(UnreadableRegistryException.of(unreadable, consequence));
+        } catch (IOException | RuntimeException _) {
+            return Optional.empty();
+        }
     }
 
     List<RegisteredWorkspace> listWorkspaces() throws IOException;

@@ -68,7 +68,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     "minos-provider-scip": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local"
     }),
-    "minos-integration-git": frozenset({"minos-engine"}),
+    "minos-integration-git": frozenset({"minos-domain", "minos-engine"}),
     "minos-application": frozenset({"minos-domain", "minos-engine"}),
     "minos-bootstrap": frozenset({
         "minos-domain", "minos-engine", "minos-application", "minos-runtime-local", "minos-storage-local",
@@ -514,56 +514,37 @@ ENGINE_MODULE = "minos-engine"
 # minos-app ModuleArchitectureTest: a lot that removes a use updates both tables.
 ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
     "minos-api": {
-        "diagnostics.PublicErrorMessages": 1,
-        "git.GitIntelligence": 1,
-        "hosted.HostedAuditEvent": 1,
-        "hosted.HostedControlPlaneService": 1,
-        "hosted.HostedPrincipal": 1,
-        "hosted.HostedProjectBinding": 1,
-        "hosted.HostedRetentionPlan": 1,
-        "hosted.HostedRetentionPolicy": 1,
-        "hosted.HostedRole": 1,
-        "hosted.HostedTenantState": 1,
-        "hosted.SharedWorkspace": 1,
+        # Kept: published read models, the records the application port ProjectSymbolQuery returns (ADR 0057,
+        # point 6, decision D4 = a of AUD-ARC-01); LocalMinosApi converts them into the public DTOs.
         "query.RelationshipResult": 1,
         "query.SymbolResult": 1,
         "query.UsageResult": 1,
-        # Accessor uses without a name: LocalMinosApi passes app.projectRegistry() and app.snapshotStore() to
-        # LocalProjectSymbolQuery. Removed by the export and query lots of AUD-ARC-01.
-        "registry.ProjectRegistry": 1,
-        "store.CodeKnowledgeSnapshotStore": 1,
     },
     "minos-cli": {
-        "diagnostics.PublicErrorMessages": 3,
-        "git.GitIntelligence": 3,
-        "hosted.HostedControlPlaneService": 3,
-        "hosted.HostedRetentionPolicy": 1,
-        "hosted.HostedRole": 1,
+        # Kept: published read models returned by ProjectSymbolQuery, see minos-api.
         "query.RelationshipResult": 1,
         "query.SymbolResult": 1,
         "query.UsageResult": 1,
-        "registry.DegradedEntry": 1,
-        "registry.ProjectPathMapping": 1,
+        # Kept: a persisted I/O port implemented by the storage adapter; DockerRuntimeBootstrap, a process entry point,
+        # receives it from the composition root (ADR 0068 places the ports in the engine).
         "registry.ProjectPathMappings": 1,
         # Accessor use without a name: MinosCliRunner passes opened.projectRegistry() and opened.snapshotStore() to
         # NexusExportService. Removed by the NEXUS export lot of AUD-ARC-01.
         "registry.ProjectRegistry": 1,
-        "registry.UnreadableRegistryException": 2,
+        # Kept: ADR 0068 section 3 places com.minos.runtime, MinosVersion included, in the engine (decision Q1 = A of
+        # the transverse core lot, 2026-10-25).
         "runtime.MinosVersion": 1,
         # Same accessor use as registry.ProjectRegistry above.
         "store.CodeKnowledgeSnapshotStore": 1,
     },
     "minos-mcp": {
-        "diagnostics.PublicErrorMessages": 2,
-        "hosted.HostedControlPlaneService": 1,
-        "registry.UnreadableRegistryException": 1,
+        # Kept: see minos-cli, ADR 0068 section 3.
         "runtime.MinosVersion": 1,
     },
     "minos-nexus": {
         "io.Sha256": 1,
         "registry.ProjectRegistry": 1,
         "registry.RegisteredProject": 1,
-        "registry.UnreadableRegistryException": 1,
         "store.CodeKnowledgeSnapshot": 1,
         "store.CodeKnowledgeSnapshotStore": 1,
     },
@@ -609,9 +590,11 @@ ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], dict[str, int]] = {
 # be owned by several modules (runtime, storage, program, integration): A3 keeps each package in one module, and
 # ADR 0068 gives the adapters a module namespace below such a root (com.minos.runtime.local, com.minos.storage.local).
 PACKAGE_ROOTS_BY_MODULE: dict[str, frozenset[str]] = {
-    "minos-domain": frozenset({"domain", "program", "semantic"}),
+    # diagnostics: the whole package (PublicErrorMessages, without I/O nor engine dependency) moved down from
+    # minos-engine with its qualified name unchanged (ADR 0068 section 3, step 1; AUD-ARC-01, lot 6).
+    "minos-domain": frozenset({"diagnostics", "domain", "program", "semantic"}),
     "minos-engine": frozenset({
-        "diagnostics", "discovery", "dynamic", "git", "hosted", "incremental", "io", "orchestration", "query",
+        "discovery", "dynamic", "git", "hosted", "incremental", "io", "orchestration", "query",
         "registry", "remote", "runtime", "source", "storage", "store",
     }),
     "minos-runtime-local": frozenset({"runtime"}),

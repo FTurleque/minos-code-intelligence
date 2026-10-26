@@ -6,7 +6,7 @@ import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ResumableRunStatus;
-import com.minos.registry.UnreadableRegistryException;
+import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.output.ProjectJson;
 import com.minos.output.SymbolOutputFormat;
 

@@ -5,7 +5,7 @@ import java.io.ByteArrayOutputStream;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
-import com.minos.registry.ProjectPathMapping;
+import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.registry.ProjectPathMappings;
 
 import java.io.IOException;

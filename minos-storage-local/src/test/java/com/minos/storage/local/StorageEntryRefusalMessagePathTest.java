@@ -1,7 +1,7 @@
 package com.minos.storage.local;
 
 import com.minos.incremental.ProjectFingerprintService;
-import com.minos.registry.ProjectPathMapping;
+import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.storage.local.registry.InterProcessLocalProjectRegistry;
 import com.minos.storage.local.registry.LocalProjectRegistry;

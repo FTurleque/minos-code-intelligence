@@ -68,12 +68,12 @@ class MinosCliSurfaceTest {
                 Map.entry("home", "package"),
                 Map.entry("providerPlatformService", "package"),
                 Map.entry("providerPlatformServiceSupplier", "package"),
-                Map.entry("gitIntelligence", "package"),
+                Map.entry("gitQuery", "package"),
                 Map.entry("remoteIndexOperations", "package"),
                 Map.entry("runtimeIntelligenceService", "package"),
                 Map.entry("runtimeIntelligenceServiceSupplier", "package"),
-                Map.entry("hostedControlPlaneService", "package"),
-                Map.entry("hostedControlPlaneServiceSupplier", "package"),
+                Map.entry("teamControlPlane", "package"),
+                Map.entry("teamControlPlaneSupplier", "package"),
                 Map.entry("resumeStatus", "package")));
 
         assertEquals(expected, visibility);

@@ -1,5 +1,11 @@
 package com.minos.integration.git;
 
+import com.minos.domain.git.ActivityQuery;
+import com.minos.domain.git.ActivityReport;
+import com.minos.domain.git.CommitActivity;
+import com.minos.domain.git.FileActivity;
+import com.minos.domain.git.RepositoryView;
+import com.minos.domain.git.ZoneActivity;
 import com.minos.git.GitIntelligence;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
