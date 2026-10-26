@@ -106,7 +106,7 @@ Les replays M15/M28 sont disponibles par `workflow_dispatch` dans `historical-qu
 
 ### IntelliJ
 
-Le plugin reste qualifié séparément sous **Java 21 / Gradle 9.8.1 / IntelliJ Platform 2026.1**, avec `buildPlugin`, `verifyPluginProjectConfiguration`, `verifyPluginStructure`, **Plugin Verifier** et les tests Windows ownership. Dependabot couvre désormais `/minos-intellij` en plus de Maven et GitHub Actions. Le workflow s'exécute sur toute PR avec une portée calculée et une gate agrégatrice `IntelliJ plugin (gate)`, check exigé par le ruleset.
+Le plugin reste qualifié séparément sous **Java 21 / Gradle 9.8.2 / IntelliJ Platform 2026.1**, avec `buildPlugin`, `verifyPluginProjectConfiguration`, `verifyPluginStructure`, **Plugin Verifier** et les tests Windows ownership. Dependabot couvre désormais `/minos-intellij` en plus de Maven et GitHub Actions. Le workflow s'exécute sur toute PR avec une portée calculée et une gate agrégatrice `IntelliJ plugin (gate)`, check exigé par le ruleset.
 
 ### Docker release et upgrade réel
 
@@ -129,7 +129,7 @@ Le blocage historique `docker compose` interactif de #246 est ainsi couvert par 
 ## Supply-chain et toolchains
 
 - cœur : Java 25 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven 3.10.0 avec checksum ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
-- IntelliJ : Java 21 / Gradle 9.8.1 / IntelliJ Platform 2026.1 ;
+- IntelliJ : Java 21 / Gradle 9.8.2 / IntelliJ Platform 2026.1 ;
 - Dependabot : Maven + Gradle `minos-intellij` + GitHub Actions ;
 - workflows GitHub : actions épinglées par SHA ;
 - Docker release : toolchains/images/checksums immuables lorsque cette garantie est revendiquée ;

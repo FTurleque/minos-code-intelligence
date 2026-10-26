@@ -71,7 +71,7 @@ def main() -> int:
             "docs/developer/TOOLCHAIN_POLICY.md",
             "Java: **25**",
             "Java: **21**",
-            "Gradle: **9.8.1**",
+            "Gradle: **9.8.2**",
             "IntelliJ Platform: **2026.1**",
             "Dependabot covers Maven, the `minos-intellij` Gradle build, and GitHub Actions",
         )

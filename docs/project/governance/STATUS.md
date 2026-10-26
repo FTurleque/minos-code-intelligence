@@ -231,7 +231,7 @@ Les replays M15/M28 historiques sont isolés dans `.github/workflows/historical-
 
 ### IntelliJ
 
-`.github/workflows/intellij-plugin.yml` qualifie le plugin séparément : Java 21, Gradle 9.8.1, IntelliJ Platform 2026.1, build/structure/Plugin Verifier sous Linux et tests ownership sous Windows. Le plugin reste un client externe sans dépendance d'implémentation `com.minos:*`. Le workflow s'exécute sur **toute** PR (aucun filtre de chemins au niveau du workflow) : un job `Plugin scope` calcule si le plugin est concerné (`scripts/ci/plugin-gate.py` ; la portée inclut `minos-cli`, `minos-integration-git`, les rendus JSON de `minos-application`, `minos-domain` et les goldens de caractérisation), les deux jobs du plugin ne tournent que dans ce cas, et `IntelliJ plugin (gate)`, toujours exécuté, est le seul check exigé.
+`.github/workflows/intellij-plugin.yml` qualifie le plugin séparément : Java 21, Gradle 9.8.2, IntelliJ Platform 2026.1, build/structure/Plugin Verifier sous Linux et tests ownership sous Windows. Le plugin reste un client externe sans dépendance d'implémentation `com.minos:*`. Le workflow s'exécute sur **toute** PR (aucun filtre de chemins au niveau du workflow) : un job `Plugin scope` calcule si le plugin est concerné (`scripts/ci/plugin-gate.py` ; la portée inclut `minos-cli`, `minos-integration-git`, les rendus JSON de `minos-application`, `minos-domain` et les goldens de caractérisation), les deux jobs du plugin ne tournent que dans ce cas, et `IntelliJ plugin (gate)`, toujours exécuté, est le seul check exigé.
 
 ### Docker
 
@@ -262,7 +262,7 @@ La **gate JaCoCo ciblée** de `PR Validation` (`scripts/quality/check-jacoco.py`
 
 - Maven Wrapper : Maven 3.10.0 avec checksum SHA-256 (`.mvn/wrapper/maven-wrapper.properties`), accepté par la plage `[3.9,4.0)` de l'enforcer ; l'image Docker et les outils embarqués (`embedded-tools.json`) restent en Maven 3.9.16 ;
 - cœur MINOS : Java 25 / Maven 3.9.x ;
-- plugin IntelliJ : Java 21 / Gradle 9.8.1 / IntelliJ Platform 2026.1 ;
+- plugin IntelliJ : Java 21 / Gradle 9.8.2 / IntelliJ Platform 2026.1 ;
 - Dependabot couvre Maven, GitHub Actions **et le build Gradle `minos-intellij`** ;
 - les actions GitHub sont épinglées sur des SHA immuables ;
 - `docker/Dockerfile.mcp.release` conserve ses images/toolchains/checksums de release reproductibles ;
