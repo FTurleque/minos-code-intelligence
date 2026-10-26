@@ -24,12 +24,12 @@ import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.operations.IndexResumeStatusSource;
 import com.minos.cli.operations.RemoteIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.application.ProjectGitQuery;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.application.dynamic.RuntimeIntelligenceService;
-import com.minos.git.GitIntelligence;
 import com.minos.hosted.HostedControlPlaneService;
 import com.minos.impact.ProjectImpactQuery;
 
@@ -133,7 +133,7 @@ public final class MinosCli {
         AutonomousIndexOperations autonomousOperations = builder.autonomousOperations;
         Path home = builder.home;
         Supplier<ProviderPlatformService> providerPlatformService = builder.providerPlatformService;
-        GitIntelligence gitIntelligenceService = builder.gitIntelligence;
+        ProjectGitQuery gitQuery = builder.gitQuery;
         RemoteIndexOperations remoteIndexOperations = builder.remoteIndexOperations;
         Supplier<RuntimeIntelligenceService> runtimeIntelligenceService = builder.runtimeIntelligenceService;
         Supplier<HostedControlPlaneService> hostedControlPlaneService = builder.hostedControlPlaneService;
@@ -152,8 +152,8 @@ public final class MinosCli {
         ArchitectureCommand architectureCommand = architectureQuery == null
                 ? null : new ArchitectureCommand(architectureQuery);
         ImpactCommand impactCommand = impactQuery == null ? null : new ImpactCommand(impactQuery);
-        GitActivityCommand gitActivityCommand = projectOperations == null || gitIntelligenceService == null
-                ? null : new GitActivityCommand(projectOperations, gitIntelligenceService);
+        GitActivityCommand gitActivityCommand = projectOperations == null || gitQuery == null
+                ? null : new GitActivityCommand(projectOperations, gitQuery);
         RemoteIndexCommand remoteIndexCommand = remoteIndexOperations == null
                 ? null : new RemoteIndexCommand(remoteIndexOperations);
         RuntimeCommand runtimeCommand = runtimeIntelligenceService == null
@@ -291,7 +291,7 @@ public final class MinosCli {
         private AutonomousIndexOperations autonomousOperations;
         private Path home;
         private Supplier<ProviderPlatformService> providerPlatformService;
-        private GitIntelligence gitIntelligence;
+        private ProjectGitQuery gitQuery;
         private RemoteIndexOperations remoteIndexOperations;
         private Supplier<RuntimeIntelligenceService> runtimeIntelligenceService;
         private Supplier<HostedControlPlaneService> hostedControlPlaneService;
@@ -342,8 +342,8 @@ public final class MinosCli {
             return this;
         }
 
-        Builder gitIntelligence(GitIntelligence value) {
-            this.gitIntelligence = Objects.requireNonNull(value);
+        Builder gitQuery(ProjectGitQuery value) {
+            this.gitQuery = Objects.requireNonNull(value);
             return this;
         }
 

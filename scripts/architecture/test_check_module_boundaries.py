@@ -1107,6 +1107,17 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
         self.assertNotIn("io.PrivateLocalStorage", cli)
         self.assertNotIn("runtime.WorkerSandboxProbe", cli)
 
+    def test_the_surfaces_read_git_through_the_application_and_keep_only_the_published_read_models(self):
+        # AUD-ARC-01, lot 4: Git goes through ProjectGitQuery, the API symbol query is built from the application, and
+        # the only query.* entries are the read models the ProjectSymbolQuery port returns (ADR 0057, point 6).
+        published = {"query.RelationshipResult", "query.SymbolResult", "query.UsageResult"}
+        for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items():
+            self.assertNotIn("git.GitIntelligence", types, surface)
+            self.assertLessEqual({name for name in types if name.startswith("query.")}, published, surface)
+        api = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-api"]
+        self.assertNotIn("registry.ProjectRegistry", api)
+        self.assertNotIn("store.CodeKnowledgeSnapshotStore", api)
+
 
 class MinosApplicationAccessorRuleTest(RatchetTreeTestCase):
     """A11 — a MinosApplication accessor called by a surface uses the engine type it returns (AUD-ARC-01)."""

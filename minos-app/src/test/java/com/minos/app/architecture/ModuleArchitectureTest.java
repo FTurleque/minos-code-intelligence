@@ -91,7 +91,6 @@ class ModuleArchitectureTest {
      */
     private static final Map<String, Map<String, Integer>> ENGINE_TYPES_USED_BY_SURFACE_BYTECODE = Map.of(
             "minos-api", Map.ofEntries(
-                    Map.entry("git.GitIntelligence", 1),
                     Map.entry("hosted.HostedAuditEvent", 1),
                     Map.entry("hosted.HostedControlPlaneService", 1),
                     Map.entry("hosted.HostedPrincipal", 1),
@@ -101,11 +100,12 @@ class ModuleArchitectureTest {
                     Map.entry("hosted.HostedRole", 1),
                     Map.entry("hosted.HostedTenantState", 1),
                     Map.entry("hosted.SharedWorkspace", 1),
+                    // Kept, as in ENGINE_TYPES_NAMED_BY_SURFACE of check-module-boundaries.py: published read models
+                    // returned by ProjectSymbolQuery (ADR 0057, point 6).
                     Map.entry("query.RelationshipResult", 1),
                     Map.entry("query.SymbolResult", 1),
                     Map.entry("query.UsageResult", 1)),
             "minos-cli", Map.ofEntries(
-                    Map.entry("git.GitIntelligence", 3),
                     Map.entry("hosted.HostedControlPlaneService", 2),
                     Map.entry("hosted.HostedProjectBinding", 1),
                     Map.entry("hosted.HostedRetentionPolicy", 1),

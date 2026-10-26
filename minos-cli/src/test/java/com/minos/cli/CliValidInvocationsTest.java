@@ -4,10 +4,10 @@ import com.minos.cli.command.NexusExportCommand;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.operations.RemoteIndexOperations;
 import com.minos.application.MinosApplication;
+import com.minos.application.ProjectGitQuery;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
-import com.minos.git.GitIntelligence;
 import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.ProjectImpactQuery;
 import org.junit.jupiter.api.Test;
@@ -183,7 +183,7 @@ class CliValidInvocationsTest {
 
     @Test
     void gitActivityTransmitsItsBoundsToTheService() throws Exception {
-        List<GitIntelligence.ActivityQuery> queries = new ArrayList<>();
+        List<ProjectGitQuery.ActivityRequest> queries = new ArrayList<>();
         ProjectOperations projects = new ProjectOperations() {
             @Override public ProjectView addProject(Path rootPath, String displayName) { throw new UnsupportedOperationException(); }
             @Override public List<ProjectView> listProjects() { throw new UnsupportedOperationException(); }
@@ -196,15 +196,15 @@ class CliValidInvocationsTest {
                 throw new UnsupportedOperationException();
             }
         };
-        GitIntelligence git = new GitIntelligence() {
+        ProjectGitQuery git = new ProjectGitQuery() {
             @Override public RepositoryView inspect(Path projectRoot) { throw new UnsupportedOperationException(); }
-            @Override public ActivityReport analyze(Path projectRoot, ActivityQuery query) {
+            @Override public ActivityReport analyze(Path projectRoot, ActivityRequest query) {
                 queries.add(query);
                 throw new IllegalStateException("reached");
             }
         };
         MinosCli cli = MinosCli.builder(recorder(ProjectSymbolQuery.class))
-                .projectOperations(projects).gitIntelligence(git).build();
+                .projectOperations(projects).gitQuery(git).build();
 
         assertEquals(1, cli.run(("git-activity p --days 5 --max-commits 10 --max-files 20 --zone-depth 3 --format json")
                 .split(" "), new StringBuilder(), new StringBuilder()));

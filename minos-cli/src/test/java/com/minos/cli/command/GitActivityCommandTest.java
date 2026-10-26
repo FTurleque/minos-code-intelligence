@@ -2,7 +2,7 @@ package com.minos.cli.command;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.minos.integration.git.GitIntelligenceService;
+import com.minos.application.ProjectGitQuery;
 import com.minos.output.SymbolOutputFormat;
 import org.junit.jupiter.api.Test;
 
@@ -18,19 +18,19 @@ class GitActivityCommandTest {
     @Test
     void jsonKeepsActivityFactualAndDoesNotInferImportance() {
         Instant now = Instant.parse("2026-07-27T08:00:00Z");
-        GitIntelligenceService.RepositoryView repository = new GitIntelligenceService.RepositoryView(
+        ProjectGitQuery.RepositoryView repository = new ProjectGitQuery.RepositoryView(
                 "repo-1", "C:/work/project", "https://github.com/example/project", "main", "abc123",
                 false, false, true, List.of());
-        GitIntelligenceService.ActivityReport report = new GitIntelligenceService.ActivityReport(
+        ProjectGitQuery.ActivityReport report = new ProjectGitQuery.ActivityReport(
                 repository,
-                new GitIntelligenceService.ActivityQuery(now.minusSeconds(86400), 100, 100, 2),
+                new ProjectGitQuery.ActivityRequest(now.minusSeconds(86400), 100, 100, 2, false),
                 1,
                 false,
                 false,
-                List.of(new GitIntelligenceService.CommitActivity(
+                List.of(new ProjectGitQuery.CommitActivity(
                         "abc123", now, "Ada", "ada@example.test", "change", List.of("src/A.java"))),
-                List.of(new GitIntelligenceService.FileActivity("src/A.java", 1, 1, now, "abc123")),
-                List.of(new GitIntelligenceService.ZoneActivity("src", 1, 1, now)),
+                List.of(new ProjectGitQuery.FileActivity("src/A.java", 1, 1, now, "abc123")),
+                List.of(new ProjectGitQuery.ZoneActivity("src", 1, 1, now)),
                 List.of()
         );
 
@@ -49,16 +49,16 @@ class GitActivityCommandTest {
     @Test
     void jsonKeysComeOutInTheirDeclaredOrderOnEveryLaunch() throws Exception {
         Instant now = Instant.parse("2026-07-27T08:00:00Z");
-        GitIntelligenceService.ActivityReport report = new GitIntelligenceService.ActivityReport(
-                new GitIntelligenceService.RepositoryView(
+        ProjectGitQuery.ActivityReport report = new ProjectGitQuery.ActivityReport(
+                new ProjectGitQuery.RepositoryView(
                         "repo-1", "C:/work/project", "https://github.com/example/project", "main", "abc123",
                         false, false, true, List.of()),
-                new GitIntelligenceService.ActivityQuery(now.minusSeconds(86400), 100, 100, 2),
+                new ProjectGitQuery.ActivityRequest(now.minusSeconds(86400), 100, 100, 2, false),
                 1, false, false,
-                List.of(new GitIntelligenceService.CommitActivity(
+                List.of(new ProjectGitQuery.CommitActivity(
                         "abc123", now, "Ada", "ada@example.test", "change", List.of("src/A.java"))),
-                List.of(new GitIntelligenceService.FileActivity("src/A.java", 1, 1, now, "abc123")),
-                List.of(new GitIntelligenceService.ZoneActivity("src", 1, 1, now)),
+                List.of(new ProjectGitQuery.FileActivity("src/A.java", 1, 1, now, "abc123")),
+                List.of(new ProjectGitQuery.ZoneActivity("src", 1, 1, now)),
                 List.of());
 
         JsonNode json = new ObjectMapper().readTree(GitActivityCommand.render(report, SymbolOutputFormat.JSON));

@@ -3,8 +3,8 @@ package com.minos.cli.command;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
+import com.minos.application.ProjectGitQuery;
 import com.minos.application.ProjectOperations;
-import com.minos.git.GitIntelligence;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
@@ -45,9 +45,9 @@ public final class GitActivityCommand {
             .integer("--zone-depth", 1, 8);
 
     private final ProjectOperations projects;
-    private final GitIntelligence git;
+    private final ProjectGitQuery git;
 
-    public GitActivityCommand(ProjectOperations projects, GitIntelligence git) {
+    public GitActivityCommand(ProjectOperations projects, ProjectGitQuery git) {
         this.projects = Objects.requireNonNull(projects, "projects");
         this.git = Objects.requireNonNull(git, "git");
     }
@@ -57,9 +57,9 @@ public final class GitActivityCommand {
                 (options, exception) -> NAME + " failed: " + failureMessage(exception),
                 options -> {
                     ProjectOperations.ProjectView project = projects.inspectProject(options.project());
-                    GitIntelligence.ActivityReport report = git.analyze(
+                    ProjectGitQuery.ActivityReport report = git.analyze(
                             Path.of(project.rootPath()),
-                            new GitIntelligence.ActivityQuery(
+                            new ProjectGitQuery.ActivityRequest(
                                     Instant.now().minus(Duration.ofDays(options.days())),
                                     options.maxCommits(),
                                     options.maxFiles(),
@@ -76,7 +76,7 @@ public final class GitActivityCommand {
         return USAGE;
     }
 
-    static String render(GitIntelligence.ActivityReport report, SymbolOutputFormat format) {
+    static String render(ProjectGitQuery.ActivityReport report, SymbolOutputFormat format) {
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(reportMap(report));
         }
@@ -89,23 +89,23 @@ public final class GitActivityCommand {
         lines.add("zones: " + report.zones().size());
         lines.add("limitations: " + String.join(",", report.limitations()));
         lines.add("note: activity is factual and is not architectural or business importance");
-        for (GitIntelligence.ZoneActivity zone : report.zones()) {
+        for (ProjectGitQuery.ZoneActivity zone : report.zones()) {
             lines.add("zone\t" + zone.zone() + "\t" + zone.commitTouches() + "\t" + zone.distinctFileCount()
                     + "\t" + zone.lastChangedAt());
         }
         return String.join("\n", lines);
     }
 
-    private static Map<String, Object> reportMap(GitIntelligence.ActivityReport report) {
+    private static Map<String, Object> reportMap(ProjectGitQuery.ActivityReport report) {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("nature", "FACTUAL_ACTIVITY");
         root.put("importanceInference", false);
         root.put("repository", repositoryMap(report.repository()));
         root.put("query", object(
-                "since", report.query().since().toString(),
-                "maxCommits", report.query().maxCommits(),
-                "maxFiles", report.query().maxFiles(),
-                "zoneDepth", report.query().zoneDepth()
+                "since", report.request().since().toString(),
+                "maxCommits", report.request().maxCommits(),
+                "maxFiles", report.request().maxFiles(),
+                "zoneDepth", report.request().zoneDepth()
         ));
         root.put("scannedCommitCount", report.scannedCommitCount());
         root.put("historyTruncated", report.historyTruncated());
@@ -117,7 +117,7 @@ public final class GitActivityCommand {
         return root;
     }
 
-    private static Map<String, Object> repositoryMap(GitIntelligence.RepositoryView repository) {
+    private static Map<String, Object> repositoryMap(ProjectGitQuery.RepositoryView repository) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("repositoryId", repository.repositoryId());
         map.put("workTree", repository.workTree());
@@ -131,7 +131,7 @@ public final class GitActivityCommand {
         return map;
     }
 
-    private static Map<String, Object> commitMap(GitIntelligence.CommitActivity commit) {
+    private static Map<String, Object> commitMap(ProjectGitQuery.CommitActivity commit) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("commitId", commit.commitId());
         map.put("committedAt", commit.committedAt().toString());
@@ -142,7 +142,7 @@ public final class GitActivityCommand {
         return map;
     }
 
-    private static Map<String, Object> fileMap(GitIntelligence.FileActivity file) {
+    private static Map<String, Object> fileMap(ProjectGitQuery.FileActivity file) {
         return object(
                 "path", file.path(),
                 "commitCount", file.commitCount(),
@@ -152,7 +152,7 @@ public final class GitActivityCommand {
         );
     }
 
-    private static Map<String, Object> zoneMap(GitIntelligence.ZoneActivity zone) {
+    private static Map<String, Object> zoneMap(ProjectGitQuery.ZoneActivity zone) {
         return object(
                 "zone", zone.zone(),
                 "commitTouches", zone.commitTouches(),
