@@ -68,7 +68,7 @@ class ModuleArchitectureTest {
             Map.entry("minos-bootstrap", Set.of("minos-domain", "minos-engine", "minos-application",
                     "minos-runtime-local", "minos-storage-local", "minos-provider-scip", "minos-integration-git",
                     "minos-storage-postgresql")),
-            Map.entry("minos-nexus", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
+            Map.entry("minos-nexus", Set.of("minos-domain", "minos-application", "minos-bootstrap")),
             Map.entry("minos-cli",
                     Set.of("minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap")),
             Map.entry("minos-api", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
@@ -117,12 +117,8 @@ class ModuleArchitectureTest {
             "minos-mcp", Map.ofEntries(
                     Map.entry("hosted.HostedControlPlaneService", 1),
                     Map.entry("runtime.MinosVersion", 1)),
-            "minos-nexus", Map.ofEntries(
-                    Map.entry("io.Sha256", 1),
-                    Map.entry("registry.ProjectRegistry", 1),
-                    Map.entry("registry.RegisteredProject", 1),
-                    Map.entry("store.CodeKnowledgeSnapshot", 1),
-                    Map.entry("store.CodeKnowledgeSnapshotStore", 1)));
+            // The NEXUS export goes through KnowledgeExportUseCase; minos-nexus does not depend on the engine.
+            "minos-nexus", Map.of());
 
     private static final String GROUP_PREFIX = "com.minos.";
 

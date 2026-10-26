@@ -74,7 +74,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
         "minos-domain", "minos-engine", "minos-application", "minos-runtime-local", "minos-storage-local",
         "minos-provider-scip", "minos-integration-git", "minos-storage-postgresql"
     }),
-    "minos-nexus": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
+    "minos-nexus": frozenset({"minos-domain", "minos-application", "minos-bootstrap"}),
     "minos-cli": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap"}),
     "minos-api": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     "minos-mcp": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
@@ -543,27 +543,18 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
         # Kept: a persisted I/O port implemented by the storage adapter; DockerRuntimeBootstrap, a process entry point,
         # receives it from the composition root (ADR 0068 places the ports in the engine).
         "registry.ProjectPathMappings": 1,
-        # Accessor use without a name: MinosCliRunner passes opened.projectRegistry() and opened.snapshotStore() to
-        # NexusExportService. Removed by the NEXUS export lot of AUD-ARC-01.
-        "registry.ProjectRegistry": 1,
         # Kept: ADR 0068 section 3 places com.minos.runtime, MinosVersion included, in the engine (decision Q1 = A of
         # the transverse core lot, 2026-10-25).
         "runtime.MinosVersion": 1,
-        # Same accessor use as registry.ProjectRegistry above.
-        "store.CodeKnowledgeSnapshotStore": 1,
     },
     "minos-mcp": {
         "hosted.HostedControlPlaneService": 1,
         # Kept: see minos-cli, ADR 0068 section 3.
         "runtime.MinosVersion": 1,
     },
-    "minos-nexus": {
-        "io.Sha256": 1,
-        "registry.ProjectRegistry": 1,
-        "registry.RegisteredProject": 1,
-        "store.CodeKnowledgeSnapshot": 1,
-        "store.CodeKnowledgeSnapshotStore": 1,
-    },
+    # The NEXUS export goes through KnowledgeExportUseCase (minos-application); minos-nexus does not depend on the
+    # engine (AUD-ARC-01, lot 5).
+    "minos-nexus": {},
 }
 
 # A12 / AUD-ARC-05, ADR 0068 — classes of the inner layers that launch a process (module/name.Type), with their number
