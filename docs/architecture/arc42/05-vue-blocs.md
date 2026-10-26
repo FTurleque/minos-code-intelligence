@@ -82,7 +82,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Responsabilité** : adapter Git local via JGit — historique, activité, faits Git.
 - **Types clés** : `GitIntelligenceService`.
 - **Interfaces** : implémente le port Git de `minos-engine`.
-- **Dépendances** : `minos-engine`, `org.eclipse.jgit 7.6`.
+- **Dépendances** : `minos-domain`, `minos-engine`, `org.eclipse.jgit 7.6`.
 - **Sources** : `minos-integration-git/src/main/java/com/minos/integration/git/`.
 
 ### minos-application
@@ -93,9 +93,9 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Sources** : `minos-application/src/main/java/com/minos/`.
 
 ### minos-nexus
-- **Responsabilité** : export read-only du snapshot normalisé au format contrat JSON NEXUS.
+- **Responsabilité** : export read-only du snapshot normalisé au format contrat JSON NEXUS. Le cas d'usage `KnowledgeExportUseCase` (`minos-application`) sélectionne les faits et résout les chemins ; `NexusExportService` les traduit dans le contrat.
 - **Types clés** : `NexusExportContract`, `NexusExportService`.
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
+- **Dépendances** : `minos-domain`, `minos-application`, `minos-bootstrap` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
 - **Sources** : `minos-nexus/src/main/java/`.
 
 ### minos-cli
@@ -146,11 +146,14 @@ flowchart TB
     semantic["<b>Sémantique</b><br/>SemanticIndexService · SemanticSearchService<br/>HybridSearchService · HybridContextBuilder"]
     engine["<b>Exposés depuis minos-engine</b><br/>ProjectDiscoveryService · HostedControlPlaneService"]
     indexing["<b>Cas d'usage d'indexation</b><br/>ProjectIndexingUseCase (com.minos.application.indexing)"]
+    team["<b>Plan de contrôle de l'équipe</b><br/>TeamControlPlane (com.minos.application.team)"]
 
     facade --> queries
     facade --> semantic
     facade --> engine
     facade --> indexing
+    facade --> team
+    team --> engine
 ```
 
 Dépendances internes relevées dans le code : `ProjectQueryService` → `CodeSearchService` ;

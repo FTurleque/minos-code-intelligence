@@ -5,7 +5,7 @@ import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.cli.support.LazyApplication;
 import com.minos.output.SymbolOutputFormat;
-import com.minos.registry.UnreadableRegistryException;
+import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.application.semantic.SemanticIndexService;
 
 import java.io.IOException;

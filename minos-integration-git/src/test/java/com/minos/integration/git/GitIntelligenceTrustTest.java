@@ -1,5 +1,8 @@
 package com.minos.integration.git;
 
+import com.minos.domain.git.ActivityQuery;
+import com.minos.domain.git.ActivityReport;
+import com.minos.domain.git.RepositoryView;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.StoredConfig;
 import org.junit.jupiter.api.Test;
@@ -39,7 +42,7 @@ class GitIntelligenceTrustTest {
         Files.writeString(root.resolve(".gitattributes"), ATTRIBUTE_LINE);
         byte[] configBefore = Files.readAllBytes(root.resolve(".git/config"));
 
-        GitIntelligenceService.RepositoryView view = new GitIntelligenceService().inspect(root);
+        RepositoryView view = new GitIntelligenceService().inspect(root);
 
         assertFalse(Files.exists(witness), "le filtre du dépôt a été exécuté");
         org.junit.jupiter.api.Assertions.assertArrayEquals(
@@ -107,7 +110,7 @@ class GitIntelligenceTrustTest {
         Files.setLastModifiedTime(linked.resolve(TRACKED), FileTime.fromMillis(System.currentTimeMillis() + 60_000));
         Files.writeString(linked.resolve(".gitattributes"), ATTRIBUTE_LINE);
 
-        GitIntelligenceService.RepositoryView view = new GitIntelligenceService().inspect(linked);
+        RepositoryView view = new GitIntelligenceService().inspect(linked);
 
         assertFalse(Files.exists(witness), "le filtre du dépôt principal a été exécuté depuis un worktree lié");
         assertTrue(view.limitations().contains("REPOSITORY_FILTERS_NOT_APPLIED"), view.limitations().toString());
@@ -136,8 +139,8 @@ class GitIntelligenceTrustTest {
         declareFilter(project, witness);
         Files.writeString(project.resolve(".gitattributes"), ATTRIBUTE_LINE);
 
-        GitIntelligenceService.ActivityReport report = new GitIntelligenceService().analyze(
-                project, new GitIntelligenceService.ActivityQuery(Instant.EPOCH, 100, 100, 1));
+        ActivityReport report = new GitIntelligenceService().analyze(
+                project, new ActivityQuery(Instant.EPOCH, 100, 100, 1));
 
         assertFalse(Files.exists(witness), "le filtre du dépôt livré avec le projet a été exécuté");
         assertEquals(1, report.scannedCommitCount());
@@ -213,9 +216,9 @@ class GitIntelligenceTrustTest {
         Path root = repositoryWithSmudgedFile(temp.resolve("repo"));
         UserPrincipal owner = Files.getOwner(root.resolve(".git"));
 
-        GitIntelligenceService.RepositoryView explicit = new GitIntelligenceService(
+        RepositoryView explicit = new GitIntelligenceService(
                 GitIntelligenceService.ActivityBudget.DEFAULT, () -> owner).inspect(root);
-        GitIntelligenceService.RepositoryView byDefault = new GitIntelligenceService().inspect(root);
+        RepositoryView byDefault = new GitIntelligenceService().inspect(root);
 
         assertTrue(explicit.clean());
         assertEquals(explicit.repositoryId(), byDefault.repositoryId());
@@ -228,8 +231,8 @@ class GitIntelligenceTrustTest {
         Path root = repositoryWithSmudgedFile(temp.resolve("mono"));
         Path project = Files.createDirectories(root.resolve("service-a"));
 
-        GitIntelligenceService.RepositoryView below = new GitIntelligenceService().inspect(project);
-        GitIntelligenceService.RepositoryView atRoot = new GitIntelligenceService().inspect(root);
+        RepositoryView below = new GitIntelligenceService().inspect(project);
+        RepositoryView atRoot = new GitIntelligenceService().inspect(root);
 
         assertEquals(root.toRealPath().toString(), below.workTree());
         assertTrue(below.limitations().contains("REPOSITORY_ABOVE_PROJECT_ROOT"), below.limitations().toString());

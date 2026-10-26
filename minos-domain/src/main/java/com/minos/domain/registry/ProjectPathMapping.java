@@ -1,4 +1,4 @@
-package com.minos.registry;
+package com.minos.domain.registry;
 
 import java.nio.file.Path;
 import java.util.Locale;
@@ -50,7 +50,7 @@ public record ProjectPathMapping(String hostRoot, String containerRoot) {
         return relativeFrom(rootFor(runtimeLocation), normalizeCandidate(physicalPath.toAbsolutePath().normalize().toString()));
     }
 
-    /** Resolves an absolute legacy path persisted by pre-M29 registries against either known root. */
+    /** Resolves an absolute legacy path, persisted by older registries, against either known root. */
     public String relativeForLegacyPath(String legacyPath) {
         String normalized = normalizeCandidate(legacyPath);
         IllegalArgumentException hostFailure;

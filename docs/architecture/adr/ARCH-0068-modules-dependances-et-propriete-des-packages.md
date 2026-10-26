@@ -190,6 +190,12 @@ L'ordre des tâches et leurs prérequis sont dans [le plan du chantier stockage]
 
 **§ 3, `hosted`** : la cartographie de SH-08 ne trouve dans `com.minos.hosted` ni lancement de processus, ni ACL, ni écriture de fichier. Le package reste dans `minos-engine`.
 
+**§ 2, § 3 et § 5, noyau transverse (AUD-ARC-01, lot 6, changement OpenSpec `descendre-le-noyau-transverse`)** :
+- **`com.minos.diagnostics`** : le paquet ne contient que `PublicErrorMessages`, sans E/S ni dépendance au moteur. Il descend entier dans `minos-domain`, nom complet inchangé (§ 3, étape 1), et la racine `diagnostics` passe du moteur au domaine dans `PACKAGE_ROOTS_BY_MODULE` (§ 5).
+- **Arête `minos-integration-git` → `minos-domain`** : elle s'ajoute à `ALLOWED_DEPENDENCIES` et à `ModuleArchitectureTest.ALLOWED`, dans le sens du § 2, parce que `GitIntelligenceService` utilise ce message public.
+- **Types du registre** : `UnreadableRegistryException`, `DegradedEntry` et `ProjectPathMapping` passent dans `com.minos.domain.registry` (§ 3, étape 3 : le côté interne prend l'espace de noms de son module). Les ports du registre restent dans `com.minos.registry`, dans le moteur.
+- **`com.minos.runtime.MinosVersion`** reste dans le moteur, comme le fixe la table du § 3.
+
 ## Écarts constatés
 
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.

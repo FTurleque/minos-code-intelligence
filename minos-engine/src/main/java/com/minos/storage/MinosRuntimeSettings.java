@@ -2,7 +2,7 @@ package com.minos.storage;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.ConfinedFileOpener;
-import com.minos.registry.ProjectPathMapping;
+import com.minos.domain.registry.ProjectPathMapping;
 
 import java.io.IOException;
 import java.io.InputStream;

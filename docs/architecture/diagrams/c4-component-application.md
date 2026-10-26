@@ -4,8 +4,9 @@
 > (`projectQueryService()`, `architectureQuery()`, `impactQuery()`, `programGraphService()`,
 > `workspaceIntelligence()`, `runtimeIntelligenceService()`, `semanticSearchService()`, etc.) ; les flèches de la
 > façade sont ces accesseurs. Les services d'indexation et le plan de contrôle tenant vivent dans `minos-engine`
-> depuis l'ADR-0044. Sources : `MinosApplication.java`, packages `architecture`, `impact`, `context`,
-> `program/analysis`, `workspace`, `application/semantic`, `application/dynamic` ; ADR-0044, ADR-0045.
+> depuis l'ADR-0044 ; les surfaces consomment le plan de contrôle par la façade `TeamControlPlane`
+> (`teamControlPlane()`). Sources : `MinosApplication.java`, packages `architecture`, `impact`, `context`,
+> `program/analysis`, `workspace`, `application/semantic`, `application/dynamic`, `application/team` ; ADR-0044, ADR-0045.
 
 ```mermaid
 flowchart TB
@@ -15,11 +16,14 @@ flowchart TB
     semantic["<b>Sémantique</b><br/>SemanticIndexService · SemanticSearchService<br/>HybridSearchService · HybridContextBuilder"]
     engine["<b>Exposés depuis minos-engine</b><br/>ProjectDiscoveryService · HostedControlPlaneService"]
     indexing["<b>Cas d'usage d'indexation</b><br/>ProjectIndexingUseCase (com.minos.application.indexing)"]
+    team["<b>Plan de contrôle de l'équipe</b><br/>TeamControlPlane (com.minos.application.team)"]
 
     facade --> queries
     facade --> semantic
     facade --> engine
     facade --> indexing
+    facade --> team
+    team --> engine
 ```
 
 Dépendances internes relevées dans le code : `ProjectQueryService` → `CodeSearchService` ;

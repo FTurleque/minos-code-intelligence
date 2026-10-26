@@ -96,7 +96,7 @@ class DefaultMinosApplicationComposerTest {
     @Test
     void projectPathMappingsAreTheFileStoreOfTheHome(@TempDir Path temp) throws Exception {
         Path home = java.nio.file.Files.createDirectories(temp.resolve("home"));
-        com.minos.registry.ProjectPathMapping mapping = new com.minos.registry.ProjectPathMapping("N:/workspace-dev", "/workspace/projects");
+        com.minos.domain.registry.ProjectPathMapping mapping = new com.minos.domain.registry.ProjectPathMapping("N:/workspace-dev", "/workspace/projects");
 
         new DefaultMinosApplicationComposer().projectPathMappings(home).save(mapping);
 

@@ -9,7 +9,7 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.orchestration.ResumableRunSummary;
-import com.minos.registry.DegradedEntry;
+import com.minos.domain.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshotStore;

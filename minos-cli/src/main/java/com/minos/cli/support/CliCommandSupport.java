@@ -4,7 +4,7 @@ import com.minos.application.ProjectOperations;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.domain.SymbolKind;
-import com.minos.registry.DegradedEntry;
+import com.minos.domain.registry.DegradedEntry;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
