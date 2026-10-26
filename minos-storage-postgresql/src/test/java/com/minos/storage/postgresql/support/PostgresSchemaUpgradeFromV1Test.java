@@ -31,7 +31,7 @@ class PostgresSchemaUpgradeFromV1Test extends PostgresTestSupport {
 
             new PostgresSchemaMigrator(factory).migrate();
 
-            assertEquals(List.of(1, 2, 3, 4), versions(factory));
+            assertEquals(List.of(1, 2, 3, 4, 5), versions(factory));
             assertEquals(PostgresSchemaMigrator.CURRENT_VERSION, versions(factory).getLast());
             assertEquals("demo", single(factory, "SELECT display_name FROM projects WHERE id='" + PROJECT + "'"));
             assertEquals("snap-1", single(factory, "SELECT snapshot_id FROM knowledge_active"));

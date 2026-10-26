@@ -208,8 +208,8 @@ class PostgresSchemaMigratorTest extends PostgresTestSupport {
                          "SELECT version FROM " + schema + ".schema_version ORDER BY version")) {
                 List<Integer> versions = new ArrayList<>();
                 while (r.next()) versions.add(r.getInt(1));
-                assertEquals(List.of(1, 2, 3, 4), versions,
-                        "schema_version of " + schema + " must contain exactly versions 1..4 once each,"
+                assertEquals(IntStream.rangeClosed(1, PostgresSchemaMigrator.CURRENT_VERSION).boxed().toList(), versions,
+                        "schema_version of " + schema + " must contain exactly versions 1..current once each,"
                                 + " with no partial or duplicate migration");
             }
             try (Statement s = c.createStatement()) {

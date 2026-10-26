@@ -119,7 +119,8 @@ public final class PostgresStorageRetentionService implements StorageRetentionSe
                 WHERE target.project_id=? AND target.id=ranked.id
                   AND NOT EXISTS (
                       SELECT 1 FROM project_index_state p
-                      WHERE p.project_id=target.project_id AND p.latest_run_id=target.id)
+                      WHERE p.project_id=target.project_id
+                        AND (p.latest_run_id=target.id OR p.resumable_run_id=target.id))
                   AND ((ranked.succeeded AND ranked.position>?)
                        OR (NOT ranked.succeeded AND ranked.position>?))
                 """;

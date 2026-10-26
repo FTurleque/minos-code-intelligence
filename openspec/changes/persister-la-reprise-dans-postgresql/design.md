@@ -56,10 +56,10 @@ L'ADR 0039 § 2 dit que `ProjectIndexState.resumableRunId` désigne l'unique run
 
 `applyV5` exécute `ALTER TABLE project_index_state ADD COLUMN IF NOT EXISTS resumable_run_id uuid NULL`, puis `INSERT INTO schema_version(version) VALUES (5) ON CONFLICT(version) DO NOTHING`. Elle suit le modèle d'`applyV3`. Elle s'exécute sous le verrou consultatif et dans la transaction de `migrate()` : un échec annule tout, comme l'exigence existante le prévoit déjà.
 
-### D3 — Un test de contrat abstrait, dans le test-jar du moteur
+### D3 — Un contrat de test en interface, dans le test-jar du moteur
 
-- `com.minos.orchestration.IndexStateStoreContract` est une classe abstraite placée dans `minos-engine/src/test`. Le package appartient au moteur (règle A3). Elle déclare `newStore()` et `reopen()` comme méthodes abstraites.
-- Elle est étendue par `FileIndexStateStoreContractTest` (`minos-storage-local`, package `com.minos.storage.local.orchestration`) et par `PostgresIndexStateStoreContractTest` (`minos-storage-postgresql`, sous-classe de `PostgresTestSupport`).
+- `com.minos.orchestration.IndexStateStoreContract` est une interface placée dans `minos-engine/src/test`. Le package appartient au moteur (règle A3). Elle déclare `newStore()` et `reopen()`, et ses cas sont des méthodes `@Test` par défaut.
+- Une interface plutôt qu'une classe abstraite : `PostgresIndexStateStoreContractTest` doit hériter de `PostgresTestSupport`, dont JUnit déroule le cycle de vie (`@BeforeAll`, `@BeforeEach`). Il implémente donc le contrat. `FileIndexStateStoreContractTest` (`minos-storage-local`, package `com.minos.storage.local.orchestration`) l'implémente aussi.
 - Les deux modules dépendent déjà du test-jar du moteur. Aucune arête n'est ajoutée.
 
 Cas du contrat :
@@ -70,12 +70,12 @@ Cas du contrat :
 
 Ce que le contrat ne couvre pas, et qui reste dans les tests propres à chaque backend : le format persisté (fichier de propriétés ou colonnes SQL) et la migration.
 
-- **Option retenue** : une classe abstraite dans le test-jar du moteur. C'est ce que recommandait l'audit.
+- **Option retenue** : une interface de test dans le test-jar du moteur. L'audit recommandait une classe abstraite, mais elle priverait le test PostgreSQL de sa superclasse.
 - **Option écartée** : un test dupliqué dans chaque module, qui ne garantit pas que les deux backends vérifient les mêmes cas.
 
 ### D4 — La rétention protège le run offert
 
-Dans `deleteHistoricalRuns`, la sous-requête `NOT EXISTS` porte sur `p.latest_run_id=target.id OR p.resumable_run_id=target.id`. Un test PostgreSQL fixe `maxNonSucceededRuns = 0`, enregistre un run `INTERRUPTED` et un état `FAILED` qui l'offre, appelle `compact`, puis vérifie que le run existe encore. Le même cas est ajouté côté local pour vérifier la symétrie.
+Dans `deleteHistoricalRuns`, la sous-requête `NOT EXISTS` porte sur `p.latest_run_id=target.id OR p.resumable_run_id=target.id`. Un test PostgreSQL fixe `maxNonSucceededRuns = 0`, enregistre un run `INTERRUPTED` et un état `FAILED` qui l'offre, appelle `compact`, puis vérifie que le run existe encore. Côté local, le cas symétrique existe déjà : `IndexRunRetentionServiceTest.compactionProtectsTheResumableRunLikeTheLatestRun`.
 
 ## Risques et coût
 

@@ -1,20 +1,20 @@
 ## 1. Contrat commun de l'état d'indexation
 
-- [ ] 1.1 (E01, D3) Écrire la classe abstraite `com.minos.orchestration.IndexStateStoreContract` dans `minos-engine/src/test` (4 cas du design). L'étendre avec `FileIndexStateStoreContractTest` dans `minos-storage-local`. **Preuve** : `./mvnw -B -ntp -pl minos-storage-local -am test "-Dtest=FileIndexStateStoreContractTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est vert. Le backend local respecte déjà le contrat.
-- [ ] 1.2 (E01, D3) **Rouge.** `PostgresIndexStateStoreContractTest` (`minos-storage-postgresql`, sous-classe de `PostgresTestSupport`) échoue sur les cas 1 et 4 : l'offre relue est vide. Prouver le rouge sous Docker, avec `"-Dminos.postgresql.tests.required=true"`.
+- [x] 1.1 (E01, D3) Écrire l'interface de test `com.minos.orchestration.IndexStateStoreContract` dans `minos-engine/src/test` (4 cas du design). L'implémenter avec `FileIndexStateStoreContractTest` dans `minos-storage-local`. **Preuve** : `./mvnw -B -ntp -pl minos-storage-local -am test "-Dtest=FileIndexStateStoreContractTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est vert. Le backend local respecte déjà le contrat.
+- [x] 1.2 (E01, D3) **Rouge.** `PostgresIndexStateStoreContractTest` (`minos-storage-postgresql`, sous-classe de `PostgresTestSupport` qui implémente le contrat) échoue sur les cas 1 et 4 : l'offre relue est vide. Prouver le rouge sous Docker, avec `"-Dminos.postgresql.tests.required=true"`.
 
 ## 2. Migration v5 et magasin PostgreSQL
 
-- [ ] 2.1 (E01, D1, D2) **Correction.** Dans `PostgresSchemaMigrator`, passer `CURRENT_VERSION` à 5 et ajouter `applyV5`. Dans `PostgresIndexStateStore`, lire et écrire `resumable_run_id`, puis construire l'état avec le constructeur à 7 arguments. Mettre à jour `PostgresSchemaUpgradeFromV1Test`, qui attend maintenant les versions 1 à 5. Ajouter un cas de montée depuis une base v4 peuplée. **Preuve** : `./mvnw -B -ntp -pl minos-storage-postgresql -am test "-Dminos.postgresql.tests.required=true"` est vert, contrat compris. Le refus d'un schéma plus récent reste vert.
+- [x] 2.1 (E01, D1, D2) **Correction.** Dans `PostgresSchemaMigrator`, passer `CURRENT_VERSION` à 5 et ajouter `applyV5`. Dans `PostgresIndexStateStore`, lire et écrire `resumable_run_id`, puis construire l'état avec le constructeur à 7 arguments. Mettre à jour `PostgresSchemaUpgradeFromV1Test`, qui attend maintenant les versions 1 à 5. Ajouter un cas de montée depuis une base v4 peuplée. **Preuve** : `./mvnw -B -ntp -pl minos-storage-postgresql -am test "-Dminos.postgresql.tests.required=true"` est vert, contrat compris. Le refus d'un schéma plus récent reste vert.
 
 ## 3. Rétention
 
-- [ ] 3.1 (E01, D4) **Rouge.** Écrire un test PostgreSQL : avec `maxNonSucceededRuns = 0`, le run `INTERRUPTED` offert est supprimé par `compact`. Il doit échouer avant la correction. Écrire le cas symétrique côté local, qui est vert.
-- [ ] 3.2 (E01, D4) **Correction.** Dans `deleteHistoricalRuns`, la sous-requête `NOT EXISTS` devient `p.latest_run_id=target.id OR p.resumable_run_id=target.id`. **Preuve** : les deux tests de rétention sont verts, ainsi que le cas « run non offert supprimé ».
+- [x] 3.1 (E01, D4) **Rouge.** Écrire un test PostgreSQL : avec `maxNonSucceededRuns = 0`, le run `INTERRUPTED` offert est supprimé par `compact`. Il doit échouer avant la correction. Le cas symétrique côté local existe déjà et est vert (`IndexRunRetentionServiceTest.compactionProtectsTheResumableRunLikeTheLatestRun`).
+- [x] 3.2 (E01, D4) **Correction.** Dans `deleteHistoricalRuns`, la sous-requête `NOT EXISTS` devient `p.latest_run_id=target.id OR p.resumable_run_id=target.id`. **Preuve** : les deux tests de rétention sont verts, ainsi que le cas « run non offert supprimé ».
 
 ## 4. Documentation
 
-- [ ] 4.1 (E01) Ajouter à l'ADR 0039 une note de mise en œuvre : l'offre de reprise est persistée par les deux backends et protégée par leur rétention. Dans `docs/developer/quality/code-audit-couverture.md:64`, passer `CURRENT_VERSION` de 4 à 5. Ajouter la ligne de note de version : une base PostgreSQL migrée en v5 est refusée par une version antérieure de MINOS.
+- [x] 4.1 (E01) Ajouter à l'ADR 0039 une note de mise en œuvre : l'offre de reprise est persistée par les deux backends et protégée par leur rétention. Dans `docs/developer/quality/code-audit-couverture.md:64`, passer `CURRENT_VERSION` de 4 à 5. Dans `docs/user/production-installation.md` § 6, dire qu'une base PostgreSQL migrée est refusée par une version antérieure de MINOS.
 
 ## 5. Clôture
 

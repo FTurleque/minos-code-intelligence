@@ -18,7 +18,7 @@ Le propriétaire a décidé le 2026-10-26 de livrer ce correctif **avant** la fu
   - `saveProjectState` écrit la colonne à l'insertion et à la mise à jour (`ON CONFLICT`).
   - Une valeur NULL se relit comme `Optional.empty()`.
 - **`PostgresStorageRetentionService.deleteHistoricalRuns`.** Le run que désigne `resumable_run_id` est protégé exactement comme celui de `latest_run_id`.
-- **Test de contrat commun aux deux backends.** La classe abstraite `IndexStateStoreContract`, placée dans les tests de `minos-engine` et publiée par son test-jar, fixe ce que tout `IndexStateStore` garantit : aller-retour de l'état avec et sans offre de reprise, retrait de l'offre, relecture par une instance neuve. Elle s'exécute contre `FileIndexStateStore` et contre `PostgresIndexStateStore`.
+- **Test de contrat commun aux deux backends.** L'interface de test `IndexStateStoreContract`, placée dans les tests de `minos-engine` et publiée par son test-jar, dont les cas sont des méthodes `@Test` par défaut, fixe ce que tout `IndexStateStore` garantit : aller-retour de l'état avec et sans offre de reprise, retrait de l'offre, relecture par une instance neuve. Elle s'exécute contre `FileIndexStateStore` et contre `PostgresIndexStateStore`.
 - **Test de rétention.** Avec `maxNonSucceededRuns = 0`, un run `INTERRUPTED` offert à la reprise survit à `compact`, sur les deux backends.
 
 ## Capabilities
@@ -40,7 +40,7 @@ Le propriétaire a décidé le 2026-10-26 de livrer ce correctif **avant** la fu
 
 ## Impact
 
-- **Modules** : `minos-storage-postgresql` (3 classes de production et leurs tests) ; `minos-engine` (test-jar seulement : `IndexStateStoreContract`) ; `minos-storage-local` (test seulement : sous-classe du contrat). Aucune dépendance ajoutée.
+- **Modules** : `minos-storage-postgresql` (3 classes de production et leurs tests) ; `minos-engine` (test-jar seulement : `IndexStateStoreContract`) ; `minos-storage-local` (test seulement : implémentation du contrat). Aucune dépendance ajoutée.
 - **Surfaces publiques** : aucune signature ne change.
   - Avec PostgreSQL, `minos project status` et l'`index` suivant voient désormais l'offre de reprise, comme avec le backend local.
   - Une base migrée en v5 est refusée par un MINOS antérieur, par le contrôle déjà existant « schema is newer than this MINOS runtime ». C'est la règle de toutes les migrations ; les notes de version la signalent.

@@ -61,7 +61,7 @@ Le projet ouvert dans IntelliJ (MCP JetBrains) déclare 15 modules dont un doubl
 | Workflows | 12 workflows GitHub Actions + `dependabot.yml` | |
 | Docker | `docker/Dockerfile.mcp`, `docker/Dockerfile.mcp.release`, `docker/compose-mcp.prod.yaml`, `docker/compose-mcp.connected.yaml` | |
 | Installateur | `packaging/windows/minos-installer.iss.template` (Inno Setup) | |
-| Persistance | schéma PostgreSQL versionné à la main (`schema_version`, `CURRENT_VERSION = 4`) dans `PostgresSchemaMigrator.java` ; snapshots locaux par `DurableAtomicFile` | aucune migration Flyway/Liquibase, aucun fichier `.sql` |
+| Persistance | schéma PostgreSQL versionné à la main (`schema_version`, `CURRENT_VERSION = 5`) dans `PostgresSchemaMigrator.java` ; snapshots locaux par `DurableAtomicFile` | aucune migration Flyway/Liquibase, aucun fichier `.sql` |
 | Code embarqué ou tiers | outils SCIP téléchargés à la release (`embedded-tools.json`, `tools-manifest`), jar ombré de `minos-app` | |
 | Projets d'exemple | `fixtures/` (Java, TypeScript, Python, Gradle, Kotlin, polyglottes) | données de test indexées, pas du code de MINOS |
 | Java hors modules | sources de scripts historiques (`scripts/history`, `scripts/m14`, `m15`, `m26`, `m27`) et une classe `docker/scripts` | non compilées par le réacteur |
