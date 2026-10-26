@@ -12,8 +12,10 @@ import com.minos.cli.operations.LocalRemoteIndexOperations;
 import com.minos.cli.operations.RemoteIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.LazyApplication;
+import com.minos.application.LocalProjectGitQuery;
 import com.minos.application.LocalProjectOperations;
 import com.minos.application.LocalProjectSymbolQuery;
+import com.minos.application.ProjectGitQuery;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.application.MinosApplication;
@@ -21,7 +23,6 @@ import com.minos.application.MinosHome;
 import com.minos.application.ProjectInspectionService;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
-import com.minos.git.GitIntelligence;
 import com.minos.impact.ProjectImpactQuery;
 import com.minos.nexus.NexusExportService;
 
@@ -117,8 +118,7 @@ public final class MinosCliRunner {
                 .autonomousOperations(LazyApplication.lazy(AutonomousIndexOperations.class, autonomousIndex))
                 .home(application.home())
                 .providerPlatformServiceSupplier(application.deferred(ProviderPlatformService::defaults))
-                .gitIntelligence(LazyApplication.lazy(GitIntelligence.class,
-                        application.deferred(MinosApplication::gitIntelligence)))
+                .gitQuery(LazyApplication.lazy(ProjectGitQuery.class, application.deferred(LocalProjectGitQuery::new)))
                 .remoteIndexOperations(LazyApplication.lazy(RemoteIndexOperations.class,
                         application.deferred(LocalRemoteIndexOperations::new)))
                 .runtimeIntelligenceServiceSupplier(application.deferred(MinosApplication::runtimeIntelligenceService))

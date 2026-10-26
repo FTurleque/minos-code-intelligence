@@ -91,12 +91,12 @@ class ModuleArchitectureTest {
      */
     private static final Map<String, Map<String, Integer>> ENGINE_TYPES_USED_BY_SURFACE_BYTECODE = Map.of(
             "minos-api", Map.ofEntries(
-                    Map.entry("git.GitIntelligence", 1),
+                    // Kept, as in ENGINE_TYPES_NAMED_BY_SURFACE of check-module-boundaries.py: published read models
+                    // returned by ProjectSymbolQuery (ADR 0057, point 6).
                     Map.entry("query.RelationshipResult", 1),
                     Map.entry("query.SymbolResult", 1),
                     Map.entry("query.UsageResult", 1)),
             "minos-cli", Map.ofEntries(
-                    Map.entry("git.GitIntelligence", 3),
                     // Kept, as in the source table: a persisted I/O port, and MinosVersion placed by ADR 0068 section 3.
                     Map.entry("registry.ProjectPathMappings", 1),
                     Map.entry("runtime.MinosVersion", 1)),

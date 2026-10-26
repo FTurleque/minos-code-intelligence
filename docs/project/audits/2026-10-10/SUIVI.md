@@ -662,7 +662,8 @@ Quatre phases, chacune spécifiée en OpenSpec, implémentée par lots et valid�
 | AUD-ARC-01 (lot 2) | 2 | `faire-consommer-le-diagnostic-de-l-hote` | **fusionné** le 2026-10-25 et archivé ; A11 passe de 43 à 41 types (garde Python) et de 39 à 36 (bytecode) ; CI verte, SonarCloud 0 nouveau problème, couverture du nouveau code 95,2 % | [PR #565](https://github.com/FTurleque/minos-code-intelligence/pull/565), fusion `9b710cbe` |
 | AUD-ARC-01 (lot 6) | 3 | `descendre-le-noyau-transverse` | implémenté en local, non poussé ; A11 passe de 41 à 33 types (garde Python) et de 36 à 28 (bytecode) | — |
 | AUD-ARC-01 (lot 3) | 3 | `faire-consommer-le-controle-heberge` | en revue (PR vers `develop`) ; les surfaces passent par la façade `TeamControlPlane` ; A11 passe de 33 à 20 types (garde Python) et de 28 à 13 (bytecode) | — |
-| AUD-ARC-01 (lot 5) | 3 | `faire-consommer-l-export-nexus` | en revue (PR vers `develop`) ; l'export passe par le cas d'usage `KnowledgeExportUseCase`, l'arête `minos-nexus` → `minos-engine` est retirée ; A11 passe de 20 à 13 types (garde Python) et de 13 à 8 (bytecode) | [PR #575](https://github.com/FTurleque/minos-code-intelligence/pull/575) |
+| AUD-ARC-01 (lot 4) | 3 | `faire-consommer-git-et-les-resultats-de-requete` | en revue ; Git par la requête applicative `ProjectGitQuery` sur les records Git descendus dans `minos-domain`, requête de symboles de l'API construite par l'application ; A11 passe de 20 à 16 types (garde Python) et de 13 à 11 (bytecode), après le lot 3 ; les 6 entrées `query.*` restent, justifiées comme modèles de lecture publiés (ADR 0057, point 6) | [PR #574](https://github.com/FTurleque/minos-code-intelligence/pull/574) |
+| AUD-ARC-01 (lot 5) | 3 | `faire-consommer-l-export-nexus` | en revue (PR vers `develop`) ; l'export passe par le cas d'usage `KnowledgeExportUseCase`, l'arête `minos-nexus` → `minos-engine` est retirée ; A11 passe de 16 à 9 types (garde Python) et de 11 à 6 (bytecode), après les lots 3 et 4 | [PR #575](https://github.com/FTurleque/minos-code-intelligence/pull/575) |
 | AUD-ARC-12 | — | aucun | **clos par décision documentée** : la convention de préfixe de module ne vaut que pour les nouveaux packages ([ADR 0068](../../../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 5, décision D4 du 2026-10-22) ; renommer les racines existantes contredirait l'ADR 0044. La règle A14 empêche toute nouvelle racine | — |
 
 ### Phase 1 — cliquets étanches (2026-10-25, HEAD de départ `dedb219e`)
@@ -816,8 +817,8 @@ Décisions du propriétaire du 2026-10-26 : Q1 = A, Q2 = A, Q3 = A.
 
 | Cliquet A11 | Avant | Après |
 |---|---|---|
-| Garde Python | 20 (API 6, CLI 8, MCP 1, NEXUS 5) | **13** (API 6, CLI 6, MCP 1, NEXUS 0) |
-| Bytecode | 13 (API 4, CLI 3, MCP 1, NEXUS 5) | **8** (API 4, CLI 3, MCP 1, NEXUS 0) |
+| Garde Python | 16 (API 3, CLI 7, MCP 1, NEXUS 5) | **9** (API 3, CLI 5, MCP 1, NEXUS 0) |
+| Bytecode | 11 (API 3, CLI 2, MCP 1, NEXUS 5) | **6** (API 3, CLI 2, MCP 1, NEXUS 0) |
 
 Preuves (poste Windows, worktree `lot5-export-nexus-f15ec1`) :
 
