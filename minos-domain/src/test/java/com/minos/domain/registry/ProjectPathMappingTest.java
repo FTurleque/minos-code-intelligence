@@ -38,9 +38,10 @@ class ProjectPathMappingTest {
 
     @Test
     void anUnknownRuntimeLocationIsRefused() {
+        Map<String, String> environment = Map.of(ProjectPathMapping.RUNTIME_LOCATION_ENV, "cloud");
+        Properties properties = new Properties();
         assertThrows(IllegalArgumentException.class,
-                () -> ProjectPathMapping.resolveRuntimeLocation(Map.of(ProjectPathMapping.RUNTIME_LOCATION_ENV, "cloud"),
-                        new Properties()));
+                () -> ProjectPathMapping.resolveRuntimeLocation(environment, properties));
     }
 
     @Test
