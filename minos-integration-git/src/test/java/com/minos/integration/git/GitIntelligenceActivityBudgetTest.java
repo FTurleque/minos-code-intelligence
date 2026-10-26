@@ -1,5 +1,8 @@
 package com.minos.integration.git;
 
+import com.minos.domain.git.ActivityQuery;
+import com.minos.domain.git.ActivityReport;
+import com.minos.domain.git.CommitActivity;
 import org.eclipse.jgit.api.Git;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -34,9 +37,9 @@ class GitIntelligenceActivityBudgetTest {
         GitIntelligenceService service = new GitIntelligenceService(
                 new GitIntelligenceService.ActivityBudget(5, 10_000, 10_000, 10_000));
 
-        GitIntelligenceService.ActivityReport report = service.analyze(root, query(10_000));
+        ActivityReport report = service.analyze(root, query(10_000));
 
-        GitIntelligenceService.CommitActivity commit = report.recentCommits().getFirst();
+        CommitActivity commit = report.recentCommits().getFirst();
         assertEquals(5, commit.changedPaths().size(),
                 "the per-commit diff budget must bound what the commit costs, whatever maxFiles says");
         assertTrue(report.limitations().contains("DIFF_SCAN_TRUNCATED"), report.limitations().toString());
@@ -63,7 +66,7 @@ class GitIntelligenceActivityBudgetTest {
         GitIntelligenceService service = new GitIntelligenceService(
                 new GitIntelligenceService.ActivityBudget(10_000, 4, 2, 10_000));
 
-        GitIntelligenceService.ActivityReport report = service.analyze(root, query(10_000));
+        ActivityReport report = service.analyze(root, query(10_000));
 
         assertTrue(report.files().size() <= 4, "tracked file map must be bounded: " + report.files().size());
         assertTrue(report.zones().size() <= 2, "tracked zone map must be bounded: " + report.zones().size());
@@ -78,7 +81,7 @@ class GitIntelligenceActivityBudgetTest {
         GitIntelligenceService service = new GitIntelligenceService(
                 new GitIntelligenceService.ActivityBudget(10_000, 10_000, 10_000, 9));
 
-        GitIntelligenceService.ActivityReport report = service.analyze(root, query(10_000));
+        ActivityReport report = service.analyze(root, query(10_000));
 
         assertEquals(9, report.recentCommits().getFirst().changedPaths().size());
         assertTrue(report.limitations().contains("PATHS_TRUNCATED"), report.limitations().toString());
@@ -99,7 +102,7 @@ class GitIntelligenceActivityBudgetTest {
         }
 
         GitIntelligenceService service = new GitIntelligenceService();
-        GitIntelligenceService.ActivityReport report = service.analyze(root, query(100));
+        ActivityReport report = service.analyze(root, query(100));
 
         assertEquals(2, report.scannedCommitCount());
         assertEquals(List.of("README.md", "src/App.java"), report.recentCommits().getLast().changedPaths());
@@ -119,8 +122,8 @@ class GitIntelligenceActivityBudgetTest {
                 () -> new GitIntelligenceService.ActivityBudget(1, 1, 1, 0));
     }
 
-    private static GitIntelligenceService.ActivityQuery query(int maxFiles) {
-        return new GitIntelligenceService.ActivityQuery(Instant.EPOCH, 100, maxFiles, 2);
+    private static ActivityQuery query(int maxFiles) {
+        return new ActivityQuery(Instant.EPOCH, 100, maxFiles, 2);
     }
 
     /** One commit whose diff is far wider than any budget under test, spread over several zones. */

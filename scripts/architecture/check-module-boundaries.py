@@ -514,17 +514,14 @@ ENGINE_MODULE = "minos-engine"
 # minos-app ModuleArchitectureTest: a lot that removes a use updates both tables.
 ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
     "minos-api": {
-        "git.GitIntelligence": 1,
+        # Kept: published read models, the records the application port ProjectSymbolQuery returns (ADR 0057,
+        # point 6, decision D4 = a of AUD-ARC-01); LocalMinosApi converts them into the public DTOs.
         "query.RelationshipResult": 1,
         "query.SymbolResult": 1,
         "query.UsageResult": 1,
-        # Accessor uses without a name: LocalMinosApi passes app.projectRegistry() and app.snapshotStore() to
-        # LocalProjectSymbolQuery. Removed by the export and query lots of AUD-ARC-01.
-        "registry.ProjectRegistry": 1,
-        "store.CodeKnowledgeSnapshotStore": 1,
     },
     "minos-cli": {
-        "git.GitIntelligence": 3,
+        # Kept: published read models returned by ProjectSymbolQuery, see minos-api.
         "query.RelationshipResult": 1,
         "query.SymbolResult": 1,
         "query.UsageResult": 1,
