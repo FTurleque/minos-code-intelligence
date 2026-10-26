@@ -35,7 +35,7 @@ class TeamCommandTest {
         MinosApplication application = MinosApplication.builder(home)
                 .hostedTenantKeyProvider(keys()).build();
         AtomicReference<String> token = new AtomicReference<>();
-        TeamCommand command = new TeamCommand(application.hostedControlPlaneService().orElseThrow(), token::get);
+        TeamCommand command = new TeamCommand(application.teamControlPlane().orElseThrow(), token::get);
         UUID tenant = UUID.randomUUID();
         StringBuilder output = new StringBuilder();
         StringBuilder error = new StringBuilder();
