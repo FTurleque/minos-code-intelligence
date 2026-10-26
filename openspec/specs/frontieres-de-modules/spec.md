@@ -651,3 +651,144 @@ Le package `com.minos.runtime.local.acl` SHALL être un package gardé du runtim
 - **GIVEN** une sonde des bacs à sable et un localisateur de commandes factices
 - **WHEN** `HostDiagnosticsService` est construit avec eux dans un test de `minos-application`
 - **THEN** il rend la sélection des bacs à sable, la décision, la commande trouvée ou absente et le niveau de confidentialité de chaque emplacement, `UNKNOWN` compris
+
+### Requirement: Le noyau transverse sans E/S est dans le domaine
+`PublicErrorMessages`, `UnreadableRegistryException`, `DegradedEntry` et `ProjectPathMapping` SHALL être des classes de `minos-domain`, sans dépendance au moteur. Les surfaces SHALL les utiliser sans entrée dans A11. Un type du noyau transverse resté dans le moteur SHALL porter dans la table A11 la raison écrite de sa place : port d'E/S ou emplacement fixé par un ADR.
+
+#### Scenario: Le message d'erreur public réintroduit dans le moteur
+- **GIVEN** une copie du dépôt où `minos-engine` déclare de nouveau une classe du paquet `com.minos.diagnostics`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** il échoue, car le paquet appartient à `minos-domain` (A3) et la racine `diagnostics` n'est plus au moteur (A14)
+
+#### Scenario: Les surfaces n'utilisent plus le noyau transverse du moteur
+- **GIVEN** le dépôt
+- **WHEN** le garde et `ModuleArchitectureTest` sont exécutés
+- **THEN** ni la table A11 du garde ni la table bytecode ne listent `PublicErrorMessages`, `UnreadableRegistryException`, `DegradedEntry` ou `ProjectPathMapping`, et les deux réussissent
+
+#### Scenario: Le domaine reste sans dépendance
+- **GIVEN** le dépôt
+- **WHEN** `ModuleArchitectureTest.coreModulesStayAtTheBottom` est exécuté
+- **THEN** aucune classe de `minos-domain`, y compris les classes descendues, ne dépend d'un autre module
+
+#### Scenario: Sorties inchangées
+- **GIVEN** le dépôt
+- **WHEN** `A2SurfaceCharacterizationTest` est exécuté
+- **THEN** les goldens de la CLI, de l'API et du MCP sont inchangés
+
+### Requirement: Le contrôle hébergé est consommé par une façade applicative
+`minos-api`, `minos-cli` et `minos-mcp` SHALL obtenir le plan de contrôle de l'équipe par `TeamControlPlane` de `minos-application`, que rend `MinosApplication.teamControlPlane()`. Leurs sources de production SHALL NOT nommer ni utiliser un type de `com.minos.hosted`, par import, nom qualifié, chaînage d'accesseur ou en bytecode. Leurs sorties SHALL rester identiques.
+
+#### Scenario: Le moteur réimporté dans l'API
+- **GIVEN** une copie du dépôt où `LocalMinosTeamApi` importe de nouveau `com.minos.hosted.HostedRole`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** il échoue en A11 en nommant `minos-api`, le fichier et le type, absent de `ENGINE_TYPES_NAMED_BY_SURFACE`
+
+#### Scenario: Un accesseur du moteur chaîné par la CLI
+- **GIVEN** une copie du dépôt où `MinosCliRunner` appelle de nouveau `opened.hostedControlPlaneService()`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en A11 sur `hosted.HostedControlPlaneService` pour `minos-cli`
+
+#### Scenario: Aucune entrée hosted dans les tables
+- **GIVEN** le dépôt
+- **WHEN** `test_check_module_boundaries.py` et `ModuleArchitectureTest` sont exécutés
+- **THEN** ils sont verts et aucune surface n'a d'entrée `hosted.*` dans l'une ou l'autre table
+
+#### Scenario: Sorties inchangées
+- **GIVEN** le dépôt
+- **WHEN** `A2SurfaceCharacterizationTest` et `RendererKeyOrderTest` sont exécutés
+- **THEN** `team.golden`, `retention.golden`, `api.golden` et `mcp-all-tools.golden` sont égaux à l'octet et l'ordre des clés est inchangé
+
+### Requirement: L'activité Git est consommée par une requête applicative
+La CLI et l'API Java SHALL obtenir l'inspection et l'activité Git d'un projet par `ProjectGitQuery` de `minos-application`, qui rend les records de `com.minos.domain.git`. Les sources de production de `minos-cli` et `minos-api` SHALL NOT nommer ni utiliser `git.GitIntelligence`, ni par import, ni par nom qualifié, ni par l'accesseur `gitIntelligence()`, ni en bytecode.
+
+#### Scenario: Le port Git réimporté par la commande
+- **GIVEN** une copie du dépôt où `GitActivityCommand` importe de nouveau `com.minos.git.GitIntelligence`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** il échoue en nommant `minos-cli`, le fichier et le type, absent de `ENGINE_TYPES_NAMED_BY_SURFACE`
+
+#### Scenario: L'accesseur appelé par l'API
+- **GIVEN** une copie du dépôt où `LocalMinosMultiRepositoryApi` appelle `app.gitIntelligence()` sans import
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en nommant `minos-api` et `com.minos.git.GitIntelligence`
+
+#### Scenario: Requête testée sans racine de composition
+- **GIVEN** un faux port `GitIntelligence` dans un test de `minos-application`
+- **WHEN** `LocalProjectGitQuery` inspecte et analyse un dépôt par lui
+- **THEN** elle rend les réponses du port, refuse une requête absente sans appeler le port, et propage l'exception du port sans enveloppe
+
+#### Scenario: Les bornes de la requête Git sont tenues par le domaine
+- **GIVEN** `GitActivityFactsTest` dans `minos-domain`
+- **WHEN** une `ActivityQuery` est construite hors de ses bornes
+- **THEN** elle est refusée avec le message qui nomme la borne, et les adresses d'auteurs sont masquées par défaut
+
+#### Scenario: Sortie inchangée
+- **GIVEN** le dépôt
+- **WHEN** `A2SurfaceCharacterizationTest`, `GitActivityCommandTest` et `LocalMinosMultiRepositoryApiIntegrationTest` sont exécutés
+- **THEN** `cli-git.golden` est inchangé et les valeurs de `inspectGit` et `analyzeGitActivity` sont celles attendues aujourd'hui
+
+### Requirement: La requête de symboles de l'API est construite par l'application
+`LocalMinosApi` SHALL construire sa requête de symboles à partir de `MinosApplication` par `LocalProjectSymbolQuery`, sans appeler `projectRegistry()` ni `snapshotStore()`. Les sources de production de `minos-api` SHALL NOT utiliser `registry.ProjectRegistry` ni `store.CodeKnowledgeSnapshotStore`.
+
+#### Scenario: Les accesseurs réintroduits dans l'API
+- **GIVEN** une copie du dépôt où `LocalMinosApi` appelle de nouveau `app.projectRegistry()`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** il échoue en nommant `minos-api` et `com.minos.registry.ProjectRegistry`
+
+#### Scenario: Réponses inchangées
+- **GIVEN** le dépôt
+- **WHEN** `A2SurfaceCharacterizationTest` est exécuté
+- **THEN** `api.golden` est inchangé
+
+### Requirement: Les résultats de requête sont des modèles de lecture publiés
+Les seules entrées `query.*` des surfaces dans les deux tables A11 SHALL être `SymbolResult`, `UsageResult` et `RelationshipResult`, rendus par le port applicatif `ProjectSymbolQuery`. Chacune SHALL porter dans la table la raison écrite de sa présence (ADR 0057, point 6). Un autre type de `com.minos.query` nommé par une surface SHALL faire échouer A11.
+
+#### Scenario: Les entrées de requête du dépôt réel
+- **GIVEN** le dépôt
+- **WHEN** l'auto-test `test_check_module_boundaries.py` est exécuté
+- **THEN** l'ensemble des entrées `query.*` de `ENGINE_TYPES_NAMED_BY_SURFACE` est inclus dans les trois modèles de lecture publiés
+
+#### Scenario: Un service de requête du moteur nommé par la CLI
+- **GIVEN** une copie du dépôt où un fichier de `minos-cli` importe `com.minos.query.SymbolQueryService`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en nommant `minos-cli`, le fichier et le type
+
+### Requirement: L'export NEXUS passe par un cas d'usage applicatif
+Les données de l'export NEXUS SHALL être produites par `KnowledgeExportUseCase` (`minos-application`), qui lit le registre et le snapshot actif. `minos-nexus` SHALL seulement traduire ce résultat en `NexusExportContract`, sans nommer ni atteindre par accesseur un type de `minos-engine`, et la CLI SHALL lui passer l'application ouverte. Le JSON, les limitations, les codes de sortie et les messages de refus SHALL rester identiques à l'octet.
+
+#### Scenario: Sortie de l'export inchangée
+- **GIVEN** le dépôt et le golden `nexus-export.golden` écrit avant la refonte
+- **WHEN** `A2SurfaceCharacterizationTest` est exécuté
+- **THEN** la sortie de `minos nexus-export --root` sur la fixture TypeScript égale le golden à l'octet, et les 12 autres goldens sont inchangés
+
+#### Scenario: Racine non enregistrée refusée par son nom
+- **GIVEN** un répertoire qui n'est pas une racine enregistrée
+- **WHEN** `KnowledgeExportUseCase` exporte ce répertoire
+- **THEN** il échoue avec « project root is not registered in MINOS: » suivi du seul nom de feuille, sans chemin absolu, et la CLI sort en 1
+
+#### Scenario: Un type du moteur réintroduit dans NEXUS
+- **GIVEN** une copie du dépôt où une classe de `minos-nexus` importe `com.minos.store.CodeKnowledgeSnapshot` ou appelle `snapshotStore()`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** le garde échoue en A11 en nommant `minos-nexus`, le fichier et le type
+
+#### Scenario: Tables A11 réduites
+- **GIVEN** le dépôt
+- **WHEN** le garde et `ModuleArchitectureTest` sont exécutés
+- **THEN** aucune table A11 ne liste de type pour `minos-nexus`, la CLI ne liste plus `registry.ProjectRegistry` ni `store.CodeKnowledgeSnapshotStore`, et les deux réussissent
+
+### Requirement: `minos-nexus` ne dépend plus de `minos-engine`
+La dépendance `minos-nexus` → `minos-engine` SHALL être absente du POM de `minos-nexus`, de `ALLOWED_DEPENDENCIES` et de `ModuleArchitectureTest.ALLOWED`. Une classe de production de `minos-nexus` qui utilise un type du moteur SHALL faire échouer le build, et le document généré des dépendances SHALL ne plus montrer l'arête.
+
+#### Scenario: Arête réintroduite dans le POM
+- **GIVEN** une copie du dépôt où `minos-nexus/pom.xml` déclare de nouveau `minos-engine`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** il échoue en citant `minos-nexus` et la dépendance interdite `minos-engine`
+
+#### Scenario: Usage transitif du moteur
+- **GIVEN** une copie du dépôt où une classe de production de `minos-nexus` utilise `com.minos.io.Sha256`
+- **WHEN** `ModuleArchitectureTest.everyModuleOnlyUsesItsAllowedModules` est exécuté après compilation
+- **THEN** il échoue en citant l'usage non déclaré `minos-nexus` → `minos-engine`
+
+#### Scenario: Document généré à jour
+- **GIVEN** le dépôt
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il réussit, ce qui atteste que `docs/architecture/diagrams/module-dependencies.md` liste pour `minos-nexus` seulement `minos-application`, `minos-bootstrap` et `minos-domain`
