@@ -18,5 +18,5 @@
 
 ## 5. Clôture
 
-- [ ] 5.1 Lancer `python .claude/scripts/run_gates.py`, en particulier `check-p0-p2.py`, puis `check-jacoco.py` (portée `m30-postgresql-pgvector`) sur le rapport Linux, `openspec validate --all --strict` et `archgate check`. Lancer `./mvnw -B -ntp verify` sous Windows et laisser la CI Linux exiger PostgreSQL.
+- [x] 5.1 Lancer `python .claude/scripts/run_gates.py`, en particulier `check-p0-p2.py`, puis `check-jacoco.py` (portée `m30-postgresql-pgvector`) sur le rapport Linux, `openspec validate --all --strict` et `archgate check`. Lancer `./mvnw -B -ntp verify` sous Windows et laisser la CI Linux exiger PostgreSQL.
 - [ ] 5.2 Dans `docs/project/audits/2026-10-10/SUIVI.md`, passer E01 à « corrigé » dans la section de la phase 4. `ETAT-2026-10-13.md` et `findings.json` ne sont pas modifiés. Revue de sécurité du stockage PostgreSQL : aucune donnée sensible dans la colonne, et une requête paramétrée.
