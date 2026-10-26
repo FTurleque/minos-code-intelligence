@@ -1,123 +1,29 @@
 package com.minos.git;
 
+import com.minos.domain.git.ActivityQuery;
+import com.minos.domain.git.ActivityReport;
+import com.minos.domain.git.RepositoryView;
+
 import java.nio.file.Path;
-import java.time.Instant;
-import java.util.List;
-import java.util.Objects;
 
 /**
- * Port : intelligence Git factuelle d'un dépôt local (M12). La couche application et les surfaces
- * n'en connaissent que ce contrat ; l'adaptateur JGit ({@code GitIntelligenceService},
- * minos-integration-git) l'implémente.
+ * Port: factual Git intelligence of a local repository. The JGit adapter ({@code GitIntelligenceService},
+ * minos-integration-git) implements it; the surfaces read it through the application query {@code ProjectGitQuery}.
+ * The facts it returns are records of {@code com.minos.domain.git}.
  *
- * <p>Les méthodes déclarent {@code throws Exception} : un adaptateur propage tel quel l'échec de sa
- * bibliothèque Git (par exemple une exception contrôlée JGit), exactement comme avant l'extraction
- * du port, pour que les messages d'erreur publics restent identiques.</p>
+ * <p>The methods declare {@code throws Exception}: an adapter propagates the failure of its Git library unchanged (for
+ * example a checked JGit exception), so the public error messages stay those of the library.</p>
  */
 public interface GitIntelligence {
 
     /**
-     * Valeur rendue à la place de l'adresse e-mail d'un auteur tant que l'appelant ne l'a pas demandée
-     * ({@link ActivityQuery#includeAuthorEmails()}) : le composant {@code authorEmail} reste présent (API
-     * versionnée et additive), seule sa valeur par défaut est masquée (AUD-SEC-10, ADR 0019).
+     * Value rendered instead of an author's e-mail address unless the caller asked for it
+     * ({@link ActivityQuery#includeAuthorEmails()}): the {@code authorEmail} component stays present (versioned,
+     * additive API), only its default value is masked (ADR 0019).
      */
     String MASKED_AUTHOR_EMAIL = "[masked]";
 
     RepositoryView inspect(Path projectRoot) throws Exception;
 
     ActivityReport analyze(Path projectRoot, ActivityQuery query) throws Exception;
-
-    /**
-     * @param includeAuthorEmails vrai seulement sur demande explicite : l'adresse réelle de chaque auteur est alors
-     *                            rendue dans {@link CommitActivity#authorEmail()} ; faux, elle n'entre jamais dans le
-     *                            rapport (le décompte des auteurs distincts, lui, s'appuie toujours sur elle).
-     */
-    record ActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth, boolean includeAuthorEmails) {
-        private static final int MAX_COMMITS = 10_000;
-        private static final int MAX_FILES = 10_000;
-        private static final int MAX_ZONE_DEPTH = 8;
-
-        /** Requête sans adresses d'auteurs (le défaut, signature d'origine conservée). */
-        public ActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth) {
-            this(since, maxCommits, maxFiles, zoneDepth, false);
-        }
-
-        public ActivityQuery {
-            Objects.requireNonNull(since, "since");
-            if (maxCommits < 1 || maxCommits > MAX_COMMITS) {
-                throw new IllegalArgumentException("maxCommits must be between 1 and " + MAX_COMMITS);
-            }
-            if (maxFiles < 1 || maxFiles > MAX_FILES) {
-                throw new IllegalArgumentException("maxFiles must be between 1 and " + MAX_FILES);
-            }
-            if (zoneDepth < 1 || zoneDepth > MAX_ZONE_DEPTH) {
-                throw new IllegalArgumentException("zoneDepth must be between 1 and " + MAX_ZONE_DEPTH);
-            }
-        }
-    }
-
-    record RepositoryView(
-            String repositoryId,
-            String workTree,
-            String originRemote,
-            String branch,
-            String headCommit,
-            boolean detachedHead,
-            boolean shallow,
-            boolean clean,
-            List<String> limitations
-    ) {
-        public RepositoryView {
-            limitations = limitations == null ? List.of() : List.copyOf(limitations);
-        }
-    }
-
-    record CommitActivity(
-            String commitId,
-            Instant committedAt,
-            String authorName,
-            String authorEmail,
-            String message,
-            List<String> changedPaths
-    ) {
-        public CommitActivity {
-            changedPaths = changedPaths == null ? List.of() : List.copyOf(changedPaths);
-        }
-    }
-
-    record FileActivity(
-            String path,
-            int commitCount,
-            int uniqueAuthorCount,
-            Instant lastChangedAt,
-            String lastCommitId
-    ) {
-    }
-
-    record ZoneActivity(
-            String zone,
-            int commitTouches,
-            int distinctFileCount,
-            Instant lastChangedAt
-    ) {
-    }
-
-    record ActivityReport(
-            RepositoryView repository,
-            ActivityQuery query,
-            int scannedCommitCount,
-            boolean historyTruncated,
-            boolean filesTruncated,
-            List<CommitActivity> recentCommits,
-            List<FileActivity> files,
-            List<ZoneActivity> zones,
-            List<String> limitations
-    ) {
-        public ActivityReport {
-            recentCommits = recentCommits == null ? List.of() : List.copyOf(recentCommits);
-            files = files == null ? List.of() : List.copyOf(files);
-            zones = zones == null ? List.of() : List.copyOf(zones);
-            limitations = limitations == null ? List.of() : List.copyOf(limitations);
-        }
-    }
 }

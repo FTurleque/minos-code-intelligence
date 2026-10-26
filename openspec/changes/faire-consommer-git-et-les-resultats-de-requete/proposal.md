@@ -12,7 +12,7 @@ Le lot 4, **Git et résultats de requête**, porte sur trois usages :
 
 ## What Changes
 
-- **Requête applicative d'activité Git** : `ProjectGitQuery` (interface) et `LocalProjectGitQuery` (implémentation sur le port du moteur), dans `com.minos.application`. Elle rend l'inspection et l'activité d'un dépôt en records applicatifs, avec les mêmes champs, les mêmes valeurs, les mêmes refus et les mêmes exceptions que le port.
+- **Requête applicative d'activité Git** : `ProjectGitQuery` (interface) et `LocalProjectGitQuery` (implémentation sur le port du moteur), dans `com.minos.application`. Elle rend l'inspection et l'activité d'un dépôt en records de `com.minos.domain.git`, et propage les exceptions du port sans enveloppe.
 - **La CLI et l'API la consomment** : `GitActivityCommand`, `MinosCli`, `MinosCliRunner` et `LocalMinosMultiRepositoryApi` ne nomment plus `GitIntelligence` et n'appellent plus `gitIntelligence()`.
 - **La requête de symboles de l'API passe par l'application** : `LocalMinosApi` construit `new LocalProjectSymbolQuery(app)`, qui lit `projectQueryService()` ; elle n'appelle plus `projectRegistry()` ni `snapshotStore()`.
 - **Résultats de requête reconnus** : l'ADR 0057 § 6 dit que les records de lecture rendus par un port applicatif sont des modèles de lecture publiés aux surfaces. Les entrées `query.*` des deux tables A11 portent cette raison écrite.

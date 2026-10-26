@@ -8,12 +8,13 @@ Ordre dans chaque section : rouge, correction, preuve. Les tests vivent dans le 
 
 ## 1. Requête applicative d'activité Git (AUD-ARC-01, lot 4)
 
-- [x] 1.1 [AUD-ARC-01] Rouge (`minos-application`) : `LocalProjectGitQueryTest`, avec un faux port. Cas couverts : chaque champ de l'inspection et du rapport rendu à l'identique, listes nulles normalisées, mêmes noms de composants que les records du port (réflexion), refus de chaque borne de `ActivityRequest` avec le message du port, exception du port propagée sans enveloppe (même instance), construction par `MinosApplication`. **Preuve du rouge : la requête n'existe pas.**
-- [x] 1.2 [AUD-ARC-01] `ProjectGitQuery` (interface et records) et `LocalProjectGitQuery`, dans `com.minos.application` (D1). Commentaires en anglais. Preuve : tests 1.1 verts ; `check-module-boundaries.py` vert (A8, A14, A15) ; `check-comment-language.py` vert.
+- [x] 1.1 [AUD-ARC-01] Rouge (`minos-application`) : `LocalProjectGitQueryTest`, avec un faux port. Cas couverts : réponses du port rendues telles quelles, requête absente refusée sans appel au port, exception du port propagée sans enveloppe (même instance), construction par `MinosApplication`. **Preuve du rouge : la requête n'existe pas.**
+- [x] 1.2 [AUD-ARC-01] `ProjectGitQuery` (interface) et `LocalProjectGitQuery`, dans `com.minos.application` (D1). Commentaires en anglais. Preuve : tests 1.1 verts ; `check-module-boundaries.py` vert (A8, A14, A15) ; `check-comment-language.py` vert.
+- [x] 1.3 [AUD-ARC-01] Rouge (`minos-domain`) : `GitActivityFactsTest` ne compile pas tant que les records Git sont imbriqués dans le port. Correction : les six records descendent dans `com.minos.domain.git` (D1), partagés par le port, l'adaptateur JGit, la requête applicative et les surfaces ; `ProjectGitQuery` rend ces records, sans copie. `GitIntelligence` passe en anglais ; maximums du moteur abaissés dans `comment-language.json`. Preuve : tests du domaine, de `minos-integration-git`, de l'application, de la CLI et de l'API verts ; duplication du nouveau code SonarCloud sous 3 % ; portée JaCoCo `domain-invariants`.
 
 ## 2. Les surfaces consomment la requête (AUD-ARC-01, lot 4)
 
-- [x] 2.1 [AUD-ARC-01] Rouge : `GitActivityCommandTest`, `CliValidInvocationsTest` et `MinosCliBuilderTest` passent aux types applicatifs (records applicatifs, builder `gitQuery`) et ne compilent pas contre le HEAD.
+- [x] 2.1 [AUD-ARC-01] Rouge : `GitActivityCommandTest`, `CliValidInvocationsTest` et `MinosCliBuilderTest` passent à la requête applicative (records du domaine, builder `gitQuery`) et ne compilent pas contre le HEAD.
 - [x] 2.2 [AUD-ARC-01] `GitActivityCommand`, `MinosCli` et `MinosCliRunner` (`LazyApplication.lazy(ProjectGitQuery.class, …LocalProjectGitQuery::new)`) consomment `ProjectGitQuery` ; `LocalMinosMultiRepositoryApi` construit `new LocalProjectGitQuery(app)`. Preuve : tests 2.1 et `LocalMinosMultiRepositoryApiIntegrationTest` verts sans attente modifiée ; `check-mne.py` vert.
 - [x] 2.3 [AUD-ARC-01] `LocalMinosApi` construit `new LocalProjectSymbolQuery(app)` (D2). Preuve : tests de `minos-api` verts.
 

@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: L'activité Git est consommée par une requête applicative
-La CLI et l'API Java SHALL obtenir l'inspection et l'activité Git d'un projet par `ProjectGitQuery` de `minos-application`, qui rend des records applicatifs. Les sources de production de `minos-cli` et `minos-api` SHALL NOT nommer ni utiliser `git.GitIntelligence`, ni par import, ni par nom qualifié, ni par l'accesseur `gitIntelligence()`, ni en bytecode.
+La CLI et l'API Java SHALL obtenir l'inspection et l'activité Git d'un projet par `ProjectGitQuery` de `minos-application`, qui rend les records de `com.minos.domain.git`. Les sources de production de `minos-cli` et `minos-api` SHALL NOT nommer ni utiliser `git.GitIntelligence`, ni par import, ni par nom qualifié, ni par l'accesseur `gitIntelligence()`, ni en bytecode.
 
 #### Scenario: Le port Git réimporté par la commande
 - **GIVEN** une copie du dépôt où `GitActivityCommand` importe de nouveau `com.minos.git.GitIntelligence`
@@ -16,7 +16,12 @@ La CLI et l'API Java SHALL obtenir l'inspection et l'activité Git d'un projet p
 #### Scenario: Requête testée sans racine de composition
 - **GIVEN** un faux port `GitIntelligence` dans un test de `minos-application`
 - **WHEN** `LocalProjectGitQuery` inspecte et analyse un dépôt par lui
-- **THEN** chaque champ du rapport du port est rendu à l'identique, une borne invalide est refusée avec le message du port, et l'exception du port est propagée sans enveloppe
+- **THEN** elle rend les réponses du port, refuse une requête absente sans appeler le port, et propage l'exception du port sans enveloppe
+
+#### Scenario: Les bornes de la requête Git sont tenues par le domaine
+- **GIVEN** `GitActivityFactsTest` dans `minos-domain`
+- **WHEN** une `ActivityQuery` est construite hors de ses bornes
+- **THEN** elle est refusée avec le message qui nomme la borne, et les adresses d'auteurs sont masquées par défaut
 
 #### Scenario: Sortie inchangée
 - **GIVEN** le dépôt

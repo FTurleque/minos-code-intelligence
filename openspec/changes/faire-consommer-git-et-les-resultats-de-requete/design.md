@@ -49,21 +49,22 @@ Soit 10 entrées du garde (API 6, CLI 4, dont 6 `query.*`) et 5 entrées bytecod
 
 **Goals** : retirer `git.GitIntelligence` de la CLI et de l'API ; retirer les accesseurs `projectRegistry()` et `snapshotStore()` de l'API ; écrire la raison des 6 entrées `query.*` ; ne changer ni sortie ni signature publique.
 
-**Non-Goals** : modifier le port Git ou son adaptateur ; retirer un accesseur de `MinosApplication` ; toucher aux entrées des lots 3, 5 et 6 ; déplacer les résultats de requête sans décision (Q1).
+**Non-Goals** : changer le comportement du port Git ou de son adaptateur ; retirer un accesseur de `MinosApplication` ; toucher aux entrées des lots 3, 5 et 6 ; déplacer les résultats de requête sans décision (Q1).
 
 ## Decisions
 
-### D1 — Une requête applicative en interface, avec ses propres records
+### D1 — Une requête applicative en interface, sur les records Git du domaine
 
-`ProjectGitQuery` (interface, `com.minos.application`) déclare `inspect(Path)` et `analyze(Path, ActivityRequest)`, `throws Exception` comme le port. Records imbriqués : `ActivityRequest`, `RepositoryView`, `CommitActivity`, `FileActivity`, `ZoneActivity`, `ActivityReport`, aux mêmes champs que ceux du port (`ActivityReport.request()` remplace `query()`). `LocalProjectGitQuery` l'implémente sur `GitIntelligence`, avec un constructeur `(MinosApplication)` (lit `gitIntelligence()` dans l'application) et un constructeur `(GitIntelligence)`.
+Les six records du port (`ActivityQuery`, `RepositoryView`, `CommitActivity`, `FileActivity`, `ZoneActivity`, `ActivityReport`) n'utilisent que le JDK et ne font aucune E/S : selon le critère D5 du lot 6, ils descendent dans `minos-domain`, paquet `com.minos.domain.git` (étape 3 de l'ordre de repli de l'ADR 0068 § 3 : `com.minos.git` garde le port dans le moteur). Mêmes composants, mêmes bornes, mêmes messages de refus. Le port `GitIntelligence` garde `inspect`, `analyze` et `MASKED_AUTHOR_EMAIL`, et rend ces records.
+
+`ProjectGitQuery` (interface, `com.minos.application`) déclare `inspect(Path)` et `analyze(Path, ActivityQuery)`, `throws Exception` comme le port, et rend les records du domaine. `LocalProjectGitQuery` l'implémente sur `GitIntelligence` : constructeur public `(MinosApplication)` (lit `gitIntelligence()` dans l'application), constructeur `(GitIntelligence)` de paquet pour les tests.
 
 - Interface : `LazyApplication.lazy` exige une interface ; c'est aussi la forme de `ProjectSymbolQuery`, `ProjectArchitectureQuery` et `ProjectImpactQuery`.
 - Nom : `GitActivityQuery` est déjà le record de requête de `MinosMultiRepositoryApi`, que `LocalMinosMultiRepositoryApi` nomme sans qualification ; `ProjectGitQuery` évite la collision.
-- Records applicatifs plutôt que records du port : une surface qui nommerait `GitIntelligence.ActivityReport` nommerait encore `git.GitIntelligence`. Ce sont des copies, ce que D4 (b) écartait pour les résultats de requête ; pour Git, D4 retient explicitement la requête applicative, et la copie se limite à 6 records sans logique.
-- `ActivityRequest` valide ses bornes en construisant le record du port dans son constructeur compact : mêmes messages (`maxCommits must be between 1 and 10000`…), au même moment, sans dupliquer les constantes.
+- Records partagés plutôt que copiés : une surface qui nommerait `GitIntelligence.ActivityReport` nommerait encore `git.GitIntelligence`, et des copies applicatives des six records sont du code dupliqué (refusé par la porte de qualité SonarCloud, 3 % de duplication du nouveau code au plus). Les records du domaine ne sont pas comptés par A11.
 - Aucune enveloppe d'exception : `analyze` et `inspect` propagent l'exception du port telle quelle (même instance).
 
-Alternative écartée : un service à classe finale (comme `WorkspaceIntelligenceService`). La CLI ne pourrait plus différer l'ouverture de `MINOS_HOME` par un proxy.
+Alternatives écartées : un service à classe finale (comme `WorkspaceIntelligenceService`), avec lequel la CLI ne pourrait plus différer l'ouverture de `MINOS_HOME` par un proxy ; des copies applicatives des records, dupliquées.
 
 ### D2 — L'API construit sa requête de symboles par l'application
 
@@ -75,7 +76,7 @@ Alternative écartée : un service à classe finale (comme `WorkspaceIntelligenc
 
 ### D4 — Tests dans le module de la classe
 
-SonarCloud juge la couverture du nouveau code module par module. `LocalProjectGitQueryTest` (`minos-application`) couvre la conversion de chaque champ, la normalisation des listes nulles, les refus de `ActivityRequest` et la propagation de l'exception, avec un faux port. Les tests de la CLI (`GitActivityCommandTest`, `CliValidInvocationsTest`, `MinosCliBuilderTest`) passent aux types applicatifs sans changer leurs attentes. `GitActivityCommandTest` construit des records applicatifs au lieu de ceux de l'adaptateur JGit.
+SonarCloud juge la couverture du nouveau code module par module, et une classe déplacée compte comme du code neuf. `GitActivityFactsTest` (`minos-domain`) couvre les bornes de `ActivityQuery` et leurs messages, le masquage par défaut des adresses, la normalisation et la copie des listes. `LocalProjectGitQueryTest` (`minos-application`) couvre la délégation au port, le refus d'une requête absente et la propagation de l'exception, avec un faux port. Les tests de l'adaptateur JGit et de la CLI (`GitActivityCommandTest`, `CliValidInvocationsTest`, `MinosCliBuilderTest`) passent aux records du domaine sans changer leurs attentes.
 
 ## Questions ouvertes
 
@@ -105,7 +106,7 @@ Les lots 3 et 5 retirent d'autres lignes des mêmes tables en parallèle : les t
 
 ## Direction des dépendances (ADR 0068)
 
-Inchangée : `minos-cli`, `minos-api` → `minos-application` → `minos-engine`. `ProjectGitQuery` et `LocalProjectGitQuery` vivent dans `com.minos.application`, qui importe déjà `com.minos.git` (`MinosApplication.java`) : aucune nouvelle arête de paquet, aucun cycle (A8). Aucun POM ne change. Les deux nouveaux types publics ont des appelants de production dans la CLI et l'API (A15).
+Inchangée : `minos-cli`, `minos-api` → `minos-application` → `minos-engine` → `minos-domain`. Les records Git descendent dans `com.minos.domain.git`, sous la racine `domain` du domaine (A14), et ne dépendent que du JDK : le domaine reste sans dépendance (A2). `minos-integration-git` déclare déjà `minos-domain`. `ProjectGitQuery` et `LocalProjectGitQuery` vivent dans `com.minos.application`, qui importe déjà `com.minos.git` (`MinosApplication.java`) : aucun cycle (A8). Aucun POM ne change. Les deux nouveaux types publics ont des appelants de production dans la CLI et l'API (A15).
 
 ## Capacités
 
@@ -119,17 +120,17 @@ Aucun comportement ne dépend du système. Les tests touchés s'exécutent dans 
 
 | Poste | Estimation |
 |---|---|
-| Couverture du nouveau code (SonarCloud, 80 % par module) | `minos-application` : environ 150 lignes neuves (interface, 6 records, conversions), couvertes par `LocalProjectGitQueryTest`. `minos-cli` et `minos-api` : lignes modifiées couvertes par `GitActivityCommandTest`, `CliValidInvocationsTest`, `MinosCliBuilderTest` et `LocalMinosMultiRepositoryApiIntegrationTest` |
-| Tests déplacés | aucun ; `GitActivityCommandTest` cesse d'utiliser les records de `GitIntelligenceService` |
-| Portées de `scripts/quality/check-jacoco.py` | `global` ; `public-api` (`com/minos/api/`, 0,60 / 0,35) pour l'API ; aucune portée ne nomme les classes Git |
+| Couverture du nouveau code (SonarCloud, 80 % par module) | `minos-domain` : les 6 records déplacés, couverts par `GitActivityFactsTest` ; `minos-application` : l'interface et la délégation, couvertes par `LocalProjectGitQueryTest`. `minos-cli` et `minos-api` : lignes modifiées couvertes par `GitActivityCommandTest`, `CliValidInvocationsTest`, `MinosCliBuilderTest` et `LocalMinosMultiRepositoryApiIntegrationTest` |
+| Tests déplacés | aucun : les records n'avaient pas de test propre dans le moteur ; `GitActivityFactsTest` est ajouté dans le domaine. Les tests de l'adaptateur JGit et `GitActivityCommandTest` importent les records du domaine |
+| Portées de `scripts/quality/check-jacoco.py` | `global` ; `domain-invariants` (`com/minos/domain/`, 0,80 / 0,60) pour les records déplacés ; `public-api` (`com/minos/api/`, 0,60 / 0,35) pour l'API ; aucune portée ne nomme les classes Git |
 | Gates littéraux | `grep` dans `scripts/` : `check-mne.py:50`, `:116-117` lit `LocalMinosMultiRepositoryApi.java` (`ownsApplication`, `this(openApplication(home), true)`, `application.close()`, faits gardés) ; `check-m21-parity.py:55`, `:79` lit `MinosCliRunner.java` (`new IdeIntelligenceCommand(app)`, inchangé) ; `check-module-boundaries.py` (A11) et son auto-test ; `ModuleArchitectureTest` |
 | Bases SpotBugs | `minos-api.xml` (entrées de `LocalMinosApi` à numéros de ligne) et `minos-cli.xml` : rejouer le profil `audit-spotbugs` et réenregistrer les lignes déplacées ; aucune entrée ajoutée à `minos-application.xml` (une alerte sur les records se corrige dans le code) |
-| Langue des commentaires | nouveaux fichiers en anglais ; maximums de `scripts/quality/comment-language.json` inchangés ou abaissés |
+| Langue des commentaires | nouveaux fichiers en anglais ; `GitIntelligence` passe en anglais, sans numéro de jalon : maximums du moteur abaissés dans `scripts/quality/comment-language.json` |
 | Documentation | ADR 0057 (mise en œuvre, point 6) ; ADR 0058 (mise en œuvre, « Point 3, lot 4 résorbé ») ; `SUIVI.md` (ligne du lot 4) ; arc42 relu (aucune mention de `GitIntelligence` par une surface attendue) |
 
 ## Risks / Trade-offs
 
-- **Copie des records Git** → test de conversion champ par champ ; une évolution additive du port demande une ligne dans la conversion, ce que la compilation ne signale pas : le test de conversion compare tous les composants par réflexion sur les records.
+- **Déplacement des records Git** → nom complet modifié dans le port, l'adaptateur et leurs tests ; la compilation refuse tout ancien nom. Aucun golden ni message ne dépend du nom des records.
 - **Sortie modifiée** → goldens rejoués, aucun régénéré.
 - **Faux retrait par `var` ou chaînage** → A11 compte les accesseurs ; aucune surface n'appelle `gitIntelligence()`.
 

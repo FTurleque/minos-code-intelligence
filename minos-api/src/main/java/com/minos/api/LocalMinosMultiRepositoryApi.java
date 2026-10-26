@@ -3,6 +3,12 @@ package com.minos.api;
 import com.minos.application.LocalProjectGitQuery;
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectGitQuery;
+import com.minos.domain.git.ActivityQuery;
+import com.minos.domain.git.ActivityReport;
+import com.minos.domain.git.CommitActivity;
+import com.minos.domain.git.FileActivity;
+import com.minos.domain.git.RepositoryView;
+import com.minos.domain.git.ZoneActivity;
 import com.minos.workspace.WorkspaceIntelligenceService;
 
 import java.nio.file.Path;
@@ -203,7 +209,7 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
             GitActivityQuery value = required(query, "query");
             return gitActivity(gitQuery.analyze(
                     Path.of(project.rootPath()),
-                    new ProjectGitQuery.ActivityRequest(
+                    new ActivityQuery(
                             value.since(), value.maxCommits(), value.maxFiles(), value.zoneDepth(),
                             value.includeAuthorEmails()
                     )
@@ -241,20 +247,20 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
         );
     }
 
-    private static GitRepositoryDto repository(ProjectGitQuery.RepositoryView value) {
+    private static GitRepositoryDto repository(RepositoryView value) {
         return new GitRepositoryDto(
                 value.repositoryId(), value.workTree(), value.originRemote(), value.branch(), value.headCommit(),
                 value.detachedHead(), value.shallow(), value.clean(), value.limitations()
         );
     }
 
-    private static GitActivityDto gitActivity(ProjectGitQuery.ActivityReport report) {
+    private static GitActivityDto gitActivity(ActivityReport report) {
         return new GitActivityDto(
                 repository(report.repository()),
-                report.request().since().toString(),
-                report.request().maxCommits(),
-                report.request().maxFiles(),
-                report.request().zoneDepth(),
+                report.query().since().toString(),
+                report.query().maxCommits(),
+                report.query().maxFiles(),
+                report.query().zoneDepth(),
                 report.scannedCommitCount(),
                 report.historyTruncated(),
                 report.filesTruncated(),
@@ -265,21 +271,21 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
         );
     }
 
-    private static GitCommitDto commit(ProjectGitQuery.CommitActivity value) {
+    private static GitCommitDto commit(CommitActivity value) {
         return new GitCommitDto(
                 value.commitId(), value.committedAt().toString(), value.authorName(), value.authorEmail(),
                 value.message(), value.changedPaths()
         );
     }
 
-    private static GitFileActivityDto fileActivity(ProjectGitQuery.FileActivity value) {
+    private static GitFileActivityDto fileActivity(FileActivity value) {
         return new GitFileActivityDto(
                 value.path(), value.commitCount(), value.uniqueAuthorCount(), value.lastChangedAt().toString(),
                 value.lastCommitId()
         );
     }
 
-    private static GitZoneActivityDto zoneActivity(ProjectGitQuery.ZoneActivity value) {
+    private static GitZoneActivityDto zoneActivity(ZoneActivity value) {
         return new GitZoneActivityDto(
                 value.zone(), value.commitTouches(), value.distinctFileCount(), value.lastChangedAt().toString()
         );

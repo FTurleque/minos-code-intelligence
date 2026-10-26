@@ -8,6 +8,9 @@ import com.minos.application.ProjectGitQuery;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
+import com.minos.domain.git.ActivityQuery;
+import com.minos.domain.git.ActivityReport;
+import com.minos.domain.git.RepositoryView;
 import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.ProjectImpactQuery;
 import org.junit.jupiter.api.Test;
@@ -183,7 +186,7 @@ class CliValidInvocationsTest {
 
     @Test
     void gitActivityTransmitsItsBoundsToTheService() throws Exception {
-        List<ProjectGitQuery.ActivityRequest> queries = new ArrayList<>();
+        List<ActivityQuery> queries = new ArrayList<>();
         ProjectOperations projects = new ProjectOperations() {
             @Override public ProjectView addProject(Path rootPath, String displayName) { throw new UnsupportedOperationException(); }
             @Override public List<ProjectView> listProjects() { throw new UnsupportedOperationException(); }
@@ -198,7 +201,7 @@ class CliValidInvocationsTest {
         };
         ProjectGitQuery git = new ProjectGitQuery() {
             @Override public RepositoryView inspect(Path projectRoot) { throw new UnsupportedOperationException(); }
-            @Override public ActivityReport analyze(Path projectRoot, ActivityRequest query) {
+            @Override public ActivityReport analyze(Path projectRoot, ActivityQuery query) {
                 queries.add(query);
                 throw new IllegalStateException("reached");
             }
