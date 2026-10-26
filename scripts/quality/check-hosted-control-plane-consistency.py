@@ -113,8 +113,10 @@ def main() -> int:
                 "key-rotate", "retention-plan", "retention-apply", "audit")
         require("MinosTeamApi.java", api, "interface MinosTeamApi", "BootstrapRequest", "RetentionApplyDto",
                 "rotateKey", "bindProject")
-        require("LocalMinosTeamApi.java", api_impl, "HostedControlPlaneService", "team mode is disabled",
+        # AUD-ARC-01, lot 3: the API reaches the control plane through the application facade only.
+        require("LocalMinosTeamApi.java", api_impl, "TeamControlPlane", "team mode is disabled",
                 "SECRET_OUTPUT_ONCE_DO_NOT_LOG")
+        forbid("LocalMinosTeamApi.java", api_impl, "com.minos.hosted")
 
         names = tool_names(mcp)
         declared = re.search(r"TOOL_COUNT\s*=\s*(\d+)", mcp)

@@ -92,30 +92,15 @@ class ModuleArchitectureTest {
     private static final Map<String, Map<String, Integer>> ENGINE_TYPES_USED_BY_SURFACE_BYTECODE = Map.of(
             "minos-api", Map.ofEntries(
                     Map.entry("git.GitIntelligence", 1),
-                    Map.entry("hosted.HostedAuditEvent", 1),
-                    Map.entry("hosted.HostedControlPlaneService", 1),
-                    Map.entry("hosted.HostedPrincipal", 1),
-                    Map.entry("hosted.HostedProjectBinding", 1),
-                    Map.entry("hosted.HostedRetentionPlan", 1),
-                    Map.entry("hosted.HostedRetentionPolicy", 1),
-                    Map.entry("hosted.HostedRole", 1),
-                    Map.entry("hosted.HostedTenantState", 1),
-                    Map.entry("hosted.SharedWorkspace", 1),
                     Map.entry("query.RelationshipResult", 1),
                     Map.entry("query.SymbolResult", 1),
                     Map.entry("query.UsageResult", 1)),
             "minos-cli", Map.ofEntries(
                     Map.entry("git.GitIntelligence", 3),
-                    Map.entry("hosted.HostedControlPlaneService", 2),
-                    Map.entry("hosted.HostedProjectBinding", 1),
-                    Map.entry("hosted.HostedRetentionPolicy", 1),
-                    Map.entry("hosted.HostedRole", 1),
-                    Map.entry("hosted.HostedTenantState", 1),
                     // Kept, as in the source table: a persisted I/O port, and MinosVersion placed by ADR 0068 section 3.
                     Map.entry("registry.ProjectPathMappings", 1),
                     Map.entry("runtime.MinosVersion", 1)),
             "minos-mcp", Map.ofEntries(
-                    Map.entry("hosted.HostedControlPlaneService", 1),
                     Map.entry("runtime.MinosVersion", 1)),
             "minos-nexus", Map.ofEntries(
                     Map.entry("io.Sha256", 1),

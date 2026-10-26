@@ -1,10 +1,10 @@
 package com.minos.cli.command;
 
+import com.minos.application.team.TeamControlPlane;
+import com.minos.application.team.TeamRetentionPolicy;
+import com.minos.application.team.TeamRole;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.CliOptions;
-import com.minos.hosted.HostedControlPlaneService;
-import com.minos.hosted.HostedRetentionPolicy;
-import com.minos.hosted.HostedRole;
 import com.minos.output.HostedControlPlaneRenderer;
 import com.minos.output.json.DeterministicJson;
 
@@ -72,15 +72,15 @@ public final class TeamCommand {
      */
     private static final Map<String, Operation> OPERATIONS = operationTable();
 
-    private final Supplier<HostedControlPlaneService> service;
+    private final Supplier<TeamControlPlane> service;
     private final Supplier<String> bearerToken;
 
-    public TeamCommand(HostedControlPlaneService service, Supplier<String> bearerToken) {
+    public TeamCommand(TeamControlPlane service, Supplier<String> bearerToken) {
         this(CliCommandSupport.constant(service, "service"), bearerToken);
     }
 
     /** The service is built on its first call, that is after the arguments have been analysed. */
-    public TeamCommand(Supplier<HostedControlPlaneService> service, Supplier<String> bearerToken) {
+    public TeamCommand(Supplier<TeamControlPlane> service, Supplier<String> bearerToken) {
         this.service = Objects.requireNonNull(service, "service");
         this.bearerToken = Objects.requireNonNull(bearerToken, "bearerToken");
     }
@@ -168,7 +168,7 @@ public final class TeamCommand {
             String requestId = requestId(options);
             String principal = required(options, "--principal");
             String displayName = required(options, "--display-name");
-            HostedRole role = role(required(options, "--role"));
+            TeamRole role = role(required(options, "--role"));
             return (service, token) -> HostedControlPlaneRenderer.renderMembers(List.of(
                     service.grantMember(token.get(), requestId, principal, displayName, role)));
         }));
@@ -224,12 +224,12 @@ public final class TeamCommand {
                     service.retentionPlan(bearer));
         }));
         table.put("retention-set", new Operation(mutation()
-                .integer("--max-audit-events", HostedRetentionPolicy.MIN_AUDIT_EVENTS, HostedRetentionPolicy.MAX_AUDIT_EVENTS)
-                .integer("--audit-days", HostedRetentionPolicy.MIN_RETENTION_DAYS, HostedRetentionPolicy.MAX_RETENTION_DAYS)
-                .integer("--archived-workspace-days", HostedRetentionPolicy.MIN_RETENTION_DAYS,
-                        HostedRetentionPolicy.MAX_RETENTION_DAYS), options -> {
+                .integer("--max-audit-events", TeamRetentionPolicy.MIN_AUDIT_EVENTS, TeamRetentionPolicy.MAX_AUDIT_EVENTS)
+                .integer("--audit-days", TeamRetentionPolicy.MIN_RETENTION_DAYS, TeamRetentionPolicy.MAX_RETENTION_DAYS)
+                .integer("--archived-workspace-days", TeamRetentionPolicy.MIN_RETENTION_DAYS,
+                        TeamRetentionPolicy.MAX_RETENTION_DAYS), options -> {
             String requestId = requestId(options);
-            HostedRetentionPolicy policy = retentionPolicy(options);
+            TeamRetentionPolicy policy = retentionPolicy(options);
             return (service, token) -> {
                 String bearer = token.get();
                 return HostedControlPlaneRenderer.renderRetention(
@@ -242,7 +242,7 @@ public final class TeamCommand {
                     service.applyRetention(token.get(), requestId));
         }));
         table.put("audit", new Operation(readOnly().integer("--limit",
-                HostedControlPlaneService.MIN_AUDIT_LIMIT, HostedControlPlaneService.MAX_AUDIT_LIMIT), options -> {
+                TeamControlPlane.MIN_AUDIT_LIMIT, TeamControlPlane.MAX_AUDIT_LIMIT), options -> {
             int limit = options.integer("--limit", DEFAULT_AUDIT_LIMIT);
             return (service, token) -> HostedControlPlaneRenderer.renderAudit(service.audit(token.get(), limit));
         }));
@@ -273,9 +273,9 @@ public final class TeamCommand {
     }
 
     /** Invalid retention bounds are a usage error: they are rejected before any service call. */
-    private static HostedRetentionPolicy retentionPolicy(CliOptions options) {
+    private static TeamRetentionPolicy retentionPolicy(CliOptions options) {
         try {
-            return new HostedRetentionPolicy(
+            return new TeamRetentionPolicy(
                     requiredInteger(options, "--max-audit-events"),
                     requiredInteger(options, "--audit-days"),
                     requiredInteger(options, "--archived-workspace-days"));
@@ -321,9 +321,9 @@ public final class TeamCommand {
         }
     }
 
-    private static HostedRole role(String value) {
+    private static TeamRole role(String value) {
         try {
-            return HostedRole.valueOf(value.trim().toUpperCase(Locale.ROOT));
+            return TeamRole.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new UsageException("unsupported hosted role: " + value);
         }
@@ -355,7 +355,7 @@ public final class TeamCommand {
     /** The service call of one operation, run only once every option has been validated. */
     @FunctionalInterface
     private interface Invocation {
-        String run(HostedControlPlaneService service, Supplier<String> token) throws IOException;
+        String run(TeamControlPlane service, Supplier<String> token) throws IOException;
     }
 
     /** A usage error (code 2); {@code trusted} marks fixed CLI text, which is printed as is instead of being redacted. */

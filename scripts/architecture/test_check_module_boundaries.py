@@ -1107,6 +1107,11 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
         self.assertNotIn("io.PrivateLocalStorage", cli)
         self.assertNotIn("runtime.WorkerSandboxProbe", cli)
 
+    def test_no_surface_uses_the_hosted_control_plane_of_the_engine(self):
+        # AUD-ARC-01, lot 3: the surfaces reach the team control plane through TeamControlPlane.
+        for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items():
+            self.assertEqual([], [entry for entry in types if entry.startswith("hosted.")], surface)
+
 
 class MinosApplicationAccessorRuleTest(RatchetTreeTestCase):
     """A11 — a MinosApplication accessor called by a surface uses the engine type it returns (AUD-ARC-01)."""
