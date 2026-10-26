@@ -97,10 +97,12 @@ Les compteurs et les tâches supposent Q1 = A et Q2 = A.
 
 ## Compteurs
 
-| Table A11 | Avant | Après (Q1 = A) |
+| Table A11 | Avant (lot 6 seul) | Après (Q1 = A) |
 |---|---|---|
 | Garde Python | 33 (API 15, CLI 11, MCP 2, NEXUS 5) | **29** (API 12, CLI 10, MCP 2, NEXUS 5) ; retirés : `git.GitIntelligence` ×2, `registry.ProjectRegistry` et `store.CodeKnowledgeSnapshotStore` de l'API |
 | Bytecode | 28 (API 13, CLI 8, MCP 2, NEXUS 5) | **26** (API 12, CLI 7, MCP 2, NEXUS 5) ; retiré : `git.GitIntelligence` ×2 |
+
+Après le lot 3 (`faire-consommer-le-controle-heberge`, fusionné avant ce lot), les mêmes retraits portent la table du garde de 20 à **16** types (API 3, CLI 7, MCP 1, NEXUS 5) et la table bytecode de 13 à **11** (API 3, CLI 2, MCP 1, NEXUS 5).
 
 Les lots 3 et 5 retirent d'autres lignes des mêmes tables en parallèle : les totaux se recalculent au rebase, les deltas de ce lot restent les mêmes.
 

@@ -30,7 +30,7 @@ import com.minos.application.ProjectSymbolQuery;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.application.dynamic.RuntimeIntelligenceService;
-import com.minos.hosted.HostedControlPlaneService;
+import com.minos.application.team.TeamControlPlane;
 import com.minos.impact.ProjectImpactQuery;
 
 import java.io.IOException;
@@ -136,7 +136,7 @@ public final class MinosCli {
         ProjectGitQuery gitQuery = builder.gitQuery;
         RemoteIndexOperations remoteIndexOperations = builder.remoteIndexOperations;
         Supplier<RuntimeIntelligenceService> runtimeIntelligenceService = builder.runtimeIntelligenceService;
-        Supplier<HostedControlPlaneService> hostedControlPlaneService = builder.hostedControlPlaneService;
+        Supplier<TeamControlPlane> teamControlPlane = builder.teamControlPlane;
         IndexResumeStatusSource resumeStatus = builder.resumeStatus;
         IdeCommand ideCommand = new IdeCommand();
         ProjectCommand projectCommand = projectOperations == null ? null : new ProjectCommand(projectOperations,
@@ -158,8 +158,8 @@ public final class MinosCli {
                 ? null : new RemoteIndexCommand(remoteIndexOperations);
         RuntimeCommand runtimeCommand = runtimeIntelligenceService == null
                 ? null : new RuntimeCommand(runtimeIntelligenceService);
-        TeamCommand teamCommand = hostedControlPlaneService == null ? null : new TeamCommand(
-                hostedControlPlaneService, () -> System.getenv(TeamCommand.TOKEN_ENVIRONMENT_VARIABLE));
+        TeamCommand teamCommand = teamControlPlane == null ? null : new TeamCommand(
+                teamControlPlane, () -> System.getenv(TeamCommand.TOKEN_ENVIRONMENT_VARIABLE));
         FindSymbolCommand findSymbolCommand = new FindSymbolCommand(symbolQuery);
         SearchCodeCommand searchCodeCommand = new SearchCodeCommand(symbolQuery);
         GetSourceCommand getSourceCommand = new GetSourceCommand(symbolQuery);
@@ -294,7 +294,7 @@ public final class MinosCli {
         private ProjectGitQuery gitQuery;
         private RemoteIndexOperations remoteIndexOperations;
         private Supplier<RuntimeIntelligenceService> runtimeIntelligenceService;
-        private Supplier<HostedControlPlaneService> hostedControlPlaneService;
+        private Supplier<TeamControlPlane> teamControlPlane;
         private IndexResumeStatusSource resumeStatus;
 
         private Builder(ProjectSymbolQuery symbolQuery) {
@@ -363,17 +363,17 @@ public final class MinosCli {
             return this;
         }
 
-        Builder hostedControlPlaneService(HostedControlPlaneService value) {
+        Builder teamControlPlane(TeamControlPlane value) {
             Objects.requireNonNull(value);
-            return hostedControlPlaneServiceSupplier(() -> value);
+            return teamControlPlaneSupplier(() -> value);
         }
 
         /**
          * Service construit à son premier appel ; le fournisseur lève {@link ServiceNotConfigured} quand le mode
          * hébergé n'est pas activé, et la commande répond alors « not configured in this CLI bootstrap ».
          */
-        Builder hostedControlPlaneServiceSupplier(Supplier<HostedControlPlaneService> value) {
-            this.hostedControlPlaneService = Objects.requireNonNull(value);
+        Builder teamControlPlaneSupplier(Supplier<TeamControlPlane> value) {
+            this.teamControlPlane = Objects.requireNonNull(value);
             return this;
         }
 

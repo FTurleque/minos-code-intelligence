@@ -80,7 +80,7 @@ class MinosCliBuilderTest {
         assertThrows(NullPointerException.class, () -> builder.gitQuery(null));
         assertThrows(NullPointerException.class, () -> builder.remoteIndexOperations(null));
         assertThrows(NullPointerException.class, () -> builder.runtimeIntelligenceService(null));
-        assertThrows(NullPointerException.class, () -> builder.hostedControlPlaneService(null));
+        assertThrows(NullPointerException.class, () -> builder.teamControlPlane(null));
         assertThrows(NullPointerException.class, () -> builder.resumeStatus(null));
     }
 

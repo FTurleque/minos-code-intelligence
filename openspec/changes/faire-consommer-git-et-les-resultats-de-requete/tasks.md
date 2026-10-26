@@ -20,7 +20,7 @@ Ordre dans chaque section : rouge, correction, preuve. Les tests vivent dans le 
 
 ## 3. Cliquets et justifications (AUD-ARC-01, lot 4)
 
-- [x] 3.1 [AUD-ARC-01] Rouge : avec les entrées retirées et le code du HEAD, le garde échoue (types non listés) ; le nouveau cas de l'auto-test (entrées `query.*` limitées aux trois modèles de lecture, aucun `git.GitIntelligence` ni accesseur de magasin pour l'API) échoue tant qu'une entrée Git reste listée. Correction : A11 du garde 33 → 29, A11 bytecode 28 → 26 ; raison écrite sur chaque entrée `query.*` des deux tables (D3). Mutations sur copie : réimport de `GitIntelligence` dans `GitActivityCommand`, `app.gitIntelligence()` dans `LocalMinosMultiRepositoryApi`, `app.projectRegistry()` dans `LocalMinosApi`, import de `query.SymbolQueryService` dans la CLI : chacune fait échouer A11. Preuve : le garde, son auto-test et `ModuleArchitectureTest` sont verts.
+- [x] 3.1 [AUD-ARC-01] Rouge : avec les entrées retirées et le code du HEAD, le garde échoue (types non listés) ; le nouveau cas de l'auto-test (entrées `query.*` limitées aux trois modèles de lecture, aucun `git.GitIntelligence` ni accesseur de magasin pour l'API) échoue tant qu'une entrée Git reste listée. Correction : A11 du garde 33 → 29, A11 bytecode 28 → 26 (20 → 16 et 13 → 11 après le lot 3) ; raison écrite sur chaque entrée `query.*` des deux tables (D3). Mutations sur copie : réimport de `GitIntelligence` dans `GitActivityCommand`, `app.gitIntelligence()` dans `LocalMinosMultiRepositoryApi`, `app.projectRegistry()` dans `LocalMinosApi`, import de `query.SymbolQueryService` dans la CLI : chacune fait échouer A11. Preuve : le garde, son auto-test et `ModuleArchitectureTest` sont verts.
 
 ## 4. Clôture
 

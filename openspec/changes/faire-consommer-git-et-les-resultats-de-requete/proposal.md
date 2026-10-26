@@ -18,7 +18,8 @@ Le lot 4, **Git et résultats de requête**, porte sur trois usages :
 - **Résultats de requête reconnus** : l'ADR 0057 § 6 dit que les records de lecture rendus par un port applicatif sont des modèles de lecture publiés aux surfaces. Les entrées `query.*` des deux tables A11 portent cette raison écrite.
 - **Cliquets A11** :
   - garde Python : 33 → **29** types (API 15 → 12, CLI 11 → 10), en retirant `git.GitIntelligence` (API, CLI), `registry.ProjectRegistry` et `store.CodeKnowledgeSnapshotStore` (API) ;
-  - table bytecode : 28 → **26** types (API 13 → 12, CLI 8 → 7), en retirant `git.GitIntelligence` (API, CLI).
+  - table bytecode : 28 → **26** types (API 13 → 12, CLI 8 → 7), en retirant `git.GitIntelligence` (API, CLI) ;
+  - après le lot 3, fusionné avant ce lot : garde 20 → **16**, bytecode 13 → **11**.
 
 ## Capabilities
 
