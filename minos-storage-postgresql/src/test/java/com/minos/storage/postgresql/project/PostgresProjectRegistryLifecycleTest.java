@@ -1,6 +1,6 @@
 package com.minos.storage.postgresql.project;
 
-import com.minos.registry.ProjectPathMapping;
+import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;

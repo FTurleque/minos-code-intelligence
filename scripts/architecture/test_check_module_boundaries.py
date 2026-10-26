@@ -251,6 +251,11 @@ class DependencyPolicyTest(unittest.TestCase):
         self.refused(scoped_graph(minos_mcp={"minos-nexus": "compile"}), "minos-mcp", "forbidden MINOS dependencies",
                      "minos-nexus")
 
+    def test_the_nexus_surface_may_not_depend_on_the_engine_again(self):
+        # AUD-ARC-01, lot 5: the NEXUS export goes through minos-application; the edge to the engine is gone.
+        self.refused(scoped_graph(minos_nexus={"minos-engine": "compile"}), "minos-nexus",
+                     "forbidden MINOS dependencies", "minos-engine")
+
     def test_a_declared_subset_of_the_allowed_table_is_accepted(self):
         _MODULE.check_dependency_policy(scoped_graph(minos_runtime_local={"minos-engine": "compile"}))
 
@@ -1082,23 +1087,62 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
     def test_a_new_cli_file_importing_a_listed_type_is_refused_against_the_real_cli_list(self):
         # A type ratchet lets a new CLI file import a type already listed; the file count refuses it.
         cli = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"]
-        self.assertEqual(1, cli["registry.DegradedEntry"])
-        self.write("minos-engine", "com.minos.registry", "DegradedEntry", "public record DegradedEntry() { }")
-        self.write("minos-cli", "com.minos.cli.support", "CliCommandSupport", "final class CliCommandSupport { }",
-                   ["com.minos.registry.DegradedEntry"])
-        listed = {"minos-cli": {"registry.DegradedEntry": 1}}
+        self.assertEqual(1, cli["runtime.MinosVersion"])
+        self.write("minos-engine", "com.minos.runtime", "MinosVersion", "public final class MinosVersion { }")
+        self.write("minos-cli", "com.minos.cli", "MinosLauncher", "final class MinosLauncher { }",
+                   ["com.minos.runtime.MinosVersion"])
+        listed = {"minos-cli": {"runtime.MinosVersion": 1}}
         self.write("minos-cli", "com.minos.cli", "Search", "final class Search { }")
         self.assertEqual(1, self.check(listed)["minos-cli"])
         self.write("minos-cli", "com.minos.cli.command", "NewCommand", "final class NewCommand { }",
-                   ["com.minos.registry.DegradedEntry"])
-        self.refused(lambda: self.check(listed), "A11", "registry.DegradedEntry", "used by 2",
+                   ["com.minos.runtime.MinosVersion"])
+        self.refused(lambda: self.check(listed), "A11", "runtime.MinosVersion", "used by 2",
                      "minos-cli/src/main/java/com/minos/cli/command/NewCommand.java")
+
+    def test_no_surface_uses_the_transverse_core_moved_to_the_domain(self):
+        # AUD-ARC-01, lot 6: these types live in minos-domain; a surface uses them without an A11 entry.
+        moved = {"diagnostics.PublicErrorMessages", "registry.DegradedEntry", "registry.ProjectPathMapping",
+                 "registry.UnreadableRegistryException"}
+        for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items():
+            self.assertFalse(moved & set(types), surface)
 
     def test_the_cli_no_longer_uses_the_host_mechanisms_of_the_engine(self):
         # AUD-ARC-01, lot 2: minos doctor reads them through HostDiagnosticsService.
         cli = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"]
         self.assertNotIn("io.PrivateLocalStorage", cli)
         self.assertNotIn("runtime.WorkerSandboxProbe", cli)
+
+    def test_the_surfaces_read_git_through_the_application_and_keep_only_the_published_read_models(self):
+        # AUD-ARC-01, lot 4: Git goes through ProjectGitQuery, the API symbol query is built from the application, and
+        # the only query.* entries are the read models the ProjectSymbolQuery port returns (ADR 0057, point 6).
+        published = {"query.RelationshipResult", "query.SymbolResult", "query.UsageResult"}
+        for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items():
+            self.assertNotIn("git.GitIntelligence", types, surface)
+            self.assertLessEqual({name for name in types if name.startswith("query.")}, published, surface)
+        api = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-api"]
+        self.assertNotIn("registry.ProjectRegistry", api)
+        self.assertNotIn("store.CodeKnowledgeSnapshotStore", api)
+
+    def test_no_surface_uses_the_hosted_control_plane_of_the_engine(self):
+        # AUD-ARC-01, lot 3: the surfaces reach the team control plane through TeamControlPlane.
+        for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items():
+            self.assertEqual([], [entry for entry in types if entry.startswith("hosted.")], surface)
+
+    def test_the_nexus_export_no_longer_uses_the_engine(self):
+        # AUD-ARC-01, lot 5: the export goes through KnowledgeExportUseCase, and the CLI passes the application.
+        self.assertEqual({}, _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-nexus"])
+        cli = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"]
+        self.assertNotIn("registry.ProjectRegistry", cli)
+        self.assertNotIn("store.CodeKnowledgeSnapshotStore", cli)
+
+    def test_an_engine_type_back_in_nexus_is_refused_against_the_real_list(self):
+        self.write("minos-engine", "com.minos.store", "CodeKnowledgeSnapshot", "public record CodeKnowledgeSnapshot() { }")
+        self.write("minos-nexus", "com.minos.nexus", "NexusExportService", "final class NexusExportService { }",
+                   ["com.minos.store.CodeKnowledgeSnapshot"])
+        listed = dict(self.LISTED, **{"minos-nexus": _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-nexus"]})
+        self.refused(lambda: self.check(listed), "A11", "minos-nexus",
+                     "minos-nexus/src/main/java/com/minos/nexus/NexusExportService.java",
+                     "com.minos.store.CodeKnowledgeSnapshot")
 
 
 class MinosApplicationAccessorRuleTest(RatchetTreeTestCase):

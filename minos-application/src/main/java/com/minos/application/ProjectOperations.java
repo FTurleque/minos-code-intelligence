@@ -1,6 +1,6 @@
 package com.minos.application;
 
-import com.minos.registry.DegradedEntry;
+import com.minos.domain.registry.DegradedEntry;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -29,7 +29,7 @@ public interface ProjectOperations {
     /**
      * The project named by {@code projectIdentifier}, with the registry entries that could not be read while
      * resolving it (Q24). A name found among the readable entries is answered with the unreadable ones listed; a name
-     * not found while some are unreadable fails with {@link com.minos.registry.UnreadableRegistryException}, which is
+     * not found while some are unreadable fails with {@link com.minos.domain.registry.UnreadableRegistryException}, which is
      * not the same answer as an absent project.
      */
     default ProjectInspection inspection(String projectIdentifier) throws IOException {

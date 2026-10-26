@@ -2,11 +2,10 @@ package com.minos.integration.nexus;
 
 import com.minos.api.LocalMinosApi;
 import com.minos.api.MinosApi;
+import com.minos.application.MinosApplication;
 import com.minos.cli.MinosLauncher;
 import com.minos.nexus.NexusExportContract;
 import com.minos.nexus.NexusExportService;
-import com.minos.storage.local.registry.LocalProjectRegistry;
-import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,10 +29,10 @@ class NexusExportIntegrationTest {
                 scip,
                 new MinosApi.IndexImportRequest("scip-typescript", "0.4.0", null, null));
 
-        NexusExportService service = new NexusExportService(
-                new LocalProjectRegistry(home.resolve("registry")),
-                new FileSymbolSnapshotStore(home.resolve("symbol-snapshots")));
-        NexusExportContract.ExportSnapshot snapshot = service.export(fixture);
+        NexusExportContract.ExportSnapshot snapshot;
+        try (MinosApplication application = MinosApplication.open(home)) {
+            snapshot = new NexusExportService(application).export(fixture);
+        }
 
         assertEquals("1", snapshot.contractVersion());
         assertEquals("MINOS", snapshot.producer());

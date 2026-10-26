@@ -93,7 +93,7 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
         this.application = app;
         this.ownsApplication = ownsApplication;
         this.projectOperations = projectOperations != null ? projectOperations : new LocalProjectOperations(app);
-        this.symbolQuery = new LocalProjectSymbolQuery(app.projectRegistry(), app.snapshotStore());
+        this.symbolQuery = new LocalProjectSymbolQuery(app);
         this.architectureQuery = app.architectureQuery();
         this.impactQuery = app.impactQuery();
         this.teamApi = new LocalMinosTeamApi(app);

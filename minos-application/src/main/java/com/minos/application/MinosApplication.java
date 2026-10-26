@@ -7,6 +7,7 @@ import com.minos.application.semantic.HybridContextBuilder;
 import com.minos.application.semantic.HybridSearchService;
 import com.minos.application.semantic.SemanticIndexService;
 import com.minos.application.semantic.SemanticSearchService;
+import com.minos.application.team.TeamControlPlane;
 import com.minos.architecture.LocalProjectArchitectureQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.discovery.ProjectDiscoveryService;
@@ -80,6 +81,7 @@ public final class MinosApplication implements AutoCloseable {
     private final Queries queries;
     private final Semantic semantic;
     private final Optional<HostedControlPlaneService> hostedControlPlaneService;
+    private final Optional<TeamControlPlane> teamControlPlane;
     private final MinosApplicationComposer compositionRoot;
 
     /**
@@ -203,6 +205,7 @@ public final class MinosApplication implements AutoCloseable {
                 semanticIndexService, semanticSearchService, hybridSearchService, hybridContextBuilder);
         this.hostedControlPlaneService = Objects.requireNonNull(
                 hostedControlPlaneService, "hostedControlPlaneService");
+        this.teamControlPlane = hostedControlPlaneService.map(TeamControlPlane::new);
         this.compositionRoot = Objects.requireNonNull(compositionRoot, "compositionRoot");
     }
 
@@ -311,6 +314,8 @@ public final class MinosApplication implements AutoCloseable {
 
     // Hosted team control plane (opt-in).
     public Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
+    /** The team control plane the surfaces consume; empty when the hosted mode is disabled. */
+    public Optional<TeamControlPlane> teamControlPlane() { return teamControlPlane; }
 
     @Override
     public void close() throws IOException {

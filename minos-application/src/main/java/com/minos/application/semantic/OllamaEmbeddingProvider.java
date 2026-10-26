@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.output.json.DeterministicJson;
-import com.minos.registry.ProjectPathMapping.RuntimeLocation;
+import com.minos.domain.registry.ProjectPathMapping.RuntimeLocation;
 import com.minos.semantic.SemanticVector;
 
 import java.io.IOException;
