@@ -66,7 +66,8 @@ class GitActivityFactsTest {
                 List.of("HISTORY_TRUNCATED"));
         assertEquals("src/A.java", full.files().get(0).path());
         assertEquals("src", full.zones().get(0).zone());
-        assertThrows(UnsupportedOperationException.class, () -> full.recentCommits().clear());
+        List<CommitActivity> commits = full.recentCommits();
+        assertThrows(UnsupportedOperationException.class, commits::clear);
     }
 
     private static String refusal(Runnable construction) {

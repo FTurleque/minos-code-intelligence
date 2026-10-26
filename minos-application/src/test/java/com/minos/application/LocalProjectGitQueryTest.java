@@ -60,8 +60,8 @@ class LocalProjectGitQueryTest {
         assertEquals("application", assertThrows(NullPointerException.class,
                 () -> new LocalProjectGitQuery((MinosApplication) null)).getMessage());
         FakePort port = new FakePort();
-        assertEquals("query", assertThrows(NullPointerException.class,
-                () -> new LocalProjectGitQuery(port).analyze(ROOT, null)).getMessage());
+        LocalProjectGitQuery query = new LocalProjectGitQuery(port);
+        assertEquals("query", assertThrows(NullPointerException.class, () -> query.analyze(ROOT, null)).getMessage());
         assertEquals(List.of(), port.queries, "a missing query never reaches the port");
     }
 
