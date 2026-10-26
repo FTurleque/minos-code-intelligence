@@ -17,6 +17,7 @@ classDiagram
     class MinosMultiRepositoryApi
     class MinosMcpServer
     class NexusExportService
+    class KnowledgeExportUseCase
 
     MinosLauncher --> MinosCli
     MinosLauncher --> LocalProjectRegistry
@@ -28,8 +29,9 @@ classDiagram
     LocalProjectArchitectureQuery --> FileSymbolSnapshotStore
     LocalProjectImpactQuery --> FileSymbolSnapshotStore
     MinosMultiRepositoryApi --|> MinosApi
-    NexusExportService --> LocalProjectRegistry
-    NexusExportService --> FileSymbolSnapshotStore
+    NexusExportService --> KnowledgeExportUseCase
+    KnowledgeExportUseCase --> LocalProjectRegistry
+    KnowledgeExportUseCase --> FileSymbolSnapshotStore
 ```
 
 Ce diagramme montre la direction des dépendances principales, pas chaque classe du dépôt.
