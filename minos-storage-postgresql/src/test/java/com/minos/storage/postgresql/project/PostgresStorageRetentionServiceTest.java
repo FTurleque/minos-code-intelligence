@@ -75,7 +75,7 @@ class PostgresStorageRetentionServiceTest extends PostgresTestSupport {
 
     @Test
     void compactionProtectsTheRunOfferedForResumeLikeTheLatestRun() throws Exception {
-        // MINOS-AUD-E01 (ADR 0039 §2): the INTERRUPTED run offered for resume survives a zero non-succeeded cap.
+        // ADR 0039 §2: the INTERRUPTED run offered for resume survives a zero non-succeeded cap.
         UUID projectId = UUID.randomUUID();
         PostgresIndexStateStore states = new PostgresIndexStateStore(connections, new PostgresJsonCodec());
         IndexingRun offered = run(projectId, IndexingRun.Status.INTERRUPTED, 1);

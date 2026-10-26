@@ -16,7 +16,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * MINOS-AUD-E01: a database at schema v4, whose project states have no resume column, migrates to v5; the existing
+ * ADR 0039 §2: a database at schema v4, whose project states have no resume column, migrates to v5; the existing
  * state is read back without a resume offer, and a new offer is then kept.
  */
 class PostgresSchemaUpgradeFromV4Test extends PostgresTestSupport {
