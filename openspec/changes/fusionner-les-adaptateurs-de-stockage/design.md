@@ -195,13 +195,10 @@ Le couple `(minos-provider-scip, minos-storage)` reste dans A13, avec `storage.l
 - Les tests PostgreSQL sont exigés sous Linux (`pr-ci.yml:380`). Sous Windows, ils passent par le profil Docker Desktop quand Docker est présent.
 - T1 s'exécute sur les deux systèmes.
 
-## Questions ouvertes (décisions du propriétaire)
+## Décisions du propriétaire (2026-10-26)
 
-- **Q1 — E01, la reprise PostgreSQL.**
-  - **Recommandation : A.** Un changement séparé, livré **avant** SH-02 : migration de schéma v5 avec `resumable_run_id`, lecture et écriture dans `PostgresIndexStateStore`, protection dans `deleteHistoricalRuns`, et test de contrat commun aux deux backends.
-  - Ce changement modifie trois fichiers que SH-02 déplace. Le livrer avant évite un conflit et fait naître ses tests dans le module actuel.
-  - **B** : le livrer après SH-02, dans `minos-storage`.
-- **Q2 — D4.** Garder 4 types en cliquet de packages jusqu'à SH-03 (**recommandé**), ou exiger tout de suite `postgresql` ↛ `local`, ce qui avancerait une partie de SH-03 dans SH-02.
-- **Q3 — D5.** Fermer le contournement `build-helper` dans SH-02 (**recommandé** : SH-02 réécrit déjà ce garde), ou par un changement séparé.
-- **Q4 — D3.** Accepter que le backend local reçoive JDBC et Jackson par transitivité, avec R1, R2 et T1 comme preuve de non-chargement (**recommandé**), ou exclure ces dépendances avec un `<optional>`. Cette exclusion casserait la composition de `minos-app` et le JAR ombré.
-- **Q5 — Ordre avec `lire-le-registre-sans-ecrire` (19/23).** Livrer ce changement **avant** la fusion (**recommandé**), ou rebaser la fusion sur lui ensuite. Dans tous les cas, l'implémentation de SH-02 commence sur un `develop` où il est fusionné ou explicitement laissé hors du lot.
+- **Q1 = A** : E01 (reprise PostgreSQL) est traité par un changement séparé, `persister-la-reprise-dans-postgresql`, livré avant SH-02. La tâche 1.1 vérifie sa fusion.
+- **Q2** : cliquet de packages `BACKEND_TYPES_NAMED_ACROSS_PACKAGES` (D4) jusqu'à SH-03.
+- **Q3** : le contournement `build-helper-maven-plugin` est fermé dans SH-02 (D5).
+- **Q4** : JDBC et Jackson transitives dans `minos-storage`, avec R1, R2 et T1 comme preuves (D3, D6).
+- **Q5** : `lire-le-registre-sans-ecrire` est livré avant la fusion ; la tâche 1.1 vérifie sa fusion.
