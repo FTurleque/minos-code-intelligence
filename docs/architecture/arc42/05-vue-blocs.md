@@ -93,9 +93,9 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Sources** : `minos-application/src/main/java/com/minos/`.
 
 ### minos-nexus
-- **Responsabilité** : export read-only du snapshot normalisé au format contrat JSON NEXUS.
+- **Responsabilité** : export read-only du snapshot normalisé au format contrat JSON NEXUS. Le cas d'usage `KnowledgeExportUseCase` (`minos-application`) sélectionne les faits et résout les chemins ; `NexusExportService` les traduit dans le contrat.
 - **Types clés** : `NexusExportContract`, `NexusExportService`.
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
+- **Dépendances** : `minos-domain`, `minos-application`, `minos-bootstrap` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
 - **Sources** : `minos-nexus/src/main/java/`.
 
 ### minos-cli

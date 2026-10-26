@@ -251,6 +251,11 @@ class DependencyPolicyTest(unittest.TestCase):
         self.refused(scoped_graph(minos_mcp={"minos-nexus": "compile"}), "minos-mcp", "forbidden MINOS dependencies",
                      "minos-nexus")
 
+    def test_the_nexus_surface_may_not_depend_on_the_engine_again(self):
+        # AUD-ARC-01, lot 5: the NEXUS export goes through minos-application; the edge to the engine is gone.
+        self.refused(scoped_graph(minos_nexus={"minos-engine": "compile"}), "minos-nexus",
+                     "forbidden MINOS dependencies", "minos-engine")
+
     def test_a_declared_subset_of_the_allowed_table_is_accepted(self):
         _MODULE.check_dependency_policy(scoped_graph(minos_runtime_local={"minos-engine": "compile"}))
 
@@ -1122,6 +1127,22 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
         # AUD-ARC-01, lot 3: the surfaces reach the team control plane through TeamControlPlane.
         for surface, types in _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE.items():
             self.assertEqual([], [entry for entry in types if entry.startswith("hosted.")], surface)
+
+    def test_the_nexus_export_no_longer_uses_the_engine(self):
+        # AUD-ARC-01, lot 5: the export goes through KnowledgeExportUseCase, and the CLI passes the application.
+        self.assertEqual({}, _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-nexus"])
+        cli = _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"]
+        self.assertNotIn("registry.ProjectRegistry", cli)
+        self.assertNotIn("store.CodeKnowledgeSnapshotStore", cli)
+
+    def test_an_engine_type_back_in_nexus_is_refused_against_the_real_list(self):
+        self.write("minos-engine", "com.minos.store", "CodeKnowledgeSnapshot", "public record CodeKnowledgeSnapshot() { }")
+        self.write("minos-nexus", "com.minos.nexus", "NexusExportService", "final class NexusExportService { }",
+                   ["com.minos.store.CodeKnowledgeSnapshot"])
+        listed = dict(self.LISTED, **{"minos-nexus": _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-nexus"]})
+        self.refused(lambda: self.check(listed), "A11", "minos-nexus",
+                     "minos-nexus/src/main/java/com/minos/nexus/NexusExportService.java",
+                     "com.minos.store.CodeKnowledgeSnapshot")
 
 
 class MinosApplicationAccessorRuleTest(RatchetTreeTestCase):
