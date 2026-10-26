@@ -63,12 +63,12 @@ class ModuleArchitectureTest {
             Map.entry("minos-storage-postgresql", Set.of("minos-domain", "minos-engine", "minos-storage-local")),
             Map.entry("minos-provider-scip",
                     Set.of("minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local")),
-            Map.entry("minos-integration-git", Set.of("minos-engine")),
+            Map.entry("minos-integration-git", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-application", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-bootstrap", Set.of("minos-domain", "minos-engine", "minos-application",
                     "minos-runtime-local", "minos-storage-local", "minos-provider-scip", "minos-integration-git",
                     "minos-storage-postgresql")),
-            Map.entry("minos-nexus", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
+            Map.entry("minos-nexus", Set.of("minos-domain", "minos-application", "minos-bootstrap")),
             Map.entry("minos-cli",
                     Set.of("minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap")),
             Map.entry("minos-api", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
@@ -91,45 +91,19 @@ class ModuleArchitectureTest {
      */
     private static final Map<String, Map<String, Integer>> ENGINE_TYPES_USED_BY_SURFACE_BYTECODE = Map.of(
             "minos-api", Map.ofEntries(
-                    Map.entry("diagnostics.PublicErrorMessages", 1),
-                    Map.entry("git.GitIntelligence", 1),
-                    Map.entry("hosted.HostedAuditEvent", 1),
-                    Map.entry("hosted.HostedControlPlaneService", 1),
-                    Map.entry("hosted.HostedPrincipal", 1),
-                    Map.entry("hosted.HostedProjectBinding", 1),
-                    Map.entry("hosted.HostedRetentionPlan", 1),
-                    Map.entry("hosted.HostedRetentionPolicy", 1),
-                    Map.entry("hosted.HostedRole", 1),
-                    Map.entry("hosted.HostedTenantState", 1),
-                    Map.entry("hosted.SharedWorkspace", 1),
+                    // Kept, as in ENGINE_TYPES_NAMED_BY_SURFACE of check-module-boundaries.py: published read models
+                    // returned by ProjectSymbolQuery (ADR 0057, point 6).
                     Map.entry("query.RelationshipResult", 1),
                     Map.entry("query.SymbolResult", 1),
                     Map.entry("query.UsageResult", 1)),
             "minos-cli", Map.ofEntries(
-                    Map.entry("diagnostics.PublicErrorMessages", 3),
-                    Map.entry("git.GitIntelligence", 3),
-                    Map.entry("hosted.HostedControlPlaneService", 2),
-                    Map.entry("hosted.HostedProjectBinding", 1),
-                    Map.entry("hosted.HostedRetentionPolicy", 1),
-                    Map.entry("hosted.HostedRole", 1),
-                    Map.entry("hosted.HostedTenantState", 1),
-                    Map.entry("registry.DegradedEntry", 2),
-                    Map.entry("registry.ProjectPathMapping", 1),
+                    // Kept, as in the source table: a persisted I/O port, and MinosVersion placed by ADR 0068 section 3.
                     Map.entry("registry.ProjectPathMappings", 1),
-                    Map.entry("registry.UnreadableRegistryException", 2),
                     Map.entry("runtime.MinosVersion", 1)),
             "minos-mcp", Map.ofEntries(
-                    Map.entry("diagnostics.PublicErrorMessages", 2),
-                    Map.entry("hosted.HostedControlPlaneService", 1),
-                    Map.entry("registry.UnreadableRegistryException", 1),
                     Map.entry("runtime.MinosVersion", 1)),
-            "minos-nexus", Map.ofEntries(
-                    Map.entry("io.Sha256", 1),
-                    Map.entry("registry.ProjectRegistry", 1),
-                    Map.entry("registry.RegisteredProject", 1),
-                    Map.entry("registry.UnreadableRegistryException", 1),
-                    Map.entry("store.CodeKnowledgeSnapshot", 1),
-                    Map.entry("store.CodeKnowledgeSnapshotStore", 1)));
+            // The NEXUS export goes through KnowledgeExportUseCase; minos-nexus does not depend on the engine.
+            "minos-nexus", Map.of());
 
     private static final String GROUP_PREFIX = "com.minos.";
 

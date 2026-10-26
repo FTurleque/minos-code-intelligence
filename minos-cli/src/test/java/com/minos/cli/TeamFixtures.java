@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.team.TeamControlPlane;
 import com.minos.cli.command.TeamCommand;
 import com.minos.hosted.HmacHostedIdentityProvider;
 import com.minos.hosted.HostedAuditSink;
@@ -58,9 +59,9 @@ public final class TeamFixtures {
         }
     }
 
-    public static HostedControlPlaneService service(SpyStore store) {
-        return new HostedControlPlaneService(store, new HmacHostedIdentityProvider(keys()), keys(),
-                (project, snapshot) -> { }, HostedAuditSink.embeddedNoop(), Clock.systemUTC());
+    public static TeamControlPlane service(SpyStore store) {
+        return new TeamControlPlane(new HostedControlPlaneService(store, new HmacHostedIdentityProvider(keys()), keys(),
+                (project, snapshot) -> { }, HostedAuditSink.embeddedNoop(), Clock.systemUTC()));
     }
 
     public static HostedTenantKeyProvider keys() {

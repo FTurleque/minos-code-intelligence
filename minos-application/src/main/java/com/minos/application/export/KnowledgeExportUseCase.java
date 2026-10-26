@@ -1,0 +1,401 @@
+package com.minos.application.export;
+
+import com.minos.application.MinosApplication;
+import com.minos.domain.CodeEntityType;
+import com.minos.domain.Evidence;
+import com.minos.domain.Relationship;
+import com.minos.domain.Symbol;
+import com.minos.domain.SymbolLocation;
+import com.minos.domain.registry.UnreadableRegistryException;
+import com.minos.io.Sha256;
+import com.minos.registry.ProjectRegistry;
+import com.minos.registry.RegisteredProject;
+import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.store.CodeKnowledgeSnapshotStore;
+
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.function.ToLongFunction;
+import java.util.stream.Collectors;
+
+/**
+ * Read-only export of the active knowledge snapshot of a registered project root, for an adapter that translates it
+ * into an external contract.
+ *
+ * <p>The selection is bounded by count and by an estimated heap weight, keeps the lowest identifiers, and declares
+ * every omission as a limitation. Only local symbols with a location under the project root, and relationships between
+ * two such symbols, are exported; their file identifiers are resolved to project-relative paths.</p>
+ */
+public final class KnowledgeExportUseCase {
+    public static final int MAX_EXPORTED_SYMBOLS = 1_000_000;
+    public static final int MAX_EXPORTED_RELATIONS = 1_000_000;
+    public static final int MAX_FILE_PATH_CANDIDATES = 1_000_000;
+    public static final long MAX_SYMBOL_SELECTION_WEIGHT_BYTES = 96L * 1024L * 1024L;
+    public static final long MAX_RELATION_SELECTION_WEIGHT_BYTES = 96L * 1024L * 1024L;
+
+    private final ProjectRegistry registry;
+    private final CodeKnowledgeSnapshotStore snapshots;
+
+    public KnowledgeExportUseCase(ProjectRegistry registry, CodeKnowledgeSnapshotStore snapshots) {
+        this.registry = Objects.requireNonNull(registry, "registry");
+        this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
+    }
+
+    /** The export over the registry and the snapshot store of an opened application. */
+    public static KnowledgeExportUseCase of(MinosApplication application) {
+        Objects.requireNonNull(application, "application");
+        return new KnowledgeExportUseCase(application.projectRegistry(), application.snapshotStore());
+    }
+
+    /**
+     * Exports the active snapshot of the project registered at {@code projectRoot}. Refusals name the leaf of the
+     * root, never its absolute path.
+     */
+    public KnowledgeExport export(Path projectRoot) throws IOException {
+        Path root = canonicalProjectRoot(projectRoot);
+        RegisteredProject project = registeredProjects().stream()
+                .filter(candidate -> candidate.rootPath().equals(root)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "project root is not registered in MINOS: " + root.getFileName()));
+        CodeKnowledgeSnapshot snapshot = snapshots.loadActiveKnowledge(project.id())
+                .orElseThrow(() -> new IllegalStateException(
+                        "project has no active MINOS knowledge snapshot: " + project.displayName()));
+        Set<String> limitations = new LinkedHashSet<>();
+
+        BoundedById<Symbol> symbolCandidates = selectSymbolCandidates(snapshot, limitations);
+        BoundedById<Relationship> relationCandidates = selectRelationCandidates(
+                snapshot, symbolCandidates.orderedMap().keySet(), limitations);
+        Set<String> requiredFileIds = candidateFileIds(symbolCandidates.values(), relationCandidates.values());
+        Map<String, String> pathByFileId = resolveFilePaths(
+                root, project.id().toString(), requiredFileIds, limitations);
+
+        Map<String, ExportedSymbol> exportedById = exportSymbols(symbolCandidates.values(), pathByFileId, limitations);
+        List<ExportedRelationship> relationships = exportRelationships(
+                relationCandidates.values(), exportedById, pathByFileId, limitations);
+        return new KnowledgeExport(project.id().toString(), project.displayName(), root, snapshot.snapshotId(),
+                List.copyOf(exportedById.values()), relationships, List.copyOf(limitations));
+    }
+
+    /**
+     * The export feeds a contract that an external consumer reads: it stays strict when registry entries are
+     * unreadable, and says so instead of surfacing a raw read failure.
+     */
+    private List<RegisteredProject> registeredProjects() throws IOException {
+        try {
+            return registry.listProjects();
+        } catch (IOException | RuntimeException failure) {
+            if (Thread.currentThread().isInterrupted()) throw failure;
+            Optional<UnreadableRegistryException> explained = registry.explainUnreadable(
+                    "the project of this root cannot be located with certainty");
+            if (explained.isEmpty()) throw failure;
+            explained.get().addSuppressed(failure);
+            throw explained.get();
+        }
+    }
+
+    private static BoundedById<Symbol> selectSymbolCandidates(
+            CodeKnowledgeSnapshot snapshot,
+            Set<String> limitations
+    ) {
+        BoundedById<Symbol> selected = new BoundedById<>(MAX_EXPORTED_SYMBOLS,
+                MAX_SYMBOL_SELECTION_WEIGHT_BYTES, KnowledgeExportUseCase::symbolWeight);
+        int omittedExternal = 0;
+        int omittedLocation = 0;
+        for (Symbol symbol : snapshot.symbols()) {
+            if (symbol.external()) {
+                omittedExternal++;
+            } else if (symbol.location() == null) {
+                omittedLocation++;
+            } else {
+                selected.offer(symbol.id(), symbol);
+            }
+        }
+        if (selected.truncated()) limitations.add("SYMBOLS_TRUNCATED");
+        if (omittedExternal > 0) limitations.add("EXTERNAL_SYMBOLS_OMITTED");
+        if (omittedLocation > 0) limitations.add("SYMBOL_WITHOUT_LOCAL_LOCATION_OMITTED");
+        return selected;
+    }
+
+    private static BoundedById<Relationship> selectRelationCandidates(
+            CodeKnowledgeSnapshot snapshot,
+            Set<String> candidateSymbolIds,
+            Set<String> limitations
+    ) {
+        BoundedById<Relationship> selected = new BoundedById<>(MAX_EXPORTED_RELATIONS,
+                MAX_RELATION_SELECTION_WEIGHT_BYTES, KnowledgeExportUseCase::relationshipWeight);
+        int omittedNonSymbol = 0;
+        int omittedNonLocal = 0;
+        for (Relationship relationship : snapshot.relationships()) {
+            if (relationship.source().type() != CodeEntityType.SYMBOL || relationship.target() == null
+                    || relationship.target().type() != CodeEntityType.SYMBOL) {
+                omittedNonSymbol++;
+            } else if (!candidateSymbolIds.contains(relationship.source().id())
+                    || !candidateSymbolIds.contains(relationship.target().id())) {
+                omittedNonLocal++;
+            } else {
+                selected.offer(relationship.id(), relationship);
+            }
+        }
+        if (selected.truncated()) limitations.add("RELATIONS_TRUNCATED");
+        if (omittedNonSymbol > 0) limitations.add("NON_SYMBOL_RELATIONS_OMITTED");
+        if (omittedNonLocal > 0) limitations.add("NON_LOCAL_RELATIONS_OMITTED");
+        return selected;
+    }
+
+    private static Set<String> candidateFileIds(
+            Collection<Symbol> symbols,
+            Collection<Relationship> relationships
+    ) {
+        Set<String> required = new LinkedHashSet<>();
+        for (Symbol symbol : symbols) {
+            SymbolLocation location = symbol.location();
+            if (location != null && location.fileId() != null) required.add(location.fileId());
+        }
+        for (Relationship relationship : relationships) {
+            SymbolLocation location = relationship.location();
+            if (location != null && location.fileId() != null) required.add(location.fileId());
+        }
+        return required;
+    }
+
+    private static Map<String, ExportedSymbol> exportSymbols(
+            Collection<Symbol> symbols,
+            Map<String, String> pathByFileId,
+            Set<String> limitations
+    ) {
+        TreeMap<String, ExportedSymbol> exported = new TreeMap<>();
+        int omittedPath = 0;
+        for (Symbol symbol : symbols) {
+            String relativePath = pathByFileId.get(symbol.location().fileId());
+            if (relativePath == null) { omittedPath++; continue; }
+            exported.put(symbol.id(), new ExportedSymbol(symbol, relativePath));
+        }
+        if (omittedPath > 0) limitations.add("UNRESOLVED_SYMBOL_FILE_ID_OMITTED");
+        return Collections.unmodifiableMap(exported);
+    }
+
+    private static List<ExportedRelationship> exportRelationships(
+            Collection<Relationship> relationships,
+            Map<String, ExportedSymbol> symbols,
+            Map<String, String> pathByFileId,
+            Set<String> limitations
+    ) {
+        TreeMap<String, ExportedRelationship> exported = new TreeMap<>();
+        int omittedNonLocal = 0;
+        int omittedPath = 0;
+        for (Relationship relationship : relationships) {
+            ExportedSymbol source = symbols.get(relationship.source().id());
+            ExportedSymbol target = symbols.get(relationship.target().id());
+            if (source == null || target == null) {
+                omittedNonLocal++;
+            } else {
+                String relativePath = relationship.location() == null
+                        ? source.filePath()
+                        : pathByFileId.get(relationship.location().fileId());
+                if (relativePath == null) {
+                    omittedPath++;
+                } else {
+                    exported.put(relationship.id(), new ExportedRelationship(relationship, relativePath));
+                }
+            }
+        }
+        if (omittedNonLocal > 0) limitations.add("NON_LOCAL_RELATIONS_OMITTED");
+        if (omittedPath > 0) limitations.add("UNRESOLVED_RELATION_FILE_ID_OMITTED");
+        return List.copyOf(exported.values());
+    }
+
+    private static Map<String, String> resolveFilePaths(
+            Path root,
+            String projectId,
+            Collection<String> requiredFileIds,
+            Set<String> limitations
+    ) throws IOException {
+        Set<String> required = new LinkedHashSet<>(requiredFileIds);
+        Map<String, String> resolved = new HashMap<>();
+        for (String fileId : required) {
+            String direct = directRelativePath(root, fileId);
+            if (direct != null) resolved.put(fileId, direct);
+        }
+        Set<String> unresolvedStableIds = required.stream().filter(fileId -> !resolved.containsKey(fileId))
+                .filter(fileId -> fileId.startsWith("file:"))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (unresolvedStableIds.isEmpty()) return Map.copyOf(resolved);
+        StableFileIdResolver resolver = new StableFileIdResolver(root, projectId, unresolvedStableIds, resolved);
+        Files.walkFileTree(root, resolver);
+        if (resolver.truncated) limitations.add("FILE_PATH_DISCOVERY_TRUNCATED");
+        if (!unresolvedStableIds.isEmpty()) limitations.add("UNRESOLVED_FILE_IDS");
+        return Map.copyOf(resolved);
+    }
+
+    private static String directRelativePath(Path root, String fileId) {
+        try {
+            Path raw = Path.of(fileId);
+            Path resolved = raw.isAbsolute() ? raw.normalize() : root.resolve(raw).normalize();
+            if (!resolved.startsWith(root) || resolved.equals(root) || !Files.isRegularFile(resolved)) return null;
+            Path canonical = resolved.toRealPath();
+            if (!canonical.startsWith(root)) return null;
+            return root.relativize(resolved).toString().replace('\\', '/');
+        } catch (InvalidPathException | IOException _) {
+            return null;
+        }
+    }
+
+    /**
+     * Walks the project tree, without following links nor entering special files, and resolves the stable file
+     * identifiers it meets to project-relative paths; it stops when none is left or after
+     * {@code MAX_FILE_PATH_CANDIDATES} entries ({@code truncated}).
+     */
+    private static final class StableFileIdResolver extends SimpleFileVisitor<Path> {
+        private final Path root;
+        private final String projectId;
+        private final Set<String> unresolved;
+        private final Map<String, String> resolved;
+        private long traversed;
+        private boolean truncated;
+
+        StableFileIdResolver(Path root, String projectId, Set<String> unresolved, Map<String, String> resolved) {
+            this.root = root;
+            this.projectId = projectId;
+            this.unresolved = unresolved;
+            this.resolved = resolved;
+        }
+
+        private FileVisitResult account() {
+            traversed++;
+            if (traversed > MAX_FILE_PATH_CANDIDATES) {
+                truncated = true;
+                return FileVisitResult.TERMINATE;
+            }
+            return unresolved.isEmpty() ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+            FileVisitResult decision = account();
+            if (decision == FileVisitResult.TERMINATE) return decision;
+            if (!directory.equals(root)
+                    && (!attributes.isDirectory() || attributes.isSymbolicLink() || attributes.isOther())) {
+                return FileVisitResult.SKIP_SUBTREE;
+            }
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+            FileVisitResult decision = account();
+            if (decision == FileVisitResult.TERMINATE) return decision;
+            if (!attributes.isRegularFile()) return FileVisitResult.CONTINUE;
+            Path canonical = file.toRealPath();
+            if (!canonical.startsWith(root)) return FileVisitResult.CONTINUE;
+            String relativePath = root.relativize(file).toString().replace('\\', '/');
+            String stableId = stableFileId(projectId, relativePath);
+            if (unresolved.remove(stableId)) resolved.put(stableId, relativePath);
+            return unresolved.isEmpty() ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
+        }
+
+        /** The stable file identifier the ingestion gives a file without an explicit identifier. */
+        private static String stableFileId(String projectId, String relativePath) {
+            return "file:" + Sha256.hex(projectId + "\u001F" + relativePath);
+        }
+    }
+
+    private static long symbolWeight(Symbol symbol) {
+        long weight = 512L;
+        weight = addWeight(weight, symbol.id());
+        weight = addWeight(weight, symbol.symbolKey());
+        weight = addWeight(weight, symbol.name());
+        weight = addWeight(weight, symbol.qualifiedName());
+        weight = addWeight(weight, symbol.signature());
+        weight = addWeight(weight, symbol.fileId());
+        weight = addWeight(weight, symbol.moduleId());
+        weight = addWeight(weight, symbol.language());
+        for (var reference : symbol.providerReferences()) {
+            weight = addWeight(weight, reference.providerId());
+            weight = addWeight(weight, reference.externalId());
+        }
+        return weight;
+    }
+
+    private static long relationshipWeight(Relationship relationship) {
+        long weight = 512L;
+        weight = addWeight(weight, relationship.id());
+        weight = addWeight(weight, relationship.source().id());
+        weight = addWeight(weight, relationship.target().id());
+        if (relationship.location() != null) weight = addWeight(weight, relationship.location().fileId());
+        for (Evidence evidence : relationship.evidence()) weight = addWeight(weight, evidence.description());
+        return weight;
+    }
+
+    private static long addWeight(long weight, String value) {
+        long increment = value == null ? 0L : 40L + (long) value.length() * Character.BYTES;
+        return increment > Long.MAX_VALUE - weight ? Long.MAX_VALUE : weight + increment;
+    }
+
+    private static Path canonicalProjectRoot(Path projectRoot) throws IOException {
+        Objects.requireNonNull(projectRoot, "projectRoot");
+        Path root = projectRoot.toRealPath();
+        if (!Files.isDirectory(root)) {
+            throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot.getFileName());
+        }
+        return root;
+    }
+
+    /**
+     * The values offered under the lowest identifiers, within a count and an estimated weight: an offer beyond either
+     * bound drops the highest identifiers and marks the selection truncated.
+     */
+    static final class BoundedById<T> {
+        private final int limit;
+        private final long maximumWeightBytes;
+        private final ToLongFunction<T> estimator;
+        private final TreeMap<String, T> retained = new TreeMap<>();
+        private final Map<String, Long> retainedWeights = new HashMap<>();
+        private long retainedWeightBytes;
+        private boolean truncated;
+
+        BoundedById(int limit, long maximumWeightBytes, ToLongFunction<T> estimator) {
+            if (limit < 1) throw new IllegalArgumentException("limit must be positive");
+            if (maximumWeightBytes < 1L) throw new IllegalArgumentException("maximumWeightBytes must be positive");
+            this.limit = limit;
+            this.maximumWeightBytes = maximumWeightBytes;
+            this.estimator = Objects.requireNonNull(estimator, "estimator");
+        }
+
+        void offer(String id, T value) {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(value, "value");
+            long weight = Math.max(1L, estimator.applyAsLong(value));
+            T previous = retained.put(id, value);
+            Long previousWeight = retainedWeights.put(id, weight);
+            if (previous != null && previousWeight != null) retainedWeightBytes -= previousWeight;
+            retainedWeightBytes = retainedWeightBytes > Long.MAX_VALUE - weight
+                    ? Long.MAX_VALUE : retainedWeightBytes + weight;
+            while (retained.size() > limit || retainedWeightBytes > maximumWeightBytes) {
+                Map.Entry<String, T> removed = retained.pollLastEntry();
+                if (removed == null) break;
+                Long removedWeight = retainedWeights.remove(removed.getKey());
+                if (removedWeight != null) retainedWeightBytes = Math.max(0L, retainedWeightBytes - removedWeight);
+                truncated = true;
+            }
+        }
+
+        boolean truncated() { return truncated; }
+        Map<String, T> orderedMap() { return Collections.unmodifiableMap(retained); }
+        Collection<T> values() { return retained.values(); }
+    }
+}

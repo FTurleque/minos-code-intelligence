@@ -812,29 +812,6 @@
       <Message>At RegisteredWorkspace.java:[line 12]</Message>
     </SourceLine>
   </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="bc1ab494771f0edbd0de32a94d884ade" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
-    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
-    <LongMessage>La méthode com.minos.registry.UnreadableRegistryException.unreadable() risque d'exposer sa représentation interne en renvoyant com.minos.registry.UnreadableRegistryException.unreadable</LongMessage>
-    <Class classname="com.minos.registry.UnreadableRegistryException" primary="true">
-      <SourceLine classname="com.minos.registry.UnreadableRegistryException" start="22" end="54" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java">
-        <Message>At UnreadableRegistryException.java:[lines 22-54]</Message>
-      </SourceLine>
-      <Message>In class com.minos.registry.UnreadableRegistryException</Message>
-    </Class>
-    <Method isStatic="false" classname="com.minos.registry.UnreadableRegistryException" signature="()Ljava/util/List;" name="unreadable" primary="true">
-      <SourceLine endBytecode="46" classname="com.minos.registry.UnreadableRegistryException" start="49" end="49" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java" startBytecode="0" />
-      <Message>In method com.minos.registry.UnreadableRegistryException.unreadable()</Message>
-    </Method>
-    <Field isStatic="false" classname="com.minos.registry.UnreadableRegistryException" signature="Ljava/util/List;" name="unreadable" primary="true">
-      <SourceLine classname="com.minos.registry.UnreadableRegistryException" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java">
-        <Message>In UnreadableRegistryException.java</Message>
-      </SourceLine>
-      <Message>Field com.minos.registry.UnreadableRegistryException.unreadable</Message>
-    </Field>
-    <SourceLine endBytecode="4" classname="com.minos.registry.UnreadableRegistryException" start="49" end="49" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java" startBytecode="4" primary="true">
-      <Message>At UnreadableRegistryException.java:[line 49]</Message>
-    </SourceLine>
-  </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="52a94635b585ffb5607a4e348810bdc3" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
     <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
     <LongMessage>La méthode com.minos.store.SnapshotQueryView.queryStore() risque d'exposer sa représentation interne en renvoyant com.minos.store.SnapshotQueryView.queryStore</LongMessage>

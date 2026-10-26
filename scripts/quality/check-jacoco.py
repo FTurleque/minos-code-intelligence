@@ -214,6 +214,7 @@ SCOPES = {
         "prefixes": (
             "com/minos/hosted/", "com/minos/storage/local/store/FileHostedControlPlaneStore", "com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider",
             "com/minos/cli/command/TeamCommand", "com/minos/api/LocalMinosTeamApi", "com/minos/output/HostedControlPlaneRenderer",
+            "com/minos/application/team/",
         ), "line": 0.45, "branch": 0.25,
     },
     "m29-backend-routing": {
@@ -257,7 +258,8 @@ SCOPES = {
             "com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore": {"line": 0.95, "branch": 0.85},
         },
     },
-    "nexus-export": {"prefixes": ("com/minos/nexus/", "com/minos/integration/nexus/"), "line": 0.30, "branch": 0.12},
+    "nexus-export": {"prefixes": ("com/minos/nexus/", "com/minos/integration/nexus/",
+                                 "com/minos/application/export/"), "line": 0.30, "branch": 0.12},
     # The lifecycle orchestrator behind every indexing run (register -> execute providers -> stage
     # -> promote -> persist, with commit-uncertain recovery and failure rollback). It is exercised
     # almost entirely indirectly through IndexingLifecycleService's test suite rather than directly,
