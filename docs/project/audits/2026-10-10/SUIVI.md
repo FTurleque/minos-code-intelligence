@@ -663,6 +663,7 @@ Quatre phases, chacune spécifiée en OpenSpec, implémentée par lots et valid�
 | AUD-ARC-01 (lot 6) | 3 | `descendre-le-noyau-transverse` | implémenté en local, non poussé ; A11 passe de 41 à 33 types (garde Python) et de 36 à 28 (bytecode) | — |
 | AUD-ARC-01 (lot 3) | 3 | `faire-consommer-le-controle-heberge` | en revue (PR vers `develop`) ; les surfaces passent par la façade `TeamControlPlane` ; A11 passe de 33 à 20 types (garde Python) et de 28 à 13 (bytecode) | — |
 | AUD-ARC-01 (lot 4) | 3 | `faire-consommer-git-et-les-resultats-de-requete` | en revue ; Git par la requête applicative `ProjectGitQuery` sur les records Git descendus dans `minos-domain`, requête de symboles de l'API construite par l'application ; A11 passe de 20 à 16 types (garde Python) et de 13 à 11 (bytecode), après le lot 3 ; les 6 entrées `query.*` restent, justifiées comme modèles de lecture publiés (ADR 0057, point 6) | [PR #574](https://github.com/FTurleque/minos-code-intelligence/pull/574) |
+| AUD-ARC-01 (lot 5) | 3 | `faire-consommer-l-export-nexus` | en revue (PR vers `develop`) ; l'export passe par le cas d'usage `KnowledgeExportUseCase`, l'arête `minos-nexus` → `minos-engine` est retirée ; A11 passe de 16 à 9 types (garde Python) et de 11 à 6 (bytecode), après les lots 3 et 4 | [PR #575](https://github.com/FTurleque/minos-code-intelligence/pull/575) |
 | AUD-ARC-12 | — | aucun | **clos par décision documentée** : la convention de préfixe de module ne vaut que pour les nouveaux packages ([ADR 0068](../../../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 5, décision D4 du 2026-10-22) ; renommer les racines existantes contredirait l'ADR 0044. La règle A14 empêche toute nouvelle racine | — |
 
 ### Phase 1 — cliquets étanches (2026-10-25, HEAD de départ `dedb219e`)
@@ -803,6 +804,38 @@ Preuves (poste Windows, worktree `minos-wt-lot6`) :
   - `check-jacoco.py` : `domain-invariants` à 0,977 / 0,842.
 - **Langue des commentaires** : les commentaires de `DegradedEntry` sont traduits, et les mentions de jalon des fichiers déplacés retirées. Les maximums du moteur baissent : 55 → 54 fichiers hors langue, 20 → 19 qui citent un jalon.
 - **SpotBugs** : l'entrée `EI_EXPOSE_REP` d'`UnreadableRegistryException` passe de `minos-engine.xml` à `minos-domain.xml`. Résultat : 0 nouvelle, 0 disparue.
+
+### Phase 3 — lot 5 d'AUD-ARC-01 implémenté (2026-10-26, branche `refactor/faire-consommer-l-export-nexus`)
+
+Décisions du propriétaire du 2026-10-26 : Q1 = A, Q2 = A, Q3 = A.
+
+**Ce qui change**
+- L'export NEXUS est le cas d'usage `KnowledgeExportUseCase` (`com.minos.application.export`), avec `KnowledgeExport`, `ExportedSymbol` et `ExportedRelationship`. Il lit le snapshot actif par `loadActiveKnowledge` : le port `CodeKnowledgeReader` ne sait pas énumérer un snapshot (écart consigné dans le design, D1).
+- `NexusExportService` ne fait que traduire ce résultat dans le contrat NEXUS v1. Son constructeur prend `MinosApplication` (rupture documentée dans `docs/user/java-api.md`) ; `export(Path)`, le contrat et les constantes `MAX_*` sont inchangés.
+- La CLI passe l'application ouverte, et non plus ses ports.
+- L'arête `minos-nexus` → `minos-engine` est retirée du POM, de `ALLOWED_DEPENDENCIES`, de `ModuleArchitectureTest.ALLOWED` et du document généré.
+
+| Cliquet A11 | Avant | Après |
+|---|---|---|
+| Garde Python | 16 (API 3, CLI 7, MCP 1, NEXUS 5) | **9** (API 3, CLI 5, MCP 1, NEXUS 0) |
+| Bytecode | 11 (API 3, CLI 2, MCP 1, NEXUS 5) | **6** (API 3, CLI 2, MCP 1, NEXUS 0) |
+
+Preuves (poste Windows, worktree `lot5-export-nexus-f15ec1`) :
+
+- **Caractérisation d'abord** : `nexus-export.golden` écrit au HEAD avant la refonte (export JSON complet de la fixture TypeScript, refus sans snapshot actif, refus d'une racine non enregistrée) ; `A2SurfaceCharacterizationTest` 13/13 avant et après, aucun golden régénéré.
+- **Rouges** :
+  - les tests du cas d'usage et de l'adaptateur ne compilent pas avant le code ;
+  - le garde signale les 7 entrées A11 devenues inutiles ;
+  - mutation (`com.minos.io.Sha256` dans une classe de `minos-nexus`) : le garde échoue en A11, `everyModuleOnlyUsesItsAllowedModules` signale `minos-nexus` → `minos-engine`, et la table bytecode signale le type.
+- **Verts** :
+  - `minos-application` : `KnowledgeExportUseCaseTest` 6, `KnowledgeExportRefusalTest` 7, `KnowledgeExportBoundedSelectionTest` 7 ;
+  - `minos-nexus` : `NexusExportServiceTest` 3, `NexusExportContractTest`, `NexusSemanticSignalServiceTest` ;
+  - `minos-cli` : `RegistryToleranceCliTest`, `LazyWiringGuardTest` ; `minos-app` : `ModuleArchitectureTest` 9/9, `NexusExportIntegrationTest` 2/2 ;
+  - gardes : `test_check_module_boundaries.py` 208 cas, `check-mne.py` (MNE-12 lit le cas d'usage), `run_gates.py` 54/54 ;
+  - `mvnw verify` complet sous Windows (31 min 18) : `ModuleArchitectureTest` 9/9, `A2SurfaceCharacterizationTest` 13/13 ;
+  - `check-jacoco.py` : `nexus-export` à 0,953 / 0,794 ; dans le seul rapport de `minos-application`, le package `export` couvre 205 lignes sur 213.
+- **Langue des commentaires** : le maximum de jalons de `minos-nexus` baisse de 3 à 2.
+- **SpotBugs** (profil `audit-spotbugs`, `minos-application` et `minos-nexus`) : 0 nouvelle, 0 disparue.
 
 ## Seconde contre-vérification des changements non implémentés (2026-10-22, HEAD `5ce7b79b`)
 

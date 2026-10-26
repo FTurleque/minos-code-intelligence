@@ -113,10 +113,8 @@ public final class MinosCliRunner {
                         application.deferred(MinosApplication::architectureQuery)))
                 .impactQuery(LazyApplication.lazy(ProjectImpactQuery.class,
                         application.deferred(MinosApplication::impactQuery)))
-                .nexusExportCommand(new NexusExportCommand(projectRoot -> {
-                    MinosApplication opened = application.get();
-                    return new NexusExportService(opened.projectRegistry(), opened.snapshotStore()).export(projectRoot);
-                }))
+                .nexusExportCommand(new NexusExportCommand(
+                        projectRoot -> new NexusExportService(application.get()).export(projectRoot)))
                 .autonomousOperations(LazyApplication.lazy(AutonomousIndexOperations.class, autonomousIndex))
                 .home(application.home())
                 .providerPlatformServiceSupplier(application.deferred(ProviderPlatformService::defaults))

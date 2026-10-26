@@ -329,6 +329,16 @@ Pour les détails d’architecture, voir [../developer/public-surfaces.md](../de
 
 ## Ruptures
 
+### Export NEXUS par un cas d'usage applicatif, version 1.3.0
+
+Aucune signature de `com.minos.api` ne change, et le contrat JSON de l'export NEXUS ([ADR 0020](../architecture/adr/ARCH-0020-minos-nexus-json-boundary.md)) ni la commande `minos nexus-export` non plus. Le constructeur de `com.minos.nexus.NexusExportService` prend l'application ouverte ; `export(Path)` et les constantes `MAX_*` sont inchangés. Un code qui construisait le service lui-même doit être modifié et recompilé (rupture de source et binaire) :
+
+| Signature 1.2.0 | Signature 1.3.0 |
+|---|---|
+| `new NexusExportService(ProjectRegistry, CodeKnowledgeSnapshotStore)` | `new NexusExportService(MinosApplication)` |
+
+La sélection de l'export est faite par `com.minos.application.export.KnowledgeExportUseCase`, que le service obtient par `KnowledgeExportUseCase.of(MinosApplication)`.
+
 ### Port de lecture des snapshots ([ADR 0056](../architecture/adr/ARCH-0056-ports-de-lecture-des-snapshots.md)), version 1.3.0
 
 Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change. Les types publics de `com.minos.store` publiés depuis la 1.2.0 sont conservés : `SnapshotQueryView`, ses accesseurs `queryStore()` et `indexMetrics()`, `CodeKnowledgeSnapshotStore.loadActiveQueryView` et `ImpactAnalysisService.analyze(SnapshotQueryView, ImpactAnalysisRequest)` sont dépréciés (`@Deprecated(since = "1.3.0")`, sans retrait programmé) et rendent le même résultat ; leur remplaçant est `SnapshotReadView`, obtenue par `CodeKnowledgeSnapshotStore.loadActiveReadView`. Les lectures de `CodeKnowledgeStore` sont déclarées par sa super-interface `CodeKnowledgeReader` : un appelant compilé contre la 1.2.0 les résout toujours.
