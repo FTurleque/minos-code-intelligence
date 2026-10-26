@@ -117,9 +117,13 @@ public final class KnowledgeExportUseCase {
         int omittedExternal = 0;
         int omittedLocation = 0;
         for (Symbol symbol : snapshot.symbols()) {
-            if (symbol.external()) { omittedExternal++; continue; }
-            if (symbol.location() == null) { omittedLocation++; continue; }
-            selected.offer(symbol.id(), symbol);
+            if (symbol.external()) {
+                omittedExternal++;
+            } else if (symbol.location() == null) {
+                omittedLocation++;
+            } else {
+                selected.offer(symbol.id(), symbol);
+            }
         }
         if (selected.truncated()) limitations.add("SYMBOLS_TRUNCATED");
         if (omittedExternal > 0) limitations.add("EXTERNAL_SYMBOLS_OMITTED");
@@ -140,14 +144,12 @@ public final class KnowledgeExportUseCase {
             if (relationship.source().type() != CodeEntityType.SYMBOL || relationship.target() == null
                     || relationship.target().type() != CodeEntityType.SYMBOL) {
                 omittedNonSymbol++;
-                continue;
-            }
-            if (!candidateSymbolIds.contains(relationship.source().id())
+            } else if (!candidateSymbolIds.contains(relationship.source().id())
                     || !candidateSymbolIds.contains(relationship.target().id())) {
                 omittedNonLocal++;
-                continue;
+            } else {
+                selected.offer(relationship.id(), relationship);
             }
-            selected.offer(relationship.id(), relationship);
         }
         if (selected.truncated()) limitations.add("RELATIONS_TRUNCATED");
         if (omittedNonSymbol > 0) limitations.add("NON_SYMBOL_RELATIONS_OMITTED");
@@ -199,12 +201,18 @@ public final class KnowledgeExportUseCase {
         for (Relationship relationship : relationships) {
             ExportedSymbol source = symbols.get(relationship.source().id());
             ExportedSymbol target = symbols.get(relationship.target().id());
-            if (source == null || target == null) { omittedNonLocal++; continue; }
-            String relativePath = relationship.location() == null
-                    ? source.filePath()
-                    : pathByFileId.get(relationship.location().fileId());
-            if (relativePath == null) { omittedPath++; continue; }
-            exported.put(relationship.id(), new ExportedRelationship(relationship, relativePath));
+            if (source == null || target == null) {
+                omittedNonLocal++;
+            } else {
+                String relativePath = relationship.location() == null
+                        ? source.filePath()
+                        : pathByFileId.get(relationship.location().fileId());
+                if (relativePath == null) {
+                    omittedPath++;
+                } else {
+                    exported.put(relationship.id(), new ExportedRelationship(relationship, relativePath));
+                }
+            }
         }
         if (omittedNonLocal > 0) limitations.add("NON_LOCAL_RELATIONS_OMITTED");
         if (omittedPath > 0) limitations.add("UNRESOLVED_RELATION_FILE_ID_OMITTED");
@@ -242,7 +250,7 @@ public final class KnowledgeExportUseCase {
             Path canonical = resolved.toRealPath();
             if (!canonical.startsWith(root)) return null;
             return root.relativize(resolved).toString().replace('\\', '/');
-        } catch (InvalidPathException | IOException exception) {
+        } catch (InvalidPathException | IOException _) {
             return null;
         }
     }
@@ -299,11 +307,11 @@ public final class KnowledgeExportUseCase {
             if (unresolved.remove(stableId)) resolved.put(stableId, relativePath);
             return unresolved.isEmpty() ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
         }
-    }
 
-    /** The stable file identifier the ingestion gives a file without an explicit identifier. */
-    private static String stableFileId(String projectId, String relativePath) {
-        return "file:" + Sha256.hex(projectId + "\u001F" + relativePath);
+        /** The stable file identifier the ingestion gives a file without an explicit identifier. */
+        private static String stableFileId(String projectId, String relativePath) {
+            return "file:" + Sha256.hex(projectId + "\u001F" + relativePath);
+        }
     }
 
     private static long symbolWeight(Symbol symbol) {

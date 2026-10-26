@@ -121,9 +121,12 @@ class KnowledgeExportUseCaseTest {
         KnowledgeExport export = fixture.useCase(List.of(fixture.symbol("a", "src/A.java")), List.of())
                 .export(fixture.root);
 
-        assertThrows(UnsupportedOperationException.class, () -> export.symbols().clear());
-        assertThrows(UnsupportedOperationException.class, () -> export.relationships().clear());
-        assertThrows(UnsupportedOperationException.class, () -> export.limitations().clear());
+        List<ExportedSymbol> symbols = export.symbols();
+        List<ExportedRelationship> relationships = export.relationships();
+        List<String> limitations = export.limitations();
+        assertThrows(UnsupportedOperationException.class, symbols::clear);
+        assertThrows(UnsupportedOperationException.class, relationships::clear);
+        assertThrows(UnsupportedOperationException.class, limitations::clear);
     }
 
     private static String stableId(ExportFixture fixture, String relativePath) {

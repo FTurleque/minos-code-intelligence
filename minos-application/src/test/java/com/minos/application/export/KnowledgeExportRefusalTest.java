@@ -60,7 +60,7 @@ class KnowledgeExportRefusalTest {
     }
 
     @Test
-    void anUnreadableRegistryEntryIsExplainedWithTheReadFailureSuppressed() throws Exception {
+    void anUnreadableRegistryEntryIsExplainedWithTheReadFailureSuppressed() {
         IOException failure = new IOException("broken entry");
         UnreadableRegistryException explained = UnreadableRegistryException.of(
                 List.of(new DegradedEntry("entry", "unreadable")), "the project of this root cannot be located with certainty");
@@ -77,7 +77,7 @@ class KnowledgeExportRefusalTest {
     }
 
     @Test
-    void aRegistryFailureThatIsNotExplainedPropagatesAsIs() throws Exception {
+    void aRegistryFailureThatIsNotExplainedPropagatesAsIs() {
         IllegalStateException failure = new IllegalStateException("backend failure");
         KnowledgeExportUseCase useCase = new KnowledgeExportUseCase(failingRegistry(failure, Optional.empty()),
                 untouched());
@@ -86,7 +86,7 @@ class KnowledgeExportRefusalTest {
     }
 
     @Test
-    void anInterruptedReadIsNotExplained() throws Exception {
+    void anInterruptedReadIsNotExplained() {
         IOException failure = new IOException("interrupted");
         KnowledgeExportUseCase useCase = new KnowledgeExportUseCase(failingRegistry(failure, null), untouched());
 
@@ -100,9 +100,10 @@ class KnowledgeExportRefusalTest {
 
     @Test
     void collaboratorsAreRequired() {
-        assertThrows(NullPointerException.class, () -> new KnowledgeExportUseCase(null, untouched()));
-        assertThrows(NullPointerException.class,
-                () -> new KnowledgeExportUseCase(ExportFixture.registry(List.of()), null));
+        com.minos.store.CodeKnowledgeSnapshotStore snapshots = untouched();
+        ProjectRegistry registry = ExportFixture.registry(List.of());
+        assertThrows(NullPointerException.class, () -> new KnowledgeExportUseCase(null, snapshots));
+        assertThrows(NullPointerException.class, () -> new KnowledgeExportUseCase(registry, null));
         assertThrows(NullPointerException.class, () -> KnowledgeExportUseCase.of(null));
         KnowledgeExportUseCase useCase = new KnowledgeExportUseCase(ExportFixture.registry(List.of()), untouched());
         assertThrows(NullPointerException.class, () -> useCase.export(null));
