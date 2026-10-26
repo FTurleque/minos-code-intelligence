@@ -14,7 +14,7 @@ buildscript {
     // (osv-scan). Not shipped by MINOS, but run by the build: raised to their first fixed versions until the plugins
     // bring them. undertow-core has no fixed version: its exception is minos-intellij/osv-scanner.toml.
     dependencies {
-        classpath(platform("com.fasterxml.jackson:jackson-bom:2.22.3"))
+        classpath(platform("com.fasterxml.jackson:jackson-bom:2.22.4"))
         constraints {
             classpath("org.jsoup:jsoup:1.23.2")
         }
