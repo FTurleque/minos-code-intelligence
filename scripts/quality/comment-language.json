@@ -23,7 +23,7 @@
     "minos-bootstrap": 6,
     "minos-cli": 13,
     "minos-domain": 21,
-    "minos-engine": 55,
+    "minos-engine": 54,
     "minos-intellij": 1,
     "minos-provider-scip": 10,
     "minos-runtime-local": 3
@@ -35,7 +35,7 @@
     "minos-bootstrap": 1,
     "minos-cli": 9,
     "minos-domain": 3,
-    "minos-engine": 20,
+    "minos-engine": 19,
     "minos-integration-git": 1,
     "minos-intellij": 2,
     "minos-nexus": 3,

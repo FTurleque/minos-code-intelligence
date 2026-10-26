@@ -9,7 +9,7 @@ import com.minos.domain.SymbolLocation;
 import com.minos.io.Sha256;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.registry.UnreadableRegistryException;
+import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
@@ -58,7 +58,7 @@ public final class NexusExportService {
             return registry.listProjects();
         } catch (IOException | RuntimeException failure) {
             if (Thread.currentThread().isInterrupted()) throw failure;
-            java.util.Optional<UnreadableRegistryException> explained = UnreadableRegistryException.explaining(registry,
+            java.util.Optional<UnreadableRegistryException> explained = registry.explainUnreadable(
                     "the project of this root cannot be located with certainty");
             if (explained.isEmpty()) throw failure;
             explained.get().addSuppressed(failure);

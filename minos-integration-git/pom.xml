@@ -15,6 +15,12 @@
 
     <dependencies>
         <dependency>
+            <!-- PublicErrorMessages (com.minos.diagnostics) lives in minos-domain (AUD-ARC-01, lot 6) -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-domain</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.minos</groupId>
             <artifactId>minos-engine</artifactId>
             <version>${project.version}</version>

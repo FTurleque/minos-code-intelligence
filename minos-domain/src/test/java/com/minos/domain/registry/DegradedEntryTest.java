@@ -1,4 +1,4 @@
-package com.minos.registry;
+package com.minos.domain.registry;
 
 import org.junit.jupiter.api.Test;
 

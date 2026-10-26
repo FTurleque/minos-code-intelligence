@@ -1,11 +1,8 @@
-package com.minos.registry;
+package com.minos.domain.registry;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.lang.reflect.Proxy;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -36,31 +33,5 @@ class UnreadableRegistryExceptionTest {
     @Test
     void anEmptyListIsNotUnreadable() {
         assertThrows(IllegalArgumentException.class, () -> UnreadableRegistryException.of(List.of(), "x"));
-    }
-
-    @Test
-    void aRegistryThatCannotBeInventoriedIsNeverPresentedAsUnreadableEntries() {
-        ProjectRegistry broken = registry(() -> {
-            throw new IOException("storage down");
-        });
-        ProjectRegistry healthy = registry(() -> new ProjectRegistry.Inventory(List.of(), List.of()));
-        ProjectRegistry damaged = registry(() -> new ProjectRegistry.Inventory(List.of(), List.of(FIRST)));
-
-        assertEquals(Optional.empty(), UnreadableRegistryException.explaining(broken, "x"), "a panne is not a partial result");
-        assertEquals(Optional.empty(), UnreadableRegistryException.explaining(healthy, "x"));
-        assertEquals(List.of(FIRST), UnreadableRegistryException.explaining(damaged, "x").orElseThrow().unreadable());
-    }
-
-    @FunctionalInterface
-    private interface InventorySource {
-        ProjectRegistry.Inventory read() throws IOException;
-    }
-
-    private static ProjectRegistry registry(InventorySource source) {
-        return (ProjectRegistry) Proxy.newProxyInstance(ProjectRegistry.class.getClassLoader(),
-                new Class<?>[]{ProjectRegistry.class}, (proxy, method, arguments) -> {
-                    if (method.getName().equals("inventory")) return source.read();
-                    throw new UnsupportedOperationException(method.getName());
-                });
     }
 }

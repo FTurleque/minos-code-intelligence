@@ -1,17 +1,17 @@
-package com.minos.registry;
+package com.minos.domain.registry;
 
 import com.minos.diagnostics.PublicErrorMessages;
 
 import static com.minos.domain.Preconditions.requireText;
 
 /**
- * Une entrée d'inventaire qui n'a pas pu être lue, ou pas assemblée en entier : elle est comptée et montrée,
- * jamais écartée en silence (Q8).
+ * An inventory entry that could not be read, or not assembled in full: it is counted and shown, never dropped
+ * silently.
  *
- * <p>{@code entry} identifie l'entrée sans chemin (l'identifiant du projet, ou le nom de son fichier de registre
- * réduit à des caractères sûrs) ; {@code reason} est un message public : il a traversé
- * {@link PublicErrorMessages} et ne porte donc aucun chemin absolu. Les deux fabriques sont l'unique endroit qui
- * décide de ces deux formes, pour le registre comme pour l'assemblage de la vue d'un projet.</p>
+ * <p>{@code entry} names the entry without a path (the project identifier, or the name of its registry file reduced
+ * to safe characters); {@code reason} is a public message: it went through {@link PublicErrorMessages} and so carries
+ * no absolute path. The two factories are the only place that decides these two forms, for the registry as for the
+ * assembly of the view of a project.</p>
  */
 public record DegradedEntry(String entry, String reason) {
 
@@ -23,21 +23,21 @@ public record DegradedEntry(String entry, String reason) {
         requireText(reason, "reason");
     }
 
-    /** Une entrée illisible pour une raison qui n'est pas une exception (par exemple : pas un fichier régulier). */
+    /** An entry unreadable for a reason that is not an exception (for example: not a regular file). */
     public static DegradedEntry of(String rawEntry, String what) {
         return new DegradedEntry(safeEntry(rawEntry), requireText(what, "what"));
     }
 
-    /** Une entrée dont la lecture a échoué : {@code what} dit ce qui n'a pas pu être fait, sans chemin. */
+    /** An entry whose read failed: {@code what} says what could not be done, without a path. */
     public static DegradedEntry of(String rawEntry, String what, Throwable failure) {
         String detail = PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName());
         return new DegradedEntry(safeEntry(rawEntry), requireText(what, "what") + " (" + printable(detail) + ")");
     }
 
     /**
-     * Le message d'une exception recopie parfois une valeur lue dans un fichier : {@code sanitize} aplatit les sauts
-     * de ligne mais laisse passer les séquences de contrôle (ESC, BEL, CSI sur 8 bits, inversion bidirectionnelle),
-     * que l'affichage en terminal exécuterait. Elles sont remplacées ici, une seule fois, par {@code _}.
+     * The message of an exception sometimes copies a value read from a file: {@code sanitize} flattens line breaks but
+     * lets control sequences through (ESC, BEL, 8-bit CSI, bidirectional override), which a terminal would execute.
+     * They are replaced here, once, by {@code _}.
      */
     public static String printable(String text) {
         StringBuilder printable = new StringBuilder(text.length());

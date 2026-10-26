@@ -1,6 +1,6 @@
 package com.minos.application.semantic;
 
-import com.minos.registry.ProjectPathMapping.RuntimeLocation;
+import com.minos.domain.registry.ProjectPathMapping.RuntimeLocation;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;

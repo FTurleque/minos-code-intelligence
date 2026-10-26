@@ -1,6 +1,6 @@
 package com.minos.storage.local.registry;
 
-import com.minos.registry.ProjectPathMapping;
+import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
 import com.minos.testsupport.WriteProtectedTree;

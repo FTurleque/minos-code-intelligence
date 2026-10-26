@@ -1,5 +1,7 @@
 package com.minos.registry;
 
+import com.minos.domain.registry.ProjectPathMapping;
+
 import java.io.IOException;
 import java.util.Optional;
 

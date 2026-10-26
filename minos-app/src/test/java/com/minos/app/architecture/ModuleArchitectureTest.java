@@ -63,7 +63,7 @@ class ModuleArchitectureTest {
             Map.entry("minos-storage-postgresql", Set.of("minos-domain", "minos-engine", "minos-storage-local")),
             Map.entry("minos-provider-scip",
                     Set.of("minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local")),
-            Map.entry("minos-integration-git", Set.of("minos-engine")),
+            Map.entry("minos-integration-git", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-application", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-bootstrap", Set.of("minos-domain", "minos-engine", "minos-application",
                     "minos-runtime-local", "minos-storage-local", "minos-provider-scip", "minos-integration-git",
@@ -91,7 +91,6 @@ class ModuleArchitectureTest {
      */
     private static final Map<String, Map<String, Integer>> ENGINE_TYPES_USED_BY_SURFACE_BYTECODE = Map.of(
             "minos-api", Map.ofEntries(
-                    Map.entry("diagnostics.PublicErrorMessages", 1),
                     Map.entry("git.GitIntelligence", 1),
                     Map.entry("hosted.HostedAuditEvent", 1),
                     Map.entry("hosted.HostedControlPlaneService", 1),
@@ -106,28 +105,22 @@ class ModuleArchitectureTest {
                     Map.entry("query.SymbolResult", 1),
                     Map.entry("query.UsageResult", 1)),
             "minos-cli", Map.ofEntries(
-                    Map.entry("diagnostics.PublicErrorMessages", 3),
                     Map.entry("git.GitIntelligence", 3),
                     Map.entry("hosted.HostedControlPlaneService", 2),
                     Map.entry("hosted.HostedProjectBinding", 1),
                     Map.entry("hosted.HostedRetentionPolicy", 1),
                     Map.entry("hosted.HostedRole", 1),
                     Map.entry("hosted.HostedTenantState", 1),
-                    Map.entry("registry.DegradedEntry", 2),
-                    Map.entry("registry.ProjectPathMapping", 1),
+                    // Kept, as in the source table: a persisted I/O port, and MinosVersion placed by ADR 0068 section 3.
                     Map.entry("registry.ProjectPathMappings", 1),
-                    Map.entry("registry.UnreadableRegistryException", 2),
                     Map.entry("runtime.MinosVersion", 1)),
             "minos-mcp", Map.ofEntries(
-                    Map.entry("diagnostics.PublicErrorMessages", 2),
                     Map.entry("hosted.HostedControlPlaneService", 1),
-                    Map.entry("registry.UnreadableRegistryException", 1),
                     Map.entry("runtime.MinosVersion", 1)),
             "minos-nexus", Map.ofEntries(
                     Map.entry("io.Sha256", 1),
                     Map.entry("registry.ProjectRegistry", 1),
                     Map.entry("registry.RegisteredProject", 1),
-                    Map.entry("registry.UnreadableRegistryException", 1),
                     Map.entry("store.CodeKnowledgeSnapshot", 1),
                     Map.entry("store.CodeKnowledgeSnapshotStore", 1)));
 

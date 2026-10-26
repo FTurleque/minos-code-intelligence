@@ -82,7 +82,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Responsabilité** : adapter Git local via JGit — historique, activité, faits Git.
 - **Types clés** : `GitIntelligenceService`.
 - **Interfaces** : implémente le port Git de `minos-engine`.
-- **Dépendances** : `minos-engine`, `org.eclipse.jgit 7.6`.
+- **Dépendances** : `minos-domain`, `minos-engine`, `org.eclipse.jgit 7.6`.
 - **Sources** : `minos-integration-git/src/main/java/com/minos/integration/git/`.
 
 ### minos-application
