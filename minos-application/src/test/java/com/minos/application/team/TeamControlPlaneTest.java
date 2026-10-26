@@ -50,9 +50,8 @@ class TeamControlPlaneTest {
     }
 
     @Test
-    void projectsTheTenantLifecycleThroughApplicationModels() throws Exception {
+    void projectsTheBootstrappedTenant() throws Exception {
         TeamBootstrap bootstrap = team.bootstrap(TENANT, "Acme", "key-a", "alice", "Alice", Duration.ofHours(1), "req-1");
-        String token = bootstrap.bearerToken();
         TeamTenant tenant = bootstrap.tenant();
         assertEquals(TENANT, tenant.tenantId());
         assertEquals("Acme", tenant.name());
@@ -60,8 +59,12 @@ class TeamControlPlaneTest {
         assertEquals(1, tenant.memberCount());
         assertEquals(0, tenant.workspaceCount());
         assertEquals(new TeamRetentionPolicy(10_000, 365, 90), tenant.retentionPolicy());
-        assertEquals(tenant, team.tenant(token));
+        assertEquals(tenant, team.tenant(bootstrap.bearerToken()));
+    }
 
+    @Test
+    void projectsWorkspacesAndTheirBindings() throws Exception {
+        String token = ownerToken();
         TeamWorkspace created = team.createWorkspace(token, "req-2", "Platform");
         assertEquals("ACTIVE", created.status());
         assertNull(created.archivedAt());
@@ -76,18 +79,25 @@ class TeamControlPlaneTest {
         TeamWorkspace archived = team.archiveWorkspace(token, "req-5", created.workspaceId());
         assertEquals("ARCHIVED", archived.status());
         assertEquals(List.of(archived), team.listWorkspaces(token));
+    }
 
+    @Test
+    void projectsMembersWithTheirRoleAndPermissions() throws Exception {
+        String token = ownerToken();
         TeamMember viewer = team.grantMember(token, "req-6", "bob", "Bob", TeamRole.VIEWER);
         assertEquals(TeamRole.VIEWER, viewer.role());
         assertEquals(List.of("MEMBER_READ", "WORKSPACE_READ"), viewer.permissions());
         assertEquals(List.of("alice", "bob"), team.listMembers(token).stream().map(TeamMember::principalId).sorted().toList());
         team.revokeMember(token, "req-7", "bob");
         assertEquals(1, team.listMembers(token).size());
+    }
 
+    @Test
+    void projectsTheRetentionAndTheAuditChain() throws Exception {
+        String token = ownerToken();
         TeamRetentionPolicy policy = new TeamRetentionPolicy(200, 30, 7);
         assertEquals(policy, team.setRetention(token, "req-8", policy));
-        TeamRetentionPlan plan = team.retentionPlan(token);
-        assertEquals(TENANT, plan.tenantId());
+        assertEquals(TENANT, team.retentionPlan(token).tenantId());
         TeamRetentionApply applied = team.applyRetention(token, "req-9");
         assertEquals(TENANT, applied.plan().tenantId());
         TeamTenant current = team.tenant(token);
@@ -100,7 +110,11 @@ class TeamControlPlaneTest {
         assertTrue(audit.stream().allMatch(event -> TENANT.equals(event.tenantId())));
         assertTrue(audit.stream().allMatch(event -> "ALLOWED".equals(event.outcome())));
         assertEquals(current.auditSequence(), audit.stream().mapToLong(TeamAuditEvent::sequence).max().orElseThrow());
+    }
 
+    @Test
+    void issuesTokensAndRotatesTheKey() throws Exception {
+        String token = ownerToken();
         String issued = team.issueToken(token, "req-10", "alice", Duration.ofHours(1));
         assertEquals(TENANT, team.tenant(issued).tenantId());
         TeamKeyRotation rotation = team.rotateKey(token, "req-11", "key-b", Duration.ofHours(1));
@@ -169,6 +183,10 @@ class TeamControlPlaneTest {
     @Test
     void refusesANullService() {
         assertThrows(NullPointerException.class, () -> new TeamControlPlane(null));
+    }
+
+    private String ownerToken() throws Exception {
+        return team.bootstrap(TENANT, "Acme", "key-a", "alice", "Alice", Duration.ofHours(1), "req-1").bearerToken();
     }
 
     /** In-memory persistence port: the facade tests need no storage adapter. */
