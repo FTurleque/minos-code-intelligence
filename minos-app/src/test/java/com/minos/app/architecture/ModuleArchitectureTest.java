@@ -205,6 +205,32 @@ class ModuleArchitectureTest {
                 .check(all);
     }
 
+    /**
+     * ADR 0068 section 4 (the storage package rules of check-module-boundaries.py on the bytecode): the PostgreSQL
+     * backend reaches the local backend's file formats only through the shared codec and path-mapping packages.
+     */
+    @Test
+    void thePostgresqlBackendDoesNotUseTheLocalBackend() {
+        noClasses().that().resideInAPackage("com.minos.storage.postgresql..")
+                .should().dependOnClassesThat().resideInAPackage("com.minos.storage.local..")
+                .because("ADR 0068 section 4: the two storage backends meet only through com.minos.storage.codec "
+                        + "and com.minos.storage.home")
+                .check(all);
+    }
+
+    /**
+     * ADR 0068 section 4: the snapshot codec and the MINOS_HOME path mapping, shared by both storage backends, use
+     * neither backend, nor the PostgreSQL driver, nor JDBC.
+     */
+    @Test
+    void theSharedStoragePackagesUseNoBackend() {
+        noClasses().that().resideInAnyPackage("com.minos.storage.codec..", "com.minos.storage.home..")
+                .should().dependOnClassesThat().resideInAnyPackage("com.minos.storage.local..",
+                        "com.minos.storage.postgresql..", "org.postgresql..", "java.sql..")
+                .because("ADR 0068 section 4: the shared storage packages sit below both backends")
+                .check(all);
+    }
+
     /** ADR 0022: the domain depends on no other module, and the engine only on the domain. */
     @Test
     void coreModulesStayAtTheBottom() {

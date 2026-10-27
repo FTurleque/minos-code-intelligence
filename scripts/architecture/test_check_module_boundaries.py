@@ -1481,6 +1481,82 @@ class BackendTypesNamedAcrossPackagesRuleTest(RatchetTreeTestCase):
                          _MODULE.check_backend_types_named_across_packages())
 
 
+class StoragePackageIsolationRuleTest(RatchetTreeTestCase):
+    """SH-03 (E04), ADR 0068 section 4 — inside minos-storage, production and test sources: the two backends do not
+    name each other, and the shared codec and path-mapping packages name neither backend, nor JDBC."""
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-storage", "com.minos.storage.codec", "SnapshotCodec", "public interface SnapshotCodec { }")
+        self.write("minos-storage", "com.minos.storage.home", "ProjectPathMappingStore",
+                   "public final class ProjectPathMappingStore { }")
+        self.write("minos-storage", "com.minos.storage.local.store", "FileSymbolSnapshotStore",
+                   "public final class FileSymbolSnapshotStore { SnapshotCodec c; ProjectPathMappingStore m; }",
+                   ["com.minos.storage.codec.SnapshotCodec", "com.minos.storage.home.ProjectPathMappingStore"])
+        self.write("minos-storage", "com.minos.storage.postgresql.snapshot", "Store",
+                   "final class Store { SnapshotCodec c; java.sql.Connection connection; }",
+                   ["com.minos.storage.codec.SnapshotCodec"])
+
+    def check(self):
+        return _MODULE.check_storage_package_isolation(self.root)
+
+    def test_a_conforming_tree_is_accepted(self):
+        self.assertEqual(4, self.check())
+
+    def test_a_postgresql_test_importing_the_local_backend_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.postgresql.snapshot", "StoreTest",
+                   "final class StoreTest { FileSymbolSnapshotStore s; }",
+                   ["com.minos.storage.local.store.FileSymbolSnapshotStore"], kind="test")
+        self.refused(self.check, "postgresql -> local",
+                     "minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/StoreTest.java",
+                     "com.minos.storage.local.store.FileSymbolSnapshotStore")
+
+    def test_the_local_backend_naming_postgresql_by_qualified_name_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.local", "Leak",
+                   "final class Leak { Object p = new com.minos.storage.postgresql.support.PostgresJdbcUrlPolicy(); }")
+        self.refused(self.check, "local -> postgresql", "minos-storage/src/main/java/com/minos/storage/local/Leak.java",
+                     "com.minos.storage.postgresql.support.PostgresJdbcUrlPolicy")
+
+    def test_the_local_backend_naming_the_driver_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.local", "Driver", "final class Driver { }",
+                   ["static org.postgresql.Driver.parseURL"])
+        self.refused(self.check, "local -> postgresql", "org.postgresql.Driver.parseURL")
+
+    def test_the_codec_importing_jdbc_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.codec", "Jdbc", "final class Jdbc { Connection c; }",
+                   ["java.sql.Connection"])
+        self.refused(self.check, "codec -> backends", "minos-storage/src/main/java/com/minos/storage/codec/Jdbc.java",
+                     "java.sql.Connection")
+
+    def test_the_path_mapping_naming_the_local_registry_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.home", "Mapping", "final class Mapping { }",
+                   ["com.minos.storage.local.registry.*"])
+        self.refused(self.check, "home -> backends", "com.minos.storage.local.registry.*")
+
+    def test_a_codec_test_naming_the_postgresql_backend_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.codec", "CodecTest",
+                   "final class CodecTest { Object p = new com.minos.storage.postgresql.PostgresStorageBackend(); }",
+                   kind="test")
+        self.refused(self.check, "codec -> backends", "src/test/java/com/minos/storage/codec/CodecTest.java")
+
+    def test_a_mention_in_a_comment_or_a_literal_is_accepted(self):
+        self.write("minos-storage", "com.minos.storage.local", "Doc",
+                   'final class Doc { /** {@code com.minos.storage.postgresql.PostgresStorageBackend} */\n'
+                   ' String s = "java.sql.Connection"; }')
+        self.write("minos-storage", "com.minos.storage.codec", "Doc",
+                   'final class Doc { // com.minos.storage.local.store.FileSymbolSnapshotStore\n }')
+        self.check()
+
+    def test_a_package_whose_name_only_starts_like_a_backend_is_not_a_backend(self):
+        self.write("minos-storage", "com.minos.storage.localized", "Text", "public final class Text { }")
+        self.write("minos-storage", "com.minos.storage.postgresql", "Uses", "final class Uses { Text t; }",
+                   ["com.minos.storage.localized.Text"])
+        self.check()
+
+    def test_the_real_tree_keeps_the_storage_packages_apart(self):
+        self.assertEqual(4, _MODULE.check_storage_package_isolation())
+
+
 class PackageRootRuleTest(RatchetTreeTestCase):
     """A14 — a module creates no new package root (AUD-ARC-12, ADR 0068)."""
 

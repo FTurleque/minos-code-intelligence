@@ -891,6 +891,49 @@ def check_backend_types_named_across_packages(root: Path = ROOT, group_id: str |
     return len(listed)
 
 
+# SH-03 (E04), ADR 0068 section 4 — inside minos-storage, production and test sources alike: the local and PostgreSQL
+# backends do not name each other, and the shared packages (the snapshot codec and the MINOS_HOME path mapping) name
+# neither backend, nor the PostgreSQL driver, nor JDBC. Each rule: (label, source package, forbidden prefixes); a prefix
+# under the groupId is written without it.
+STORAGE_PACKAGE_RULES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("local -> postgresql", LOCAL_BACKEND_PACKAGE, (POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE)),
+    ("postgresql -> local", POSTGRESQL_BACKEND_PACKAGE, (LOCAL_BACKEND_PACKAGE,)),
+    ("codec -> backends", "storage.codec",
+     (LOCAL_BACKEND_PACKAGE, POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE, "java.sql")),
+    ("home -> backends", "storage.home",
+     (LOCAL_BACKEND_PACKAGE, POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE, "java.sql")),
+)
+EXTERNAL_PACKAGE_PREFIXES = (POSTGRESQL_DRIVER_PACKAGE, "java.")
+
+
+def check_storage_package_isolation(root: Path = ROOT, group_id: str | None = None) -> int:
+    """SH-03 — no production nor test source of a STORAGE_PACKAGE_RULES package of minos-storage names a forbidden
+    package, by single, static or wildcard import or by qualified name; comments and string literals are ignored."""
+    group = group_id or repository_group_id(root)
+    violations: list[str] = []
+    for label, package, forbidden in STORAGE_PACKAGE_RULES:
+        prefixes = tuple(prefix if prefix.startswith(EXTERNAL_PACKAGE_PREFIXES) else f"{group}.{prefix}"
+                         for prefix in forbidden)
+        qualified = re.compile(r"\b(?:" + "|".join(re.escape(prefix) for prefix in prefixes) + r")(?:\.\w+)+")
+        for kind in ("main", "test"):
+            package_root = root / STORAGE_MODULE / "src" / kind / "java" / Path(*f"{group}.{package}".split("."))
+            if not package_root.is_dir():
+                continue
+            for source in sorted(package_root.rglob("*.java")):
+                code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+                found: set[str] = set()
+                for _static, name, wildcard in SOURCE_IMPORT.findall(code):
+                    if any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes):
+                        found.add(name + (".*" if wildcard else ""))
+                found.update(qualified.findall(SOURCE_IMPORT.sub(" ", code)))
+                relative = source.relative_to(root).as_posix()
+                violations += [f"{label} {relative} -> {name}" for name in sorted(found)]
+    if violations:
+        fail("Storage package isolation violated (ADR 0068 section 4: the backends meet only through the shared codec "
+             "and path-mapping packages, which name neither backend nor JDBC): " + "; ".join(violations))
+    return len(STORAGE_PACKAGE_RULES)
+
+
 def check_package_roots(root: Path = ROOT, group_id: str | None = None,
                         listed: dict[str, frozenset[str]] | None = None,
                         modules: tuple[str, ...] = MODULES) -> int:
