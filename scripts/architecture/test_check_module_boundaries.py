@@ -411,6 +411,20 @@ class PomLayoutRuleTest(unittest.TestCase):
             with self.subTest(tag=tag, where="profile"):
                 self.refused(pom_text("minos-x", profiles=self.in_profile(self.compiler(configuration))), tag, "profile")
 
+    def test_the_build_helper_plugin_is_refused_at_the_root_and_in_a_profile(self):
+        # E02: build-helper add-source compiles the sources of another module without any compiler setting.
+        plugin = ("<plugins><plugin><groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId>"
+                  "<executions><execution><goals><goal>add-source</goal></goals><configuration><sources>"
+                  "<source>../minos-storage/src/main/java</source></sources></configuration></execution></executions>"
+                  "</plugin></plugins>")
+        with self.subTest(where="root"):
+            self.refused(pom_text("minos-x", build=f"<build>{plugin}</build>"), "build-helper-maven-plugin")
+        with self.subTest(where="profile"):
+            self.refused(pom_text("minos-x", profiles=self.in_profile(plugin)), "build-helper-maven-plugin", "profile")
+        with self.subTest(where="pluginManagement"):
+            managed = plugin.replace("<plugins>", "<pluginManagement><plugins>").replace("</plugins>", "</plugins></pluginManagement>")
+            self.refused(pom_text("minos-x", build=f"<build>{managed}</build>"), "build-helper-maven-plugin")
+
     def test_plugins_in_a_profile_are_accepted(self):
         _MODULE.check_pom_layout("minos-x", element(pom_text(
             "minos-x", profiles=self.in_profile("<plugins><plugin><artifactId>surefire</artifactId></plugin></plugins>"))))
@@ -1660,6 +1674,52 @@ class ArchitectureTestPolicyRuleTest(unittest.TestCase):
         self.assertEqual(len(_MODULE.ALLOWED_DEPENDENCIES), _MODULE.check_architecture_test_policy())
 
 
+class PostgresqlBackendIsolationRuleTest(RatchetTreeTestCase):
+    """R1 / R2 (E04): the composition root and the SCIP provider never name the PostgreSQL backend nor its driver."""
+
+    BACKEND = "com.minos.storage.postgresql.PostgresStorageBackend"
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-storage-postgresql", "com.minos.storage.postgresql", "PostgresStorageBackend",
+                   "public final class PostgresStorageBackend { public static Object open() { return null; } }")
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Composer", "final class Composer { }", ["java.util.List"])
+
+    def check(self):
+        return _MODULE.check_postgresql_backend_isolation(self.root)
+
+    def test_a_conforming_tree_is_accepted(self):
+        self.assertEqual(2, self.check())
+
+    def test_an_import_of_the_backend_in_the_composition_root_is_refused(self):
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Leak", "final class Leak { PostgresStorageBackend b; }",
+                   [self.BACKEND])
+        self.refused(self.check, "R1", "minos-bootstrap/src/main/java/com/minos/bootstrap/Leak.java", self.BACKEND)
+
+    def test_static_and_wildcard_imports_are_refused(self):
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Static", "final class Static { }", [f"static {self.BACKEND}.open"])
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Wild", "final class Wild { }", ["com.minos.storage.postgresql.*"])
+        self.refused(self.check, "Static.java", "Wild.java", "com.minos.storage.postgresql.*")
+
+    def test_a_qualified_name_of_the_driver_in_the_scip_provider_is_refused(self):
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Leak",
+                   "final class Leak { Object d = new org.postgresql.Driver(); }")
+        self.refused(self.check, "R2", "minos-provider-scip", "org.postgresql.Driver")
+
+    def test_a_mention_in_a_comment_or_a_literal_is_accepted(self):
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Doc",
+                   f'final class Doc {{ // {self.BACKEND}\n String s = "org.postgresql.Driver"; }}')
+        self.check()
+
+    def test_the_assembly_may_name_the_backend(self):
+        self.write("minos-app", "com.minos.app", "Assembly", "final class Assembly { PostgresStorageBackend b; }",
+                   [self.BACKEND])
+        self.check()
+
+    def test_the_real_tree_isolates_the_postgresql_backend(self):
+        self.assertEqual(2, _MODULE.check_postgresql_backend_isolation())
+
+
 class EveryRuleHasATest(unittest.TestCase):
 
     def test_every_check_function_of_the_script_is_referenced_by_a_test(self):
@@ -1724,7 +1784,8 @@ class MainWiringTest(unittest.TestCase):
     def test_main_runs_the_ratchet_rules_a11_to_a14(self):
         for name in ("check_engine_types_named_by_surfaces", "check_process_launchers",
                      "check_adapter_types_named_by_adapters", "check_package_roots",
-                     "check_architecture_test_policy", "check_snapshot_read_port"):
+                     "check_architecture_test_policy", "check_snapshot_read_port",
+                     "check_postgresql_backend_isolation"):
             with self.subTest(rule=name):
                 calls: list[str] = []
                 code, error = self.run_main_with(**{name: self.spy(calls, name)})

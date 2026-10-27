@@ -132,6 +132,10 @@ def repository_group_id(root: Path = ROOT) -> str:
     return group
 
 
+# Plugins that add another directory to the compiled sources (E02): forbidden in every <build>, profiles included.
+SOURCE_ADDING_PLUGINS = frozenset({"build-helper-maven-plugin"})
+
+
 def check_pom_layout(module: str, root: ET.Element) -> None:
     """No custom source layout, at the root of the POM or hidden in a <profile> (plugins in a profile are fine)."""
     builds = [("", root.find("m:build", NS))]
@@ -146,6 +150,9 @@ def check_pom_layout(module: str, root: ET.Element) -> None:
         plugins = build.findall("m:plugins/m:plugin", NS) + build.findall("m:pluginManagement/m:plugins/m:plugin", NS)
         for plugin in plugins:
             artifact = plugin.findtext("m:artifactId", default="", namespaces=NS)
+            if artifact in SOURCE_ADDING_PLUGINS:
+                fail(f"{module}: {artifact}{where} is forbidden (it adds the sources of another directory to the "
+                     "build without any compiler setting)")
             if artifact != "maven-compiler-plugin":
                 continue
             configuration = plugin.find("m:configuration", NS)
@@ -391,6 +398,41 @@ def check_source_boundaries(root: Path = ROOT, group_id: str | None = None) -> N
     if violations:
         fail("A2 source boundary violated (a non-adapter module other than minos-bootstrap names a concrete "
              "adapter class; reach it through a port wired by minos-bootstrap): " + "; ".join(violations))
+
+
+# R1 / R2 (E04, ADR 0068 section 4) — the PostgreSQL backend is optional in production: the composition root discovers
+# it by ServiceLoader and the SCIP provider never needs it. Neither names a type of its package nor of its driver, so
+# that sharing one storage module with the local backend gives them no compile-time path to PostgreSQL.
+POSTGRESQL_BLIND_MODULES = {BOOTSTRAP_MODULE: "R1", "minos-provider-scip": "R2"}
+POSTGRESQL_BACKEND_PACKAGE = "storage.postgresql"
+POSTGRESQL_DRIVER_PACKAGE = "org.postgresql"
+
+
+def check_postgresql_backend_isolation(root: Path = ROOT, group_id: str | None = None) -> int:
+    """R1 / R2 — no production source of minos-bootstrap nor of minos-provider-scip names the PostgreSQL backend
+    package or the PostgreSQL driver, by single, static or wildcard import or by qualified name; comments and string
+    literals are ignored."""
+    group = group_id or repository_group_id(root)
+    prefixes = (f"{group}.{POSTGRESQL_BACKEND_PACKAGE}", POSTGRESQL_DRIVER_PACKAGE)
+    qualified = re.compile(r"\b(?:" + "|".join(re.escape(prefix) for prefix in prefixes) + r")(?:\.\w+)+")
+    violations: list[str] = []
+    for module, rule in sorted(POSTGRESQL_BLIND_MODULES.items()):
+        source_root = root / module / "src" / "main" / "java"
+        if not source_root.is_dir():
+            continue
+        for source in sorted(source_root.rglob("*.java")):
+            code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+            found: set[str] = set()
+            for _static, name, wildcard in SOURCE_IMPORT.findall(code):
+                if any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes):
+                    found.add(name + (".*" if wildcard else ""))
+            found.update(qualified.findall(SOURCE_IMPORT.sub(" ", code)))
+            relative = source.relative_to(root).as_posix()
+            violations += [f"{rule} {relative} -> {name}" for name in sorted(found)]
+    if violations:
+        fail("R1/R2 PostgreSQL backend isolation violated (minos-bootstrap discovers the backend by ServiceLoader and "
+             "minos-provider-scip never needs it): " + "; ".join(violations))
+    return len(POSTGRESQL_BLIND_MODULES)
 
 
 RUNTIME_LOCAL_MODULE = "minos-runtime-local"
@@ -1608,6 +1650,7 @@ def main() -> int:
         graph = {module: frozenset(dependencies) for module, dependencies in scoped.items()}
         total, counts = check_java_layout()
         check_source_boundaries()
+        postgresql_blind = check_postgresql_backend_isolation()
         exported = check_runtime_local_exports()
         engine_types = check_engine_types_named_by_surfaces()
         launchers = check_process_launchers()
@@ -1642,6 +1685,8 @@ def main() -> int:
         print(f"A13 adapter -> adapter types: {adapter_types} listed in ADAPTER_TYPES_NAMED_BY_ADAPTER "
               f"({sum(sum(types.values()) for types in ADAPTER_TYPES_NAMED_BY_ADAPTER.values())} files), none other "
               f"is named")
+        print(f"R1/R2 PostgreSQL backend isolation: {postgresql_blind} modules name neither the backend package nor "
+              "its driver")
         print(f"A14 package roots: {package_roots} roots over {len(MODULES)} modules, no new root")
         print(f"AUD-ARC-11 execution edges by service: "
               + (", ".join(f"{a} -> {b}" for a, b in runtime_edges) or "none") + " (documented)")
