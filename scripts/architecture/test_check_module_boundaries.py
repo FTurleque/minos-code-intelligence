@@ -1425,62 +1425,6 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
                          _MODULE.check_adapter_types_named_by_adapters())
 
 
-class BackendTypesNamedAcrossPackagesRuleTest(RatchetTreeTestCase):
-    """D4 (SH-02, E04) — inside minos-storage, the PostgreSQL backend names local types only through the shrinking
-    list, and the local backend names none of the PostgreSQL backend."""
-
-    LISTED = {"storage.local.store.SnapshotCodec": 1}
-
-    def setUp(self):
-        super().setUp()
-        self.write("minos-storage", "com.minos.storage.local.store", "SnapshotCodec", "public interface SnapshotCodec { }")
-        self.write("minos-storage", "com.minos.storage.local.store", "FileSymbolSnapshotStore",
-                   "public final class FileSymbolSnapshotStore { }")
-        self.write("minos-storage", "com.minos.storage.local.store", "SnapshotIntegrityService",
-                   "public final class SnapshotIntegrityService { }")
-        self.write("minos-storage", "com.minos.storage.postgresql.support", "PostgresJdbcUrlPolicy",
-                   "public final class PostgresJdbcUrlPolicy { }")
-        self.write("minos-storage", "com.minos.storage.postgresql.snapshot", "Store", "final class Store { SnapshotCodec c; }",
-                   ["com.minos.storage.local.store.SnapshotCodec"])
-
-    def check(self, listed=None):
-        return _MODULE.check_backend_types_named_across_packages(self.root,
-                                                                 listed=self.LISTED if listed is None else listed)
-
-    def test_a_conforming_tree_is_accepted(self):
-        self.assertEqual(1, self.check())
-
-    def test_a_new_local_type_named_by_the_postgresql_backend_is_refused(self):
-        self.write("minos-storage", "com.minos.storage.postgresql", "Leak", "final class Leak { FileSymbolSnapshotStore s; }",
-                   ["com.minos.storage.local.store.FileSymbolSnapshotStore"])
-        self.refused(self.check, "D4", "postgresql -> local",
-                     "minos-storage/src/main/java/com/minos/storage/postgresql/Leak.java",
-                     "com.minos.storage.local.store.FileSymbolSnapshotStore")
-
-    def test_the_local_backend_naming_the_postgresql_backend_is_refused_whatever_the_table(self):
-        self.write("minos-storage", "com.minos.storage.local", "Leak",
-                   "final class Leak { Object p = new com.minos.storage.postgresql.support.PostgresJdbcUrlPolicy(); }")
-        self.refused(self.check, "D4", "local -> postgresql", "com.minos.storage.postgresql.support.PostgresJdbcUrlPolicy")
-
-    def test_an_entry_no_longer_named_is_refused(self):
-        listed = {**self.LISTED, "storage.local.store.SnapshotIntegrityService": 1}
-        self.refused(lambda: self.check(listed), "D4", "storage.local.store.SnapshotIntegrityService", "no longer named")
-
-    def test_a_second_postgresql_file_naming_a_listed_type_is_refused(self):
-        self.write("minos-storage", "com.minos.storage.postgresql.support", "Payload",
-                   "final class Payload { SnapshotCodec c; }", ["com.minos.storage.local.store.SnapshotCodec"])
-        self.refused(self.check, "D4", "listed for 1 file(s)", "used by 2")
-
-    def test_local_types_named_by_the_local_backend_itself_are_not_counted(self):
-        self.write("minos-storage", "com.minos.storage.local.registry", "Registry",
-                   "final class Registry { SnapshotCodec c; }", ["com.minos.storage.local.store.SnapshotCodec"])
-        self.assertEqual(1, self.check())
-
-    def test_the_real_tree_names_only_listed_backend_types(self):
-        self.assertEqual(len(_MODULE.BACKEND_TYPES_NAMED_ACROSS_PACKAGES),
-                         _MODULE.check_backend_types_named_across_packages())
-
-
 class StoragePackageIsolationRuleTest(RatchetTreeTestCase):
     """SH-03 (E04), ADR 0068 section 4 — inside minos-storage, production and test sources: the two backends do not
     name each other, and the shared codec and path-mapping packages name neither backend, nor JDBC."""
@@ -1934,7 +1878,7 @@ class MainWiringTest(unittest.TestCase):
         for name in ("check_engine_types_named_by_surfaces", "check_process_launchers",
                      "check_adapter_types_named_by_adapters", "check_package_roots",
                      "check_architecture_test_policy", "check_snapshot_read_port",
-                     "check_postgresql_backend_isolation", "check_backend_types_named_across_packages"):
+                     "check_postgresql_backend_isolation", "check_storage_package_isolation"):
             with self.subTest(rule=name):
                 calls: list[str] = []
                 code, error = self.run_main_with(**{name: self.spy(calls, name)})

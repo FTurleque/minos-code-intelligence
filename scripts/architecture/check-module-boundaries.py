@@ -59,7 +59,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     # ADR 0058: every module a class uses is declared, including the domain reached through minos-engine.
     "minos-runtime-local": frozenset({"minos-domain", "minos-engine"}),
     # ADR 0068 section 4: one storage module; its local and PostgreSQL backends are kept apart by package rules
-    # (R1, R2 and BACKEND_TYPES_NAMED_ACROSS_PACKAGES), not by Maven.
+    # (R1, R2 and STORAGE_PACKAGE_RULES), not by Maven.
     "minos-storage": frozenset({"minos-domain", "minos-engine"}),
     "minos-provider-scip": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage"
@@ -602,13 +602,8 @@ ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], dict[str, int]] = {
     },
 }
 
-# D4 (SH-02, E04), ADR 0068 section 4 — inside minos-storage, the types of com.minos.storage.local that the production
-# sources of com.minos.storage.postgresql name, each with the number of files that name it. The list only shrinks (SH-03
-# moves the shared codecs to com.minos.storage.codec and empties it); com.minos.storage.local names no type of
-# com.minos.storage.postgresql at all.
 STORAGE_MODULE = "minos-storage"
 LOCAL_BACKEND_PACKAGE = "storage.local"
-BACKEND_TYPES_NAMED_ACROSS_PACKAGES: dict[str, int] = {}
 
 # A14 / AUD-ARC-12, ADR 0068 — the package roots (first segment under the groupId) each module owns. A new package
 # goes under one of its module's roots; a new root is a decision, written here by a visible edit (ADR 0068). A root may
@@ -863,27 +858,6 @@ def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | Non
         fail("A13 adapter -> adapter ratchet (ADR 0068: adapters meet through engine ports; a new coupling is "
              "added to ADAPTER_TYPES_NAMED_BY_ADAPTER in a reviewed change): " + "; ".join(problems))
     return sum(len(types) for types in listed.values())
-
-
-def check_backend_types_named_across_packages(root: Path = ROOT, group_id: str | None = None,
-                                              listed: dict[str, int] | None = None) -> int:
-    """D4 — inside minos-storage, the PostgreSQL backend names the types of the local backend only through
-    BACKEND_TYPES_NAMED_ACROSS_PACKAGES, each from the listed number of files; the local backend names none of the
-    PostgreSQL backend."""
-    listed = BACKEND_TYPES_NAMED_ACROSS_PACKAGES if listed is None else listed
-    group = group_id or repository_group_id(root)
-    qualified_name = qualified_name_pattern(group)
-    local, postgresql = f"{group}.{LOCAL_BACKEND_PACKAGE}", f"{group}.{POSTGRESQL_BACKEND_PACKAGE}"
-    problems = named_type_ratchet_problems("D4", "postgresql -> local", "BACKEND_TYPES_NAMED_ACROSS_PACKAGES", root,
-                                           STORAGE_MODULE, STORAGE_MODULE, listed, group, qualified_name,
-                                           naming_package=postgresql, target_package=local)
-    problems += named_type_ratchet_problems("D4", "local -> postgresql", "the empty list of the local backend", root,
-                                            STORAGE_MODULE, STORAGE_MODULE, {}, group, qualified_name,
-                                            naming_package=local, target_package=postgresql)
-    if problems:
-        fail("D4 storage backends ratchet (ADR 0068 section 4: local and postgresql do not depend on each other; SH-03 "
-             "moves the shared codecs out of the local backend): " + "; ".join(problems))
-    return len(listed)
 
 
 # SH-03 (E04), ADR 0068 section 4 — inside minos-storage, production and test sources alike: the local and PostgreSQL
@@ -1719,7 +1693,7 @@ def main() -> int:
         engine_types = check_engine_types_named_by_surfaces()
         launchers = check_process_launchers()
         adapter_types = check_adapter_types_named_by_adapters()
-        backend_types = check_backend_types_named_across_packages()
+        storage_packages = check_storage_package_isolation()
         package_roots = check_package_roots()
         service_loaders = check_service_loader_class_loaders()
         snapshot_view_users = check_snapshot_read_port()
@@ -1752,9 +1726,8 @@ def main() -> int:
               f"is named")
         print(f"R1/R2 PostgreSQL backend isolation: {postgresql_blind} modules name neither the backend package nor "
               "its driver")
-        print(f"D4 storage backends: {backend_types} types of the local backend listed in "
-              f"BACKEND_TYPES_NAMED_ACROSS_PACKAGES ({sum(BACKEND_TYPES_NAMED_ACROSS_PACKAGES.values())} files), none "
-              "other is named by the PostgreSQL backend, and the local backend names none of it")
+        print(f"Storage packages: {storage_packages} rules over production and test sources, the two backends name "
+              "each other nowhere, the codec and the path mapping name neither backend nor JDBC")
         print(f"A14 package roots: {package_roots} roots over {len(MODULES)} modules, no new root")
         print(f"AUD-ARC-11 execution edges by service: "
               + (", ".join(f"{a} -> {b}" for a, b in runtime_edges) or "none") + " (documented)")
