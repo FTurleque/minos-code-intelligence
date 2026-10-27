@@ -51,7 +51,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     /**
      * Heap retained by a query view, as a multiple of its persisted size. With one instance per distinct
      * string (ADR 0047, option A) a repository-shaped snapshot retains 1.41 to 1.46 times its V3 file
-     * (QueryViewWeightTest in minos-storage-local, same codec); 2 leaves a margin and also bounds a string of two-byte characters, which
+     * (QueryViewWeightTest of the local backend, same codec); 2 leaves a margin and also bounds a string of two-byte characters, which
      * takes at most twice its UTF-8 size. It was 8 before the strings were shared, when a reread view
      * retained 2.5 to 3.3 times its file.
      */

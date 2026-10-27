@@ -141,7 +141,7 @@ TESTCONTAINERS_GUARD_ENV = {
     "TESTCONTAINERS_PULL_POLICY": "com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy",
     "TESTCONTAINERS_RYUK_DISABLED": "true",
 }
-TESTCONTAINERS_GUARD_CLASS = ("minos-storage-postgresql/src/test/java/com/minos/storage/postgresql/"
+TESTCONTAINERS_GUARD_CLASS = ("minos-storage/src/test/java/com/minos/storage/postgresql/"
                               "PrePulledImagesOnlyPullPolicy.java")
 
 

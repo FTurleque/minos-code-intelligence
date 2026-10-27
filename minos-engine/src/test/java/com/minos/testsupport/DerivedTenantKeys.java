@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * Fournisseur de clés de test : la clé d'un (locataire, identifiant, usage) est le SHA-256 de leur concaténation,
  * stable d'un appel à l'autre et sans matériau secret réel. Un seul exemplaire pour les tests hébergés de
- * {@code minos-engine} et de {@code minos-storage-local} (Q13, jusque-là cinq copies).
+ * {@code minos-engine} et de {@code minos-storage} (Q13, jusque-là cinq copies).
  */
 public final class DerivedTenantKeys {
 

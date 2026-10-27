@@ -54,13 +54,13 @@ def forbid_production_sonar_suppressions() -> None:
 
 
 def forbid_postgres_connection_escape() -> None:
-    source_root = ROOT / "minos-storage-postgresql" / "src" / "main" / "java"
+    source_root = ROOT / "minos-storage" / "src" / "main" / "java" / "com" / "minos" / "storage" / "postgresql"
     for source in source_root.rglob("*.java"):
         text = source.read_text(encoding="utf-8")
         if "connections.open()" in text:
             raise RuntimeError(f"{source.relative_to(ROOT)}: raw PostgreSQL connection ownership is forbidden")
     factory = read(
-        "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java"
+        "minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java"
     )
     if re.search(r"\bConnection\s+open\s*\(", factory):
         raise RuntimeError("PostgresConnectionFactory.java: Connection must not escape the factory lifecycle")
@@ -177,20 +177,20 @@ def main() -> int:
 
         docker_transport = read("minos-app/src/main/java/com/minos/app/DockerMcpTransport.java")
         pg_connections = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java"
+            "minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java"
         )
         pg_migrator = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresSchemaMigrator.java"
+            "minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresSchemaMigrator.java"
         )
         pg_registry = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/project/PostgresProjectRegistry.java"
+            "minos-storage/src/main/java/com/minos/storage/postgresql/project/PostgresProjectRegistry.java"
         )
         location = read("minos-domain/src/main/java/com/minos/domain/SymbolLocation.java")
         intellij_location = read(
             "minos-intellij/src/main/java/com/minos/intellij/navigation/MinosLocation.java"
         )
         file_snapshots = read(
-            "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java"
+            "minos-storage/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java"
         )
         mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
