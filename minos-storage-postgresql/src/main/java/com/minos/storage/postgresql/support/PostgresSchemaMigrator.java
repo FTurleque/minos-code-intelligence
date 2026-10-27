@@ -7,7 +7,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 public final class PostgresSchemaMigrator {
-    static final int CURRENT_VERSION = 4;
+    static final int CURRENT_VERSION = 5;
 
     private final PostgresConnectionFactory connections;
 
@@ -59,6 +59,7 @@ public final class PostgresSchemaMigrator {
                     if (version < 2) applyV2(statement);
                     if (version < 3) applyV3(statement);
                     if (version < 4) applyV4(statement);
+                    if (version < 5) applyV5(statement);
                     return null;
                 }
             });
@@ -127,5 +128,11 @@ public final class PostgresSchemaMigrator {
         }
         s.execute("CREATE UNIQUE INDEX IF NOT EXISTS workspaces_name_uq ON workspaces(name)");
         s.execute("INSERT INTO schema_version(version) VALUES (4) ON CONFLICT(version) DO NOTHING");
+    }
+
+    /** ADR 0039 §2: the run a project offers for resume, persisted like the latest run (no foreign key either). */
+    private static void applyV5(Statement s) throws SQLException {
+        s.execute("ALTER TABLE project_index_state ADD COLUMN IF NOT EXISTS resumable_run_id uuid NULL");
+        s.execute("INSERT INTO schema_version(version) VALUES (5) ON CONFLICT(version) DO NOTHING");
     }
 }

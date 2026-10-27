@@ -73,6 +73,28 @@ class PostgresStorageRetentionServiceTest extends PostgresTestSupport {
                         .findProjectState(projectId).orElseThrow().latestRunId().orElseThrow());
     }
 
+    @Test
+    void compactionProtectsTheRunOfferedForResumeLikeTheLatestRun() throws Exception {
+        // ADR 0039 §2: the INTERRUPTED run offered for resume survives a zero non-succeeded cap.
+        UUID projectId = UUID.randomUUID();
+        PostgresIndexStateStore states = new PostgresIndexStateStore(connections, new PostgresJsonCodec());
+        IndexingRun offered = run(projectId, IndexingRun.Status.INTERRUPTED, 1);
+        IndexingRun notOffered = run(projectId, IndexingRun.Status.INTERRUPTED, 2);
+        IndexingRun latest = run(projectId, IndexingRun.Status.FAILED, 3);
+        for (IndexingRun run : List.of(offered, notOffered, latest)) states.saveRun(run);
+        states.saveProjectState(new ProjectIndexState(projectId, ProjectIndexState.Availability.FAILED,
+                Optional.empty(), Optional.of(latest.id()), Instant.parse("2026-02-01T00:00:00Z"),
+                Optional.of("interrupted"), Optional.of(offered.id())));
+
+        new PostgresStorageRetentionService(connections)
+                .compact(projectId, new PersistentRetentionPolicy(PersistentRetentionPolicy.DEFAULT_MAX_HISTORICAL_SNAPSHOTS,
+                        PersistentRetentionPolicy.DEFAULT_MAX_SUCCEEDED_RUNS, 0));
+
+        assertTrue(states.findRun(offered.id()).isPresent(), "the run offered for resume must survive");
+        assertTrue(states.findRun(latest.id()).isPresent(), "the latest run must survive");
+        assertTrue(states.findRun(notOffered.id()).isEmpty(), "a run neither latest nor offered is compacted");
+    }
+
     private int count(String table, UUID projectId) throws Exception {
         return connections.withConnection(connection -> {
             try (var statement = connection.prepareStatement(

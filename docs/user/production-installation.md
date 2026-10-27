@@ -230,6 +230,8 @@ Pour une base PostgreSQL **externe non-loopback**, l'URL JDBC doit utiliser `ssl
 
 Il n'existe pas de fallback silencieux PostgreSQL→local.
 
+MINOS migre le schéma de la base à l'ouverture, en une transaction. Une base migrée par une version de MINOS est refusée par une version plus ancienne (`PostgreSQL schema is newer than this MINOS runtime`) : revenir à une version antérieure demande la sauvegarde de la base prise avant la mise à jour. Le schéma 5 conserve l'offre de reprise d'une indexation interrompue, comme le stockage local.
+
 Une base PostgreSQL externe n'est jamais supprimée par l'uninstaller MINOS.
 
 ## 7. Recherche sémantique

@@ -212,6 +212,14 @@ Autres précisions : une `InterruptedException` pendant un provider produit un r
 
 Changement `hacher-l-arbre-source-une-fois-par-indexation` (AUD-PERF-04) : l'empreinte du scope racine d'un point de contrôle peut être fournie par l'orchestration (`ReferenceFingerprint`, empreinte de référence capturée avant la découverte) quand le service qui l'a produite capture comme celui des points de contrôle ; sinon elle est recapturée. La valeur persistée et la vérification de reprise sont inchangées. Le raccourci taille / date pour l'empreinte de fin de run est écarté (décision du propriétaire du 2026-10-21).
 
+## Mise en œuvre — offre de reprise persistée par les deux backends (2026-10-26)
+
+Changement `persister-la-reprise-dans-postgresql` (MINOS-AUD-E01). Le backend PostgreSQL stocke `resumableRunId` dans la colonne `resumable_run_id` de `project_index_state`, ajoutée par la migration de schéma v5. Il la relit et la retire comme le backend fichier. Sa rétention protège le run offert à la reprise comme le dernier run (§ 2).
+
+Le contrat `IndexStateStoreContract`, une interface de test du test-jar de `minos-engine`, fixe ces garanties pour tout `IndexStateStore`. `FileIndexStateStoreContractTest` et `PostgresIndexStateStoreContractTest` l'exécutent.
+
+Un run interrompu avant la migration n'a pas d'offre : l'indexation suivante est complète.
+
 ## Écarts constatés
 
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
