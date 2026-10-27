@@ -83,7 +83,7 @@ final class SnapshotBinaryCodecSupport {
     private static final int MAX_REFERENCES = 1_000_000;
     private static final int MAX_ROLES = 1_000;
     private static final int MAX_EVIDENCE = 1_000_000;
-    private static final int MAX_STRING_CHARS = 8 * 1024 * 1024;
+    private static final int MAX_STRING_CHARS = SnapshotBinaryPrimitives.MAX_STRING_CHARS;
     /** A string of at most {@link #MAX_STRING_CHARS} UTF-16 code units encodes to at most three bytes per unit. */
     private static final int MAX_STRING_UTF8_BYTES = 3 * MAX_STRING_CHARS;
     static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
@@ -847,27 +847,12 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    static int readHeaderVersion(
-            DataInputStream input,
-            int expectedMagic,
-            String name
-    ) throws IOException {
-        if (input.readInt() != expectedMagic) {
-            throw new IOException("invalid " + name + " magic");
-        }
-        return input.readInt();
+    static int readHeaderVersion(DataInputStream input, int expectedMagic, String name) throws IOException {
+        return SnapshotBinaryPrimitives.readHeaderVersion(input, expectedMagic, name);
     }
 
     static void writeString(DataOutputStream output, String value) throws IOException {
-        if (value == null) {
-            output.writeInt(-1);
-            return;
-        }
-        requireWritableString(value);
-        output.writeInt(value.length());
-        for (int index = 0; index < value.length(); index++) {
-            output.writeChar(value.charAt(index));
-        }
+        SnapshotBinaryPrimitives.writeString(output, value);
     }
 
     private static void writeString(EncodingSink output, String value) throws IOException {
@@ -875,9 +860,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static void requireWritableString(String value) throws IOException {
-        if (value.length() > MAX_STRING_CHARS) {
-            throw new IOException("string exceeds snapshot limit");
-        }
+        SnapshotBinaryPrimitives.requireWritableString(value);
     }
 
     /**
@@ -1058,18 +1041,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static String readString(DataInputStream input) throws IOException {
-        int length = input.readInt();
-        if (length == -1) {
-            return null;
-        }
-        if (length < 0 || length > MAX_STRING_CHARS) {
-            throw new IOException("invalid string length in symbol snapshot: " + length);
-        }
-        StringBuilder value = new StringBuilder(length);
-        for (int index = 0; index < length; index++) {
-            value.append(input.readChar());
-        }
-        return value.toString();
+        return SnapshotBinaryPrimitives.readString(input);
     }
 
     private static String readString(SnapshotInput input) throws IOException {
@@ -1089,19 +1061,11 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static String readRequiredString(DataInputStream input, String fieldName) throws IOException {
-        String value = readString(input);
-        if (value == null || value.isBlank()) {
-            throw new IOException(fieldName + " must not be blank");
-        }
-        return value;
+        return SnapshotBinaryPrimitives.readRequiredString(input, fieldName);
     }
 
     static int readCount(DataInputStream input, int maximum, String name) throws IOException {
-        int count = input.readInt();
-        if (count < 0 || count > maximum) {
-            throw new IOException("invalid " + name + ": " + count);
-        }
-        return count;
+        return SnapshotBinaryPrimitives.readCount(input, maximum, name);
     }
 
     private static <E extends Enum<E>> E readEnum(
