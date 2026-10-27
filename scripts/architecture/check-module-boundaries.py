@@ -868,11 +868,14 @@ STORAGE_PACKAGE_RULES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("local -> postgresql", LOCAL_BACKEND_PACKAGE, (POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE)),
     ("postgresql -> local", POSTGRESQL_BACKEND_PACKAGE, (LOCAL_BACKEND_PACKAGE,)),
     ("codec -> backends", "storage.codec",
-     (LOCAL_BACKEND_PACKAGE, POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE, "java.sql")),
+     (LOCAL_BACKEND_PACKAGE, POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE, "java.sql", "javax.sql")),
     ("home -> backends", "storage.home",
-     (LOCAL_BACKEND_PACKAGE, POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE, "java.sql")),
+     (LOCAL_BACKEND_PACKAGE, POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE, "java.sql", "javax.sql")),
 )
-EXTERNAL_PACKAGE_PREFIXES = (POSTGRESQL_DRIVER_PACKAGE, "java.")
+EXTERNAL_PACKAGE_PREFIXES = (POSTGRESQL_DRIVER_PACKAGE, "java.", "javax.")
+# The closed list of the packages directly under com.minos.storage that minos-storage holds: a new sibling package would
+# escape the rules above, so it is a decision written here by a visible edit.
+STORAGE_PACKAGES = frozenset({"codec", "home", "local", "postgresql"})
 
 
 def check_storage_package_isolation(root: Path = ROOT, group_id: str | None = None) -> int:
@@ -880,6 +883,14 @@ def check_storage_package_isolation(root: Path = ROOT, group_id: str | None = No
     package, by single, static or wildcard import or by qualified name; comments and string literals are ignored."""
     group = group_id or repository_group_id(root)
     violations: list[str] = []
+    for kind in ("main", "test"):
+        storage_root = root / STORAGE_MODULE / "src" / kind / "java" / Path(*f"{group}.storage".split("."))
+        if storage_root.is_dir():
+            for source in sorted(storage_root.rglob("*.java")):
+                parts = source.relative_to(storage_root).parts
+                if len(parts) == 1 or parts[0] not in STORAGE_PACKAGES:
+                    violations.append(f"storage package outside {', '.join(sorted(STORAGE_PACKAGES))} "
+                                      f"{source.relative_to(root).as_posix()}")
     for label, package, forbidden in STORAGE_PACKAGE_RULES:
         prefixes = tuple(prefix if prefix.startswith(EXTERNAL_PACKAGE_PREFIXES) else f"{group}.{prefix}"
                          for prefix in forbidden)

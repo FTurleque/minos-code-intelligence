@@ -1491,10 +1491,22 @@ class StoragePackageIsolationRuleTest(RatchetTreeTestCase):
                    'final class Doc { // com.minos.storage.local.store.FileSymbolSnapshotStore\n }')
         self.check()
 
-    def test_a_package_whose_name_only_starts_like_a_backend_is_not_a_backend(self):
-        self.write("minos-storage", "com.minos.storage.localized", "Text", "public final class Text { }")
-        self.write("minos-storage", "com.minos.storage.postgresql", "Uses", "final class Uses { Text t; }",
-                   ["com.minos.storage.localized.Text"])
+    def test_the_shared_packages_naming_javax_sql_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.home", "Pool", "final class Pool { DataSource d; }",
+                   ["javax.sql.DataSource"])
+        self.refused(self.check, "home -> backends", "javax.sql.DataSource")
+
+    def test_a_storage_package_outside_the_closed_list_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.bridge", "Bridge", "final class Bridge { }")
+        self.write("minos-storage", "com.minos.storage.bridgetest", "BridgeTest", "final class BridgeTest { }",
+                   kind="test")
+        self.refused(self.check, "storage package outside codec, home, local, postgresql",
+                     "minos-storage/src/main/java/com/minos/storage/bridge/Bridge.java",
+                     "minos-storage/src/test/java/com/minos/storage/bridgetest/BridgeTest.java")
+
+    def test_a_package_whose_name_only_starts_like_a_forbidden_one_is_accepted(self):
+        self.write("minos-storage", "com.minos.storage.local", "Uses", "final class Uses { Text t; }",
+                   ["org.postgresqlish.Text", "java.sqlite.Row"])
         self.check()
 
     def test_the_real_tree_keeps_the_storage_packages_apart(self):
