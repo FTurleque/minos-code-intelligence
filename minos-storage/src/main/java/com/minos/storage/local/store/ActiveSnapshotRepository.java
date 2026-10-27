@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.SnapshotBinaryPrimitives;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
 import com.minos.store.SnapshotDescriptor;
@@ -74,9 +75,9 @@ public final class ActiveSnapshotRepository {
         ))) {
             output.writeInt(POINTER_MAGIC);
             output.writeInt(pointer.formatVersion());
-            SnapshotBinaryCodecSupport.writeString(output, pointer.snapshotId());
-            SnapshotBinaryCodecSupport.writeString(output, pointer.fileName());
-            SnapshotBinaryCodecSupport.writeString(output, pointer.sha256());
+            SnapshotBinaryPrimitives.writeString(output, pointer.snapshotId());
+            SnapshotBinaryPrimitives.writeString(output, pointer.fileName());
+            SnapshotBinaryPrimitives.writeString(output, pointer.sha256());
             output.writeInt(pointer.symbolCount());
             if (pointer.formatVersion() >= FORMAT_VERSION_V2) {
                 output.writeInt(pointer.occurrenceCount());
@@ -89,21 +90,21 @@ public final class ActiveSnapshotRepository {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 ConfinedFileOpener.openRegularFileNoFollow(file)
         ))) {
-            int version = SnapshotBinaryCodecSupport.readHeaderVersion(input, POINTER_MAGIC, "active snapshot pointer");
+            int version = SnapshotBinaryPrimitives.readHeaderVersion(input, POINTER_MAGIC, "active snapshot pointer");
             if (version != FORMAT_VERSION_V1 && version != FORMAT_VERSION_V2 && version != FORMAT_VERSION_V3) {
                 throw new IOException("unsupported active snapshot pointer version: " + version);
             }
             SnapshotDescriptor pointer = new SnapshotDescriptor(
                     version,
-                    SnapshotBinaryCodecSupport.readRequiredString(input, "snapshotId"),
-                    SnapshotBinaryCodecSupport.readRequiredString(input, "fileName"),
-                    SnapshotBinaryCodecSupport.readRequiredString(input, "sha256"),
-                    SnapshotBinaryCodecSupport.readCount(input, MAX_SYMBOLS, "symbol count"),
+                    SnapshotBinaryPrimitives.readRequiredString(input, "snapshotId"),
+                    SnapshotBinaryPrimitives.readRequiredString(input, "fileName"),
+                    SnapshotBinaryPrimitives.readRequiredString(input, "sha256"),
+                    SnapshotBinaryPrimitives.readCount(input, MAX_SYMBOLS, "symbol count"),
                     version >= FORMAT_VERSION_V2
-                            ? SnapshotBinaryCodecSupport.readCount(input, MAX_OCCURRENCES, "occurrence count")
+                            ? SnapshotBinaryPrimitives.readCount(input, MAX_OCCURRENCES, "occurrence count")
                             : 0,
                     version >= FORMAT_VERSION_V2
-                            ? SnapshotBinaryCodecSupport.readCount(input, MAX_RELATIONSHIPS, "relationship count")
+                            ? SnapshotBinaryPrimitives.readCount(input, MAX_RELATIONSHIPS, "relationship count")
                             : 0
             );
             if (input.read() != -1) {

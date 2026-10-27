@@ -715,52 +715,52 @@
       <Message>At FileSymbolSnapshotStore.java:[line 258]</Message>
     </SourceLine>
   </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="9bd4fca0469f2bb17319b1eadb537ba8" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="f145640ec02e83e237a283a705ab521c" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
     <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
-    <LongMessage>La méthode com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec() risque d'exposer sa représentation interne en renvoyant com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec</LongMessage>
-    <Class classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" primary="true">
-      <SourceLine classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="58" end="61" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
+    <LongMessage>La méthode com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection.codec() risque d'exposer sa représentation interne en renvoyant com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection.codec</LongMessage>
+    <Class classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" primary="true">
+      <SourceLine classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" start="58" end="61" sourcepath="com/minos/storage/codec/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
         <Message>At KnowledgeSnapshotCodecs.java:[lines 58-61]</Message>
       </SourceLine>
-      <Message>In class com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection</Message>
+      <Message>In class com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection</Message>
     </Class>
-    <Method isStatic="false" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" signature="()Lcom/minos/storage/local/store/SnapshotCodec;" name="codec" primary="true">
-      <SourceLine endBytecode="46" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="58" end="58" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="0" />
-      <Message>In method com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec()</Message>
+    <Method isStatic="false" classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" signature="()Lcom/minos/storage/codec/SnapshotCodec;" name="codec" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" start="58" end="58" sourcepath="com/minos/storage/codec/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="0" />
+      <Message>In method com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection.codec()</Message>
     </Method>
-    <Field isStatic="false" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" signature="Lcom/minos/storage/local/store/SnapshotCodec;" name="codec" primary="true">
-      <SourceLine classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
+    <Field isStatic="false" classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" signature="Lcom/minos/storage/codec/SnapshotCodec;" name="codec" primary="true">
+      <SourceLine classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" sourcepath="com/minos/storage/codec/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
         <Message>In KnowledgeSnapshotCodecs.java</Message>
       </SourceLine>
-      <Message>Field com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec</Message>
+      <Message>Field com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection.codec</Message>
     </Field>
-    <SourceLine endBytecode="4" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="58" end="58" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="4" primary="true">
+    <SourceLine endBytecode="4" classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" start="58" end="58" sourcepath="com/minos/storage/codec/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="4" primary="true">
       <Message>At KnowledgeSnapshotCodecs.java:[line 58]</Message>
     </SourceLine>
   </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="7183890bbd0bb0b232793c7ec598d960" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="54653b2226e8b9cf4922a029751f946e" cweid="374" rank="18" abbrev="EI2" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP2" instanceOccurrenceMax="0">
     <ShortMessage>Une méthode expose sa représentation interne en incorporant une référence à un objet modifiable</ShortMessage>
-    <LongMessage>La méthode new com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection(SnapshotCodec, long) risque d'exposer sa représentation interne en stockant un objet externe modifiable dans com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec</LongMessage>
-    <Class classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" primary="true">
-      <SourceLine classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="58" end="61" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
+    <LongMessage>La méthode new com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection(SnapshotCodec, long) risque d'exposer sa représentation interne en stockant un objet externe modifiable dans com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection.codec</LongMessage>
+    <Class classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" primary="true">
+      <SourceLine classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" start="58" end="61" sourcepath="com/minos/storage/codec/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
         <Message>At KnowledgeSnapshotCodecs.java:[lines 58-61]</Message>
       </SourceLine>
-      <Message>In class com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection</Message>
+      <Message>In class com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection</Message>
     </Class>
-    <Method isStatic="false" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" signature="(Lcom/minos/storage/local/store/SnapshotCodec;J)V" name="&lt;init&gt;" primary="true">
-      <SourceLine endBytecode="95" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="59" end="61" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="0" />
-      <Message>In method new com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection(SnapshotCodec, long)</Message>
+    <Method isStatic="false" classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" signature="(Lcom/minos/storage/codec/SnapshotCodec;J)V" name="&lt;init&gt;" primary="true">
+      <SourceLine endBytecode="95" classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" start="59" end="61" sourcepath="com/minos/storage/codec/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="0" />
+      <Message>In method new com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection(SnapshotCodec, long)</Message>
     </Method>
-    <Field isStatic="false" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" signature="Lcom/minos/storage/local/store/SnapshotCodec;" name="codec" primary="true">
-      <SourceLine classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
+    <Field isStatic="false" classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" signature="Lcom/minos/storage/codec/SnapshotCodec;" name="codec" primary="true">
+      <SourceLine classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" sourcepath="com/minos/storage/codec/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java">
         <Message>In KnowledgeSnapshotCodecs.java</Message>
       </SourceLine>
-      <Message>Field com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection.codec</Message>
+      <Message>Field com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection.codec</Message>
     </Field>
     <LocalVariable role="LOCAL_VARIABLE_NAMED" pc="13" name="codec" register="1">
       <Message>Local variable named codec</Message>
     </LocalVariable>
-    <SourceLine endBytecode="13" classname="com.minos.storage.local.store.KnowledgeSnapshotCodecs$Selection" start="59" end="59" sourcepath="com/minos/storage/local/store/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="13" primary="true">
+    <SourceLine endBytecode="13" classname="com.minos.storage.codec.KnowledgeSnapshotCodecs$Selection" start="59" end="59" sourcepath="com/minos/storage/codec/KnowledgeSnapshotCodecs.java" sourcefile="KnowledgeSnapshotCodecs.java" startBytecode="13" primary="true">
       <Message>At KnowledgeSnapshotCodecs.java:[line 59]</Message>
     </SourceLine>
   </BugInstance>

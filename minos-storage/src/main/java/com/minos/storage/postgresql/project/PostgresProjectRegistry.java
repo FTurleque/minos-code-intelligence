@@ -4,7 +4,7 @@ import com.minos.storage.postgresql.support.PostgresConnectionFactory;
 import com.minos.storage.postgresql.support.PostgresProjectMutationLock;
 import com.minos.io.CommitUncertainException;
 import com.minos.domain.registry.ProjectPathMapping;
-import com.minos.storage.local.registry.ProjectPathMappingStore;
+import com.minos.storage.home.ProjectPathMappingStore;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.ProjectRegistryLimits;
 import com.minos.registry.RegisteredProject;

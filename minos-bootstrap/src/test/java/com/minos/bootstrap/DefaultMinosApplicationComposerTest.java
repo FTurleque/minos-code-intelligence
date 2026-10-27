@@ -100,8 +100,8 @@ class DefaultMinosApplicationComposerTest {
 
         new DefaultMinosApplicationComposer().projectPathMappings(home).save(mapping);
 
-        assertEquals(java.util.Optional.of(mapping), new com.minos.storage.local.registry.ProjectPathMappingStore(home).loadOptional());
-        assertInstanceOf(com.minos.storage.local.registry.ProjectPathMappingStore.class,
+        assertEquals(java.util.Optional.of(mapping), new com.minos.storage.home.ProjectPathMappingStore(home).loadOptional());
+        assertInstanceOf(com.minos.storage.home.ProjectPathMappingStore.class,
                 new DefaultMinosApplicationComposer().projectPathMappings(home));
     }
 }

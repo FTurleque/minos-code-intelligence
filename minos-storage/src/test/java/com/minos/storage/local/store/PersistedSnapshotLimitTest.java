@@ -1,5 +1,9 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.PersistedSizeFixtures;
+import com.minos.storage.codec.SnapshotCodec;
+import com.minos.storage.codec.SnapshotCodecV2;
+import com.minos.storage.codec.SnapshotCodecV3;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.domain.Symbol;
 import com.minos.store.CodeKnowledgeSnapshot;

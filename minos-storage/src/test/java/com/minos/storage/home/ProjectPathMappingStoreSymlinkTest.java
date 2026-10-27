@@ -1,4 +1,4 @@
-package com.minos.storage.local.registry;
+package com.minos.storage.home;
 
 import com.minos.domain.registry.ProjectPathMapping;
 import org.junit.jupiter.api.Test;

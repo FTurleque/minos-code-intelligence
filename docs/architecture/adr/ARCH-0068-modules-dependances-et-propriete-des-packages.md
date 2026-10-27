@@ -197,15 +197,14 @@ L'ordre des tâches et leurs prérequis sont dans [le plan du chantier stockage]
 - **`com.minos.runtime.MinosVersion`** reste dans le moteur, comme le fixe la table du § 3.
 
 **§ 4, adaptateurs de stockage réunis (SH-02, AUD-ARC-08, changement OpenSpec `fusionner-les-adaptateurs-de-stockage`)** :
-- **Un seul module** : `minos-storage` contient `com.minos.storage.local` et `com.minos.storage.postgresql`, et le reactor compte 13 modules. Il dépend de `minos-domain` et de `minos-engine` seulement.
-- **Cloisonnement des backends par packages** : `com.minos.storage.local` ne nomme aucun type de `com.minos.storage.postgresql` ; `com.minos.storage.postgresql` ne nomme de `com.minos.storage.local` que les types de `BACKEND_TYPES_NAMED_ACROSS_PACKAGES` (cliquet D4 de `check-module-boundaries.py`, qui ne fait que rétrécir et que SH-03 videra en déplaçant les codecs partagés vers `com.minos.storage.codec`).
+- **Un seul module** : `minos-storage` contient les deux backends, `com.minos.storage.local` et `com.minos.storage.postgresql`, et deux packages qu'ils partagent : `com.minos.storage.codec`, le codec des snapshots (formats V1, V2 et V3, primitives du pointeur actif, intégrité), et `com.minos.storage.home`, le fichier de correspondance des chemins de `MINOS_HOME` (`ProjectPathMappingStore`). Le reactor compte 13 modules ; le module dépend de `minos-domain` et de `minos-engine` seulement.
+- **Cloisonnement des backends par packages** (SH-03, changement OpenSpec `extraire-le-codec-commun-du-stockage`) : `com.minos.storage.local` et `com.minos.storage.postgresql` ne se nomment pas l'un l'autre, et `com.minos.storage.codec` et `com.minos.storage.home` ne nomment aucun des deux backends, ni `org.postgresql`, ni `java.sql`. La règle `check_storage_package_isolation` de `check-module-boundaries.py` le vérifie sur les sources de production et de test, et `ModuleArchitectureTest` (`thePostgresqlBackendDoesNotUseTheLocalBackend`, `theSharedStoragePackagesUseNoBackend`) sur le bytecode.
 - **PostgreSQL reste optionnel** : `minos-bootstrap` et `minos-provider-scip` ne nomment ni le backend PostgreSQL ni son pilote (règles R1 et R2, et `ModuleArchitectureTest.onlyThePostgresqlBackendUsesPostgresql` sur le bytecode) ; la racine de composition le découvre par `ServiceLoader`, son service n'est déclaré que par l'assemblage `minos-app`, et une application composée avec le backend local ne charge aucune de ses classes (`LocalCompositionLoadsNoPostgresqlClassTest`). Le pilote JDBC et Jackson sont dans le graphe de tout consommateur de `minos-storage`.
 
 ## Écarts constatés
 
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
 
-- Codec commun (§ 4) à réaliser : `com.minos.storage.codec` n'existe pas, et `com.minos.storage.postgresql` nomme quatre types de `com.minos.storage.local` (`ProjectPathMappingStore`, `KnowledgeSnapshotCodecs`, `SnapshotCodec`, `SnapshotIntegrityService`), contrairement au point « `local` et `postgresql` ne dépendent pas l'un de l'autre » — preuve : `BACKEND_TYPES_NAMED_ACROSS_PACKAGES` dans `scripts/architecture/check-module-boundaries.py`.
 - Le découpage ratifié par l'ADR 0022 compte 12 modules enfants ; le reactor en compte 13 : `minos-storage` y tient la place de `minos-storage-local` (§ 4), et `minos-bootstrap` (ADR 0042) s'y ajoute sans qu'un ADR source l'inscrive dans la liste ratifiée — preuve : `pom.xml` `<modules>`.
 
 ## References

@@ -1,4 +1,4 @@
-package com.minos.storage.local.store;
+package com.minos.storage.codec;
 
 import com.minos.store.CodeKnowledgeSnapshot;
 import org.junit.jupiter.api.Test;

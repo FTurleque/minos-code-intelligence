@@ -1,14 +1,10 @@
 package com.minos.storage.local.store;
 
-import com.minos.domain.Origin;
-import com.minos.domain.OriginType;
-import com.minos.domain.PositionEncoding;
+import com.minos.storage.codec.CodecFixtures;
 import com.minos.domain.ProviderReference;
 import com.minos.domain.ResolutionStatus;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
-import com.minos.domain.SymbolKind;
-import com.minos.domain.SymbolLocation;
 import com.minos.store.SymbolSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -167,109 +163,9 @@ class FileSymbolSnapshotStoreTest {
     }
 
     static List<Symbol> symbols(UUID projectId) {
-        return List.of(
-                symbol(
-                        projectId,
-                        "method-int",
-                        SymbolKind.METHOD,
-                        "convert",
-                        "com.minos.Converter.convert",
-                        "(int)",
-                        8,
-                        ResolutionStatus.RESOLVED,
-                        false,
-                        "opaque-method-int"
-                ),
-                symbol(
-                        projectId,
-                        "method-string",
-                        SymbolKind.METHOD,
-                        "convert",
-                        "com.minos.Converter.convert",
-                        "(java.lang.String)",
-                        12,
-                        ResolutionStatus.RESOLVED,
-                        false,
-                        "opaque-method-\uD800string"
-                ),
-                symbol(
-                        projectId,
-                        "external-clock",
-                        SymbolKind.CLASS,
-                        "Clock",
-                        "java.time.Clock",
-                        null,
-                        0,
-                        ResolutionStatus.RESOLVED,
-                        true,
-                        "opaque-external-clock"
-                ),
-                symbol(
-                        projectId,
-                        "unresolved-client",
-                        SymbolKind.CLASS,
-                        "MissingClient",
-                        "com.minos.MissingClient",
-                        null,
-                        0,
-                        ResolutionStatus.UNRESOLVED,
-                        true,
-                        "opaque-missing-client"
-                )
-        );
+        return CodecFixtures.symbols(projectId);
     }
 
-    private static Symbol symbol(
-            UUID projectId,
-            String id,
-            SymbolKind kind,
-            String name,
-            String qualifiedName,
-            String signature,
-            int line,
-            ResolutionStatus resolutionStatus,
-            boolean external,
-            String externalId
-    ) {
-        SymbolLocation location = line == 0
-                ? null
-                : new SymbolLocation(
-                        "file-converter",
-                        line,
-                        4,
-                        line,
-                        20,
-                        PositionEncoding.UTF16_CODE_UNITS
-                );
-        return new Symbol(
-                id,
-                projectId + "|java|" + kind + "|" + qualifiedName + "|" + id,
-                external
-                        ? SymbolIdentityQuality.PROVIDER_SCOPED_FALLBACK
-                        : SymbolIdentityQuality.STRUCTURAL_FALLBACK,
-                projectId.toString(),
-                external ? null : "main",
-                external ? null : "file-converter",
-                null,
-                kind,
-                name,
-                qualifiedName,
-                signature,
-                "java",
-                location,
-                resolutionStatus,
-                new Origin(
-                        "fixture-provider",
-                        "TEST",
-                        "1.0",
-                        "run-1",
-                        OriginType.OTHER
-                ),
-                external,
-                false,
-                Set.of(new ProviderReference("fixture-provider", externalId))
-        );
-    }
 
     private static byte[] snapshotBytes(Path root, UUID projectId) throws IOException {
         try (var files = Files.list(root.resolve(projectId.toString()))) {

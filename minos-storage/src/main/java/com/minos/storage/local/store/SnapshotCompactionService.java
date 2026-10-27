@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.SnapshotIntegrityService;
 import com.minos.store.SnapshotDescriptor;
 import java.io.IOException;
 import java.nio.file.Path;

@@ -9,8 +9,8 @@ import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
-import com.minos.storage.local.store.KnowledgeSnapshotCodecs;
-import com.minos.storage.local.store.SnapshotCodec;
+import com.minos.storage.codec.KnowledgeSnapshotCodecs;
+import com.minos.storage.codec.SnapshotCodec;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotDescriptor;
@@ -279,7 +279,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         Path existing = createScratchFile("snapshot-existing-");
         try {
             String existingSha = copyExistingPayload(connection, snapshot, existing);
-            if (!existingSha.equals(new com.minos.storage.local.store.SnapshotIntegrityService().checksum(existing))) {
+            if (!existingSha.equals(new com.minos.storage.codec.SnapshotIntegrityService().checksum(existing))) {
                 throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
             }
             if (!codec.decode(existing).equals(codec.decode(encodedPayload))) {

@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.QueryViewWeightFixtures;
 import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;

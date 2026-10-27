@@ -1,4 +1,4 @@
-package com.minos.storage.local.store;
+package com.minos.storage.codec;
 
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
@@ -45,7 +45,6 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.DigestOutputStream;
@@ -64,10 +63,9 @@ import java.util.UUID;
  * Shared binary primitives used by the explicit v1/v2/v3 snapshot codecs.
  *
  * <p>The framing helpers ({@code readHeaderVersion}, {@code writeString}, {@code readString},
- * {@code readRequiredString}, {@code readCount}) are package-private rather than private because
- * {@link ActiveSnapshotRepository} writes the pointer file with the same framing. They must stay a
- * single implementation: a divergence between the two would silently produce pointer files this
- * package can no longer read back.</p>
+ * {@code readRequiredString}, {@code readCount}) delegate to {@link SnapshotBinaryPrimitives}, which the active
+ * snapshot pointer of the local backend also uses. They must stay a single implementation: a divergence between the
+ * two would silently produce pointer files this package can no longer read back.</p>
  */
 final class SnapshotBinaryCodecSupport {
 
@@ -83,7 +81,7 @@ final class SnapshotBinaryCodecSupport {
     private static final int MAX_REFERENCES = 1_000_000;
     private static final int MAX_ROLES = 1_000;
     private static final int MAX_EVIDENCE = 1_000_000;
-    private static final int MAX_STRING_CHARS = 8 * 1024 * 1024;
+    private static final int MAX_STRING_CHARS = SnapshotBinaryPrimitives.MAX_STRING_CHARS;
     /** A string of at most {@link #MAX_STRING_CHARS} UTF-16 code units encodes to at most three bytes per unit. */
     private static final int MAX_STRING_UTF8_BYTES = 3 * MAX_STRING_CHARS;
     static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
@@ -847,27 +845,12 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    static int readHeaderVersion(
-            DataInputStream input,
-            int expectedMagic,
-            String name
-    ) throws IOException {
-        if (input.readInt() != expectedMagic) {
-            throw new IOException("invalid " + name + " magic");
-        }
-        return input.readInt();
+    static int readHeaderVersion(DataInputStream input, int expectedMagic, String name) throws IOException {
+        return SnapshotBinaryPrimitives.readHeaderVersion(input, expectedMagic, name);
     }
 
     static void writeString(DataOutputStream output, String value) throws IOException {
-        if (value == null) {
-            output.writeInt(-1);
-            return;
-        }
-        requireWritableString(value);
-        output.writeInt(value.length());
-        for (int index = 0; index < value.length(); index++) {
-            output.writeChar(value.charAt(index));
-        }
+        SnapshotBinaryPrimitives.writeString(output, value);
     }
 
     private static void writeString(EncodingSink output, String value) throws IOException {
@@ -875,9 +858,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static void requireWritableString(String value) throws IOException {
-        if (value.length() > MAX_STRING_CHARS) {
-            throw new IOException("string exceeds snapshot limit");
-        }
+        SnapshotBinaryPrimitives.requireWritableString(value);
     }
 
     /**
@@ -1058,18 +1039,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static String readString(DataInputStream input) throws IOException {
-        int length = input.readInt();
-        if (length == -1) {
-            return null;
-        }
-        if (length < 0 || length > MAX_STRING_CHARS) {
-            throw new IOException("invalid string length in symbol snapshot: " + length);
-        }
-        StringBuilder value = new StringBuilder(length);
-        for (int index = 0; index < length; index++) {
-            value.append(input.readChar());
-        }
-        return value.toString();
+        return SnapshotBinaryPrimitives.readString(input);
     }
 
     private static String readString(SnapshotInput input) throws IOException {
@@ -1089,19 +1059,11 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static String readRequiredString(DataInputStream input, String fieldName) throws IOException {
-        String value = readString(input);
-        if (value == null || value.isBlank()) {
-            throw new IOException(fieldName + " must not be blank");
-        }
-        return value;
+        return SnapshotBinaryPrimitives.readRequiredString(input, fieldName);
     }
 
     static int readCount(DataInputStream input, int maximum, String name) throws IOException {
-        int count = input.readInt();
-        if (count < 0 || count > maximum) {
-            throw new IOException("invalid " + name + ": " + count);
-        }
-        return count;
+        return SnapshotBinaryPrimitives.readCount(input, maximum, name);
     }
 
     private static <E extends Enum<E>> E readEnum(

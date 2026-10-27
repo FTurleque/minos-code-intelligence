@@ -1,4 +1,4 @@
-package com.minos.storage.local.store;
+package com.minos.storage.codec;
 
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
@@ -33,11 +33,11 @@ import java.util.UUID;
  * symbol and relationships carrying evidence. The names come from a vocabulary so that the same fixture can
  * be produced with compact (Latin-1) and with two-byte (UTF-16) strings.
  */
-final class QueryViewWeightFixtures {
+public final class QueryViewWeightFixtures {
 
-    static final String[] ASCII = {"snapshot", "relationship", "occurrence", "provider", "resolve", "indexer"};
-    static final String[] LATIN1 = {"été", "façade", "créé", "données", "référence", "dépôt"};
-    static final String[] CJK = {"漢字", "符号表", "関係", "索引", "参照", "構造"};
+    public static final String[] ASCII = {"snapshot", "relationship", "occurrence", "provider", "resolve", "indexer"};
+    public static final String[] LATIN1 = {"été", "façade", "créé", "données", "référence", "dépôt"};
+    public static final String[] CJK = {"漢字", "符号表", "関係", "索引", "参照", "構造"};
 
     private static final Origin ORIGIN = new Origin("fixture-provider", "TEST", "1.0.0", "run-1", OriginType.OTHER);
 
@@ -45,7 +45,7 @@ final class QueryViewWeightFixtures {
     }
 
     /** {@code files} source files, each with 20 symbols, 140 occurrences and 100 relationships. */
-    static CodeKnowledgeSnapshot repository(UUID projectId, String snapshotId, int files, List<String[]> vocabularies) {
+    public static CodeKnowledgeSnapshot repository(UUID projectId, String snapshotId, int files, List<String[]> vocabularies) {
         Random random = new Random(0xA6_03L);
         String project = projectId.toString();
         List<Symbol> symbols = new ArrayList<>();

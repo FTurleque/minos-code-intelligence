@@ -1,5 +1,6 @@
 package com.minos.storage.local.registry;
 
+import com.minos.storage.home.ProjectPathMappingStore;
 import java.io.OutputStreamWriter;
 import java.io.ByteArrayOutputStream;
 import com.minos.io.PrivateLocalStorage;

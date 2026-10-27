@@ -1,5 +1,6 @@
 package com.minos.storage.local.registry;
 
+import com.minos.storage.home.ProjectPathMappingStore;
 import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;

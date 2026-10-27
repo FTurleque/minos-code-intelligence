@@ -1,7 +1,7 @@
 package com.minos.storage.local;
 
 import com.minos.storage.local.registry.LocalProjectRegistry;
-import com.minos.storage.local.registry.ProjectPathMappingStore;
+import com.minos.storage.home.ProjectPathMappingStore;
 import com.minos.storage.local.store.FileSemanticVectorStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

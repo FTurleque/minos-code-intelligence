@@ -59,7 +59,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     # ADR 0058: every module a class uses is declared, including the domain reached through minos-engine.
     "minos-runtime-local": frozenset({"minos-domain", "minos-engine"}),
     # ADR 0068 section 4: one storage module; its local and PostgreSQL backends are kept apart by package rules
-    # (R1, R2 and BACKEND_TYPES_NAMED_ACROSS_PACKAGES), not by Maven.
+    # (R1, R2 and STORAGE_PACKAGE_RULES), not by Maven.
     "minos-storage": frozenset({"minos-domain", "minos-engine"}),
     "minos-provider-scip": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage"
@@ -602,18 +602,8 @@ ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], dict[str, int]] = {
     },
 }
 
-# D4 (SH-02, E04), ADR 0068 section 4 — inside minos-storage, the types of com.minos.storage.local that the production
-# sources of com.minos.storage.postgresql name, each with the number of files that name it. The list only shrinks (SH-03
-# moves the shared codecs to com.minos.storage.codec and empties it); com.minos.storage.local names no type of
-# com.minos.storage.postgresql at all.
 STORAGE_MODULE = "minos-storage"
 LOCAL_BACKEND_PACKAGE = "storage.local"
-BACKEND_TYPES_NAMED_ACROSS_PACKAGES: dict[str, int] = {
-    "storage.local.registry.ProjectPathMappingStore": 1,
-    "storage.local.store.KnowledgeSnapshotCodecs": 2,
-    "storage.local.store.SnapshotCodec": 2,
-    "storage.local.store.SnapshotIntegrityService": 1,
-}
 
 # A14 / AUD-ARC-12, ADR 0068 — the package roots (first segment under the groupId) each module owns. A new package
 # goes under one of its module's roots; a new root is a decision, written here by a visible edit (ADR 0068). A root may
@@ -870,25 +860,58 @@ def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | Non
     return sum(len(types) for types in listed.values())
 
 
-def check_backend_types_named_across_packages(root: Path = ROOT, group_id: str | None = None,
-                                              listed: dict[str, int] | None = None) -> int:
-    """D4 — inside minos-storage, the PostgreSQL backend names the types of the local backend only through
-    BACKEND_TYPES_NAMED_ACROSS_PACKAGES, each from the listed number of files; the local backend names none of the
-    PostgreSQL backend."""
-    listed = BACKEND_TYPES_NAMED_ACROSS_PACKAGES if listed is None else listed
+# SH-03 (E04), ADR 0068 section 4 — inside minos-storage, production and test sources alike: the local and PostgreSQL
+# backends do not name each other, and the shared packages (the snapshot codec and the MINOS_HOME path mapping) name
+# neither backend, nor the PostgreSQL driver, nor JDBC. Each rule: (label, source package, forbidden prefixes); a prefix
+# under the groupId is written without it.
+STORAGE_PACKAGE_RULES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("local -> postgresql", LOCAL_BACKEND_PACKAGE, (POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE)),
+    ("postgresql -> local", POSTGRESQL_BACKEND_PACKAGE, (LOCAL_BACKEND_PACKAGE,)),
+    ("codec -> backends", "storage.codec",
+     (LOCAL_BACKEND_PACKAGE, POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE, "java.sql", "javax.sql")),
+    ("home -> backends", "storage.home",
+     (LOCAL_BACKEND_PACKAGE, POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE, "java.sql", "javax.sql")),
+)
+EXTERNAL_PACKAGE_PREFIXES = (POSTGRESQL_DRIVER_PACKAGE, "java.", "javax.")
+# The closed list of the packages directly under com.minos.storage that minos-storage holds: a new sibling package would
+# escape the rules above, so it is a decision written here by a visible edit.
+STORAGE_PACKAGES = frozenset({"codec", "home", "local", "postgresql"})
+
+
+def check_storage_package_isolation(root: Path = ROOT, group_id: str | None = None) -> int:
+    """SH-03 — no production nor test source of a STORAGE_PACKAGE_RULES package of minos-storage names a forbidden
+    package, by single, static or wildcard import or by qualified name; comments and string literals are ignored."""
     group = group_id or repository_group_id(root)
-    qualified_name = qualified_name_pattern(group)
-    local, postgresql = f"{group}.{LOCAL_BACKEND_PACKAGE}", f"{group}.{POSTGRESQL_BACKEND_PACKAGE}"
-    problems = named_type_ratchet_problems("D4", "postgresql -> local", "BACKEND_TYPES_NAMED_ACROSS_PACKAGES", root,
-                                           STORAGE_MODULE, STORAGE_MODULE, listed, group, qualified_name,
-                                           naming_package=postgresql, target_package=local)
-    problems += named_type_ratchet_problems("D4", "local -> postgresql", "the empty list of the local backend", root,
-                                            STORAGE_MODULE, STORAGE_MODULE, {}, group, qualified_name,
-                                            naming_package=local, target_package=postgresql)
-    if problems:
-        fail("D4 storage backends ratchet (ADR 0068 section 4: local and postgresql do not depend on each other; SH-03 "
-             "moves the shared codecs out of the local backend): " + "; ".join(problems))
-    return len(listed)
+    violations: list[str] = []
+    for kind in ("main", "test"):
+        storage_root = root / STORAGE_MODULE / "src" / kind / "java" / Path(*f"{group}.storage".split("."))
+        if storage_root.is_dir():
+            for source in sorted(storage_root.rglob("*.java")):
+                parts = source.relative_to(storage_root).parts
+                if len(parts) == 1 or parts[0] not in STORAGE_PACKAGES:
+                    violations.append(f"storage package outside {', '.join(sorted(STORAGE_PACKAGES))} "
+                                      f"{source.relative_to(root).as_posix()}")
+    for label, package, forbidden in STORAGE_PACKAGE_RULES:
+        prefixes = tuple(prefix if prefix.startswith(EXTERNAL_PACKAGE_PREFIXES) else f"{group}.{prefix}"
+                         for prefix in forbidden)
+        qualified = re.compile(r"\b(?:" + "|".join(re.escape(prefix) for prefix in prefixes) + r")(?:\.\w+)+")
+        for kind in ("main", "test"):
+            package_root = root / STORAGE_MODULE / "src" / kind / "java" / Path(*f"{group}.{package}".split("."))
+            if not package_root.is_dir():
+                continue
+            for source in sorted(package_root.rglob("*.java")):
+                code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+                found: set[str] = set()
+                for _static, name, wildcard in SOURCE_IMPORT.findall(code):
+                    if any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes):
+                        found.add(name + (".*" if wildcard else ""))
+                found.update(qualified.findall(SOURCE_IMPORT.sub(" ", code)))
+                relative = source.relative_to(root).as_posix()
+                violations += [f"{label} {relative} -> {name}" for name in sorted(found)]
+    if violations:
+        fail("Storage package isolation violated (ADR 0068 section 4: the backends meet only through the shared codec "
+             "and path-mapping packages, which name neither backend nor JDBC): " + "; ".join(violations))
+    return len(STORAGE_PACKAGE_RULES)
 
 
 def check_package_roots(root: Path = ROOT, group_id: str | None = None,
@@ -1061,7 +1084,7 @@ UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
         "in-memory state store used only by the tests of five modules; moving it needs a test-jar, not done here",
     "minos-nexus/com.minos.nexus.NexusSemanticSignalService":
         "public NEXUS semantic signal v2 surface (docs/developer/public-surfaces.md), not qualified by a client",
-    "minos-storage/com.minos.storage.local.store.CodeKnowledgeSnapshotBinaryCodec":
+    "minos-storage/com.minos.storage.codec.CodeKnowledgeSnapshotBinaryCodec":
         "declared snapshot codec boundary, excluded by AUD-QUA-02 itself",
 }
 TOP_LEVEL_PUBLIC_TYPE = re.compile(
@@ -1681,7 +1704,7 @@ def main() -> int:
         engine_types = check_engine_types_named_by_surfaces()
         launchers = check_process_launchers()
         adapter_types = check_adapter_types_named_by_adapters()
-        backend_types = check_backend_types_named_across_packages()
+        storage_packages = check_storage_package_isolation()
         package_roots = check_package_roots()
         service_loaders = check_service_loader_class_loaders()
         snapshot_view_users = check_snapshot_read_port()
@@ -1714,9 +1737,8 @@ def main() -> int:
               f"is named")
         print(f"R1/R2 PostgreSQL backend isolation: {postgresql_blind} modules name neither the backend package nor "
               "its driver")
-        print(f"D4 storage backends: {backend_types} types of the local backend listed in "
-              f"BACKEND_TYPES_NAMED_ACROSS_PACKAGES ({sum(BACKEND_TYPES_NAMED_ACROSS_PACKAGES.values())} files), none "
-              "other is named by the PostgreSQL backend, and the local backend names none of it")
+        print(f"Storage packages: {storage_packages} rules over production and test sources, the two backends name "
+              "each other nowhere, the codec and the path mapping name neither backend nor JDBC")
         print(f"A14 package roots: {package_roots} roots over {len(MODULES)} modules, no new root")
         print(f"AUD-ARC-11 execution edges by service: "
               + (", ".join(f"{a} -> {b}" for a, b in runtime_edges) or "none") + " (documented)")

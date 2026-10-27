@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.SnapshotIntegrityService;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.SnapshotDescriptor;
 import org.junit.jupiter.api.Test;
