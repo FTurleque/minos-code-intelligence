@@ -1,4 +1,4 @@
-package com.minos.storage.local.store;
+package com.minos.storage.codec;
 
 import com.minos.store.CodeKnowledgeSnapshot;
 import org.junit.jupiter.api.Test;
@@ -47,7 +47,7 @@ class SnapshotEncodedSizeTest {
     void v1AnnouncesExactlyTheBytesItWrites(@TempDir Path root) throws Exception {
         UUID projectId = UUID.randomUUID();
         CodeKnowledgeSnapshot symbolsOnly = new CodeKnowledgeSnapshot(projectId, "legacy",
-                FileSymbolSnapshotStoreTest.symbols(projectId), List.of(), List.of());
+                CodecFixtures.symbols(projectId), List.of(), List.of());
 
         assertExact(new SnapshotCodecV1(), symbolsOnly, root.resolve("a.symbols"));
         assertThrows(IllegalArgumentException.class,

@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.QueryViewWeightFixtures;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.store.CodeKnowledgeSnapshot;

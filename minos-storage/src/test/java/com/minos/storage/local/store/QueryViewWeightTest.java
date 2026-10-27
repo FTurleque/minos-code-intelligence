@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.QueryViewWeightFixtures;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.IncomingRelationships;
 import com.minos.store.SnapshotReadView;

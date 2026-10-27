@@ -1,4 +1,4 @@
-package com.minos.storage.local.store;
+package com.minos.storage.codec;
 
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
@@ -29,26 +29,26 @@ import java.util.UUID;
 /**
  * Contenu des snapshots de référence écrits par le code de {@code d9ae1005} (lot A6, étape 2). Autonome : il
  * ne dépend que du domaine, pour se compiler aussi contre la base et y produire les fixtures
- * ({@link LegacySnapshotFixtureGenerator}). Les chaînes piégées couvrent accents, emoji (paire de
+ * ({@code LegacySnapshotFixtureGenerator}). Les chaînes piégées couvrent accents, emoji (paire de
  * substitution), CJK, NUL, U+FFFF et, dans une variante seulement, un surrogate isolé.
  */
-final class LegacySnapshotContent {
+public final class LegacySnapshotContent {
 
-    static final UUID V1_PROJECT = UUID.fromString("a6000000-0000-4000-8000-000000000001");
-    static final UUID V2_PROJECT = UUID.fromString("a6000000-0000-4000-8000-000000000002");
-    static final UUID V2_LONE_SURROGATE_PROJECT = UUID.fromString("a6000000-0000-4000-8000-000000000003");
-    static final String V1_SNAPSHOT = "legacy-v1";
-    static final String V2_SNAPSHOT = "legacy-v2";
-    static final String V2_LONE_SURROGATE_SNAPSHOT = "legacy-v2-lone-surrogate";
+    public static final UUID V1_PROJECT = UUID.fromString("a6000000-0000-4000-8000-000000000001");
+    public static final UUID V2_PROJECT = UUID.fromString("a6000000-0000-4000-8000-000000000002");
+    public static final UUID V2_LONE_SURROGATE_PROJECT = UUID.fromString("a6000000-0000-4000-8000-000000000003");
+    public static final String V1_SNAPSHOT = "legacy-v1";
+    public static final String V2_SNAPSHOT = "legacy-v2";
+    public static final String V2_LONE_SURROGATE_SNAPSHOT = "legacy-v2-lone-surrogate";
 
     /** Accents, emoji (paire de substitution), CJK, NUL et U+FFFF : bien formé en UTF-16. */
-    static final String TRAPS = "é à ü — 😀 漢字 nul\u0000 max￿";
-    static final String LONE_SURROGATE = "orphelin\uD800fin";
+    public static final String TRAPS = "é à ü — 😀 漢字 nul\u0000 max￿";
+    public static final String LONE_SURROGATE = "orphelin\uD800fin";
 
     private LegacySnapshotContent() {
     }
 
-    static List<Symbol> symbols(UUID projectId, String extra) {
+    public static List<Symbol> symbols(UUID projectId, String extra) {
         String project = projectId.toString();
         return List.of(
                 new Symbol("sym-a", "key-a " + TRAPS, SymbolIdentityQuality.CANONICAL, project, "module-é", "src/Été.java",
@@ -61,7 +61,7 @@ final class LegacySnapshotContent {
                         true, true, Set.of()));
     }
 
-    static CodeKnowledgeSnapshot knowledge(UUID projectId, String snapshotId, String extra) {
+    public static CodeKnowledgeSnapshot knowledge(UUID projectId, String snapshotId, String extra) {
         String project = projectId.toString();
         CodeEntityRef a = new CodeEntityRef(CodeEntityType.SYMBOL, "sym-a");
         CodeEntityRef b = new CodeEntityRef(CodeEntityType.SYMBOL, "sym-b");
@@ -82,15 +82,15 @@ final class LegacySnapshotContent {
         return new CodeKnowledgeSnapshot(projectId, snapshotId, symbols(projectId, extra), occurrences, relationships);
     }
 
-    static CodeKnowledgeSnapshot v2() {
+    public static CodeKnowledgeSnapshot v2() {
         return knowledge(V2_PROJECT, V2_SNAPSHOT, "sans orphelin");
     }
 
-    static CodeKnowledgeSnapshot v2WithLoneSurrogate() {
+    public static CodeKnowledgeSnapshot v2WithLoneSurrogate() {
         return knowledge(V2_LONE_SURROGATE_PROJECT, V2_LONE_SURROGATE_SNAPSHOT, LONE_SURROGATE);
     }
 
-    static List<Symbol> v1Symbols() {
+    public static List<Symbol> v1Symbols() {
         return symbols(V1_PROJECT, "v1 " + TRAPS);
     }
 

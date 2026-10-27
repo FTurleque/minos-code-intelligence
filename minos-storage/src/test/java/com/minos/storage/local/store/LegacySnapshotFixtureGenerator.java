@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.LegacySnapshotContent;
 import java.nio.file.Path;
 
 /**

@@ -610,9 +610,6 @@ STORAGE_MODULE = "minos-storage"
 LOCAL_BACKEND_PACKAGE = "storage.local"
 BACKEND_TYPES_NAMED_ACROSS_PACKAGES: dict[str, int] = {
     "storage.local.registry.ProjectPathMappingStore": 1,
-    "storage.local.store.KnowledgeSnapshotCodecs": 2,
-    "storage.local.store.SnapshotCodec": 2,
-    "storage.local.store.SnapshotIntegrityService": 1,
 }
 
 # A14 / AUD-ARC-12, ADR 0068 — the package roots (first segment under the groupId) each module owns. A new package
@@ -1104,7 +1101,7 @@ UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
         "in-memory state store used only by the tests of five modules; moving it needs a test-jar, not done here",
     "minos-nexus/com.minos.nexus.NexusSemanticSignalService":
         "public NEXUS semantic signal v2 surface (docs/developer/public-surfaces.md), not qualified by a client",
-    "minos-storage/com.minos.storage.local.store.CodeKnowledgeSnapshotBinaryCodec":
+    "minos-storage/com.minos.storage.codec.CodeKnowledgeSnapshotBinaryCodec":
         "declared snapshot codec boundary, excluded by AUD-QUA-02 itself",
 }
 TOP_LEVEL_PUBLIC_TYPE = re.compile(

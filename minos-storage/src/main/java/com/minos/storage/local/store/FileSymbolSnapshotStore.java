@@ -1,5 +1,9 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.KnowledgeSnapshotCodecs;
+import com.minos.storage.codec.SnapshotCodec;
+import com.minos.storage.codec.SnapshotCodecV1;
+import com.minos.storage.codec.SnapshotIntegrityService;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;

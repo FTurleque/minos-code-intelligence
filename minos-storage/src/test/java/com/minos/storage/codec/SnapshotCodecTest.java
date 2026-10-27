@@ -1,4 +1,4 @@
-package com.minos.storage.local.store;
+package com.minos.storage.codec;
 
 import com.minos.domain.OccurrenceRole;
 import com.minos.domain.Origin;
@@ -28,7 +28,7 @@ class SnapshotCodecTest {
         CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(
                 projectId,
                 "legacy",
-                FileSymbolSnapshotStoreTest.symbols(projectId),
+                CodecFixtures.symbols(projectId),
                 List.of(),
                 List.of()
         );
@@ -50,7 +50,7 @@ class SnapshotCodecTest {
         CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(
                 projectId,
                 "knowledge",
-                FileSymbolSnapshotStoreTest.symbols(projectId),
+                CodecFixtures.symbols(projectId),
                 List.of(),
                 List.of()
         );
@@ -82,7 +82,7 @@ class SnapshotCodecTest {
         CodeKnowledgeSnapshot incompatible = new CodeKnowledgeSnapshot(
                 projectId,
                 "legacy",
-                FileSymbolSnapshotStoreTest.symbols(projectId),
+                CodecFixtures.symbols(projectId),
                 List.of(occurrence),
                 List.of()
         );

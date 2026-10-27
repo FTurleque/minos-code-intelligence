@@ -1,4 +1,4 @@
-package com.minos.storage.local.store;
+package com.minos.storage.codec;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;

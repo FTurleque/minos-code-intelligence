@@ -1,4 +1,4 @@
-package com.minos.storage.local.store;
+package com.minos.storage.codec;
 
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
@@ -45,7 +45,6 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.DigestOutputStream;
@@ -64,10 +63,9 @@ import java.util.UUID;
  * Shared binary primitives used by the explicit v1/v2/v3 snapshot codecs.
  *
  * <p>The framing helpers ({@code readHeaderVersion}, {@code writeString}, {@code readString},
- * {@code readRequiredString}, {@code readCount}) are package-private rather than private because
- * {@link ActiveSnapshotRepository} writes the pointer file with the same framing. They must stay a
- * single implementation: a divergence between the two would silently produce pointer files this
- * package can no longer read back.</p>
+ * {@code readRequiredString}, {@code readCount}) delegate to {@link SnapshotBinaryPrimitives}, which the active
+ * snapshot pointer of the local backend also uses. They must stay a single implementation: a divergence between the
+ * two would silently produce pointer files this package can no longer read back.</p>
  */
 final class SnapshotBinaryCodecSupport {
 

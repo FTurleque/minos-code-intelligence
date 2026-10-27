@@ -1,4 +1,4 @@
-package com.minos.storage.local.store;
+package com.minos.storage.codec;
 
 import com.minos.io.ConfinedFileOpener;
 import com.minos.io.Sha256;

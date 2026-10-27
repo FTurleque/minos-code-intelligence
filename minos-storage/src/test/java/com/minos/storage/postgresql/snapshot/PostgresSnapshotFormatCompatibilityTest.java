@@ -1,8 +1,8 @@
 package com.minos.storage.postgresql.snapshot;
 
 import com.minos.storage.postgresql.PostgresTestSupport;
-import com.minos.storage.local.store.SnapshotCodecV2;
-import com.minos.storage.local.store.SnapshotIntegrityService;
+import com.minos.storage.codec.SnapshotCodecV2;
+import com.minos.storage.codec.SnapshotIntegrityService;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.SnapshotQueryView;
 import org.junit.jupiter.api.Test;

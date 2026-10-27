@@ -1,5 +1,7 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.QueryViewWeightFixtures;
+import com.minos.storage.codec.SnapshotCodecV3;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.SnapshotQueryView;
 import org.junit.jupiter.api.Test;

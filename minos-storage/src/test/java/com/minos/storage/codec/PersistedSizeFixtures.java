@@ -1,4 +1,4 @@
-package com.minos.storage.local.store;
+package com.minos.storage.codec;
 
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
@@ -20,10 +20,10 @@ import java.util.UUID;
  * Snapshots sized against the persisted-snapshot ceiling. Every large symbol shares one ASCII string
  * instance, so a snapshot that encodes to more than 256 MiB costs only a few megabytes of heap.
  */
-final class PersistedSizeFixtures {
+public final class PersistedSizeFixtures {
 
     /** Below {@code MAX_STRING_CHARS} (8 Mi characters), the per-string ceiling of every codec. */
-    static final int LARGE_STRING_CHARS = 8_000_000;
+    public static final int LARGE_STRING_CHARS = 8_000_000;
     private static final String LARGE = "s".repeat(LARGE_STRING_CHARS);
 
     private PersistedSizeFixtures() {
@@ -33,14 +33,14 @@ final class PersistedSizeFixtures {
      * Thirty-four symbols carrying an 8-million-character ASCII signature: about 272 MB in V3 (UTF-8), the
      * format a store picks for it, and 544 MB in V2 — above 256 MiB either way.
      */
-    static CodeKnowledgeSnapshot oversized(UUID projectId, String snapshotId) {
+    public static CodeKnowledgeSnapshot oversized(UUID projectId, String snapshotId) {
         List<Symbol> symbols = new ArrayList<>();
         for (int index = 0; index < 34; index++) symbols.add(symbol(projectId, index, LARGE));
         return new CodeKnowledgeSnapshot(projectId, snapshotId, symbols, List.of(), List.of());
     }
 
     /** {@code count} large symbols, then one symbol whose signature has {@code tailChars} characters. */
-    static CodeKnowledgeSnapshot withTail(UUID projectId, String snapshotId, int count, int tailChars) {
+    public static CodeKnowledgeSnapshot withTail(UUID projectId, String snapshotId, int count, int tailChars) {
         return withTail(projectId, snapshotId, count, tailChars, false);
     }
 
@@ -49,7 +49,7 @@ final class PersistedSizeFixtures {
      * {@code paritySymbol}, one more small symbol: every symbol carries an odd number of fixed bytes, so
      * it flips the parity of a V2 encoding, whose strings only ever add an even number of bytes.
      */
-    static CodeKnowledgeSnapshot withTail(UUID projectId, String snapshotId, int count, int tailChars,
+    public static CodeKnowledgeSnapshot withTail(UUID projectId, String snapshotId, int count, int tailChars,
                                           boolean paritySymbol) {
         List<Symbol> symbols = new ArrayList<>();
         for (int index = 0; index < count; index++) symbols.add(symbol(projectId, index, LARGE));
@@ -62,7 +62,7 @@ final class PersistedSizeFixtures {
      * A snapshot whose encoding by {@code codec} is exactly {@code target} bytes: large symbols, then one
      * symbol whose signature length absorbs the remainder (the smallest symbol count that makes it fit).
      */
-    static CodeKnowledgeSnapshot ofEncodedSize(UUID projectId, String snapshotId, long target, SnapshotCodec codec)
+    public static CodeKnowledgeSnapshot ofEncodedSize(UUID projectId, String snapshotId, long target, SnapshotCodec codec)
             throws IOException {
         // Each large symbol adds a fixed number of bytes: start just below the target instead of counting
         // every size from zero (a UTF-8 size walks every character).
@@ -81,7 +81,7 @@ final class PersistedSizeFixtures {
         throw new IllegalArgumentException("no fixture encodes to exactly " + target + " bytes");
     }
 
-    static Symbol symbol(UUID projectId, int index, String signature) {
+    public static Symbol symbol(UUID projectId, int index, String signature) {
         return new Symbol(
                 String.format(java.util.Locale.ROOT, "sym-%03d", index),
                 "key-" + index,

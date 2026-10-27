@@ -8,7 +8,7 @@ import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.PersistentRetentionPolicy;
 import com.minos.storage.StorageRetentionService;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
-import com.minos.storage.local.store.SnapshotIntegrityService;
+import com.minos.storage.codec.SnapshotIntegrityService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
