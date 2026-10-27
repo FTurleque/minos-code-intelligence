@@ -68,10 +68,13 @@ class SnapshotBinaryPrimitivesTest {
     void aCountOutsideItsBoundsIsRefused() throws IOException {
         assertEquals(7, SnapshotBinaryPrimitives.readCount(input(written(output -> output.writeInt(7))), 7, "symbol count"));
 
-        IOException above = assertThrows(IOException.class, () -> SnapshotBinaryPrimitives.readCount(
-                input(written(output -> output.writeInt(8))), 7, "symbol count"));
-        IOException negative = assertThrows(IOException.class, () -> SnapshotBinaryPrimitives.readCount(
-                input(written(output -> output.writeInt(-1))), 7, "symbol count"));
+        DataInputStream eight = input(written(output -> output.writeInt(8)));
+        DataInputStream minusOne = input(written(output -> output.writeInt(-1)));
+
+        IOException above = assertThrows(IOException.class,
+                () -> SnapshotBinaryPrimitives.readCount(eight, 7, "symbol count"));
+        IOException negative = assertThrows(IOException.class,
+                () -> SnapshotBinaryPrimitives.readCount(minusOne, 7, "symbol count"));
 
         assertEquals("invalid symbol count: 8", above.getMessage());
         assertEquals("invalid symbol count: -1", negative.getMessage());
