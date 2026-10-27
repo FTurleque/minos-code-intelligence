@@ -137,7 +137,7 @@ def main() -> int:
             "requireCapacity",
         )
         require(
-            "minos-storage/src/main/java/com/minos/storage/local/store/SnapshotBinaryCodecSupport.java",
+            "minos-storage/src/main/java/com/minos/storage/codec/SnapshotBinaryCodecSupport.java",
             "BoundedInputStream",
             "BoundedOutputStream",
             "MAX_PERSISTED_SNAPSHOT_BYTES",

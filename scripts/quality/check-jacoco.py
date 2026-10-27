@@ -26,7 +26,7 @@ SCOPES = {
     # (pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system): line 0.912, branch 0.758. Floor = measure minus 2 points.
     "storage-codec-and-state": {
         "prefixes": (
-            "com/minos/storage/local/store/SnapshotBinaryCodecSupport",
+            "com/minos/storage/codec/SnapshotBinaryCodecSupport", "com/minos/storage/codec/SnapshotBinaryPrimitives",
             "com/minos/storage/local/orchestration/FileIndexStateStore",
             "com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore",
             "com/minos/storage/local/registry/LocalProjectRegistry",
@@ -62,7 +62,7 @@ SCOPES = {
     "persistence-cache-indexes": {
         "prefixes": (
             "com/minos/storage/local/store/FileSymbolSnapshotStore", "com/minos/storage/local/store/ActiveSnapshotRepository",
-            "com/minos/storage/local/store/SnapshotCodec", "com/minos/storage/local/store/SnapshotIntegrityService",
+            "com/minos/storage/codec/SnapshotCodec", "com/minos/storage/codec/SnapshotIntegrityService",
             "com/minos/store/InMemoryCodeKnowledgeStore", "com/minos/store/SnapshotQueryView",
             "com/minos/store/SnapshotReadView", "com/minos/store/CodeKnowledgeReader",
         ), "line": 0.50, "branch": 0.35,

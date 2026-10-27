@@ -34,7 +34,7 @@ def main() -> int:
         compaction = read("minos-storage/src/main/java/com/minos/storage/local/store/SnapshotCompactionService.java")
         retention = read("minos-storage/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java")
         postgres_snapshot = read("minos-storage/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java")
-        snapshot_codec = read("minos-storage/src/main/java/com/minos/storage/local/store/SnapshotBinaryCodecSupport.java")
+        snapshot_codec = read("minos-storage/src/main/java/com/minos/storage/codec/SnapshotBinaryCodecSupport.java")
         file_snapshot = read("minos-storage/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")
         semantic_budget = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java")
         semantic_service = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexService.java")

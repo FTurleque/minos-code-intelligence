@@ -103,7 +103,7 @@ Relevés le 2026-10-23 (audit des ADR), preuves relues au HEAD `2f773e57` ; la d
 
 - Point 11 : une rétention automatique est appliquée par défaut — au plus 2 snapshots historiques plus l'actif par projet, compaction à chaque chemin terminal d'indexation — alors que l'ADR 0023 et l'[ADR 0024](DATA-0024-active-snapshot-query-view-and-rebuildable-indexes.md) (« Limites ») disent qu'aucune politique automatique de rétention n'est adoptée. La roadmap M16 donne cette rétention comme livrée par M16-S9 dans le profil par défaut. Le propriétaire n'a pas tranché — preuves : `minos-storage/src/main/java/com/minos/storage/local/store/SnapshotRetentionPolicy.java:10`, `minos-storage/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java:174`, `minos-engine/src/main/java/com/minos/storage/PersistentRetentionPolicy.java:9`, `minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java:366` et `:441` ; [`M16_EXECUTION.md`](../../project/roadmap/M16_EXECUTION.md) lignes 114 et 140.
 
-Écart d'un ADR source levé par la consolidation : le codec V3, relevé hors de la décision de l'ADR 0023, relève des points 6 à 8 (ADR 0046) — `minos-storage/src/main/java/com/minos/storage/local/store/SnapshotCodecV3.java`.
+Écart d'un ADR source levé par la consolidation : le codec V3, relevé hors de la décision de l'ADR 0023, relève des points 6 à 8 (ADR 0046) — `minos-storage/src/main/java/com/minos/storage/codec/SnapshotCodecV3.java`.
 
 ## References
 
