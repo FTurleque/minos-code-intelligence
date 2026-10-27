@@ -20,8 +20,7 @@ MODULES = (
     "minos-domain",
     "minos-engine",
     "minos-runtime-local",
-    "minos-storage-local",
-    "minos-storage-postgresql",
+    "minos-storage",
     "minos-provider-scip",
     "minos-integration-git",
     "minos-application",
@@ -41,8 +40,7 @@ MODULES = (
 # application through MinosApplication.open and reach the composition root at runtime only.
 ADAPTER_MODULES = frozenset({
     "minos-runtime-local",
-    "minos-storage-local",
-    "minos-storage-postgresql",
+    "minos-storage",
     "minos-provider-scip",
     "minos-integration-git",
 })
@@ -52,9 +50,6 @@ ASSEMBLY_MODULE = "minos-app"
 SURFACE_MODULES = frozenset({"minos-cli", "minos-api", "minos-mcp", "minos-nexus"})
 # Surfaces may see the composition root at runtime or in tests, never at compile time.
 SURFACE_TO_BOOTSTRAP_SCOPES = frozenset({"runtime", "test"})
-# Optional backends stay optional in production: the composition root may reach them in tests only
-# (production discovers them by ServiceLoader, see DefaultMinosApplicationComposer).
-BOOTSTRAP_TEST_ONLY_ADAPTERS = frozenset({"minos-storage-postgresql"})
 
 # Explicitly allowed direct MINOS dependencies. This is a maximum set, not a requirement:
 # removing a dependency is allowed, adding a dependency outside this policy is blocked.
@@ -63,24 +58,25 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     "minos-engine": frozenset({"minos-domain"}),
     # ADR 0058: every module a class uses is declared, including the domain reached through minos-engine.
     "minos-runtime-local": frozenset({"minos-domain", "minos-engine"}),
-    "minos-storage-local": frozenset({"minos-domain", "minos-engine"}),
-    "minos-storage-postgresql": frozenset({"minos-domain", "minos-engine", "minos-storage-local"}),
+    # ADR 0068 section 4: one storage module; its local and PostgreSQL backends are kept apart by package rules
+    # (R1, R2 and BACKEND_TYPES_NAMED_ACROSS_PACKAGES), not by Maven.
+    "minos-storage": frozenset({"minos-domain", "minos-engine"}),
     "minos-provider-scip": frozenset({
-        "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local"
+        "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage"
     }),
     "minos-integration-git": frozenset({"minos-domain", "minos-engine"}),
     "minos-application": frozenset({"minos-domain", "minos-engine"}),
     "minos-bootstrap": frozenset({
-        "minos-domain", "minos-engine", "minos-application", "minos-runtime-local", "minos-storage-local",
-        "minos-provider-scip", "minos-integration-git", "minos-storage-postgresql"
+        "minos-domain", "minos-engine", "minos-application", "minos-runtime-local", "minos-storage",
+        "minos-provider-scip", "minos-integration-git"
     }),
     "minos-nexus": frozenset({"minos-domain", "minos-application", "minos-bootstrap"}),
     "minos-cli": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap"}),
     "minos-api": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     "minos-mcp": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     "minos-app": frozenset({
-        "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local",
-        "minos-storage-postgresql", "minos-provider-scip", "minos-integration-git",
+        "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
+        "minos-provider-scip", "minos-integration-git",
         "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp"
     }),
 }
@@ -96,8 +92,7 @@ ARTIFACT_TO_MODULE = {
     "minos-domain": "minos-domain",
     "minos-engine": "minos-engine",
     "minos-runtime-local": "minos-runtime-local",
-    "minos-storage-local": "minos-storage-local",
-    "minos-storage-postgresql": "minos-storage-postgresql",
+    "minos-storage": "minos-storage",
     "minos-provider-scip": "minos-provider-scip",
     "minos-integration-git": "minos-integration-git",
     "minos-application": "minos-application",
@@ -259,11 +254,6 @@ def check_hexagonal_boundaries(scoped: dict[str, dict[str, str]]) -> None:
                         f"{module} -> {forbidden} (an adapter must implement engine/domain ports and never "
                         "depend on the application, the composition root or a surface)")
         elif module == BOOTSTRAP_MODULE:
-            for adapter in sorted(set(dependencies) & BOOTSTRAP_TEST_ONLY_ADAPTERS):
-                if dependencies[adapter] != "test":
-                    violations.append(
-                        f"{module} -> {adapter} [{dependencies[adapter]}] (optional backends are discovered "
-                        "by ServiceLoader in production; the composition root may reach them in tests only)")
             for surface in sorted(set(dependencies) & (SURFACE_MODULES | {ASSEMBLY_MODULE})):
                 violations.append(f"{module} -> {surface} (the composition root sits below the surfaces)")
         elif module != ASSEMBLY_MODULE:
@@ -607,15 +597,22 @@ ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], dict[str, int]] = {
         "runtime.local.sandbox.WorkerSandboxBackend": 1,
         "runtime.local.sandbox.WorkerSandboxBackends": 1,
     },
-    ("minos-provider-scip", "minos-storage-local"): {
+    ("minos-provider-scip", "minos-storage"): {
         "storage.local.store.FileSymbolSnapshotStore": 1,
     },
-    ("minos-storage-postgresql", "minos-storage-local"): {
-        "storage.local.registry.ProjectPathMappingStore": 1,
-        "storage.local.store.KnowledgeSnapshotCodecs": 2,
-        "storage.local.store.SnapshotCodec": 2,
-        "storage.local.store.SnapshotIntegrityService": 1,
-    },
+}
+
+# D4 (SH-02, E04), ADR 0068 section 4 — inside minos-storage, the types of com.minos.storage.local that the production
+# sources of com.minos.storage.postgresql name, each with the number of files that name it. The list only shrinks (SH-03
+# moves the shared codecs to com.minos.storage.codec and empties it); com.minos.storage.local names no type of
+# com.minos.storage.postgresql at all.
+STORAGE_MODULE = "minos-storage"
+LOCAL_BACKEND_PACKAGE = "storage.local"
+BACKEND_TYPES_NAMED_ACROSS_PACKAGES: dict[str, int] = {
+    "storage.local.registry.ProjectPathMappingStore": 1,
+    "storage.local.store.KnowledgeSnapshotCodecs": 2,
+    "storage.local.store.SnapshotCodec": 2,
+    "storage.local.store.SnapshotIntegrityService": 1,
 }
 
 # A14 / AUD-ARC-12, ADR 0068 — the package roots (first segment under the groupId) each module owns. A new package
@@ -631,8 +628,7 @@ PACKAGE_ROOTS_BY_MODULE: dict[str, frozenset[str]] = {
         "registry", "remote", "runtime", "source", "storage", "store",
     }),
     "minos-runtime-local": frozenset({"runtime"}),
-    "minos-storage-local": frozenset({"storage"}),
-    "minos-storage-postgresql": frozenset({"storage"}),
+    "minos-storage": frozenset({"storage"}),
     "minos-provider-scip": frozenset({"adapter"}),
     "minos-integration-git": frozenset({"integration"}),
     "minos-application": frozenset({
@@ -726,19 +722,21 @@ def accessor_types_used(code: str, accessors: dict[str, tuple[int, str]], group:
 
 
 def types_named_by_module(root: Path, module: str, targets: dict[str, str], qualified_name: re.Pattern[str],
-                          accessors: dict[str, tuple[int, str]] | None = None, group: str = ""
-                          ) -> tuple[dict[str, set[str]], list[str]]:
+                          accessors: dict[str, tuple[int, str]] | None = None, group: str = "",
+                          naming_package: str = "") -> tuple[dict[str, set[str]], list[str]]:
     """Target types the production sources of one module use (type -> files): by single or static import, by fully
     qualified name and, when accessors are given, by a call of a MinosApplication accessor that returns the type. Also
     every wildcard import of a target package ('file -> package.*'). Comments and string literals are ignored; a nested
-    type counts as its top-level type."""
+    type counts as its top-level type. A naming package (dotted, under the source root) restricts the naming files to
+    that package and its subpackages."""
     named: dict[str, set[str]] = {}
     wildcards: list[str] = []
     packages = set(targets.values())
     source_root = root / module / "src" / "main" / "java"
-    if not source_root.is_dir():
+    naming_root = source_root.joinpath(*naming_package.split(".")) if naming_package else source_root
+    if not naming_root.is_dir():
         return named, wildcards
-    for source in sorted(source_root.rglob("*.java")):
+    for source in sorted(naming_root.rglob("*.java")):
         text = source.read_text(encoding="utf-8")
         code = COMMENTS_AND_LITERALS.sub(" ", text)
         relative = source.relative_to(root).as_posix()
@@ -761,17 +759,20 @@ def types_named_by_module(root: Path, module: str, targets: dict[str, str], qual
 
 def named_type_ratchet_problems(rule: str, label: str, table: str, root: Path, naming: str, target: str,
                                 listed: dict[str, int], group: str, qualified_name: re.Pattern[str],
-                                accessors: dict[str, tuple[int, str]] | None = None) -> list[str]:
+                                accessors: dict[str, tuple[int, str]] | None = None, naming_package: str = "",
+                                target_package: str = "") -> list[str]:
     """Problems of one (naming module, target module) list: unknown entry, invalid count, type outside the list, count
-    different from the number of files that use the type, dead entry."""
-    targets = production_types(root, target)
+    different from the number of files that use the type, dead entry. Naming and target packages (dotted, under the
+    source root) narrow the list to the types of one package named by the files of another, inside one module."""
+    targets = {name: package for name, package in production_types(root, target).items()
+               if not target_package or name.startswith(target_package + ".")}
     prefix = group + "."
     problems = [f"{label}: {table} entry {name} names no production type of {target}"
                 for name in sorted(listed) if prefix + name not in targets]
     problems += [f"{label}: {table} entry {name} has the count {count!r}; write the positive number of files that "
                  "use it" for name, count in sorted(listed.items())
                  if isinstance(count, bool) or not isinstance(count, int) or count < 1]
-    named, wildcards = types_named_by_module(root, naming, targets, qualified_name, accessors, group)
+    named, wildcards = types_named_by_module(root, naming, targets, qualified_name, accessors, group, naming_package)
     problems += [f"{label}: wildcard import of a {target} package {wildcard}" for wildcard in wildcards]
     for qualified in sorted(named):
         name = qualified.removeprefix(prefix)
@@ -869,6 +870,27 @@ def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | Non
     return sum(len(types) for types in listed.values())
 
 
+def check_backend_types_named_across_packages(root: Path = ROOT, group_id: str | None = None,
+                                              listed: dict[str, int] | None = None) -> int:
+    """D4 — inside minos-storage, the PostgreSQL backend names the types of the local backend only through
+    BACKEND_TYPES_NAMED_ACROSS_PACKAGES, each from the listed number of files; the local backend names none of the
+    PostgreSQL backend."""
+    listed = BACKEND_TYPES_NAMED_ACROSS_PACKAGES if listed is None else listed
+    group = group_id or repository_group_id(root)
+    qualified_name = qualified_name_pattern(group)
+    local, postgresql = f"{group}.{LOCAL_BACKEND_PACKAGE}", f"{group}.{POSTGRESQL_BACKEND_PACKAGE}"
+    problems = named_type_ratchet_problems("D4", "postgresql -> local", "BACKEND_TYPES_NAMED_ACROSS_PACKAGES", root,
+                                           STORAGE_MODULE, STORAGE_MODULE, listed, group, qualified_name,
+                                           naming_package=postgresql, target_package=local)
+    problems += named_type_ratchet_problems("D4", "local -> postgresql", "the empty list of the local backend", root,
+                                            STORAGE_MODULE, STORAGE_MODULE, {}, group, qualified_name,
+                                            naming_package=local, target_package=postgresql)
+    if problems:
+        fail("D4 storage backends ratchet (ADR 0068 section 4: local and postgresql do not depend on each other; SH-03 "
+             "moves the shared codecs out of the local backend): " + "; ".join(problems))
+    return len(listed)
+
+
 def check_package_roots(root: Path = ROOT, group_id: str | None = None,
                         listed: dict[str, frozenset[str]] | None = None,
                         modules: tuple[str, ...] = MODULES) -> int:
@@ -960,8 +982,8 @@ def check_service_loader_class_loaders(root: Path = ROOT, modules: tuple[str, ..
 # calls all show the word. The list only shrinks.
 LEGACY_SNAPSHOT_VIEW_USERS = frozenset({
     # Both snapshot stores implement the deprecated loadActiveQueryView by SnapshotQueryView.of(read view).
-    "minos-storage-local/storage.local.store.FileSymbolSnapshotStore",
-    "minos-storage-postgresql/storage.postgresql.snapshot.PostgresCodeKnowledgeSnapshotStore",
+    "minos-storage/storage.local.store.FileSymbolSnapshotStore",
+    "minos-storage/storage.postgresql.snapshot.PostgresCodeKnowledgeSnapshotStore",
     # Deprecated public overload analyze(SnapshotQueryView, ...), delegating to analyze(SnapshotReadView, ...).
     "minos-application/impact.ImpactAnalysisService",
 })
@@ -1039,7 +1061,7 @@ UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
         "in-memory state store used only by the tests of five modules; moving it needs a test-jar, not done here",
     "minos-nexus/com.minos.nexus.NexusSemanticSignalService":
         "public NEXUS semantic signal v2 surface (docs/developer/public-surfaces.md), not qualified by a client",
-    "minos-storage-local/com.minos.storage.local.store.CodeKnowledgeSnapshotBinaryCodec":
+    "minos-storage/com.minos.storage.local.store.CodeKnowledgeSnapshotBinaryCodec":
         "declared snapshot codec boundary, excluded by AUD-QUA-02 itself",
 }
 TOP_LEVEL_PUBLIC_TYPE = re.compile(
@@ -1655,6 +1677,7 @@ def main() -> int:
         engine_types = check_engine_types_named_by_surfaces()
         launchers = check_process_launchers()
         adapter_types = check_adapter_types_named_by_adapters()
+        backend_types = check_backend_types_named_across_packages()
         package_roots = check_package_roots()
         service_loaders = check_service_loader_class_loaders()
         snapshot_view_users = check_snapshot_read_port()
@@ -1687,6 +1710,9 @@ def main() -> int:
               f"is named")
         print(f"R1/R2 PostgreSQL backend isolation: {postgresql_blind} modules name neither the backend package nor "
               "its driver")
+        print(f"D4 storage backends: {backend_types} types of the local backend listed in "
+              f"BACKEND_TYPES_NAMED_ACROSS_PACKAGES ({sum(BACKEND_TYPES_NAMED_ACROSS_PACKAGES.values())} files), none "
+              "other is named by the PostgreSQL backend, and the local backend names none of it")
         print(f"A14 package roots: {package_roots} roots over {len(MODULES)} modules, no new root")
         print(f"AUD-ARC-11 execution edges by service: "
               + (", ".join(f"{a} -> {b}" for a, b in runtime_edges) or "none") + " (documented)")

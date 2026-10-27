@@ -46,8 +46,8 @@ class ModuleArchitectureTest {
 
     static {
         for (String module : List.of(
-                "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local",
-                "minos-storage-postgresql", "minos-provider-scip", "minos-integration-git", "minos-application",
+                "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
+                "minos-provider-scip", "minos-integration-git", "minos-application",
                 "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp")) {
             OUTPUTS.put(module, Path.of(module, "target", "classes"));
         }
@@ -59,27 +59,25 @@ class ModuleArchitectureTest {
             Map.entry("minos-domain", Set.of()),
             Map.entry("minos-engine", Set.of("minos-domain")),
             Map.entry("minos-runtime-local", Set.of("minos-domain", "minos-engine")),
-            Map.entry("minos-storage-local", Set.of("minos-domain", "minos-engine")),
-            Map.entry("minos-storage-postgresql", Set.of("minos-domain", "minos-engine", "minos-storage-local")),
+            Map.entry("minos-storage", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-provider-scip",
-                    Set.of("minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local")),
+                    Set.of("minos-domain", "minos-engine", "minos-runtime-local", "minos-storage")),
             Map.entry("minos-integration-git", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-application", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-bootstrap", Set.of("minos-domain", "minos-engine", "minos-application",
-                    "minos-runtime-local", "minos-storage-local", "minos-provider-scip", "minos-integration-git",
-                    "minos-storage-postgresql")),
+                    "minos-runtime-local", "minos-storage", "minos-provider-scip", "minos-integration-git")),
             Map.entry("minos-nexus", Set.of("minos-domain", "minos-application", "minos-bootstrap")),
             Map.entry("minos-cli",
                     Set.of("minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap")),
             Map.entry("minos-api", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
             Map.entry("minos-mcp", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
             Map.entry("minos-app", Set.of("minos-domain", "minos-engine", "minos-runtime-local",
-                    "minos-storage-local", "minos-storage-postgresql", "minos-provider-scip",
+                    "minos-storage", "minos-provider-scip",
                     "minos-integration-git", "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli",
                     "minos-api", "minos-mcp")));
 
-    private static final Set<String> ADAPTERS = Set.of("minos-runtime-local", "minos-storage-local",
-            "minos-storage-postgresql", "minos-provider-scip", "minos-integration-git");
+    private static final Set<String> ADAPTERS = Set.of("minos-runtime-local", "minos-storage",
+            "minos-provider-scip", "minos-integration-git");
     private static final Set<String> SURFACES = Set.of("minos-cli", "minos-api", "minos-mcp", "minos-nexus");
 
     /**

@@ -4,7 +4,7 @@
 > `minos-domain/src/main/java/com/minos/domain/`, `minos-engine/src/main/java/`,
 > `minos-cli/src/main/java/com/minos/cli/MinosCli.java`,
 > `minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java`,
-> `minos-provider-scip/src/main/java/`, `minos-storage-local/src/main/java/`,
+> `minos-provider-scip/src/main/java/`, `minos-storage/src/main/java/`,
 > `minos-application/src/main/java/`, ADR-0022.
 
 ---
@@ -18,7 +18,7 @@ flowchart TB
     surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-nexus"]
     bootstrap["<b>minos-bootstrap</b><br/>racine de composition (ADR-0042)"]
     application["<b>minos-application</b><br/>services applicatifs"]
-    adapters["<b>Adaptateurs</b><br/>minos-storage-local · minos-storage-postgresql (optionnel)<br/>minos-provider-scip · minos-runtime-local · minos-integration-git"]
+    adapters["<b>Adaptateurs</b><br/>minos-storage (local · PostgreSQL optionnel)<br/>minos-provider-scip · minos-runtime-local · minos-integration-git"]
     engine["<b>minos-engine</b><br/>ports, indexation, requêtes"]
     domain["<b>minos-domain</b><br/>modèle de domaine pur"]
 
@@ -64,18 +64,19 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Dépendances** : `minos-domain`, `minos-engine`.
 - **Sources** : `minos-runtime-local/src/main/java/com/minos/runtime/local/` (racine : l'orchestration — `LocalIsolatedIndexWorker`, `StrongProcessOwnershipIndexerExecutor`, `CompositeProviderRuntimeManager` ; sous-packages `process` pour la localisation des commandes, l'environnement et l'exécution des processus, `sandbox` pour les contrats et la sélection du bac à sable, bubblewrap et cgroup sous Linux, AppContainer et Job Object sous Windows, `workspace` pour l'espace de travail du provider, le quota d'écriture et la rétention, `distributed` pour les artefacts distribués, `acl` pour l'unique lanceur d'`icacls` et l'implémentation Windows du port `PlatformAccessControl` du moteur ; les dépendances vont de la racine vers tous, de `sandbox` vers `process`, `workspace` et `acl`, de `process` vers `workspace`, jamais l'inverse). Les ressources restent dans `com/minos/runtime/local/` et se chargent par chemin absolu. Les types de `acl`, `process`, `sandbox` et `workspace` sont publics pour se voir entre sous-packages ou pour `ServiceLoader` ; seuls ceux de la liste `RUNTIME_LOCAL_EXPORTED_TYPES` peuvent être nommés par un autre module, et aucun de `acl` (règle A10 de `check-module-boundaries.py`).
 
-### minos-storage-local
-- **Responsabilité** : persistance locale des snapshots, vecteurs sémantiques, observations runtime, control plane tenant.
-- **Types clés** : `SnapshotRepository`, `FileSemanticVectorStore`, `FileRuntimeObservationStore`, `FileHostedControlPlaneStore`.
-- **Interfaces** : implémente `CodeKnowledgeStore`, `SemanticVectorStore`, `RuntimeObservationStore`, `HostedControlPlaneStore`.
-- **Dépendances** : `minos-domain`, `minos-engine`.
-- **Sources** : `minos-storage-local/src/main/java/com/minos/storage/local/` (sous-packages `store`, `registry`, `orchestration`, `incremental`).
+### minos-storage
+- **Responsabilité** : adaptateurs de stockage ([ADR 0068](../adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 4). Le backend local persiste les snapshots, les vecteurs sémantiques, les observations runtime et le control plane tenant. Le backend PostgreSQL/pgvector, optionnel, remplace l'ensemble de la couche locale, pas seulement le port de snapshot (ADR-0025).
+- **Types clés** : `LocalStorageBackend`, `FileSymbolSnapshotStore`, `FileSemanticVectorStore`, `FileRuntimeObservationStore`, `FileHostedControlPlaneStore` ; `PostgresStorageBackend`, `PostgresStorageBackendProvider`.
+- **Interfaces** : implémente `StorageBackend`, `CodeKnowledgeStore`, `ProjectRegistry`, `ProjectFingerprintSnapshotStore`, `SemanticVectorStore`, `RuntimeObservationStore`, `IndexStateStore`, `HostedControlPlaneStore`, définies dans `minos-engine`. Le module ne dépend pas de `minos-application` (un adaptateur n'en dépend jamais, ADR 0042).
+- **Dépendances** : `minos-domain`, `minos-engine`, `postgresql 42.7.14`, `jackson 2.22`.
+- **Cloisonnement** : les deux backends sont séparés par des règles de packages, pas par Maven. `com.minos.storage.local` ne nomme aucun type de `com.minos.storage.postgresql`. `com.minos.storage.postgresql` ne nomme de `com.minos.storage.local` que les types de la liste `BACKEND_TYPES_NAMED_ACROSS_PACKAGES`, qui ne fait que rétrécir. Ni `minos-bootstrap` ni `minos-provider-scip` ne nomment le backend PostgreSQL ou son pilote (règles R1 et R2) : la racine de composition le découvre par `ServiceLoader`, et la composition locale ne charge aucune de ses classes (`LocalCompositionLoadsNoPostgresqlClassTest`). Les dépendances JDBC et Jackson sont dans le graphe de tout consommateur du module.
+- **Sources** : `minos-storage/src/main/java/com/minos/storage/local/` (sous-packages `store`, `registry`, `orchestration`, `incremental`) et `minos-storage/src/main/java/com/minos/storage/postgresql/` (racine : le backend et son fournisseur `ServiceLoader` ; sous-packages `support` pour la connexion, la politique d'URL JDBC, les migrations, les codecs et le verrou de mutation, `snapshot` pour les stores de snapshots et d'observations, `project` pour le registre, les états d'index et la rétention, `semantic` pour les requêtes et le store vectoriel ; les dépendances vont vers `support`, jamais l'inverse).
 
 ### minos-provider-scip
 - **Responsabilité** : adapter SCIP — ingestion des artefacts `.scip`, normalisation vers le domaine MINOS, lifecycle des providers Java/TypeScript/polyglot.
 - **Types clés** : `ScipIngestionAdapter`, `ScipSymbolNormalizer`, `ScipIndexerCatalog`, `ScipJavaProcessPlanFactory`, `ScipTypeScriptProcessPlanFactory`, `ManagedPolyglotScipRuntimeManager`.
 - **Interfaces** : implémente `IndexerProvider`.
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-storage-local`, `minos-runtime-local`, `scip-java-bindings 0.9.0`.
+- **Dépendances** : `minos-domain`, `minos-engine`, `minos-storage`, `minos-runtime-local`, `scip-java-bindings 0.9.0`.
 - **Sources** : `minos-provider-scip/src/main/java/com/minos/adapter/scip/` (racine : `ScipIndexerCatalog` ; sous-packages `ingestion` pour la lecture et la normalisation des artefacts `.scip`, `runtime` pour le cycle de vie du snapshot, `runtime.install` pour l'installation des outils, `runtime.plan` pour les plans d'indexation ; les dépendances vont de `install` vers `plan`, jamais l'inverse). Les ressources empaquetées restent dans `com/minos/adapter/scip/runtime/` et se chargent par chemin absolu.
 
 ### minos-integration-git
@@ -118,19 +119,13 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 ### minos-bootstrap
 - **Responsabilité** : racine de composition ([ADR 0042](../adr/ARCH-0042-racine-de-composition.md)) : seul module non adaptateur qui connaît des classes concrètes d'adaptateur ; découvert par `ServiceLoader` derrière `MinosApplication.open(home)` / `Builder.build()`.
 - **Types clés** : `DefaultMinosApplicationComposer`, `StorageBackendSelection`, `LocalRemoteIndexingRuntime`, `LocalWorkerSandboxProbe`.
-- **Dépendances** : `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
+- **Dépendances** : `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
 - **Sources** : `minos-bootstrap/src/main/java/com/minos/bootstrap/`.
 
 ### minos-app
 - **Responsabilité** : assemblage final (shaded JAR), point d'entrée NEXUS (`NexusExportBridgeMain`), route `minos mcp` (`McpLaunchRouteProvider` → router backend natif/Docker, `com.minos.app`) fournie à `MinosLauncher` par `META-INF/services` ([ADR 0044](../adr/archive/0044-un-package-un-module.md)).
 - **Dépendances** : tous les modules.
 - **Sources** : `minos-app/src/main/java/`.
-
-### minos-storage-postgresql (optionnel)
-- **Responsabilité** : backend de stockage PostgreSQL/pgvector — implémente `StorageBackend`, `ProjectRegistry`, `ProjectFingerprintSnapshotStore`, `SemanticVectorStore`, `RuntimeObservationStore`, `IndexStateStore`.
-- **Note architecturale** : ce module ne dépend pas de `minos-application` (un adaptateur n'en dépend jamais, ADR 0042). Les interfaces `StorageBackend` (`com.minos.storage`), `ProjectRegistry` (`com.minos.registry`) et `ProjectFingerprintSnapshotStore` (`com.minos.incremental`) sont définies dans `minos-engine` ; le backend PostgreSQL remplace l'ensemble de la couche locale, pas seulement le port de snapshot (voir ADR-0025).
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-storage-local`, `postgresql 42.7.13`, `jackson 2.22`.
-- **Sources** : `minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/` (racine : le backend et son fournisseur `ServiceLoader` ; sous-packages `support` pour la connexion, la politique d'URL JDBC, les migrations, les codecs et le verrou de mutation, `snapshot` pour les stores de snapshots et d'observations, `project` pour le registre, les états d'index et la rétention, `semantic` pour les requêtes et le store vectoriel ; les dépendances vont vers `support`, jamais l'inverse). Ces classes sont publiques pour se voir entre sous-packages ; aucun autre module ne les importe.
 
 ---
 
