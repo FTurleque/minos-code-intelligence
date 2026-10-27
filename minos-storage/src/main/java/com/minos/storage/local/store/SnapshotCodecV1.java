@@ -4,7 +4,6 @@ import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.SymbolSnapshot;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Objects;
 
 /** Historical M2 symbol-only codec. */

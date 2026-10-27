@@ -109,9 +109,9 @@ class LocalCompositionLoadsNoPostgresqlClassTest {
                     throw new ClassNotFoundException(name);
                 }
                 byte[] bytes = input.readAllBytes();
-                Class<?> defined = defineClass(name, bytes, 0, bytes.length);
-                this.defined.add(name);
-                return defined;
+                Class<?> definedClass = defineClass(name, bytes, 0, bytes.length);
+                defined.add(name);
+                return definedClass;
             } catch (IOException exception) {
                 throw new ClassNotFoundException(name, exception);
             }
