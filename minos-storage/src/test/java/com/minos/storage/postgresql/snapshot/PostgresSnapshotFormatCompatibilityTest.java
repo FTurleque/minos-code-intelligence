@@ -1,6 +1,7 @@
 package com.minos.storage.postgresql.snapshot;
 
 import com.minos.storage.postgresql.PostgresTestSupport;
+import com.minos.storage.codec.LegacySnapshotContent;
 import com.minos.storage.codec.SnapshotCodecV2;
 import com.minos.storage.codec.SnapshotIntegrityService;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -30,8 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PostgresSnapshotFormatCompatibilityTest extends PostgresTestSupport {
 
     private static final String FIXTURES = "/snapshot-formats/base-d9ae1005/";
-    private static final UUID V2_PROJECT = UUID.fromString("a6000000-0000-4000-8000-000000000002");
-    private static final UUID LONE_SURROGATE_PROJECT = UUID.fromString("a6000000-0000-4000-8000-000000000003");
+    private static final UUID V2_PROJECT = LegacySnapshotContent.V2_PROJECT;
+    private static final UUID LONE_SURROGATE_PROJECT = LegacySnapshotContent.V2_LONE_SURROGATE_PROJECT;
 
     @TempDir
     Path tempDir;
@@ -40,6 +41,7 @@ class PostgresSnapshotFormatCompatibilityTest extends PostgresTestSupport {
     void legacyV2PayloadLoadsAndReimportingTheSameSnapshotKeepsIt() throws Exception {
         byte[] legacy = resource("v2-well-formed.knowledge");
         CodeKnowledgeSnapshot expected = insertLegacy(V2_PROJECT, "legacy-v2", legacy);
+        assertEquals(LegacySnapshotContent.v2(), expected);
         PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
 
         SnapshotQueryView view = store.loadActiveQueryView(V2_PROJECT).orElseThrow();
@@ -66,6 +68,7 @@ class PostgresSnapshotFormatCompatibilityTest extends PostgresTestSupport {
     void legacyPayloadWithAnUnpairedSurrogateLoadsExactlyAndIsRepublishedInV2() throws Exception {
         CodeKnowledgeSnapshot expected = insertLegacy(LONE_SURROGATE_PROJECT, "legacy-v2-lone-surrogate",
                 resource("v2-lone-surrogate.knowledge"));
+        assertEquals(LegacySnapshotContent.v2WithLoneSurrogate(), expected);
         PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         assertEquals(expected, store.loadActiveKnowledge(LONE_SURROGATE_PROJECT).orElseThrow());
 
