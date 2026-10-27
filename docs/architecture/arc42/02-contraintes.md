@@ -1,7 +1,7 @@
 # Section 2 — Contraintes
 
 > Preuves : `pom.xml` (versions enforcer), ADR-0004, ADR-0005, ADR-0017, ADR-0021, ADR-0035, ADR-0037,
-> `minos-storage-postgresql/pom.xml` (Docker Testcontainers), ADR-0022.
+> `minos-storage/pom.xml` (Docker Testcontainers), ADR-0022.
 
 ---
 
@@ -11,13 +11,13 @@
 |-----|-----------|--------|--------|
 | CT-1 | **Java 25** requis (range `[25,26)`) | Imposée — enforcer Maven | `pom.xml` `<requireJavaVersion>` |
 | CT-2 | **Maven 3.9.x** requis (range `[3.9,4.0)`) | Imposée — enforcer Maven | `pom.xml` `<requireMavenVersion>` |
-| CT-3 | **Reactor Maven multi-module** : 14 modules enfants + parent | Imposée — ADR-0022 | `pom.xml` `<modules>` |
+| CT-3 | **Reactor Maven multi-module** : 13 modules enfants + parent | Imposée — ADR-0022 | `pom.xml` `<modules>` |
 | CT-4 | Direction de dépendances Maven stricte : `domain → engine → infra → adapters → services → surfaces → app` | Imposée — ADR-0022 | Structure `pom.xml` des modules |
 | CT-5 | **SCIP** comme protocole d'interopérabilité d'indexation privilégié | Imposée — ADR-0002 | `minos-provider-scip/pom.xml` |
 | CT-6 | **MCP STDIO read-only** — aucune mutation de projet via MCP | Imposée — ADR-0017 | `MinosMcpServer.java` |
 | CT-7 | **Shaded JAR** produit par `minos-app` ; point d'entrée `com.minos.cli.MinosLauncher` | Imposée — ADR-0022 | `minos-app/pom.xml` shade plugin |
 | CT-8 | **JGit** confiné à `minos-integration-git` | Imposée — ADR-0022 | `minos-integration-git/pom.xml` |
-| CT-9 | **PostgreSQL / pgvector** : backend optionnel, qualifié par Testcontainers | Préférence qualifiée | `minos-storage-postgresql/pom.xml` |
+| CT-9 | **PostgreSQL / pgvector** : backend optionnel, qualifié par Testcontainers | Préférence qualifiée | `minos-storage/pom.xml` |
 | CT-10 | Aucun framework serveur (Spring, Quarkus…) dans le cœur | Imposée — ADR-0004 | Absence de dépendance framework dans `pom.xml` |
 
 ---

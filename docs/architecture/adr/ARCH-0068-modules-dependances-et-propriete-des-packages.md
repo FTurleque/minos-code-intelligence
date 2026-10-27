@@ -85,8 +85,8 @@ Un accès package-private entre jars se résout par déplacement du code ou du t
 | `com.minos.domain`, `com.minos.semantic` (types du domaine) | `minos-domain` |
 | `com.minos.query`, ports `com.minos.store` (dont `CodeKnowledgeStore`), `com.minos.git`, `com.minos.runtime` (dont `MinosVersion`), `com.minos.storage`, `com.minos.discovery`, `com.minos.incremental`, `com.minos.orchestration` (dont `ScipSymbolSnapshotRequest` et `ScipSymbolSnapshotReport`), `com.minos.hosted`, `com.minos.dynamic` | `minos-engine` |
 | `com.minos.runtime.local` | `minos-runtime-local` |
-| `com.minos.storage.local` (dont `store`, `registry`, `orchestration`, `incremental`) | `minos-storage-local` |
-| `com.minos.storage.postgresql` | `minos-storage-postgresql` |
+| `com.minos.storage.local` (dont `store`, `registry`, `orchestration`, `incremental`) | `minos-storage` |
+| `com.minos.storage.postgresql` | `minos-storage` |
 | `com.minos.adapter.scip` | `minos-provider-scip` |
 | `com.minos.integration.git` | `minos-integration-git` |
 | `com.minos.application` (dont `dynamic`, `semantic`, `StorageBackends`) | `minos-application` |
@@ -196,13 +196,17 @@ L'ordre des tâches et leurs prérequis sont dans [le plan du chantier stockage]
 - **Types du registre** : `UnreadableRegistryException`, `DegradedEntry` et `ProjectPathMapping` passent dans `com.minos.domain.registry` (§ 3, étape 3 : le côté interne prend l'espace de noms de son module). Les ports du registre restent dans `com.minos.registry`, dans le moteur.
 - **`com.minos.runtime.MinosVersion`** reste dans le moteur, comme le fixe la table du § 3.
 
+**§ 4, adaptateurs de stockage réunis (SH-02, AUD-ARC-08, changement OpenSpec `fusionner-les-adaptateurs-de-stockage`)** :
+- **Un seul module** : `minos-storage` contient `com.minos.storage.local` et `com.minos.storage.postgresql`, et le reactor compte 13 modules. Il dépend de `minos-domain` et de `minos-engine` seulement.
+- **Cloisonnement des backends par packages** : `com.minos.storage.local` ne nomme aucun type de `com.minos.storage.postgresql` ; `com.minos.storage.postgresql` ne nomme de `com.minos.storage.local` que les types de `BACKEND_TYPES_NAMED_ACROSS_PACKAGES` (cliquet D4 de `check-module-boundaries.py`, qui ne fait que rétrécir et que SH-03 videra en déplaçant les codecs partagés vers `com.minos.storage.codec`).
+- **PostgreSQL reste optionnel** : `minos-bootstrap` et `minos-provider-scip` ne nomment ni le backend PostgreSQL ni son pilote (règles R1 et R2) ; la racine de composition le découvre par `ServiceLoader`, et une application composée avec le backend local ne charge aucune de ses classes (`LocalCompositionLoadsNoPostgresqlClassTest`). Le pilote JDBC et Jackson sont dans le graphe de tout consommateur de `minos-storage`.
+
 ## Écarts constatés
 
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
 
-- Fusion du stockage (§ 4) à réaliser : le reactor déclare toujours `minos-storage-local` et `minos-storage-postgresql`, sans module `minos-storage` ni package `com.minos.storage.codec` — preuve : `pom.xml:27`, `pom.xml:31`.
-- `minos-storage-postgresql` dépend de `minos-storage-local`, contrairement au point « `local` et `postgresql` ne dépendent pas l'un de l'autre », et la table du gate l'autorise — preuve : `minos-storage-postgresql/pom.xml:31`, `scripts/architecture/check-module-boundaries.py:67`.
-- Le découpage ratifié par l'ADR 0022 compte 12 modules enfants ; le reactor en compte 14 : `minos-bootstrap` (ADR 0042) et `minos-storage-postgresql`, que l'ADR 0042 range parmi les adaptateurs sans qu'un ADR source l'ajoute à la liste ratifiée — preuve : `pom.xml:24-37`.
+- Codec commun (§ 4) à réaliser : `com.minos.storage.codec` n'existe pas, et `com.minos.storage.postgresql` nomme quatre types de `com.minos.storage.local` (`ProjectPathMappingStore`, `KnowledgeSnapshotCodecs`, `SnapshotCodec`, `SnapshotIntegrityService`), contrairement au point « `local` et `postgresql` ne dépendent pas l'un de l'autre » — preuve : `BACKEND_TYPES_NAMED_ACROSS_PACKAGES` dans `scripts/architecture/check-module-boundaries.py`.
+- Le découpage ratifié par l'ADR 0022 compte 12 modules enfants ; le reactor en compte 13 : `minos-storage` y tient la place de `minos-storage-local` (§ 4), et `minos-bootstrap` (ADR 0042) s'y ajoute sans qu'un ADR source l'inscrive dans la liste ratifiée — preuve : `pom.xml` `<modules>`.
 
 ## References
 

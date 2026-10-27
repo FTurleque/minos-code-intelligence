@@ -60,7 +60,7 @@ python scripts/architecture/check-module-boundaries.py ; python scripts/docs/che
 - État : À faire
 - Priorité : P1
 - Dépendances : SH-02
-- Point d'entrée : `minos-storage-local/src/main/java/com/minos/storage/local/store/KnowledgeSnapshotCodecs.java`, `minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresSnapshotPayloadCodec.java`, `docs/architecture/adr/archive/0046-format-de-snapshot-v3-chaines-utf8.md`
+- Point d'entrée : `minos-storage/src/main/java/com/minos/storage/local/store/KnowledgeSnapshotCodecs.java`, `minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresSnapshotPayloadCodec.java`, `docs/architecture/adr/archive/0046-format-de-snapshot-v3-chaines-utf8.md`
 
 ### Actions
 
@@ -221,7 +221,7 @@ Tests de contrat existants API/NEXUS/MCP/CLI ; compilation et vérification plug
 - État : À faire
 - Priorité : P2
 - Dépendances : SH-02
-- Point d'entrée : `minos-bootstrap/src/main/java/com/minos/bootstrap/StorageBackendSelection.java`, `minos-application/src/main/java/com/minos/application/MinosApplicationComposers.java`, `minos-engine/src/main/java/com/minos/io/StableFileSystemIdentity.java`, `docs/architecture/adr/ARCH-0042-racine-de-composition.md`
+- Point d'entrée : `minos-bootstrap/src/main/java/com/minos/bootstrap/StorageBackendSelection.java`, `minos-application/src/main/java/com/minos/application/MinosApplicationComposers.java`, `minos-engine/src/main/java/com/minos/orchestration/StableFileSystemIdentity.java`, `docs/architecture/adr/ARCH-0042-racine-de-composition.md`
 
 ### Actions
 

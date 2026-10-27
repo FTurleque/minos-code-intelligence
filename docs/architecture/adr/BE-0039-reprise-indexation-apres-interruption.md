@@ -17,7 +17,7 @@ Aujourd'hui, une indexation qui s'arrête brutalement (reboot, `kill`, fermeture
 
 ### Ce qui existe déjà et qui fonctionne
 
-- **Bail projet inter-JVM** : `ProjectIndexLease` (`minos-storage-local/.../orchestration/ProjectIndexLease.java`) pose un verrou fichier sous `MINOS_HOME/index-state/locks/indexing/<projectId>.lock`. Le système d'exploitation le libère à la mort du processus : après une coupure, le projet n'est pas bloqué.
+- **Bail projet inter-JVM** : `ProjectIndexLease` (`minos-storage/.../orchestration/ProjectIndexLease.java`) pose un verrou fichier sous `MINOS_HOME/index-state/locks/indexing/<projectId>.lock`. Le système d'exploitation le libère à la mort du processus : après une coupure, le projet n'est pas bloqué.
 - **Trace de run durable** : `IndexingRunExecutor` appelle `stateStore.saveRun(...)` après **chaque** provider terminé, ainsi qu'à l'entrée des phases `STAGING` et `PROMOTION`. `FileIndexStateStore` écrit ces propriétés de façon atomique et durable.
 - **Artefacts déterministes et durables** : `ProcessIndexerExecutor` (`minos-runtime-local`) écrit l'artefact final dans `runs/<runId>/<indexerId>[/scopes/module-<sha256-16>]/index.scip`, par `DurableAtomicFile.replace` (fsync du fichier, `ATOMIC_MOVE`, fsync du répertoire). Le chemin du scope est le SHA-256 tronqué de la racine relative : il est reproductible d'un run à l'autre. Ces fichiers **ne sont pas supprimés** en fin de run, ni en cas d'échec.
 - **Réconciliation des métadonnées** : `AuthoritativeProjectStateReconciler.recoverAbandonedRuns` récupère déjà le cas « la promotion a réussi mais le processus est mort avant d'écrire les métadonnées » : si le run était en phase `PROMOTION` et que son snapshot préparé est devenu l'actif, il est repassé en `SUCCEEDED`.
