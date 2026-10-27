@@ -244,7 +244,7 @@ Le gate refuse tout autre job qui exécute du code connecté, toute entrée de l
 
 ```bash
 for image in $(python scripts/quality/check-image-pins.py --testcontainers-images); do docker pull "$image"; done
-TESTCONTAINERS_PULL_POLICY=com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy TESTCONTAINERS_RYUK_DISABLED=true ./mvnw -o -B -ntp test -pl minos-storage-postgresql -am -Dminos.postgresql.tests.required=true "-Dtest=com/minos/storage/postgresql/**/*Test" -Dsurefire.failIfNoSpecifiedTests=false
+TESTCONTAINERS_PULL_POLICY=com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy TESTCONTAINERS_RYUK_DISABLED=true ./mvnw -o -B -ntp test -pl minos-storage -am -Dminos.postgresql.tests.required=true "-Dtest=com/minos/storage/postgresql/**/*Test" -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
 Une image manquante à la liste fait échouer le démarrage du conteneur avec le message « is not in the pre-pulled list ». Les tests des autres modules ne démarrent aucun conteneur.

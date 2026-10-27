@@ -43,9 +43,9 @@ flowchart TB
 | Élément | Réalisation |
 |---|---|
 | Processus JVM minos | `minos-app` (JAR ombré ou `minos.exe`) ; `MinosLauncher` vient de `minos-cli`, `McpBackendRouter` de `minos-app`, le serveur MCP de `minos-mcp` |
-| MinosApplication | composée par `minos-bootstrap` (ServiceLoader) ; moteur de `minos-engine`, stockage de `minos-storage-local` |
+| MinosApplication | composée par `minos-bootstrap` (ServiceLoader) ; moteur de `minos-engine`, stockage de `minos-storage` (backend local) |
 | MINOS_HOME | répertoires privés : `runtime/backend.properties`, `projects`, `indexing`, `runs`, `locks`, `workspaces`, `hosted-control-plane`, `tools` |
 | Indexeurs | providers gérés sous `MINOS_HOME/tools`, lancés par `minos-runtime-local` et `minos-provider-scip` |
 
-Éléments optionnels non dessinés : backend de stockage PostgreSQL / pgvector (`minos-storage-postgresql`, câblé par
+Éléments optionnels non dessinés : backend de stockage PostgreSQL / pgvector (`minos-storage`, `com.minos.storage.postgresql`, câblé par
 `minos-bootstrap`), couche sémantique (`disabled | local-hash | ollama`), plan de contrôle tenant.

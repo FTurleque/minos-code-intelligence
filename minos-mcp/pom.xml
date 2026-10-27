@@ -51,7 +51,7 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <!-- WriteProtectedTree (com.minos.testsupport), as in minos-storage-local; test scope adds no edge (compile edge to minos-engine already exists) -->
+            <!-- WriteProtectedTree (com.minos.testsupport), as in minos-storage; test scope adds no edge (compile edge to minos-engine already exists) -->
             <groupId>com.minos</groupId>
             <artifactId>minos-engine</artifactId>
             <version>${project.version}</version>

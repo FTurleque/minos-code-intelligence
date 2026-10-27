@@ -30,11 +30,10 @@ MINOS applique une architecture **hexagonale (ports & adapters)** organisée en 
 minos-domain          ← modèle de domaine pur, zéro dépendance externe
 minos-engine          ← ports (interfaces) et services de requête provider-indépendants
 minos-runtime-local   ← infrastructure d'exécution locale de processus providers
-minos-storage-local   ← implémentations de persistance locale (fichiers, mémoire)
+minos-storage         ← adaptateurs de stockage : local (fichiers, mémoire) et PostgreSQL / pgvector (optionnel)
 minos-provider-scip   ← adapter SCIP : ingestion et lifecycle providers Java/TS/polyglot
 minos-integration-git ← adapter Git (JGit)
 minos-application     ← services applicatifs partagés (architecture, impact, recherche…)
-minos-storage-postgresql ← backend PostgreSQL / pgvector (optionnel)
 minos-bootstrap       ← racine de composition : câble les adaptateurs derrière les ports (ADR-0042)
 minos-nexus           ← adapter NEXUS (contrat JSON export)
 minos-cli             ← surface CLI stable
@@ -56,10 +55,10 @@ La direction des dépendances est strictement ascendante : les couches basses ig
 | SCIP (protobuf) | Protocole d'indexation sémantique | `minos-provider-scip` |
 | SDK Java MCP 2.0 | Transport MCP STDIO | `minos-mcp` |
 | JGit 7.6 | Intégration Git locale | `minos-integration-git` |
-| PostgreSQL / pgvector | Stockage avancé optionnel | `minos-storage-postgresql` |
-| Jackson | Sérialisation JSON (NEXUS, MCP, output) | `minos-storage-postgresql`, `minos-application` |
+| PostgreSQL / pgvector | Stockage avancé optionnel | `minos-storage` |
+| Jackson | Sérialisation JSON (NEXUS, MCP, output) | `minos-storage`, `minos-application` |
 | JUnit 5 / JaCoCo | Tests et couverture | Tous |
-| Testcontainers | Tests d'intégration PostgreSQL | `minos-storage-postgresql` |
+| Testcontainers | Tests d'intégration PostgreSQL | `minos-storage` |
 | Advanced Installer / JPackage | Distribution Windows | `minos-app` build |
 
 ---

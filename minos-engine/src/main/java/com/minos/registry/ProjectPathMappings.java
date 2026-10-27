@@ -8,7 +8,7 @@ import java.util.Optional;
 /**
  * Port : correspondance persistée entre racines de projets hôte et conteneur (plan d'administration
  * Docker). L'assemblage {@code minos-app} n'en connaît que ce contrat ; l'implémentation fichier
- * ({@code ProjectPathMappingStore}, minos-storage-local) est câblée par minos-bootstrap.
+ * ({@code ProjectPathMappingStore}, minos-storage) est câblée par minos-bootstrap.
  */
 public interface ProjectPathMappings {
 

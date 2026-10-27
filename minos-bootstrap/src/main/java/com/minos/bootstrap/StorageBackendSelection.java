@@ -11,13 +11,14 @@ import java.util.Locale;
 import java.util.ServiceLoader;
 
 /**
- * Sélection du backend de stockage configuré (déplacée telle quelle de {@code StorageBackends.open},
- * ADR 0042) : le backend {@code local} est intégré ; tout autre backend, optionnel, est découvert par
- * {@code ServiceLoader} (PostgreSQL n'est donc jamais une dépendance de compilation de la composition).
+ * Selection of the configured storage backend (ADR 0042): the {@code local} backend is built in; any other backend,
+ * optional, is discovered by {@code ServiceLoader}. No class of this module names the PostgreSQL backend (rule R1 of
+ * check-module-boundaries.py, ADR 0068 section 4), its service is registered by the minos-app assembly only, and the
+ * local composition loads none of its classes (LocalCompositionLoadsNoPostgresqlClassTest).
  *
- * <p>La découverte passe par le chargeur qui a chargé MINOS (celui du port {@link StorageBackendProvider}),
- * jamais par le chargeur de contexte du thread, et refuse deux fournisseurs de l'identifiant demandé au lieu
- * de prendre le premier (AUD-ARC-04).</p>
+ * <p>Discovery goes through the class loader that loaded MINOS (the one of the {@link StorageBackendProvider} port),
+ * never through the thread context class loader, and refuses two providers of the requested identifier instead of
+ * taking the first one (AUD-ARC-04).</p>
  */
 final class StorageBackendSelection {
     private StorageBackendSelection() { }
@@ -26,7 +27,7 @@ final class StorageBackendSelection {
         return open(configuration, minosClassLoader());
     }
 
-    /** Variante à chargeur explicite, pour les tests de chargeur isolé. */
+    /** Variant with an explicit class loader, for the isolated class loader tests. */
     static StorageBackend open(StorageBackendConfiguration configuration, ClassLoader loader) throws IOException {
         if ("local".equals(configuration.backend())) {
             return new LocalStorageBackend(configuration.home());
@@ -38,7 +39,7 @@ final class StorageBackendSelection {
         return StorageBackendProvider.class.getClassLoader();
     }
 
-    /** L'unique fournisseur de l'identifiant demandé (sans casse, {@link Locale#ROOT}), sinon un refus. */
+    /** The only provider of the requested identifier (case-insensitive, {@link Locale#ROOT}), otherwise a refusal. */
     static StorageBackendProvider provider(String backend, ClassLoader loader) throws IOException {
         String requested = backend.toLowerCase(Locale.ROOT);
         List<StorageBackendProvider> matching = ServiceLoader.load(StorageBackendProvider.class, loader).stream()

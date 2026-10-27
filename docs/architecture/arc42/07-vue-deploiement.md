@@ -1,7 +1,7 @@
 # Section 7 — Vue de déploiement
 
 > Preuves : ADR-0021, ADR-0037, `minos-app/pom.xml` (shade, jar, failsafe),
-> `minos-storage-postgresql/pom.xml` (DOCKER_HOST, Testcontainers),
+> `minos-storage/pom.xml` (DOCKER_HOST, Testcontainers),
 > ADR-0035 (Windows + Linux), ADR-0027 (IntelliJ Java 21).
 
 ---
@@ -55,11 +55,11 @@ flowchart TB
 | Élément | Réalisation |
 |---|---|
 | Processus JVM minos | `minos-app` (JAR ombré ou `minos.exe`) ; `MinosLauncher` vient de `minos-cli`, `McpBackendRouter` de `minos-app`, le serveur MCP de `minos-mcp` |
-| MinosApplication | composée par `minos-bootstrap` (ServiceLoader) ; moteur de `minos-engine`, stockage de `minos-storage-local` |
+| MinosApplication | composée par `minos-bootstrap` (ServiceLoader) ; moteur de `minos-engine`, stockage de `minos-storage` (backend local) |
 | MINOS_HOME | répertoires privés : `runtime/backend.properties`, `projects`, `indexing`, `runs`, `locks`, `workspaces`, `hosted-control-plane`, `tools` |
 | Indexeurs | providers gérés sous `MINOS_HOME/tools`, lancés par `minos-runtime-local` et `minos-provider-scip` |
 
-Éléments optionnels non dessinés : backend de stockage PostgreSQL / pgvector (`minos-storage-postgresql`, câblé par
+Éléments optionnels non dessinés : backend de stockage PostgreSQL / pgvector (`minos-storage`, `com.minos.storage.postgresql`, câblé par
 `minos-bootstrap`), couche sémantique (`disabled | local-hash | ollama`), plan de contrôle tenant.
 
 ---
@@ -80,7 +80,7 @@ graph TB
         subgraph ctr_minos["«Container» minos (conteneur Docker)"]
             mcp_docker["«Container»\nminos-mcp\nServeur MCP STDIO"]
             app_docker["«Container»\nminos-application\nServices applicatifs"]
-            storage_docker["«Container»\nminos-storage-local\nPersistance locale"]
+            storage_docker["«Container»\nminos-storage\nPersistance locale"]
         end
         subgraph vol_minos["«node» Volume Docker MINOS_HOME"]
             snap_docker["«database»\nSnapshots"]
@@ -108,8 +108,8 @@ graph TB
 |-----------|-------|-------------|
 | STDIO / JSON-RPC 2.0 | Transport MCP | Agent IA ↔ MinosMcpServer |
 | ProcessBuilder / STDIO | Lancement indexeurs | minos-runtime-local → scip-java, scip-typescript |
-| JDBC | Stockage PostgreSQL (opt-in) | minos-storage-postgresql → PostgreSQL |
+| JDBC | Stockage PostgreSQL (opt-in) | minos-storage (PostgreSQL) → PostgreSQL |
 | JGit (in-process) | Lecture Git | minos-integration-git → dépôt Git local |
 | docker exec -i | Relay STDIO Docker | McpBackendRouter → conteneur MINOS |
 | Fichier local JSON | Export NEXUS | minos-nexus → orchestrateur NEXUS |
-| Fichier binaire v2 | Snapshots MINOS | minos-storage-local → système de fichiers |
+| Fichier binaire v2 | Snapshots MINOS | minos-storage (local) → système de fichiers |

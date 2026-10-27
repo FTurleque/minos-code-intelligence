@@ -44,7 +44,7 @@
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
-            <artifactId>minos-storage-local</artifactId>
+            <artifactId>minos-storage</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -59,20 +59,15 @@
         </dependency>
         <!--
           A2 / ADR 0042 (C5): application x PostgreSQL integration tests live in the composition root,
-          the module where the application meets its adapters. PostgreSQL stays optional in production
-          (discovered by ServiceLoader, see StorageBackendSelection): every dependency below is test-only,
-          which check-module-boundaries.py enforces for minos-storage-postgresql. Versions are those of
-          minos-storage-postgresql/pom.xml; the test-jar carries PostgresTestSupport (Docker/pgvector).
+          the module where the application meets its adapters. PostgreSQL stays optional in production: it is
+          discovered by ServiceLoader (StorageBackendSelection), no production class of this module names it
+          (rule R1 of check-module-boundaries.py) and the local composition loads none of its classes
+          (LocalCompositionLoadsNoPostgresqlClassTest). The test-jar of minos-storage carries PostgresTestSupport
+          (Docker/pgvector); the Testcontainers versions are those of minos-storage/pom.xml.
         -->
         <dependency>
             <groupId>com.minos</groupId>
-            <artifactId>minos-storage-postgresql</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-storage-postgresql</artifactId>
+            <artifactId>minos-storage</artifactId>
             <version>${project.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
@@ -110,11 +105,23 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- ADR 0068 section 4: the PostgreSQL backend is registered by the minos-app assembly only. The tests of
+                         this module that select it get the registration from this directory, kept out of
+                         target/test-classes so that the test-jar used by the surfaces does not carry it -->
+                    <additionalClasspathElements>
+                        <additionalClasspathElement>${project.basedir}/src/test/postgresql-backend</additionalClasspathElement>
+                    </additionalClasspathElements>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
     <profiles>
-        <!-- Same Docker Desktop hints as minos-storage-postgresql, for the PostgreSQL tests above. -->
+        <!-- Same Docker Desktop hints as minos-storage, for the PostgreSQL tests above. -->
         <profile>
             <id>windows-docker-desktop-testcontainers</id>
             <activation>

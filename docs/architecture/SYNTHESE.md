@@ -17,7 +17,7 @@ Son architecture est **hexagonale, capabilist et fail-closed** :
 
 - `minos-domain` est le cœur sans dépendance externe.
 - `minos-engine` définit les ports (interfaces) provider-indépendants.
-- Les adapters (`minos-provider-scip`, `minos-integration-git`, `minos-storage-local`, `minos-storage-postgresql`) implémentent ces ports.
+- Les adapters (`minos-provider-scip`, `minos-integration-git`, `minos-storage`) implémentent ces ports.
 - Les surfaces (`minos-cli`, `minos-mcp`, `minos-api`, `minos-nexus`) consomment les services applicatifs via `minos-application`.
 - `minos-bootstrap` est la racine de composition (ADR-0042) ; `minos-app` est l'assemblage final distribué (lanceur, JAR ombré, backends optionnels).
 

@@ -46,8 +46,8 @@ class ModuleArchitectureTest {
 
     static {
         for (String module : List.of(
-                "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local",
-                "minos-storage-postgresql", "minos-provider-scip", "minos-integration-git", "minos-application",
+                "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
+                "minos-provider-scip", "minos-integration-git", "minos-application",
                 "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp")) {
             OUTPUTS.put(module, Path.of(module, "target", "classes"));
         }
@@ -59,27 +59,25 @@ class ModuleArchitectureTest {
             Map.entry("minos-domain", Set.of()),
             Map.entry("minos-engine", Set.of("minos-domain")),
             Map.entry("minos-runtime-local", Set.of("minos-domain", "minos-engine")),
-            Map.entry("minos-storage-local", Set.of("minos-domain", "minos-engine")),
-            Map.entry("minos-storage-postgresql", Set.of("minos-domain", "minos-engine", "minos-storage-local")),
+            Map.entry("minos-storage", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-provider-scip",
-                    Set.of("minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local")),
+                    Set.of("minos-domain", "minos-engine", "minos-runtime-local", "minos-storage")),
             Map.entry("minos-integration-git", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-application", Set.of("minos-domain", "minos-engine")),
             Map.entry("minos-bootstrap", Set.of("minos-domain", "minos-engine", "minos-application",
-                    "minos-runtime-local", "minos-storage-local", "minos-provider-scip", "minos-integration-git",
-                    "minos-storage-postgresql")),
+                    "minos-runtime-local", "minos-storage", "minos-provider-scip", "minos-integration-git")),
             Map.entry("minos-nexus", Set.of("minos-domain", "minos-application", "minos-bootstrap")),
             Map.entry("minos-cli",
                     Set.of("minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap")),
             Map.entry("minos-api", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
             Map.entry("minos-mcp", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
             Map.entry("minos-app", Set.of("minos-domain", "minos-engine", "minos-runtime-local",
-                    "minos-storage-local", "minos-storage-postgresql", "minos-provider-scip",
+                    "minos-storage", "minos-provider-scip",
                     "minos-integration-git", "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli",
                     "minos-api", "minos-mcp")));
 
-    private static final Set<String> ADAPTERS = Set.of("minos-runtime-local", "minos-storage-local",
-            "minos-storage-postgresql", "minos-provider-scip", "minos-integration-git");
+    private static final Set<String> ADAPTERS = Set.of("minos-runtime-local", "minos-storage",
+            "minos-provider-scip", "minos-integration-git");
     private static final Set<String> SURFACES = Set.of("minos-cli", "minos-api", "minos-mcp", "minos-nexus");
 
     /**
@@ -190,6 +188,20 @@ class ModuleArchitectureTest {
         noClasses().that(inModules(SURFACES))
                 .should().dependOnClassesThat(inModules(union(ADAPTERS, Set.of("minos-bootstrap", "minos-app"))))
                 .because("ADR 0042 (A2): surfaces open the application through MinosApplication.open")
+                .check(all);
+    }
+
+    /**
+     * ADR 0068 section 4 (rules R1, R2 and D4 on the bytecode): the composition root, the SCIP provider and the local
+     * storage backend never use the PostgreSQL backend nor its driver, even through a type they do not name (a
+     * {@code var}, an inherited member, a return type). minos-storage holds both backends; only these packages keep
+     * PostgreSQL optional.
+     */
+    @Test
+    void onlyThePostgresqlBackendUsesPostgresql() {
+        noClasses().that().resideInAnyPackage("com.minos.bootstrap..", "com.minos.adapter.scip..", "com.minos.storage.local..")
+                .should().dependOnClassesThat().resideInAnyPackage("com.minos.storage.postgresql..", "org.postgresql..")
+                .because("ADR 0068 section 4: the PostgreSQL backend is optional and discovered by ServiceLoader")
                 .check(all);
     }
 

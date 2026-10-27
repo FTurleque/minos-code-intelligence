@@ -195,8 +195,8 @@ class HexagonalRuleTest(unittest.TestCase):
             self.assertIn(fragment, str(raised.exception))
 
     def test_the_application_layer_may_not_depend_on_an_adapter(self):
-        self.refused(scoped_graph(minos_application={"minos-storage-local": "compile"}),
-                     "minos-application -> minos-storage-local")
+        self.refused(scoped_graph(minos_application={"minos-storage": "compile"}),
+                     "minos-application -> minos-storage")
         _MODULE.check_hexagonal_boundaries(scoped_graph(minos_application={"minos-engine": "compile"}))
 
     def test_a_surface_may_not_depend_on_an_adapter_in_any_scope(self):
@@ -220,11 +220,9 @@ class HexagonalRuleTest(unittest.TestCase):
                     self.refused(scoped_graph(**{adapter: {upper: "compile"}}), f"{adapter} -> {upper}")
             _MODULE.check_hexagonal_boundaries(scoped_graph(**{adapter: {"minos-engine": "compile"}}))
 
-    def test_the_composition_root_reaches_the_optional_backend_in_tests_only(self):
-        self.refused(scoped_graph(minos_bootstrap={"minos-storage-postgresql": "compile"}),
-                     "minos-bootstrap -> minos-storage-postgresql")
-        _MODULE.check_hexagonal_boundaries(scoped_graph(minos_bootstrap={"minos-storage-postgresql": "test"}))
-        _MODULE.check_hexagonal_boundaries(scoped_graph(minos_bootstrap={"minos-storage-local": "compile"}))
+    def test_the_composition_root_compiles_against_the_storage_module(self):
+        # The PostgreSQL backend shares minos-storage with the local one; R1 keeps the composition root off it.
+        _MODULE.check_hexagonal_boundaries(scoped_graph(minos_bootstrap={"minos-storage": "compile"}))
 
     def test_the_composition_root_sits_below_the_surfaces_and_the_assembly(self):
         self.refused(scoped_graph(minos_bootstrap={"minos-cli": "test"}), "minos-bootstrap -> minos-cli")
@@ -411,6 +409,20 @@ class PomLayoutRuleTest(unittest.TestCase):
             with self.subTest(tag=tag, where="profile"):
                 self.refused(pom_text("minos-x", profiles=self.in_profile(self.compiler(configuration))), tag, "profile")
 
+    def test_the_build_helper_plugin_is_refused_at_the_root_and_in_a_profile(self):
+        # E02: build-helper add-source compiles the sources of another module without any compiler setting.
+        plugin = ("<plugins><plugin><groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId>"
+                  "<executions><execution><goals><goal>add-source</goal></goals><configuration><sources>"
+                  "<source>../minos-storage/src/main/java</source></sources></configuration></execution></executions>"
+                  "</plugin></plugins>")
+        with self.subTest(where="root"):
+            self.refused(pom_text("minos-x", build=f"<build>{plugin}</build>"), "build-helper-maven-plugin")
+        with self.subTest(where="profile"):
+            self.refused(pom_text("minos-x", profiles=self.in_profile(plugin)), "build-helper-maven-plugin", "profile")
+        with self.subTest(where="pluginManagement"):
+            managed = plugin.replace("<plugins>", "<pluginManagement><plugins>").replace("</plugins>", "</plugins></pluginManagement>")
+            self.refused(pom_text("minos-x", build=f"<build>{managed}</build>"), "build-helper-maven-plugin")
+
     def test_plugins_in_a_profile_are_accepted(self):
         _MODULE.check_pom_layout("minos-x", element(pom_text(
             "minos-x", profiles=self.in_profile("<plugins><plugin><artifactId>surefire</artifactId></plugin></plugins>"))))
@@ -433,7 +445,7 @@ class SourceBoundaryRuleTest(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
         write_root_pom(self.root)
-        self.write("minos-storage-local", "com.minos.storage.local.store", "FileStore", "public final class FileStore { "
+        self.write("minos-storage", "com.minos.storage.local.store", "FileStore", "public final class FileStore { "
                    "public static FileStore create() { return new FileStore(); } }")
 
     def write(self, module, package, name, body, imports=()):
@@ -451,7 +463,7 @@ class SourceBoundaryRuleTest(unittest.TestCase):
 
     def test_a_single_import_is_refused(self):
         self.write("minos-cli", "com.minos.cli", "Cmd", "class Cmd { FileStore s; }", [self.ADAPTER_CLASS])
-        self.refused("minos-cli/src/main/java/com/minos/cli/Cmd.java", self.ADAPTER_CLASS, "minos-storage-local")
+        self.refused("minos-cli/src/main/java/com/minos/cli/Cmd.java", self.ADAPTER_CLASS, "minos-storage")
 
     def test_a_static_import_is_refused(self):
         self.write("minos-cli", "com.minos.cli", "Cmd", "class Cmd { }", [f"static {self.ADAPTER_CLASS}.create"])
@@ -608,8 +620,8 @@ class PomRulesOnRealPomsTest(unittest.TestCase):
         self.assertIn("minos-engine", scoped["minos-cli"])
 
     def test_a_surface_that_starts_depending_on_an_adapter_is_refused(self):
-        self.add_dependency("minos-cli", "minos-storage-local")
-        self.refused("A2 hexagonal boundary violated", "minos-cli -> minos-storage-local")
+        self.add_dependency("minos-cli", "minos-storage")
+        self.refused("A2 hexagonal boundary violated", "minos-cli -> minos-storage")
 
     def test_the_application_that_starts_depending_on_an_adapter_is_refused(self):
         self.add_dependency("minos-application", "minos-provider-scip")
@@ -1340,15 +1352,15 @@ class ProcessLauncherRuleTest(RatchetTreeTestCase):
 class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
     """A13 — an adapter names another adapter's types only through the list of the couple (AUD-ARC-08)."""
 
-    COUPLE = ("minos-storage-postgresql", "minos-storage-local")
+    COUPLE = ("minos-provider-scip", "minos-storage")
     LISTED = {COUPLE: {"storage.local.store.SnapshotCodec": 1}}
 
     def setUp(self):
         super().setUp()
-        self.write("minos-storage-local", "com.minos.storage.local.store", "SnapshotCodec", "public interface SnapshotCodec { }")
-        self.write("minos-storage-local", "com.minos.storage.local.store", "SnapshotIntegrityService",
+        self.write("minos-storage", "com.minos.storage.local.store", "SnapshotCodec", "public interface SnapshotCodec { }")
+        self.write("minos-storage", "com.minos.storage.local.store", "SnapshotIntegrityService",
                    "public final class SnapshotIntegrityService { }")
-        self.write("minos-storage-postgresql", "com.minos.storage.postgresql", "Store", "final class Store { SnapshotCodec c; }",
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Store", "final class Store { SnapshotCodec c; }",
                    ["com.minos.storage.local.store.SnapshotCodec"])
 
     def check(self, listed=None):
@@ -1358,22 +1370,22 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
         self.assertEqual(1, self.check())
 
     def test_an_imported_type_outside_the_list_is_refused_naming_both_modules(self):
-        self.write("minos-storage-postgresql", "com.minos.storage.postgresql", "Leak",
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Leak",
                    "final class Leak { SnapshotIntegrityService s; }",
                    ["com.minos.storage.local.store.SnapshotIntegrityService"])
-        self.refused(self.check, "A13", "minos-storage-postgresql -> minos-storage-local",
+        self.refused(self.check, "A13", "minos-provider-scip -> minos-storage",
                      "com.minos.storage.local.store.SnapshotIntegrityService")
 
     def test_a_qualified_name_without_import_is_refused_like_an_import(self):
-        self.write("minos-storage-postgresql", "com.minos.storage.postgresql", "Leak",
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Leak",
                    "final class Leak { Object s = new com.minos.storage.local.store.SnapshotIntegrityService(); }")
-        self.refused(self.check, "A13", "minos-storage-postgresql -> minos-storage-local",
+        self.refused(self.check, "A13", "minos-provider-scip -> minos-storage",
                      "com.minos.storage.local.store.SnapshotIntegrityService")
 
     def test_a_couple_absent_from_the_table_is_refused(self):
-        self.write("minos-provider-scip", "com.minos.adapter.scip", "Leak", "final class Leak { SnapshotCodec c; }",
+        self.write("minos-integration-git", "com.minos.integration.git", "Leak", "final class Leak { SnapshotCodec c; }",
                    ["com.minos.storage.local.store.SnapshotCodec"])
-        self.refused(self.check, "A13", "minos-provider-scip -> minos-storage-local")
+        self.refused(self.check, "A13", "minos-integration-git -> minos-storage")
 
     def test_a_dead_entry_is_refused(self):
         listed = {self.COUPLE: {"storage.local.store.SnapshotCodec": 1, "storage.local.store.SnapshotIntegrityService": 1}}
@@ -1381,11 +1393,11 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
 
     def test_a_second_file_naming_a_listed_type_is_refused_with_both_counts(self):
         # AUD-ARC-08: a new adapter file naming an already listed type passed the type ratchet.
-        self.write("minos-storage-postgresql", "com.minos.storage.postgresql.snapshot", "Payload",
+        self.write("minos-provider-scip", "com.minos.adapter.scip.runtime", "Payload",
                    "final class Payload { SnapshotCodec c; }", ["com.minos.storage.local.store.SnapshotCodec"])
-        self.refused(self.check, "A13", "minos-storage-postgresql -> minos-storage-local",
+        self.refused(self.check, "A13", "minos-provider-scip -> minos-storage",
                      "storage.local.store.SnapshotCodec", "listed for 1 file(s)", "used by 2",
-                     "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/snapshot/Payload.java")
+                     "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/Payload.java")
 
     def test_a_count_above_the_observed_files_is_refused(self):
         listed = {self.COUPLE: {"storage.local.store.SnapshotCodec": 3}}
@@ -1393,25 +1405,80 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
 
     def test_a_new_scip_file_naming_the_listed_command_locator_is_refused_against_the_real_list(self):
         couple = ("minos-provider-scip", "minos-runtime-local")
-        listed = {couple: {"runtime.local.process.CommandLocator": 1}}
+        listed = {couple: {"runtime.local.process.CommandLocator": 1}, **self.LISTED}
         self.write("minos-runtime-local", "com.minos.runtime.local.process", "CommandLocator",
                    "public final class CommandLocator { }")
         self.write("minos-provider-scip", "com.minos.adapter.scip", "Plan", "final class Plan { CommandLocator l; }",
                    ["com.minos.runtime.local.process.CommandLocator"])
-        self.write("minos-storage-postgresql", "com.minos.storage.postgresql", "Store", "final class Store { }")
-        self.assertEqual(1, self.check(listed))
+        self.assertEqual(2, self.check(listed))
         self.write("minos-provider-scip", "com.minos.adapter.scip.go", "GoPlan", "final class GoPlan { CommandLocator l; }",
                    ["com.minos.runtime.local.process.CommandLocator"])
         self.refused(lambda: self.check(listed), "A13", "minos-provider-scip -> minos-runtime-local", "used by 2")
         self.assertEqual(10, _MODULE.ADAPTER_TYPES_NAMED_BY_ADAPTER[couple]["runtime.local.process.CommandLocator"])
 
     def test_a_table_key_that_is_not_a_couple_of_adapters_is_refused(self):
-        listed = {**self.LISTED, ("minos-cli", "minos-storage-local"): {}}
-        self.refused(lambda: self.check(listed), "A13", "minos-cli -> minos-storage-local", "not a couple of adapters")
+        listed = {**self.LISTED, ("minos-cli", "minos-storage"): {}}
+        self.refused(lambda: self.check(listed), "A13", "minos-cli -> minos-storage", "not a couple of adapters")
 
     def test_the_real_tree_names_only_listed_adapter_types(self):
         self.assertEqual(sum(len(types) for types in _MODULE.ADAPTER_TYPES_NAMED_BY_ADAPTER.values()),
                          _MODULE.check_adapter_types_named_by_adapters())
+
+
+class BackendTypesNamedAcrossPackagesRuleTest(RatchetTreeTestCase):
+    """D4 (SH-02, E04) — inside minos-storage, the PostgreSQL backend names local types only through the shrinking
+    list, and the local backend names none of the PostgreSQL backend."""
+
+    LISTED = {"storage.local.store.SnapshotCodec": 1}
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-storage", "com.minos.storage.local.store", "SnapshotCodec", "public interface SnapshotCodec { }")
+        self.write("minos-storage", "com.minos.storage.local.store", "FileSymbolSnapshotStore",
+                   "public final class FileSymbolSnapshotStore { }")
+        self.write("minos-storage", "com.minos.storage.local.store", "SnapshotIntegrityService",
+                   "public final class SnapshotIntegrityService { }")
+        self.write("minos-storage", "com.minos.storage.postgresql.support", "PostgresJdbcUrlPolicy",
+                   "public final class PostgresJdbcUrlPolicy { }")
+        self.write("minos-storage", "com.minos.storage.postgresql.snapshot", "Store", "final class Store { SnapshotCodec c; }",
+                   ["com.minos.storage.local.store.SnapshotCodec"])
+
+    def check(self, listed=None):
+        return _MODULE.check_backend_types_named_across_packages(self.root,
+                                                                 listed=self.LISTED if listed is None else listed)
+
+    def test_a_conforming_tree_is_accepted(self):
+        self.assertEqual(1, self.check())
+
+    def test_a_new_local_type_named_by_the_postgresql_backend_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.postgresql", "Leak", "final class Leak { FileSymbolSnapshotStore s; }",
+                   ["com.minos.storage.local.store.FileSymbolSnapshotStore"])
+        self.refused(self.check, "D4", "postgresql -> local",
+                     "minos-storage/src/main/java/com/minos/storage/postgresql/Leak.java",
+                     "com.minos.storage.local.store.FileSymbolSnapshotStore")
+
+    def test_the_local_backend_naming_the_postgresql_backend_is_refused_whatever_the_table(self):
+        self.write("minos-storage", "com.minos.storage.local", "Leak",
+                   "final class Leak { Object p = new com.minos.storage.postgresql.support.PostgresJdbcUrlPolicy(); }")
+        self.refused(self.check, "D4", "local -> postgresql", "com.minos.storage.postgresql.support.PostgresJdbcUrlPolicy")
+
+    def test_an_entry_no_longer_named_is_refused(self):
+        listed = {**self.LISTED, "storage.local.store.SnapshotIntegrityService": 1}
+        self.refused(lambda: self.check(listed), "D4", "storage.local.store.SnapshotIntegrityService", "no longer named")
+
+    def test_a_second_postgresql_file_naming_a_listed_type_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.postgresql.support", "Payload",
+                   "final class Payload { SnapshotCodec c; }", ["com.minos.storage.local.store.SnapshotCodec"])
+        self.refused(self.check, "D4", "listed for 1 file(s)", "used by 2")
+
+    def test_local_types_named_by_the_local_backend_itself_are_not_counted(self):
+        self.write("minos-storage", "com.minos.storage.local.registry", "Registry",
+                   "final class Registry { SnapshotCodec c; }", ["com.minos.storage.local.store.SnapshotCodec"])
+        self.assertEqual(1, self.check())
+
+    def test_the_real_tree_names_only_listed_backend_types(self):
+        self.assertEqual(len(_MODULE.BACKEND_TYPES_NAMED_ACROSS_PACKAGES),
+                         _MODULE.check_backend_types_named_across_packages())
 
 
 class PackageRootRuleTest(RatchetTreeTestCase):
@@ -1456,10 +1523,10 @@ class PackageRootRuleTest(RatchetTreeTestCase):
 class SnapshotReadPortRuleTest(RatchetTreeTestCase):
     """A18 — only the core names the in-memory index; the deprecated view stays in its closed list (AUD-ARC-07)."""
 
-    MODULES = ("minos-engine", "minos-storage-local", "minos-storage-postgresql", "minos-application")
+    MODULES = ("minos-engine", "minos-storage", "minos-application")
     LISTED = frozenset({
-        "minos-storage-local/storage.local.store.FileSymbolSnapshotStore",
-        "minos-storage-postgresql/storage.postgresql.snapshot.PostgresCodeKnowledgeSnapshotStore",
+        "minos-storage/storage.local.store.FileSymbolSnapshotStore",
+        "minos-storage/storage.postgresql.snapshot.PostgresCodeKnowledgeSnapshotStore",
         "minos-application/impact.ImpactAnalysisService",
     })
 
@@ -1472,11 +1539,11 @@ class SnapshotReadPortRuleTest(RatchetTreeTestCase):
         self.write("minos-engine", "com.minos.query", "SymbolQueryService",
                    "public final class SymbolQueryService { CodeKnowledgeReader reader; }",
                    ["com.minos.store.CodeKnowledgeReader"])
-        self.write("minos-storage-local", "com.minos.storage.local.store", "FileSymbolSnapshotStore",
+        self.write("minos-storage", "com.minos.storage.local.store", "FileSymbolSnapshotStore",
                    "public final class FileSymbolSnapshotStore {\n"
                    "    public Optional<SnapshotQueryView> loadActiveQueryView(UUID id) { return null; }\n}",
                    ["com.minos.store.SnapshotQueryView"])
-        self.write("minos-storage-postgresql", "com.minos.storage.postgresql.snapshot",
+        self.write("minos-storage", "com.minos.storage.postgresql.snapshot",
                    "PostgresCodeKnowledgeSnapshotStore",
                    "public final class PostgresCodeKnowledgeSnapshotStore {\n"
                    "    public Optional<SnapshotQueryView> loadActiveQueryView(UUID id) { return null; }\n}",
@@ -1544,7 +1611,7 @@ class SnapshotReadPortRuleTest(RatchetTreeTestCase):
         self.refused(self.check, "A18", "Writer.java", "CodeKnowledgeStore")
 
     def test_the_write_port_stays_allowed_outside_the_application(self):
-        self.write("minos-storage-local", "com.minos.storage.local.store", "Ingest",
+        self.write("minos-storage", "com.minos.storage.local.store", "Ingest",
                    "final class Ingest { CodeKnowledgeStore store; }", ["com.minos.store.CodeKnowledgeStore"])
         self.assertEqual(3, self.check())
 
@@ -1598,6 +1665,26 @@ class RuntimeServiceEdgeTest(RatchetTreeTestCase):
         services = self.root / "minos-app" / "src" / "main" / "resources" / "META-INF" / "services"
         (services / "com.minos.cli.McpLaunchRoute").write_text("com.minos.app.Missing\n", encoding="utf-8")
         self.refused(self.edges, "com.minos.app.Missing", "not a production type of minos-app")
+
+    def test_the_assembly_registers_an_implementation_of_a_module_it_depends_on(self):
+        # D7 (SH-02): the assembly declares the optional PostgreSQL backend; the edge goes to the providing module.
+        self.write("minos-engine", "com.minos.storage", "StorageBackendProvider", "public interface StorageBackendProvider { }")
+        self.write("minos-storage", "com.minos.storage.postgresql", "PostgresStorageBackendProvider",
+                   "public final class PostgresStorageBackendProvider implements StorageBackendProvider { }")
+        services = self.root / "minos-app" / "src" / "main" / "resources" / "META-INF" / "services"
+        (services / "com.minos.storage.StorageBackendProvider").write_text(
+            "com.minos.storage.postgresql.PostgresStorageBackendProvider\n", encoding="utf-8")
+        self.assertEqual(("com.minos.storage.StorageBackendProvider",), self.edges()[("minos-engine", "minos-storage")])
+
+    def test_a_module_other_than_the_assembly_registering_a_foreign_implementation_is_refused(self):
+        self.write("minos-engine", "com.minos.storage", "StorageBackendProvider", "public interface StorageBackendProvider { }")
+        self.write("minos-storage", "com.minos.storage.postgresql", "PostgresStorageBackendProvider",
+                   "public final class PostgresStorageBackendProvider implements StorageBackendProvider { }")
+        services = self.root / "minos-bootstrap" / "src" / "main" / "resources" / "META-INF" / "services"
+        services.mkdir(parents=True)
+        (services / "com.minos.storage.StorageBackendProvider").write_text(
+            "com.minos.storage.postgresql.PostgresStorageBackendProvider\n", encoding="utf-8")
+        self.refused(self.edges, "minos-bootstrap", "not a production type of minos-bootstrap")
 
     def test_a_document_without_the_edge_is_refused_naming_the_edge(self):
         edges = self.edges()
@@ -1658,6 +1745,52 @@ class ArchitectureTestPolicyRuleTest(unittest.TestCase):
 
     def test_the_real_tables_are_identical(self):
         self.assertEqual(len(_MODULE.ALLOWED_DEPENDENCIES), _MODULE.check_architecture_test_policy())
+
+
+class PostgresqlBackendIsolationRuleTest(RatchetTreeTestCase):
+    """R1 / R2 (E04): the composition root and the SCIP provider never name the PostgreSQL backend nor its driver."""
+
+    BACKEND = "com.minos.storage.postgresql.PostgresStorageBackend"
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-storage", "com.minos.storage.postgresql", "PostgresStorageBackend",
+                   "public final class PostgresStorageBackend { public static Object open() { return null; } }")
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Composer", "final class Composer { }", ["java.util.List"])
+
+    def check(self):
+        return _MODULE.check_postgresql_backend_isolation(self.root)
+
+    def test_a_conforming_tree_is_accepted(self):
+        self.assertEqual(2, self.check())
+
+    def test_an_import_of_the_backend_in_the_composition_root_is_refused(self):
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Leak", "final class Leak { PostgresStorageBackend b; }",
+                   [self.BACKEND])
+        self.refused(self.check, "R1", "minos-bootstrap/src/main/java/com/minos/bootstrap/Leak.java", self.BACKEND)
+
+    def test_static_and_wildcard_imports_are_refused(self):
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Static", "final class Static { }", [f"static {self.BACKEND}.open"])
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Wild", "final class Wild { }", ["com.minos.storage.postgresql.*"])
+        self.refused(self.check, "Static.java", "Wild.java", "com.minos.storage.postgresql.*")
+
+    def test_a_qualified_name_of_the_driver_in_the_scip_provider_is_refused(self):
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Leak",
+                   "final class Leak { Object d = new org.postgresql.Driver(); }")
+        self.refused(self.check, "R2", "minos-provider-scip", "org.postgresql.Driver")
+
+    def test_a_mention_in_a_comment_or_a_literal_is_accepted(self):
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Doc",
+                   f'final class Doc {{ // {self.BACKEND}\n String s = "org.postgresql.Driver"; }}')
+        self.check()
+
+    def test_the_assembly_may_name_the_backend(self):
+        self.write("minos-app", "com.minos.app", "Assembly", "final class Assembly { PostgresStorageBackend b; }",
+                   [self.BACKEND])
+        self.check()
+
+    def test_the_real_tree_isolates_the_postgresql_backend(self):
+        self.assertEqual(2, _MODULE.check_postgresql_backend_isolation())
 
 
 class EveryRuleHasATest(unittest.TestCase):
@@ -1724,7 +1857,8 @@ class MainWiringTest(unittest.TestCase):
     def test_main_runs_the_ratchet_rules_a11_to_a14(self):
         for name in ("check_engine_types_named_by_surfaces", "check_process_launchers",
                      "check_adapter_types_named_by_adapters", "check_package_roots",
-                     "check_architecture_test_policy", "check_snapshot_read_port"):
+                     "check_architecture_test_policy", "check_snapshot_read_port",
+                     "check_postgresql_backend_isolation", "check_backend_types_named_across_packages"):
             with self.subTest(rule=name):
                 calls: list[str] = []
                 code, error = self.run_main_with(**{name: self.spy(calls, name)})

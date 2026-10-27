@@ -45,12 +45,12 @@ def main() -> int:
         port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
         codec = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeObservationEnvelopeCodec.java")
         service = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java")
-        store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
+        store = read("minos-storage/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
         bounded_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
         command = read("minos-cli/src/main/java/com/minos/cli/command/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         app_assembler = read("minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
-        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
+        local_storage = read("minos-storage/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
         mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_schemas = read("minos-mcp/src/main/java/com/minos/mcp/McpToolSchemas.java")
         backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
@@ -119,8 +119,8 @@ def main() -> int:
 
         tests = {
             "RuntimeObservationModelTest.java": read("minos-engine/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
-            "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreTest.java"),
-            "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreSymlinkTest.java"),
+            "FileRuntimeObservationStoreTest.java": read("minos-storage/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreTest.java"),
+            "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreSymlinkTest.java"),
             "RuntimeIntelligenceServiceTest.java": read("minos-application/src/test/java/com/minos/application/dynamic/RuntimeIntelligenceServiceTest.java"),
             # A3 / ADR 0044: the file-adapter half of the split runtime service test (real local stores).
             "RuntimeIntelligenceFileAdaptersTest.java": read("minos-bootstrap/src/test/java/com/minos/bootstrap/RuntimeIntelligenceFileAdaptersTest.java"),

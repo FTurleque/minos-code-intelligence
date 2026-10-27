@@ -116,7 +116,7 @@ Les entités normalisées restent canoniques. Les indexes ne sont jamais persist
 
 ## Compliance and Enforcement
 
-- Test `FileSymbolSnapshotStoreCacheTest` (`minos-storage-local`, lancé par `mvnw verify`) — réutilisation de la vue, promotion externe visible sans invalidation explicite, republication d’un même `snapshotId` sans contenu périmé, construction unique en cas de cache miss concurrent.
+- Test `FileSymbolSnapshotStoreCacheTest` (`minos-storage`, lancé par `mvnw verify`) — réutilisation de la vue, promotion externe visible sans invalidation explicite, republication d’un même `snapshotId` sans contenu périmé, construction unique en cas de cache miss concurrent.
 - Revue : toute évolution du cache garde l’identité `(projectId, snapshotId)`, la comparaison du descriptor et la relecture du pointeur actif.
 
 ## Invariants
@@ -137,4 +137,4 @@ La qualification exacte et les mesures avant/après sont enregistrées dans la P
 
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
 
-- Le cache de vues est borné aussi en octets, alors que « Limites » le dit borné en nombre d’entrées seulement — preuve : `minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java:59-60`.
+- Le cache de vues est borné aussi en octets, alors que « Limites » le dit borné en nombre d’entrées seulement — preuve : `minos-storage/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java:59-60`.

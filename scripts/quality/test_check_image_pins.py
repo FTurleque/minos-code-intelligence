@@ -371,7 +371,7 @@ class CheckImagePinsTest(unittest.TestCase):
             self.assertEqual(1, gate.main(["--root", directory, "--testcontainers-images"]))
 
     def test_the_real_list_is_the_image_the_postgresql_tests_read(self):
-        support = (gate.DEFAULT_ROOT / "minos-storage-postgresql/src/test/java/com/minos/storage/postgresql"
+        support = (gate.DEFAULT_ROOT / "minos-storage/src/test/java/com/minos/storage/postgresql"
                    / "PostgresTestSupport.java").read_text(encoding="utf-8")
         self.assertIn("MINOS_POSTGRES_IMAGE:-(", support,
                       "PostgresTestSupport no longer reads the default of MINOS_POSTGRES_IMAGE: update the list")

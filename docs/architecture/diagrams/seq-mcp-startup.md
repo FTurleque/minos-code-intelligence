@@ -43,7 +43,7 @@ sequenceDiagram
 | Routeur | `McpBackendRouter` (`minos-app`) : valide `MINOS_HOME`, lit la configuration par `McpBackendConfigurationStore.loadOrMigrate` |
 | Application | `MinosApplication.open(home)` (composée par `minos-bootstrap`) ; `ProjectQueryService.findSymbols` |
 | Serveur MCP | `MinosMcpServer.run(application)`, `MinosMcpTools`, `MinosApplicationMcpBackend` (`minos-mcp`) |
-| Stockage | `CodeKnowledgeSnapshotStore.loadActiveQueryView` (`minos-storage-local`) |
+| Stockage | `CodeKnowledgeSnapshotStore.loadActiveQueryView` (`minos-storage`) |
 
 L'application reste ouverte pendant toute la session et n'est fermée qu'une fois, au retour du serveur.
 

@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           chmod +x mvnw
-          # test-compile, not compile: minos-runtime-local and minos-storage-local depend on the test-jar of
+          # test-compile, not compile: minos-runtime-local and minos-storage depend on the test-jar of
           # minos-engine, which the reactor only provides once test classes are compiled (on a fresh runner, compile
           # alone sent Maven to Maven Central for it, 2026-10-09).
           ./mvnw --batch-mode --no-transfer-progress -Paudit-spotbugs -DskipTests test-compile spotbugs:spotbugs -fae

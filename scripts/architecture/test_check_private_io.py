@@ -29,8 +29,8 @@ _SPEC.loader.exec_module(_MODULE)
 
 PRIMITIVE = "minos-engine/src/main/java/com/minos/io/BoundedFileLease.java"
 NOT_A_PRIMITIVE = "minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java"
-SOURCE = "minos-storage-local/src/main/java/com/minos/storage/local/Store.java"
-OTHER = "minos-storage-local/src/main/java/com/minos/storage/local/Other.java"
+SOURCE = "minos-storage/src/main/java/com/minos/storage/local/Store.java"
+OTHER = "minos-storage/src/main/java/com/minos/storage/local/Other.java"
 BACKSLASH = chr(92)
 
 # One witness per forbidden call: (header, body) of a source that uses exactly that call.
@@ -58,7 +58,7 @@ WITNESSES = {
     "message(Path)": ("", 'Path target = root; throw new IOException("not a directory: " + target);'),
 }
 PLUGIN = "minos-intellij/src/main/java/com/minos/intellij/protocol/Launcher.java"
-REAL_FIXED_SITE = "minos-storage-local/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java"
+REAL_FIXED_SITE = "minos-storage/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java"
 
 
 def java(body: str, header: str = "") -> str:
@@ -227,7 +227,7 @@ class PrivateIoGateTest(unittest.TestCase):
 
     def test_tests_resources_the_excluded_module_and_the_primitives_are_out_of_scope(self):
         body = java("Files.createDirectories(root);")
-        self.repo.put("minos-storage-local/src/test/java/p/T.java", body)
+        self.repo.put("minos-storage/src/test/java/p/T.java", body)
         self.repo.put("minos-provider-scip/src/main/resources/p/Script.java", body)
         self.repo.put("minos-intellij/src/main/java/p/Ide.java", body)
         self.repo.put(PRIMITIVE, body)
@@ -291,8 +291,8 @@ class PrivateIoGateTest(unittest.TestCase):
 
     def test_a_directory_or_a_wildcard_is_refused(self):
         self.repo.put(SOURCE, java("Files.createDirectories(a);"))
-        for bad in ("minos-storage-local/src/main/java/", "minos-storage-local/src/main/java/**/*.java",
-                    "minos-storage-local/src/main/java/com/minos/storage/local/*.java"):
+        for bad in ("minos-storage/src/main/java/", "minos-storage/src/main/java/**/*.java",
+                    "minos-storage/src/main/java/com/minos/storage/local/*.java"):
             with self.subTest(file=bad):
                 self.repo.allow(entry(file=bad))
                 with self.assertRaises(ValueError):
@@ -301,9 +301,9 @@ class PrivateIoGateTest(unittest.TestCase):
     def test_a_missing_file_a_primitive_or_a_test_source_is_refused(self):
         self.repo.put(SOURCE, java("Files.createDirectories(a);"))
         self.repo.put(PRIMITIVE, java("Files.createDirectories(a);"))
-        self.repo.put("minos-storage-local/src/test/java/p/T.java", java("int x;"))
-        for bad in ("minos-storage-local/src/main/java/com/minos/Absent.java", PRIMITIVE,
-                    "minos-storage-local/src/test/java/p/T.java"):
+        self.repo.put("minos-storage/src/test/java/p/T.java", java("int x;"))
+        for bad in ("minos-storage/src/main/java/com/minos/Absent.java", PRIMITIVE,
+                    "minos-storage/src/test/java/p/T.java"):
             with self.subTest(file=bad):
                 self.repo.allow(entry(file=bad))
                 with self.assertRaises(ValueError):

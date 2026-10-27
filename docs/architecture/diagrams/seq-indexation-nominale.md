@@ -46,7 +46,7 @@ sequenceDiagram
 | Orchestration de l'indexation | `ProjectIndexingUseCase` (`minos-application`), appelé par `LocalAutonomousIndexOperations` (`minos-cli`) |
 | Moteur | `ProjectFingerprintService`, `ProjectDiscoveryService`, `ProjectInvalidationService`, `IndexerRegistry`, `IncrementalIndexingPlanner`, `IndexingLifecycleService` / `IndexingRunExecutor` (`minos-engine`) |
 | Provider SCIP | `ProviderRuntimeManager` (port) et `IndexerExecutor` (`IndexingRuntimePorts`), réalisés par `minos-provider-scip` |
-| Stockage | `IndexStateStore`, `SnapshotStager`, `SnapshotPromoter`, `ProjectFingerprintSnapshotStore` (ports d'`minos-engine`, réalisés par `minos-storage-local`) |
+| Stockage | `IndexStateStore`, `SnapshotStager`, `SnapshotPromoter`, `ProjectFingerprintSnapshotStore` (ports d'`minos-engine`, réalisés par `minos-storage`) |
 
 Points à retenir : l'empreinte est prise **avant** la découverte (MINOS-AUD-D06) ; la promotion du snapshot est
 atomique (ADR-0006) ; la baseline d'empreinte n'est promue que si l'espace de travail n'a pas changé pendant le run

@@ -329,6 +329,10 @@ Pour les détails d’architecture, voir [../developer/public-surfaces.md](../de
 
 ## Ruptures
 
+### Adaptateurs de stockage dans un seul artefact, version 1.3.0
+
+Les backends de stockage local et PostgreSQL sont livrés dans un seul artefact Maven, `com.minos:minos-storage`, à la place de `com.minos:minos-storage-local` et `com.minos:minos-storage-postgresql` ([ADR 0068](../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 4). Les packages et le nom des classes ne changent pas (`com.minos.storage.local.*`, `com.minos.storage.postgresql.*`). Le service `StorageBackendProvider` du backend PostgreSQL est déclaré par l'assemblage `minos-app` : le JAR distribué `minos-code-intelligence-*-all.jar` le contient, et un hôte qui dépend de `com.minos:minos-api` n'a que le backend local, comme avant. Un projet qui déclarait l'un des deux anciens artefacts déclare `minos-storage` ; il reçoit alors le pilote PostgreSQL et Jackson dans son graphe de dépendances, que le backend local ne charge pas. Aucun artefact de relocation n'est publié : MINOS ne publie pas ses modules dans un dépôt Maven.
+
 ### Export NEXUS par un cas d'usage applicatif, version 1.3.0
 
 Aucune signature de `com.minos.api` ne change, et le contrat JSON de l'export NEXUS ([ADR 0020](../architecture/adr/ARCH-0020-minos-nexus-json-boundary.md)) ni la commande `minos nexus-export` non plus. Le constructeur de `com.minos.nexus.NexusExportService` prend l'application ouverte ; `export(Path)` et les constantes `MAX_*` sont inchangés. Un code qui construisait le service lui-même doit être modifié et recompilé (rupture de source et binaire) :

@@ -77,7 +77,7 @@ M23 must therefore improve semantic quality without rewriting history or convert
 
 - Gate `scripts/quality/check-semantic-retrieval-consistency.py` — contrat sémantique, guide et cet ADR (`loopback`, `float32`, `256`, `KEEP_CURRENT_M20_BACKEND`) ; lancé seulement par `scripts/m23/run-final.ps1` et `scripts/m24/run-final.ps1` (aucun workflow).
 - Tests `OllamaEmbeddingProviderTest` et `OllamaEmbeddingProviderRuntimeLocationTest` (`minos-application`, lancés par `mvnw verify`) — bouclage et `minos-ollama` acceptés, hôtes distants refusés ; `minos-ollama` hors Docker refusé à l’usage avant toute résolution de nom.
-- Test `FileSemanticVectorStoreTest` (`minos-storage-local`) — écriture v2 float32, lecture v1 et migration au remplacement suivant.
+- Test `FileSemanticVectorStoreTest` (`minos-storage`) — écriture v2 float32, lecture v1 et migration au remplacement suivant.
 - Revue : aucun hôte accepté en plus du bouclage et de `minos-ollama` ; aucun backend ANN sans mesure.
 
 ## Rejected alternatives

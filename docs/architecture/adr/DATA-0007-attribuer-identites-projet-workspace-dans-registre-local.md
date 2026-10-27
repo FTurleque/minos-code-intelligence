@@ -51,7 +51,7 @@ Le modèle MINOS validé en M0 impose qu'un chemin local ne constitue pas à lui
 ## Compliance and Enforcement
 
 - Gate `scripts/architecture/check-private-io.py` (job `invariants`) — écritures privées par les primitives confinées, dont la promotion atomique.
-- Tests `LocalProjectRegistryTest` et `InterProcessLocalProjectRegistryTest` (`minos-storage-local`) — comportement du registre fichier.
+- Tests `LocalProjectRegistryTest` et `InterProcessLocalProjectRegistryTest` (`minos-storage`) — comportement du registre fichier.
 - Revue : identités jamais dérivées du chemin ou du nom, aucune dépendance du registre vers un fournisseur.
 
 ## Validation obtenue
@@ -69,5 +69,5 @@ La PR M1.2 a été fusionnée dans `main` au commit `b12c4bdc5a6061c6d6b0e4f7ef0
 
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
 
-- Le point 6 prévoit une promotion atomique « avec repli par remplacement » ; l'écriture du registre passe par `DurableAtomicFile.replace`, qui échoue sur `AtomicMoveNotSupportedException` sans repli — preuve : `minos-storage-local/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java:489-498`, `minos-engine/src/main/java/com/minos/io/DurableAtomicFile.java:199-200`.
-- La conséquence « les opérations concurrentes multi-processus ne sont pas encore garanties » ne décrit plus le code : un registre sérialisé par verrou OS inter-processus existe — preuve : `minos-storage-local/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java:21-29`.
+- Le point 6 prévoit une promotion atomique « avec repli par remplacement » ; l'écriture du registre passe par `DurableAtomicFile.replace`, qui échoue sur `AtomicMoveNotSupportedException` sans repli — preuve : `minos-storage/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java:489-498`, `minos-engine/src/main/java/com/minos/io/DurableAtomicFile.java:199-200`.
+- La conséquence « les opérations concurrentes multi-processus ne sont pas encore garanties » ne décrit plus le code : un registre sérialisé par verrou OS inter-processus existe — preuve : `minos-storage/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java:21-29`.

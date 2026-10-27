@@ -14,13 +14,12 @@
     "minos-nexus": "en",
     "minos-provider-scip": "en",
     "minos-runtime-local": "en",
-    "minos-storage-local": "en",
-    "minos-storage-postgresql": "en"
+    "minos-storage": "en"
   },
   "outOfLanguageMaximum": {
     "minos-app": 1,
     "minos-application": 48,
-    "minos-bootstrap": 6,
+    "minos-bootstrap": 5,
     "minos-cli": 13,
     "minos-domain": 21,
     "minos-engine": 53,
@@ -41,7 +40,7 @@
     "minos-nexus": 2,
     "minos-provider-scip": 3,
     "minos-runtime-local": 1,
-    "minos-storage-local": 5
+    "minos-storage": 5
   },
   "mixed": {}
 }

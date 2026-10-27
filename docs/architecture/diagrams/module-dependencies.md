@@ -10,8 +10,7 @@ flowchart LR
     minos_domain["minos-domain"]
     minos_engine["minos-engine"]
     minos_runtime_local["minos-runtime-local"]
-    minos_storage_local["minos-storage-local"]
-    minos_storage_postgresql["minos-storage-postgresql"]
+    minos_storage["minos-storage"]
     minos_provider_scip["minos-provider-scip"]
     minos_integration_git["minos-integration-git"]
     minos_application["minos-application"]
@@ -24,15 +23,12 @@ flowchart LR
     minos_engine --> minos_domain
     minos_runtime_local --> minos_domain
     minos_runtime_local --> minos_engine
-    minos_storage_local --> minos_domain
-    minos_storage_local --> minos_engine
-    minos_storage_postgresql --> minos_domain
-    minos_storage_postgresql --> minos_engine
-    minos_storage_postgresql --> minos_storage_local
+    minos_storage --> minos_domain
+    minos_storage --> minos_engine
     minos_provider_scip --> minos_domain
     minos_provider_scip --> minos_engine
     minos_provider_scip --> minos_runtime_local
-    minos_provider_scip --> minos_storage_local
+    minos_provider_scip --> minos_storage
     minos_integration_git --> minos_domain
     minos_integration_git --> minos_engine
     minos_application --> minos_domain
@@ -43,8 +39,7 @@ flowchart LR
     minos_bootstrap --> minos_integration_git
     minos_bootstrap --> minos_provider_scip
     minos_bootstrap --> minos_runtime_local
-    minos_bootstrap --> minos_storage_local
-    minos_bootstrap --> minos_storage_postgresql
+    minos_bootstrap --> minos_storage
     minos_nexus --> minos_application
     minos_nexus --> minos_bootstrap
     minos_nexus --> minos_domain
@@ -72,12 +67,11 @@ flowchart LR
     minos_app --> minos_nexus
     minos_app --> minos_provider_scip
     minos_app --> minos_runtime_local
-    minos_app --> minos_storage_local
-    minos_app --> minos_storage_postgresql
+    minos_app --> minos_storage
     minos_application -.-> minos_bootstrap
     minos_cli -.-> minos_app
     minos_engine -.-> minos_runtime_local
-    minos_engine -.-> minos_storage_postgresql
+    minos_engine -.-> minos_storage
 ```
 
 ## Dépendances MINOS directes
@@ -87,17 +81,16 @@ flowchart LR
 | `minos-domain` | — |
 | `minos-engine` | `minos-domain` |
 | `minos-runtime-local` | `minos-domain`, `minos-engine` |
-| `minos-storage-local` | `minos-domain`, `minos-engine` |
-| `minos-storage-postgresql` | `minos-domain`, `minos-engine`, `minos-storage-local` |
-| `minos-provider-scip` | `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage-local` |
+| `minos-storage` | `minos-domain`, `minos-engine` |
+| `minos-provider-scip` | `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage` |
 | `minos-integration-git` | `minos-domain`, `minos-engine` |
 | `minos-application` | `minos-domain`, `minos-engine` |
-| `minos-bootstrap` | `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |
+| `minos-bootstrap` | `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage` |
 | `minos-nexus` | `minos-application`, `minos-bootstrap`, `minos-domain` |
 | `minos-cli` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-nexus` |
 | `minos-api` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
 | `minos-mcp` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
-| `minos-app` | `minos-api`, `minos-application`, `minos-bootstrap`, `minos-cli`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-mcp`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |
+| `minos-app` | `minos-api`, `minos-application`, `minos-bootstrap`, `minos-cli`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-mcp`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage` |
 
 ## Arêtes d'exécution par service
 
@@ -110,7 +103,7 @@ Ces arêtes sont en pointillés dans le diagramme et ne comptent pas dans la pol
 | `minos-application` | `minos-bootstrap` | `com.minos.application.MinosApplicationComposer` |
 | `minos-cli` | `minos-app` | `com.minos.cli.McpLaunchRoute` |
 | `minos-engine` | `minos-runtime-local` | `com.minos.io.PlatformAccessControl`, `com.minos.orchestration.ExecutionPathIdentityProvider` |
-| `minos-engine` | `minos-storage-postgresql` | `com.minos.storage.StorageBackendProvider` |
+| `minos-engine` | `minos-storage` | `com.minos.storage.StorageBackendProvider` |
 
 Le sens d'une flèche pleine est **module → dépendance directe** ; une flèche en pointillés va
 du module qui déclare un service au module qui le fournit. Les dépendances transitives ne sont pas répétées.

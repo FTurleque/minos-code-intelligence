@@ -92,18 +92,18 @@ def main() -> int:
         ignore_rules = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
         runtime_settings = read("minos-engine/src/main/java/com/minos/storage/MinosRuntimeSettings.java")
         backend_store = read("minos-app/src/main/java/com/minos/app/McpBackendConfigurationStore.java")
-        path_store = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/ProjectPathMappingStore.java")
-        registry = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java")
+        path_store = read("minos-storage/src/main/java/com/minos/storage/local/registry/ProjectPathMappingStore.java")
+        registry = read("minos-storage/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java")
         storage_config = read("minos-engine/src/main/java/com/minos/storage/StorageBackendConfiguration.java")
-        postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java")
+        postgres = read("minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java")
         postgres_policy = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/support/PostgresJdbcUrlPolicy.java")
+            "minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresJdbcUrlPolicy.java")
         mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
         json = read("minos-application/src/main/java/com/minos/output/json/DeterministicJson.java")
-        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
+        local_storage = read("minos-storage/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
         postgres_storage = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresStorageBackend.java")
+            "minos-storage/src/main/java/com/minos/storage/postgresql/PostgresStorageBackend.java")
         retention_policy = read("minos-engine/src/main/java/com/minos/storage/PersistentRetentionPolicy.java")
         # AUD-ARC-02: the indexing orchestration moved from the CLI to the application use case.
         indexing = read("minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java")
@@ -262,7 +262,7 @@ def main() -> int:
         require("LocalStorageBackend.java", local_storage,
                 "new LocalStorageRetentionService", "retentionService()")
         local_retention = read(
-            "minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageRetentionService.java")
+            "minos-storage/src/main/java/com/minos/storage/local/LocalStorageRetentionService.java")
         require("LocalStorageRetentionService.java", local_retention,
                 "compactWithActiveSnapshot", "CompactionResult::activeSnapshotId")
         require("PostgresStorageBackend.java", postgres_storage,
