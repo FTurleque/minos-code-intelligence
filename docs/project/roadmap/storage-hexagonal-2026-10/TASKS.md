@@ -57,7 +57,7 @@ python scripts/architecture/check-module-boundaries.py ; python scripts/docs/che
 
 ## SH-03 — Extraire le codec commun et interdire les dépendances entre backends
 
-- État : implémenté (2026-10-27, changement OpenSpec `extraire-le-codec-commun-du-stockage`)
+- État : fait (2026-10-27, PR #585, changement OpenSpec archivé `2026-10-27-extraire-le-codec-commun-du-stockage`)
 - Priorité : P1
 - Dépendances : SH-02
 - Point d'entrée : `minos-storage/src/main/java/com/minos/storage/codec/KnowledgeSnapshotCodecs.java`, `minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresSnapshotPayloadCodec.java`, `docs/architecture/adr/archive/0046-format-de-snapshot-v3-chaines-utf8.md`
