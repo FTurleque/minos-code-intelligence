@@ -1666,6 +1666,26 @@ class RuntimeServiceEdgeTest(RatchetTreeTestCase):
         (services / "com.minos.cli.McpLaunchRoute").write_text("com.minos.app.Missing\n", encoding="utf-8")
         self.refused(self.edges, "com.minos.app.Missing", "not a production type of minos-app")
 
+    def test_the_assembly_registers_an_implementation_of_a_module_it_depends_on(self):
+        # D7 (SH-02): the assembly declares the optional PostgreSQL backend; the edge goes to the providing module.
+        self.write("minos-engine", "com.minos.storage", "StorageBackendProvider", "public interface StorageBackendProvider { }")
+        self.write("minos-storage", "com.minos.storage.postgresql", "PostgresStorageBackendProvider",
+                   "public final class PostgresStorageBackendProvider implements StorageBackendProvider { }")
+        services = self.root / "minos-app" / "src" / "main" / "resources" / "META-INF" / "services"
+        (services / "com.minos.storage.StorageBackendProvider").write_text(
+            "com.minos.storage.postgresql.PostgresStorageBackendProvider\n", encoding="utf-8")
+        self.assertEqual(("com.minos.storage.StorageBackendProvider",), self.edges()[("minos-engine", "minos-storage")])
+
+    def test_a_module_other_than_the_assembly_registering_a_foreign_implementation_is_refused(self):
+        self.write("minos-engine", "com.minos.storage", "StorageBackendProvider", "public interface StorageBackendProvider { }")
+        self.write("minos-storage", "com.minos.storage.postgresql", "PostgresStorageBackendProvider",
+                   "public final class PostgresStorageBackendProvider implements StorageBackendProvider { }")
+        services = self.root / "minos-bootstrap" / "src" / "main" / "resources" / "META-INF" / "services"
+        services.mkdir(parents=True)
+        (services / "com.minos.storage.StorageBackendProvider").write_text(
+            "com.minos.storage.postgresql.PostgresStorageBackendProvider\n", encoding="utf-8")
+        self.refused(self.edges, "minos-bootstrap", "not a production type of minos-bootstrap")
+
     def test_a_document_without_the_edge_is_refused_naming_the_edge(self):
         edges = self.edges()
         with contextlib.redirect_stdout(io.StringIO()):

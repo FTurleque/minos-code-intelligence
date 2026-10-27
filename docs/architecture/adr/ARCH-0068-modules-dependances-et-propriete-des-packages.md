@@ -101,7 +101,7 @@ Un accès package-private entre jars se résout par déplacement du code ou du t
 - La route `minos mcp` passe par le SPI `com.minos.cli.McpLaunchRoute`, déclaré dans `minos-cli` et fourni par `minos-app` (`META-INF/services`) ; `MinosLauncher` le résout dans le seul chargeur de classes de MINOS et échoue explicitement, sans chemin, à zéro ou plusieurs fournisseurs ; le JAR ombré en déclare exactement un (ADR 0044 § 2 et § Consequences).
 - `hosted` reste dans `minos-engine` tant que la cartographie de SH-08 n'a pas montré un meilleur emplacement ; le transport MCP Docker et le pont NEXUS restent dans `minos-app`, sous leurs noms (ADR 0062 § 1 et § 2).
 
-### 4. Adaptateurs de stockage réunis dans `minos-storage` (accepté, à mettre en œuvre)
+### 4. Adaptateurs de stockage réunis dans `minos-storage` (accepté ; module réuni par SH-02, codec commun à faire par SH-03)
 
 - Un seul artefact Maven `com.minos:minos-storage` remplace `minos-storage-local` et `minos-storage-postgresql` (ADR 0055 § Decision).
 - Les implémentations gardent `com.minos.storage.local.*` et `com.minos.storage.postgresql.*` ; les codecs réellement partagés rejoignent `com.minos.storage.codec` dans le même artefact. Aucune classe de production n'est déclarée dans `com.minos.storage`, qui appartient à `minos-engine` (ADR 0055 § Decision).
@@ -199,7 +199,7 @@ L'ordre des tâches et leurs prérequis sont dans [le plan du chantier stockage]
 **§ 4, adaptateurs de stockage réunis (SH-02, AUD-ARC-08, changement OpenSpec `fusionner-les-adaptateurs-de-stockage`)** :
 - **Un seul module** : `minos-storage` contient `com.minos.storage.local` et `com.minos.storage.postgresql`, et le reactor compte 13 modules. Il dépend de `minos-domain` et de `minos-engine` seulement.
 - **Cloisonnement des backends par packages** : `com.minos.storage.local` ne nomme aucun type de `com.minos.storage.postgresql` ; `com.minos.storage.postgresql` ne nomme de `com.minos.storage.local` que les types de `BACKEND_TYPES_NAMED_ACROSS_PACKAGES` (cliquet D4 de `check-module-boundaries.py`, qui ne fait que rétrécir et que SH-03 videra en déplaçant les codecs partagés vers `com.minos.storage.codec`).
-- **PostgreSQL reste optionnel** : `minos-bootstrap` et `minos-provider-scip` ne nomment ni le backend PostgreSQL ni son pilote (règles R1 et R2) ; la racine de composition le découvre par `ServiceLoader`, et une application composée avec le backend local ne charge aucune de ses classes (`LocalCompositionLoadsNoPostgresqlClassTest`). Le pilote JDBC et Jackson sont dans le graphe de tout consommateur de `minos-storage`.
+- **PostgreSQL reste optionnel** : `minos-bootstrap` et `minos-provider-scip` ne nomment ni le backend PostgreSQL ni son pilote (règles R1 et R2, et `ModuleArchitectureTest.onlyThePostgresqlBackendUsesPostgresql` sur le bytecode) ; la racine de composition le découvre par `ServiceLoader`, son service n'est déclaré que par l'assemblage `minos-app`, et une application composée avec le backend local ne charge aucune de ses classes (`LocalCompositionLoadsNoPostgresqlClassTest`). Le pilote JDBC et Jackson sont dans le graphe de tout consommateur de `minos-storage`.
 
 ## Écarts constatés
 

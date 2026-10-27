@@ -191,6 +191,20 @@ class ModuleArchitectureTest {
                 .check(all);
     }
 
+    /**
+     * ADR 0068 section 4 (rules R1, R2 and D4 on the bytecode): the composition root, the SCIP provider and the local
+     * storage backend never use the PostgreSQL backend nor its driver, even through a type they do not name (a
+     * {@code var}, an inherited member, a return type). minos-storage holds both backends; only these packages keep
+     * PostgreSQL optional.
+     */
+    @Test
+    void onlyThePostgresqlBackendUsesPostgresql() {
+        noClasses().that().resideInAnyPackage("com.minos.bootstrap..", "com.minos.adapter.scip..", "com.minos.storage.local..")
+                .should().dependOnClassesThat().resideInAnyPackage("com.minos.storage.postgresql..", "org.postgresql..")
+                .because("ADR 0068 section 4: the PostgreSQL backend is optional and discovered by ServiceLoader")
+                .check(all);
+    }
+
     /** ADR 0022: the domain depends on no other module, and the engine only on the domain. */
     @Test
     void coreModulesStayAtTheBottom() {

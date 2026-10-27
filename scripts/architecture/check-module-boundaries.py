@@ -1546,7 +1546,9 @@ def runtime_service_edges(root: Path = ROOT, modules: tuple[str, ...] = MODULES)
 
     A production META-INF/services file of module Y whose service interface is a production type of module X != Y
     makes X load an implementation of Y at run time. A service interface outside the reactor is not an edge. An
-    implementation that is not a production type of the module that registers it fails.
+    implementation that is not a production type of the module that registers it fails, except in the assembly
+    minos-app, which may register an implementation of a module it depends on (D7, ADR 0068 section 4: the optional
+    PostgreSQL backend); the edge then goes to the module that provides the implementation.
     """
     owners = {qualified: module for module in modules for qualified in production_types(root, module)}
     edges: dict[tuple[str, str], set[str]] = {}
@@ -1560,12 +1562,14 @@ def runtime_service_edges(root: Path = ROOT, modules: tuple[str, ...] = MODULES)
                 implementation = line.split("#", 1)[0].strip()
                 if not implementation:
                     continue
-                if owners.get(implementation) != module:
+                providing = owners.get(implementation)
+                assembled = module == ASSEMBLY_MODULE and providing in ALLOWED_DEPENDENCIES[ASSEMBLY_MODULE]
+                if providing != module and not assembled:
                     fail(f"{module}: META-INF/services/{service} names {implementation}, which is not a production "
                          f"type of {module}")
                 declaring = owners.get(service)
-                if declaring is not None and declaring != module:
-                    edges.setdefault((declaring, module), set()).add(service)
+                if declaring is not None and declaring != providing:
+                    edges.setdefault((declaring, providing), set()).add(service)
     return {edge: tuple(sorted(services)) for edge, services in sorted(edges.items())}
 
 

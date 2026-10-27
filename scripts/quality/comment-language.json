@@ -19,7 +19,7 @@
   "outOfLanguageMaximum": {
     "minos-app": 1,
     "minos-application": 48,
-    "minos-bootstrap": 6,
+    "minos-bootstrap": 5,
     "minos-cli": 13,
     "minos-domain": 21,
     "minos-engine": 53,

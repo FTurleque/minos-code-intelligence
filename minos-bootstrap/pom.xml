@@ -105,6 +105,18 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- ADR 0068 section 4: the PostgreSQL backend is registered by the minos-app assembly only. The tests of
+                         this module that select it get the registration from this directory, kept out of
+                         target/test-classes so that the test-jar used by the surfaces does not carry it -->
+                    <additionalClasspathElements>
+                        <additionalClasspathElement>${project.basedir}/src/test/postgresql-backend</additionalClasspathElement>
+                    </additionalClasspathElements>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

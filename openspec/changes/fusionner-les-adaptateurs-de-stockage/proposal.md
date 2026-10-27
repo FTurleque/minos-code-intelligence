@@ -28,7 +28,7 @@ L'audit d'octobre 2026 demandait de vérifier quatre entrées au HEAD avant SH-0
   - Surefire avec `additionalClasspathElements` ;
   - le profil `windows-docker-desktop-testcontainers` ;
   - la propriété `minos.postgresql.tests.required` et son mode strict en CI.
-- **Le reactor et les POM consommateurs pointent vers `minos-storage`** : `minos-bootstrap`, `minos-provider-scip`, `minos-app`, avec la même portée qu'avant. Le seul service de production, `StorageBackendProvider` → `PostgresStorageBackendProvider`, garde son fichier.
+- **Le reactor et les POM consommateurs pointent vers `minos-storage`** : `minos-bootstrap`, `minos-provider-scip`, `minos-app`, avec la même portée qu'avant. Le seul service de production, `StorageBackendProvider` → `PostgresStorageBackendProvider`, est déclaré par l'assemblage `minos-app`, qui seul apportait le backend PostgreSQL avant la fusion (décision Q6). Les tests de `minos-bootstrap` le reçoivent par un répertoire de classpath de test placé hors de leur test-jar.
 - **Le garde des frontières suit la fusion** :
   - les deux nœuds deviennent `minos-storage` dans `MODULES`, `ADAPTER_MODULES`, `ARTIFACT_TO_MODULE`, `ALLOWED_DEPENDENCIES` (A2), `PACKAGE_ROOTS_BY_MODULE` (A14), A15, A18 et `ModuleArchitectureTest.ALLOWED` (A17) ;
   - l'arête `minos-storage-postgresql` → `minos-storage-local` disparaît ;

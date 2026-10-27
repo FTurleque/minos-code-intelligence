@@ -171,7 +171,7 @@ Le couple `(minos-provider-scip, minos-storage)` reste dans A13, avec `storage.l
 ### D6 — Un seul POM qui reprend les deux anciens
 
 - Les dépendances sont l'union des deux POM, moins l'arête interne.
-- Le test-jar est produit, puisque `minos-bootstrap` et `minos-app` réutilisent `PostgresTestSupport`.
+- Le test-jar est produit, puisque `minos-bootstrap` réutilise `PostgresTestSupport`.
 - Surefire reprend `argLine` avec `-Djdk.net.URLClassPath.disableClassPathURLCheck=true`, `redirectTestOutputToFile=false` et `additionalClasspathElements`.
 - Le profil Windows Docker Desktop est repris.
 - Dépendances que le backend local reçoit désormais par transitivité : JDBC, Jackson et le pilote PostgreSQL entrent dans le graphe de tout consommateur de `minos-storage`. Le JAR ombré les contenait déjà, puisque `minos-app` déclarait les deux modules. L'API Java embarquée et le SBOM sont inventoriés dans la tâche 4.3. On n'écrit nulle part que PostgreSQL serait absent du classpath local.
@@ -195,6 +195,33 @@ Le couple `(minos-provider-scip, minos-storage)` reste dans A13, avec `storage.l
 - Les tests PostgreSQL sont exigés sous Linux (`pr-ci.yml:380`). Sous Windows, ils passent par le profil Docker Desktop quand Docker est présent.
 - T1 s'exécute sur les deux systèmes.
 
+## Mise en œuvre (2026-10-27, base `033a59fa`)
+
+- **Base de départ (tâche 1.1)** : `develop` à `033a59fa` contient E01 (PR #580) et `lire-le-registre-sans-ecrire`. Il reste à ce dernier quatre tâches de qualification Docker, qui ne touchent pas le stockage. Le `verify` complet de la tête de la PR #580 est vert sous Windows et sert de base.
+- **T1** : le test compose l'application dans un chargeur de classes isolé. Ce chargeur définit lui-même chaque classe `com.minos.*` et `org.postgresql.*` et l'enregistre. Les classes déjà chargées par d'autres tests du même JVM ne faussent donc pas la mesure. La variante à chargement forcé prouve que la vérification échoue et nomme la classe.
+- **Clé du verrou consultatif PostgreSQL** : la chaîne `'minos-storage-postgresql'` de `PostgresSchemaMigrator` reste inchangée. C'est la clé partagée entre versions de MINOS, pas un nom de module.
+- **Dependency-Check** : la suppression du faux CPE PostgreSQL vise désormais l'artefact `minos-storage`. Elle n'est exercée que par le workflow `code-audit`, et n'a pas été rejouée en local faute de clé NVD.
+- **Dépendances transitives** : `minos-bootstrap` et `minos-provider-scip` reçoivent le pilote PostgreSQL et Jackson à la compilation. Le JAR ombré de `minos-app` les contenait déjà. Il compte 10 234 entrées, sans doublon, et le service `StorageBackendProvider` n'y est déclaré qu'une fois.
+
+### D7 — Le service PostgreSQL est déclaré par l'assemblage
+
+Avant la fusion, `minos-bootstrap` ne voyait `minos-storage-postgresql` qu'en portée `test`, qui n'est pas transitive. Le
+fournisseur PostgreSQL n'arrivait donc qu'avec `minos-app`, et les tests des surfaces (CLI, API, MCP) enregistraient une
+doublure `postgresql` (`CloseCountingStorageProvider`) sans rencontrer le vrai fournisseur. Dans un seul module, ce
+fournisseur atteint par transitivité le classpath de test des surfaces, et la sélection refuse à bon droit deux
+fournisseurs du même identifiant (AUD-ARC-04).
+
+- **Option retenue (Q6, 2026-10-27)** : `META-INF/services/com.minos.storage.StorageBackendProvider` vit dans
+  `minos-app/src/main/resources`. Le JAR distribué le contient, une seule fois. Les tests de `minos-bootstrap` qui
+  sélectionnent PostgreSQL le reçoivent de `minos-bootstrap/src/test/postgresql-backend`, ajouté par
+  `additionalClasspathElements`, comme `platform-access-control`. Ce répertoire n'entre pas dans le test-jar des
+  surfaces. Un hôte qui dépend de `minos-api` n'a que le backend local, comme avant la fusion.
+- **Options écartées** :
+  - réécrire les tests des surfaces sans doublure : le backend local ne fait rien à la fermeture, il n'y a rien à
+    observer ;
+  - un accesseur additif de fermeture : il change l'API publique pour un besoin de test ;
+  - un classpath de test filtré dans Surefire : configuration fragile.
+
 ## Décisions du propriétaire (2026-10-26)
 
 - **Q1 = A** : E01 (reprise PostgreSQL) est traité par un changement séparé, `persister-la-reprise-dans-postgresql`, livré avant SH-02. La tâche 1.1 vérifie sa fusion.
@@ -202,3 +229,4 @@ Le couple `(minos-provider-scip, minos-storage)` reste dans A13, avec `storage.l
 - **Q3** : le contournement `build-helper-maven-plugin` est fermé dans SH-02 (D5).
 - **Q4** : JDBC et Jackson transitives dans `minos-storage`, avec R1, R2 et T1 comme preuves (D3, D6).
 - **Q5** : `lire-le-registre-sans-ecrire` est livré avant la fusion ; la tâche 1.1 vérifie sa fusion.
+- **Q6 (2026-10-27)** : le service PostgreSQL est déclaré par l'assemblage `minos-app` (D7).

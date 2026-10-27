@@ -30,8 +30,8 @@
             <version>${project.version}</version>
         </dependency>
         <!--
-          The PostgreSQL backend only. The local backend never loads these classes: the composition root discovers the
-          PostgreSQL backend by ServiceLoader, and LocalCompositionLoadsNoPostgresqlClassTest (minos-bootstrap) proves it.
+          The PostgreSQL backend only. Its StorageBackendProvider service is registered by the minos-app assembly, not by
+          this module; the local backend never loads these classes (LocalCompositionLoadsNoPostgresqlClassTest).
         -->
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -85,9 +85,9 @@
         <plugins>
             <plugin>
                 <!--
-                  A2: the application-level consistency test over PostgreSQL lives in minos-app (this adapter does not
-                  depend on minos-application); it reuses the Docker / pgvector bootstrap of PostgresTestSupport through
-                  this test-jar, as minos-bootstrap does.
+                  The application-level tests over PostgreSQL live in minos-bootstrap (this adapter does not depend on
+                  minos-application); they reuse the Docker / pgvector bootstrap of PostgresTestSupport through this
+                  test-jar.
                 -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
