@@ -8,7 +8,7 @@ import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.storage.local.registry.LocalProjectRegistry;
-import com.minos.storage.local.registry.ProjectPathMappingStore;
+import com.minos.storage.home.ProjectPathMappingStore;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

@@ -608,9 +608,7 @@ ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], dict[str, int]] = {
 # com.minos.storage.postgresql at all.
 STORAGE_MODULE = "minos-storage"
 LOCAL_BACKEND_PACKAGE = "storage.local"
-BACKEND_TYPES_NAMED_ACROSS_PACKAGES: dict[str, int] = {
-    "storage.local.registry.ProjectPathMappingStore": 1,
-}
+BACKEND_TYPES_NAMED_ACROSS_PACKAGES: dict[str, int] = {}
 
 # A14 / AUD-ARC-12, ADR 0068 — the package roots (first segment under the groupId) each module owns. A new package
 # goes under one of its module's roots; a new root is a decision, written here by a visible edit (ADR 0068). A root may

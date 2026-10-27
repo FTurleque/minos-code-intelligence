@@ -1,4 +1,4 @@
-package com.minos.storage.local.registry;
+package com.minos.storage.home;
 
 import java.io.OutputStreamWriter;
 import java.io.ByteArrayOutputStream;
