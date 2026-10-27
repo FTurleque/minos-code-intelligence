@@ -58,5 +58,5 @@
 ## 7. Clôture
 
 - [x] 7.1 Lancer `./mvnw -B -ntp verify` complet sous Windows, avec Docker Desktop pour les tests PostgreSQL, puis `python .claude/scripts/run_gates.py` et `archgate check`.
-- [ ] 7.2 Mesurer la couverture JaCoCo de `minos-storage`, classe par classe, sur le rapport Linux de la CI (artefact `jacoco-modules-Linux`), où les tests PostgreSQL sont exigés. Toute classe sous 80 % reçoit des tests dans la PR, avant la fusion.
+- [x] 7.2 Mesurer la couverture JaCoCo de `minos-storage`, classe par classe, sur le rapport Linux de la CI (artefact `jacoco-modules-Linux`), où les tests PostgreSQL sont exigés. Toute classe sous 80 % reçoit des tests dans la PR, avant la fusion. Mesure de la PR #585 (run `40582931012`, commit `f728cce3`) : aucune classe de `minos-storage` sous 80 %, module à 94,0 % ; classes déplacées ou ajoutées de 89,2 % (`SnapshotIntegrityService`) à 100 % (`SnapshotBinaryPrimitives`, `KnowledgeSnapshotCodecs`, `ActiveSnapshotRepository`). SonarCloud : 91,9 % sur le nouveau code, 0 alerte.
 - [x] 7.3 Mettre à jour la ligne de phase 4 dans `docs/project/audits/2026-10-10/SUIVI.md` (D4 vide, constat E04 points 1 et 2) et la ligne SH-03 du plan de stockage hexagonal. Revue d'architecture (`minos-architecture-reviewer`) et revue de sécurité du stockage. `ETAT-2026-10-13.md` et `findings.json` ne sont pas modifiés.
