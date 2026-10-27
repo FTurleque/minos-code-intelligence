@@ -12,6 +12,7 @@ import com.minos.domain.RelationshipKind;
 import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.ResolutionStatus;
 import com.minos.domain.ResolvedSymbolReference;
+import com.minos.domain.Symbol;
 import com.minos.domain.SymbolLocation;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolSearchCriteria;
@@ -41,14 +42,14 @@ class InMemoryCodeKnowledgeStoreIndexTest {
                                 SymbolSearchCriteria.qualifiedName("com.minos.Converter.convert", 10)
                         ).stream()
                         .filter(symbol -> "(java.lang.String)".equals(symbol.signature()))
-                        .map(symbol -> symbol.id())
+                        .map(Symbol::id)
                         .toList()
         );
         assertEquals(
                 List.of("method-int", "method-string"),
                 store.findFileSymbols(projectId.toString(), "file-converter", 10)
                         .stream()
-                        .map(symbol -> symbol.id())
+                        .map(Symbol::id)
                         .toList()
         );
         assertTrue(store.indexMetrics().qualifiedNameKeys() > 0);
