@@ -57,22 +57,22 @@ python scripts/architecture/check-module-boundaries.py ; python scripts/docs/che
 
 ## SH-03 — Extraire le codec commun et interdire les dépendances entre backends
 
-- État : À faire
+- État : implémenté (2026-10-27, changement OpenSpec `extraire-le-codec-commun-du-stockage`)
 - Priorité : P1
 - Dépendances : SH-02
-- Point d'entrée : `minos-storage/src/main/java/com/minos/storage/local/store/KnowledgeSnapshotCodecs.java`, `minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresSnapshotPayloadCodec.java`, `docs/architecture/adr/archive/0046-format-de-snapshot-v3-chaines-utf8.md`
+- Point d'entrée : `minos-storage/src/main/java/com/minos/storage/codec/KnowledgeSnapshotCodecs.java`, `minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresSnapshotPayloadCodec.java`, `docs/architecture/adr/archive/0046-format-de-snapshot-v3-chaines-utf8.md`
 
 ### Actions
 
-- [ ] Après fusion, cartographier puis déplacer les types de codec réellement partagés vers com.minos.storage.codec, avec leurs tests.
-- [ ] Conserver les responsabilités fichiers locales hors codec ; aucun accès à JDBC ou au backend local depuis le codec.
-- [ ] Remplacer les imports PostgreSQL vers local.store ; préserver magic, versions, hash logique, plafonds, repli V2 des surrogates et compatibilité V1/V2/V3.
-- [ ] Ajouter une garde package local ↛ postgresql et postgresql ↛ local, codec ↛ backends ; prouver qu'une violation synthétique est rejetée.
+- [x] Après fusion, cartographier puis déplacer les types de codec réellement partagés vers com.minos.storage.codec, avec leurs tests.
+- [x] Conserver les responsabilités fichiers locales hors codec ; aucun accès à JDBC ou au backend local depuis le codec.
+- [x] Remplacer les imports PostgreSQL vers local.store ; préserver magic, versions, hash logique, plafonds, repli V2 des surrogates et compatibilité V1/V2/V3.
+- [x] Ajouter une garde package local ↛ postgresql et postgresql ↛ local, codec ↛ backends ; prouver qu'une violation synthétique est rejetée.
 
 ### Critères d'acceptation
 
-- [ ] Les fixtures historiques se lisent depuis les deux backends ; les bytes et identités encodés restent conformes au contrat existant.
-- [ ] Aucun import backend croisé ; aucun besoin d'un module Maven codec supplémentaire.
+- [x] Les fixtures historiques se lisent depuis les deux backends (V2 par les deux, V1, antérieure à PostgreSQL, par le backend local) ; les bytes et identités encodés restent conformes au contrat existant.
+- [x] Aucun import backend croisé ; aucun besoin d'un module Maven codec supplémentaire.
 
 ### Vérification
 

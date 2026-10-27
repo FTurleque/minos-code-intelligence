@@ -187,6 +187,20 @@ Seule la CI Linux exige les tests PostgreSQL (`-Dminos.postgresql.tests.required
 
 Aucune arête Maven n'est ajoutée ni retirée. À l'intérieur de `minos-storage`, les arêtes de packages deviennent `local → codec`, `local → home`, `postgresql → codec` et `postgresql → home`, sans cycle (A8). `minos-bootstrap → minos-storage` existe déjà ; son import passe de `local.registry` à `home`.
 
+## Mise en œuvre (2026-10-27, base `6b06c007`)
+
+- **Baseline** : `develop` à `6b06c007` ne diffère de la PR #582, dont la CI a passé `verify` sur Ubuntu et Windows, que par de la documentation (#583, #584). Cette CI sert de baseline ; aucun `verify` local n'est relancé sur la base.
+- **Ordre des tâches 3.1 et 3.2 inversé** : le pointeur actif appelle `SnapshotBinaryCodecSupport`, de portée paquet ; déplacer le codec avant d'extraire les primitives laisserait un commit qui ne compile pas. `SnapshotBinaryPrimitives` est donc extraite dans `com.minos.storage.local.store`, puis déplacée avec le codec. Chaque commit compile.
+- **D4 rétrécit avant d'être retiré** : le déplacement du codec retire ses 3 entrées, celui du mapping la dernière ; la tâche 5.1 retire ensuite la table vide.
+- **Rouges prouvés** :
+  - garde Python : 10 auto-tests rouges contre le garde de la base ; au HEAD de la base, la règle refuse les 3 fichiers de production et les 2 tests PostgreSQL attendus ;
+  - ArchUnit : une dépendance temporaire du codec vers `FileSymbolSnapshotStore` fait échouer `theSharedStoragePackagesUseNoBackend` seule, une dépendance temporaire de `PostgresSnapshotPayloadCodec` vers le backend local fait échouer `thePostgresqlBackendDoesNotUseTheLocalBackend` seule ; 12 sur 12 après retrait ;
+  - octets du pointeur : une mutation de `writeString` fait échouer `ActiveSnapshotPointerBytesTest`.
+- **Réserves de la revue d'architecture reprises** : la liste des packages directs de `com.minos.storage` dans `minos-storage` est fermée (`STORAGE_PACKAGES` : `codec`, `home`, `local`, `postgresql`), et `codec` et `home` ne nomment pas non plus `javax.sql` (garde et ArchUnit).
+- **Limite acceptée** : un nom de classe passé à `Class.forName` est un littéral, que ni le garde ni ArchUnit ne voient. `minos-storage` n'appelle ni `Class.forName` ni `loadClass` au HEAD.
+- **SpotBugs** : seules les deux alertes de `KnowledgeSnapshotCodecs$Selection` changent d'empreinte avec le package ; la base garde 50 entrées.
+- **Hors périmètre relevé** : `scripts/m15/run-final.ps1:73-80` cite `minos-storage\src\main\java\com\minos\store\`, un chemin qui n'existe plus depuis le renommage de l'ADR 0044 ; le script n'est pas exécuté par la CI et reste tel quel.
+
 ## Décisions du propriétaire (2026-10-27)
 
 - **Q1** : une classe publique de primitives dans le codec (D2).

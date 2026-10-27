@@ -220,13 +220,13 @@ class ModuleArchitectureTest {
 
     /**
      * ADR 0068 section 4: the snapshot codec and the MINOS_HOME path mapping, shared by both storage backends, use
-     * neither backend, nor the PostgreSQL driver, nor JDBC.
+     * neither backend, nor the PostgreSQL driver, nor JDBC ({@code java.sql}, {@code javax.sql}).
      */
     @Test
     void theSharedStoragePackagesUseNoBackend() {
         noClasses().that().resideInAnyPackage("com.minos.storage.codec..", "com.minos.storage.home..")
                 .should().dependOnClassesThat().resideInAnyPackage("com.minos.storage.local..",
-                        "com.minos.storage.postgresql..", "org.postgresql..", "java.sql..")
+                        "com.minos.storage.postgresql..", "org.postgresql..", "java.sql..", "javax.sql..")
                 .because("ADR 0068 section 4: the shared storage packages sit below both backends")
                 .check(all);
     }
