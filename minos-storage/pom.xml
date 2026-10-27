@@ -11,9 +11,12 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>minos-storage-postgresql</artifactId>
-    <name>MINOS PostgreSQL Storage</name>
-    <description>PostgreSQL and pgvector persistence backend for MINOS.</description>
+    <artifactId>minos-storage</artifactId>
+    <name>MINOS Storage</name>
+    <description>
+        Storage adapters of MINOS: the local backend (com.minos.storage.local) and the PostgreSQL and pgvector backend
+        (com.minos.storage.postgresql), kept apart by package rules (ADR 0068 section 4).
+    </description>
 
     <dependencies>
         <dependency>
@@ -26,11 +29,10 @@
             <artifactId>minos-engine</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-storage-local</artifactId>
-            <version>${project.version}</version>
-        </dependency>
+        <!--
+          The PostgreSQL backend only. The local backend never loads these classes: the composition root discovers the
+          PostgreSQL backend by ServiceLoader, and LocalCompositionLoadsNoPostgresqlClassTest (minos-bootstrap) proves it.
+        -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
@@ -69,8 +71,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <!-- SH-08: IcaclsTestAccessControl (com.minos.testsupport), the platform access control of the Windows tests of
-                 a module that cannot see minos-runtime-local; test scope adds no edge (compile edge to minos-engine already exists) -->
+            <!-- LogCapture, WriteProtectedTree and IcaclsTestAccessControl (com.minos.testsupport); test scope adds no edge
+                 (the compile edge to minos-engine already exists) -->
             <groupId>com.minos</groupId>
             <artifactId>minos-engine</artifactId>
             <version>${project.version}</version>
@@ -83,9 +85,9 @@
         <plugins>
             <plugin>
                 <!--
-                  A2: the application-level consistency test over PostgreSQL lives in minos-app
-                  (this adapter no longer depends on minos-application); it reuses the Docker /
-                  pgvector bootstrap of PostgresTestSupport through this test-jar.
+                  A2: the application-level consistency test over PostgreSQL lives in minos-app (this adapter does not
+                  depend on minos-application); it reuses the Docker / pgvector bootstrap of PostgresTestSupport through
+                  this test-jar, as minos-bootstrap does.
                 -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
