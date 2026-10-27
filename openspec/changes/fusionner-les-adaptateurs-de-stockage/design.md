@@ -201,6 +201,7 @@ Le couple `(minos-provider-scip, minos-storage)` reste dans A13, avec `storage.l
 - **T1** : le test compose l'application dans un chargeur de classes isolé. Ce chargeur définit lui-même chaque classe `com.minos.*` et `org.postgresql.*` et l'enregistre. Les classes déjà chargées par d'autres tests du même JVM ne faussent donc pas la mesure. La variante à chargement forcé prouve que la vérification échoue et nomme la classe.
 - **Clé du verrou consultatif PostgreSQL** : la chaîne `'minos-storage-postgresql'` de `PostgresSchemaMigrator` reste inchangée. C'est la clé partagée entre versions de MINOS, pas un nom de module.
 - **Dependency-Check** : la suppression du faux CPE PostgreSQL vise désormais l'artefact `minos-storage`. Elle n'est exercée que par le workflow `code-audit`, et n'a pas été rejouée en local faute de clé NVD.
+- **Clôture locale (tâche 6.1)** : `mvnw verify` complet est vert sous Windows (26 min 54), ainsi que `check-jacoco.py`. Le JAR distribué, avec un `MINOS_HOME` neuf sur le backend local, sans PostgreSQL ni Docker, répond à `project list` et à `doctor`. `minos index` n'a pas été exécuté : le poste ne fournit pas les outils des providers.
 - **Dépendances transitives** : `minos-bootstrap` et `minos-provider-scip` reçoivent le pilote PostgreSQL et Jackson à la compilation. Le JAR ombré de `minos-app` les contenait déjà. Il compte 10 234 entrées, sans doublon, et le service `StorageBackendProvider` n'y est déclaré qu'une fois.
 
 ### D7 — Le service PostgreSQL est déclaré par l'assemblage

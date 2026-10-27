@@ -52,6 +52,6 @@
 
 ## 6. Clôture
 
-- [ ] 6.1 Lancer `./mvnw -B -ntp verify` complet sous Windows, puis le scénario local sans PostgreSQL ni Docker : `minos index` sur une fixture, avec le backend `local`. Lancer aussi `python .claude/scripts/run_gates.py`, `check-jacoco.py` sur le rapport agrégé et `archgate check`.
+- [x] 6.1 Lancer `./mvnw -B -ntp verify` complet sous Windows, puis le scénario local sans PostgreSQL ni Docker : `minos index` sur une fixture, avec le backend `local`. Lancer aussi `python .claude/scripts/run_gates.py`, `check-jacoco.py` sur le rapport agrégé et `archgate check`.
 - [ ] 6.2 Mesurer la couverture JaCoCo du module `minos-storage`, classe par classe, sur le rapport Linux de la CI, avec les tests PostgreSQL exigés. Toute classe sous 80 % reçoit des tests dans la PR, avant la fusion.
 - [ ] 6.3 Mettre à jour la ligne de phase 4 dans `docs/project/audits/2026-10-10/SUIVI.md` et la ligne SH-02 du plan de stockage hexagonal. Revue d'architecture (`minos-architecture-reviewer`) et revue de sécurité du stockage. `ETAT-2026-10-13.md` et `findings.json` ne sont pas modifiés.
