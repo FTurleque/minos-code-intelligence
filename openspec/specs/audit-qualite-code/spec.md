@@ -146,7 +146,7 @@ Tout cache à ordre d'accès borné en poids du code de production SHALL utilise
 
 #### Scenario: Statistiques inchangées après migration
 - **GIVEN** les tests existants des caches migrés, sans modification de leurs assertions
-- **WHEN** `./mvnw -B -ntp -pl minos-application,minos-storage-local,minos-bootstrap -am test` est exécuté
+- **WHEN** `./mvnw -B -ntp -pl minos-application,minos-storage,minos-bootstrap -am test` est exécuté
 - **THEN** ils réussissent
 
 ### Requirement: Le cache partagé tient ses bornes et son poids
