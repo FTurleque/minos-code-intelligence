@@ -175,7 +175,7 @@ Une exception levée par une primitive d'E/S privée pour une cible refusée (li
 
 #### Scenario: Lien symbolique refusé
 - **GIVEN** un lien symbolique vers un fichier régulier, sur un système où le lien a pu être créé
-- **WHEN** un store de `minos-storage-local` le rencontre à la place de son fichier
+- **WHEN** un store du backend local de `minos-storage` le rencontre à la place de son fichier
 - **THEN** la lecture est refusée et le message ne contient pas le chemin absolu du lien
 
 ### Requirement: Une configuration d'exécution présente mais non régulière est refusée
@@ -347,13 +347,13 @@ Le magasin de snapshots PostgreSQL SHALL écrire ses fichiers de travail par les
 
 #### Scenario: Lien substitué au fichier de travail
 - **GIVEN** un fichier de travail remplacé par un lien symbolique vers un fichier sentinelle
-- **WHEN** `./mvnw -B -ntp -pl minos-storage-postgresql -am test` exécute le test du magasin
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test` exécute le test du magasin
 - **THEN** l'opération échoue, la sentinelle est intacte et le fichier de travail est supprimé
 
 #### Scenario: Plus d'entrée de liste pour le magasin
 - **GIVEN** le dépôt après ce changement
 - **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
-- **THEN** il réussit et la liste ne contient plus d'entrée sous `minos-storage-postgresql/`
+- **THEN** il réussit et la liste ne contient plus d'entrée sous `minos-storage/src/main/java/com/minos/storage/postgresql/`
 
 ### Requirement: Une entrée de cache de dépôt distant est publiée par un déplacement atomique de répertoire
 Le matérialiseur de dépôts distants SHALL publier une entrée de cache par un déplacement atomique de répertoire, sans repli par copie et sans remplacer une entrée existante. Un système de fichiers sans rename atomique SHALL faire échouer la matérialisation avec le message public existant.
@@ -387,17 +387,17 @@ L'ingestion SCIP SHALL ouvrir l'artefact d'index par un canal qui refuse lien sy
 - **THEN** il réussit et la liste ne contient plus d'entrée pour `ScipIndexReader.java` ni `ScipSymbolSnapshotImporter.java`
 
 ### Requirement: Le stockage local écrit ses fichiers par les primitives d'E/S privées
-Le code de production de `minos-storage-local` SHALL écrire ses snapshots, pointeurs, empreintes, vecteurs, sessions d'observation, fichiers de propriétés et sauvegardes par les primitives d'E/S privées, sans appel brut de `Files` listé dans la liste de tolérance. Une écriture dont la cible est un lien symbolique SHALL échouer sans modifier la cible du lien.
+Le code de production du backend local (`com.minos.storage.local`, dans `minos-storage`) SHALL écrire ses snapshots, pointeurs, empreintes, vecteurs, sessions d'observation, fichiers de propriétés et sauvegardes par les primitives d'E/S privées, sans appel brut de `Files` listé dans la liste de tolérance. Une écriture dont la cible est un lien symbolique SHALL échouer sans modifier la cible du lien.
 
 #### Scenario: Lien substitué au fichier d'un snapshot
 - **GIVEN** un lien symbolique vers un fichier sentinelle à l'emplacement du fichier de snapshot à écrire
-- **WHEN** `./mvnw -B -ntp -pl minos-storage-local -am test` exécute les tests de lien du module
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test` exécute les tests de lien du module
 - **THEN** l'écriture échoue et la sentinelle est intacte
 
 #### Scenario: Plus aucune entrée de liste pour le module
 - **GIVEN** le dépôt après ce changement
 - **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
-- **THEN** il réussit et la liste ne contient plus d'entrée sous `minos-storage-local/`
+- **THEN** il réussit et la liste ne contient plus d'entrée sous `minos-storage/src/main/java/com/minos/storage/local/`
 
 ### Requirement: Une sauvegarde de migration et une session publiée ne sont jamais écrasées
 La sauvegarde `.m29-v1.bak` d'une entrée de registre et le fichier d'une session d'observation SHALL être publiés sans remplacer une cible existante. Un système de fichiers qui ne peut pas garantir cette exclusivité SHALL faire échouer la publication.

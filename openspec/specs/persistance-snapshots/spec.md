@@ -189,7 +189,7 @@ Publier deux fois le même snapshot, ou la même empreinte, sous le même identi
 
 #### Scenario: Duplication détectée
 - **GIVEN** une publication modifiée localement pour insérer sans contrôle d'existence
-- **WHEN** `./mvnw -B -ntp -pl minos-storage-postgresql -am verify` est exécuté avec PostgreSQL disponible
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am verify` est exécuté avec PostgreSQL disponible
 - **THEN** le test d'idempotence échoue
 
 ### Requirement: Une migration rejouée laisse le schéma à la version courante
@@ -295,7 +295,7 @@ Les réponses des requêtes de lecture, leur ordre, leurs limites et leurs budge
 
 #### Scenario: Store PostgreSQL, sous Linux seulement
 - **GIVEN** un poste Linux avec Docker
-- **WHEN** `./mvnw -B -ntp -pl minos-storage-postgresql -am test "-Dminos.postgresql.tests.required=true"` est exécuté
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test "-Dminos.postgresql.tests.required=true"` est exécuté
 - **THEN** les tests du cache de vues PostgreSQL passent avec les mêmes décomptes que le store fichier ; sans Docker les tests sont sautés, ce qui n'est pas une preuve
 
 ### Requirement: L'ancien contrat de vue reste disponible sans seconde construction d'index
@@ -303,7 +303,7 @@ Les réponses des requêtes de lecture, leur ordre, leurs limites et leurs budge
 
 #### Scenario: Les deux contrats sur un même snapshot
 - **GIVEN** un store fichier à compteurs avec un snapshot actif
-- **WHEN** `./mvnw -B -ntp -pl minos-storage-local -am test` lit la vue neutre puis l'ancienne vue et calcule l'impact par chacune
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test` lit la vue neutre puis l'ancienne vue et calcule l'impact par chacune
 - **THEN** le compteur de constructions de vue vaut 1, celui de l'index des arêtes vaut au plus 1, et les deux rapports d'impact sont égaux
 
 #### Scenario: Descripteurs binaires de la version publiée
@@ -329,7 +329,7 @@ La vue neutre SHALL être publiée et mise en cache sous les mêmes règles que 
 
 #### Scenario: Promotion pendant la construction
 - **GIVEN** un store fichier dont le snapshot actif est promu par une autre instance pendant la construction de la vue
-- **WHEN** `./mvnw -B -ntp -pl minos-storage-local -am test` lit la vue neutre
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test` lit la vue neutre
 - **THEN** la vue rendue est celle du nouveau snapshot actif et aucune vue de l'ancien n'est en cache
 
 ### Requirement: Le rang de correspondance d'un symbole est calculé une fois par candidat
