@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql;
 
+import com.minos.registry.RegisteredWorkspace;
 import com.minos.storage.postgresql.project.PostgresStorageRetentionService;
 import com.minos.storage.postgresql.project.ProjectMutationIndexStateStore;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,7 @@ class PostgresStorageBackendTest extends PostgresTestSupport {
         var created = backend.projectRegistry().createWorkspaceWithResult("platform");
         assertTrue(created.createdByThisCall());
         assertEquals(List.of(created.workspace().id()),
-                backend.projectRegistry().listWorkspaces().stream().map(workspace -> workspace.id()).toList());
+                backend.projectRegistry().listWorkspaces().stream().map(RegisteredWorkspace::id).toList());
         assertTrue(backend.snapshotStore().loadActiveKnowledge(project).isEmpty());
         assertTrue(backend.fingerprintStore().loadActive(project).isEmpty());
         assertTrue(backend.semanticVectorStore().load(project.toString()).isEmpty());
