@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /** Validates the PostgreSQL JDBC endpoint before credentials are ever handed to the driver. */
@@ -15,7 +16,7 @@ final class PostgresJdbcUrlPolicy {
     private static final String MANAGED_DOCKER_HOST = "minos-postgres";
     private static final String SSL_MODE_PARAMETER = "sslmode";
     private static final Set<String> ALLOWED_URL_PARAMETERS = Set.of("sslmode");
-    private static final Set<String> ALLOWED_SSL_MODES = Set.of(
+    static final Set<String> ALLOWED_SSL_MODES = Set.of(
             "disable", "allow", "prefer", "require", "verify-ca", "verify-full");
 
     private PostgresJdbcUrlPolicy() {
@@ -63,9 +64,19 @@ final class PostgresJdbcUrlPolicy {
             }
         }
         String sslMode = query.get(SSL_MODE_PARAMETER);
-        if (sslMode != null && !ALLOWED_SSL_MODES.contains(sslMode.toLowerCase(Locale.ROOT))) {
+        if (sslMode != null && driverSslMode(sslMode).isEmpty()) {
             throw new IOException("MINOS_POSTGRES_URL contains an unsupported sslmode");
         }
+    }
+
+    /**
+     * The mode pgjdbc 42.7.x applies for this value, empty when the driver refuses it. Every TLS consumer of
+     * the driver goes through {@code org.postgresql.jdbc.SslMode.of}, which matches the value with
+     * {@link String#equalsIgnoreCase}: the policy recognizes a mode by the same comparison, so it never accepts a value
+     * the driver reads as another mode (PostgresJdbcUrlPolicyDriverParityTest).
+     */
+    private static Optional<String> driverSslMode(String value) {
+        return ALLOWED_SSL_MODES.stream().filter(mode -> mode.equalsIgnoreCase(value)).findFirst();
     }
 
     private static void validateJdbcHostPolicy(String host, String sslMode, boolean managed) throws IOException {
@@ -76,7 +87,7 @@ final class PostgresJdbcUrlPolicy {
             return;
         }
         if (loopbackHost(host)) return;
-        if (!"verify-full".equalsIgnoreCase(sslMode)) {
+        if (sslMode == null || !driverSslMode(sslMode).orElse("").equals("verify-full")) {
             throw new IOException("external PostgreSQL requires sslmode=verify-full");
         }
     }
