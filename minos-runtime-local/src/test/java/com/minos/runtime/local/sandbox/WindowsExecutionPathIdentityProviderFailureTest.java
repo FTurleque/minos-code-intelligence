@@ -56,7 +56,7 @@ class WindowsExecutionPathIdentityProviderFailureTest {
 
         IOException failure = assertThrows(IOException.class, () -> provider.capture(missing, project));
 
-        assertTrue(failure.getMessage().startsWith("Windows filesystem identity query failed: "), failure.getMessage());
+        assertTrue(failure.getMessage().startsWith("Windows filesystem identity query failed (exit "), failure.getMessage());
         assertFalse(failure.getMessage().contains(temporary.toString()), "no absolute path: " + failure.getMessage());
         assertFalse(failure.getMessage().contains("missing-registered-root"), failure.getMessage());
         assertFalse(failure.getMessage().contains("registered="), "no partial identity leaks into the failure");
@@ -71,7 +71,7 @@ class WindowsExecutionPathIdentityProviderFailureTest {
 
         IOException failure = assertThrows(IOException.class, () -> provider.capture(registered, missing));
 
-        assertTrue(failure.getMessage().startsWith("Windows filesystem identity query failed: "), failure.getMessage());
+        assertTrue(failure.getMessage().startsWith("Windows filesystem identity query failed (exit "), failure.getMessage());
         assertFalse(failure.getMessage().contains(temporary.toString()), "no absolute path: " + failure.getMessage());
     }
 
