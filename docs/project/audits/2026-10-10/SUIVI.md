@@ -395,6 +395,28 @@ Aucun ne peut être levé depuis `develop` ni depuis ce poste ; ils restent cons
 
 Corrigé le 2026-10-14 : le commentaire de l'action OSV réutilisable dans `pr-ci.yml` nommait `v2.3.8` pour un commit sans tag qui appelle `osv-scanner-action` en v2.6.0. Toujours non corrigé : `sync-tools-manifest.py --write` réécrit le Dockerfile en LF sous Windows.
 
+### Clôture du sprint 3 (2026-10-28)
+
+Les six constats du sprint ont leur changement fusionné : AUD-DEP-01 (PR #434), AUD-DEP-03 (PR #435, gate de PR), AUD-DEP-02 et AUD-DEP-10 (PR #436), AUD-DEP-16 (PR #437), AUD-DEP-15 (PR #441) ; AUD-DEP-14 est un risque accepté jusqu'au 2027-01-15 (R-27). Statuts de `findings.json` au 2026-10-28 : AUD-DEP-01, -02, -03, -16 fermés avec réserve ; AUD-DEP-10, -15 fermés ; AUD-DEP-14 risque accepté. `migrer-le-socle-vers-java-25` est archivé ; `surveiller-les-outils-embarques` reste actif.
+
+**Bloqué par la promotion `develop` → `main`** (rien ne peut être levé depuis `develop`) :
+
+| Reste | Changement / constat | Blocage |
+|---|---|---|
+| Premier passage de la veille planifiée (tâche 3.4), puis archivage (tâche 4.3) | `surveiller-les-outils-embarques`, AUD-DEP-03 | `workflow_dispatch` refusé tant que `embedded-tools-advisories.yml` n'est pas sur `main` |
+| Exception Java 24 des workflows de qualification A → B | AUD-DEP-01 | `release-promotion-gate.yml:80` et `docker-upgrade-qualification.yml:63` installent Java 24 pour construire le candidat A (`main`, encore en Java 24) ; la liste fermée de `check-toolchain-baseline.py` (`PREVIOUS_JAVA`) se vide quand `main` est en Java 25 |
+| Indexation Java par le runtime de l'installateur | AUD-DEP-01 | runtime Java 25 de la distribution prouvé sur un projet TypeScript (run 38927003115) ; l'indexation d'un projet Maven Java échoue sur le poste à l'identique sous 1.2.0 (« Échec d'indexation Java sous Windows ») : la preuve Java attend une distribution 1.3.0 publiée et installée |
+
+**En attente d'une décision du propriétaire** :
+
+- **AUD-DEP-15** : le refus du cycle de vie porte sur l'état incohérent (compose qui demande l'image de requête, configuration qui ne la définit pas), pas sur la seule absence de `MINOS_QUERY_IMAGE` ; l'exigence de la spécification est précisée en ce sens, sans confirmation explicite du propriétaire.
+
+**Chantiers en cours**, chacun vers `develop` (branches de travail ; PR non ouvertes au 2026-10-28) :
+
+- avis OSV du classpath de scip-java 0.13.1 et résidus OSV : `claude/sec-avis-osv-scip-java-1742a7` ;
+- tests de confinement intermittents (`ProviderWriteContainmentTest` sous Windows) : `claude/fix-confinement-intermittent-41e028` ;
+- scripts Docker en panne (observations b à d d'AUD-DEP-15 : `verify-run-configurations.ps1`, `.env` de `prod-mcp.ps1`, verrous npm de `build-local-windows-candidate.ps1`) : `claude/fix-scripts-docker-sprint3-3bff60`.
+
 ## Sprint 5 — Chaîne de release et d'approvisionnement (spécifié le 2026-10-13)
 
 Cinq changements OpenSpec, même branche. Trois décomptes de l'audit sont périmés au HEAD : 25 checkouts (pas 22), 7 jobs sans délai (pas 1), 5 jobs avec identifiants Docker Hub (pas 3).
@@ -554,12 +576,12 @@ Deux changements OpenSpec, même branche. Les six constats sont confirmés mais 
 
 | Constat | Changement OpenSpec | Statut | Écart avec l'audit constaté à l'analyse |
 |---|---|---|---|
-| AUD-ARC-01 | `figer-la-dette-de-frontieres-par-des-cliquets` (règle A11), puis `faire-consommer-l-indexation-aux-surfaces` (lot 1) | **Dette figée** ; lot 1 fusionné (PR #548) et archivé le 2026-10-24 (indexation locale et distante) | 102 imports dans 30 fichiers. Cliquet dans le garde Python, pas dans ArchUnit. Chantier (cas d'usage d'indexation) après AUD-ARC-02, débloqué le 2026-10-21 (AUD-ARC-02 implémenté en local). |
-| AUD-ARC-05 | idem (règle A12) et `trancher-les-decisions-d-architecture-du-sprint-10` (D2) | **Dette figée** ; chantier non spécifié | Un seul site de lancement de processus dans le moteur. Déplacer `hosted` contredit l'ADR 0044. Chantier après AUD-SEC-06. |
+| AUD-ARC-01 | `figer-la-dette-de-frontieres-par-des-cliquets` (règle A11), puis `faire-consommer-l-indexation-aux-surfaces` (lot 1) | **Fermé avec réserve** (revérification du 2026-10-28) ; lots 1 à 6 fusionnés et archivés, voir « Résorption de la dette d'architecture figée » | 102 imports dans 30 fichiers. Cliquet dans le garde Python, pas dans ArchUnit. Chantier (cas d'usage d'indexation) après AUD-ARC-02, débloqué le 2026-10-21 (AUD-ARC-02 implémenté en local). |
+| AUD-ARC-05 | idem (règle A12) et `trancher-les-decisions-d-architecture-du-sprint-10` (D2) | **Partiel** (revérification du 2026-10-28) : SH-08 fusionné, le moteur ne lance plus de processus ; la part de code concret du moteur reste entière | Un seul site de lancement de processus dans le moteur. Déplacer `hosted` contredit l'ADR 0044. Chantier après AUD-SEC-06. |
 | AUD-ARC-07 | `trancher-les-decisions-d-architecture-du-sprint-10` (D1), puis `exposer-un-port-de-lecture-de-snapshot` | **Port de lecture fusionné** (PR #547) et archivé le 2026-10-24 | « Trancher 0047 avant le port de lecture » est une lecture de l'audit ; l'ordre de l'ADR 0047 commence par AUD-PERF-03. |
-| AUD-ARC-08 | `figer-la-dette-de-frontieres-par-des-cliquets` (règle A13) | **Dette figée** ; chantier non spécifié | Un couplage de plus que l'audit (type utilisé par nom qualifié, sans import). |
+| AUD-ARC-08 | `figer-la-dette-de-frontieres-par-des-cliquets` (règle A13) | **Fermé avec réserve** (revérification du 2026-10-28) ; SH-02, SH-03 et SH-06 fusionnés | Un couplage de plus que l'audit (type utilisé par nom qualifié, sans import). |
 | AUD-ARC-11 | idem (arêtes d'exécution) et décision D3 | **Arête documentée** ; déplacement non retenu | Déplacer le transport créerait une arête interdite ; renommer le pont NEXUS casse un point d'entrée documenté. |
-| AUD-ARC-12 | idem (règle A14) et décision D4 | **Dette figée** | 23 racines, pas 24 ; aucun package partagé entre modules. Renommer contredit l'ADR 0044. |
+| AUD-ARC-12 | idem (règle A14) et décision D4 | **Décision documentée** (ADR 0068 § 5, revérification du 2026-10-28) | 23 racines, pas 24 ; aucun package partagé entre modules. Renommer contredit l'ADR 0044. |
 
 ### Implémentation (2026-10-22, branche `refactor/figer-les-frontieres-du-sprint-10`, worktree `minos-wt-sprint10`)
 
@@ -567,12 +589,12 @@ Les deux changements sont implémentés sur une même branche ; aucun fichier de
 
 | Constat | Statut | Décompte au HEAD `7e1faafe` | Chantier restant et prérequis |
 |---|---|---|---|
-| AUD-ARC-01 | **Ouvert, dette figée** (règle A11) ; lot 1 fusionné (PR #548) et archivé le 2026-10-24 | 39 entrées après le lot 1 (CLI 15, API 14, MCP 4, NEXUS 6), contre 60 avant (CLI 33, API 16, NEXUS 6, MCP 5). L'audit comptait 103 références et 52 types pour la CLI : AUD-ARC-02 en a retiré 19 | surfaces consommant des cas d'usage (suite de SH-05, SH-09) : lot 1 implémenté par `faire-consommer-l-indexation-aux-surfaces` (indexation locale et distante, 21 entrées retirées : CLI 18, API 2, MCP 1 ; aucune surface ne nomme plus `com.minos.orchestration` ni `com.minos.remote` ; cas d'usage `RemoteIndexingUseCase`, résumés d'indexation, état de reprise par `ProjectInspectionService`, runtimes par `ProviderPlatformService`, D7 = A le 2026-10-23) ; CI Linux, Windows et SonarCloud verts sur la PR #548 (couverture du nouveau code : `minos-application` 93,3 %, `minos-cli` 89,5 %, `minos-api` et `minos-mcp` 100 %) ; reste manuel : le workflow `code-audit` avec `spotbugs_blocking` (tâche 6.5 de l'archive) ; cinq lots suivants inventoriés dans son design (diagnostic de l'hôte après SH-08, contrôle hébergé, Git et résultats de requête, export NEXUS sur le port SH-04, noyau transverse). Décisions du propriétaire du 2026-10-22 : toutes les recommandations du design retenues (la CLI garde ses ports et ses vues ; résultats de requête du moteur publiés aux surfaces, amendement de l'ADR 0057 § 6 avec le lot 4 ; A11 étendue aux accesseurs de `MinosApplication` avec le lot 4) |
-| AUD-ARC-05 | **Ouvert, dette figée** (règle A12, `PrivateLocalStorage` seul) ; D2 : port d'ACL de plateforme fourni par `minos-runtime-local`, `hosted` reste dans le moteur (ADR 0062) | 1 classe, 6 `ProcessBuilder` | SH-08 : avec la mesure du nombre d'objets durcis (reste d'AUD-SEC-06) |
+| AUD-ARC-01 | **Fermé avec réserve** au 2026-10-28 (règle A11) ; lot 1 fusionné (PR #548) et archivé le 2026-10-24, lots 2 à 6 fusionnés du 2026-10-25 au 2026-10-26 | 39 entrées après le lot 1 (CLI 15, API 14, MCP 4, NEXUS 6), contre 60 avant (CLI 33, API 16, NEXUS 6, MCP 5). L'audit comptait 103 références et 52 types pour la CLI : AUD-ARC-02 en a retiré 19 | surfaces consommant des cas d'usage (suite de SH-05, SH-09) : lot 1 implémenté par `faire-consommer-l-indexation-aux-surfaces` (indexation locale et distante, 21 entrées retirées : CLI 18, API 2, MCP 1 ; aucune surface ne nomme plus `com.minos.orchestration` ni `com.minos.remote` ; cas d'usage `RemoteIndexingUseCase`, résumés d'indexation, état de reprise par `ProjectInspectionService`, runtimes par `ProviderPlatformService`, D7 = A le 2026-10-23) ; CI Linux, Windows et SonarCloud verts sur la PR #548 (couverture du nouveau code : `minos-application` 93,3 %, `minos-cli` 89,5 %, `minos-api` et `minos-mcp` 100 %) ; reste manuel : le workflow `code-audit` avec `spotbugs_blocking` (tâche 6.5 de l'archive) ; cinq lots suivants inventoriés dans son design (diagnostic de l'hôte après SH-08, contrôle hébergé, Git et résultats de requête, export NEXUS sur le port SH-04, noyau transverse). Décisions du propriétaire du 2026-10-22 : toutes les recommandations du design retenues (la CLI garde ses ports et ses vues ; résultats de requête du moteur publiés aux surfaces, amendement de l'ADR 0057 § 6 avec le lot 4 ; A11 étendue aux accesseurs de `MinosApplication` avec le lot 4) |
+| AUD-ARC-05 | **Partiel** au 2026-10-28 (règle A12 vide depuis SH-08) ; D2 : port d'ACL de plateforme fourni par `minos-runtime-local`, `hosted` reste dans le moteur (ADR 0062) | 1 classe, 6 `ProcessBuilder` | SH-08 : avec la mesure du nombre d'objets durcis (reste d'AUD-SEC-06) |
 | AUD-ARC-07 | **Port de lecture implémenté** (2026-10-23, ADR 0056) ; D1 : ordre de l'ADR 0047 confirmé, option A livrée et mesurée sur corpus réel | 0 classe de production hors de `com.minos.store` (`minos-engine`) ne nomme `InMemoryCodeKnowledgeStore` ; 3 classes listées utilisent l'ancienne vue (les deux stores, la surcharge dépréciée de l'impact) ; 2 constructions d'index mémoire par vue, sur défaut de cache, inchangées | SH-04 par `exposer-un-port-de-lecture-de-snapshot` : port `CodeKnowledgeReader`, vue `SnapshotReadView` en cache dans les deux stores, ancien contrat déprécié et conservé, règle **A18** (décisions D1 à D5 du 2026-10-22, D6 et D7 du 2026-10-23). Preuves : double de lecture non mémoire (tests de `minos-engine` et `minos-application`), tests à compteurs des deux stores (PostgreSQL sur serveur réel par Docker), descripteurs binaires 1.2.0, goldens inchangés. `scripts/m15/run-final.ps1` (rejeu manuel) est en panne avant ce changement (`:57` attend 12 modules, `:78-79` lit un chemin disparu) et exige `loadActiveQueryView(project.id())` dans `ProjectQueryService` (`:94`), que la migration retire : laissé inchangé (D6 = (a)). CI Linux, Windows et SonarCloud verts sur la PR #547, fusionnée et archivée le 2026-10-24 ; le coût de l'index mémoire par vue est hors périmètre (ADR 0047, options B et C) |
-| AUD-ARC-08 | **Ouvert, dette figée** (règle A13) | 14 entrées : SCIP → runtime local 9 (dont `StrongProcessOwnershipIndexerExecutor`, hors de la liste A10), SCIP → stockage local 1, PostgreSQL → stockage local 4 (dont `SnapshotIntegrityService` en nom qualifié seul) | SH-02, SH-03, puis SH-06 |
+| AUD-ARC-08 | **Fermé avec réserve** au 2026-10-28 (règle A13 : un couple justifié) | 14 entrées : SCIP → runtime local 9 (dont `StrongProcessOwnershipIndexerExecutor`, hors de la liste A10), SCIP → stockage local 1, PostgreSQL → stockage local 4 (dont `SnapshotIntegrityService` en nom qualifié seul) | SH-02, SH-03, puis SH-06 |
 | AUD-ARC-11 | **Arête documentée** ; D3 : `minos-app` inchangé (ADR 0062) | 4 arêtes d'exécution par service, dont `minos-cli` → `minos-app` ; le dépôt NEXUS local ne nomme pas `NexusExportBridgeMain` | aucun sans nouvelle décision |
-| AUD-ARC-12 | **Dette figée** (règle A14) ; D4 : convention pour les nouveaux packages seulement (ADR 0062, `.claude/rules/java-production.md`) | 37 racines sur 14 modules | aucun sans nouvelle décision |
+| AUD-ARC-12 | **Décision documentée** (règle A14) ; D4 : convention pour les nouveaux packages seulement (ADR 0062, `.claude/rules/java-production.md`) | 37 racines sur 14 modules | aucun sans nouvelle décision |
 
 Preuves : rouge prouvé sur une copie mutée (six mutations : garde du HEAD code 0, garde modifié code 1 ; document versionné du HEAD refusé en nommant les quatre arêtes manquantes) ; `python scripts/architecture/check-module-boundaries.py` vert ; `python scripts/architecture/test_check_module_boundaries.py` 154 tests verts ; `check-current-docs.py` et `product-facts.py --check` verts. ADR : 0062 créé (Accepted), notes de mise en œuvre des ADR 0022 (A12), 0047 (ordre confirmé) et 0058 (A11) ; registre `arc42/09-decisions.md` complété (0047, 0058, 0060, 0062). Ordre des chantiers : `docs/project/roadmap/storage-hexagonal-2026-10/README.md`. **Fusionné** ([PR #534](https://github.com/FTurleque/minos-code-intelligence/pull/534), commit de fusion `6b60790e`, les treize checks verts dont `Verify (ubuntu-24.04)`, `Verify (windows-2022)` et `SonarCloud Code Analysis`) ; les deux changements sont archivés le 2026-10-22 (`openspec/changes/archive/2026-10-22-…`), la capacité `frontieres-de-modules` reçoit les cinq exigences.
 
@@ -606,7 +628,25 @@ Les quatre changements sont fusionnés dans `develop` et archivés : `figer-la-d
 
 Preuve : `code-audit` bloquant sur la branche, run 40048471322 vert (`0 new finding(s), 0 baseline finding(s) gone`) ; tests de `minos-engine`, `minos-storage-local` et `minos-storage-postgresql` verts ; [PR #551](https://github.com/FTurleque/minos-code-intelligence/pull/551) vers `develop`.
 
-Sprint clos. Restent hors du sprint : les lots 2 à 6 d'AUD-ARC-01, SH-08 (AUD-ARC-05) et SH-02, SH-03, SH-06 (AUD-ARC-08), suivis dans le [plan du chantier hexagonal](../../roadmap/storage-hexagonal-2026-10/README.md) ; le coût de l'index mémoire par vue d'AUD-ARC-07 (ADR 0047, options B et C).
+Sprint clos. Les chantiers de fond (lots 2 à 6 d'AUD-ARC-01, SH-08, SH-02, SH-03, SH-06) sont fusionnés : voir « Résorption de la dette d'architecture figée » et « Clôture du sprint 10 au 2026-10-28 ». Reste hors du sprint le coût de l'index mémoire par vue d'AUD-ARC-07 (ADR 0047, options B et C).
+
+### Clôture du sprint 10 au 2026-10-28
+
+Statuts alignés sur la revérification indépendante du 2026-10-28 (`develop` `810dcfb2`, [`ETAT-2026-10-13.md`](ETAT-2026-10-13.md), § « Suite au 28 octobre ») et sur `findings.json`.
+
+| Constat | Statut | Réserve ou reste |
+|---|---|---|
+| AUD-ARC-01 | **Fermé avec réserve** | Les surfaces nomment 9 types du moteur (9 imports, 7 fichiers). `ProjectPathMappings` reste nommé par la CLI (`DockerRuntimeBootstrap`) ; les POM CLI, API et MCP dépendent de `minos-engine` ; `MinosApplication` expose 19 accesseurs qui rendent un type du moteur. |
+| AUD-ARC-05 | **Partiel** | Le moteur ne lance plus aucun processus (SH-08). La part de code concret du moteur (12 836 lignes de classes sur 17 526, 73,2 %) n'a ni cliquet ni cible : décision à prendre (cliquet chiffré ou acceptation écrite). |
+| AUD-ARC-07 | **Fermé avec réserve** | Chaque vue construit un index mémoire complet (ADR 0047, options B et C hors périmètre). |
+| AUD-ARC-08 | **Fermé avec réserve** | A13 ne garde qu'un couple justifié (SCIP → runtime local, 9 types, 28 fichiers). Le pilote PostgreSQL est au classpath de compilation de `minos-bootstrap` : l'isolement tient par règles de sources, ArchUnit et test de chargement. |
+| AUD-ARC-11 | **Fermé avec réserve** | Rien ne surveille le contenu de `minos-app`. |
+| AUD-ARC-12 | **Décision documentée** | `com.minos.storage.codec` et `com.minos.storage.home` (`minos-storage`) partagent la racine `com.minos.storage` avec `minos-engine` : le défaut décrit par le constat, sous une racine déjà partagée. |
+
+Chantiers en cours sur ces réserves, chacun vers `develop` (branches de travail ; PR non ouvertes au 2026-10-28) :
+
+- réserves d'AUD-ARC-01 (surfaces) : `claude/refactor-arc01-reserves-222289` ;
+- décision sur AUD-ARC-05 et packages `codec`/`home` d'AUD-ARC-12 : `claude/refactor-arc05-arc12-549311`.
 
 ## Sprint 11 — Hygiène de fond (spécifié le 2026-10-13, fusionné le 2026-10-24)
 
@@ -658,7 +698,7 @@ Quatre phases, chacune spécifiée en OpenSpec, implémentée par lots et valid�
 | Constat | Phase | Changement OpenSpec | Statut | PR / commit |
 |---|---|---|---|---|
 | AUD-ARC-01, -05, -08 | 1 | `rendre-les-cliquets-d-architecture-etanches` | **fusionné** le 2026-10-25, treize checks verts (SonarCloud : 0 nouveau problème) | [PR #563](https://github.com/FTurleque/minos-code-intelligence/pull/563), fusion `6566ddda` |
-| AUD-ARC-05 | 2 | `extraire-le-port-d-acl-de-plateforme` (SH-08) | **fusionné** le 2026-10-25 et archivé ; A12 passe de 1 classe et 2 sites à 0 ; CI verte (15 checks, SonarCloud 0 nouveau problème, couverture du nouveau code 93,6 %). Constat **fermable** : le moteur ne lance plus aucun processus | [PR #564](https://github.com/FTurleque/minos-code-intelligence/pull/564), fusion `47c02b89` |
+| AUD-ARC-05 | 2 | `extraire-le-port-d-acl-de-plateforme` (SH-08) | **fusionné** le 2026-10-25 et archivé ; A12 passe de 1 classe et 2 sites à 0 ; CI verte (15 checks, SonarCloud 0 nouveau problème, couverture du nouveau code 93,6 %). Volet processus fermé : le moteur ne lance plus aucun processus ; constat **partiel** à la revérification du 2026-10-28 (part de code concret du moteur) | [PR #564](https://github.com/FTurleque/minos-code-intelligence/pull/564), fusion `47c02b89` |
 | AUD-ARC-01 (lot 2) | 2 | `faire-consommer-le-diagnostic-de-l-hote` | **fusionné** le 2026-10-25 et archivé ; A11 passe de 43 à 41 types (garde Python) et de 39 à 36 (bytecode) ; CI verte, SonarCloud 0 nouveau problème, couverture du nouveau code 95,2 % | [PR #565](https://github.com/FTurleque/minos-code-intelligence/pull/565), fusion `9b710cbe` |
 | AUD-ARC-01 (lot 6) | 3 | `descendre-le-noyau-transverse` | **fusionné** le 2026-10-26 et archivé ; A11 passe de 41 à 33 types (garde Python) et de 36 à 28 (bytecode) ; CI verte, SonarCloud 0 nouveau problème, couverture du nouveau code 92,3 % | [PR #566](https://github.com/FTurleque/minos-code-intelligence/pull/566), fusion `e287fecf` |
 | AUD-ARC-01 (lot 3) | 3 | `faire-consommer-le-controle-heberge` | **fusionné** le 2026-10-26 et archivé ; les surfaces passent par la façade `TeamControlPlane` ; A11 passe de 33 à 20 types (garde Python) et de 28 à 13 (bytecode) ; CI verte, SonarCloud 0 nouveau problème, couverture du nouveau code 89,4 % | [PR #573](https://github.com/FTurleque/minos-code-intelligence/pull/573), fusion `0d4df8c3` |
