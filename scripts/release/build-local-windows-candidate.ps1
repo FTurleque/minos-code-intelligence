@@ -190,7 +190,9 @@ if ($Modules -notcontains 'java.xml') { throw 'Candidate runtime does not contai
 $SmokeHome = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-local-candidate-mcp-' + [Guid]::NewGuid())
 try {
     New-Item -ItemType Directory -Force -Path $SmokeHome | Out-Null
-    & $McpProbe -LauncherPath $Launcher -CandidateHome $SmokeHome -TimeoutSeconds 30
+    # A cold jpackage runtime on a hosted Windows runner can take longer than 30 s to answer initialize. The probe
+    # still fails closed after this bound (90 s for initialize and tools/list, plus its 15 s process deadline).
+    & $McpProbe -LauncherPath $Launcher -CandidateHome $SmokeHome -TimeoutSeconds 90
     if ($LASTEXITCODE -ne 0) { throw "Native MCP handshake failed for local candidate (exit=$LASTEXITCODE)." }
 }
 finally {
