@@ -348,7 +348,7 @@ Voir `docs/developer/semantic-retrieval-2.md` pour les limitations et gates.
 minos.cmd git-activity <projet> [--days 30] [--max-commits 500] [--max-files 500] [--zone-depth 2] [--include-author-emails] [--format text|json]
 ```
 
-Activité factuelle du dépôt du projet (commits, fichiers, zones). En JSON, chaque commit porte `authorName` et `authorEmail` : **l'adresse e-mail est masquée par défaut** (`"authorEmail":"[masked]"`) et n'est rendue qu'avec `--include-author-emails`. Le masquage ne change pas le décompte des auteurs distincts d'un fichier (`uniqueAuthorCount`). Les champs `workTree` et `originRemote` de la section `repository` ne sont pas masqués.
+Activité factuelle du dépôt du projet (commits, fichiers, zones). En JSON, chaque commit porte `authorName` et `authorEmail` : **l'adresse e-mail est masquée par défaut** (`"authorEmail":"[masked]"`) et n'est rendue qu'avec `--include-author-emails`. Le masquage ne change pas le décompte des auteurs distincts d'un fichier (`uniqueAuthorCount`). Dans la section `repository`, `workTree` est le chemin absolu du dépôt (la CLI est locale) ; `originRemote` n'est rendu que pour un remote réseau (URL à hôte, ou forme SCP `utilisateur@hôte:chemin`), sans identifiants, requête ni fragment ; un remote local (chemin POSIX ou Windows, partage UNC, `file://`) ou une URL illisible est rendu `null`, avec la limitation `ORIGIN_REMOTE_NOT_DISCLOSED`.
 
 ## Remote & Distributed Indexing
 

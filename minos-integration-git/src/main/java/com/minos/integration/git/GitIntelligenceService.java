@@ -50,6 +50,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
@@ -67,6 +69,9 @@ public final class GitIntelligenceService implements GitIntelligence {
 
     private static final String FILTER_SECTION = "filter";
     private static final String OWNER_PROBE_DIRECTORY = "owner-probe";
+    /** The SCP form of a network remote; a one-letter host is a Windows drive, not a host. */
+    private static final Pattern SCP_REMOTE =
+            Pattern.compile("(?:[^@/\\\\]+@)?(?<host>[^@/\\\\:]{2,}):(?<path>[^\\\\]+)");
 
     private final ActivityBudget budget;
     private final Supplier<UserPrincipal> expectedOwner;
@@ -334,6 +339,7 @@ public final class GitIntelligenceService implements GitIntelligence {
                 : repository.getWorkTree().toPath().toRealPath();
         String rawRemote = repository.getConfig().getString("remote", "origin", "url");
         String remote = sanitizeRemote(rawRemote);
+        String disclosed = disclosedRemote(rawRemote);
         String head = objectId(repository.resolve(Constants.HEAD));
         String fullBranch = repository.getFullBranch();
         boolean detached = fullBranch != null && !fullBranch.startsWith(Constants.R_HEADS);
@@ -346,6 +352,8 @@ public final class GitIntelligenceService implements GitIntelligence {
         List<String> limitations = new ArrayList<>();
         if (remote == null) {
             limitations.add("NO_ORIGIN_REMOTE");
+        } else if (disclosed == null) {
+            limitations.add("ORIGIN_REMOTE_NOT_DISCLOSED");
         }
         if (detached) {
             limitations.add("DETACHED_HEAD");
@@ -367,7 +375,7 @@ public final class GitIntelligenceService implements GitIntelligence {
         return new RepositoryView(
                 Sha256.hex(identityBasis),
                 workTree.toString(),
-                remote,
+                disclosed,
                 branch,
                 head,
                 detached,
@@ -528,6 +536,33 @@ public final class GitIntelligenceService implements GitIntelligence {
         String[] segments = normalized.substring(0, slash).split("/");
         int count = Math.min(depth, segments.length);
         return String.join("/", java.util.Arrays.copyOf(segments, count));
+    }
+
+    /**
+     * The origin remote as rendered by the public surfaces: a recognised network form (a URL with a host and a scheme
+     * other than {@code file}, or the SCP form {@code [user@]host:path}) without credentials, query or fragment. Any
+     * other value -- an unparsable URL, a local or UNC path -- is withheld ({@code null}): it could carry a password or
+     * an absolute path of the machine. The repository identity keeps using {@link #sanitizeRemote(String)}.
+     */
+    static String disclosedRemote(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String value = raw.trim();
+        if (value.contains("://")) {
+            try {
+                URI uri = new URI(value);
+                if (uri.getHost() == null || "file".equalsIgnoreCase(uri.getScheme())) {
+                    return null;
+                }
+                return new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), trimGitSuffix(uri.getPath()),
+                        null, null).toString();
+            } catch (URISyntaxException _) {
+                return null;
+            }
+        }
+        Matcher scp = SCP_REMOTE.matcher(value);
+        return scp.matches() ? trimGitSuffix(scp.group("host") + ":" + scp.group("path")) : null;
     }
 
     private static String sanitizeRemote(String raw) {

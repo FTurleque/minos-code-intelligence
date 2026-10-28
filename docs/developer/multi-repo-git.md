@@ -98,7 +98,7 @@ Informations de repository :
 ```text
 repositoryId
 workTree
-originRemote (sanitisé)
+originRemote (remote réseau sans identifiants ; null et ORIGIN_REMOTE_NOT_DISCLOSED pour un remote local ou illisible)
 branch
 headCommit
 detachedHead
