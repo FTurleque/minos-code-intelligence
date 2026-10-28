@@ -61,6 +61,8 @@ Surfaces consommatrices des cas d'usage (point 6, lot 1, mis en œuvre le 2026-1
 
 Modèles de lecture publiés (point 6, mis en œuvre le 2026-10-26, audit AUD-ARC-01, lot 4, changement `faire-consommer-git-et-les-resultats-de-requete`, décision D4 = a du propriétaire) : un record de lecture que rend un port applicatif est un résultat de cas d'usage, même s'il est défini dans `minos-engine`. `SymbolResult`, `UsageResult` et `RelationshipResult` (`com.minos.query`), que rend `ProjectSymbolQuery`, sont ainsi publiés aux surfaces ; la CLI les rend, l'API Java les convertit en DTO de `com.minos.api`, et aucune signature publique ne les nomme. Leur usage par une surface est tenu par la règle A11 de l'ADR 0058, avec cette raison écrite ; tout autre type du moteur reste une dette. Un port du moteur, en revanche, n'est pas appelé par une surface : l'activité Git passe par la requête applicative `ProjectGitQuery` (`minos-application`). Les faits Git qu'elle rend, comme le port, sont des records sans E/S de `minos-domain` (`com.minos.domain.git`), partagés plutôt que copiés.
 
+Staging du cycle SCIP (point 3, mis en œuvre le 2026-10-28, audit AUD-ARC-08, changement `injecter-le-staging-du-cycle-scip`, tâche SH-06) : `ScipProjectSnapshotLifecycle` reçoit le magasin actif et ouvre ses magasins de travail par le port `com.minos.store.StagingSnapshotStores` du moteur, que `minos-bootstrap` implémente par `FileSymbolSnapshotStore::new` pour les deux backends. Le provider SCIP ne nomme pas `minos-storage` en production et ne le déclare qu'en portée `test` ; les magasins de travail vivent sous `staged-snapshots/<run>` de `MINOS_HOME`, nettoyés après la promotion, et une promotion reprise les relit.
+
 ## Compliance and Enforcement
 
 - Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — règle A2 (frontières hexagonales, POM et sources) et règle A8 (aucun cycle de packages, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris) ; auto-test `test_check_module_boundaries.py`.
@@ -73,7 +75,6 @@ Modèles de lecture publiés (point 6, mis en œuvre le 2026-10-26, audit AUD-AR
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
 
 - Point 4 : `OllamaEmbeddingProvider` vit dans `minos-application` et y est instancié par la configuration applicative — preuve : `minos-application/src/main/java/com/minos/application/MinosApplicationRuntimeConfiguration.java:53`.
-- Point 3 : `ScipProjectSnapshotLifecycle` construit directement un `FileSymbolSnapshotStore` au lieu de recevoir son staging par un port injecté — preuve : `minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java:41`, `:82`.
 
 ## References
 
