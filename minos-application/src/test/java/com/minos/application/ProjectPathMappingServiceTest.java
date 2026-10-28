@@ -46,16 +46,17 @@ class ProjectPathMappingServiceTest {
     @Test
     void refusesMissingArguments() {
         assertThrows(NullPointerException.class, () -> new ProjectPathMappingService(null));
-        assertThrows(NullPointerException.class,
-                () -> new ProjectPathMappingService(new RecordingMappings(null)).configure(null));
+        ProjectPathMappingService service = new ProjectPathMappingService(new RecordingMappings(null));
+        assertThrows(NullPointerException.class, () -> service.configure(null));
         assertThrows(NullPointerException.class, () -> ProjectPathMappingService.forHome(null));
     }
 
     @Test
     void forHomeFailsExplicitlyWithoutTheCompositionRoot() {
         // minos-bootstrap is not on this module's test classpath: the composer lookup fails closed.
+        Path home = Path.of("home");
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> ProjectPathMappingService.forHome(Path.of("home")));
+                () -> ProjectPathMappingService.forHome(home));
         assertEquals(MinosApplicationComposers.MISSING, failure.getMessage());
     }
 
