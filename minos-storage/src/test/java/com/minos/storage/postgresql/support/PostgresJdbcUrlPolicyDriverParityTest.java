@@ -3,11 +3,15 @@ package com.minos.storage.postgresql.support;
 import org.junit.jupiter.api.Test;
 import org.postgresql.Driver;
 import org.postgresql.jdbc.SslMode;
+import org.postgresql.util.PSQLException;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -86,6 +90,41 @@ class PostgresJdbcUrlPolicyDriverParityTest {
             }
         }
         assertTrue(refusedForTheKey >= 2, "the sample must contain refused loopback URLs: " + refusedForTheKey);
+    }
+
+    private static final List<String> SSL_MODE_VALUES = List.of(
+            "verify-full", "VERIFY-FULL", "Verify-Full", "verify-fulL",
+            "ver%C4%B1fy-full", "VER%C4%B0FY-FULL", "VER%C4%B1FY-FULL",
+            "d%C4%B1sable", "D%C4%B0SABLE", "requ%C4%B1re",
+            "verify_full", "verifyfull", "%20verify-full", "verify-full%20", "");
+
+    @Test
+    void theMinosPolicyRecognizesTheSslModeValueExactlyAsTheDriverDoes() {
+        int unicodeFolded = 0;
+        for (String value : SSL_MODE_VALUES) {
+            String loopback = "jdbc:postgresql://127.0.0.1:5432/minos?sslmode=" + value;
+            String external = EXTERNAL + "?sslmode=" + value;
+            SslMode driver = driverModeOrNull(loopback);
+            if (driver != null && value.contains("%C4")) unicodeFolded++;
+            assertEquals(driver != null, accepts(loopback), "the driver and the policy disagree on " + loopback);
+            assertEquals(driver == SslMode.VERIFY_FULL, accepts(external),
+                    "the driver and the policy disagree on " + external);
+        }
+        assertTrue(unicodeFolded >= 3, "the sample must contain values the driver folds beyond ASCII: " + unicodeFolded);
+    }
+
+    @Test
+    void theMinosPolicyKnowsExactlyTheModesOfTheDriver() {
+        Set<String> driver = Arrays.stream(SslMode.values()).map(mode -> mode.value).collect(Collectors.toSet());
+        assertEquals(PostgresJdbcUrlPolicy.ALLOWED_SSL_MODES, driver, "the policy must know exactly the modes of the driver");
+    }
+
+    private static SslMode driverModeOrNull(String url) {
+        try {
+            return SslMode.of(driverProperties(url));
+        } catch (PSQLException _) {
+            return null;
+        }
     }
 
     private static boolean accepts(String url) {
