@@ -6,7 +6,6 @@ import com.minos.runtime.local.process.IndexerProcessPlan;
 import com.minos.runtime.local.process.ProcessIndexerExecutor;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.Language;
-import com.minos.orchestration.ExecutionPathIdentityProvider;
 import com.minos.orchestration.IndexerCapability;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
@@ -17,7 +16,6 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -28,7 +26,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -200,25 +197,7 @@ class ProviderWriteContainmentTest {
         // the exception class. Fail here instead, with the reason the identity capture gives.
         assertTrue(request.pathAuthorization().isPresent(),
                 () -> "the execution roots could not be canonically authorized: "
-                        + identityCaptureDiagnostic(projectRoot));
+                        + ExecutionPathIdentityDiagnostics.describe(projectRoot));
         return request;
-    }
-
-    /** Asks every identity provider again, directly, and reports what each one answers. */
-    private static String identityCaptureDiagnostic(Path projectRoot) {
-        List<String> answers = new ArrayList<>();
-        for (ExecutionPathIdentityProvider provider : ServiceLoader.load(ExecutionPathIdentityProvider.class)) {
-            String name = provider.getClass().getSimpleName();
-            try {
-                Path real = projectRoot.toRealPath();
-                answers.add(name + (provider.capture(real, real).isPresent()
-                        ? " captured both roots when asked again"
-                        : " declined this platform"));
-            } catch (IOException | RuntimeException failure) {
-                answers.add(name + " failed again: " + failure.getClass().getSimpleName()
-                        + ": " + failure.getMessage());
-            }
-        }
-        return answers.isEmpty() ? "no identity provider is registered" : String.join("; ", answers);
     }
 }
