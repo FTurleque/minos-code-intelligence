@@ -411,11 +411,11 @@ Les six constats du sprint ont leur changement fusionné : AUD-DEP-01 (PR #434),
 
 - **AUD-DEP-15** : le refus du cycle de vie porte sur l'état incohérent (compose qui demande l'image de requête, configuration qui ne la définit pas), pas sur la seule absence de `MINOS_QUERY_IMAGE` ; l'exigence de la spécification est précisée en ce sens, sans confirmation explicite du propriétaire.
 
-**Chantiers en cours**, chacun vers `develop` (branches de travail ; PR non ouvertes au 2026-10-28) :
+**Chantiers en cours**, chacun en PR vers `develop` (ouvertes le 2026-10-28, non fusionnées) :
 
-- avis OSV du classpath de scip-java 0.13.1 et résidus OSV : `claude/sec-avis-osv-scip-java-1742a7` ;
-- tests de confinement intermittents (`ProviderWriteContainmentTest` sous Windows) : `claude/fix-confinement-intermittent-41e028` ;
-- scripts Docker en panne (observations b à d d'AUD-DEP-15 : `verify-run-configurations.ps1`, `.env` de `prod-mcp.ps1`, verrous npm de `build-local-windows-candidate.ps1`) : `claude/fix-scripts-docker-sprint3-3bff60`.
+- avis OSV du classpath de scip-java 0.13.1 (dérogation R-29) et résidus OSV : [PR #598](https://github.com/FTurleque/minos-code-intelligence/pull/598) ;
+- tests de confinement intermittents (`ProviderWriteContainmentTest` sous Windows) : [PR #599](https://github.com/FTurleque/minos-code-intelligence/pull/599), et [PR #602](https://github.com/FTurleque/minos-code-intelligence/pull/602) (environnement minimal du helper d'identité de chemin Windows) ;
+- scripts Docker en panne (observations b à d d'AUD-DEP-15 : `verify-run-configurations.ps1`, `.env` de `prod-mcp.ps1`, verrous npm de `build-local-windows-candidate.ps1`) : [PR #596](https://github.com/FTurleque/minos-code-intelligence/pull/596).
 
 ## Sprint 5 — Chaîne de release et d'approvisionnement (spécifié le 2026-10-13)
 
@@ -643,10 +643,10 @@ Statuts alignés sur la revérification indépendante du 2026-10-28 (`develop` `
 | AUD-ARC-11 | **Fermé avec réserve** | Rien ne surveille le contenu de `minos-app`. |
 | AUD-ARC-12 | **Décision documentée** | `com.minos.storage.codec` et `com.minos.storage.home` (`minos-storage`) partagent la racine `com.minos.storage` avec `minos-engine` : le défaut décrit par le constat, sous une racine déjà partagée. |
 
-Chantiers en cours sur ces réserves, chacun vers `develop` (branches de travail ; PR non ouvertes au 2026-10-28) :
+Chantiers en cours sur ces réserves, chacun en PR vers `develop` (ouvertes le 2026-10-28, non fusionnées) :
 
-- réserves d'AUD-ARC-01 (surfaces) : `claude/refactor-arc01-reserves-222289` ;
-- décision sur AUD-ARC-05 et packages `codec`/`home` d'AUD-ARC-12 : `claude/refactor-arc05-arc12-549311`.
+- réserves d'AUD-ARC-01 (surfaces) : [PR #601](https://github.com/FTurleque/minos-code-intelligence/pull/601) ;
+- AUD-ARC-05 et packages `codec`/`home` d'AUD-ARC-12 : [PR #600](https://github.com/FTurleque/minos-code-intelligence/pull/600).
 
 ## Sprint 11 — Hygiène de fond (spécifié le 2026-10-13, fusionné le 2026-10-24)
 
