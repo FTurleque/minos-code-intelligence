@@ -126,7 +126,7 @@ Caractérisation A2 et golden, tests d'indexation/reprise existants ; scripts/qu
 
 ## SH-06 — Découpler le cycle SCIP de la persistance locale concrète
 
-- État : implémenté en local (2026-10-28, changement OpenSpec `injecter-le-staging-du-cycle-scip`) ; CI et couverture Linux à constater
+- État : fait (2026-10-28, PR #591, changement OpenSpec `injecter-le-staging-du-cycle-scip` archivé) ; CI verte, couverture Linux de `ScipProjectSnapshotLifecycle` 92,1 % des lignes
 - Priorité : P2
 - Dépendances : SH-03, SH-05
 - Point d'entrée : `minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java`, `minos-engine/src/main/java/com/minos/orchestration`, `minos-bootstrap/src/main/java/com/minos/bootstrap`

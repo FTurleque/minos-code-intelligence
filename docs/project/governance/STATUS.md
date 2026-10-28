@@ -146,6 +146,17 @@ Les six changements du sprint 11 (« hygiène de fond ») sont **fusionnés dans
 
 Reste : la preuve Windows réelle du runner scip-java renommé (`retirer-les-jalons-des-identifiants`, tâche 4.2), sans laquelle ce changement n'est pas archivé. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 
+## Dette d'architecture figée (2026-10-25, close le 2026-10-28)
+
+Les quatre phases du chantier (AUD-ARC-01, -05, -08, -12) sont **fusionnées dans `develop` et archivées**, sans changement de sortie CLI, API Java, MCP ni du plugin. Compteurs de `check-module-boundaries.py` à la clôture :
+
+- **A11** : 9 types de `minos-engine` nommés par les surfaces (CLI 5, API 3, MCP 1, NEXUS 0), chacun depuis un nombre de fichiers listé, aussi vérifié sur le bytecode.
+- **A12** : vide ; `minos-domain`, `minos-engine` et `minos-application` ne lancent aucun processus, l'ACL Windows passe par le port `PlatformAccessControl` de `minos-runtime-local`.
+- **A13** : un seul couple, `minos-provider-scip` → `minos-runtime-local` (9 types, 28 fichiers), justifié par écrit ; le provider SCIP ne nomme plus le stockage.
+- **Stockage** : un seul module `minos-storage` (reactor à 13 modules), codec commun dans `com.minos.storage.codec`, backends isolés par des règles de packages.
+
+Reste au plan du chantier hexagonal : SH-12. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
+
 ## État produit
 
 - **C0 → M30** : terminés et intégrés.
