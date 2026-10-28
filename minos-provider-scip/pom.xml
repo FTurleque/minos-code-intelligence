@@ -28,6 +28,7 @@
             <groupId>com.minos</groupId>
             <artifactId>minos-storage</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>

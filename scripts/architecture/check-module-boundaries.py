@@ -50,6 +50,9 @@ ASSEMBLY_MODULE = "minos-app"
 SURFACE_MODULES = frozenset({"minos-cli", "minos-api", "minos-mcp", "minos-nexus"})
 # Surfaces may see the composition root at runtime or in tests, never at compile time.
 SURFACE_TO_BOOTSTRAP_SCOPES = frozenset({"runtime", "test"})
+# Couples (module, dependency) allowed in test scope only: the SCIP provider receives its snapshot stores through
+# engine ports (SH-06), and its tests keep the real file store of minos-storage.
+TEST_ONLY_DEPENDENCIES = frozenset({("minos-provider-scip", "minos-storage")})
 
 # Explicitly allowed direct MINOS dependencies. This is a maximum set, not a requirement:
 # removing a dependency is allowed, adding a dependency outside this policy is blocked.
@@ -223,9 +226,18 @@ def check_no_hidden_internal_dependencies(module: str, root: ET.Element, group_i
             )
 
 
+def test_only_dependency_violations(module: str, dependencies: dict[str, str]) -> list[str]:
+    """The TEST_ONLY_DEPENDENCIES of one module declared in a scope other than test."""
+    return [f"{module} -> {dependency} [{dependencies[dependency]}] (TEST_ONLY_DEPENDENCIES: this dependency is "
+            "allowed in test scope only; production code reaches it through engine ports)"
+            for owner, dependency in sorted(TEST_ONLY_DEPENDENCIES)
+            if owner == module and dependencies.get(dependency, "test") != "test"]
+
+
 def check_hexagonal_boundaries(scoped: dict[str, dict[str, str]]) -> None:
     """A2 / ADR 0042 — explicit, scope-aware hexagonal rules (all scopes unless stated)."""
-    roles = ADAPTER_MODULES | SURFACE_MODULES | {APPLICATION_MODULE, BOOTSTRAP_MODULE, ASSEMBLY_MODULE}
+    roles = (ADAPTER_MODULES | SURFACE_MODULES | {APPLICATION_MODULE, BOOTSTRAP_MODULE, ASSEMBLY_MODULE}
+             | {name for couple in TEST_ONLY_DEPENDENCIES for name in couple})
     unknown = roles - set(MODULES)
     if unknown:
         fail(f"hexagonal policy references unknown modules: {', '.join(sorted(unknown))}")
@@ -233,6 +245,7 @@ def check_hexagonal_boundaries(scoped: dict[str, dict[str, str]]) -> None:
     for module in MODULES:
         dependencies = scoped[module]
         adapters = sorted(set(dependencies) & ADAPTER_MODULES)
+        violations += test_only_dependency_violations(module, dependencies)
         if module == APPLICATION_MODULE:
             violations += [
                 f"{module} -> {adapter} (the application layer must depend only on ports; "
@@ -597,9 +610,6 @@ ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], dict[str, int]] = {
         "runtime.local.sandbox.WorkerSandboxBackend": 1,
         "runtime.local.sandbox.WorkerSandboxBackends": 1,
     },
-    ("minos-provider-scip", "minos-storage"): {
-        "storage.local.store.FileSymbolSnapshotStore": 1,
-    },
 }
 
 # A13 / AUD-ARC-08, ADR 0068 — the written reason of each couple of ADAPTER_TYPES_NAMED_BY_ADAPTER. A couple without a
@@ -610,8 +620,6 @@ ADAPTER_COUPLING_REASONS: dict[tuple[str, str], str] = {
         "environment and bounded outputs, and runs the indexers under the strong process ownership and the worker "
         "sandbox of the local runtime (ADR 0068, ADR 0070); it names only types exported by A10, plus the strong "
         "ownership launcher"),
-    ("minos-provider-scip", "minos-storage"): (
-        "the SCIP snapshot lifecycle creates its working snapshot stores on the files of the local backend"),
 }
 
 STORAGE_MODULE = "minos-storage"
