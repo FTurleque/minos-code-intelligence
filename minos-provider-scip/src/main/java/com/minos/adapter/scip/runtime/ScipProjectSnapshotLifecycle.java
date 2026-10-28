@@ -2,7 +2,6 @@ package com.minos.adapter.scip.runtime;
 
 import com.minos.discovery.ModuleAssignmentRule;
 import com.minos.io.PrivateLocalStorage;
-import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.ingestion.ScipSymbolSnapshotImporter;
 import com.minos.io.Sha256;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
@@ -18,7 +17,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.storage.local.store.FileSymbolSnapshotStore;
+import com.minos.store.StagingSnapshotStores;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,28 +28,32 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Project staging and promotion for the SCIP artifacts produced during indexing. */
+/**
+ * Project staging and promotion for the SCIP artifacts produced during indexing.
+ *
+ * <p>The lifecycle creates no snapshot store: it publishes to the active store it receives, and opens its working
+ * stores (one per provider scope, then the staged project snapshot) through {@link StagingSnapshotStores}, under
+ * {@code staged-snapshots/<run>} of the MINOS home only.
+ */
 public final class ScipProjectSnapshotLifecycle implements SnapshotStager, SnapshotPromoter {
 
     private final Path stagingRoot;
     private final Path runsRoot;
     private final CodeKnowledgeSnapshotStore activeStore;
+    private final StagingSnapshotStores stagingStores;
     private final Map<String, IndexerDescriptor> descriptors;
-
-    public ScipProjectSnapshotLifecycle(Path minosHome) throws IOException {
-        this(minosHome, new FileSymbolSnapshotStore(normalizedHome(minosHome).resolve("symbol-snapshots")),
-                ScipIndexerCatalog.javaTypeScriptDescriptors());
-    }
 
     public ScipProjectSnapshotLifecycle(
             Path minosHome,
             CodeKnowledgeSnapshotStore activeStore,
+            StagingSnapshotStores stagingStores,
             List<IndexerDescriptor> descriptors
     ) throws IOException {
         Path home = normalizedHome(minosHome);
         this.stagingRoot = home.resolve("staged-snapshots");
         this.runsRoot = home.resolve("runs");
         this.activeStore = Objects.requireNonNull(activeStore, "activeStore");
+        this.stagingStores = Objects.requireNonNull(stagingStores, "stagingStores");
         Objects.requireNonNull(descriptors, "descriptors");
         Map<String, IndexerDescriptor> values = new LinkedHashMap<>();
         for (IndexerDescriptor descriptor : descriptors) {
@@ -79,7 +82,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
             String scope = scopeKey(artifact.projectRelativeRoot());
             String portableRoot = portable(artifact.projectRelativeRoot());
             Path providerRoot = runRoot.resolve("providers").resolve(artifact.indexerId()).resolve(scope);
-            FileSymbolSnapshotStore providerStore = new FileSymbolSnapshotStore(providerRoot);
+            CodeKnowledgeSnapshotStore providerStore = stagingStores.open(providerRoot);
             String providerSnapshotId = "provider-" + request.runId() + "-" + artifact.indexerId() + "-" + scope;
             new ScipSymbolSnapshotImporter().importSnapshot(
                     artifact.finalArtifact(),
@@ -109,7 +112,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
         cleanupProviderWorkspaces(request.runId(), request.artifacts());
 
         String stagedSnapshotId = "run-" + request.runId();
-        FileSymbolSnapshotStore stagedStore = new FileSymbolSnapshotStore(runRoot.resolve("project"));
+        CodeKnowledgeSnapshotStore stagedStore = stagingStores.open(runRoot.resolve("project"));
         stagedStore.publish(
                 request.projectId(),
                 stagedSnapshotId,
@@ -128,7 +131,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
             throw new IllegalArgumentException("stagedSnapshotId must not be blank");
         }
         Path stagedRunRoot = runRoot(runId);
-        FileSymbolSnapshotStore stagedStore = new FileSymbolSnapshotStore(stagedRunRoot.resolve("project"));
+        CodeKnowledgeSnapshotStore stagedStore = stagingStores.open(stagedRunRoot.resolve("project"));
         CodeKnowledgeSnapshot staged = stagedStore.loadActiveKnowledge(projectId)
                 .orElseThrow(() -> new IllegalStateException("staged project snapshot is missing for run " + runId));
         if (!stagedSnapshotId.equals(staged.snapshotId())) {

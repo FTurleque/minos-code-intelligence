@@ -30,6 +30,7 @@ import com.minos.storage.StorageBackendConfiguration;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.storage.local.store.EnvironmentHostedTenantKeyProvider;
 import com.minos.storage.local.store.FileHostedControlPlaneStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -86,7 +87,8 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
             CodeKnowledgeSnapshotStore snapshots,
             List<IndexerDescriptor> descriptors
     ) throws IOException {
-        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(home, snapshots, descriptors);
+        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(
+                home, snapshots, FileSymbolSnapshotStore::new, descriptors);
         return new SnapshotLifecycle(lifecycle, lifecycle);
     }
 

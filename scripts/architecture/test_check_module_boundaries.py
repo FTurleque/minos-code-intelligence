@@ -232,6 +232,14 @@ class HexagonalRuleTest(unittest.TestCase):
         self.refused(scoped_graph(minos_engine={"minos-runtime-local": "compile"}), "minos-engine -> minos-runtime-local")
         self.refused(scoped_graph(minos_domain={"minos-integration-git": "test"}), "minos-domain -> minos-integration-git")
 
+    def test_the_scip_provider_sees_the_storage_module_in_tests_only(self):
+        # SH-06: the SCIP lifecycle receives its stores through engine ports; its tests keep the real file store.
+        for scope in ("compile", "runtime", "provided"):
+            with self.subTest(scope=scope):
+                self.refused(scoped_graph(minos_provider_scip={"minos-storage": scope}),
+                             f"minos-provider-scip -> minos-storage [{scope}]", "TEST_ONLY_DEPENDENCIES", "test")
+        _MODULE.check_hexagonal_boundaries(scoped_graph(minos_provider_scip={"minos-storage": "test"}))
+
     def test_the_assembly_may_depend_on_every_module(self):
         everything = {module: "compile" for module in MODULES if module != "minos-app"}
         _MODULE.check_hexagonal_boundaries(scoped_graph(minos_app=everything))
@@ -1363,8 +1371,10 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
         self.write("minos-provider-scip", "com.minos.adapter.scip", "Store", "final class Store { SnapshotCodec c; }",
                    ["com.minos.storage.local.store.SnapshotCodec"])
 
-    def check(self, listed=None):
-        return _MODULE.check_adapter_types_named_by_adapters(self.root, listed=self.LISTED if listed is None else listed)
+    def check(self, listed=None, reasons=None):
+        listed = self.LISTED if listed is None else listed
+        reasons = {couple: "reviewed coupling" for couple in listed} if reasons is None else reasons
+        return _MODULE.check_adapter_types_named_by_adapters(self.root, listed=listed, reasons=reasons)
 
     def test_a_conforming_tree_is_accepted(self):
         self.assertEqual(1, self.check())
@@ -1423,6 +1433,37 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
     def test_the_real_tree_names_only_listed_adapter_types(self):
         self.assertEqual(sum(len(types) for types in _MODULE.ADAPTER_TYPES_NAMED_BY_ADAPTER.values()),
                          _MODULE.check_adapter_types_named_by_adapters())
+
+    def test_a_file_store_created_again_by_the_scip_lifecycle_is_refused_without_a_storage_couple(self):
+        # SH-06: the real table has no minos-provider-scip -> minos-storage couple any more.
+        self.assertNotIn(self.COUPLE, _MODULE.ADAPTER_TYPES_NAMED_BY_ADAPTER)
+        self.write("minos-storage", "com.minos.storage.local.store", "FileSymbolSnapshotStore",
+                   "public final class FileSymbolSnapshotStore { }")
+        self.write("minos-provider-scip", "com.minos.adapter.scip.runtime", "ScipProjectSnapshotLifecycle",
+                   "public final class ScipProjectSnapshotLifecycle { Object s = new FileSymbolSnapshotStore(); }",
+                   ["com.minos.storage.local.store.FileSymbolSnapshotStore"])
+        self.refused(lambda: self.check(listed={}, reasons={}), "A13", "minos-provider-scip -> minos-storage",
+                     "storage.local.store.FileSymbolSnapshotStore",
+                     "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java")
+
+    def test_a_listed_couple_without_a_reason_is_refused(self):
+        self.refused(lambda: self.check(reasons={}), "A13", "ADAPTER_COUPLING_REASONS",
+                     "minos-provider-scip -> minos-storage", "no written reason")
+
+    def test_a_blank_reason_is_refused(self):
+        self.refused(lambda: self.check(reasons={self.COUPLE: "  "}), "A13",
+                     "minos-provider-scip -> minos-storage", "no written reason")
+
+    def test_a_reason_without_a_listed_couple_is_refused(self):
+        reasons = {self.COUPLE: "reviewed coupling", ("minos-integration-git", "minos-storage"): "stale"}
+        self.refused(lambda: self.check(reasons=reasons), "A13", "minos-integration-git -> minos-storage",
+                     "remove the reason")
+
+    def test_every_real_couple_has_a_written_reason(self):
+        self.assertEqual(set(_MODULE.ADAPTER_TYPES_NAMED_BY_ADAPTER), set(_MODULE.ADAPTER_COUPLING_REASONS))
+        for couple, reason in _MODULE.ADAPTER_COUPLING_REASONS.items():
+            with self.subTest(couple=couple):
+                self.assertTrue(reason.strip())
 
 
 class StoragePackageIsolationRuleTest(RatchetTreeTestCase):

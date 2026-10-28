@@ -52,9 +52,9 @@
         <mcp.sdk.version>2.1.0</mcp.sdk.version>
         <!--
           Keep both Jackson generations centrally pinned. MINOS' PostgreSQL codec uses
-          Jackson 2 while MCP SDK 2.0.0 brings Jackson 3 through mcp-json-jackson3.
-          2.22.2 and 3.2.2 contain the 2026 security fixes required by the release gate
-          (patch releases on top of the original 2.22.1/3.1.5 fix versions).
+          Jackson 2 while the MCP SDK brings Jackson 3 through mcp-json-jackson3.
+          The two versions below contain the 2026 security fixes required by the release gate
+          (first shipped in 2.22.1 and 3.1.5); scripts/docs/check-current-docs.py pins them.
         -->
         <jackson2.version>2.22.4</jackson2.version>
         <jackson3.version>3.2.4</jackson3.version>
