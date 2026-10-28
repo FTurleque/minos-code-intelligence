@@ -199,10 +199,10 @@ class ScipProjectSnapshotLifecycleTest {
         UUID runId = UUID.randomUUID();
         Path home = root.resolve("recorded-home");
         Path javaIndex = root.resolve("recorded-java.scip");
-        Path tsIndex = root.resolve("recorded-typescript.scip");
+        Path typeScriptIndex = root.resolve("recorded-typescript.scip");
         writeIndex(javaIndex, "java", "src/main/java/io/example/JavaService.java",
                 "scip-java maven fixture 1.0 io/example/JavaService#", "JavaService");
-        writeIndex(tsIndex, "typescript", "src/TsService.ts",
+        writeIndex(typeScriptIndex, "typescript", "src/TsService.ts",
                 "scip-typescript npm fixture 1.0.0 src/`TsService.ts`/TsService#", "TsService");
         List<Path> opened = new ArrayList<>();
         StagingSnapshotStores recording = directory -> {
@@ -213,7 +213,7 @@ class ScipProjectSnapshotLifecycleTest {
         ScipProjectSnapshotLifecycle lifecycle = lifecycle(home, recording);
         String stagedId = lifecycle.stage(new IndexSnapshotStageRequest(runId, projectId, List.of(
                 new IndexingArtifact(Language.JAVA, "scip-java", javaIndex),
-                new IndexingArtifact(Language.TYPESCRIPT, "scip-typescript", tsIndex))));
+                new IndexingArtifact(Language.TYPESCRIPT, "scip-typescript", typeScriptIndex))));
         lifecycle.promote(projectId, runId, stagedId);
 
         // Two provider stores, then the staged project store written by stage and read back by promote: every

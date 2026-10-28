@@ -15,7 +15,7 @@ import java.nio.file.Path;
 public interface StagingSnapshotStores {
 
     /**
-     * Opens the working store rooted at {@code root}.
+     * Opens the working store rooted at {@code root}, which the store may create.
      *
      * @param root directory of the working store, owned by the indexing run
      * @return a store whose publications stay under {@code root}
