@@ -18,4 +18,4 @@ Ordre : rouge, correction, preuve. Un seul module touché : `minos-integration-g
 
 ## 4. Clôture
 
-- [ ] 4.1 `docs/project/audits/2026-10-10/SUIVI.md` : ligne AUD-SEC-10-suite (statut, PR, preuve) ; `openspec validate --all --strict`.
+- [x] 4.1 `docs/project/audits/2026-10-10/SUIVI.md` : ligne AUD-SEC-10-suite (statut, PR, preuve) ; `openspec validate --all --strict`. — fait : PR #594 ; validation 36/36.
