@@ -1,6 +1,7 @@
 package com.minos.runtime.local.sandbox;
 
 import com.minos.runtime.local.process.CommandLocator;
+import com.minos.runtime.local.process.ProviderProcessEnvironment;
 import com.minos.orchestration.ExecutionPathIdentityProvider;
 
 import java.io.ByteArrayOutputStream;
@@ -12,6 +13,7 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -91,11 +93,24 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
                 "-EncodedCommand",
                 encodedHelper()));
         builder.redirectErrorStream(true);
-        builder.environment().put(
-                "MINOS_REGISTERED_PATH_IDENTITY_TARGET", registeredProjectRoot.toString());
-        builder.environment().put(
-                "MINOS_PROJECT_PATH_IDENTITY_TARGET", projectRoot.toString());
+        applyHelperEnvironment(builder, registeredProjectRoot, projectRoot);
         return builder.start();
+    }
+
+    /**
+     * Gives the helper the trusted-launcher allowlist and its two targets, never the JVM environment.
+     *
+     * <p>The JVM may carry control-plane keys, hosted tokens and CI credentials. Measured on Windows 10:
+     * {@code SystemRoot}, {@code TEMP} and {@code TMP} are what the helper and its {@code Add-Type}
+     * compilation need; the trusted-launcher set adds non-secret profile locations and the PowerShell
+     * module analysis cache path. The targets are set after the allowlist, because the deny pattern of
+     * declared variables refuses every {@code MINOS_*} name.</p>
+     */
+    static void applyHelperEnvironment(ProcessBuilder builder, Path registeredProjectRoot, Path projectRoot) {
+        ProviderProcessEnvironment.applyForTrustedLauncher(builder, Map.of());
+        Map<String, String> environment = builder.environment();
+        environment.put("MINOS_REGISTERED_PATH_IDENTITY_TARGET", registeredProjectRoot.toString());
+        environment.put("MINOS_PROJECT_PATH_IDENTITY_TARGET", projectRoot.toString());
     }
 
     /** Reads both identities from a successful helper response, or refuses the whole response. */
