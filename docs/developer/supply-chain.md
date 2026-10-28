@@ -249,7 +249,7 @@ TESTCONTAINERS_PULL_POLICY=com.minos.storage.postgresql.PrePulledImagesOnlyPullP
 
 Une image manquante à la liste fait échouer le démarrage du conteneur avec le message « is not in the pre-pulled list ». Les tests des autres modules ne démarrent aucun conteneur.
 
-**Portée du jeton : non vérifiée par le dépôt.** « Lecture seule » n'est écrit que dans ce document et dans les commentaires des workflows ; l'API de Docker Hub ne permet pas de la lire. La vérification revient au propriétaire du compte (tâche 4.1 de `durcir-les-workflows-github`), qui la date ici une fois faite. Elle borne ce que peuvent lire les deux jobs de la liste fermée ; les jobs de test ne lisent plus le jeton.
+**Portée du jeton : « Public Repo Read-only »**, vérifiée dans Docker Hub par le propriétaire du compte le 2026-10-28 (tâche 4.1 de `durcir-les-workflows-github`). L'API de Docker Hub ne permet pas de la lire : la vérification se refait à la main à chaque recréation du jeton, et se date ici. Elle borne ce que peuvent lire les deux jobs de la liste fermée ; les jobs de test ne lisent pas le jeton (Testcontainers n'y trouve aucune authentification : « No matching Auth Configs » dans le journal de `Verify (ubuntu-24.04)`).
 
 ## Jeton du dépôt et délais des jobs (AUD-DEP-12)
 

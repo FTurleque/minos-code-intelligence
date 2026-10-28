@@ -22,4 +22,4 @@ Ordre : rouge, correction, preuve. Trois lots : 1 (attestation, sans dépendance
 ## 4. Clôture
 
 - [x] 4.1 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-DEP-06 : statut par lot, décision D2, écarts sur le script de signature, preuves). — fait : ligne AUD-DEP-06 du sprint 5 (PR #469, lots 1 et 2) ; statut « Risque accepté (R-28) » depuis le 2026-10-24, preuve de release en attente (3.2).
-- [ ] 4.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md` (état de signature exact), `docs/developer/supply-chain.md`, `docs/user/installation.md`, index des ADR si un ADR est créé.
+- [x] 4.2 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md` (état de signature exact), `docs/developer/supply-chain.md`, `docs/user/installation.md`, index des ADR si un ADR est créé. — fait (2026-10-28) : `STATUS.md`, `supply-chain.md` et `production-installation.md` disent l'état non signé (risque R-28) et la commande `gh attestation verify` ; aucun ADR créé (D2 = C) ; validation verte. Archivage après la tâche 3.2 (prochaine release).
