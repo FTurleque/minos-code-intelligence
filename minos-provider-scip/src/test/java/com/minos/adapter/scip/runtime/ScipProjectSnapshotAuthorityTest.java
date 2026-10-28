@@ -1,6 +1,8 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation.Status;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -14,7 +16,10 @@ class ScipProjectSnapshotAuthorityTest {
 
     @Test
     void emptyProductionStoreIsExplicitlyObservedAsNoActiveSnapshot(@TempDir Path root) throws Exception {
-        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(root.resolve("home"));
+        Path home = root.resolve("home");
+        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(home,
+                new FileSymbolSnapshotStore(home.resolve("symbol-snapshots")), FileSymbolSnapshotStore::new,
+                ScipIndexerCatalog.javaTypeScriptDescriptors());
 
         var observation = lifecycle.observeActiveSnapshot(UUID.randomUUID());
 

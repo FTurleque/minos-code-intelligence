@@ -1,6 +1,8 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.discovery.ModuleAssignmentRule;
+import com.minos.domain.Symbol;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.DiscoveredModule;
@@ -9,6 +11,7 @@ import com.minos.discovery.ProjectDiscovery.SourceRoot;
 import com.minos.discovery.ProjectDiscovery.SourceRootKind;
 import com.minos.orchestration.IndexingRuntimePorts.IndexSnapshotStageRequest;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
+import com.minos.store.StagingSnapshotStores;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -19,9 +22,11 @@ import org.scip_code.scip.SingleLineRange;
 import org.scip_code.scip.SymbolInformation;
 import org.scip_code.scip.SymbolRole;
 
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -30,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScipProjectSnapshotLifecycleTest {
@@ -63,7 +69,7 @@ class ScipProjectSnapshotLifecycleTest {
                 "TsService"
         );
 
-        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(home);
+        ScipProjectSnapshotLifecycle lifecycle = lifecycle(home);
         FileSymbolSnapshotStore active = new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
 
         String stagedId = lifecycle.stage(new IndexSnapshotStageRequest(
@@ -113,7 +119,7 @@ class ScipProjectSnapshotLifecycleTest {
                 "Shared"
         );
 
-        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(root.resolve("scoped-home"));
+        ScipProjectSnapshotLifecycle lifecycle = lifecycle(root.resolve("scoped-home"));
         FileSymbolSnapshotStore active = new FileSymbolSnapshotStore(root.resolve("scoped-home/symbol-snapshots"));
         String stagedId = lifecycle.stage(new IndexSnapshotStageRequest(
                 runId,
@@ -127,8 +133,8 @@ class ScipProjectSnapshotLifecycleTest {
 
         var symbols = active.loadActiveKnowledge(projectId).orElseThrow().symbols();
         assertEquals(2, symbols.size());
-        assertEquals(List.of("Shared", "Shared"), symbols.stream().map(symbol -> symbol.name()).sorted().toList());
-        assertEquals(2, symbols.stream().map(symbol -> symbol.id()).distinct().count());
+        assertEquals(List.of("Shared", "Shared"), symbols.stream().map(Symbol::name).sorted().toList());
+        assertEquals(2, symbols.stream().map(Symbol::id).distinct().count());
         assertNotEquals(symbols.get(0).fileId(), symbols.get(1).fileId());
         assertTrue(symbols.stream().anyMatch(symbol -> "ui/app/src/Shared.ts".equals(symbol.fileId())));
         assertTrue(symbols.stream().anyMatch(symbol -> "ui/lib/src/Shared.ts".equals(symbol.fileId())));
@@ -154,7 +160,7 @@ class ScipProjectSnapshotLifecycleTest {
                 new DiscoveredModule(Path.of("packages/web"), "web", Set.of(BuildSystem.NPM),
                         List.of(new SourceRoot(Path.of("packages/web/src"), SourceRootKind.SOURCE, Language.TYPESCRIPT)))));
 
-        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(root.resolve("module-home"));
+        ScipProjectSnapshotLifecycle lifecycle = lifecycle(root.resolve("module-home"));
         FileSymbolSnapshotStore active = new FileSymbolSnapshotStore(root.resolve("module-home/symbol-snapshots"));
         String stagedId = lifecycle.stage(new IndexSnapshotStageRequest(
                 runId, projectId,
@@ -179,7 +185,7 @@ class ScipProjectSnapshotLifecycleTest {
         writeIndex(index, "typescript", "packages/api/src/Greeting.ts",
                 "scip-typescript npm api 1.0.0 src/`Greeting.ts`/Greeting#", "Greeting");
 
-        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(root.resolve("plain-home"));
+        ScipProjectSnapshotLifecycle lifecycle = lifecycle(root.resolve("plain-home"));
         FileSymbolSnapshotStore active = new FileSymbolSnapshotStore(root.resolve("plain-home/symbol-snapshots"));
         String stagedId = lifecycle.stage(new IndexSnapshotStageRequest(runId, projectId,
                 List.of(new IndexingArtifact(Language.TYPESCRIPT, "scip-typescript", index))));
@@ -188,7 +194,96 @@ class ScipProjectSnapshotLifecycleTest {
         assertNull(active.loadActiveKnowledge(projectId).orElseThrow().symbols().getFirst().moduleId());
     }
 
-    private static com.minos.domain.Symbol symbolNamed(List<com.minos.domain.Symbol> symbols, String name) {
+    @Test
+    void opensEveryWorkingStoreThroughThePortUnderTheStagingRunRoot() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Path home = root.resolve("recorded-home");
+        Path javaIndex = root.resolve("recorded-java.scip");
+        Path typeScriptIndex = root.resolve("recorded-typescript.scip");
+        writeIndex(javaIndex, "java", "src/main/java/io/example/JavaService.java",
+                "scip-java maven fixture 1.0 io/example/JavaService#", "JavaService");
+        writeIndex(typeScriptIndex, "typescript", "src/TsService.ts",
+                "scip-typescript npm fixture 1.0.0 src/`TsService.ts`/TsService#", "TsService");
+        List<Path> opened = new ArrayList<>();
+        StagingSnapshotStores recording = directory -> {
+            opened.add(directory);
+            return new FileSymbolSnapshotStore(directory);
+        };
+
+        ScipProjectSnapshotLifecycle lifecycle = lifecycle(home, recording);
+        String stagedId = lifecycle.stage(new IndexSnapshotStageRequest(runId, projectId, List.of(
+                new IndexingArtifact(Language.JAVA, "scip-java", javaIndex),
+                new IndexingArtifact(Language.TYPESCRIPT, "scip-typescript", typeScriptIndex))));
+        lifecycle.promote(projectId, runId, stagedId);
+
+        // Two provider stores, then the staged project store written by stage and read back by promote: every
+        // working store comes from the port, under the staging root of the run.
+        Path runRoot = home.toAbsolutePath().normalize().resolve("staged-snapshots").resolve(runId.toString());
+        assertEquals(List.of(
+                runRoot.resolve("providers").resolve("scip-java").resolve("root"),
+                runRoot.resolve("providers").resolve("scip-typescript").resolve("root"),
+                runRoot.resolve("project"),
+                runRoot.resolve("project")), opened);
+        assertEquals(stagedId, activeStore(home).loadActiveKnowledge(projectId).orElseThrow().snapshotId());
+    }
+
+    @Test
+    void promotionWithoutAStagedSnapshotFailsAndLeavesTheActiveStoreUnchanged() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        UUID firstRun = UUID.randomUUID();
+        Path home = root.resolve("missing-home");
+        Path index = root.resolve("first.scip");
+        writeIndex(index, "typescript", "src/First.ts", "scip-typescript npm first 1.0.0 src/`First.ts`/First#", "First");
+        ScipProjectSnapshotLifecycle lifecycle = lifecycle(home);
+        String firstId = lifecycle.stage(new IndexSnapshotStageRequest(firstRun, projectId,
+                List.of(new IndexingArtifact(Language.TYPESCRIPT, "scip-typescript", index))));
+        lifecycle.promote(projectId, firstRun, firstId);
+
+        UUID missingRun = UUID.randomUUID();
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> lifecycle.promote(projectId, missingRun, "run-" + missingRun));
+
+        assertTrue(failure.getMessage().contains("staged project snapshot is missing for run " + missingRun),
+                failure.getMessage());
+        assertEquals(firstId, activeStore(home).loadActiveKnowledge(projectId).orElseThrow().snapshotId());
+    }
+
+    @Test
+    void aSecondLifecycleOnTheSameHomePromotesTheSnapshotStagedByTheFirst() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Path home = root.resolve("resumed-home");
+        Path index = root.resolve("resumed.scip");
+        writeIndex(index, "typescript", "src/Resumed.ts",
+                "scip-typescript npm resumed 1.0.0 src/`Resumed.ts`/Resumed#", "Resumed");
+        String stagedId = lifecycle(home).stage(new IndexSnapshotStageRequest(runId, projectId,
+                List.of(new IndexingArtifact(Language.TYPESCRIPT, "scip-typescript", index))));
+
+        lifecycle(home).promote(projectId, runId, stagedId);
+
+        var snapshot = activeStore(home).loadActiveKnowledge(projectId).orElseThrow();
+        assertEquals(stagedId, snapshot.snapshotId());
+        assertEquals(List.of("Resumed"), snapshot.symbols().stream().map(Symbol::name).toList());
+        assertFalse(Files.exists(home.resolve("staged-snapshots").resolve(runId.toString())),
+                "staged snapshot tree must be removed after the resumed promotion");
+    }
+
+    private static ScipProjectSnapshotLifecycle lifecycle(Path home) throws IOException {
+        return lifecycle(home, FileSymbolSnapshotStore::new);
+    }
+
+    private static ScipProjectSnapshotLifecycle lifecycle(Path home, StagingSnapshotStores stagingStores)
+            throws IOException {
+        return new ScipProjectSnapshotLifecycle(home, activeStore(home), stagingStores,
+                ScipIndexerCatalog.javaTypeScriptDescriptors());
+    }
+
+    private static FileSymbolSnapshotStore activeStore(Path home) throws IOException {
+        return new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
+    }
+
+    private static Symbol symbolNamed(List<Symbol> symbols, String name) {
         return symbols.stream().filter(symbol -> name.equals(symbol.name())).findFirst().orElseThrow();
     }
 

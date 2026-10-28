@@ -92,6 +92,16 @@ class DefaultMinosApplicationComposerTest {
                 composer.hostCommandLocator().invocation(Path.of("docker"), "version"));
     }
 
+    @Test
+    void hostedControlPlaneFactoriesAreTheFileStoreAndTheEnvironmentKeys(@TempDir Path temp) throws Exception {
+        DefaultMinosApplicationComposer composer = new DefaultMinosApplicationComposer();
+        com.minos.hosted.HostedTenantKeyProvider keys = composer.environmentHostedTenantKeyProvider();
+
+        assertInstanceOf(com.minos.storage.local.store.EnvironmentHostedTenantKeyProvider.class, keys);
+        assertInstanceOf(com.minos.storage.local.store.FileHostedControlPlaneStore.class,
+                composer.hostedControlPlaneStore(temp.resolve("hosted"), keys));
+    }
+
     /** Port de minos-app — la correspondance de chemins de production est le magasin fichier du home. */
     @Test
     void projectPathMappingsAreTheFileStoreOfTheHome(@TempDir Path temp) throws Exception {
