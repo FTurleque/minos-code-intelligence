@@ -126,22 +126,22 @@ Caractérisation A2 et golden, tests d'indexation/reprise existants ; scripts/qu
 
 ## SH-06 — Découpler le cycle SCIP de la persistance locale concrète
 
-- État : À faire
+- État : implémenté en local (2026-10-28, changement OpenSpec `injecter-le-staging-du-cycle-scip`) ; CI et couverture Linux à constater
 - Priorité : P2
 - Dépendances : SH-03, SH-05
 - Point d'entrée : `minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java`, `minos-engine/src/main/java/com/minos/orchestration`, `minos-bootstrap/src/main/java/com/minos/bootstrap`
 
 ### Actions
 
-- [ ] Inventorier créations FileSymbolSnapshotStore pour providers, staging et promotion ; définir les ports minimaux correspondants.
-- [ ] Injecter les implémentations depuis bootstrap ; conserver nettoyage, chemins autorisés et limites d'artefacts.
-- [ ] Faire rester conversion et normalisation SCIP dans provider ; retirer sa dépendance au module storage si plus aucun usage légitime ne subsiste.
-- [ ] Préserver la publication atomique et la reprise ; aucune dépendance provider → bootstrap/application.
+- [x] Inventorier créations FileSymbolSnapshotStore pour providers, staging et promotion ; définir les ports minimaux correspondants. Preuve : design du changement (4 créations), port `com.minos.store.StagingSnapshotStores`.
+- [x] Injecter les implémentations depuis bootstrap ; conserver nettoyage, chemins autorisés et limites d'artefacts. Preuve : `DefaultMinosApplicationComposer.snapshotLifecycle` passe `FileSymbolSnapshotStore::new` ; `ScipProjectSnapshotLifecycleTest` (répertoires ouverts sous `staged-snapshots/<run>`), `ScipRuntimeStoragePrivacyTest`, `check-post-mne.py`.
+- [x] Faire rester conversion et normalisation SCIP dans provider ; retirer sa dépendance au module storage si plus aucun usage légitime ne subsiste. Preuve : `minos-storage` en portée `test` dans `minos-provider-scip/pom.xml` (les tests gardent le vrai magasin fichier), garde `TEST_ONLY_DEPENDENCIES`, A13 sans entrée stockage.
+- [x] Préserver la publication atomique et la reprise ; aucune dépendance provider → bootstrap/application. Preuve : tests « promotion reprise par un second cycle » et « promotion sans snapshot mis en place », `LocalStorageRetentionPreparedSnapshotTest`, règle A2.
 
 ### Critères d'acceptation
 
-- [ ] Tests du provider exécutables avec doubles des ports ; les tests intégrés confirment le même backend et les mêmes résultats.
-- [ ] Graphe Maven sans dépendance inutile provider → storage ; absence d'inversion de dépendance cachée.
+- [x] Tests du provider exécutables avec doubles des ports ; les tests intégrés confirment le même backend et les mêmes résultats. Preuve : double enregistreur de `StagingSnapshotStores` dans `ScipProjectSnapshotLifecycleTest` ; assertions existantes inchangées.
+- [x] Graphe Maven sans dépendance inutile provider → storage ; absence d'inversion de dépendance cachée. Preuve : arête de compilation retirée, portée `test` seule ; aucune arête ajoutée (`check-module-boundaries.py`).
 
 ### Vérification
 

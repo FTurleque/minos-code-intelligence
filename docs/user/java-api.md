@@ -352,6 +352,17 @@ Aucune signature de `com.minos.api` ne change, et le contrat JSON de l'export NE
 
 La sélection de l'export est faite par `com.minos.application.export.KnowledgeExportUseCase`, que le service obtient par `KnowledgeExportUseCase.of(MinosApplication)`.
 
+### Staging injecté du cycle SCIP, version 1.3.0
+
+Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change, et `MinosApplicationComposer.snapshotLifecycle` garde la sienne. La classe interne `com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle` n'a plus qu'un constructeur, qui reçoit le magasin actif et le port `com.minos.store.StagingSnapshotStores` par lequel elle ouvre ses magasins de travail ([ADR 0068](../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md), « Mise en œuvre »). Un code qui la construisait lui-même doit être modifié et recompilé (rupture de source et binaire) :
+
+| Signature 1.2.0 | Signature 1.3.0 |
+|---|---|
+| `new ScipProjectSnapshotLifecycle(Path)` | `new ScipProjectSnapshotLifecycle(home, new FileSymbolSnapshotStore(home.resolve("symbol-snapshots")), FileSymbolSnapshotStore::new, ScipIndexerCatalog.javaTypeScriptDescriptors())` |
+| `new ScipProjectSnapshotLifecycle(Path, CodeKnowledgeSnapshotStore, List<IndexerDescriptor>)` | `new ScipProjectSnapshotLifecycle(Path, CodeKnowledgeSnapshotStore, StagingSnapshotStores, List<IndexerDescriptor>)` |
+
+`com.minos:minos-provider-scip` ne dépend plus de `com.minos:minos-storage` qu'en portée `test` : un projet qui recevait le stockage par cette dépendance le déclare lui-même.
+
 ### Port de lecture des snapshots ([ADR 0056](../architecture/adr/ARCH-0056-ports-de-lecture-des-snapshots.md)), version 1.3.0
 
 Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change. Les types publics de `com.minos.store` publiés depuis la 1.2.0 sont conservés : `SnapshotQueryView`, ses accesseurs `queryStore()` et `indexMetrics()`, `CodeKnowledgeSnapshotStore.loadActiveQueryView` et `ImpactAnalysisService.analyze(SnapshotQueryView, ImpactAnalysisRequest)` sont dépréciés (`@Deprecated(since = "1.3.0")`, sans retrait programmé) et rendent le même résultat ; leur remplaçant est `SnapshotReadView`, obtenue par `CodeKnowledgeSnapshotStore.loadActiveReadView`. Les lectures de `CodeKnowledgeStore` sont déclarées par sa super-interface `CodeKnowledgeReader` : un appelant compilé contre la 1.2.0 les résout toujours.
