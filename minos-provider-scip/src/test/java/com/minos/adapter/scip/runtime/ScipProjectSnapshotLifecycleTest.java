@@ -283,7 +283,7 @@ class ScipProjectSnapshotLifecycleTest {
         return new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
     }
 
-    private static com.minos.domain.Symbol symbolNamed(List<com.minos.domain.Symbol> symbols, String name) {
+    private static Symbol symbolNamed(List<Symbol> symbols, String name) {
         return symbols.stream().filter(symbol -> name.equals(symbol.name())).findFirst().orElseThrow();
     }
 
