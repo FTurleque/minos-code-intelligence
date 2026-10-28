@@ -352,6 +352,19 @@ Aucune signature de `com.minos.api` ne change, et le contrat JSON de l'export NE
 
 La sélection de l'export est faite par `com.minos.application.export.KnowledgeExportUseCase`, que le service obtient par `KnowledgeExportUseCase.of(MinosApplication)`.
 
+### Accesseurs de `MinosApplication` réservés à l'application, version 1.3.0
+
+Aucune signature de `com.minos.api` ne change, ni aucune sortie de la CLI, du serveur MCP ou du plan Docker. Quatre accesseurs de la classe interne `com.minos.application.MinosApplication`, qui rendaient un port de `minos-engine`, ne sont plus publics : seules les classes de `com.minos.application` les appellent. Un code qui les appelait directement doit passer par la façade indiquée et être recompilé (rupture de source et binaire) :
+
+| Accesseur retiré | Remplaçant |
+|---|---|
+| `gitIntelligence()` | `new LocalProjectGitQuery(application)` (`ProjectGitQuery`) |
+| `hostedControlPlaneService()` | `teamControlPlane()` (`TeamControlPlane`) |
+| `providerCatalog()` | `ProviderPlatformService.defaults(application)` |
+| `scipArtifactImporter()` | `new LocalProjectOperations(application)` (`import-scip`) |
+
+La correspondance des chemins du plan Docker se configure par `com.minos.application.ProjectPathMappingService.forHome(home).configure(mapping)`.
+
 ### Staging injecté du cycle SCIP, version 1.3.0
 
 Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change, et `MinosApplicationComposer.snapshotLifecycle` garde la sienne. La classe interne `com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle` n'a plus qu'un constructeur, qui reçoit le magasin actif et le port `com.minos.store.StagingSnapshotStores` par lequel elle ouvre ses magasins de travail ([ADR 0068](../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md), « Mise en œuvre »). Un code qui la construisait lui-même doit être modifié et recompilé (rupture de source et binaire) :

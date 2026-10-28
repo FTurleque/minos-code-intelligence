@@ -1165,8 +1165,8 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
                      "com.minos.store.CodeKnowledgeSnapshot")
 
 
-class MinosApplicationAccessorRuleTest(RatchetTreeTestCase):
-    """A11 — a MinosApplication accessor called by a surface uses the engine type it returns (AUD-ARC-01)."""
+class MinosApplicationTreeTestCase(RatchetTreeTestCase):
+    """A temporary tree with a MinosApplication whose public accessors return engine types (fixture, no test)."""
 
     APPLICATION = """public final class MinosApplication {
     public static MinosApplication open(java.nio.file.Path home) { return null; }
@@ -1193,6 +1193,10 @@ class MinosApplicationAccessorRuleTest(RatchetTreeTestCase):
 
     def surface(self, module, name, body, imports=()):
         self.write(module, f"com.minos.{module.removeprefix('minos-')}", name, body, imports)
+
+
+class MinosApplicationAccessorRuleTest(MinosApplicationTreeTestCase):
+    """A11 — a MinosApplication accessor called by a surface uses the engine type it returns (AUD-ARC-01)."""
 
     def check(self, listed):
         return _MODULE.check_engine_types_named_by_surfaces(self.root, listed=listed)
@@ -1267,14 +1271,69 @@ class MinosApplicationAccessorRuleTest(RatchetTreeTestCase):
         self.write("minos-application", "com.minos.application", "Other", "final class Other { }")
         self.refused(lambda: self.check({}), "A11", "MinosApplication")
 
-    def test_the_real_application_exposes_the_accessors_the_surfaces_call(self):
+    def test_the_real_application_exposes_the_accessors_the_use_cases_call(self):
         accessors = _MODULE.minos_application_accessors()
         for name, engine_type in (("projectRegistry", "registry.ProjectRegistry"),
                                   ("snapshotStore", "store.CodeKnowledgeSnapshotStore"),
-                                  ("gitIntelligence", "git.GitIntelligence"),
-                                  ("hostedControlPlaneService", "hosted.HostedControlPlaneService"),
                                   ("snapshotStager", "orchestration.IndexingRuntimePorts")):
             self.assertEqual((0, engine_type), accessors[name])
+        # AUD-ARC-01: called only inside com.minos.application, so package-private and not counted.
+        for name in ("gitIntelligence", "hostedControlPlaneService", "providerCatalog", "scipArtifactImporter"):
+            self.assertNotIn(name, accessors)
+
+
+class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
+    """A11 — the public MinosApplication accessors returning an engine type are a closed list (AUD-ARC-01)."""
+
+    LISTED = {"snapshotStore": "store.CodeKnowledgeSnapshotStore", "gitIntelligence": "git.GitIntelligence",
+              "hostedControlPlaneService": "hosted.HostedControlPlaneService",
+              "snapshotStager": "orchestration.IndexingRuntimePorts",
+              "indexerRegistry": "orchestration.IndexerRegistry"}
+
+    def check_accessors(self, listed):
+        return _MODULE.check_minos_application_accessors(self.root, "com.minos", listed=listed)
+
+    def test_the_exact_list_is_accepted(self):
+        self.assertEqual(5, self.check_accessors(self.LISTED))
+
+    def test_an_accessor_outside_the_list_is_refused_with_its_name_and_type(self):
+        listed = {name: engine_type for name, engine_type in self.LISTED.items() if name != "gitIntelligence"}
+        self.refused(lambda: self.check_accessors(listed), "A11", "MinosApplication.gitIntelligence",
+                     "git.GitIntelligence", "application facade")
+
+    def test_a_different_returned_type_is_refused(self):
+        listed = dict(self.LISTED, snapshotStore="registry.ProjectRegistry")
+        self.refused(lambda: self.check_accessors(listed), "A11", "MinosApplication.snapshotStore",
+                     "store.CodeKnowledgeSnapshotStore", "registry.ProjectRegistry")
+
+    def test_an_entry_without_a_public_accessor_is_refused(self):
+        listed = dict(self.LISTED, scipArtifactImporter="orchestration.ScipArtifactImporter")
+        self.refused(lambda: self.check_accessors(listed), "A11", "scipArtifactImporter", "remove it")
+
+    def test_a_surface_reaching_the_composition_root_is_refused(self):
+        self.surface("minos-cli", "Bootstrap", "final class Bootstrap { Object s(MinosApplication app) { "
+                     "return app.compositionRoot().gitIntelligence(); } }", ["com.minos.application.MinosApplication"])
+        self.refused(lambda: self.check_accessors(self.LISTED), "A11",
+                     "minos-cli/src/main/java/com/minos/cli/Bootstrap.java", "composition root")
+        self.surface("minos-cli", "Bootstrap", "final class Bootstrap { Object s() { "
+                     "return MinosApplicationComposers.resolve(); } }",
+                     ["com.minos.application.MinosApplicationComposers"])
+        self.refused(lambda: self.check_accessors(self.LISTED), "A11", "Bootstrap.java")
+
+    def test_the_composition_root_in_a_comment_a_literal_or_a_test_is_ignored(self):
+        self.surface("minos-mcp", "Quiet", 'final class Quiet { // app.compositionRoot()\n '
+                     'String s = "MinosApplicationComposers"; }')
+        self.write("minos-mcp", "com.minos.mcp", "QuietTest", "final class QuietTest { Object o = app.compositionRoot(); }",
+                   kind="test")
+        self.assertEqual(5, self.check_accessors(self.LISTED))
+
+    def test_the_real_list_matches_the_real_application(self):
+        self.assertEqual(len(_MODULE.MINOS_APPLICATION_ENGINE_ACCESSORS),
+                         _MODULE.check_minos_application_accessors())
+        self.assertEqual(15, len(_MODULE.MINOS_APPLICATION_ENGINE_ACCESSORS))
+
+    def test_the_cli_no_longer_names_the_project_path_port(self):
+        self.assertNotIn("registry.ProjectPathMappings", _MODULE.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"])
 
 
 class ProcessLauncherRuleTest(RatchetTreeTestCase):
@@ -1928,7 +1987,8 @@ class MainWiringTest(unittest.TestCase):
         self.assertIn("spy exports failed", error)
 
     def test_main_runs_the_ratchet_rules_a11_to_a14(self):
-        for name in ("check_engine_types_named_by_surfaces", "check_process_launchers",
+        for name in ("check_engine_types_named_by_surfaces", "check_minos_application_accessors",
+                     "check_process_launchers",
                      "check_adapter_types_named_by_adapters", "check_package_roots",
                      "check_architecture_test_policy", "check_snapshot_read_port",
                      "check_postgresql_backend_isolation", "check_storage_package_isolation"):

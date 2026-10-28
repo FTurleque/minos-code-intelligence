@@ -22,9 +22,8 @@ classDiagram
       hybridContextBuilder()
       workspaceIntelligence()
       runtimeIntelligenceService()
-      hostedControlPlaneService()
+      teamControlPlane()
       providerRuntimeManager()
-      gitIntelligence()
     }
     class MinosCli { <<adapter>> }
     class MinosIdeProtocolV1 { <<external JSON protocol>> }

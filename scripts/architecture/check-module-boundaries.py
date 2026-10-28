@@ -570,9 +570,6 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
         "query.RelationshipResult": 1,
         "query.SymbolResult": 1,
         "query.UsageResult": 1,
-        # Kept: a persisted I/O port implemented by the storage adapter; DockerRuntimeBootstrap, a process entry point,
-        # receives it from the composition root (ADR 0068 places the ports in the engine).
-        "registry.ProjectPathMappings": 1,
         # Kept: ADR 0068 section 3 places com.minos.runtime, MinosVersion included, in the engine (decision Q1 = A of
         # the transverse core lot, 2026-10-25).
         "runtime.MinosVersion": 1,
@@ -584,6 +581,30 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
     # The NEXUS export goes through KnowledgeExportUseCase (minos-application); minos-nexus does not depend on the
     # engine (AUD-ARC-01, lot 5).
     "minos-nexus": {},
+}
+
+# A11 / AUD-ARC-01, ADR 0057 point 6 — the public instance accessors of MinosApplication whose return type names a
+# minos-engine type, with that type (as minos_application_accessors reads them). No surface production code calls them
+# (ENGINE_TYPES_NAMED_BY_SURFACE); they serve the use cases of the application sub-packages (ProjectIndexingUseCase,
+# RemoteIndexingUseCase, KnowledgeExportUseCase) and the tests. A new one goes through an application facade instead;
+# an accessor called only inside com.minos.application is package-private and leaves the table.
+MINOS_APPLICATION_ENGINE_ACCESSORS: dict[str, str] = {
+    "discoveryService": "discovery.ProjectDiscoveryService",
+    "fingerprintService": "incremental.ProjectFingerprintService",
+    "fingerprintStore": "incremental.ProjectFingerprintSnapshotStore",
+    "incrementalIndexingPlanner": "orchestration.IncrementalIndexingPlanner",
+    "indexStateStore": "orchestration.IndexStateStore",
+    "indexerDescriptors": "orchestration.IndexerDescriptor",
+    "indexerRegistry": "orchestration.IndexerRegistry",
+    "invalidationService": "orchestration.ProjectInvalidationService",
+    "projectRegistry": "registry.ProjectRegistry",
+    "providerRuntimeManager": "runtime.ProviderRuntimeManager",
+    "retentionService": "storage.StorageRetentionService",
+    # Kept for a test only: MinosMcpWriteProtectedHomeTest seeds runtime sessions on disk through the open application.
+    "runtimeObservationStore": "dynamic.RuntimeObservationStore",
+    "snapshotPromoter": "orchestration.IndexingRuntimePorts",
+    "snapshotStager": "orchestration.IndexingRuntimePorts",
+    "snapshotStore": "store.CodeKnowledgeSnapshotStore",
 }
 
 # A12 / AUD-ARC-05, ADR 0068 — classes of the inner layers that launch a process (module/name.Type), with their number
@@ -819,6 +840,39 @@ def check_engine_types_named_by_surfaces(root: Path = ROOT, group_id: str | None
              "justification; go through an application port, or add the type to ENGINE_TYPES_NAMED_BY_SURFACE in "
              "a reviewed change): " + "; ".join(problems))
     return {surface: len(listed.get(surface, {})) for surface in sorted(SURFACE_MODULES)}
+
+
+COMPOSITION_ROOT_USE = re.compile(r"\bcompositionRoot\s*\(|::\s*compositionRoot\b|\bMinosApplicationComposers?\b")
+
+
+def check_minos_application_accessors(root: Path = ROOT, group_id: str | None = None,
+                                      listed: dict[str, str] | None = None) -> int:
+    """A11 — the public MinosApplication accessors returning a minos-engine type are exactly those of
+    MINOS_APPLICATION_ENGINE_ACCESSORS, each with its listed type; the table only shrinks. No surface production
+    source reaches the composition root, whose methods return engine ports. Comments and literals are ignored."""
+    listed = MINOS_APPLICATION_ENGINE_ACCESSORS if listed is None else listed
+    accessors = minos_application_accessors(root, group_id)
+    problems = []
+    for name, (_, engine_type) in sorted(accessors.items()):
+        if name not in listed:
+            problems.append(f"MinosApplication.{name} is a new public accessor returning {engine_type}; expose an "
+                            "application facade, or keep it package-private if only com.minos.application calls it")
+        elif listed[name] != engine_type:
+            problems.append(f"MinosApplication.{name} returns {engine_type}, listed as {listed[name]}")
+    problems += [f"MINOS_APPLICATION_ENGINE_ACCESSORS entry {name} is no longer a public accessor returning an "
+                 "engine type; remove it (the ratchet only shrinks)" for name in sorted(set(listed) - set(accessors))]
+    # The composition root hands out engine ports under an application type: a surface would bypass the table.
+    for surface in sorted(SURFACE_MODULES):
+        source_root = root / surface / "src" / "main" / "java"
+        if not source_root.is_dir():
+            continue
+        for source in sorted(source_root.rglob("*.java")):
+            if COMPOSITION_ROOT_USE.search(COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))):
+                problems.append(f"{source.relative_to(root).as_posix()} reaches the composition root "
+                                "(compositionRoot() or MinosApplicationComposer); go through an application facade")
+    if problems:
+        fail("A11 MinosApplication engine accessors ratchet (ADR 0057 point 6): " + "; ".join(problems))
+    return len(accessors)
 
 
 def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
@@ -1728,6 +1782,7 @@ def main() -> int:
         postgresql_blind = check_postgresql_backend_isolation()
         exported = check_runtime_local_exports()
         engine_types = check_engine_types_named_by_surfaces()
+        engine_accessors = check_minos_application_accessors()
         launchers = check_process_launchers()
         adapter_types = check_adapter_types_named_by_adapters()
         storage_packages = check_storage_package_isolation()
@@ -1756,6 +1811,8 @@ def main() -> int:
               + ", ".join(f"{surface}={count} ({sum(ENGINE_TYPES_NAMED_BY_SURFACE.get(surface, {}).values())} files)"
                           for surface, count in engine_types.items())
               + " listed in ENGINE_TYPES_NAMED_BY_SURFACE (names and MinosApplication accessors), none other is used")
+        print(f"A11 MinosApplication engine accessors: {engine_accessors} public accessor(s) return a minos-engine "
+              "type, all listed in MINOS_APPLICATION_ENGINE_ACCESSORS")
         print(f"A12 process launchers: {launchers} class(es) of domain, engine and application listed with "
               f"{sum(PROCESS_LAUNCHERS.values())} launch site(s), none other launches a process")
         print(f"A13 adapter -> adapter types: {adapter_types} listed in ADAPTER_TYPES_NAMED_BY_ADAPTER "

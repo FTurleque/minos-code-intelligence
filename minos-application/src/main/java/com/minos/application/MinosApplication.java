@@ -272,10 +272,10 @@ public final class MinosApplication implements AutoCloseable {
     public IncrementalIndexingPlanner incrementalIndexingPlanner() { return indexing.incrementalIndexingPlanner(); }
     public ProviderRuntimeManager providerRuntimeManager() { return indexing.providerRuntimeManager(); }
     public List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
-    /** Provider catalog port; consulted on demand, never frozen at composition. */
-    public IndexerProviderCatalog providerCatalog() { return indexing.providerCatalog(); }
-    /** Explicit SCIP import port (import-scip); the adapter is instantiated for each import. */
-    public ScipArtifactImporter scipArtifactImporter() { return indexing.scipArtifactImporter(); }
+    /** Provider catalog port; consulted on demand, never frozen at composition (ProviderPlatformService). */
+    IndexerProviderCatalog providerCatalog() { return indexing.providerCatalog(); }
+    /** Explicit SCIP import port (import-scip, LocalProjectOperations); the adapter is instantiated for each import. */
+    ScipArtifactImporter scipArtifactImporter() { return indexing.scipArtifactImporter(); }
     public SnapshotStager snapshotStager() { return indexing.snapshotStager(); }
     public SnapshotPromoter snapshotPromoter() { return indexing.snapshotPromoter(); }
 
@@ -295,7 +295,8 @@ public final class MinosApplication implements AutoCloseable {
     }
 
     // Queries (ADR 0045: derived services grouped in Queries).
-    public GitIntelligence gitIntelligence() { return gitIntelligence; }
+    /** Git facts port, read by LocalProjectGitQuery; the surfaces use ProjectGitQuery. */
+    GitIntelligence gitIntelligence() { return gitIntelligence; }
     public ProjectInspectionService projectInspectionService() { return queries.projectInspectionService(); }
     public ProjectQueryService projectQueryService() { return queries.projectQueryService(); }
     public ProjectArchitectureQuery architectureQuery() { return queries.architectureQuery(); }
@@ -313,7 +314,8 @@ public final class MinosApplication implements AutoCloseable {
     public HybridContextBuilder hybridContextBuilder() { return semantic.hybridContextBuilder(); }
 
     // Hosted team control plane (opt-in).
-    public Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
+    /** Engine service behind {@link #teamControlPlane()}; empty when the hosted mode is disabled. */
+    Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
     /** The team control plane the surfaces consume; empty when the hosted mode is disabled. */
     public Optional<TeamControlPlane> teamControlPlane() { return teamControlPlane; }
 

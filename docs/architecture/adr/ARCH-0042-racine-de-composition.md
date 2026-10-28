@@ -348,9 +348,10 @@ trois classes concernées sont donc passées par la composition avant l'engageme
 Arbitrage : `minos-app` garde ses dépendances POM vers les adaptateurs, mais son code n'en nomme aucun.
 **Raison** : le POM de `minos-app` est légitime — c'est l'assemblage final qui décide quels adaptateurs
 (et backends optionnels) sont livrés dans le JAR ombré ; son source, en revanche, relève de la même règle
-que les surfaces. `DockerMcpTransport` passe par `HostCommandLocator` et `DockerRuntimeBootstrap` par
-`ProjectPathMappings` (port de `minos-engine`, implémenté par `ProjectPathMappingStore`), tous deux
-fournis par la composition ; aucun port n'expose de type d'adaptateur. Le contrôle des sources
+que les surfaces. `DockerMcpTransport` passe par `HostCommandLocator`, fourni par la composition, et
+`DockerRuntimeBootstrap` par la façade applicative `ProjectPathMappingService`, qui reçoit de la
+composition le port `ProjectPathMappings` (implémenté par `ProjectPathMappingStore`) ; aucun port
+n'expose de type d'adaptateur. Le contrôle des sources
 (condition 1) le verrouille, `minos-app` compris.
 
 ### 8.3 Limite connue du script : dépendances transitives de test (V47)
