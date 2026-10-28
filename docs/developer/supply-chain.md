@@ -176,7 +176,7 @@ Constat AUD-DEP-03 (audit du 10 octobre 2026). Le tableau dit, pour chaque famil
 | Actions GitHub | Dependabot (`github-actions`) | épinglage par SHA (`check-workflow-pins.py`) ; pas de veille d'avis | chaque PR |
 | Images de conteneur | Dependabot (`docker`, `docker-compose`, `/docker`) | épinglage par digest (`check-image-pins.py`) ; pas de veille d'avis sur le contenu des images | chaque PR |
 | Verrous npm de scip-typescript et de scip-python (66 paquets) | personne : une montée est un changement de catalogue qualifié (ADR 0040) | OSV-Scanner, même job, par `--lockfile=package-lock.json:<chemin>` | chaque PR |
-| Catalogue `embedded-tools.json` (7 providers, 9 artefacts, 2 composants assemblés) et les 74 jars de `scip-java-classpath.lock.json` | personne : changement de catalogue qualifié | `scripts/quality/check-embedded-tools-advisories.py` (API OSV, calendrier de support de Node.js), workflow `embedded-tools-advisories.yml` | chaque lundi, et à la demande |
+| Catalogue `embedded-tools.json` (7 providers, 9 artefacts, 2 composants assemblés) et les 70 jars de `scip-java-classpath.lock.json` | personne : changement de catalogue qualifié | `scripts/quality/check-embedded-tools-advisories.py` (API OSV, calendrier de support de Node.js), workflow `embedded-tools-advisories.yml` | chaque lundi, et à la demande |
 
 ### Verrous npm
 
@@ -188,7 +188,7 @@ Dependabot n'a pas d'écosystème `npm`, volontairement : ces verrous **sont** l
 
 Le script lit le catalogue et une table qu'il porte (`WATCHES`) : pour chaque identifiant, les paquets à interroger (écosystème OSV, nom), un calendrier de support, ou la raison pour laquelle il n'est pas suivi. Un composant du catalogue absent de la table fait échouer le script, comme une entrée de table que le catalogue n'a plus : aucun composant n'est oublié en silence. L'auto-test (`--self-test`, réponses simulées, sans réseau) tourne dans le job `invariants` et le prouve sur le catalogue réel à chaque PR.
 
-Le verrou du classpath de scip-java contient des noms de jars, pas des coordonnées : la table `CLASSPATH_GROUPS` du script donne le groupe Maven de chaque artefact (établie sur un cache Coursier dont les 74 jars avaient l'empreinte SHA-256 du verrou). Elle se met à jour avec le verrou, à chaque montée de scip-java ; un jar sans groupe fait échouer le script.
+Le verrou du classpath de scip-java contient des noms de jars, pas des coordonnées : la table `CLASSPATH_GROUPS` du script donne le groupe Maven de chaque artefact (établie sur un cache Coursier dont les 70 jars avaient l'empreinte SHA-256 du verrou). Elle se met à jour avec le verrou, à chaque montée de scip-java ; un jar sans groupe fait échouer le script.
 
 Sa sortie a toujours quatre sections : composants touchés par un avis, composants hors support, constats sous dérogation, composants **non couverts**. Codes de sortie : `0` rien à signaler ; `1` un composant est touché ou hors support, ou la table ou une dérogation est fausse ; `2` le service d'avis ou le calendrier n'a pas pu être lu. Un échec réseau n'est jamais lu comme « aucun avis ».
 

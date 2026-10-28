@@ -138,7 +138,7 @@ class ClasspathLockTest {
 
         assertEquals(List.of(alpha, beta), jars);
         String arguments = Files.readString(coursier.resolveSibling("arguments.txt")).trim();
-        assertEquals("fetch --classpath org.scip-code:scip-java:0.13.1", arguments);
+        assertEquals("fetch --classpath org.scip-code:scip-java:0.13.2", arguments);
     }
 
     @Test

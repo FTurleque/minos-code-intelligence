@@ -8,7 +8,7 @@ import java.nio.file.StandardCopyOption;
 import org.scip_code.scip.Index;
 
 /**
- * Windows compatibility patch for upstream scip-java 0.13.1.
+ * Windows compatibility patch for upstream scip-java 0.13.2.
  *
  * <p>The upstream implementation requests POSIX permissions while creating its
  * temporary output file. Windows rejects that file attribute. Aggregation

@@ -52,7 +52,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     public static final String SCIP_TYPESCRIPT_ID = "scip-typescript";
     public static final String SCIP_TYPESCRIPT_VERSION = "0.4.0";
     public static final String SCIP_JAVA_ID = "scip-java";
-    public static final String SCIP_JAVA_VERSION = "0.13.1";
+    public static final String SCIP_JAVA_VERSION = "0.13.2";
     public static final String SCIP_JAVA_COORDINATE = "org.scip-code:scip-java:" + SCIP_JAVA_VERSION;
 
     // The URL, version and SHA-256 of every pinned artifact below live in embedded-tools.json (the one

@@ -12,7 +12,7 @@ What it does:
 1. Every entry of the catalogue (providers, artifacts, assembled) must be in WATCHES, which says how it is watched
    (packages of an OSV ecosystem, a support schedule, the jars of the classpath lock) or why it is not. An entry
    missing from the table fails, and so does a table entry that the catalogue no longer has.
-2. The packages are queried at the catalogue version through the OSV batch API. The 74 jars of
+2. The packages are queried at the catalogue version through the OSV batch API. The 70 jars of
    scip-java-classpath.lock.json are queried in the same batch; the lock holds file names, so CLASSPATH_GROUPS
    gives the Maven group of each artifact (checked against the SHA-256 of the lock when the table was written);
    a jar missing from that table fails.
@@ -117,7 +117,7 @@ WATCHES: dict[str, Watch] = {
 }
 
 # Maven group of every artifact of scip-java-classpath.lock.json (the lock holds jar names, sizes and SHA-256).
-# Written from a Coursier cache whose 74 jars matched the SHA-256 of the lock. A wrong group would query a package
+# Written from a Coursier cache whose 70 jars matched the SHA-256 of the lock. A wrong group would query a package
 # that does not exist and answer "no advisory": a change of this table is reviewed like a change of the lock.
 CLASSPATH_GROUPS_BY_GROUP: dict[str, tuple[str, ...]] = {
     "aopalliance": ("aopalliance",),
@@ -125,39 +125,36 @@ CLASSPATH_GROUPS_BY_GROUP: dict[str, tuple[str, ...]] = {
     "com.github.ajalt.colormath": ("colormath-jvm",),
     "com.github.ajalt.mordant": ("mordant-core-jvm", "mordant-jvm", "mordant-jvm-ffm-jvm",
                                  "mordant-jvm-graal-ffi-jvm", "mordant-jvm-jna-jvm"),
-    "com.google.code.findbugs": ("jsr305",),
+    "com.google.code.gson": ("gson",),
     "com.google.errorprone": ("error_prone_annotations",),
-    "com.google.guava": ("guava",),
+    "com.google.guava": ("failureaccess", "guava"),
     "com.google.inject": ("guice",),
-    "com.google.j2objc": ("j2objc-annotations",),
     "com.google.protobuf": ("protobuf-java",),
     "commons-codec": ("commons-codec",),
     "commons-io": ("commons-io",),
-    "javax.annotation": ("javax.annotation-api",),
     "javax.inject": ("javax.inject",),
     "net.java.dev.jna": ("jna",),
-    "org.apache.commons": ("commons-lang3",),
     "org.apache.httpcomponents": ("httpclient", "httpcore"),
     "org.apache.maven": ("maven-artifact", "maven-builder-support", "maven-core", "maven-model",
                          "maven-model-builder", "maven-plugin-api", "maven-repository-metadata",
                          "maven-resolver-provider", "maven-settings", "maven-settings-builder"),
     "org.apache.maven.resolver": ("maven-resolver-api", "maven-resolver-connector-basic", "maven-resolver-impl",
                                   "maven-resolver-named-locks", "maven-resolver-spi",
-                                  "maven-resolver-transport-file", "maven-resolver-transport-wagon",
+                                  "maven-resolver-transport-file", "maven-resolver-transport-http",
                                   "maven-resolver-util"),
     "org.apache.maven.shared": ("maven-shared-utils",),
-    "org.apache.maven.wagon": ("wagon-http", "wagon-http-shared", "wagon-provider-api"),
-    "org.checkerframework": ("checker-compat-qual",),
-    "org.codehaus.mojo": ("animal-sniffer-annotations",),
     "org.codehaus.plexus": ("plexus-cipher", "plexus-classworlds", "plexus-component-annotations",
                             "plexus-interpolation", "plexus-sec-dispatcher", "plexus-utils"),
     "org.eclipse.sisu": ("org.eclipse.sisu.inject", "org.eclipse.sisu.plexus"),
     "org.jetbrains": ("annotations",),
-    "org.jetbrains.kotlin": ("kotlin-compiler-embeddable", "kotlin-daemon-embeddable", "kotlin-reflect",
-                             "kotlin-script-runtime", "kotlin-scripting-common", "kotlin-scripting-dependencies",
-                             "kotlin-scripting-dependencies-maven", "kotlin-scripting-jvm", "kotlin-stdlib"),
+    "org.jetbrains.kotlin": ("kotlin-build-tools-api", "kotlin-compiler-embeddable", "kotlin-daemon-embeddable",
+                             "kotlin-reflect", "kotlin-script-runtime", "kotlin-scripting-common",
+                             "kotlin-scripting-dependencies", "kotlin-scripting-dependencies-maven",
+                             "kotlin-scripting-jvm", "kotlin-stdlib"),
     "org.jetbrains.kotlinx": ("kotlinx-coroutines-core-jvm", "kotlinx-serialization-core-jvm",
                               "kotlinx-serialization-json-jvm"),
+    "org.jspecify": ("jspecify",),
+    "org.ow2.asm": ("asm",),
     "org.scip-code": ("scip-aggregator", "scip-java", "scip-java-bindings", "scip-shared"),
     "org.slf4j": ("jcl-over-slf4j", "slf4j-api"),
 }
@@ -165,7 +162,7 @@ CLASSPATH_GROUPS: dict[str, str] = {artifact: group
                                     for group, artifacts in CLASSPATH_GROUPS_BY_GROUP.items()
                                     for artifact in artifacts}
 # A classifier is part of the jar name, not of the version an advisory is written against.
-CLASSPATH_CLASSIFIERS: dict[str, str] = {"guice": "-no_aop"}
+CLASSPATH_CLASSIFIERS: dict[str, str] = {"guice": "-classes"}
 
 # Runtime -> (address of the schedule, name shown, key of a release line in the schedule).
 SUPPORT_SCHEDULES: dict[str, tuple[str, str, Callable[[str], str]]] = {
@@ -532,15 +529,15 @@ def small_catalogue() -> dict:
                       {"id": "nodejs", "platform": "linux-x64", "version": "24.20.0"},
                       {"id": "scip-clang", "platform": "linux-x64", "version": "0.4.0"},
                       {"id": "maven", "platform": "any", "version": "3.9.16"}],
-        "assembled": [{"id": "scip-java-classpath", "platform": "windows-x64", "version": "0.13.1",
+        "assembled": [{"id": "scip-java-classpath", "platform": "windows-x64", "version": "0.13.2",
                        "lock": "scip-java-classpath.lock.json"}],
     }
 
 
 def small_lock() -> dict:
-    return {"coordinate": "org.scip-code:scip-java:0.13.1", "version": "0.13.1",
-            "jars": [{"name": "guava-25.1-android.jar", "size": 1, "sha256": "00"},
-                     {"name": "guice-4.2.2-no_aop.jar", "size": 1, "sha256": "00"},
+    return {"coordinate": "org.scip-code:scip-java:0.13.2", "version": "0.13.2",
+            "jars": [{"name": "guava-33.6.0-jre.jar", "size": 1, "sha256": "00"},
+                     {"name": "guice-5.1.0-classes.jar", "size": 1, "sha256": "00"},
                      {"name": "javax.inject-1.jar", "size": 1, "sha256": "00"}]}
 
 
@@ -609,8 +606,8 @@ class AdvisoryWatchTest(unittest.TestCase):
     def test_every_jar_of_the_classpath_lock_is_queried_as_a_maven_package_without_its_classifier(self):
         services = FakeServices()
         self.evaluate(services)
-        self.assertIn(("Maven", "com.google.guava:guava", "25.1-android"), services.asked)
-        self.assertIn(("Maven", "com.google.inject:guice", "4.2.2"), services.asked)
+        self.assertIn(("Maven", "com.google.guava:guava", "33.6.0-jre"), services.asked)
+        self.assertIn(("Maven", "com.google.inject:guice", "5.1.0"), services.asked)
         self.assertIn(("Maven", "javax.inject:javax.inject", "1"), services.asked)
 
     def test_the_report_always_has_its_four_sections(self):
@@ -627,17 +624,17 @@ class AdvisoryWatchTest(unittest.TestCase):
     # --- findings ---
 
     def test_a_component_hit_by_an_advisory_is_refused_by_name(self):
-        services = FakeServices({("Maven", "com.google.guava:guava", "25.1-android"): ["GHSA-aaaa-bbbb-cccc"]})
+        services = FakeServices({("Maven", "com.google.guava:guava", "33.6.0-jre"): ["GHSA-aaaa-bbbb-cccc"]})
         outcome = self.evaluate(services)
         self.assertEqual(1, len(outcome.affected), outcome.affected)
-        self.assertIn("scip-java-classpath 0.13.1 [windows-x64]", outcome.affected[0])
+        self.assertIn("scip-java-classpath 0.13.2 [windows-x64]", outcome.affected[0])
         self.assertIn("GHSA-aaaa-bbbb-cccc", outcome.affected[0])
-        self.assertIn("com.google.guava:guava 25.1-android", outcome.affected[0])
+        self.assertIn("com.google.guava:guava 33.6.0-jre", outcome.affected[0])
         self.assertEqual(outcome.affected, outcome.failures)
         code, output, errors = self.run_watch(services)
         self.assertEqual(1, code)
         self.assertIn("Affected by an advisory (1):", output)
-        self.assertIn(f"{LABEL} FAILED: scip-java-classpath 0.13.1 [windows-x64]: GHSA-aaaa-bbbb-cccc", errors)
+        self.assertIn(f"{LABEL} FAILED: scip-java-classpath 0.13.2 [windows-x64]: GHSA-aaaa-bbbb-cccc", errors)
         self.assertNotIn("SUCCESS", output)
 
     def test_an_advisory_listed_on_a_following_page_is_found(self):
@@ -753,7 +750,7 @@ class AdvisoryWatchTest(unittest.TestCase):
     # --- waivers ---
 
     def test_a_dated_waiver_moves_the_finding_out_of_the_failures(self):
-        services = FakeServices({("Maven", "com.google.guava:guava", "25.1-android"): ["GHSA-aaaa-bbbb-cccc"]})
+        services = FakeServices({("Maven", "com.google.guava:guava", "33.6.0-jre"): ["GHSA-aaaa-bbbb-cccc"]})
         self.waivers({"component": "scip-java-classpath", "finding": "GHSA-aaaa-bbbb-cccc",
                       "reason": "not reachable from the indexer", "expires": "2026-12-31"})
         outcome = self.evaluate(services)
@@ -764,7 +761,7 @@ class AdvisoryWatchTest(unittest.TestCase):
         self.assertIn("not reachable from the indexer", outcome.waived[0])
 
     def test_an_expired_waiver_is_refused_and_its_finding_fails_again(self):
-        services = FakeServices({("Maven", "com.google.guava:guava", "25.1-android"): ["GHSA-aaaa-bbbb-cccc"]})
+        services = FakeServices({("Maven", "com.google.guava:guava", "33.6.0-jre"): ["GHSA-aaaa-bbbb-cccc"]})
         self.waivers({"component": "scip-java-classpath", "finding": "GHSA-aaaa-bbbb-cccc",
                       "reason": "not reachable from the indexer", "expires": "2026-10-12"})
         outcome = self.evaluate(services)

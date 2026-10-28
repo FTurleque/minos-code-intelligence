@@ -73,7 +73,7 @@ Le registre persiste `rootRelativePath`, pas le chemin physique host/container. 
 C'est l'image d'**administration** (`MINOS_IMAGE`, cible `admin`). Elle prépare au BUILD :
 
 ```text
-scip-java            0.13.1
+scip-java            0.13.2
 scip-typescript      0.4.0
 scip-python          0.6.6
 scip-clang           0.4.0
@@ -118,7 +118,7 @@ La construction provider-complete applique désormais les invariants suivants :
 La coordonnée autoritative reste :
 
 ```text
-org.scip-code:scip-java:0.13.1
+org.scip-code:scip-java:0.13.2
 ```
 
 Le launcher standalone construit via Coursier retourne actuellement `scip-java version 0.0.0-SNAPSHOT`; cette chaîne n'est pas la provenance de l'artefact. L'inventaire conserve séparément la coordonnée/version attendue et le checksum du binaire réellement exécuté.
