@@ -73,6 +73,16 @@ class StorageBackendSelectionTest {
     }
 
     @Test
+    void theLocalIdentifierIsSelectedWhateverItsCaseWithoutAnyProvider() throws Exception {
+        for (String identifier : new String[]{"local", "LOCAL", "Local", " local "}) {
+            try (URLClassLoader empty = new URLClassLoader(new URL[0], null);
+                 StorageBackend backend = StorageBackendSelection.open(configuration(identifier), empty)) {
+                assertEquals("com.minos.storage.local.LocalStorageBackend", backend.getClass().getName(), identifier);
+            }
+        }
+    }
+
+    @Test
     void missingProviderKeepsTheExistingRefusal() {
         IOException failure = assertThrows(IOException.class,
                 () -> StorageBackendSelection.open(configuration("postgresql"), new URLClassLoader(new URL[0], null)));
