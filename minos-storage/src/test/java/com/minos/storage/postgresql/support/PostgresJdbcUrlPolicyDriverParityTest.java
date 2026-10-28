@@ -116,13 +116,13 @@ class PostgresJdbcUrlPolicyDriverParityTest {
     @Test
     void theMinosPolicyKnowsExactlyTheModesOfTheDriver() {
         Set<String> driver = Arrays.stream(SslMode.values()).map(mode -> mode.value).collect(Collectors.toSet());
-        assertEquals(driver, PostgresJdbcUrlPolicy.ALLOWED_SSL_MODES);
+        assertEquals(PostgresJdbcUrlPolicy.ALLOWED_SSL_MODES, driver, "the policy must know exactly the modes of the driver");
     }
 
     private static SslMode driverModeOrNull(String url) {
         try {
             return SslMode.of(driverProperties(url));
-        } catch (PSQLException refused) {
+        } catch (PSQLException _) {
             return null;
         }
     }
