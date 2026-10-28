@@ -44,22 +44,7 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
             return Optional.empty();
         }
 
-        ProcessBuilder builder = new ProcessBuilder(List.of(
-                powershell.orElseThrow().toString(),
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-EncodedCommand",
-                encodedHelper()));
-        builder.redirectErrorStream(true);
-        builder.environment().put(
-                "MINOS_REGISTERED_PATH_IDENTITY_TARGET", registeredProjectRoot.toString());
-        builder.environment().put(
-                "MINOS_PROJECT_PATH_IDENTITY_TARGET", projectRoot.toString());
-
-        Process process = builder.start();
+        Process process = startHelper(powershell.orElseThrow(), registeredProjectRoot, projectRoot);
         try (ExecutorService outputExecutor = Executors.newSingleThreadExecutor(
                 Thread.ofPlatform()
                         .name("minos-windows-path-identity-output")
@@ -85,18 +70,44 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
                 throw new IOException("Windows filesystem identity output exceeded its bound");
             }
             String text = new String(bytes, StandardCharsets.UTF_8);
-            if (process.exitValue() != 0) {
-                throw new IOException("Windows filesystem identity query failed: " + boundedDiagnostic(text));
+            int exitCode = process.exitValue();
+            if (exitCode != 0) {
+                throw new IOException(queryFailureMessage(exitCode, text));
             }
-            Matcher registered = REGISTERED.matcher(text);
-            Matcher project = PROJECT.matcher(text);
-            if (!registered.find() || !project.find()) {
-                throw new IOException("Windows filesystem identity helper returned an invalid response");
-            }
-            return Optional.of(new IdentityPair(
-                    "windows:" + registered.group(1).toLowerCase(Locale.ROOT),
-                    "windows:" + project.group(1).toLowerCase(Locale.ROOT)));
+            return Optional.of(parseIdentities(text));
         }
+    }
+
+    /** Starts the packaged helper with both targets passed through its environment, never its command line. */
+    private static Process startHelper(Path powershell, Path registeredProjectRoot, Path projectRoot)
+            throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(List.of(
+                powershell.toString(),
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-EncodedCommand",
+                encodedHelper()));
+        builder.redirectErrorStream(true);
+        builder.environment().put(
+                "MINOS_REGISTERED_PATH_IDENTITY_TARGET", registeredProjectRoot.toString());
+        builder.environment().put(
+                "MINOS_PROJECT_PATH_IDENTITY_TARGET", projectRoot.toString());
+        return builder.start();
+    }
+
+    /** Reads both identities from a successful helper response, or refuses the whole response. */
+    private static IdentityPair parseIdentities(String text) throws IOException {
+        Matcher registered = REGISTERED.matcher(text);
+        Matcher project = PROJECT.matcher(text);
+        if (!registered.find() || !project.find()) {
+            throw new IOException("Windows filesystem identity helper returned an invalid response");
+        }
+        return new IdentityPair(
+                "windows:" + registered.group(1).toLowerCase(Locale.ROOT),
+                "windows:" + project.group(1).toLowerCase(Locale.ROOT));
     }
 
     /**
@@ -155,6 +166,20 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    /**
+     * Failure message of a helper that exited with a non-zero status.
+     *
+     * <p>The exit status leads, in decimal and as an NTSTATUS-style hexadecimal value: a helper
+     * that dies while its process initializes (for instance {@code 0xC0000142}) prints nothing, and
+     * its exit status is then the only evidence of how it failed. The message carries no path.</p>
+     */
+    static String queryFailureMessage(int exitCode, String output) {
+        String diagnostic = boundedDiagnostic(output);
+        return "Windows filesystem identity query failed (exit " + exitCode
+                + " = " + String.format(Locale.ROOT, "0x%08X", exitCode) + "): "
+                + (diagnostic.isEmpty() ? "<no helper output>" : diagnostic);
     }
 
     private static String boundedDiagnostic(String text) {
