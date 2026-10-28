@@ -1,8 +1,10 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.PrivateLocalStorage.Privacy;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -25,7 +27,8 @@ class ScipRuntimeStoragePrivacyTest {
     void theStagingAndRunsRootsOfTheSnapshotLifecycleAreOwnerOnly(@TempDir Path root) throws Exception {
         Path home = root.resolve("home");
 
-        new ScipProjectSnapshotLifecycle(home);
+        new ScipProjectSnapshotLifecycle(home, new FileSymbolSnapshotStore(home.resolve("symbol-snapshots")),
+                FileSymbolSnapshotStore::new, ScipIndexerCatalog.javaTypeScriptDescriptors());
 
         assertPrivate(home.resolve("staged-snapshots"));
         assertPrivate(home.resolve("runs"));
