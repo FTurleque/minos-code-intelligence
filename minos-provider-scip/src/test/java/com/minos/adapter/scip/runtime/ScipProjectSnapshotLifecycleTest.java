@@ -2,6 +2,7 @@ package com.minos.adapter.scip.runtime;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.discovery.ModuleAssignmentRule;
+import com.minos.domain.Symbol;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.DiscoveredModule;
@@ -132,8 +133,8 @@ class ScipProjectSnapshotLifecycleTest {
 
         var symbols = active.loadActiveKnowledge(projectId).orElseThrow().symbols();
         assertEquals(2, symbols.size());
-        assertEquals(List.of("Shared", "Shared"), symbols.stream().map(symbol -> symbol.name()).sorted().toList());
-        assertEquals(2, symbols.stream().map(symbol -> symbol.id()).distinct().count());
+        assertEquals(List.of("Shared", "Shared"), symbols.stream().map(Symbol::name).sorted().toList());
+        assertEquals(2, symbols.stream().map(Symbol::id).distinct().count());
         assertNotEquals(symbols.get(0).fileId(), symbols.get(1).fileId());
         assertTrue(symbols.stream().anyMatch(symbol -> "ui/app/src/Shared.ts".equals(symbol.fileId())));
         assertTrue(symbols.stream().anyMatch(symbol -> "ui/lib/src/Shared.ts".equals(symbol.fileId())));
@@ -263,7 +264,7 @@ class ScipProjectSnapshotLifecycleTest {
 
         var snapshot = activeStore(home).loadActiveKnowledge(projectId).orElseThrow();
         assertEquals(stagedId, snapshot.snapshotId());
-        assertEquals(List.of("Resumed"), snapshot.symbols().stream().map(symbol -> symbol.name()).toList());
+        assertEquals(List.of("Resumed"), snapshot.symbols().stream().map(Symbol::name).toList());
         assertFalse(Files.exists(home.resolve("staged-snapshots").resolve(runId.toString())),
                 "staged snapshot tree must be removed after the resumed promotion");
     }
