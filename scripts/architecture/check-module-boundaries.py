@@ -602,6 +602,18 @@ ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], dict[str, int]] = {
     },
 }
 
+# A13 / AUD-ARC-08, ADR 0068 — the written reason of each couple of ADAPTER_TYPES_NAMED_BY_ADAPTER. A couple without a
+# reason, or a reason without a couple, fails: every coupling between adapters is a reviewed, explained decision.
+ADAPTER_COUPLING_REASONS: dict[tuple[str, str], str] = {
+    ("minos-provider-scip", "minos-runtime-local"): (
+        "the SCIP provider builds the process plans of its indexers, installs its tools with a filtered process "
+        "environment and bounded outputs, and runs the indexers under the strong process ownership and the worker "
+        "sandbox of the local runtime (ADR 0068, ADR 0070); it names only types exported by A10, plus the strong "
+        "ownership launcher"),
+    ("minos-provider-scip", "minos-storage"): (
+        "the SCIP snapshot lifecycle creates its working snapshot stores on the files of the local backend"),
+}
+
 STORAGE_MODULE = "minos-storage"
 LOCAL_BACKEND_PACKAGE = "storage.local"
 
@@ -841,14 +853,20 @@ def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
 
 
 def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | None = None,
-                                          listed: dict[tuple[str, str], dict[str, int]] | None = None) -> int:
+                                          listed: dict[tuple[str, str], dict[str, int]] | None = None,
+                                          reasons: dict[tuple[str, str], str] | None = None) -> int:
     """A13 — an adapter names the types of another adapter only through ADAPTER_TYPES_NAMED_BY_ADAPTER, each from the
-    listed number of files."""
+    listed number of files, and each couple carries its written reason in ADAPTER_COUPLING_REASONS."""
     listed = ADAPTER_TYPES_NAMED_BY_ADAPTER if listed is None else listed
+    reasons = ADAPTER_COUPLING_REASONS if reasons is None else reasons
     group = group_id or repository_group_id(root)
     qualified_name = qualified_name_pattern(group)
     problems = [f"ADAPTER_TYPES_NAMED_BY_ADAPTER names {naming} -> {named}, which is not a couple of adapters"
                 for naming, named in sorted(listed) if {naming, named} - ADAPTER_MODULES or naming == named]
+    problems += [f"ADAPTER_COUPLING_REASONS has no written reason for {naming} -> {named}; write why the couple is "
+                 "needed" for naming, named in sorted(listed) if not reasons.get((naming, named), "").strip()]
+    problems += [f"ADAPTER_COUPLING_REASONS gives a reason for {naming} -> {named}, absent from "
+                 "ADAPTER_TYPES_NAMED_BY_ADAPTER; remove the reason" for naming, named in sorted(set(reasons) - set(listed))]
     for naming in sorted(ADAPTER_MODULES):
         for named in sorted(ADAPTER_MODULES - {naming}):
             problems += named_type_ratchet_problems("A13", f"{naming} -> {named}", "ADAPTER_TYPES_NAMED_BY_ADAPTER",
@@ -1734,7 +1752,7 @@ def main() -> int:
               f"{sum(PROCESS_LAUNCHERS.values())} launch site(s), none other launches a process")
         print(f"A13 adapter -> adapter types: {adapter_types} listed in ADAPTER_TYPES_NAMED_BY_ADAPTER "
               f"({sum(sum(types.values()) for types in ADAPTER_TYPES_NAMED_BY_ADAPTER.values())} files), none other "
-              f"is named")
+              f"is named; {len(ADAPTER_COUPLING_REASONS)} couple(s) justified in ADAPTER_COUPLING_REASONS")
         print(f"R1/R2 PostgreSQL backend isolation: {postgresql_blind} modules name neither the backend package nor "
               "its driver")
         print(f"Storage packages: {storage_packages} rules over production and test sources, the two backends name "

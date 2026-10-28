@@ -1363,8 +1363,10 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
         self.write("minos-provider-scip", "com.minos.adapter.scip", "Store", "final class Store { SnapshotCodec c; }",
                    ["com.minos.storage.local.store.SnapshotCodec"])
 
-    def check(self, listed=None):
-        return _MODULE.check_adapter_types_named_by_adapters(self.root, listed=self.LISTED if listed is None else listed)
+    def check(self, listed=None, reasons=None):
+        listed = self.LISTED if listed is None else listed
+        reasons = {couple: "reviewed coupling" for couple in listed} if reasons is None else reasons
+        return _MODULE.check_adapter_types_named_by_adapters(self.root, listed=listed, reasons=reasons)
 
     def test_a_conforming_tree_is_accepted(self):
         self.assertEqual(1, self.check())
@@ -1423,6 +1425,25 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
     def test_the_real_tree_names_only_listed_adapter_types(self):
         self.assertEqual(sum(len(types) for types in _MODULE.ADAPTER_TYPES_NAMED_BY_ADAPTER.values()),
                          _MODULE.check_adapter_types_named_by_adapters())
+
+    def test_a_listed_couple_without_a_reason_is_refused(self):
+        self.refused(lambda: self.check(reasons={}), "A13", "ADAPTER_COUPLING_REASONS",
+                     "minos-provider-scip -> minos-storage", "no written reason")
+
+    def test_a_blank_reason_is_refused(self):
+        self.refused(lambda: self.check(reasons={self.COUPLE: "  "}), "A13",
+                     "minos-provider-scip -> minos-storage", "no written reason")
+
+    def test_a_reason_without_a_listed_couple_is_refused(self):
+        reasons = {self.COUPLE: "reviewed coupling", ("minos-integration-git", "minos-storage"): "stale"}
+        self.refused(lambda: self.check(reasons=reasons), "A13", "minos-integration-git -> minos-storage",
+                     "remove the reason")
+
+    def test_every_real_couple_has_a_written_reason(self):
+        self.assertEqual(set(_MODULE.ADAPTER_TYPES_NAMED_BY_ADAPTER), set(_MODULE.ADAPTER_COUPLING_REASONS))
+        for couple, reason in _MODULE.ADAPTER_COUPLING_REASONS.items():
+            with self.subTest(couple=couple):
+                self.assertTrue(reason.strip())
 
 
 class StoragePackageIsolationRuleTest(RatchetTreeTestCase):
