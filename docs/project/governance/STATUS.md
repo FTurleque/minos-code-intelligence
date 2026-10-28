@@ -63,12 +63,12 @@ Mesures sur un index réel de ce dépôt (2026-10-15, produit sous Linux) : sur 
 
 Les cinq changements du sprint 5 (« chaîne de release et d'approvisionnement ») sont **fusionnés dans `develop`** (PR #467, #468, #469, #470, #472) :
 
-- **Workflows GitHub** : aucun checkout ne garde le jeton Git (`persist-credentials: false`), chaque job a un délai ; le code exécuté connecté à Docker Hub est limité à une liste fermée de quatre jobs, les autres se déconnectent après avoir tiré leurs images épinglées. `check-workflow-pins.py` le garde et a désormais un auto-test.
+- **Workflows GitHub** : aucun checkout ne garde le jeton Git (`persist-credentials: false`), chaque job a un délai ; le code exécuté connecté à Docker Hub est limité à une liste fermée de deux jobs de montée de version ; les autres, jobs de test compris, tirent leurs images épinglées puis se déconnectent, et les tests refusent toute image hors de la liste. Le jeton Docker Hub est en lecture seule sur les dépôts publics (vérifié le 2026-10-28). `check-workflow-pins.py` le garde, avec son auto-test.
 - **Plugin IntelliJ** : ses dépendances sont verrouillées (verrous Gradle stricts, sommes SHA-256 vérifiées) et il est construit par son wrapper Gradle, y compris en release. Le workflow de release attache le zip du plugin à la release ; v1.1.0 et v1.2.0 n'en ont pas et ne seront pas rattrapées.
 - **Release Windows** : les artefacts reçoivent une attestation de provenance GitHub. Les exécutables **ne sont pas signés** (risque accepté R-28 : aucun service de signature accessible au mainteneur ; révision au plus tard le 2027-10-24) ; le manifeste et le texte de la release le disent, avec la commande `gh attestation verify` ; quand la signature est exigée (variable `MINOS_REQUIRE_SIGNED_RELEASE`), le workflow échoue sur tout exécutable publié sans signature Authenticode valide et horodatée.
 - **Build Maven reproductible** : deux constructions du même commit donnent le même jar ombré, sous Linux d'une machine à l'autre ; toutes les versions de plugins sont épinglées. Un jar construit sous Windows diffère d'un jar Linux par les fins de ligne de 20 fichiers texte (aucune classe) : la reproductibilité vaut par plateforme.
 
-Restent à faire : vérifier la portée du jeton Docker Hub (propriétaire) et relever, au prochain candidat de release, la construction du plugin par le wrapper, le zip du plugin attaché et l'attestation. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
+Reste à faire : relever, au prochain candidat de release, la construction du plugin par le wrapper, le zip du plugin attaché et l'attestation. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 
 ## Audit 2026-10-10 — sprint 6 (2026-10-16)
 
