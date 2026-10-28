@@ -247,7 +247,7 @@ new MinosMultiRepositoryApi.GitActivityQuery(since, 100, 100, 2);
 new MinosMultiRepositoryApi.GitActivityQuery(since, 100, 100, 2, true);
 ```
 
-Un appelant qui lisait l'adresse sans le demander doit passer `true`. `workTree` et `originRemote` ne sont pas concernés par ce masquage.
+Un appelant qui lisait l'adresse sans le demander doit passer `true`. Dans `GitRepositoryDto`, `workTree` est le chemin absolu du dépôt ; `originRemote` n'est rendu que pour un remote réseau (URL à hôte, ou forme SCP `utilisateur@hôte:chemin`), sans identifiants, requête ni fragment ; un remote local (chemin POSIX ou Windows, partage UNC, `file://`) ou une URL illisible est rendu `null`, avec la limitation `ORIGIN_REMOTE_NOT_DISCLOSED`.
 
 ### Registre abîmé : lister et résoudre un espace de travail sans rien taire
 
