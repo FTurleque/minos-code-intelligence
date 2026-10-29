@@ -36,7 +36,9 @@ def sync(root: Path, write: bool) -> list[str]:
         return failures
     expected = gate.expected_docker_args(catalog)
     path = root / gate.DOCKERFILE
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    # Decoded from bytes: read_text would translate CRLF to LF, and --write would then change every line ending
+    # of a Windows checkout instead of only the ARG values.
+    lines = path.read_bytes().decode("utf-8").splitlines(keepends=True)
     changed = False
     for index, line in enumerate(lines):
         match = gate.ARG_LINE.match(line.rstrip("\r\n"))
