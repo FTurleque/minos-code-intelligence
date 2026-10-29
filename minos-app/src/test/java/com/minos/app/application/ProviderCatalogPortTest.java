@@ -23,7 +23,7 @@ class ProviderCatalogPortTest {
             List<String> expected = ScipIndexerCatalog.qualifiedProviders().stream()
                     .map(provider -> provider.descriptor().id())
                     .toList();
-            assertEquals(expected, application.providerCatalog().providers().stream()
+            assertEquals(expected, application.compositionRoot().providerCatalog().providers().stream()
                     .map(provider -> provider.descriptor().id())
                     .toList());
             assertEquals(expected.stream().sorted().toList(),

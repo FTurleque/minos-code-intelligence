@@ -255,7 +255,7 @@ public final class SnapshotScalabilityBenchmark {
             InMemorySnapshotStore capture = new InMemorySnapshotStore();
             snapshot = null;
             long started = System.nanoTime();
-            application.scipArtifactImporter().importSnapshot(input.path(),
+            application.compositionRoot().scipArtifactImporter().importSnapshot(input.path(),
                     importRequest(project, dataset, "capture-" + index, input), capture);
             captureNanos[index] = System.nanoTime() - started;
             snapshot = capture.loadActiveKnowledge(project.id()).orElseThrow();
@@ -288,7 +288,7 @@ public final class SnapshotScalabilityBenchmark {
         for (int index = 0; index < importNanos.length; index++) {
             long started = System.nanoTime();
             try {
-                application.scipArtifactImporter().importSnapshot(input.path(),
+                application.compositionRoot().scipArtifactImporter().importSnapshot(input.path(),
                         importRequest(project, dataset, "import-" + index, input), application.snapshotStore());
             } catch (IOException refused) {
                 outcome = "REFUSED " + refused.getClass().getSimpleName() + ": " + refused.getMessage();

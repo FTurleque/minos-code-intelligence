@@ -23,7 +23,7 @@ class MinosApplicationMcpBackendM27Test {
                     purpose == HostedTenantKeyProvider.Purpose.ENCRYPTION ? "AES" : "HmacSHA256");
         };
         MinosApplication app = MinosApplication.builder(home).hostedTenantKeyProvider(keys).build();
-        var service = app.hostedControlPlaneService().orElseThrow();
+        var service = app.teamControlPlane().orElseThrow();
         var bootstrap = service.bootstrap(UUID.randomUUID(), "Acme", "key-a", "owner", "Owner",
                 Duration.ofHours(1), "mcp-bootstrap");
         var workspace = service.createWorkspace(bootstrap.bearerToken(), "mcp-workspace", "Platform");
