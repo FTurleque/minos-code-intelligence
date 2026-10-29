@@ -411,11 +411,11 @@ Les six constats du sprint ont leur changement fusionné : AUD-DEP-01 (PR #434),
 
 - **AUD-DEP-15** : le refus du cycle de vie porte sur l'état incohérent (compose qui demande l'image de requête, configuration qui ne la définit pas), pas sur la seule absence de `MINOS_QUERY_IMAGE` ; l'exigence de la spécification est précisée en ce sens, sans confirmation explicite du propriétaire.
 
-**Chantiers en cours**, chacun en PR vers `develop` (ouvertes le 2026-10-28, non fusionnées) :
+**Chantiers ouverts le 2026-10-28** :
 
-- avis OSV du classpath de scip-java 0.13.1 : dérogation R-29 et résidus OSV, [PR #598](https://github.com/FTurleque/minos-code-intelligence/pull/598) ; montée de scip-java en 0.13.2, qui retire quatre dérogations, [PR #603](https://github.com/FTurleque/minos-code-intelligence/pull/603) ;
-- tests de confinement intermittents (`ProviderWriteContainmentTest` sous Windows) : [PR #599](https://github.com/FTurleque/minos-code-intelligence/pull/599), et [PR #602](https://github.com/FTurleque/minos-code-intelligence/pull/602) (environnement minimal du helper d'identité de chemin Windows) ;
-- scripts Docker en panne (observations b à d d'AUD-DEP-15 : `verify-run-configurations.ps1`, `.env` de `prod-mcp.ps1`, verrous npm de `build-local-windows-candidate.ps1`) : [PR #596](https://github.com/FTurleque/minos-code-intelligence/pull/596).
+- avis OSV du classpath de scip-java 0.13.1 : dérogation R-29 et résidus OSV, [PR #598](https://github.com/FTurleque/minos-code-intelligence/pull/598), **fusionnée** dans `develop` (`b68beef8`) ; montée de scip-java en 0.13.2, qui ne laisse que la dérogation `guava` jusqu'à son terme, [PR #603](https://github.com/FTurleque/minos-code-intelligence/pull/603), **ouverte** ;
+- tests de confinement intermittents (`ProviderWriteContainmentTest` sous Windows) : [PR #599](https://github.com/FTurleque/minos-code-intelligence/pull/599), **fusionnée** (`9b074f61`), et [PR #602](https://github.com/FTurleque/minos-code-intelligence/pull/602) (environnement minimal du helper d'identité de chemin Windows), **fusionnée** (`7490b04a`) ;
+- scripts Docker en panne (observations b à d d'AUD-DEP-15 : `verify-run-configurations.ps1`, `.env` de `prod-mcp.ps1`, verrous npm de `build-local-windows-candidate.ps1`) : [PR #596](https://github.com/FTurleque/minos-code-intelligence/pull/596), **fusionnée** (`9bb39cc7`).
 
 ## Sprint 5 — Chaîne de release et d'approvisionnement (spécifié le 2026-10-13)
 
@@ -643,10 +643,12 @@ Statuts alignés sur la revérification indépendante du 2026-10-28 (`develop` `
 | AUD-ARC-11 | **Fermé avec réserve** | Rien ne surveille le contenu de `minos-app`. |
 | AUD-ARC-12 | **Décision documentée** | `com.minos.storage.codec` et `com.minos.storage.home` (`minos-storage`) partagent la racine `com.minos.storage` avec `minos-engine` : le défaut décrit par le constat, sous une racine déjà partagée. |
 
-Chantiers en cours sur ces réserves, chacun en PR vers `develop` (ouvertes le 2026-10-28, non fusionnées) :
+Chantiers ouverts le 2026-10-28 sur ces réserves, **fusionnés** dans `develop` :
 
-- réserves d'AUD-ARC-01 (surfaces) : [PR #601](https://github.com/FTurleque/minos-code-intelligence/pull/601) ;
-- AUD-ARC-05 et packages `codec`/`home` d'AUD-ARC-12 : [PR #600](https://github.com/FTurleque/minos-code-intelligence/pull/600).
+- réserves d'AUD-ARC-01 (surfaces) : [PR #601](https://github.com/FTurleque/minos-code-intelligence/pull/601) (`5105c188`) ; la CLI ne nomme plus le port `ProjectPathMappings` (A11 : 9 → 8 types), `MinosApplication` passe de 19 à 15 accesseurs publics typés moteur sous le cliquet `MINOS_APPLICATION_ENGINE_ACCESSORS` ;
+- AUD-ARC-05 et packages `codec`/`home` d'AUD-ARC-12 : [PR #600](https://github.com/FTurleque/minos-code-intelligence/pull/600) (`8fdbf119`) ; A14 refuse tout sous-package de `com.minos.storage` hors de `minos-storage`, et la ligne `AUD-ARC-05 minos-engine concrete code` mesure le code concret du moteur sans échouer (mesure, pas cliquet).
+
+Les statuts du tableau ci-dessus sont ceux de la revérification du 2026-10-28 ; l'effet de ces deux PR sur AUD-ARC-01, -05 et -12 n'est pas revérifié.
 
 ## Sprint 11 — Hygiène de fond (spécifié le 2026-10-13, fusionné le 2026-10-24)
 
