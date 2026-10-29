@@ -18,7 +18,7 @@ concurrency:
 jobs:
   vulnerability-scan:
     name: Dependency vulnerability gate
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a96bc4d2b09685b6142bcfe25a3dc17cb2d7347 # commit sans tag, appelle osv-scanner-action v2.6.0
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a96bc4d2b09685b6142bcfe25a3dc17cb2d7347 # commit sans tag (v2.7.0 + 2 commits), appelle osv-scanner-action v2.7.0
     with:
       # The scanner recognises an npm lockfile by its file name (package-lock.json). The two lockfiles shipped
       # with the product are prefixed with the name of their tool, so --recursive does not see them: each is

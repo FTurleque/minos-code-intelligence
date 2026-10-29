@@ -363,5 +363,45 @@ class ShippedTreeTest(unittest.TestCase):
         self.assertTrue(any("toolchain" in failure and "1.97.1" in failure for failure in failures), failures)
 
 
+_SYNC_SPEC = importlib.util.spec_from_file_location("sync_tools_manifest", gate.DEFAULT_ROOT / gate.SYNC_SCRIPT)
+sync_script = importlib.util.module_from_spec(_SYNC_SPEC)
+_SYNC_SPEC.loader.exec_module(sync_script)
+
+
+class SyncToolsManifestTest(unittest.TestCase):
+    """sync-tools-manifest.py --write changes the ARG values and nothing else, line endings included."""
+
+    def write_tree(self, directory: Path, newline: str) -> Path:
+        dockerfile_path = directory / gate.DOCKERFILE
+        dockerfile_path.parent.mkdir(parents=True)
+        dockerfile_path.write_bytes(dockerfile(java="0.9.0").replace("\n", newline).encode("utf-8"))
+        catalogue_path = directory / gate.CATALOG
+        catalogue_path.parent.mkdir(parents=True)
+        catalogue_path.write_text(json.dumps(catalog()), encoding="utf-8")
+        return dockerfile_path
+
+    def test_write_keeps_the_crlf_line_endings_of_the_dockerfile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_tree(Path(directory), "\r\n")
+            self.assertEqual([], sync_script.sync(Path(directory), write=True))
+            written = path.read_bytes()
+        self.assertEqual(dockerfile().replace("\n", "\r\n").encode("utf-8"), written)
+
+    def test_write_keeps_the_lf_line_endings_of_the_dockerfile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_tree(Path(directory), "\n")
+            self.assertEqual([], sync_script.sync(Path(directory), write=True))
+            written = path.read_bytes()
+        self.assertEqual(dockerfile().encode("utf-8"), written)
+
+    def test_check_reports_the_differing_arg_without_writing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_tree(Path(directory), "\r\n")
+            before = path.read_bytes()
+            failures = sync_script.sync(Path(directory), write=False)
+            self.assertEqual(before, path.read_bytes())
+        self.assertTrue(any("ARG SCIP_JAVA_VERSION is 0.9.0" in failure for failure in failures), failures)
+
+
 if __name__ == "__main__":
     unittest.main()
