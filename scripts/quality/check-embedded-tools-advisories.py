@@ -808,10 +808,19 @@ class RepositoryTableTest(unittest.TestCase):
     def test_the_repository_catalogue_is_entirely_known_and_its_uncovered_part_is_listed(self):
         services = FakeServices()
         outcome = evaluate(DEFAULT_ROOT, services, datetime.date(2020, 1, 1))
-        self.assertEqual([], outcome.failures)
+        # The simulated answers carry no advisory, so a real waiver matches no finding here: that is the weekly
+        # run's verdict, not this table's.
+        self.assertEqual([], [failure for failure in outcome.failures if "matches no finding" not in failure])
         self.assertGreaterEqual(outcome.entries, 11)
         self.assertTrue(outcome.uncovered)
         self.assertGreaterEqual(len([key for key in services.asked if key[0] == "Maven"]), 70)
+
+    def test_the_repository_waivers_are_well_formed_and_name_catalogue_components(self):
+        # Checked against a fixed date: an expiry is the weekly run's verdict and never turns a pull request red.
+        waivers, failures = load_waivers(DEFAULT_ROOT, datetime.date(2020, 1, 1))
+        self.assertEqual([], failures)
+        unknown = sorted({component for component, _ in waivers} - set(WATCHES))
+        self.assertEqual([], unknown, "a waiver names a component that the catalogue does not have")
 
     def test_a_copy_of_the_repository_catalogue_with_one_more_component_is_refused(self):
         with tempfile.TemporaryDirectory() as directory:
