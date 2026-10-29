@@ -37,7 +37,7 @@ class PlatformAccessControlDiscoveryTest {
 
     @Test
     void theSingleRegisteredImplementationIsTheOneUsed() throws Exception {
-        PlatformAccessControl found = PrivateLocalStorage.discoverPlatformAccessControl(
+        PlatformAccessControl found = PlatformAccessControlDiscovery.discover(
                 loaderRegistering(RecordingAccessControl.class));
 
         found.protectFromInheritance(temporary);
@@ -47,7 +47,7 @@ class PlatformAccessControlDiscoveryTest {
 
     @Test
     void withoutAnyImplementationBothOperationsAreRefusedWithoutAPath() {
-        PlatformAccessControl found = PrivateLocalStorage.discoverPlatformAccessControl(loaderRegistering());
+        PlatformAccessControl found = PlatformAccessControlDiscovery.discover(loaderRegistering());
 
         IOException protect = assertThrows(IOException.class, () -> found.protectFromInheritance(temporary));
         IOException read = assertThrows(IOException.class, () -> found.requireNoConditionalDeny(temporary));
@@ -59,7 +59,7 @@ class PlatformAccessControlDiscoveryTest {
 
     @Test
     void twoImplementationsAreRefusedRatherThanChosenBetween() {
-        PlatformAccessControl found = PrivateLocalStorage.discoverPlatformAccessControl(
+        PlatformAccessControl found = PlatformAccessControlDiscovery.discover(
                 loaderRegistering(RecordingAccessControl.class, OtherAccessControl.class));
 
         IOException refusal = assertThrows(IOException.class, () -> found.requireNoConditionalDeny(temporary));
@@ -70,7 +70,7 @@ class PlatformAccessControlDiscoveryTest {
     @Test
     void anAclFileSystemWithoutImplementationCreatesNothingAndNamesNoPath() throws Exception {
         UserPrincipal owner = Files.getOwner(temporary);
-        PlatformAccessControl none = PrivateLocalStorage.discoverPlatformAccessControl(loaderRegistering());
+        PlatformAccessControl none = PlatformAccessControlDiscovery.discover(loaderRegistering());
         PrivateLocalStorage.useForTesting(new DelegatingProbe(
                 FakeCapabilityProbe.aclOnly(target -> FakeAclFileAttributeView.ownerOnly(owner)), none));
         Path directory = temporary.resolve("private");
@@ -160,8 +160,8 @@ class PlatformAccessControlDiscoveryTest {
     }
 
     /** A capability probe that answers like {@code base} and hands both Windows operations to {@code port}. */
-    private record DelegatingProbe(PrivateLocalStorage.CapabilityProbe base, PlatformAccessControl port)
-            implements PrivateLocalStorage.CapabilityProbe {
+    private record DelegatingProbe(CapabilityProbe base, PlatformAccessControl port)
+            implements CapabilityProbe {
         @Override
         public boolean supportsPosix(Path target) {
             return base.supportsPosix(target);
@@ -184,7 +184,7 @@ class PlatformAccessControlDiscoveryTest {
     }
 
     /** The real POSIX answer of the file system the test runs on. */
-    private static final class PosixProbe implements PrivateLocalStorage.CapabilityProbe {
+    private static final class PosixProbe implements CapabilityProbe {
         @Override
         public boolean supportsPosix(Path target) {
             return target.getFileSystem().supportedFileAttributeViews().contains("posix");
@@ -198,6 +198,6 @@ class PlatformAccessControlDiscoveryTest {
 
     @Test
     void theDiscoveredPortIsKeptForTheProcess() {
-        assertSame(PrivateLocalStorage.platformAccessControl(), PrivateLocalStorage.platformAccessControl());
+        assertSame(PlatformAccessControlDiscovery.current(), PlatformAccessControlDiscovery.current());
     }
 }

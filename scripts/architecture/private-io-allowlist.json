@@ -116,8 +116,14 @@
   {
     "file": "minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java",
     "method": "Files.createTempFile",
-    "max": 3,
+    "max": 1,
     "justification": "Primitive de création à droits privés : ce fichier crée lui-même les fichiers et répertoires avec les droits du propriétaire seul (D2 du changement etendre-le-garde-d-e-s-privees-aux-ecritures-brutes) ; entrée durable."
+  },
+  {
+    "file": "minos-engine/src/main/java/com/minos/io/ProcessOwner.java",
+    "method": "Files.createTempFile",
+    "max": 2,
+    "justification": "Sonde du propriétaire du processus, détachée de PrivateLocalStorage (decouper-les-classes-de-plus-de-800-lignes, décision Q6) : un fichier témoin créé à côté de l'objet vérifié, ou dans l'objet, puis supprimé aussitôt, jamais lu ; il ne peut pas passer par PrivateLocalStorage, qui l'appelle avant de durcir ; entrée durable."
   },
   {
     "file": "minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java",

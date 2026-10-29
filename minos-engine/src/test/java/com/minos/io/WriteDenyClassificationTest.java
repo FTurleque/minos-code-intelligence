@@ -31,22 +31,22 @@ class WriteDenyClassificationTest {
 
     @Test
     void aWriteDenyOnTheOwnerApplies() {
-        assertTrue(PrivateLocalStorage.carriesWriteDenyForOwner(List.of(deny(OWNER)), OWNER));
+        assertTrue(WriteDenyDiagnosis.carriesWriteDenyForOwner(List.of(deny(OWNER)), OWNER));
     }
 
     @Test
     void aWriteDenyOnAGroupIsAssumedToApplyBecauseMembershipIsUnknown() {
-        assertTrue(PrivateLocalStorage.carriesWriteDenyForOwner(List.of(deny(new Group("Users"))), OWNER));
+        assertTrue(WriteDenyDiagnosis.carriesWriteDenyForOwner(List.of(deny(new Group("Users"))), OWNER));
     }
 
     @Test
     void aWriteDenyOnAnotherUserDoesNotApply() {
-        assertFalse(PrivateLocalStorage.carriesWriteDenyForOwner(List.of(deny(new User("someone-else"))), OWNER));
+        assertFalse(WriteDenyDiagnosis.carriesWriteDenyForOwner(List.of(deny(new User("someone-else"))), OWNER));
     }
 
     @Test
     void anInheritOnlyDenyDoesNotApplyToTheObjectItself() {
-        assertFalse(PrivateLocalStorage.carriesWriteDenyForOwner(
+        assertFalse(WriteDenyDiagnosis.carriesWriteDenyForOwner(
                 List.of(deny(OWNER, AclEntryFlag.INHERIT_ONLY, AclEntryFlag.FILE_INHERIT)), OWNER));
     }
 
@@ -55,6 +55,6 @@ class WriteDenyClassificationTest {
         AclEntry readDeny = AclEntry.newBuilder().setType(AclEntryType.DENY).setPrincipal(OWNER)
                 .setPermissions(EnumSet.of(AclEntryPermission.READ_DATA)).build();
 
-        assertFalse(PrivateLocalStorage.carriesWriteDenyForOwner(List.of(readDeny), OWNER));
+        assertFalse(WriteDenyDiagnosis.carriesWriteDenyForOwner(List.of(readDeny), OWNER));
     }
 }

@@ -22,8 +22,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.ServiceConfigurationError;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -145,7 +143,7 @@ public final class PrivateLocalStorage {
         Path target = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) && !supportsPosix(target)) {
             refuseSharedLocation(target, readUserHome ? userHome(System.getProperty("user.home")) : userHome);
-            UserPrincipal expected = currentUser != null ? currentUser : currentOwner(target);
+            UserPrincipal expected = currentUser != null ? currentUser : ProcessOwner.current(target);
             if (!Files.getOwner(target, LinkOption.NOFOLLOW_LINKS).equals(expected)) {
                 throw new IOException("MINOS refuses to make private an existing directory that belongs to another "
                         + "account; its permissions are unchanged. Take ownership of it, or choose another MINOS_HOME");
@@ -428,55 +426,8 @@ public final class PrivateLocalStorage {
     public static void verifyOwnedByCurrentUser(Path path) throws IOException {
         Path target = Objects.requireNonNull(path, "path").toAbsolutePath().normalize();
         UserPrincipal owner = Files.getOwner(target, LinkOption.NOFOLLOW_LINKS);
-        if (!owner.equals(currentOwner(target))) {
+        if (!owner.equals(ProcessOwner.current(target))) {
             throw new IOException("private storage location is owned by another principal");
-        }
-    }
-
-    private static volatile UserPrincipal currentOwner;
-
-    private static UserPrincipal currentOwner(Path near) throws IOException {
-        UserPrincipal known = currentOwner;
-        if (known != null) return known;
-        currentOwner = probeOwner(near);
-        return currentOwner;
-    }
-
-    /**
-     * The probe could be written neither beside the checked object nor in it. The original exception names the probe's
-     * absolute path: it is replaced by a message without a path, as every refusal of this class is, keeping only the
-     * kind of failure as a path-free cause.
-     */
-    private static IOException ownerUnverifiable(IOException failure) {
-        IOException cause = failure instanceof AccessDeniedException ? new AccessDeniedException(null)
-                : new IOException(failure.getClass().getSimpleName());
-        return new IOException("MINOS cannot verify who owns an existing directory it cannot write to; its permissions "
-                + "are unchanged. Choose a MINOS_HOME the current account can write to", cause);
-    }
-
-    static UserPrincipal probeOwner(Path near) throws IOException {
-        // The probe lives next to the object being checked, never in a publicly writable directory: the owner the
-        // system gives a new file does not depend on the directory it is created in. When the parent cannot be written
-        // (the parent of a MINOS home is often another account's), the checked directory itself is used.
-        Path parent = near.getParent();
-        Path directory = parent != null ? parent : near;
-        Path probe;
-        try {
-            probe = Files.createTempFile(directory, "minos-owner-", ".probe");
-        } catch (IOException parentNotWritable) {
-            if (directory.equals(near) || !Files.isDirectory(near, LinkOption.NOFOLLOW_LINKS)) {
-                throw ownerUnverifiable(parentNotWritable);
-            }
-            try {
-                probe = Files.createTempFile(near, "minos-owner-", ".probe");
-            } catch (IOException notWritableEither) {
-                throw ownerUnverifiable(notWritableEither);
-            }
-        }
-        try {
-            return Files.getOwner(probe, LinkOption.NOFOLLOW_LINKS);
-        } finally {
-            Files.deleteIfExists(probe);
         }
     }
 
@@ -584,7 +535,7 @@ public final class PrivateLocalStorage {
             try {
                 acl.setAcl(desired);
             } catch (AccessDeniedException denied) {
-                throw explainDenied(denied, current, owner);
+                throw WriteDenyDiagnosis.explainDenied(denied, current, owner);
             }
             PROTECTED_LOCATIONS.remove(key);
         }
@@ -618,83 +569,9 @@ public final class PrivateLocalStorage {
         return List.copyOf(desired);
     }
 
-    // ------------------------------------------------------------ explicit deny entries (Windows)
-
-    private static final String WRITE_PROTECTED_MESSAGE =
-            "private storage is write-protected by an explicit deny entry; MINOS does not remove it";
-
-    private static final Set<AclEntryPermission> WRITE_RIGHTS = EnumSet.of(
-            AclEntryPermission.WRITE_DATA,
-            AclEntryPermission.APPEND_DATA,
-            AclEntryPermission.DELETE,
-            AclEntryPermission.DELETE_CHILD,
-            AclEntryPermission.WRITE_ATTRIBUTES,
-            AclEntryPermission.WRITE_NAMED_ATTRS,
-            AclEntryPermission.WRITE_ACL);
-
-    /**
-     * The failure for an access-denied error on a location whose DACL carries a write DENY that applies to
-     * the owner: MINOS says why it cannot write, and the message does not name the path. The original
-     * error names it, so what is chained is an access-denied cause without its path.
-     */
-    private static IOException explainDenied(AccessDeniedException denied, List<AclEntry> aclOfTheLocation,
-                                             UserPrincipal owner) {
-        return carriesWriteDenyForOwner(aclOfTheLocation, owner) ? writeProtected() : denied;
-    }
-
-    private static IOException writeProtected() {
-        return new IOException(WRITE_PROTECTED_MESSAGE, new AccessDeniedException(null));
-    }
-
-    /**
-     * Whether a DENY entry that applies to the object itself takes a write right from the owner. An entry
-     * counts when it is not inherit-only and names the owner, or a group: Java cannot say which groups the
-     * process belongs to, so a DENY on a group is assumed to apply. That is wrong only when the owner is
-     * not a member, and then the refusal had another cause that the message would mislabel.
-     */
-    static boolean carriesWriteDenyForOwner(List<AclEntry> acl, UserPrincipal owner) {
-        for (AclEntry entry : acl) {
-            if (entry.type() != AclEntryType.DENY) continue;
-            if (entry.flags().contains(AclEntryFlag.INHERIT_ONLY)) continue;
-            boolean applies = entry.principal().equals(owner)
-                    || entry.principal() instanceof java.nio.file.attribute.GroupPrincipal
-                    || namesTheProcessUser(entry.principal());
-            if (!applies) continue;
-            for (AclEntryPermission right : entry.permissions()) {
-                if (WRITE_RIGHTS.contains(right)) return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Whether {@code principal} is the account this process runs as. An elevated token owns what it creates
-     * as the Administrators group, not as the user, so a DENY placed on the user never equals the owner.
-     * Used only to word a diagnostic, never to decide access: the name is compared case-insensitively
-     * after its domain part.
-     */
-    private static boolean namesTheProcessUser(java.nio.file.attribute.UserPrincipal principal) {
-        String user = System.getProperty("user.name");
-        if (user == null || user.isBlank()) return false;
-        String name = principal.getName();
-        int separator = name.lastIndexOf('\\');
-        String account = separator >= 0 ? name.substring(separator + 1) : name;
-        return account.equalsIgnoreCase(user);
-    }
-
-    /** Rethrows {@code denied} as the write-protected failure when one of {@code locations} carries a write DENY. */
+    /** Words {@code denied} as the write-protected failure when one of {@code locations} carries a write DENY. */
     private static IOException explainDenied(AccessDeniedException denied, Path... locations) {
-        for (Path location : locations) {
-            if (location == null) continue;
-            AclFileAttributeView view = aclView(location);
-            if (view == null) continue;
-            try {
-                if (carriesWriteDenyForOwner(view.getAcl(), view.getOwner())) return writeProtected();
-            } catch (IOException unreadable) {
-                // Nothing more precise than the original refusal can be said.
-            }
-        }
-        return denied;
+        return WriteDenyDiagnosis.explainDenied(denied, PrivateLocalStorage::aclView, locations);
     }
 
     // ------------------------------------------------------------ protected DACLs (Windows)
@@ -800,119 +677,7 @@ public final class PrivateLocalStorage {
         return CAPABILITY_PROBE.get().supportsPosix(target);
     }
 
-    // ---------------------------------------------------------------- platform access control (ADR 0068)
-
-    /** The port of this process, discovered on first use and kept. */
-    private static final class DiscoveredPlatformAccessControl {
-        static final PlatformAccessControl INSTANCE =
-                discoverPlatformAccessControl(PrivateLocalStorage.class.getClassLoader());
-
-        private DiscoveredPlatformAccessControl() {
-        }
-    }
-
-    /** The platform access control of this process (see {@link PlatformAccessControl}). */
-    static PlatformAccessControl platformAccessControl() {
-        return DiscoveredPlatformAccessControl.INSTANCE;
-    }
-
-    /**
-     * The single implementation registered for {@code loader}, or one that refuses every operation when there is
-     * none, more than one, or one that cannot be loaded: choosing between two would let either decide what private
-     * storage means. The thread context class loader is never used (ADR 0042, AUD-ARC-04).
-     */
-    static PlatformAccessControl discoverPlatformAccessControl(ClassLoader loader) {
-        List<PlatformAccessControl> found = new ArrayList<>();
-        try {
-            ServiceLoader.load(PlatformAccessControl.class, loader).forEach(found::add);
-        } catch (ServiceConfigurationError _) {
-            return refusing("a platform access control for private storage cannot be loaded");
-        }
-        if (found.isEmpty()) {
-            return refusing("no platform access control is available to make private storage private on this "
-                    + "file system");
-        }
-        if (found.size() > 1) {
-            return refusing("several platform access controls are registered for private storage; none is chosen");
-        }
-        return found.getFirst();
-    }
-
-    private static PlatformAccessControl refusing(String reason) {
-        return new PlatformAccessControl() {
-            @Override
-            public void protectFromInheritance(Path target) throws IOException {
-                throw new IOException(reason);
-            }
-
-            @Override
-            public void requireNoConditionalDeny(Path target) throws IOException {
-                throw new IOException(reason);
-            }
-        };
-    }
-
     // ---------------------------------------------------------------- fault-injection seam (tests)
-
-    /**
-     * What a given path's filesystem actually exposes for privacy enforcement. Production code
-     * always uses {@link #real()}; tests may substitute a fake via
-     * {@link #useForTesting(CapabilityProbe)} to deterministically exercise the POSIX, ACL and
-     * unsupported-filesystem branches without depending on the real OS/filesystem under CI.
-     *
-     * <p>Public so that tests in other modules that build on {@code PrivateLocalStorage} (e.g.
-     * {@code MinosApplication.open}) can inject the same deterministic fault without depending on
-     * minos-engine's test sources or duplicating this seam. It is a fault-injection hook, not part
-     * of the storage policy itself -- production code never references it, and {@link
-     * #useForTesting} refuses to install one outside a test runtime (see there for why that is, and
-     * is not, a security boundary).</p>
-     */
-    public interface CapabilityProbe {
-        boolean supportsPosix(Path target);
-
-        AclFileAttributeView aclView(Path target);
-
-        /**
-         * Makes the DACL of {@code target}, which already holds its final explicit entries, stop
-         * inheriting from its parent. Only a platform whose inheritance Java cannot switch off through
-         * {@link AclFileAttributeView} has anything to do here: the default does nothing, which is what a
-         * test double wants.
-         */
-        default void protectFromInheritance(Path target) throws IOException {
-        }
-
-        /**
-         * Fails if {@code target} carries a conditional DENY entry, or if its DACL cannot be read to find out.
-         * Only a platform whose DACL Java cannot fully read has anything to do here: the default does nothing,
-         * which is what a test double wants.
-         */
-        default void requireNoConditionalDeny(Path target) throws IOException {
-        }
-
-        static CapabilityProbe real() {
-            return new CapabilityProbe() {
-                @Override
-                public boolean supportsPosix(Path target) {
-                    return target.getFileSystem().supportedFileAttributeViews().contains("posix");
-                }
-
-                @Override
-                public AclFileAttributeView aclView(Path target) {
-                    return Files.getFileAttributeView(target, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-                }
-
-                @Override
-                public void protectFromInheritance(Path target) throws IOException {
-                    platformAccessControl().protectFromInheritance(target);
-                }
-
-                @Override
-                public void requireNoConditionalDeny(Path target) throws IOException {
-                    platformAccessControl().requireNoConditionalDeny(target);
-                }
-            };
-        }
-    }
 
     private static final ThreadLocal<CapabilityProbe> CAPABILITY_PROBE =
             ThreadLocal.withInitial(CapabilityProbe::real);

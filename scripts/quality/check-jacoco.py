@@ -33,7 +33,8 @@ SCOPES = {
         ),
         "line": 0.89, "branch": 0.73,
     },
-    # AUD-TST-02: the confined I/O primitives (34 classes with their inner ones), Linux line 0.801 / branch 0.701,
+    # AUD-TST-02: the confined I/O primitives (42 classes with their inner ones in the minos-engine report of
+    # 2026-10-29, Windows line 0.829 / branch 0.732). Measures that set the floor: Linux line 0.801 / branch 0.701,
     # Windows 0.814 / 0.717 (pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system). Floor = the lower measure minus 2 points. LeaseDeadline (0.812 / 0.750 on
     # Windows before it had a test of its own) is floored by class: 32/32 lines, 15/16 branches with LeaseDeadlineTest
     # alone on Windows; floor = measure minus about 5 points.

@@ -200,9 +200,9 @@ class PrivateLocalStorageWindowsAclTest {
     @Test
     void theProtectionIsAssertedOncePerObjectAndPerJvmNotOnEveryCall() throws Exception {
         Path home = PrivateLocalStorage.ensurePrivateDirectory(temporary.resolve("home"));
-        PrivateLocalStorage.CapabilityProbe real = PrivateLocalStorage.CapabilityProbe.real();
+        CapabilityProbe real = CapabilityProbe.real();
         int[] calls = {0};
-        PrivateLocalStorage.useForTesting(new PrivateLocalStorage.CapabilityProbe() {
+        PrivateLocalStorage.useForTesting(new CapabilityProbe() {
             @Override public boolean supportsPosix(Path target) { return real.supportsPosix(target); }
             @Override public AclFileAttributeView aclView(Path target) { return real.aclView(target); }
             @Override public void protectFromInheritance(Path target) throws IOException {
@@ -379,7 +379,7 @@ class PrivateLocalStorageWindowsAclTest {
     }
 
     /** Real ACL view, counting how many times the DACL is written. */
-    private static final class CountingAclProbe implements PrivateLocalStorage.CapabilityProbe {
+    private static final class CountingAclProbe implements CapabilityProbe {
         int setAclCalls;
         IOException daclFailure;
 
@@ -391,12 +391,12 @@ class PrivateLocalStorageWindowsAclTest {
         @Override
         public void requireNoConditionalDeny(Path target) throws IOException {
             if (daclFailure != null) throw daclFailure;
-            PrivateLocalStorage.CapabilityProbe.real().requireNoConditionalDeny(target);
+            CapabilityProbe.real().requireNoConditionalDeny(target);
         }
 
         @Override
         public void protectFromInheritance(Path target) throws IOException {
-            PrivateLocalStorage.CapabilityProbe.real().protectFromInheritance(target);
+            CapabilityProbe.real().protectFromInheritance(target);
         }
 
         @Override
@@ -470,7 +470,7 @@ class PrivateLocalStorageWindowsAclTest {
         UserPrincipal currentUser = Files.getOwner(home);
         denyWriting(parent, currentUser);
         try {
-            assertEquals(currentUser, PrivateLocalStorage.probeOwner(home));
+            assertEquals(currentUser, ProcessOwner.probe(home));
             try (var leftovers = Files.list(home)) {
                 assertEquals(0L, leftovers.count(), "the probe is deleted");
             }
@@ -487,7 +487,7 @@ class PrivateLocalStorageWindowsAclTest {
         denyWriting(home, currentUser);
         denyWriting(parent, currentUser);
         try {
-            IOException refusal = assertThrows(IOException.class, () -> PrivateLocalStorage.probeOwner(home));
+            IOException refusal = assertThrows(IOException.class, () -> ProcessOwner.probe(home));
 
             assertTrue(refusal.getMessage().contains("cannot verify who owns"), refusal.getMessage());
             for (Throwable cause = refusal; cause != null; cause = cause.getCause()) {
