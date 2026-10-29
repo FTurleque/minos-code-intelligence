@@ -37,7 +37,7 @@ class LazyApplicationTest {
             opens.incrementAndGet();
             return MinosApplication.open(home);
         })) {
-            application.deferred(MinosApplication::gitIntelligence);
+            application.deferred(MinosApplication::architectureQuery);
         }
         assertEquals(0, opens.get());
     }
