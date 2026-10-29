@@ -1391,6 +1391,31 @@ class ProcessLauncherRuleTest(RatchetTreeTestCase):
                    'final class Exec { void r() throws Exception { Runtime.getRuntime().exec(new String[] {"x"}); } }')
         self.refused(self.check, "A12", "minos-application/application.Exec")
 
+    def test_runtime_exec_through_a_variable_a_parameter_or_a_method_reference_is_refused(self):
+        # AUD-ARC-05: `Runtime r = Runtime.getRuntime(); r.exec(...)` passed A12.
+        bodies = {
+            "Local": 'final class Local { void r() throws Exception { Runtime r = Runtime.getRuntime(); r.exec("x"); } }',
+            "Inferred": 'final class Inferred { void r() throws Exception { var rt = Runtime.getRuntime();\n'
+                        ' rt\n  .exec(new String[] {"x"}); } }',
+            "Field": 'final class Field { private final Runtime runtime = Runtime.getRuntime();\n'
+                     ' void r() throws Exception { this.runtime.exec("x"); } }',
+            "Parameter": 'final class Parameter { void r(java.lang.Runtime host) throws Exception { host.exec("x"); } }',
+            "Reference": 'final class Reference { Object f = Runtime.getRuntime()::exec; }',
+        }
+        for name, body in bodies.items():
+            with self.subTest(launcher=name):
+                self.write("minos-engine", "com.minos.io", name, body)
+                self.refused(self.check, "A12", f"minos-engine/io.{name}", "is not in PROCESS_LAUNCHERS")
+                self.assertEqual(2, self.check({**self.LISTED, f"minos-engine/io.{name}": 1}))
+                (self.root / "minos-engine" / "src" / "main" / "java" / "com" / "minos" / "io" / f"{name}.java").unlink()
+
+    def test_runtime_queries_without_exec_are_not_launchers(self):
+        self.write("minos-engine", "com.minos.io", "Sizing",
+                   "final class Sizing { int c = Runtime.getRuntime().availableProcessors(); "
+                   "long m() { Runtime r = Runtime.getRuntime(); return r.maxMemory(); } "
+                   "void x(Executor exec) { exec.execute(null); } }")
+        self.assertEqual(1, self.check())
+
     def test_an_entry_that_launches_nothing_any_more_is_refused(self):
         self.write("minos-engine", "com.minos.io", "PrivateLocalStorage", "public final class PrivateLocalStorage { }")
         self.refused(self.check, "A12", "minos-engine/io.PrivateLocalStorage", "launches no process any more")
@@ -1414,6 +1439,33 @@ class ProcessLauncherRuleTest(RatchetTreeTestCase):
                    'public final class PrivateLocalStorage { Object p = new ProcessBuilder("icacls.exe"); }')
         self.refused(lambda: self.check(dict(_MODULE.PROCESS_LAUNCHERS)), "A12",
                      "minos-engine/io.PrivateLocalStorage", "is not in PROCESS_LAUNCHERS")
+
+
+class EngineConcreteCodeMeasureTest(RatchetTreeTestCase):
+    """AUD-ARC-05 — the share of concrete code of minos-engine is measured (ADR 0068, Mise en oeuvre), never ratcheted."""
+
+    def test_each_file_counts_for_its_first_top_level_declaration_with_all_its_lines(self):
+        self.write("minos-engine", "com.minos.io", "Store", "public final class Store {\n    int a;\n}")
+        self.write("minos-engine", "com.minos.io", "Annotated",
+                   '@SuppressWarnings("x") public abstract class Annotated { interface Nested { } }')
+        self.write("minos-engine", "com.minos.io", "Port", "/** class in a comment */\npublic interface Port { }")
+        self.write("minos-engine", "com.minos.io", "Row", "public record Row(int a) { static class Inner { } }")
+        self.write("minos-engine", "com.minos.io", "Kind", "enum Kind { A }")
+        self.write("minos-engine", "com.minos.io", "package-info", "")
+        self.write("minos-engine", "com.minos.io", "Odd", "// nothing declared")
+        self.write("minos-engine", "com.minos.io", "Ignored", "final class Ignored { }", kind="test")
+        self.write("minos-domain", "com.minos.domain", "Elsewhere", "final class Elsewhere { }")
+        measured = _MODULE.engine_concrete_code(self.root)
+        self.assertEqual({"class": (2, 10), "interface": (1, 5), "record": (1, 4), "enum": (1, 4), "info": (1, 4),
+                          "unclassified": (1, 4)}, measured)
+
+    def test_a_module_without_sources_measures_nothing(self):
+        self.assertEqual({}, _MODULE.engine_concrete_code(self.root))
+
+    def test_the_real_engine_has_no_unclassified_file(self):
+        measured = _MODULE.engine_concrete_code()
+        self.assertNotIn("unclassified", measured)
+        self.assertGreater(measured["class"][0], 0)
 
 
 class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
@@ -1571,6 +1623,17 @@ class StoragePackageIsolationRuleTest(RatchetTreeTestCase):
                    ["java.sql.Connection"])
         self.refused(self.check, "codec -> backends", "minos-storage/src/main/java/com/minos/storage/codec/Jdbc.java",
                      "java.sql.Connection")
+
+    def test_a_package_below_the_storage_root_outside_minos_storage_is_refused(self):
+        # AUD-ARC-12: com.minos.storage.<x> names minos-storage; only the root package itself belongs to the engine.
+        self.write("minos-engine", "com.minos.storage", "StorageBackend", "public interface StorageBackend { }")
+        self.assertEqual(4, self.check())
+        for module, kind in (("minos-engine", "main"), ("minos-application", "main"), ("minos-bootstrap", "test")):
+            with self.subTest(module=module, kind=kind):
+                self.write(module, "com.minos.storage.cache", "Cache", "final class Cache { }", kind=kind)
+                self.refused(self.check, "below com.minos.storage outside minos-storage",
+                             f"{module}/src/{kind}/java/com/minos/storage/cache/Cache.java")
+                (self.root / module / "src" / kind / "java" / "com" / "minos" / "storage" / "cache" / "Cache.java").unlink()
 
     def test_the_path_mapping_naming_the_local_registry_is_refused(self):
         self.write("minos-storage", "com.minos.storage.home", "Mapping", "final class Mapping { }",

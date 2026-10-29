@@ -56,7 +56,8 @@ class LocalProviderWorkspaceTest {
             assertEquals(Path.of("modules/app"), isolated.projectRelativeRoot());
             assertEquals(copiedRoot.resolve("modules/app"), isolated.projectRoot());
             assertTrue(isolated.pathAuthorization().isPresent(),
-                    "the copied filesystem identity must be captured before provider launch");
+                    () -> "the copied filesystem identity must be captured before provider launch: "
+                            + ExecutionPathIdentityDiagnostics.describe(isolated.projectRoot()));
             assertEquals("source-root", Files.readString(copiedRoot.resolve("README.md")));
             assertEquals("class Main {}\n", Files.readString(copiedRoot.resolve("modules/app/Main.java")));
             assertFalse(Files.exists(copiedRoot.resolve("ignored.txt")));

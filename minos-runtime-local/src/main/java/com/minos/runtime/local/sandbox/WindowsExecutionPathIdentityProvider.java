@@ -1,6 +1,7 @@
 package com.minos.runtime.local.sandbox;
 
 import com.minos.runtime.local.process.CommandLocator;
+import com.minos.runtime.local.process.ProviderProcessEnvironment;
 import com.minos.orchestration.ExecutionPathIdentityProvider;
 
 import java.io.ByteArrayOutputStream;
@@ -12,6 +13,7 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -44,22 +46,7 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
             return Optional.empty();
         }
 
-        ProcessBuilder builder = new ProcessBuilder(List.of(
-                powershell.orElseThrow().toString(),
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-EncodedCommand",
-                encodedHelper()));
-        builder.redirectErrorStream(true);
-        builder.environment().put(
-                "MINOS_REGISTERED_PATH_IDENTITY_TARGET", registeredProjectRoot.toString());
-        builder.environment().put(
-                "MINOS_PROJECT_PATH_IDENTITY_TARGET", projectRoot.toString());
-
-        Process process = builder.start();
+        Process process = startHelper(powershell.orElseThrow(), registeredProjectRoot, projectRoot);
         try (ExecutorService outputExecutor = Executors.newSingleThreadExecutor(
                 Thread.ofPlatform()
                         .name("minos-windows-path-identity-output")
@@ -85,18 +72,57 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
                 throw new IOException("Windows filesystem identity output exceeded its bound");
             }
             String text = new String(bytes, StandardCharsets.UTF_8);
-            if (process.exitValue() != 0) {
-                throw new IOException("Windows filesystem identity query failed: " + boundedDiagnostic(text));
+            int exitCode = process.exitValue();
+            if (exitCode != 0) {
+                throw new IOException(queryFailureMessage(exitCode, text));
             }
-            Matcher registered = REGISTERED.matcher(text);
-            Matcher project = PROJECT.matcher(text);
-            if (!registered.find() || !project.find()) {
-                throw new IOException("Windows filesystem identity helper returned an invalid response");
-            }
-            return Optional.of(new IdentityPair(
-                    "windows:" + registered.group(1).toLowerCase(Locale.ROOT),
-                    "windows:" + project.group(1).toLowerCase(Locale.ROOT)));
+            return Optional.of(parseIdentities(text));
         }
+    }
+
+    /** Starts the packaged helper with both targets passed through its environment, never its command line. */
+    private static Process startHelper(Path powershell, Path registeredProjectRoot, Path projectRoot)
+            throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(List.of(
+                powershell.toString(),
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-EncodedCommand",
+                encodedHelper()));
+        builder.redirectErrorStream(true);
+        applyHelperEnvironment(builder, registeredProjectRoot, projectRoot);
+        return builder.start();
+    }
+
+    /**
+     * Gives the helper the trusted-launcher allowlist and its two targets, never the JVM environment.
+     *
+     * <p>The JVM may carry control-plane keys, hosted tokens and CI credentials. Measured on Windows 10:
+     * {@code SystemRoot}, {@code TEMP} and {@code TMP} are what the helper and its {@code Add-Type}
+     * compilation need; the trusted-launcher set adds non-secret profile locations and the PowerShell
+     * module analysis cache path. The targets are set after the allowlist, because the deny pattern of
+     * declared variables refuses every {@code MINOS_*} name.</p>
+     */
+    static void applyHelperEnvironment(ProcessBuilder builder, Path registeredProjectRoot, Path projectRoot) {
+        ProviderProcessEnvironment.applyForTrustedLauncher(builder, Map.of());
+        Map<String, String> environment = builder.environment();
+        environment.put("MINOS_REGISTERED_PATH_IDENTITY_TARGET", registeredProjectRoot.toString());
+        environment.put("MINOS_PROJECT_PATH_IDENTITY_TARGET", projectRoot.toString());
+    }
+
+    /** Reads both identities from a successful helper response, or refuses the whole response. */
+    private static IdentityPair parseIdentities(String text) throws IOException {
+        Matcher registered = REGISTERED.matcher(text);
+        Matcher project = PROJECT.matcher(text);
+        if (!registered.find() || !project.find()) {
+            throw new IOException("Windows filesystem identity helper returned an invalid response");
+        }
+        return new IdentityPair(
+                "windows:" + registered.group(1).toLowerCase(Locale.ROOT),
+                "windows:" + project.group(1).toLowerCase(Locale.ROOT));
     }
 
     /**
@@ -155,6 +181,20 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    /**
+     * Failure message of a helper that exited with a non-zero status.
+     *
+     * <p>The exit status leads, in decimal and as an NTSTATUS-style hexadecimal value: a helper
+     * that dies while its process initializes (for instance {@code 0xC0000142}) prints nothing, and
+     * its exit status is then the only evidence of how it failed. The message carries no path.</p>
+     */
+    static String queryFailureMessage(int exitCode, String output) {
+        String diagnostic = boundedDiagnostic(output);
+        return "Windows filesystem identity query failed (exit " + exitCode
+                + " = " + String.format(Locale.ROOT, "0x%08X", exitCode) + "): "
+                + (diagnostic.isEmpty() ? "<no helper output>" : diagnostic);
     }
 
     private static String boundedDiagnostic(String text) {
