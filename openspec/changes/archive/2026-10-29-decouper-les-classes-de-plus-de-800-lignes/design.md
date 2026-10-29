@@ -123,6 +123,24 @@ Couverture des blocs au HEAD, sous Linux comme sous Windows ; couverture Sonar r
 | `CapabilityProbe` (`:855-915`) | 9 / 9 | 0 / 0 |
 | reste | 236 / 272 | 98 / 122 |
 
+Rapports `jacoco-modules-Linux` et `jacoco-modules-Windows` du run `PR Validation` 40872361738 (`develop` `617b73a3`, avant découpage), mêmes sommes :
+
+| Classe d'origine, bloc | Linux lignes | Linux branches | Windows lignes | Windows branches |
+|---|---|---|---|---|
+| `PRIVATE` entier | 290 / 346 | 134 / 170 | 306 / 346 | 138 / 170 |
+| diagnostic de refus (`:621-698`) | 19 / 29 | 19 / 34 | 27 / 29 | 28 / 34 |
+| propriétaire du processus (`:436-481`) | 18 / 20 | 8 / 10 | 20 / 20 | 8 / 10 |
+| découverte du port (`:803-853`) | 14 / 16 | 4 / 4 | 14 / 16 | 4 / 4 |
+| `CapabilityProbe` (`:855-915`) | 4 / 9 | 0 / 0 | 9 / 9 | 0 / 0 |
+| reste | 235 / 272 | 103 / 122 | 236 / 272 | 98 / 122 |
+| `MANAGER`, somme des méthodes | 376 / 520 | 170 / 292 | 362 / 520 | 175 / 292 |
+| gestes d'installation | 28 / 28 | 5 / 6 | 28 / 28 | 5 / 6 |
+| extraction bornée | 30 / 30 | 13 / 14 | 30 / 30 | 13 / 14 |
+| classpath de scip-java (avec `DirectoryMover`) | 77 / 83 | 25 / 30 | 79 / 83 | 25 / 30 |
+| reste du `MANAGER` | 241 / 379 | 127 / 242 | 225 / 379 | 132 / 242 |
+
+Pour `MANAGER`, les blocs sont sommés par compteurs de méthodes (le total diffère de quelques lignes de la somme par `<line>`). Le diagnostic de refus et `CapabilityProbe` sont moins couverts sous Linux, leurs chemins ACL n'y tournant pas ; `com/minos/io/` est jugé par son préfixe de package. Planchers de D6 contre la plus basse des deux mesures : reste du `MANAGER` 0,594 (Windows) / 0,525 (Linux), plancher 0,52 / 0,44 ; `ScipJavaClasspathInstallation` 0,928 / 0,833 (Linux), plancher 0,85 / 0,75 ; `BoundedZipExtraction` 1,0 / 0,929, plancher 0,90 / 0,80 ; `ManagedToolInstallation` mesuré à 5/8 branches sous Linux après découpage, plancher 0,57. Les deux jobs `Verify` de #605 et #606 ont passé ces planchers.
+
 - **1.3** : `git grep` des membres déplacés (`carriesWriteDenyForOwner`, `namesTheProcessUser`, `explainDenied`, `WRITE_PROTECTED_MESSAGE`, `probeOwner`, `currentOwner`, `ownerUnverifiable`, `discoverPlatformAccessControl`, `platformAccessControl()`, `CapabilityProbe` ; `run`, `moveFile`, `moveDirectory`, `writeNewFile`, `deleteRecursively`, `extractZipBounded`, `extractDistribution`, `scipJavaFetchCommand`, `fetchVerifiedClasspath`, `resolvedJars`, `swapIn`, `DirectoryMover`) dans `scripts/`, `.github/`, `docs/`, `quality/`, `.claude/`, `.archgate/`, `minos-intellij/` et les sources Java : aucun gate de plus que ceux de la table ci-dessus ; seules les lignes 616, 624 et 627 de `docs/project/audits/2026-10-10/SUIVI.md` citent `PrivateLocalStorage.currentOwner` et `probeOwner`, relevé daté d'une correction SpotBugs, laissé tel quel.
 
 ### Mesures après découpage (2026-10-29, poste Windows, JDK 25)
