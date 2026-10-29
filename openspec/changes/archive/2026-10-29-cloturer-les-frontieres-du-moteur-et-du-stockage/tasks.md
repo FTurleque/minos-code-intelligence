@@ -23,5 +23,5 @@ Ordre dans chaque section : rouge, correction, preuve. Les tests vivent dans la 
 
 ## 5. Clôture
 
-- [ ] 5.1 **(manuelle)** Mettre à jour le suivi de l'audit (`docs/project/audits/2026-10-10/SUIVI.md`, `findings.json`, `ETAT-2026-10-13.md`) : AUD-ARC-05 et AUD-ARC-12 fermés par ce changement. Fait par la session de clôture du sprint 10, pas dans cette PR.
-- [ ] 5.2 `openspec validate --all --strict`, puis archivage après fusion ; `docs/developer/quality-gates.md` (A12, A14, mesure du moteur) est mis à jour dans la même PR.
+- [x] 5.1 **(manuelle)** Mettre à jour le suivi de l'audit (`docs/project/audits/2026-10-10/SUIVI.md`, `findings.json`, `ETAT-2026-10-13.md`) : AUD-ARC-05 et AUD-ARC-12 fermés par ce changement. Fait par la session de clôture du sprint 10, pas dans cette PR. — fait par la PR #597 (`afb98887`).
+- [x] 5.2 `openspec validate --all --strict`, puis archivage après fusion ; `docs/developer/quality-gates.md` (A12, A14, mesure du moteur) est mis à jour dans la même PR. — PR #600 fusionnée (`8fdbf119`, `docs/developer/quality-gates.md` compris), run https://github.com/FTurleque/minos-code-intelligence/actions/runs/40789379497 ; archivé le 2026-10-29.
