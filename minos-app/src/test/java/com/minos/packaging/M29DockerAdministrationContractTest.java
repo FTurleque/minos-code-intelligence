@@ -78,7 +78,7 @@ class M29DockerAdministrationContractTest {
                 "probe must preserve scip-java diagnostics instead of hiding failures behind grep");
         assertTrue(providerProbe.contains("scip-java version 0.0.0-SNAPSHOT"),
                 "standalone scip-java reports embedded build metadata rather than the Maven artifact version");
-        assertFalse(providerProbe.contains("scip-java version 0.13.1"),
+        assertFalse(providerProbe.contains("scip-java version 0.13.2"),
                 "runtime probe must not claim a version string the standalone executable does not report");
         assertFalse(providerProbe.contains("cs launch org.scip-code:scip-java"),
                 "offline provider probe must not require network-time Coursier resolution");
@@ -159,7 +159,7 @@ class M29DockerAdministrationContractTest {
                 "Maven integrity must not depend on a checksum downloaded beside the payload");
         assertTrue(dockerfile.contains("mvn --version | grep -F \"Apache Maven ${MAVEN_VERSION}\""));
         assertTrue(dockerfile.contains("SCIP_TYPESCRIPT_VERSION=0.4.0"));
-        assertTrue(dockerfile.contains("SCIP_JAVA_VERSION=0.13.1"));
+        assertTrue(dockerfile.contains("SCIP_JAVA_VERSION=0.13.2"));
         assertTrue(dockerfile.contains("SCIP_JAVA_STANDALONE_REPORTED_VERSION=0.0.0-SNAPSHOT"));
         assertTrue(dockerfile.contains("SCIP_PYTHON_VERSION=0.6.6"));
         assertTrue(dockerfile.contains("SCIP_CLANG_VERSION=0.4.0"));

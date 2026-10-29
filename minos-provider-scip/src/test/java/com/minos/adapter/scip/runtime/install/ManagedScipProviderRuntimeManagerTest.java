@@ -27,7 +27,7 @@ class ManagedScipProviderRuntimeManagerTest {
         List<String> command = ManagedScipProviderRuntimeManager.scipJavaFetchCommand(coursier);
 
         // Resolution only: scip-java is never launched, and nothing runs before the jars are verified.
-        assertEquals(List.of(coursier.toString(), "fetch", "--classpath", "org.scip-code:scip-java:0.13.1"), command);
+        assertEquals(List.of(coursier.toString(), "fetch", "--classpath", "org.scip-code:scip-java:0.13.2"), command);
         assertFalse(command.contains("launch"));
         assertFalse(command.contains("--main"));
         // The Windows plan of a Kotlin project reads JAVA_HOME: it is proven in a child JVM with its own environment,

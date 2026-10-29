@@ -82,7 +82,7 @@ ARG COURSIER_LINUX_SHA256=62b141b186e4dfdef03af64c36bdcdfeaab2df30de14950ca220e6
 ARG SCIP_CLANG_LINUX_SHA256=06fd18c576f979a726c651594644ec4a35db4f471f2160b3f72eb89fa6001784
 ARG RUST_ANALYZER_LINUX_GZ_SHA256=ac4f42ddbbd040d75d847e991894776485783e28beb744b9719a660a99abe115
 ARG SCIP_TYPESCRIPT_VERSION=0.4.0
-ARG SCIP_JAVA_VERSION=0.13.1
+ARG SCIP_JAVA_VERSION=0.13.2
 ARG SCIP_JAVA_STANDALONE_REPORTED_VERSION=0.0.0-SNAPSHOT
 ARG SCIP_PYTHON_VERSION=0.6.6
 ARG SCIP_CLANG_VERSION=0.4.0
@@ -252,7 +252,7 @@ RUN set -eux; \
 
 # Build a standalone scip-java launcher while network is available. The Maven coordinate is
 # verified independently because the standalone wrapper reports 0.0.0-SNAPSHOT even though it
-# embeds the exact 0.13.1 artifact. Coursier coordinates are immutable upstream inputs but their
+# embeds the exact 0.13.2 artifact. Coursier coordinates are immutable upstream inputs but their
 # full transitive graph is not represented by a repository-owned lockfile; the produced executable
 # is therefore recorded in provider evidence rather than advertised as bit-for-bit reproducible.
 # Project dependency resolution for the real Maven build is a separate indexing concern handled by

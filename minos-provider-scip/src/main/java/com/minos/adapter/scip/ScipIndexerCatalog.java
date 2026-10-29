@@ -71,7 +71,7 @@ public final class ScipIndexerCatalog {
 
     public static IndexerDescriptor scipJava() {
         return new IndexerDescriptor(
-                "scip-java", "0.13.1", "scip-java",
+                "scip-java", "0.13.2", "scip-java",
                 Set.of(Language.JAVA, Language.KOTLIN), Set.of(BuildSystem.MAVEN),
                 Set.of(
                         IndexerCapability.SYMBOLS,
@@ -88,7 +88,7 @@ public final class ScipIndexerCatalog {
                         "Kotlin support is provided by scip-java and must pass the M17 Kotlin fixture before promotion",
                         "Windows execution uses the M0-qualified Maven/javac shims and ScipWriter compatibility patch",
                         "no final index may be promoted when provider execution or project compilation fails",
-                        "incremental indexing has not been qualified for scip-java 0.13.1",
+                        "incremental indexing has not been qualified for scip-java 0.13.2",
                         "CALLS relations are not emitted explicitly",
                         "some symbol kinds remain unspecified"));
     }

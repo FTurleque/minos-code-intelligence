@@ -4,7 +4,7 @@
   "providers": [
     {
       "id": "scip-java",
-      "version": "0.13.1",
+      "version": "0.13.2",
       "license": "Apache-2.0",
       "dockerArgs": {
         "version": "SCIP_JAVA_VERSION"
@@ -231,13 +231,13 @@
       "id": "scip-java-classpath",
       "platform": "windows-x64",
       "provider": "scip-java",
-      "version": "0.13.1",
+      "version": "0.13.2",
       "recipe": "coursier-fetch",
-      "coordinate": "org.scip-code:scip-java:0.13.1",
+      "coordinate": "org.scip-code:scip-java:0.13.2",
       "lock": "scip-java-classpath.lock.json",
       "license": "Apache-2.0",
       "embedded": true,
-      "payload": "assembled/scip-java-classpath-0.13.1-windows-x64.zip"
+      "payload": "assembled/scip-java-classpath-0.13.2-windows-x64.zip"
     }
   ]
 }
