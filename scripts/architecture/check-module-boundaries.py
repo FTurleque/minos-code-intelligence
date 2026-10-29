@@ -637,11 +637,11 @@ def process_launch_sites(code: str) -> tuple[bool, int]:
 ADAPTER_TYPES_NAMED_BY_ADAPTER: dict[tuple[str, str], dict[str, int]] = {
     ("minos-provider-scip", "minos-runtime-local"): {
         "runtime.local.StrongProcessOwnershipIndexerExecutor": 1,
-        "runtime.local.process.BoundedProcessOutput": 3,
+        "runtime.local.process.BoundedProcessOutput": 2,
         "runtime.local.process.CommandLocator": 10,
         "runtime.local.process.IndexerProcessPlan": 4,
         "runtime.local.process.IndexerProcessPlanFactory": 4,
-        "runtime.local.process.InstallationProcessEnvironment": 3,
+        "runtime.local.process.InstallationProcessEnvironment": 2,
         "runtime.local.process.ProcessIndexerExecutor": 1,
         "runtime.local.sandbox.WorkerSandboxBackend": 1,
         "runtime.local.sandbox.WorkerSandboxBackends": 1,
