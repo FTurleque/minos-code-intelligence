@@ -591,10 +591,25 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
 # minos-runtime-local (com.minos.runtime.local.acl).
 PROCESS_LAUNCHER_MODULES = ("minos-domain", ENGINE_MODULE, APPLICATION_MODULE)
 PROCESS_LAUNCHERS: dict[str, int] = {}
-PROCESS_LAUNCH = re.compile(r"\bProcessBuilder\b|\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\b")
+PROCESS_LAUNCH = re.compile(r"\bProcessBuilder\b|\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*(?:\.|::)\s*exec\b")
 PROCESS_LAUNCH_SITE = re.compile(r"\bnew\s+ProcessBuilder\b|\bProcessBuilder\s*::\s*new\b"
                                  r"|\bProcessBuilder\s*\.\s*startPipeline\b"
-                                 r"|\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\b")
+                                 r"|\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*(?:\.|::)\s*exec\b")
+# A Runtime held by a name (local, field or parameter typed Runtime, or any name assigned Runtime.getRuntime(), `var`
+# included) launches a process through `name.exec` or `name::exec`; other Runtime calls (availableProcessors, maxMemory)
+# do not launch anything.
+RUNTIME_HOLDER = re.compile(r"\b(?:java\s*\.\s*lang\s*\.\s*)?Runtime\s+([A-Za-z_]\w*)\b"
+                            r"|\b([A-Za-z_]\w*)\s*=\s*(?:java\s*\.\s*lang\s*\.\s*)?Runtime\s*\.\s*getRuntime\s*\(\s*\)")
+
+
+def process_launch_sites(code: str) -> tuple[bool, int]:
+    """A12 — whether code (comments and literals blanked) launches a process, and its number of launch sites: the
+    PROCESS_LAUNCH_SITE forms plus every `exec` called on a name that holds a Runtime."""
+    holders = {name for pair in RUNTIME_HOLDER.findall(code) for name in pair if name}
+    held_exec = (re.compile(r"\b(?:" + "|".join(sorted(map(re.escape, holders))) + r")\s*(?:\.|::)\s*exec\b")
+                 if holders else None)
+    held_sites = len(held_exec.findall(code)) if held_exec else 0
+    return bool(PROCESS_LAUNCH.search(code)) or held_sites > 0, len(PROCESS_LAUNCH_SITE.findall(code)) + held_sites
 
 # A13 / AUD-ARC-08, ADR 0068 — the types of one adapter another adapter names, per (naming, named) couple, with the
 # number of files of the naming adapter that name each.
@@ -821,13 +836,35 @@ def check_engine_types_named_by_surfaces(root: Path = ROOT, group_id: str | None
     return {surface: len(listed.get(surface, {})) for surface in sorted(SURFACE_MODULES)}
 
 
+# AUD-ARC-05, ADR 0068 (Mise en œuvre) — the share of concrete code of minos-engine is measured, never ratcheted: a
+# ratchet would refuse splitting a large class and accept turning a class into a record. A production file counts for
+# the kind of its first top-level declaration, with all its lines (comments and blank lines included).
+TOP_LEVEL_KIND = re.compile(r"^(?:@[\w.]+(?:\([^)]*\))?\s+)*(?:(?:public|protected|private|abstract|final|static|sealed"
+                            r"|non-sealed|strictfp)\s+)*(class|interface|record|enum|@interface)\s+\w+", re.MULTILINE)
+
+
+def engine_concrete_code(root: Path = ROOT, module: str = ENGINE_MODULE) -> dict[str, tuple[int, int]]:
+    """AUD-ARC-05 — kind of first top-level declaration -> (production files, lines) of one module; package-info and
+    module-info count as "info", a file without a recognised declaration as "unclassified"."""
+    measured: dict[str, tuple[int, int]] = {}
+    source_root = root / module / "src" / "main" / "java"
+    for source in sorted(source_root.rglob("*.java")) if source_root.is_dir() else []:
+        text = source.read_text(encoding="utf-8")
+        declaration = TOP_LEVEL_KIND.search(text)
+        kind = ("info" if source.name in ("package-info.java", "module-info.java")
+                else declaration.group(1) if declaration else "unclassified")
+        files, lines = measured.get(kind, (0, 0))
+        measured[kind] = (files + 1, lines + len(text.splitlines()))
+    return measured
+
+
 def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
                             listed: dict[str, int] | None = None,
                             modules: tuple[str, ...] = PROCESS_LAUNCHER_MODULES) -> int:
     """A12 — in the domain, the engine and the application, only the PROCESS_LAUNCHERS classes launch a process (a
-    class that mentions ProcessBuilder or Runtime.getRuntime().exec), each with its listed number of launch sites (new
-    ProcessBuilder, ProcessBuilder::new, ProcessBuilder.startPipeline, Runtime.getRuntime().exec). Comments and string
-    literals are ignored."""
+    class that mentions ProcessBuilder or calls exec on a Runtime), each with its listed number of launch sites (new
+    ProcessBuilder, ProcessBuilder::new, ProcessBuilder.startPipeline, Runtime.getRuntime().exec or ::exec, and exec
+    on a name that holds a Runtime, see process_launch_sites). Comments and string literals are ignored."""
     listed = PROCESS_LAUNCHERS if listed is None else listed
     prefix = (group_id or repository_group_id(root)) + "."
     found: dict[str, tuple[str, int]] = {}
@@ -836,11 +873,10 @@ def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
         if not source_root.is_dir():
             continue
         for source in sorted(source_root.rglob("*.java")):
-            code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
-            if PROCESS_LAUNCH.search(code):
+            launches, sites = process_launch_sites(COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8")))
+            if launches:
                 name = ".".join(source.relative_to(source_root).with_suffix("").parts).removeprefix(prefix)
-                found[f"{module}/{name}"] = (source.relative_to(root).as_posix(),
-                                             len(PROCESS_LAUNCH_SITE.findall(code)))
+                found[f"{module}/{name}"] = (source.relative_to(root).as_posix(), sites)
     problems = [f"{path} launches a process and is not in PROCESS_LAUNCHERS ({entry})"
                 for entry, (path, _) in sorted(found.items()) if entry not in listed]
     problems += [f"PROCESS_LAUNCHERS entry {entry} has the count {count!r}, which is not a count of launch sites"
@@ -906,7 +942,9 @@ STORAGE_PACKAGES = frozenset({"codec", "home", "local", "postgresql"})
 
 def check_storage_package_isolation(root: Path = ROOT, group_id: str | None = None) -> int:
     """SH-03 — no production nor test source of a STORAGE_PACKAGE_RULES package of minos-storage names a forbidden
-    package, by single, static or wildcard import or by qualified name; comments and string literals are ignored."""
+    package, by single, static or wildcard import or by qualified name; comments and string literals are ignored.
+    AUD-ARC-12 — minos-storage holds only the STORAGE_PACKAGES below com.minos.storage, and no other module declares a
+    package below it."""
     group = group_id or repository_group_id(root)
     violations: list[str] = []
     for kind in ("main", "test"):
@@ -917,6 +955,14 @@ def check_storage_package_isolation(root: Path = ROOT, group_id: str | None = No
                 if len(parts) == 1 or parts[0] not in STORAGE_PACKAGES:
                     violations.append(f"storage package outside {', '.join(sorted(STORAGE_PACKAGES))} "
                                       f"{source.relative_to(root).as_posix()}")
+        # AUD-ARC-12, ADR 0068 section 5: a package below com.minos.storage always names minos-storage; the root package
+        # itself holds the engine ports.
+        for module in MODULES:
+            other_root = root / module / "src" / kind / "java" / Path(*f"{group}.storage".split("."))
+            if module != STORAGE_MODULE and other_root.is_dir():
+                violations += [f"package below {group}.storage outside {STORAGE_MODULE} "
+                               f"{source.relative_to(root).as_posix()}" for source in sorted(other_root.rglob("*.java"))
+                               if len(source.relative_to(other_root).parts) > 1]
     for label, package, forbidden in STORAGE_PACKAGE_RULES:
         prefixes = tuple(prefix if prefix.startswith(EXTERNAL_PACKAGE_PREFIXES) else f"{group}.{prefix}"
                          for prefix in forbidden)
@@ -1758,13 +1804,20 @@ def main() -> int:
               + " listed in ENGINE_TYPES_NAMED_BY_SURFACE (names and MinosApplication accessors), none other is used")
         print(f"A12 process launchers: {launchers} class(es) of domain, engine and application listed with "
               f"{sum(PROCESS_LAUNCHERS.values())} launch site(s), none other launches a process")
+        concrete = engine_concrete_code()
+        engine_lines = sum(lines for _, lines in concrete.values())
+        class_files, class_lines = concrete.get("class", (0, 0))
+        print(f"AUD-ARC-05 {ENGINE_MODULE} concrete code (measured, not ratcheted; ADR 0068): {class_files} class "
+              f"files, {class_lines} of {engine_lines} lines ({100 * class_lines / max(engine_lines, 1):.1f}%); "
+              + ", ".join(f"{kind}={files}/{lines}" for kind, (files, lines) in sorted(concrete.items())))
         print(f"A13 adapter -> adapter types: {adapter_types} listed in ADAPTER_TYPES_NAMED_BY_ADAPTER "
               f"({sum(sum(types.values()) for types in ADAPTER_TYPES_NAMED_BY_ADAPTER.values())} files), none other "
               f"is named; {len(ADAPTER_COUPLING_REASONS)} couple(s) justified in ADAPTER_COUPLING_REASONS")
         print(f"R1/R2 PostgreSQL backend isolation: {postgresql_blind} modules name neither the backend package nor "
               "its driver")
         print(f"Storage packages: {storage_packages} rules over production and test sources, the two backends name "
-              "each other nowhere, the codec and the path mapping name neither backend nor JDBC")
+              "each other nowhere, the codec and the path mapping name neither backend nor JDBC, no other module "
+              "declares a package below com.minos.storage")
         print(f"A14 package roots: {package_roots} roots over {len(MODULES)} modules, no new root")
         print(f"AUD-ARC-11 execution edges by service: "
               + (", ".join(f"{a} -> {b}" for a, b in runtime_edges) or "none") + " (documented)")

@@ -139,8 +139,12 @@ public final class ProviderProcessEnvironment {
                 || SECRET_FRAGMENTS.stream().anyMatch(lower::contains);
     }
 
-    /** Replaces the environment of {@code builder} with the minimum a trusted launcher needs, plus {@code declared}. */
-    static void applyForTrustedLauncher(ProcessBuilder builder, Map<String, String> declared) {
+    /**
+     * Replaces the environment of {@code builder} with the minimum a trusted launcher needs, plus {@code declared}.
+     * Every trusted PowerShell program MINOS starts uses it: the sandbox launchers and the Windows path
+     * identity helper.
+     */
+    public static void applyForTrustedLauncher(ProcessBuilder builder, Map<String, String> declared) {
         Objects.requireNonNull(builder, "builder");
         Objects.requireNonNull(declared, "declared");
         Map<String, String> environment = builder.environment();
