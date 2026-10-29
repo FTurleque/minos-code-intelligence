@@ -117,14 +117,27 @@ SCOPES = {
             "com/minos/adapter/scip/runtime/plan/ScipClangProcessPlanFactory", "com/minos/adapter/scip/runtime/plan/ScipDotnetProcessPlanFactory",
             "com/minos/adapter/scip/runtime/plan/ScipGoProcessPlanFactory", "com/minos/adapter/scip/runtime/plan/RustAnalyzerScipProcessPlanFactory",
             "com/minos/adapter/scip/runtime/install/StrongOwnedProcessExecutors",
-            # AUD-TST-02: Linux 0.711 / 0.572, Windows 0.668 / 0.548 (pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system); class floor = the lower measure
-            # minus about 5 points.
+            # AUD-QUA-07: the manager and the three classes split from it (decouper-les-classes-de-plus-de-800-lignes).
+            # Whole manager before the split, CI: Linux 0.711 / 0.572, Windows 0.668 / 0.548 (pr-ci.yml runs 38719668720
+            # and 38697957273, 2026-10-15); local Windows report of minos-provider-scip: 358/514 lines, 174/292 branches
+            # before, 360/516 and 174/292 for the four classes after (no covered line or branch lost). What stays on the
+            # manager is its least covered part (pinned acquisition at 11 %): 225/377 = 0.597, 131/242 = 0.541 locally.
+            # The CI Windows report read 0.028 lower in lines and 0.048 lower in branches than the local one for the
+            # whole class, so each floor = local measure - that gap - about 5 points: manager 0.52 / 0.44,
+            # ManagedToolInstallation (28/28, 6/8; Linux CI 5/8 branches) 0.90 / 0.57, BoundedZipExtraction (30/30, 13/14) 0.90 / 0.80,
+            # ScipJavaClasspathInstallation (77/81, 24/28) 0.85 / 0.75. The Linux measure is the Verify (ubuntu-24.04) job.
             "com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager",
+            "com/minos/adapter/scip/runtime/install/ManagedToolInstallation",
+            "com/minos/adapter/scip/runtime/install/BoundedZipExtraction",
+            "com/minos/adapter/scip/runtime/install/ScipJavaClasspathInstallation",
         ),
         "line": 0.50,
         "branch": 0.28,
         "prefixMinimums": {
-            "com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager": {"line": 0.61, "branch": 0.49},
+            "com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager": {"line": 0.52, "branch": 0.44},
+            "com/minos/adapter/scip/runtime/install/ManagedToolInstallation": {"line": 0.90, "branch": 0.57},
+            "com/minos/adapter/scip/runtime/install/BoundedZipExtraction": {"line": 0.90, "branch": 0.80},
+            "com/minos/adapter/scip/runtime/install/ScipJavaClasspathInstallation": {"line": 0.85, "branch": 0.75},
             "com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager": {"line": 0.28, "branch": 0.20},
             "com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35},
             "com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15},

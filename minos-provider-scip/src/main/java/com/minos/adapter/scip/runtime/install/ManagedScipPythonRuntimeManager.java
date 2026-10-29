@@ -6,8 +6,6 @@ import com.minos.io.PrivateLocalStorage;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.runtime.local.process.InstallationProcessEnvironment;
-import com.minos.runtime.local.process.BoundedProcessOutput;
 import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.local.process.IndexerProcessPlan;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -26,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Managed runtime extension for @sourcegraph/scip-python. */
@@ -253,27 +250,7 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
 
     static void run(List<String> command, Path workingDirectory, Path log, Duration timeout)
             throws IOException, InterruptedException {
-        PrivateLocalStorage.ensurePrivateDirectory(log.toAbsolutePath().normalize().getParent());
-        ProcessBuilder builder = new ProcessBuilder(command);
-        InstallationProcessEnvironment.apply(builder, Map.of());
-        builder.directory(workingDirectory.toFile());
-        builder.redirectErrorStream(true);
-        Process process = builder.start();
-        BoundedProcessOutput.Capture capture = BoundedProcessOutput.capture(process, log, null);
-        boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        if (!completed) {
-            process.descendants().toList().reversed().forEach(handle -> {
-                if (handle.isAlive()) handle.destroyForcibly();
-            });
-            if (process.isAlive()) process.destroyForcibly();
-            process.waitFor(5, TimeUnit.SECONDS);
-            capture.await();
-            throw new IllegalStateException("tool command timed out; see the tool log " + leafName(log));
-        }
-        capture.await();
-        if (process.exitValue() != 0) {
-            throw new IllegalStateException("tool command failed with code " + process.exitValue() + "; see the tool log " + leafName(log));
-        }
+        ManagedToolInstallation.run(command, workingDirectory, log, timeout);
     }
 
     private static void deleteRecursively(Path path) throws IOException {

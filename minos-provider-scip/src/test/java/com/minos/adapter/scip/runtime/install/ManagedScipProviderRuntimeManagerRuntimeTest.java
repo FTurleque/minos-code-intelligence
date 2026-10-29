@@ -49,7 +49,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
                 "bin/", "", "bin/tool", "payload", "lib/deep/readme.txt", "hello")));
         Path destination = directory.resolve("out");
 
-        ManagedScipProviderRuntimeManager.extractZipBounded(archive, destination, 1024, 10);
+        BoundedZipExtraction.extractZipBounded(archive, destination, 1024, 10);
 
         assertEquals("payload", Files.readString(destination.resolve("bin/tool")));
         assertEquals("hello", Files.readString(destination.resolve("lib/deep/readme.txt")));
@@ -61,7 +61,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
         Path destination = directory.resolve("out");
 
         IOException refusal = assertThrows(IOException.class,
-                () -> ManagedScipProviderRuntimeManager.extractZipBounded(archive, destination, 1024, 10));
+                () -> BoundedZipExtraction.extractZipBounded(archive, destination, 1024, 10));
 
         assertTrue(refusal.getMessage().contains("archive entry escapes destination"), refusal.getMessage());
         assertFalse(Files.exists(directory.resolve("evil.txt")), "zip-slip must not write outside the destination");
@@ -73,7 +73,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
         Path destination = directory.resolve("out");
 
         IOException refusal = assertThrows(IOException.class,
-                () -> ManagedScipProviderRuntimeManager.extractZipBounded(archive, destination, 1024, 1));
+                () -> BoundedZipExtraction.extractZipBounded(archive, destination, 1024, 1));
 
         assertTrue(refusal.getMessage().contains("too many entries"), refusal.getMessage());
         assertTrue(refusal.getMessage().endsWith(": many.zip"), refusal.getMessage());
@@ -86,7 +86,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
         Path destination = directory.resolve("out");
 
         IOException refusal = assertThrows(IOException.class,
-                () -> ManagedScipProviderRuntimeManager.extractZipBounded(archive, destination, 100, 10));
+                () -> BoundedZipExtraction.extractZipBounded(archive, destination, 100, 10));
 
         assertTrue(refusal.getMessage().contains("extraction size budget"), refusal.getMessage());
     }
@@ -105,7 +105,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
                 first + java.io.File.pathSeparator + second,
                 "done", ""));
 
-        assertEquals(List.of(first, second), ManagedScipProviderRuntimeManager.resolvedJars(log));
+        assertEquals(List.of(first, second), ScipJavaClasspathInstallation.resolvedJars(log));
     }
 
     @Test
@@ -114,7 +114,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
         Files.writeString(log, "Downloading https://repo.example/first.jar\nnothing else\n");
 
         IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> ManagedScipProviderRuntimeManager.resolvedJars(log));
+                () -> ScipJavaClasspathInstallation.resolvedJars(log));
 
         assertEquals("scip-java classpath resolution returned no jar", refusal.getMessage());
     }
@@ -124,8 +124,8 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
         Path missing = directory.resolve("absent.log");
         Path folder = Files.createDirectories(directory.resolve("folder.log"));
 
-        assertThrows(IOException.class, () -> ManagedScipProviderRuntimeManager.resolvedJars(missing));
-        assertThrows(IOException.class, () -> ManagedScipProviderRuntimeManager.resolvedJars(folder));
+        assertThrows(IOException.class, () -> ScipJavaClasspathInstallation.resolvedJars(missing));
+        assertThrows(IOException.class, () -> ScipJavaClasspathInstallation.resolvedJars(folder));
     }
 
     @Test
@@ -133,7 +133,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
         Path coursier = directory.resolve("cs");
 
         assertEquals(List.of(coursier.toString(), "fetch", "--classpath", ManagedScipProviderRuntimeManager.SCIP_JAVA_COORDINATE),
-                ManagedScipProviderRuntimeManager.scipJavaFetchCommand(coursier));
+                ScipJavaClasspathInstallation.scipJavaFetchCommand(coursier));
     }
 
     // ------------------------------------------------------------------ packaged resources

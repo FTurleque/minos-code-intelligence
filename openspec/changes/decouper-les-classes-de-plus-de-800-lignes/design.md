@@ -125,6 +125,17 @@ Couverture des blocs au HEAD, sous Linux comme sous Windows ; couverture Sonar r
 
 - **1.3** : `git grep` des membres déplacés (`carriesWriteDenyForOwner`, `namesTheProcessUser`, `explainDenied`, `WRITE_PROTECTED_MESSAGE`, `probeOwner`, `currentOwner`, `ownerUnverifiable`, `discoverPlatformAccessControl`, `platformAccessControl()`, `CapabilityProbe` ; `run`, `moveFile`, `moveDirectory`, `writeNewFile`, `deleteRecursively`, `extractZipBounded`, `extractDistribution`, `scipJavaFetchCommand`, `fetchVerifiedClasspath`, `resolvedJars`, `swapIn`, `DirectoryMover`) dans `scripts/`, `.github/`, `docs/`, `quality/`, `.claude/`, `.archgate/`, `minos-intellij/` et les sources Java : aucun gate de plus que ceux de la table ci-dessus ; seules les lignes 616, 624 et 627 de `docs/project/audits/2026-10-10/SUIVI.md` citent `PrivateLocalStorage.currentOwner` et `probeOwner`, relevé daté d'une correction SpotBugs, laissé tel quel.
 
+### Mesures après découpage (2026-10-29, poste Windows, JDK 25)
+
+| Fichier | Lignes avant | Lignes après | Lignes couvertes avant → après | Branches couvertes avant → après |
+|---|---|---|---|---|
+| `PRIVATE` et ses quatre classes extraites | 960 | 724 (`PRIVATE`) | 306/346 → 307/347 | 136/170 → 136/170 |
+| `MANAGER` et ses trois classes extraites | 1 005 | 751 (`MANAGER`) | 358/514 → 360/516 | 174/292 → 174/292 |
+
+Aucune ligne ni branche couverte n'est perdue ; l'écart de total vient des lignes de délégation, toutes couvertes. Par classe après : `WriteDenyDiagnosis` 27/29, 26/34 ; `ProcessOwner` 20/20, 8/10 ; `PlatformAccessControlDiscovery` 14/16, 4/4 ; `CapabilityProbe` 9/9 ; `MANAGER` 225/377, 131/242 ; `ManagedToolInstallation` 28/28, 6/8 (Linux : 5/8 branches) ; `BoundedZipExtraction` 30/30, 13/14 ; `ScipJavaClasspathInstallation` 77/81, 24/28. Le manager garde ses parties les moins couvertes, d'où le plancher recalculé de D6. Linux : jobs `Verify (ubuntu-24.04)` des deux PR.
+
+Reste hors lot : dans `MANAGER`, l'acquisition épinglée de Coursier, Maven et Node (couverte à 11 %) et l'amorçage depuis la charge utile (décision Q2) ; les quatre autres fichiers de plus de 800 lignes (décision Q5).
+
 ## Goals / Non-Goals
 
 **Goals** : `PRIVATE` et `MANAGER` sous 800 lignes (cibles : ≤ 740 et ≤ 770, estimations ~726 et ~751) ; chaque classe issue du découpage a une seule raison de changer, ses tests dans son module et son entrée dans les gates ; aucun compte de cliquet qui monte ; zéro différence observable.
