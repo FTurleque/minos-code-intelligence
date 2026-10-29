@@ -217,7 +217,7 @@ et l'appel `MinosApplication.open(home)` du lanceur.
 - **(d3) Statu quo documenté** : l'application reste la racine de composition ; seuls les ports et les
   adaptateurs fichiers ont bougé. Le constat A2 resterait ouvert.
 
-## 4. Recommandation
+## Decision
 
 **(c), avec le SPI** : un module `minos-bootstrap` porte le câblage déplacé verbatim, découvert par
 `ServiceLoader` derrière `MinosApplication.open(home)` / `Builder.build()`.
