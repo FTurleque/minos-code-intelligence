@@ -83,6 +83,19 @@ function Test-ExactDockerImage([string] $DockerPath, [string] $Image, [string] $
         [string]$PreparedLabel.Value -eq 'true'
 }
 
+# The build context of docker\Dockerfile.mcp.release: every file its COPY instructions take from the context,
+# the MINOS jar and the npm lockfiles of the embedded scip-typescript and scip-python. The worktree is clean
+# (checked above), so the lockfiles of the source tree are the bytes packaged in the jar; docker\scripts\
+# mcp-lifecycle.ps1 assembles the same context for the installer.
+function Copy-DockerBuildContext([string] $Jar, [string] $LockDirectory, [string] $Context) {
+    Copy-Item -LiteralPath $Jar -Destination (Join-Path $Context 'minos.jar') -Force
+    foreach ($Lock in @('scip-typescript-package-lock.json', 'scip-python-package-lock.json')) {
+        $Source = Join-Path $LockDirectory $Lock
+        if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) { throw "Docker prebuild input missing: $Source" }
+        Copy-Item -LiteralPath $Source -Destination (Join-Path $Context $Lock) -Force
+    }
+}
+
 function Get-LocalCandidateStagingProcesses([string] $StagingRoot) {
     $RootPrefix = [System.IO.Path]::GetFullPath($StagingRoot).TrimEnd('\') + '\'
     $Matches = @()
@@ -208,6 +221,7 @@ if ($PrepareDockerImage) {
 
     $Jar = Join-Path $DistRoot 'lib\minos.jar'
     $Dockerfile = Join-Path $DistRoot 'docker\Dockerfile.mcp.release'
+    $LockDirectory = Join-Path $RepoRoot 'minos-provider-scip\src\main\resources\com\minos\adapter\scip\runtime'
     foreach ($Required in @($Jar, $Dockerfile)) {
         if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "Docker prebuild input missing: $Required" }
     }
@@ -223,7 +237,7 @@ if ($PrepareDockerImage) {
         $Context = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-local-docker-image-' + [Guid]::NewGuid())
         try {
             New-Item -ItemType Directory -Force -Path $Context | Out-Null
-            Copy-Item -LiteralPath $Jar -Destination (Join-Path $Context 'minos.jar') -Force
+            Copy-DockerBuildContext -Jar $Jar -LockDirectory $LockDirectory -Context $Context
             $Timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
             & $Docker.Source build --file $Dockerfile --tag $PreparedImage `
                 --build-arg "MINOS_VERSION=$Version" `

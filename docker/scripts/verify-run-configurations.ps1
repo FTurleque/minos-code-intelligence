@@ -123,7 +123,7 @@ Assert-Condition -Condition ($composeContent.Contains('no-new-privileges:true'))
     -Message 'Le runtime MCP doit activer no-new-privileges.'
 Assert-Condition -Condition ($composeContent.Contains('restart: unless-stopped')) `
     -Message 'Le conteneur PROD doit redemarrer automatiquement.'
-Assert-Condition -Condition ($composeContent.Contains('- infinity')) `
+Assert-Condition -Condition ($composeContent -match '(?m)^\s*entrypoint:\s*\[\s*sleep\s*,\s*infinity\s*\]\s*$') `
     -Message 'Le conteneur PROD doit rester disponible entre deux sessions STDIO.'
 Assert-Condition -Condition ($smokeContent.Contains('"--entrypoint", "java"')) `
     -Message 'Le smoke test doit lancer explicitement le serveur MCP dans le conteneur.'
@@ -147,6 +147,7 @@ MINOS_IMAGE=minos-code-intelligence:verify
 MINOS_QUERY_IMAGE=minos-code-intelligence:verify-query
 MINOS_DATA_DIR=$($temporaryRoot.Replace('\', '/'))/data
 MINOS_PROJECTS_DIR=$($temporaryRoot.Replace('\', '/'))/projects
+MINOS_HOST_PROJECTS_ROOT=$($temporaryRoot.Replace('\', '/'))/projects
 MINOS_VERSION=verify
 MINOS_GIT_COMMIT=verify
 "@
