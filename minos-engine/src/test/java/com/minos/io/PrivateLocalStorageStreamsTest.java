@@ -143,8 +143,8 @@ class PrivateLocalStorageStreamsTest {
     @Test
     void aFileWhichCannotBeHardenedIsDeletedAndTheFailureIsReported(@TempDir Path root) {
         Path file = root.resolve("victim");
-        PrivateLocalStorage.CapabilityProbe real = PrivateLocalStorage.CapabilityProbe.real();
-        PrivateLocalStorage.useForTesting(new PrivateLocalStorage.CapabilityProbe() {
+        CapabilityProbe real = CapabilityProbe.real();
+        PrivateLocalStorage.useForTesting(new CapabilityProbe() {
             @Override
             public boolean supportsPosix(Path target) {
                 return !target.getFileName().toString().equals("victim") && real.supportsPosix(target);

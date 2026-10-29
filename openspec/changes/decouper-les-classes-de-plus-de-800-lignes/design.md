@@ -109,6 +109,22 @@ Changements actifs (`openspec list`, 16 changements dans `develop`) et changemen
 
 Couverture des blocs au HEAD, sous Linux comme sous Windows ; couverture Sonar réelle (l'API ne donne rien pour une branche non principale de cette organisation) ; durée des suites de tests. Pour cette révision : `wc -l`, `git log 5ce7b79b..f7c6cb13` sur les deux fichiers, relecture des deux fichiers, des gates, de la liste de tolérance et de la règle Archgate de SEC-0061 ; **aucun build Maven**, aucun gate Java exécuté, aucun code modifié.
 
+### Relevé à l'implémentation (2026-10-29, `develop` `617b73a3`)
+
+- **1.1** : `wc -l` inchangé, `PRIVATE` 960 et `MANAGER` 1 005. `git log f7c6cb13..617b73a3` sur les deux fichiers et `check-module-boundaries.py` : cinq commits (`1e577b0f`, `065bc258`, `c073bb87`, `72cf8c5d`, `9b857f11`) ; seul `9b857f11` touche `MANAGER`, sur une ligne (`SCIP_JAVA_VERSION`), sans décaler aucun numéro de ligne de ce design. Comptes A13 du couple (`minos-provider-scip`, `minos-runtime-local`) : `BoundedProcessOutput` 3, `CommandLocator` 10, `InstallationProcessEnvironment` 3. `injecter-le-staging-du-cycle-scip` est archivé (`2026-10-28`) : la condition d'ordre de D9 est remplie.
+- **1.2** (rapport `jacoco.xml` du module, poste Windows, JDK 25 ; Linux non mesuré localement, sa preuve est le job `Verify (ubuntu-24.04)` de chaque PR) :
+
+| Classe d'origine, bloc | Lignes couvertes / total | Branches couvertes / total |
+|---|---|---|
+| `PRIVATE` entier | 306 / 346 | 136 / 170 |
+| diagnostic de refus (`:621-698`) | 27 / 29 | 26 / 34 |
+| propriétaire du processus (`:436-481`) | 20 / 20 | 8 / 10 |
+| découverte du port (`:803-853`) | 14 / 16 | 4 / 4 |
+| `CapabilityProbe` (`:855-915`) | 9 / 9 | 0 / 0 |
+| reste | 236 / 272 | 98 / 122 |
+
+- **1.3** : `git grep` des membres déplacés (`carriesWriteDenyForOwner`, `namesTheProcessUser`, `explainDenied`, `WRITE_PROTECTED_MESSAGE`, `probeOwner`, `currentOwner`, `ownerUnverifiable`, `discoverPlatformAccessControl`, `platformAccessControl()`, `CapabilityProbe` ; `run`, `moveFile`, `moveDirectory`, `writeNewFile`, `deleteRecursively`, `extractZipBounded`, `extractDistribution`, `scipJavaFetchCommand`, `fetchVerifiedClasspath`, `resolvedJars`, `swapIn`, `DirectoryMover`) dans `scripts/`, `.github/`, `docs/`, `quality/`, `.claude/`, `.archgate/`, `minos-intellij/` et les sources Java : aucun gate de plus que ceux de la table ci-dessus ; seules les lignes 616, 624 et 627 de `docs/project/audits/2026-10-10/SUIVI.md` citent `PrivateLocalStorage.currentOwner` et `probeOwner`, relevé daté d'une correction SpotBugs, laissé tel quel.
+
 ## Goals / Non-Goals
 
 **Goals** : `PRIVATE` et `MANAGER` sous 800 lignes (cibles : ≤ 740 et ≤ 770, estimations ~726 et ~751) ; chaque classe issue du découpage a une seule raison de changer, ses tests dans son module et son entrée dans les gates ; aucun compte de cliquet qui monte ; zéro différence observable.
