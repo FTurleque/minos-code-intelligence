@@ -53,16 +53,19 @@ final class WriteDenyDiagnosis {
     static IOException explainDenied(AccessDeniedException denied, Function<Path, AclFileAttributeView> aclView,
                                      Path... locations) {
         for (Path location : locations) {
-            if (location == null) continue;
-            AclFileAttributeView view = aclView.apply(location);
-            if (view == null) continue;
-            try {
-                if (carriesWriteDenyForOwner(view.getAcl(), view.getOwner())) return writeProtected();
-            } catch (IOException unreadable) {
-                // Nothing more precise than the original refusal can be said.
-            }
+            AclFileAttributeView view = location == null ? null : aclView.apply(location);
+            if (view != null && carriesWriteDenyForOwner(view)) return writeProtected();
         }
         return denied;
+    }
+
+    private static boolean carriesWriteDenyForOwner(AclFileAttributeView view) {
+        try {
+            return carriesWriteDenyForOwner(view.getAcl(), view.getOwner());
+        } catch (IOException _) {
+            // Nothing more precise than the original refusal can be said.
+            return false;
+        }
     }
 
     private static IOException writeProtected() {
@@ -77,17 +80,20 @@ final class WriteDenyDiagnosis {
      */
     static boolean carriesWriteDenyForOwner(List<AclEntry> acl, UserPrincipal owner) {
         for (AclEntry entry : acl) {
-            if (entry.type() != AclEntryType.DENY) continue;
-            if (entry.flags().contains(AclEntryFlag.INHERIT_ONLY)) continue;
-            boolean applies = entry.principal().equals(owner)
-                    || entry.principal() instanceof GroupPrincipal
-                    || namesTheProcessUser(entry.principal());
-            if (!applies) continue;
-            for (AclEntryPermission right : entry.permissions()) {
-                if (WRITE_RIGHTS.contains(right)) return true;
+            if (deniesTheOwner(entry, owner) && entry.permissions().stream().anyMatch(WRITE_RIGHTS::contains)) {
+                return true;
             }
         }
         return false;
+    }
+
+    /** A DENY entry that applies to the object itself (not inherit-only) and to the owner, or to a group. */
+    private static boolean deniesTheOwner(AclEntry entry, UserPrincipal owner) {
+        return entry.type() == AclEntryType.DENY
+                && !entry.flags().contains(AclEntryFlag.INHERIT_ONLY)
+                && (entry.principal().equals(owner)
+                        || entry.principal() instanceof GroupPrincipal
+                        || namesTheProcessUser(entry.principal()));
     }
 
     /**
