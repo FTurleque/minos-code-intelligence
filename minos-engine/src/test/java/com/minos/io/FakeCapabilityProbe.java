@@ -8,7 +8,7 @@ import java.util.Objects;
 import java.util.function.Function;
 
 /**
- * Deterministic {@link PrivateLocalStorage.CapabilityProbe} double for fault injection.
+ * Deterministic {@link CapabilityProbe} double for fault injection.
  *
  * <p>Simulates the filesystems {@link PrivateLocalStorage} must cope with, without depending on
  * what the CI runner's real OS happens to expose:</p>
@@ -20,7 +20,7 @@ import java.util.function.Function;
  *       same path, so a {@code harden()} mutation is visible to the following {@code verify()}.</li>
  * </ul>
  */
-final class FakeCapabilityProbe implements PrivateLocalStorage.CapabilityProbe {
+final class FakeCapabilityProbe implements CapabilityProbe {
 
     private final boolean posixSupported;
     private final Function<Path, AclFileAttributeView> aclFactory;

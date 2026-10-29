@@ -10,6 +10,7 @@ import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
+import com.minos.io.CapabilityProbe;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
@@ -146,7 +147,7 @@ class MinosApplicationTest {
     @Test
     void opensRejectsAnUnenforceableHomeBeforeReadingConfiguration(@TempDir Path root) {
         Path home = root.resolve("unenforceable-home");
-        PrivateLocalStorage.useForTesting(new PrivateLocalStorage.CapabilityProbe() {
+        PrivateLocalStorage.useForTesting(new CapabilityProbe() {
             @Override
             public boolean supportsPosix(Path target) {
                 return false;

@@ -68,7 +68,7 @@ class PrivateLocalStorageSharedLocationTest {
     void theIdentityProbeLeavesNothingBehind() throws IOException {
         Path home = Files.createDirectories(temporary.resolve("home"));
 
-        assertEquals(Files.getOwner(home), PrivateLocalStorage.probeOwner(home));
+        assertEquals(Files.getOwner(home), ProcessOwner.probe(home));
         try (Stream<Path> left = Files.list(temporary)) {
             assertEquals(List.of(home), left.toList(), "the probe is deleted");
         }
@@ -78,7 +78,7 @@ class PrivateLocalStorageSharedLocationTest {
     void aProbeThatCannotBeCreatedFailsWithoutAPath() {
         Path home = temporary.resolve("absent").resolve("home");
 
-        IOException refusal = assertThrows(IOException.class, () -> PrivateLocalStorage.probeOwner(home));
+        IOException refusal = assertThrows(IOException.class, () -> ProcessOwner.probe(home));
         assertProbeRefusal(refusal);
         assertTrue(!(refusal.getCause() instanceof AccessDeniedException), "only the kind of failure is kept");
     }
@@ -94,7 +94,7 @@ class PrivateLocalStorageSharedLocationTest {
         try {
             assumeTrue(!Files.isWritable(parent), "an account that ignores permissions (root) cannot be denied");
 
-            IOException refusal = assertThrows(IOException.class, () -> PrivateLocalStorage.probeOwner(home));
+            IOException refusal = assertThrows(IOException.class, () -> ProcessOwner.probe(home));
             assertProbeRefusal(refusal);
             assertTrue(refusal.getCause() instanceof AccessDeniedException, String.valueOf(refusal.getCause()));
         } finally {

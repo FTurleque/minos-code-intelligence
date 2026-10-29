@@ -95,6 +95,10 @@ Option B. Le niveau « arbre privé » est **partiel** par construction : la con
 - Tests `PrivateLocalStorageStreamsTest`, `ConfinedFileOpenerChannelTest`, `DurableAtomicFileMoveDirectoryTest` (`minos-engine`, build Maven des jobs `Verify`).
 - Revue : tout appelant du niveau arbre nomme, dans son test, la racine privée dont il hérite.
 
+## Mise en œuvre
+
+**2026-10-29** (changement OpenSpec `decouper-les-classes-de-plus-de-800-lignes`, décision Q6) : les appels bruts de la primitive peuvent se répartir entre classes de `com.minos.io` et de son adaptateur de plateforme sans que leur somme monte. `PrivateLocalStorage.java` garde ses cinq entrées ; son maximum `Files.createTempFile` est de 1. Les deux autres sites vivent dans `WindowsIcaclsAccessControl.java` (`minos-runtime-local`, fichier de `icacls /save`, `max` 1) et dans `ProcessOwner.java` (`minos-engine`, fichier témoin de la sonde du propriétaire, `max` 2). Un appel brut de plus, dans l'une de ces classes ou ailleurs, échoue toujours au garde.
+
 ---
 
 ## Méthode de validation
