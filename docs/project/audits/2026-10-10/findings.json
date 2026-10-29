@@ -32,7 +32,7 @@
     "axes": [
       "Performance"
     ],
-    "preuve": "minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java:59 (`snapshots.loadActiveKnowledge`), :61 (`semanticIndex.status`), :63-64 (`semanticIndex.activeIndex(...)`), :74 → SemanticSearchService.java:41 et :53 (`indexService.status` avant ET après). SemanticIndexService.java:59-64 : `activeIndex` rappelle `status(project)` puis `store.load(...)` ; :68 chaque `status` fait `snapshots.loadActiveKnowledge(project.id())` pour ne lire que `snapshotId()`, :69 `store.metadata`, :103 `sizeBytes`. Total par requête : 5 `loadActiveKnowledge`, 4 `metadata`, 4 `sizeBytes`, 1 `load` complet de l'index, 1 `search`. L'index n'est utilisé que pour la liste de documents et `builtAtEpochMilli` (HybridSearchService.java:65-72). PostgreSQL : PostgresSemanticVectorStore.java:35 `load` sans cache → PostgresSemanticReadQueries.java:56-83 `SELECT ... d.content, d.embedding::text ... ORDER BY d.stable_key` puis `parseVector` (:134-148, `split(\",\")` + `Double.parseDouble` par composante) ; :114-125 `sizeBytes` = `SUM(octet_length(content)+pg_column_size(embedding))` sur tous les documents, :36-54 `metadata` = `COUNT` sur tous les documents. Mesure de raisonnement (script Python, float32 en représentation décimale la plus courte, 768 dimensions) : 9 498 octets de texte par vecteur ; au budget par défaut (SemanticIndexBudget.java:15-18, 192 Mio de `double[]` → 32 768 documents à 768 dimensions) ≈ 311 Mo de texte transférés et analysés à chaque requête hybride. — Relecture : partie « double chargement par SemanticIndexService.status » déjà consignée dans docs/project/audits/ARCHI-SUIVI.md § A6.8 et :929 (connu partiel) ; le chargement complet de l'index pgvector par requête est nouveau. Tas par défaut : aucun -Xmx/MaxRAMPercentage dans docker/compose-mcp.connected.yaml (:13 mem_limit 3g, :120 JAVA_TOOL_OPTIONS sans option de tas), donc ≈ 768 Mio de tas, qu'une seule requête au budget par défaut peut épuiser.",
+    "preuve": "minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java:59 (`snapshots.loadActiveKnowledge`), :61 (`semanticIndex.status`), :63-64 (`semanticIndex.activeIndex(...)`), :74 → SemanticSearchService.java:41 et :53 (`indexService.status` avant ET après). SemanticIndexService.java:59-64 : `activeIndex` rappelle `status(project)` puis `store.load(...)` ; :68 chaque `status` fait `snapshots.loadActiveKnowledge(project.id())` pour ne lire que `snapshotId()`, :69 `store.metadata`, :103 `sizeBytes`. Total par requête : 5 `loadActiveKnowledge`, 4 `metadata`, 4 `sizeBytes`, 1 `load` complet de l'index, 1 `search`. L'index n'est utilisé que pour la liste de documents et `builtAtEpochMilli` (HybridSearchService.java:65-72). PostgreSQL : PostgresSemanticVectorStore.java:35 `load` sans cache → PostgresSemanticReadQueries.java:56-83 `SELECT ... d.content, d.embedding::text ... ORDER BY d.stable_key` puis `parseVector` (:134-148, `split(\",\")` + `Double.parseDouble` par composante) ; :114-125 `sizeBytes` = `SUM(octet_length(content)+pg_column_size(embedding))` sur tous les documents, :36-54 `metadata` = `COUNT` sur tous les documents. Mesure de raisonnement (script Python, float32 en représentation décimale la plus courte, 768 dimensions) : 9 498 octets de texte par vecteur ; au budget par défaut (SemanticIndexBudget.java:15-18, 192 Mio de `double[]` → 32 768 documents à 768 dimensions) ≈ 311 Mo de texte transférés et analysés à chaque requête hybride. — Relecture : partie « double chargement par SemanticIndexService.status » déjà consignée dans docs/audit/ARCHI-SUIVI.md § A6.8 et :929 (connu partiel) ; le chargement complet de l'index pgvector par requête est nouveau. Tas par défaut : aucun -Xmx/MaxRAMPercentage dans docker/compose-mcp.connected.yaml (:13 mem_limit 3g, :120 JAVA_TOOL_OPTIONS sans option de tas), donc ≈ 768 Mio de tas, qu'une seule requête au budget par défaut peut épuiser.",
     "impact": "Chemin MCP interactif (`minos_hybrid_search`, `minos_hybrid_context`, `ide hybrid-context`) dans la configuration documentée « connected » (PostgreSQL + Ollama, docker/compose-mcp.connected.yaml) : chaque requête rapatrie ~300 Mo de texte, alloue ~200 Mo de `double[]` et des centaines de Mo de chaînes (pilote pgjdbc qui tamponne le résultat entier par défaut), alors que la recherche vectorielle elle-même est faite côté base (`search`). Plusieurs requêtes simultanées approchent le plafond de 3 Gio du conteneur de requêtes. Côté fichier, au-delà de 64 Mio persistés (voir AUD-PERF-03), les 5 chargements sont 5 décodages complets (0,75 à 1,46 s chacun mesurés au § A6.4 d'ARCHI-SUIVI) : 4 à 7 s par requête. L'audit A6 n'avait identifié que le double chargement (cas sémantique désactivé).",
     "effort": "M",
     "action": "1) Ajouter au port `CodeKnowledgeSnapshotStore` une lecture du seul identifiant/descripteur actif (même correction que MINOS-AUD-D03 : `activeSnapshotRepository.read` en local, `knowledge_active` en PostgreSQL) et l'utiliser dans `SemanticIndexService.status`. 2) Dans `HybridSearchService.search`, calculer `status` une seule fois et le passer à `SemanticSearchService` (surcharge interne), et ne plus appeler `activeIndex` : l'identité de corpus peut se fonder sur `IndexMetadata` (snapshotId, provider, modèle, dimensions, builtAt) et les documents se lire sans les vecteurs (`SELECT ... sans embedding` ou méthode `documents(projectId)` du port). 3) Ne calculer `sizeBytes` que pour `minos_semantic_index_status`, pas sur le chemin de requête. Test : compteur de `loadActiveKnowledge`/`load` sur un faux store, attendu 1 et 0 par requête hybride.",
@@ -62,7 +62,7 @@
     "preuve": "docker/Dockerfile.mcp:4 `FROM eclipse-temurin:24.0.2_12-jre@sha256:…` ; docker/Dockerfile.mcp.release:6 `FROM eclipse-temurin:24.0.2_12-jdk@sha256:…` ; pom.xml:44 `<maven.compiler.release>24` et pom.xml:191 `<requireJavaVersion><version>[24,25)` ; .github/dependabot.yml:70-71 ignore `eclipse-temurin` en `semver-major` ; scripts/release/build-windows-distribution.ps1:156,268-280 (jpackage/jlink embarque le runtime du JDK 24 de `setup-java java-version: '24'`, .github/workflows/release-windows.yml:114-119). JDK 24 est une version non-LTS remplacée par la 25 LTS (GA 16/09/2025) ; 24.0.2 (juillet 2025) est sa dernière mise à jour publique.",
     "impact": "Le serveur MCP, le CLI, le pilote PostgreSQL (TLS) et le runtime embarqué dans l'installeur Windows et les deux images Docker restent exposés à toutes les vulnérabilités JDK corrigées par les CPU d'octobre 2025 à juillet 2026 ; Dependabot ne fait que rafraîchir le digest du même 24.0.2 et ne proposera jamais la 25, et l'enforcer fait échouer tout build sur un JDK 25. Les docs (TOOLCHAIN_POLICY.md) ne mentionnent pas cette fin de support.",
     "effort": "L",
-    "action": "Ouvrir le changement de base prévu par docs/developer/TOOLCHAIN_POLICY.md vers Java 25 LTS : `maven.compiler.release` 25, enforcer `[25,26)`, `setup-java` 25 dans les 13 workflows, `eclipse-temurin:25.x` (jre/jdk) dans les deux Dockerfiles, `verify-run-configurations.ps1:112` ; qualifier Linux/Windows/Docker/installeur. En attendant, inscrire le risque au registre (docs/architecture/risks/register.md) avec une échéance. Préalable : un ADR qui remplace l'ADR 0005 (« Aligner sur Java 24 »).",
+    "action": "Ouvrir le changement de base prévu par docs/TOOLCHAIN_POLICY.md vers Java 25 LTS : `maven.compiler.release` 25, enforcer `[25,26)`, `setup-java` 25 dans les 13 workflows, `eclipse-temurin:25.x` (jre/jdk) dans les deux Dockerfiles, `verify-run-configurations.ps1:112` ; qualifier Linux/Windows/Docker/installeur. En attendant, inscrire le risque au registre (docs/architecture/risks/register.md) avec une échéance. Préalable : un ADR qui remplace l'ADR 0005 (« Aligner sur Java 24 »).",
     "connu": null,
     "confiance": "confirmé",
     "sprint": 3,
@@ -74,7 +74,7 @@
     "changement": "migrer-le-socle-vers-java-25",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "pom.xml:44 release 25, pom.xml:198 [25,26) ; Dockerfile.mcp.release:26,37,69 eclipse-temurin:25.0.4.1 ; ScipIndexerCatalog.java:336 'Java 25 JDK' ; docs/developer/TOOLCHAIN_POLICY.md:9-10 Java 25 ; check-toolchain-baseline.py rc=0 (java=25, 36 places) ; test_check_toolchain_baseline OK ; test_check_image_pins OK",
+      "preuve": "pom.xml:44 release 25, pom.xml:198 [25,26) ; Dockerfile.mcp.release:26,37,69 eclipse-temurin:25.0.4.1 ; ScipIndexerCatalog.java:336 'Java 25 JDK' ; docs/TOOLCHAIN_POLICY.md:9-10 Java 25 ; check-toolchain-baseline.py rc=0 (java=25, 36 places) ; test_check_toolchain_baseline OK ; test_check_image_pins OK",
       "reserve": "Restent java-version: '24' dans release-promotion-gate.yml:79 et docker-upgrade-qualification.yml:62 (candidat A, exception tracée dans le gate, à retirer) ; fixture java-24-smoke voulue ; commentaire 'measured on JDK 24' DurableAtomicFile.java:207. Aucune exécution Java 25 vérifiable ici."
     }
   },
@@ -98,9 +98,13 @@
       "AUD-ARC-10"
     ],
     "bloque": [],
-    "statut": "Dette figée",
+    "statut": "Fermé avec réserve",
     "changement": "figer-la-dette-de-frontieres-par-des-cliquets` (règle A11)",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Scan indépendant (imports + noms qualifiés, hors commentaires/littéraux) : HEAD 9 types, 9 imports, 7 fichiers (CLI 5 : query.RelationshipResult/SymbolResult/UsageResult, registry.ProjectPathMappings, runtime.MinosVersion ; API 3 : query.* dans LocalMinosApi ; MCP 1 : MinosVersion ; NEXUS 0), aucun import joker, aucun appel d'accesseur MinosApplication. Même script sur le snapshot du 24/10 : 39 types, 44 imports, 21 fichiers (le suivi en disait 20). ENGINE_TYPES_NAMED_BY_SURFACE = ces 9 entrées, chacune commentée : query.* = modèles de lecture publiés (ARCH-0057 point 6, D4 = a), MinosVersion (ARCH-0068 § 3, Q1 = A), ProjectPathMappings (port d'E/S reçu par DockerRuntimeBootstrap). Table bytecode alignée (api 3, cli 2, mcp 1, nexus vide) ; minos-nexus n'a plus d'arête vers le moteur. (revérifié le 28/10 sur `810dcfb2`)",
+      "reserve": "ProjectPathMappings est un port du moteur nommé par une surface (DockerRuntimeBootstrap:60, via MinosApplicationComposers.resolve().projectPathMappings), ce que ARCH-0057 l.62 exclut (« un port du moteur n'est pas appelé par une surface ») : justification écrite mais contradictoire. Les POM de minos-cli, minos-api, minos-mcp gardent la dépendance compile vers minos-engine ; MinosApplication expose encore 19 accesseurs publics typés moteur (porte ouverte tenue seulement par A11). Le SUIVI garde « Ouvert, dette figée » l.557/l.570 alors que la phase 3 est fusionnée."
+    }
   },
   {
     "id": "AUD-ARC-02",
@@ -111,7 +115,7 @@
       "Architecture",
       "Qualité"
     ],
-    "preuve": "minos-engine/src/main/java/com/minos/incremental/IncrementalIndexingCoordinator.java:23 « public final class IncrementalIndexingCoordinator » (219 lignes, « Orchestration M7 complète : découverte, empreinte, invalidation, négociation, planification, exécution ») ; grep -rln IncrementalIndexingCoordinator */src/main → seul son propre fichier ; usages : IncrementalIndexingCoordinatorTest, IncrementalIndexingDiagnosticRedactionTest (minos-bootstrap), IncrementalIndexingRealFixtureTest (minos-app), IncrementalIndexingDiscoveryOrderTest (minos-engine). Le flux réel est minos-cli/.../LocalAutonomousIndexOperations.java:150-185. Conséquence déjà payée : docs/project/audits/constats.md:407 (D06) « l'empreinte est capturée avant la découverte, dans le coordinateur et dans la CLI » — correctif écrit deux fois. Le coordinateur porte 6 des 9 imports com.minos.incremental→com.minos.orchestration du cycle de packages AUD-ARC-06.",
+    "preuve": "minos-engine/src/main/java/com/minos/incremental/IncrementalIndexingCoordinator.java:23 « public final class IncrementalIndexingCoordinator » (219 lignes, « Orchestration M7 complète : découverte, empreinte, invalidation, négociation, planification, exécution ») ; grep -rln IncrementalIndexingCoordinator */src/main → seul son propre fichier ; usages : IncrementalIndexingCoordinatorTest, IncrementalIndexingDiagnosticRedactionTest (minos-bootstrap), IncrementalIndexingRealFixtureTest (minos-app), IncrementalIndexingDiscoveryOrderTest (minos-engine). Le flux réel est minos-cli/.../LocalAutonomousIndexOperations.java:150-185. Conséquence déjà payée : docs/audit/constats.md:407 (D06) « l'empreinte est capturée avant la découverte, dans le coordinateur et dans la CLI » — correctif écrit deux fois. Le coordinateur porte 6 des 9 imports com.minos.incremental→com.minos.orchestration du cycle de packages AUD-ARC-06.",
     "impact": "Des tests d'intégration réels (fixture, rédaction des diagnostics) valident un chemin que le produit n'emprunte pas : un défaut corrigé ou testé dans le coordinateur peut rester présent dans la CLI, et inversement. SH-05 risque de créer une troisième orchestration au lieu de converger.",
     "effort": "M",
     "action": "Trancher dans SH-05 : soit le coordinateur devient le cas d'usage unique appelé par la CLI (et ses tests deviennent ceux du produit), soit il est supprimé et ses tests sont reportés sur LocalAutonomousIndexOperations / le futur cas d'usage. Ajouter IncrementalIndexingCoordinator à la cartographie SH-01.",
@@ -123,9 +127,13 @@
       "AUD-ARC-01",
       "AUD-PERF-04"
     ],
-    "statut": "Spécifié",
+    "statut": "Fermé",
     "changement": "unifier-l-orchestration-d-indexation",
-    "verification": null
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "IncrementalIndexingCoordinator absent de tout src/main (seule mention : un test de minos-application). Aucune construction de IndexingLifecycleService ni de IndexingRunExecutor dans minos-cli/src/main ; LocalAutonomousIndexOperations délègue à ProjectIndexingUseCase (minos-application), chemin unique. (revérifié le 22/10 sur `7e1faafe`)",
+      "reserve": ""
+    }
   },
   {
     "id": "AUD-ARC-03",
@@ -135,7 +143,7 @@
     "axes": [
       "Architecture"
     ],
-    "preuve": "docs/architecture/arc42/05-vue-blocs.md:102 (minos-cli) liste minos-integration-git, minos-storage-local, minos-provider-scip, minos-runtime-local ; :107 (minos-api) liste minos-storage-local, minos-cli, minos-integration-git ; :96 (minos-nexus) liste minos-storage-local ; :130 (minos-storage-postgresql) liste minos-application ; :62 et :69 omettent minos-domain (ajouté par ADR 0058) ; :113 (minos-mcp) ne cite que minos-application ; :67 range InMemoryCodeKnowledgeStore dans minos-storage-local (il est dans minos-engine, com.minos.store). Les POM réels (sortie du gate) : minos-cli = application, bootstrap(runtime), domain, engine, nexus. docs/architecture/SYNTHESE.md:80 et :117 « minos-storage-postgresql dépend de minos-application — confirmé intentionnel … StorageBackend (package com.minos.storage, dans minos-application) » alors que com.minos.storage est dans minos-engine. docs/project/audits/constats.md:421 déclare G16/G17 « corrigés » ; python3 scripts/docs/check-current-docs.py → SUCCESS (ne contrôle pas ces listes). Les diagrammes docs/architecture/diagrams/c4-container.md:19-28 et arc42/05 §5.1 omettent les arêtes surfaces→moteur (103 références) et adaptateur→adaptateur.",
+    "preuve": "docs/architecture/arc42/05-vue-blocs.md:102 (minos-cli) liste minos-integration-git, minos-storage-local, minos-provider-scip, minos-runtime-local ; :107 (minos-api) liste minos-storage-local, minos-cli, minos-integration-git ; :96 (minos-nexus) liste minos-storage-local ; :130 (minos-storage-postgresql) liste minos-application ; :62 et :69 omettent minos-domain (ajouté par ADR 0058) ; :113 (minos-mcp) ne cite que minos-application ; :67 range InMemoryCodeKnowledgeStore dans minos-storage-local (il est dans minos-engine, com.minos.store). Les POM réels (sortie du gate) : minos-cli = application, bootstrap(runtime), domain, engine, nexus. docs/architecture/SYNTHESE.md:80 et :117 « minos-storage-postgresql dépend de minos-application — confirmé intentionnel … StorageBackend (package com.minos.storage, dans minos-application) » alors que com.minos.storage est dans minos-engine. docs/audit/constats.md:421 déclare G16/G17 « corrigés » ; python3 scripts/docs/check-current-docs.py → SUCCESS (ne contrôle pas ces listes). Les diagrammes docs/architecture/diagrams/c4-container.md:19-28 et arc42/05 §5.1 omettent les arêtes surfaces→moteur (103 références) et adaptateur→adaptateur.",
     "impact": "La documentation courante décrit comme normale une architecture que les gardes interdisent (surfaces → adaptateurs) et masque la dette réelle (surfaces → moteur) : un contributeur ou un agent qui s'y fie proposera des arêtes refusées par le gate, ou sous-estimera SH-05/SH-09.",
     "effort": "S",
     "action": "Générer les listes « Dépendances » de arc42/05 depuis les POM (comme module-dependencies.md) ou les remplacer par un lien vers ce fichier généré ; passer SYNTHESE.md au statut historique ; ajouter au diagramme conteneur les arêtes surfaces→moteur et adaptateur→adaptateur ; étendre check-current-docs.py pour comparer toute liste de modules d'arc42 aux POM.",
@@ -169,9 +177,13 @@
     "sprint": 9,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "decouvrir-les-fournisseurs-par-chargeur-explicite",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Les 4 ServiceLoader.load de production passent un chargeur explicite (StorageBackendSelection:44, StableFileSystemIdentity:64, MinosApplicationComposers:36, McpLaunchRoutes:31). Garde A16 OK. (revérifié le 22/10 sur `7e1faafe`)",
+      "reserve": "L'injection depuis la racine de composition est reportée (D3). Le moteur atteint toujours l'adaptateur runtime-local par découverte de service."
+    }
   },
   {
     "id": "AUD-ARC-05",
@@ -181,7 +193,7 @@
     "axes": [
       "Architecture"
     ],
-    "preuve": "minos-engine : 169 fichiers, 16 932 lignes ; 33 fichiers d'interfaces = 1 042 lignes, 70 fichiers de classes = 12 136 lignes (le reste en records/enums). Packages les plus lourds : orchestration 40 fichiers / 4 463 l., io 16 / 2 640 l., hosted 32 / 2 431 l. (RBAC, chaîne d'audit HMAC, rétention : un cas d'usage complet). minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java:634 « Process process = new ProcessBuilder(Path.of(systemRoot, \"System32\", \"icacls.exe\").toString(), path, \"/inheritance:d\", ...) ». docs/architecture/adr/0022-maven-reactor-and-module-boundaries.md:71 range « moteur → runtime process local concret » parmi les dépendances qui « doivent devenir impossibles ».",
+    "preuve": "minos-engine : 169 fichiers, 16 932 lignes ; 33 fichiers d'interfaces = 1 042 lignes, 70 fichiers de classes = 12 136 lignes (le reste en records/enums). Packages les plus lourds : orchestration 40 fichiers / 4 463 l., io 16 / 2 640 l., hosted 32 / 2 431 l. (RBAC, chaîne d'audit HMAC, rétention : un cas d'usage complet). minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java:634 « Process process = new ProcessBuilder(Path.of(systemRoot, \"System32\", \"icacls.exe\").toString(), path, \"/inheritance:d\", ...) ». docs/adr/0022-maven-reactor-and-module-boundaries.md:71 range « moteur → runtime process local concret » parmi les dépendances qui « doivent devenir impossibles ».",
     "impact": "Le module que tous les adaptateurs et toutes les surfaces importent porte aussi des mécanismes OS et des cas d'usage métier : chaque modification de l'E/S Windows ou du plan de contrôle recompile et re-teste tout le reactor, et la frontière « noyau sans infrastructure » n'est vérifiée par aucune garde.",
     "effort": "L",
     "action": "Dans SH-08 : extraire le mécanisme ACL Windows (icacls) derrière un port fourni par minos-runtime-local ou un module d'E/S plateforme ; déplacer hosted vers minos-application (ou un module dédié) en laissant ses ports dans le moteur ; ajouter une règle ArchUnit « minos-engine n'appelle ni ProcessBuilder ni Runtime.exec ».",
@@ -193,9 +205,13 @@
       "AUD-SEC-06"
     ],
     "bloque": [],
-    "statut": "Dette figée",
+    "statut": "Partiel",
     "changement": "idem (règle A12) et `trancher-les-decisions-d-architecture-du-sprint-10` (D2)",
-    "verification": null
+    "verification": {
+      "verdict": "partiel",
+      "preuve": "Volet processus fermé : aucun ProcessBuilder/Runtime.exec dans domain/engine/application (seule mention : Javadoc IndexingRuntimePorts:234) ; PROCESS_LAUNCHERS = {} ; PrivateLocalStorage 1032 -> 960 lignes, découvre le port com.minos.io.PlatformAccessControl par ServiceLoader (fail-closed si 0 ou >1 implémentation) ; implémenté par minos-runtime-local com.minos.runtime.local.acl.WindowsIcaclsAccessControl (+ WindowsIcacls, seul ProcessBuilder, 287 lignes), déclaré dans minos-runtime-local/src/main/resources/META-INF/services/com.minos.io.PlatformAccessControl. Volet « moteur annoncé ports » : même méthode que le 24/10 (rejouée sur minos9 : 13 095 / 18 018 exacts) -> HEAD 170 fichiers, 17 526 lignes, classes 69 fichiers / 12 836 l. (73,2 %), interfaces 37 / 1 122 l. ; 24/10 : 13 095 (72,7 %) / 1 137 ; audit : 12 136 / 16 932 (71,7 %) / 1 042. (revérifié le 28/10 sur `810dcfb2`)",
+      "reserve": "Le titre du constat porte deux défauts ; seul le lancement d'icacls est résolu. La part concrète baisse de 259 lignes depuis le 24/10 mais reste au-dessus de l'audit (+700 lignes de classes, 73 % contre 72 %) ; elle est assumée par ARCH-0068 (« le prix de déplacer plutôt que renommer ») sans cliquet ni cible. Le SUIVI dit « fermable » (l.661) et garde « Dette figée » dans ses tableaux l.558 et l.571 : incohérent dans les deux sens."
+    }
   },
   {
     "id": "AUD-ARC-07",
@@ -205,7 +221,7 @@
     "axes": [
       "Architecture"
     ],
-    "preuve": "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java:279 « InMemoryCodeKnowledgeStore indexedStore = new InMemoryCodeKnowledgeStore(snapshot); » ; minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java:142 « InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot); » ; docs/architecture/adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md:3 « Status: Proposed (2026-09-29) — aucune implémentation » ; docs/project/roadmap/storage-hexagonal-2026-10/README.md:123 SH-04 (port de lecture, ADR 0056) « À faire ».",
+    "preuve": "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java:279 « InMemoryCodeKnowledgeStore indexedStore = new InMemoryCodeKnowledgeStore(snapshot); » ; minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java:142 « InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot); » ; docs/adr/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md:3 « Status: Proposed (2026-09-29) — aucune implémentation » ; docs/roadmap/storage-hexagonal-2026-10/README.md:123 SH-04 (port de lecture, ADR 0056) « À faire ».",
     "impact": "La taille du projet indexable reste bornée par le tas de chaque processus (CLI, MCP) ; tant que ADR 0047 n'est pas tranché, SH-04 conçoit un port de lecture sans savoir si l'implémentation sera paginée ou mappée.",
     "effort": "L",
     "action": "Trancher ADR 0047 (option A internement au décodage, mesurée, comme premier pas) avant SH-04, puis faire dépendre les requêtes du port de lecture et non de InMemoryCodeKnowledgeStore.",
@@ -216,9 +232,13 @@
       "AUD-PERF-03"
     ],
     "bloque": [],
-    "statut": "Décision à prendre",
+    "statut": "Fermé avec réserve",
     "changement": "trancher-les-decisions-d-architecture-du-sprint-10` (D1)",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Port CodeKnowledgeReader et vue SnapshotReadView présents (minos-engine com.minos.store) ; ARCH-0056 Statut Accepted ; ADR 0047 tranché (Accepted 2026-10-13 option A, puis archivé, remplacé par DATA-0066). 'new InMemoryCodeKnowledgeStore' en production : uniquement SnapshotReadView:45 et SnapshotQueryView:48 (plus dans FileSymbolSnapshotStore ni PostgresCodeKnowledgeSnapshotStore). A18 vert : 3 classes listées utilisent l'ancienne vue (les deux stores, ImpactAnalysisService), minos-application ne nomme ni InMemoryCodeKnowledgeStore ni CodeKnowledgeStore. (revérifié le 24/10 sur `bf633fc7`)",
+      "reserve": "Le constat d'impact (taille indexable bornée par le tas) demeure : chaque vue construit encore un index mémoire complet, mis en cache (options B et C d'ADR 0047 hors périmètre). L'ancien contrat déprécié reste utilisé par 3 classes."
+    }
   },
   {
     "id": "AUD-ARC-08",
@@ -239,9 +259,13 @@
       "AUD-ARC-10"
     ],
     "bloque": [],
-    "statut": "Dette figée",
+    "statut": "Fermé avec réserve",
     "changement": "figer-la-dette-de-frontieres-par-des-cliquets` (règle A13)",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Snapshot 810dcfb2. pom.xml : reactor à 13 modules, un seul `minos-storage` (packages codec, home, local, postgresql), plus aucun minos-storage-local/-postgresql. Codec commun : minos-storage/src/main/java/com/minos/storage/codec (9 classes : KnowledgeSnapshotCodecs, SnapshotCodec V1-V3, SnapshotIntegrityService, SnapshotBinaryPrimitives…), ProjectPathMappingStore dans com.minos.storage.home ; PostgreSQL n'importe plus que codec/home (PostgresCodeKnowledgeSnapshotStore.java:12-13 et :282, PostgresSnapshotPayloadCodec.java:4-5, PostgresProjectRegistry.java:7). Interdiction local <-> postgresql : STORAGE_PACKAGE_RULES de check-module-boundaries.py (local->postgresql+driver, postgresql->local, codec/home->backends+JDBC, sources main ET test) + liste fermée STORAGE_PACKAGES, doublée en ArchUnit sur le bytecode (minos-app ModuleArchitectureTest : thePostgresqlBackendDoesNotUseTheLocalBackend, theSharedStoragePackagesUseNoBackend). Bootstrap sans PostgreSQL : R1 (POSTGRESQL_BLIND_MODULES, sources de minos-bootstrap sans import ni nom qualifié de com.minos.storage.postgresql / org.postgresql), ArchUnit onlyThePostgresqlBackendUsesPostgresql (bootstrap, adapter.scip, storage.local), test de chargement T1 LocalCompositionLoadsNoPostgresqlClassTest (chargeur isolé, aucune classe org.postgresql./storage.postgresql. chargée) ; service déclaré par minos-app/src/main/resources/META-INF/services/com.minos.storage.StorageBackendProvider. SCIP : aucun `new FileSymbolSnapshotStore` dans minos-provider-scip/src/main (seule instanciation de prod : LocalStorageBackend.java:49 ; bootstrap passe `FileSymbolSnapshotStore::new`, DefaultMinosApplicationComposer.java:91) ; ScipProjectSnapshotLifecycle reçoit StagingSnapshotStores (port moteur com.minos.store) ; aucun import com.minos.storage dans le provider ; minos-provider-scip/pom.xml:29-31 minos-storage en <scope>test</scope>, gardé par TEST_ONLY_DEPENDENCIES. A13 : ADAPTER_TYPES_NAMED_BY_ADAPTER = un seul couple provider-scip -> runtime-local, 9 types (StrongProcessOwnershipIndexerExecutor, BoundedProcessOutput, CommandLocator, IndexerProcessPlan, IndexerProcessPlanFactory, InstallationProcessEnvironment, ProcessIndexerExecutor, WorkerSandboxBackend, WorkerSandboxBackends), 28 usages-fichiers ; ADAPTER_COUPLING_REASONS : 1 raison écrite (plans de processus, environnement filtré, sorties bornées, propriété forte et sandbox ; ADR 0068/0070), le garde refuse couple sans raison et raison sans couple. Compte réel : 28 imports com.minos.runtime.local dans 12 fichiers de minos-provider-scip/src/main (inchangé depuis le 24/10, +3 vs audit). Rejoué : check-module-boundaries.py SUCCESS (modules=13, sources=577 ; A13 9 types/28 fichiers, 1 couple justifié ; R1/R2 2 modules ; Storage packages 4 règles ; A14 36 racines/13 modules) ; test_check_module_boundaries.py : 238 tests OK (unittest, pas de pytest). (revérifié le 28/10 sur `810dcfb2`)",
+      "reserve": "1) « Bootstrap ne dépend pas de PostgreSQL en compilation » n'est vrai qu'au niveau des sources et du bytecode : minos-storage/pom.xml:37-40 déclare org.postgresql:postgresql en portée compile, donc le pilote et com.minos.storage.postgresql sont sur le classpath de compilation de minos-bootstrap (et de provider-scip en test) ; la garde est R1 (regex sources) + ArchUnit + T1, pas Maven (choix assumé, `build-helper` refusé). 2) L'impact de l'audit n'est que partiellement levé : le staging SCIP reste sur fichiers pour les deux backends (bootstrap injecte FileSymbolSnapshotStore::new quel que soit le backend, ADR 0068 § 2/§ 5 « pour les deux backends »), et PostgresProjectRegistry lit toujours ProjectPathMappingStore sous MINOS_HOME (fichier) : le backend PostgreSQL n'est toujours pas autonome, désormais par décision documentée plutôt que par couplage. 3) Le couplage SCIP -> runtime-local reste à 28 imports (25 à l'audit), justifié mais pas réduit ; A13 compte des usages-fichiers par type, pas des références. 4) Pas de build Java : ArchUnit, T1 et la portée test non exécutés ici (CI verte affirmée par SUIVI, non vérifiée)."
+    }
   },
   {
     "id": "AUD-QUA-01",
@@ -262,9 +286,13 @@
       "AUD-TST-13"
     ],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "garantir-la-parite-du-lanceur-job-object",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "`python3 scripts/quality/check-job-object-launcher-parity.py` -> JOB OBJECT LAUNCHER PARITY GATE SUCCESS (identical fragments=7, assumed divergent zones=10) ; auto-test test_check_job_object_launcher_parity.py OK ; câblé pr-ci.yml:161-165 (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "10 zones divergentes « assumées » restent ; alignement du command-line-builder moteur sur le mode cmd-c strict (D3) non fait."
+    }
   },
   {
     "id": "AUD-QUA-02",
@@ -275,7 +303,7 @@
       "Qualité",
       "Architecture"
     ],
-    "preuve": "Zéro référence depuis un src/main (commande : `grep -rlw <Classe> --include=*.java --include=*.xml --include=*.kts minos-*/src/main | grep -v <Classe>.java | wc -l` → 0 pour chacune) : minos-engine/src/main/java/com/minos/incremental/IncrementalIndexingCoordinator.java:8 (219 l., « Orchestration M7 complète », 4 tests), ProjectFingerprintSnapshotAlignmentService.java (41 l.), minos-engine/.../orchestration/IndexerProviderRegistry.java (58 l.), minos-application/.../program/analysis/InterproceduralFlowService.java (110 l.), ProgramGraphEvaluator.java (46 l.), minos-application/.../semantic/SemanticSearchEvaluator.java (70 l.), minos-nexus/.../NexusSemanticSignalService.java (52 l.). Les gates les figent : scripts/quality/check-jacoco.py:29 (portée incluant ProgramGraphEvaluator et InterproceduralFlowService), :53 (SemanticSearchEvaluator), scripts/quality/check-java-ast-provider-consistency.py:109 (exige `ProgramGraphEvaluator().evaluate`). L'annexe D de l'audit d'octobre note déjà que le coordinateur « n'est pas appelé en production » (docs/project/audits/annexes/D-cycle-de-vie.md:282) sans en faire un constat.",
+    "preuve": "Zéro référence depuis un src/main (commande : `grep -rlw <Classe> --include=*.java --include=*.xml --include=*.kts minos-*/src/main | grep -v <Classe>.java | wc -l` → 0 pour chacune) : minos-engine/src/main/java/com/minos/incremental/IncrementalIndexingCoordinator.java:8 (219 l., « Orchestration M7 complète », 4 tests), ProjectFingerprintSnapshotAlignmentService.java (41 l.), minos-engine/.../orchestration/IndexerProviderRegistry.java (58 l.), minos-application/.../program/analysis/InterproceduralFlowService.java (110 l.), ProgramGraphEvaluator.java (46 l.), minos-application/.../semantic/SemanticSearchEvaluator.java (70 l.), minos-nexus/.../NexusSemanticSignalService.java (52 l.). Les gates les figent : scripts/quality/check-jacoco.py:29 (portée incluant ProgramGraphEvaluator et InterproceduralFlowService), :53 (SemanticSearchEvaluator), scripts/quality/check-java-ast-provider-consistency.py:109 (exige `ProgramGraphEvaluator().evaluate`). L'annexe D de l'audit d'octobre note déjà que le coordinateur « n'est pas appelé en production » (docs/audit/annexes/D-cycle-de-vie.md:282) sans en faire un constat.",
     "impact": "Code testé, mesuré et documenté comme s'il était le chemin réel (12 documents citent IncrementalIndexingCoordinator) : les relecteurs et les audits lisent un orchestrateur qui ne tourne pas (l'annexe D y a relevé un motif de défaut), chaque refactorisation du moteur doit le maintenir compilable, et les seuils JaCoCo comptent une couverture qui ne protège rien.",
     "effort": "M",
     "action": "Pour chaque classe, décider explicitement : brancher (si c'est une capacité promise), déplacer vers src/test ou vers un module d'évaluation/benchmark (évaluateurs), ou supprimer ; retirer en même temps les portées JaCoCo et les exigences de gate correspondantes. Ajouter au gate de frontières un contrôle « aucune classe publique de src/main sans référence de production hors liste blanche nominative » (même principe à cliquet que check-private-io). `CodeKnowledgeSnapshotBinaryCodec` relève déjà de E11 et les ports hébergés non qualifiés (`HostedAvailabilityPort`, `HostedTransportSecurityPort`) sont des frontières déclarées : à garder hors de ce lot.",
@@ -284,9 +312,13 @@
     "sprint": 9,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "retirer-les-services-sans-appelant-de-production` (et `unifier-l-orchestration-d-indexation` pour le coordinateur)",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "ProjectFingerprintSnapshotAlignmentService, IndexerProviderRegistry et InterproceduralFlowService : 0 référence dans le code Java. Garde A15 OK : 11 types inscrits ; IncrementalIndexingCoordinator retiré de la liste. (revérifié le 22/10 sur `7e1faafe`)",
+      "reserve": "ProgramGraphEvaluator (minos-application/src/main) et NexusSemanticSignalService sont conservés et inscrits dans la liste à cliquet A15 (l.571, 580) : la dette est figée, pas supprimée. C'est une décision du propriétaire."
+    }
   },
   {
     "id": "AUD-QUA-03",
@@ -305,9 +337,13 @@
     "sprint": 9,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "donner-un-contrat-d-erreur-au-port-d-etat-d-index",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "IndexStateStoreException (minos-engine) est levée par FileIndexStateStore, PostgresIndexStateStore et ProjectMutationIndexStateStore, et capturée par ProjectIndexStateReconciler, IndexingRunExecutor et LocalProjectOperations. Tests présents : IndexStateStoreExceptionTest, ProjectIndexStateReconcilerErrorContractTest et ProjectIndexStateReconcilerStoreFailureTest. (revérifié le 22/10 sur `7e1faafe`)",
+      "reserve": "Il reste des catch (RuntimeException) dans ProjectIndexStateReconciler:256 et :264. Ils portent sur le SnapshotStore, pas sur le port d'état, donc le même schéma de requalification survit sur un port voisin. D5 (refus métier) est reporté."
+    }
   },
   {
     "id": "AUD-QUA-04",
@@ -351,9 +387,13 @@
     "sprint": 11,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "mutualiser-les-caches-lru-et-nommer-les-additions-bornees",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Au HEAD bf633fc7, seulement 3 LinkedHashMap à ordre d'accès dans src/main : minos-engine/.../store/cache/WeightedLruCache.java:35 (unique cache pondéré) et 2 exclusions en liste fermée et justifiées (SourceStateKeyMemo.java:35, HostedDenialThrottle.java:28). Les 20 helpers bornés restants portent des noms qui disent leur sémantique (saturatingAdd/saturatingMultiply/addOrThrow ; checkedAdd lève une exception dans RemoteCloneBudget.java:143 et FileSemanticVectorStore.java:431). Plus aucun safeAdd. check-bounded-helpers.py : rc=0 (« bounded helpers checked=20 ») ; --self-test rc=0 ; câblé dans pr-ci.yml:187,190. (revérifié le 24/10 sur `bf633fc7`)",
+      "reserve": "Les helpers ne sont pas mutualisés : il reste 20 copies privées (dont 2 checkedAdd), sans BoundedArithmetic, par décision D2b. Le gate ne garde que les noms et sémantiques. Le défaut des opérandes négatifs, relevé hors périmètre, n'est pas traité."
+    }
   },
   {
     "id": "AUD-SEC-02",
@@ -376,7 +416,7 @@
     "changement": "epingler-et-isoler-l-installation-des-providers, executer-scip-java-sur-classpath-verifie",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "PR #449 fusionnée le 2026-10-14 (dc4cffb9) : le plan d'indexation revérifie chaque jar du classpath installé contre le verrou SHA-256 avant chaque exécution, sous Windows et sous Linux ; `coursier launch` retiré (ScipJavaProcessPlanFactory, ScipJavaClasspath). Verify (ubuntu-24.04) et Verify (windows-2022) verts, run 38572983303 ; image complète verte, run 38572982326.",
+      "preuve": "`ScipJavaProcessPlanFactory.java` (package `runtime/plan`) ne contient plus `coursier launch` ; le plan passe par `ScipJavaClasspath.verify(...)` (l.173) puis `java -jar <lanceur>` (l.181-185). Repli : lanceur `scip-java` du `PATH` sans vérification (l.139), décision du propriétaire en attente. (revérifié le 14/10 sur `9e4a6e61`)",
       "reserve": "Indexation réelle dans bubblewrap et AppContainer non rejouée (la CI n'exécute aucun provider, tâche manuelle 1.5) ; un scip-java installé à la main dans le PATH, sans classpath installé, reste exécuté sans vérification (décision du propriétaire) ; fenêtre vérification → ouverture par la JVM (même compte)."
     }
   },
@@ -400,9 +440,13 @@
       "AUD-TST-08"
     ],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "idem",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "check-jacoco.py:26-35 scope `storage-codec-and-state` (SnapshotBinaryCodecSupport, FileIndexStateStore, FileProjectFingerprintSnapshotStore, LocalProjectRegistry, 0.89/0.73) ; :41-44 `com/minos/io/` + plancher LeaseDeadline ; LeaseDeadlineTest présent (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "Couverture ciblée seulement ~246/531 fichiers (déclaré) ; PrivateLocalStorage absent de tout scope nominatif (seul `global` le couvre)."
+    }
   },
   {
     "id": "AUD-TST-03",
@@ -454,7 +498,7 @@
     "changement": "borner-la-couverture-globale-et-du-coeur",
     "verification": {
       "verdict": "fermé",
-      "preuve": "PR #451 fusionnée le 2026-10-14 (4cc5a817) : check-jacoco.py déclare PostgresRuntimeObservationStore dans m30-postgresql-pgvector avec un plancher de classe 0,95 / 0,85 (mesure Linux 65/65 lignes, 18/20 branches) ; MINOS JACOCO GATE SUCCESS sous Linux, run 38623008754. Les tests PostgreSQL sont exigés en CI Linux (pr-ci.yml, -Dminos.postgresql.tests.required=true) : pas de saut silencieux.",
+      "preuve": "`check-jacoco.py:188,196` rattache `PostgresRuntimeObservationStore` (0,95 / 0,85) ; `pr-ci.yml:297` passe `-Dminos.postgresql.tests.required=true` sous Linux, donc `assumeTrue(dockerAvailable)` (`PostgresTestSupport.java:101`) ne peut plus sauter en silence en CI ; il reste un saut volontaire hors CI. (revérifié le 14/10 sur `9e4a6e61`)",
       "reserve": null
     }
   },
@@ -466,7 +510,7 @@
     "axes": [
       "Tests"
     ],
-    "preuve": "minos-intellij/build.gradle.kts:11,70-72,89-107 : greffon PIT et `useJUnitPlatform()`, aucun JaCoCo. Appariement par nom (script) : sans référence dans un test `MinosToolWindowPanel` (403 l.), `MinosM21Actions` (231), `MinosEditorActions` (226), `MinosProjectService` (154), `MinosSettingsConfigurable` (123), `MinosSettingsState` (85), `MinosUiController` (77), `MinosNavigation` (43), `MinosRegistryNotice` (25), `MinosToolWindowFactory` (21) — 1 388/3 600 lignes. SpotBugs signale déjà `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` dans `MinosProjectService:121` (docs/developer/quality/code-audit-couverture.md § 5.1). Les 15 fichiers de test ne couvrent que `protocol/` et `ui/ArchitectureGraphPanel`.",
+    "preuve": "minos-intellij/build.gradle.kts:11,70-72,89-107 : greffon PIT et `useJUnitPlatform()`, aucun JaCoCo. Appariement par nom (script) : sans référence dans un test `MinosToolWindowPanel` (403 l.), `MinosM21Actions` (231), `MinosEditorActions` (226), `MinosProjectService` (154), `MinosSettingsConfigurable` (123), `MinosSettingsState` (85), `MinosUiController` (77), `MinosNavigation` (43), `MinosRegistryNotice` (25), `MinosToolWindowFactory` (21) — 1 388/3 600 lignes. SpotBugs signale déjà `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` dans `MinosProjectService:121` (docs/quality/code-audit-couverture.md § 5.1). Les 15 fichiers de test ne couvrent que `protocol/` et `ui/ArchitectureGraphPanel`.",
     "impact": "Toute régression d'interface, de paramétrage ou d'orchestration des actions côté IDE n'est détectée qu'en usage manuel ; la CI du plugin ne peut pas signaler d'érosion faute de mesure.",
     "effort": "M",
     "action": "Brancher JaCoCo dans build.gradle.kts avec un rapport publié par intellij-plugin.yml ; extraire la logique de `MinosProjectService`/`MinosM21Actions` dans des classes testables sans plateforme (comme `protocol/`) ; tests `BasePlatformTestCase` pour la fenêtre d'outils.",
@@ -475,9 +519,13 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "mesurer-la-couverture-du-plugin-intellij",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "minos-intellij/build.gradle.kts:27,118-151 jacoco + jacocoTestCoverageVerification (0.33/0.33, protocol 0.47/0.39) ; .github/workflows/intellij-plugin.yml:90 exécute la vérification en CI (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "Les classes UI/actions restent sans test : 0 référence dans src/test pour MinosToolWindowPanel, MinosM21Actions, MinosEditorActions, MinosProjectService, MinosSettingsConfigurable, MinosUiController ; plancher bas (33 %). Défaut « aucune couverture mesurée » fermé, défaut « 10 classes sans test » non."
+    }
   },
   {
     "id": "AUD-PERF-02",
@@ -487,7 +535,7 @@
     "axes": [
       "Performance"
     ],
-    "preuve": "minos-application/src/main/java/com/minos/application/semantic/SemanticDocumentFactory.java:69-74 (commentaire « a file is not reread once per symbol » puis `sourceReader.readExcerpt(location, 2, CHUNK_MAX_TOKENS)` par symbole) ; minos-application/src/main/java/com/minos/context/LocalSourceReader.java:131-137 (« Reads the current file contents for every excerpt request », cache retiré) : ouverture confinée, lecture complète, découpage en lignes et `getBytes(UTF_8)` par ligne à chaque extrait. Appelants : minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java:276-279 (`synchronizeSemanticIfConfigured` après chaque indexation réussie), HybridSearchService.java:136 (`documentFactory.build` à chaque reconstruction du corpus structuré). Mesure existante (docs/project/audits/ARCHI-SUIVI.md § A6.3.4) : ≈ 6 ms par document, 112,7 s pour 19 115 documents, 467 à 515 s pour 81 095. — Relecture : déjà consigné hors périmètre dans docs/project/audits/ARCHI-SUIVI.md § A6.8 (ligne « LocalSourceReader relit le fichier entier pour chaque extrait ») et :882 ; le renvoi « connu: MINOS-AUD-F06 » est inexact (F06 = garde de fraîcheur, pas la relecture). Aggravant vérifié : LocalAutonomousIndexOperations.java:155 appelle synchronizeSemanticIfConfigured même en NO_CHANGES et SemanticIndexService.java:113-117 reconstruit alors tous les documents.",
+    "preuve": "minos-application/src/main/java/com/minos/application/semantic/SemanticDocumentFactory.java:69-74 (commentaire « a file is not reread once per symbol » puis `sourceReader.readExcerpt(location, 2, CHUNK_MAX_TOKENS)` par symbole) ; minos-application/src/main/java/com/minos/context/LocalSourceReader.java:131-137 (« Reads the current file contents for every excerpt request », cache retiré) : ouverture confinée, lecture complète, découpage en lignes et `getBytes(UTF_8)` par ligne à chaque extrait. Appelants : minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java:276-279 (`synchronizeSemanticIfConfigured` après chaque indexation réussie), HybridSearchService.java:136 (`documentFactory.build` à chaque reconstruction du corpus structuré). Mesure existante (docs/audit/ARCHI-SUIVI.md § A6.3.4) : ≈ 6 ms par document, 112,7 s pour 19 115 documents, 467 à 515 s pour 81 095. — Relecture : déjà consigné hors périmètre dans docs/audit/ARCHI-SUIVI.md § A6.8 (ligne « LocalSourceReader relit le fichier entier pour chaque extrait ») et :882 ; le renvoi « connu: MINOS-AUD-F06 » est inexact (F06 = garde de fraîcheur, pas la relecture). Aggravant vérifié : LocalAutonomousIndexOperations.java:155 appelle synchronizeSemanticIfConfigured même en NO_CHANGES et SemanticIndexService.java:113-117 reconstruit alors tous les documents.",
     "impact": "Coût en O(symboles du fichier × taille du fichier) : plusieurs minutes ajoutées à chaque `minos index` dès qu'un provider d'embeddings est configuré, et une première requête hybride MCP de plusieurs minutes après chaque nouveau snapshot (ou à chaque requête quand le corpus dépasse le plafond de 256 Mio du cache). Aggravant relevé à la relecture : un `minos index` sans changement (NO_CHANGES) relance quand même la synchronisation sémantique complète (LocalAutonomousIndexOperations.java:155 → SemanticIndexService.java:113-117).",
     "effort": "S",
     "action": "La boucle traite déjà les symboles fichier par fichier (`symbolsByFile`) : lire la source UNE fois par fichier dans `build` (méthode `LocalSourceReader.load(fileId)` renvoyant un objet d'extraits) et découper les extraits en mémoire. La fraîcheur n'est pas affectée (cache de portée d'appel, jeté à la fin du fichier), ce qui lève l'objection qui avait fait retirer l'ancien cache. Corriger le commentaire. Test : compteur d'ouvertures = nombre de fichiers distincts ; documents identiques à l'octet sur les fixtures.",
@@ -496,9 +544,13 @@
     "sprint": 4,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé",
     "changement": "lire-chaque-source-une-fois-par-fichier",
-    "verification": null
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "`SemanticDocumentFactory.java:96` lit chaque fichier une fois (`sourceFiles.read(fileId)`), plus aucun `readExcerpt` par symbole ; mesure du mainteneur : 30,5–32,1 s → 1,7–1,9 s sur 19 022 documents. (PR #458 ; revérifié le 16/10 sur `97c86a70`)",
+      "reserve": null
+    }
   },
   {
     "id": "AUD-PERF-03",
@@ -508,7 +560,7 @@
     "axes": [
       "Performance"
     ],
-    "preuve": "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java:44 `QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L`, :367 `safeMultiply(Files.size(snapshot), 8)`, :41 plafond 512 Mio, :247 admission `weight <= maxQueryCacheWeightBytes` ; même constante dans minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java:44 et :449. En plus, chaque reconstruction lit le fichier deux fois : FileSymbolSnapshotStore.java:274 `verifyChecksum` (passe SHA-256 complète) puis :275 `codec.read`. Mesures existantes (ARCHI-SUIVI § A6.4 point 5, ADR 0047) : vue = 1,4 × le fichier ; ce dépôt (194,6 Mo en V3) n'est jamais mis en cache ; relecture 0,75 à 1,46 s par requête. — Relecture : connu — docs/project/audits/ARCHI-SUIVI.md § A6.8 (« QUERY_VIEW_PERSISTED_AMPLIFICATION = 8 … contre 1,4 mesuré ») et docs/architecture/adr/0047-…md:36 (décision 1 « hors de cet ADR »). Renseigner connu = « ARCHI-SUIVI § A6.8 » plutôt que A9.",
+    "preuve": "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java:44 `QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L`, :367 `safeMultiply(Files.size(snapshot), 8)`, :41 plafond 512 Mio, :247 admission `weight <= maxQueryCacheWeightBytes` ; même constante dans minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java:44 et :449. En plus, chaque reconstruction lit le fichier deux fois : FileSymbolSnapshotStore.java:274 `verifyChecksum` (passe SHA-256 complète) puis :275 `codec.read`. Mesures existantes (ARCHI-SUIVI § A6.4 point 5, ADR 0047) : vue = 1,4 × le fichier ; ce dépôt (194,6 Mo en V3) n'est jamais mis en cache ; relecture 0,75 à 1,46 s par requête. — Relecture : connu — docs/audit/ARCHI-SUIVI.md § A6.8 (« QUERY_VIEW_PERSISTED_AMPLIFICATION = 8 … contre 1,4 mesuré ») et docs/adr/0047-…md:36 (décision 1 « hors de cet ADR »). Renseigner connu = « ARCHI-SUIVI § A6.8 » plutôt que A9.",
     "impact": "Sur tout projet moyen à gros, chaque appel MCP (symboles, usages, impact, architecture, hybride…) paie une relecture complète du snapshot ; la correction bornée recommandée en premier par l'ADR 0047 (§ Décision 1) n'est toujours pas faite au HEAD. Effet multiplié par AUD-PERF-01.",
     "effort": "S",
     "action": "Remplacer le facteur 8 par la mesure (1,4 à 1,5 avec marge, ou poids calculé depuis les compteurs seuls) dans les deux stores, sous un test de poids comparé au tas retenu (même méthode que `HybridCorpusWeightTest`). Fusionner vérification SHA-256 et décodage en un seul parcours (flux `DigestInputStream` sous le décodeur, rejet en fin de lecture avant publication de la vue).",
@@ -547,9 +599,13 @@
       "AUD-ARC-02"
     ],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "hacher-l-arbre-source-une-fois-par-indexation",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "ReferenceFingerprint réutilisé par IndexingRunExecutor et ProjectIndexingUseCase pour le scope racine. Tests RootScopeFingerprintReuseTest, ReferenceFingerprintTest et IndexPlanCaptureOrderTest présents, sans @Disabled. (revérifié le 22/10 sur `7e1faafe`)",
+      "reserve": "Passe de 3 à 2 hachages complets seulement, sans raccourci taille/date (D3). La reprise et les scopes non racine sont hors périmètre. Gain non mesuré sur un vrai `minos index`. Tests Java non exécutés (pas de JDK 25)."
+    }
   },
   {
     "id": "AUD-PERF-05",
@@ -559,7 +615,7 @@
     "axes": [
       "Performance"
     ],
-    "preuve": "minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java:176-177 : `getArchitectureIntelligence(request.project())` puis `getModuleContext(request.project(), request.module()).module().id()` ; minos-application/src/main/java/com/minos/architecture/LocalProjectArchitectureQuery.java:59-63 : les deux méthodes appellent `loadContext`, qui (:81-85) refait `snapshotStore.loadActiveKnowledge` et `discoveryService.discover(project.rootPath())`. Mesure existante (ARCHI-SUIVI § A6.3.6) : découverte 12,7 s (worktree) à 36,3 s, 96 % du coût d'une requête d'architecture. — Relecture : connu — docs/project/audits/ARCHI-SUIVI.md § A6.8 (découverte = 96 % d'une requête d'architecture, « lot perf ») ; le doublement par MinosApplicationMcpBackend.java:176-177 n'y figure pas et reste l'apport du constat.",
+    "preuve": "minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java:176-177 : `getArchitectureIntelligence(request.project())` puis `getModuleContext(request.project(), request.module()).module().id()` ; minos-application/src/main/java/com/minos/architecture/LocalProjectArchitectureQuery.java:59-63 : les deux méthodes appellent `loadContext`, qui (:81-85) refait `snapshotStore.loadActiveKnowledge` et `discoveryService.discover(project.rootPath())`. Mesure existante (ARCHI-SUIVI § A6.3.6) : découverte 12,7 s (worktree) à 36,3 s, 96 % du coût d'une requête d'architecture. — Relecture : connu — docs/audit/ARCHI-SUIVI.md § A6.8 (découverte = 96 % d'une requête d'architecture, « lot perf ») ; le doublement par MinosApplicationMcpBackend.java:176-177 n'y figure pas et reste l'apport du constat.",
     "impact": "La requête MCP la plus lente du produit coûte le double sans raison (25 à 72 s sur ce dépôt), et dépasse plus facilement les délais des clients MCP.",
     "effort": "S",
     "action": "Calculer l'identifiant de module depuis la vue déjà obtenue (`intelligenceService.moduleContext(view, module)` exposé par le port, ou une méthode `getArchitectureGraph(project, module)` qui charge le contexte une fois). Ne remet pas en cause la décision A4 de ne pas mettre en cache. Test : `ProjectDiscoveryService` espion, une seule découverte par appel.",
@@ -595,9 +651,13 @@
       "AUD-PERF-01"
     ],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "synchroniser-l-index-semantique-par-differentiel",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "`SemanticIndexService.java:130` sort tôt quand l'index porte déjà le même snapshot et modèle ; `:152,168` réutilise les vecteurs par empreinte (`IndexedDocument.reusingStoredVector`). Mesure réelle (25 210 documents) : 10,4–10,9 s → 3,2–4,2 s, sans changement 45–53 ms. (PR #456 ; revérifié le 16/10 sur `97c86a70`)",
+      "reserve": "Les 25 209 mises à jour de rattachement dominent encore le coût ; envoi binaire des vecteurs non essayé."
+    }
   },
   {
     "id": "AUD-PERF-07",
@@ -643,9 +703,13 @@
       "AUD-TST-03"
     ],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "espacer-le-sondage-de-propriete-des-processus",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "ProcessOwnershipTracker (déplacé dans le package process) : INITIAL_POLL_MILLIS=10, STEADY_POLL_MILLIS=100 (:33-36, :116). Même schéma dans MinosProcessSupervisor.java:44 et :234. Tests ProcessOwnershipTrackerCadenceTest et MinosProcessSupervisorCadenceTest présents, sans @Disabled ni @EnabledOnOs. (revérifié le 21/10 sur `1492113e`)",
+      "reserve": "Option A : on sonde encore toutes les 10 ms pendant la première seconde. Le code reste dupliqué dans le plugin, sans factorisation. Tests non exécutés ici (pas de JDK)."
+    }
   },
   {
     "id": "AUD-DEP-02",
@@ -714,9 +778,13 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "verrouiller-les-dependances-gradle-du-plugin",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Fusionné dans develop : minos-intellij/gradle.lockfile, buildscript-gradle.lockfile, gradle/verification-metadata.xml (1506 l., verify-signatures=false l.5) ; build.gradle.kts:7-8 et 51-52 lockMode = LockMode.STRICT (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "Sommes SHA-256 seulement (pas de signatures) ; verrou du buildscript exclu du scan OSV (4 composants avisés) ; aucun build Gradle rejoué ici, preuve CI en attente"
+    }
   },
   {
     "id": "AUD-DEP-05",
@@ -726,7 +794,7 @@
     "axes": [
       "Dépendances"
     ],
-    "preuve": ".github/workflows/intellij-plugin-release.yml:89-92 et release-windows.yml:98-101 `gradle-version: '9.6.1'` puis `gradle --no-daemon …` (intellij-plugin-release.yml:113, release-windows.yml:107) ; minos-intellij/gradle/wrapper/gradle-wrapper.properties `gradle-9.8.0-bin.zip` (commit Dependabot 45b21b49 du 09/10) ; intellij-plugin.yml:68 utilise `./gradlew` ; docs/developer/TOOLCHAIN_POLICY.md:19 annonce encore 9.6.1 « through the wrapper » ; intellij-plugin-release.yml:24,144 `runs-on: ubuntu-latest`.",
+    "preuve": ".github/workflows/intellij-plugin-release.yml:89-92 et release-windows.yml:98-101 `gradle-version: '9.6.1'` puis `gradle --no-daemon …` (intellij-plugin-release.yml:113, release-windows.yml:107) ; minos-intellij/gradle/wrapper/gradle-wrapper.properties `gradle-9.8.0-bin.zip` (commit Dependabot 45b21b49 du 09/10) ; intellij-plugin.yml:68 utilise `./gradlew` ; docs/TOOLCHAIN_POLICY.md:19 annonce encore 9.6.1 « through the wrapper » ; intellij-plugin-release.yml:24,144 `runs-on: ubuntu-latest`.",
     "impact": "L'artefact publié est produit par une chaîne que la CI de PR n'exécute jamais (et sur une image de runner flottante) : une incompatibilité Gradle/plugin n'apparaît qu'au moment de la release, et Dependabot, qui ne suit que le wrapper, creusera l'écart à chaque montée.",
     "effort": "S",
     "action": "Remplacer `gradle-version` + `gradle` par `./gradlew` (comme intellij-plugin.yml), épingler `ubuntu-24.04`, mettre à jour TOOLCHAIN_POLICY.md, et étendre check-workflow-pins.py pour refuser `gradle-version:` et `*-latest`.",
@@ -739,7 +807,7 @@
     "changement": "durcir-les-workflows-github",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "PR #450 fusionnée le 2026-10-14 (13ac5682) : intellij-plugin-release.yml et release-windows.yml construisent le plugin par ./gradlew / gradlew.bat, sans gradle-version ; runs-on ubuntu-24.04 ; check-toolchain-baseline.py refuse tout gradle-version, check-workflow-pins.py refuse un runner -latest (auto-test test_check_workflow_pins.py). CI verte, runs 38627054379 et 38627053606.",
+      "preuve": "`intellij-plugin-release.yml:115` et `release-windows.yml:109,114` passent par `gradlew` ; runners `ubuntu-24.04` (l.24, 146) et `windows-2022` ; plus aucun `ubuntu-latest` ni appel `gradle` hors wrapper. (revérifié le 14/10 sur `9e4a6e61`)",
       "reserve": "Le build Gradle de release ne tourne qu'au prochain candidat (tâche manuelle 5.2 de durcir-les-workflows-github)."
     }
   },
@@ -760,9 +828,13 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Risque accepté",
     "changement": "attester-et-signer-la-release-windows",
-    "verification": null
+    "verification": {
+      "verdict": "risque accepté",
+      "preuve": "docs/architecture/risks/register.md:24, R-28 « Accepté jusqu'au 2027-10-24 ». Le motif y est écrit : aucun service de signature accessible à un particulier établi en France. La protection de remplacement aussi : attestation actions/attest-build-provenance du job publish, `gh attestation verify`, SHA-256, état « unsigned » dans le manifeste. Conditions de révision : création d'une structure juridique dans l'UE, ou utilisateurs bloqués par SmartScreen, au plus tard le 2027-10-24. D2 est tranchée : openspec/changes/attester-et-signer-la-release-windows/design.md:43 (option C, propriétaire, 2026-10-24). supply-chain.md:114 « les releases ne sont pas signées » (R-28) ; :116 décrit le garde-fou ; :121 donne `gh attestation verify … --repo FTurleque/minos-code-intelligence`. Garde-fou toujours en place : release-windows.yml:36 et :174, et release-signature.ps1:28 et :43 (valeur invalide refusée ; signature exigée sans mode configuré, échec). Attestation release-windows.yml:278 (épinglée par SHA, v4.2.2), qui couvre *.exe, *.zip, *.cdx.json et *-THIRD-PARTY-NOTICES.txt, donc aussi les variantes lite ; le plugin est attesté à part (intellij-plugin-release.yml:191). Le texte de la release vient de release-integrity-notes-unsigned.md : « pas signée Authenticode » et `gh attestation verify`, injecté par publish-windows-release.ps1:356. (revérifié le 25/10 sur `dedb219e`)",
+      "reserve": "test-release-signature.ps1 non rejoué (pas de pwsh ici). Aucune attestation observée sur une vraie release (3.2 en attente). sign-windows-artifact.ps1 reste appelé par aucun workflow : c'est cohérent avec l'option C."
+    }
   },
   {
     "id": "AUD-DEP-07",
@@ -781,9 +853,13 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "publier-le-plugin-avec-la-release",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "intellij-plugin-release.yml:7-18 on: workflow_call + workflow_dispatch (plus de trigger release:) ; release-windows.yml:298 uses: ./.github/workflows/intellij-plugin-release.yml et :305-322 contrôle d'un zip unique ; check-ci-wiring.py SUCCESS (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "Non prouvé par une release réelle ; rattrapage des zips de v1.1.0/v1.2.0 non décidé"
+    }
   },
   {
     "id": "AUD-DEP-08",
@@ -818,7 +894,7 @@
     "axes": [
       "Dépendances"
     ],
-    "preuve": ".github/workflows/pr-ci.yml:113 « this job is not a required check, audit G6 » ; docs/project/audits/AUDIT-2026-09.md:400-404 (G5, G6 ouverts) ; exécution locale des 18 gates du job `invariants` + 10 auto-tests : tous rc=0 au HEAD 816cdd0c (check-workflow-pins : 87 `uses` externes épinglés) — leur état vert actuel ne dépend que de la discipline.",
+    "preuve": ".github/workflows/pr-ci.yml:113 « this job is not a required check, audit G6 » ; docs/audit/AUDIT-2026-09.md:400-404 (G5, G6 ouverts) ; exécution locale des 18 gates du job `invariants` + 10 auto-tests : tous rc=0 au HEAD 816cdd0c (check-workflow-pins : 87 `uses` externes épinglés) — leur état vert actuel ne dépend que de la discipline.",
     "impact": "Un gate rouge (épinglage, frontières, manifeste d'outils) ou une CVE remontée par OSV ne bloque pas une fusion ; tout l'appareil de contrôle est consultatif.",
     "effort": "S",
     "action": "Ajouter au ruleset main+develop les checks `Static invariants (single run)`, `Dependency vulnerability gate`, `Gitleaks`, `Verify (ubuntu-24.04)`, `Verify (windows-2022)` ; pour le plugin (filtré par chemins), un job agrégateur toujours exécuté qui réussit quand le plugin n'est pas touché.",
@@ -877,9 +953,13 @@
     "sprint": 8,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé",
     "changement": "refuser-l-execution-de-provider-sans-frontiere",
-    "verification": null
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "ProcessIndexerExecutor.execute lève toujours IllegalStateException. Le constructeur public de StrongProcessOwnershipIndexerExecutor impose networkPolicy et sandboxSelector (localIsolation non nul). Le constructeur avec localIsolation = null est package-private. nativeEphemeralWorkspace reste public, mais ne peut plus exécuter un ProcessIndexerExecutor nu, puisque son execute refuse. (revérifié le 21/10 sur `1492113e`)",
+      "reserve": "nativeEphemeralWorkspace reste une entrée publique sans confinement pour tout autre IndexerExecutor (choix documenté). Pas de build Java ici."
+    }
   },
   {
     "id": "AUD-ARC-10",
@@ -927,9 +1007,13 @@
     "sprint": 10,
     "depends_on": [],
     "bloque": [],
-    "statut": "Dette figée",
+    "statut": "Fermé avec réserve",
     "changement": "idem (arêtes d'exécution) et décision D3",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Décision documentée sans déplacement (ADR 0062 D3, reprise dans ARCH-0068:67) : minos-app inchangé (DockerMcpTransport 214 l. avec 2 ProcessBuilder :114 :190, McpBackendConfigurationStore, McpBackendRouter, com.minos.integration.nexus.NexusExportBridgeMain). L'arête cachée est désormais publiée et contrôlée : module-dependencies.md § 'Arêtes d'exécution par service' liste minos-cli → minos-app (McpLaunchRoute) ; le garde affiche 4 arêtes d'exécution documentées et échoue si une manque. minos-cli/pom.xml ne déclare toujours pas minos-app (attendu). (revérifié le 24/10 sur `bf633fc7`)",
+      "reserve": "Dette fonctionnelle non corrigée : transport et persistance MCP restent dans le module à la politique la plus permissive ; aucun cliquet sur le contenu de minos-app (ALLOWED l'autorise toujours vers les 13 modules, ProcessBuilder non surveillé dans minos-app)."
+    }
   },
   {
     "id": "AUD-ARC-12",
@@ -948,9 +1032,13 @@
     "sprint": 10,
     "depends_on": [],
     "bloque": [],
-    "statut": "Dette figée",
+    "statut": "Décision documentée",
     "changement": "idem (règle A14) et décision D4",
-    "verification": null
+    "verification": {
+      "verdict": "décision documentée",
+      "preuve": "SUIVI.md:671 « clos par décision documentée » : convention de préfixe de module pour les nouveaux packages seulement (ADR-0068 § 5, D4 du 22/10), renommer contredirait l'ADR 0044 ; ADR-0068 § 5 : aucun package existant renommé, nouvelle racine = modification relue de PACKAGE_ROOTS_BY_MODULE ; .claude/rules/java-production.md:16 reprend la règle. A14 rejoué : 36 racines sur 13 modules, « no new root » (37/14 avant : la fusion supprime une racine 'storage' en double). Les nouveaux packages com.minos.storage.codec et com.minos.storage.home ne sont pas de nouvelles racines (racine 'storage' déjà possédée par minos-storage et minos-engine) et sont fermés par STORAGE_PACKAGES = {codec, home, local, postgresql}. (revérifié le 28/10 sur `810dcfb2`)",
+      "reserve": "codec et home sont créés sous la racine partagée 'storage' mais hors de tout espace de noms de module : ADR-0068 § 5 demande « de préférence » com.minos.storage.local/.postgresql, et minos-engine possède lui-même le package com.minos.storage (6 fichiers, dont MinosRuntimeSettings). Un lecteur de com.minos.storage.codec ne peut donc pas déduire le module de l'import (engine ou storage) : c'est exactement le défaut décrit par AUD-ARC-12, reproduit par SH-03 en 2026-10-27, après D4. A14 ne raisonne qu'au grain de la racine. Hiérarchies partagées toujours présentes (runtime, storage, program, integration). SUIVI incohérent en interne : sections sprint 10 (:562, :575) « Dette figée » vs :671 « clos par décision »."
+    }
   },
   {
     "id": "AUD-QUA-06",
@@ -960,7 +1048,7 @@
     "axes": [
       "Qualité"
     ],
-    "preuve": "Avec chemin absolu et cause : minos-runtime-local/.../RunDirectoryRetention.java:180 (`\"MINOS could not reclaim run directory \" + target, failure`), :201 (`… quarantined run \" + child, exception`), minos-runtime-local/.../ProviderResidueReclamation.java:63 (`\"… provider residue in \" + directory, exception`). Régime inverse dans les mêmes modules : RunDirectoryRetention.java:327-328 (classe seule), ProcessIdentity.java:47 (« without the cause: it may carry a path »), ProjectIgnorePolicy.java:77-78 (chemin relatif + classe), IndexingRunExecutor.java:114-115. Règle écrite : docs/project/audits/PROMPT-FIABILITE.md:127 (« messages … sans chemin absolu »). Le serveur MCP stdio journalise sur stderr, capturé par les clients MCP.",
+    "preuve": "Avec chemin absolu et cause : minos-runtime-local/.../RunDirectoryRetention.java:180 (`\"MINOS could not reclaim run directory \" + target, failure`), :201 (`… quarantined run \" + child, exception`), minos-runtime-local/.../ProviderResidueReclamation.java:63 (`\"… provider residue in \" + directory, exception`). Régime inverse dans les mêmes modules : RunDirectoryRetention.java:327-328 (classe seule), ProcessIdentity.java:47 (« without the cause: it may carry a path »), ProjectIgnorePolicy.java:77-78 (chemin relatif + classe), IndexingRunExecutor.java:114-115. Règle écrite : docs/audit/PROMPT-FIABILITE.md:127 (« messages … sans chemin absolu »). Le serveur MCP stdio journalise sur stderr, capturé par les clients MCP.",
     "impact": "Le nom d'utilisateur et l'arborescence de MINOS_HOME finissent dans les journaux des clients MCP/IDE selon la classe qui échoue ; incohérence qui rend la règle invérifiable.",
     "effort": "S",
     "action": "Aligner les trois sites sur le régime majoritaire (chemin relatif à la racine gérée + type d'exception) et ajouter au gate check-private-io (ou à un test ArchUnit) une interdiction de concaténer un `Path` absolu dans un appel `LOGGER.log`.",
@@ -994,9 +1082,13 @@
     "sprint": 11,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "decouper-les-methodes-d-analyse-et-d-ingestion",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "Mesure indépendante par script (commentaires et chaînes blanchis, longueur de la signature à l'accolade fermante, src/main hors minos-intellij) : 4 928 méthodes et 35 blocs ≥ 80 lignes, dont 19 constructeurs canoniques de records. Il reste donc 16 méthodes ≥ 80 lignes, soit exactement la liste « hors lot » du SUIVI. ScipIngestionAdapter.ingest et ImpactAnalysisService.analyze n'y figurent plus. IndexingRunExecutor.java:53 execute(RunRequest, Collaborators) a 2 paramètres (records :869, :886). (revérifié le 24/10 sur `bf633fc7`)",
+      "reserve": "Trois méthodes citées par l'audit restent longues : CodeSearchService.search (119 l.), WindowsAppContainerWorkerSandboxBackend.sandboxPlan (108 l.) et LocalIsolatedIndexWorker.execute (107 l.). Il n'y a ni gate ni seuil, ce qui est conforme à l'audit. Le décompte de 40 de l'audit n'est pas reproduit (16 hors records)."
+    }
   },
   {
     "id": "AUD-QUA-08",
@@ -1006,7 +1098,7 @@
     "axes": [
       "Qualité"
     ],
-    "preuve": "minos-intellij/src/main/java/com/minos/intellij/actions/MinosM21Actions.java:23, minos-intellij/src/main/java/com/minos/intellij/protocol/MinosM21Client.java:14 (8 actions déclarées dans plugin.xml:39-49 sous `MinosM21Actions$…`) ; minos-provider-scip/.../ScipIndexerCatalog.java:50 `qualifiedM17Providers`, :63 `qualifiedM24Providers` (appelé par minos-bootstrap DefaultMinosApplicationComposer) ; minos-engine/.../incremental/BuildDescriptorPolicy.java:15 `M17_DEFAULT_FILE_NAMES`, :29 `M24_ADDITIONAL_FILE_NAMES`, `m17Defaults`/`m24Defaults` dans 4 fichiers. docs/architecture/adr/GEN-0043-retrait-des-artefacts-de-jalon.md:26 et docs/project/audits/PROMPT-FIABILITE.md:127 (« aucun nouveau numéro de jalon dans un nom de fichier »).",
+    "preuve": "minos-intellij/src/main/java/com/minos/intellij/actions/MinosM21Actions.java:23, minos-intellij/src/main/java/com/minos/intellij/protocol/MinosM21Client.java:14 (8 actions déclarées dans plugin.xml:39-49 sous `MinosM21Actions$…`) ; minos-provider-scip/.../ScipIndexerCatalog.java:50 `qualifiedM17Providers`, :63 `qualifiedM24Providers` (appelé par minos-bootstrap DefaultMinosApplicationComposer) ; minos-engine/.../incremental/BuildDescriptorPolicy.java:15 `M17_DEFAULT_FILE_NAMES`, :29 `M24_ADDITIONAL_FILE_NAMES`, `m17Defaults`/`m24Defaults` dans 4 fichiers. docs/adr/0043-retrait-des-artefacts-de-jalon.md:26 et docs/audit/PROMPT-FIABILITE.md:127 (« aucun nouveau numéro de jalon dans un nom de fichier »).",
     "impact": "Le nom ne dit pas ce que la méthode garantit (quel ensemble de fournisseurs, quels descripteurs) : il faut connaître l'historique des jalons pour savoir lequel appeler ; la convention est appliquée aux scripts mais pas au code.",
     "effort": "S",
     "action": "Renommer par capacité (`MinosAdvancedAnalysisActions`, `qualifiedProviders()` / `legacyJavaProviders()`, `DEFAULT_BUILD_DESCRIPTORS` / `POLYGLOT_BUILD_DESCRIPTORS`) ; pour les classes d'actions IntelliJ, garder les identifiants d'action `Minos.*` de plugin.xml inchangés pour ne pas casser les raccourcis utilisateur.",
@@ -1015,9 +1107,13 @@
     "sprint": 11,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "retirer-les-jalons-des-identifiants",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "check-milestone-identifiers.py : rc=0 (« production files read=604, milestone names left=0 ») ; --self-test rc=0 ; câblé dans pr-ci.yml:193,196. Une recherche indépendante par regex des identifiants M<n>/m<n>/_M<n> dans src/main, commentaires et chaînes exclus, ne trouve aucun jalon (seuls des faux positifs : MACOS_ARM64, system32). plugin.xml n'a aucun class= à jalon. Aucune variable MINOS_M* hors scripts/history. (revérifié le 24/10 sur `bf633fc7`)",
+      "reserve": "Le changement openspec retirer-les-jalons-des-identifiants reste actif : la preuve Windows réelle (tâche 4.2) n'est pas faite. Des chaînes publiques gardent des jalons (hors lot, D3), par exemple ScipGoProcessPlanFactory.java:20 « scip-go M24 qualification ». Les commentaires à jalon restent comptés (91 fichiers) par le gate de langue."
+    }
   },
   {
     "id": "AUD-QUA-09",
@@ -1036,9 +1132,13 @@
     "sprint": 11,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "garder-les-fonctions-de-scripts-jumelles",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "check-twin-script-functions.py : rc=0 (12 entrées, 25 copies, 39 scripts) ; test_check_twin_script_functions.py : 27 tests OK ; câblé dans pr-ci.yml:169,172. find_ci_wiring_violations n'est définie qu'une fois (scripts/quality/gate_cli.py:59). (revérifié le 24/10 sur `bf633fc7`)",
+      "reserve": "Le gate ne garde que les copies identiques ; les homonymes divergents ne sont pas alignés. Invoke-NativeChecked de scripts/ci/qualify-docker-upgrade.ps1 n'a toujours pas le relâchement de $ErrorActionPreference cité par l'audit (diff relu). Il est aussi encore défini dans scripts/m24/bootstrap-windows-toolchains.ps1, m14 et m15, hors périmètre. Find-EmbeddedClaudeCli diverge. Aucune bibliothèque partagée, par décision D1 = A."
+    }
   },
   {
     "id": "AUD-QUA-10",
@@ -1048,7 +1148,7 @@
     "axes": [
       "Qualité"
     ],
-    "preuve": "minos-engine/src/main/java/com/minos/io/ConfinedFileOpener.java:64 `static volatile Runnable beforeOpenForTests = () -> { };` (13 occurrences dans le dépôt, toutes en test hormis la déclaration et l'appel). Q15 est toujours « CONFIRMÉ » (non clos) dans docs/project/audits/AUDIT-2026-09.md:531 ; la partie « I/O dans le constructeur de IndexingExecutionRequest » n'est plus visible au HEAD (IndexingRuntimePorts.java:236-280 ne fait que des validations).",
+    "preuve": "minos-engine/src/main/java/com/minos/io/ConfinedFileOpener.java:64 `static volatile Runnable beforeOpenForTests = () -> { };` (13 occurrences dans le dépôt, toutes en test hormis la déclaration et l'appel). Q15 est toujours « CONFIRMÉ » (non clos) dans docs/audit/AUDIT-2026-09.md:531 ; la partie « I/O dans le constructeur de IndexingExecutionRequest » n'est plus visible au HEAD (IndexingRuntimePorts.java:236-280 ne fait que des validations).",
     "impact": "État global partagé par toute la JVM dans le chemin d'ouverture confiné : un test qui oublie de le restaurer perturbe les tests parallèles, et la classe de sécurité porte un crochet modifiable depuis le package.",
     "effort": "S",
     "action": "Injecter le crochet par un paramètre package-private (`openRegularFileNoFollow(path, Runnable beforeOpen)`) appelé par la méthode publique avec un no-op ; supprimer le champ statique. Mettre à jour Q15 : partie I/O du record close, partie seam ouverte.",
@@ -1057,9 +1157,13 @@
     "sprint": 8,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé",
     "changement": "retirer-le-crochet-statique-de-l-ouverture-confinee",
-    "verification": null
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "Aucune occurrence de beforeOpenForTests dans les fichiers *.java du dépôt (il y en avait 13 à l'origine). Le SUIVI cite la PR #492 et le run CI 39074198501. (revérifié le 21/10 sur `1492113e`)",
+      "reserve": ""
+    }
   },
   {
     "id": "AUD-QUA-11",
@@ -1069,7 +1173,7 @@
     "axes": [
       "Qualité"
     ],
-    "preuve": "Commande : `grep -rlE '^\\s*(\\*|//).*[éèàùêç]' --include=*.java minos-*/src/main | wc -l` → 170 sur 547 ; parmi eux, 27 contiennent aussi des commentaires anglais (« the/is/never/when »). Exemples : minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java:21 (« Serveur MCP local … ») au milieu de Javadoc anglaise ; minos-engine/.../IndexingRunExecutor.java (Javadoc « Rouvre le run interrompu » à côté de blocs anglais) ; minos-runtime-local/.../FileResumableRunMarkers.java:67. Q18 : docs/project/audits/AUDIT-2026-09.md:534, « CONFIRMÉ ».",
+    "preuve": "Commande : `grep -rlE '^\\s*(\\*|//).*[éèàùêç]' --include=*.java minos-*/src/main | wc -l` → 170 sur 547 ; parmi eux, 27 contiennent aussi des commentaires anglais (« the/is/never/when »). Exemples : minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java:21 (« Serveur MCP local … ») au milieu de Javadoc anglaise ; minos-engine/.../IndexingRunExecutor.java (Javadoc « Rouvre le run interrompu » à côté de blocs anglais) ; minos-runtime-local/.../FileResumableRunMarkers.java:67. Q18 : docs/audit/AUDIT-2026-09.md:534, « CONFIRMÉ ».",
     "impact": "Hygiène : la Javadoc publique de minos-api et des ports n'a pas de langue de référence.",
     "effort": "M",
     "action": "Fixer la langue par module (convention écrite dans CONTRIBUTING.md) et commencer par les 27 fichiers mixtes ; pas de traduction en masse.",
@@ -1078,9 +1182,13 @@
     "sprint": 11,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "fixer-la-langue-des-commentaires",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "check-comment-language.py rejoué : rc=0, mixed=0 dans tous les modules, compteurs hors langue et à jalon égaux aux maximums ; --self-test rc=0 ; câblé dans pr-ci.yml:199,202. Mutation sur une copie jetable (--root), avec une phrase française ajoutée à MinosMcpServer.java:21 : rc=1, échec « mixes French (line 21) and English (line 43) » plus le cliquet « minos-mcp has 1 out-of-language file(s), above its maximum 0 ». Le cliquet est donc actif. (revérifié le 24/10 sur `bf633fc7`)",
+      "reserve": "Le premier exemple de l'audit est toujours là : MinosMcpServer.java:21 « /** Serveur MCP local MINOS en transport STDIO. */ » au milieu de Javadoc anglaise. L'heuristique du gate ne le détecte pas : aucun mot de la liste FRENCH_WORDS et pas d'accent. Le fichier n'est donc compté ni mixte ni hors langue. 158 fichiers entièrement français restent tolérés (par exemple FileResumableRunMarkers.java:60-67). Il reste aussi du français neuf dans ImpactAnalysisService.java:75 (@deprecated depuis 1.3.0)."
+    }
   },
   {
     "id": "AUD-SEC-03",
@@ -1099,9 +1207,13 @@
     "sprint": 8,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "etendre-le-garde-d-e-s-privees-aux-ecritures-brutes",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "check-private-io.py rejoué : SUCCESS (sources=533, allowlisted-occurrences=56, forbidden=20, primitives=4). FORBIDDEN couvre désormais newOutputStream, newBufferedWriter, createDirectory, createTempFile, createTempDirectory, copy, move (et newByteChannel, createFile). Auto-test test_check_private_io.py : 43 tests OK. private-io-allowlist.json : 23 entrées (56 occurrences). (revérifié le 21/10 sur `1492113e`)",
+      "reserve": "Le garde est complet, mais 23 entrées de liste blanche, soit 56 occurrences, restent à migrer (le SUIVI en comptait 44 à 107 auparavant). La migration est en cours : les écritures brutes subsistent derrière la liste blanche."
+    }
   },
   {
     "id": "AUD-SEC-04",
@@ -1120,9 +1232,13 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Partiel",
     "changement": "idem",
-    "verification": null
+    "verification": {
+      "verdict": "partiel",
+      "preuve": "Le fichier a bougé : minos-storage/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java. Les deux messages sont INCHANGÉS : :313-314 `throw new IOException(\"project path cannot be represented by configured runtime mapping: \" + project.rootPath(), exception)` et :364-365 `throw new IOException(\"legacy project root cannot be migrated with configured mapping: \" + legacyRoot, exception)` (legacyRoot = propriété de registre contenant la racine absolue héritée). check-private-io.py rejoué : SUCCESS (sources=606, allowlisted-occurrences=56, forbidden=21, primitives=4) ; test_check_private_io.py OK : le gate ne voit toujours ni l'accesseur de record ni le String contenant un chemin. Les 3 sites corrigés au 25/10 le restent (leafName). (revérifié le 28/10 sur `810dcfb2`)",
+      "reserve": "Désaccord avec SUIVI.md:483 (« Implémenté, gardé », « 0 après ») : 2 chemins absolus restent concaténés dans des IOException du backend local, non corrigés malgré la réserve du 25/10 et les déplacements de SH-02/SH-03. Limite du gate inchangée (pas de typage : Path par accesseur, String de chemin, message préparé dans une variable). Barrière de sortie publique (PublicErrorMessages) heuristique, cf. AUD-SEC-05."
+    }
   },
   {
     "id": "AUD-SEC-05",
@@ -1141,9 +1257,13 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "ne-plus-laisser-fuir-de-chemin-absolu-dans-les-erreurs",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "PublicErrorMessages.java:42 (regex ANSI OSC/CSI), :55/:77 stripControl avant analyse ; :100-101 lecteur Windows détecté sans frontière ; :109,:122 conservent `isPathIdentifierChar` pour POSIX. PublicErrorMessagesTest : 27 @Test, 0 @Disabled. (revérifié le 21/10 sur `1492113e`)",
+      "reserve": "Le cas ANSI de l'audit est fermé. Un chemin POSIX collé à un identifiant (`v1.2/home/u/x`) passe toujours : c'est une limite assumée et testée, pas la règle proposée par l'audit."
+    }
   },
   {
     "id": "AUD-SEC-06",
@@ -1166,9 +1286,13 @@
     "bloque": [
       "AUD-ARC-05"
     ],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "conserver-les-refus-conditionnels-windows",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "PrivateLocalStorage.java:72-79 : lecture complète de la DACL par icacls /save, refus si une XD est présente. Le backend AppContainer passe désormais par PrivateLocalStorage.ensurePrivateDirectory (:329, :375-376). 18 occurrences de conditional/XD dans les tests de minos-engine. Le SUIVI cite les runs Windows 20/20, 9/9 et 15/15. (revérifié le 21/10 sur `1492113e`)",
+      "reserve": "La Javadoc :79 reconnaît une fenêtre de course : une XD ajoutée entre la lecture et la réécriture est toujours supprimée. Tests Windows non rejoués ici. icacls reste mentionné dans la Javadoc du backend (:56) ; je n'ai pas vérifié s'il l'invoque encore directement."
+    }
   },
   {
     "id": "AUD-SEC-07",
@@ -1187,9 +1311,13 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "reserver-minos-ollama-au-runtime-docker",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "OllamaEmbeddingProvider.java:69-70 managedServiceOutsideDocker = host minos-ollama && runtimeLocation != DOCKER ; :98-103 embed lève avant openConnection ; :206-215 readErrorExcerpt lit au plus MAX_ERROR_BODY_BYTES, coupe à 512 car. et passe par PublicErrorMessages.sanitize. Tests : OllamaEmbeddingProviderRuntimeLocationTest et ErrorBodyTest ; gate check-semantic-retrieval-consistency.py rc=0. (revérifié le 21/10 sur `1492113e`)",
+      "reserve": "Le refus intervient à l'usage, pas à l'ouverture (décision D1). :190 accepte encore minos-ollama comme hôte valide sans condition. La preuve Docker réelle est en attente, et Dockerfile.mcp ne pose pas MINOS_RUNTIME_LOCATION. HTTP en clair reste accepté."
+    }
   },
   {
     "id": "AUD-SEC-08",
@@ -1208,9 +1336,13 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé",
     "changement": "echapper-les-libelles-mermaid",
-    "verification": null
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "ArchitectureResultRenderer.java:278-279 replace(\"<\",\"&lt;\").replace(\">\",\"&gt;\") ; :172 <br/> ajouté après échappement de chaque partie ; :288 neutralise %%{ dans les commentaires. ArchitectureResultRendererMermaidEscapingTest : 7 @Test, 0 @Disabled. (revérifié le 21/10 sur `1492113e`)",
+      "reserve": null
+    }
   },
   {
     "id": "AUD-SEC-09",
@@ -1229,9 +1361,13 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé",
     "changement": "prouver-le-refus-des-arguments-mcp-inconnus",
-    "verification": null
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "MinosMcpTools.java:452-463 refuse toute clé hors schéma (`unknown MCP argument: ` + nom borné) ; MinosMcpServer.java:62 validateToolInputs(false). Test : minos-mcp/.../MinosMcpUnknownArgumentTest.java. (revérifié le 21/10 sur `1492113e`)",
+      "reserve": null
+    }
   },
   {
     "id": "AUD-SEC-10",
@@ -1250,9 +1386,13 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "ne-plus-exposer-la-racine-absolue-ni-les-e-mails-d-auteurs",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "SEC-10-suite (SUIVI.md:479, PR #594) : GitIntelligenceService.java:340-356, 377-378 — originRemote = disclosedRemote(raw) : URL à hôte hors file:// reconstruite sans userinfo/query/fragment, ou forme SCP (SCP_REMOTE :73-74, hôte >= 2 caractères, donc C:/ exclu) ; sinon null + limitation ORIGIN_REMOTE_NOT_DISCLOSED ; identité inchangée (sanitizeRemote). GitRemoteDisclosureTest couvre https avec mot de passe illisible, chemins POSIX/Windows (\\ et /), file://, UNC, relatif ; vérifie l'absence de 'p ss' et 'depots' dans la vue (non exécuté : pas de JDK 25). MCP : MinosApplicationMcpBackend.java:93 rootPath = nom du répertoire seul ; aucune surface MCP ne rend RepositoryView/workTree. E-mails masqués par défaut (constat initial). (revérifié le 28/10 sur `810dcfb2`)",
+      "reserve": "workTree reste exposé en chemin absolu (GitIntelligenceService.java:377 -> GitActivityCommand.java:129, LocalMinosMultiRepositoryApi.java:252) par décision du propriétaire du 28/10 (« remote seul », docs/user/cli.md:351, java-api.md:250) ; rootPath reste absolu côté CLI (ProjectJson.java:32, D1). La réponse à « plus exposés ? » est donc : originRemote local/identifiants oui, workTree et rootPath CLI non (décision documentée). repositoryId sans remote = sha256(\"path:\"+workTree), non réversible mais stable."
+    }
   },
   {
     "id": "AUD-SEC-11",
@@ -1271,9 +1411,13 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "declarer-la-provenance-des-regles-de-securite",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "JavaProgramGraphAssembler.java:80 addLimitation(\"SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY\") ; ProgramGraphSecurityRulesProvenanceTest : 6 @Test ; check-advanced-provider-consistency.py rc=0. (revérifié le 21/10 sur `1492113e`)",
+      "reserve": "Seule la limitation est en place. Les règles d'opérateur hors du dépôt et le refus des assainisseurs déclarés par le dépôt ne sont pas faits : un dépôt hostile peut toujours façonner les règles, l'outil le signale seulement."
+    }
   },
   {
     "id": "AUD-SEC-12",
@@ -1344,9 +1488,13 @@
       "AUD-TST-07"
     ],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "borner-la-couverture-globale-et-du-coeur",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "scripts/quality/check-jacoco.py:19-24 scope `global` com/minos/ (hors app) line 0.84/0.81, branch 0.69/0.67 par plateforme ; exécuté en CI .github/workflows/pr-ci.yml:335 et :356 ; `check-jacoco.py --self-test` -> MINOS JACOCO GATE SELF-TEST SUCCESS (16 scenarios) (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "Pas de `jacoco:check` Maven (pom.xml inchangé) : le seuil vit dans le gate Python ; minos-app exclu du global ; mesures CI non rejouables ici (pas de JDK 25)."
+    }
   },
   {
     "id": "AUD-TST-06",
@@ -1445,9 +1593,13 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé",
     "changement": "prouver-l-attente-des-verrous-et-l-idempotence",
-    "verification": null
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "PostgresSchemaMigratorTest.java:50-56 migrate() x2 puis assertEquals(1..CURRENT_VERSION, schemaVersions()) ; marqueurs AUD-TST-09 dans les tests idempotence (sous-packages postgresql/) (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "Non exécuté ici (Testcontainers/JDK absent) ; rouge prouvé seulement selon le suivi."
+    }
   },
   {
     "id": "AUD-TST-10",
@@ -1466,9 +1618,13 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "idem",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "PostgresTestSupport.awaitAdvisoryLockWaiter (pg_locks) et ParkedThreads présents (grep) ; plus aucun `Thread.sleep(100|200|300)` dans les *Test.java du réacteur (seul MinosProcessSupervisorTest du plugin : `sleep 300` dans un script shell, hors sujet) (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "Attentes de verrous fichier via BoundedFileLease observées comme fil TIMED_WAITING : signal indirect ; non exécuté ici."
+    }
   },
   {
     "id": "AUD-TST-11",
@@ -1478,7 +1634,7 @@
     "axes": [
       "Tests"
     ],
-    "preuve": "docs/developer/quality/code-audit-couverture.md:229 « PIT est incomplet : 11 modules sur 14 analysés » et tableau § 5.2 (minos-runtime-local : 560 RUN_ERROR non analysés ; minos-cli rapport vide ; bootstrap, app : pas de rapport ; plugin bloqué) ; même document l.288 : « PIT n'a analysé que 3 modules sur 14 ». .github/workflows/code-audit.yml:3-6 : `workflow_dispatch` seul, aucun seuil. Score mesuré : 45 % tués/mutants, 61 % tués/couverts (§ 5.2).",
+    "preuve": "docs/quality/code-audit-couverture.md:229 « PIT est incomplet : 11 modules sur 14 analysés » et tableau § 5.2 (minos-runtime-local : 560 RUN_ERROR non analysés ; minos-cli rapport vide ; bootstrap, app : pas de rapport ; plugin bloqué) ; même document l.288 : « PIT n'a analysé que 3 modules sur 14 ». .github/workflows/code-audit.yml:3-6 : `workflow_dispatch` seul, aucun seuil. Score mesuré : 45 % tués/mutants, 61 % tués/couverts (§ 5.2).",
     "impact": "La force des tests de la CLI, de la composition (bootstrap) et du jar livré reste inconnue ; le chiffre « 3/14 » repris par d'autres documents sous-estime le travail fait et brouille le point de reprise.",
     "effort": "M",
     "action": "Corriger § 7 du document ; exécuter `code-audit.yml` sur runner éphémère pour minos-cli, minos-bootstrap, minos-app et rejouer les 560 mutants de minos-runtime-local ; ensuite seulement fixer un plancher PIT par module (décision ouverte dans `etendre-audit-outille-a-tout-le-perimetre`).",
@@ -1487,9 +1643,13 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "completer-la-mutation-et-son-document",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "`docs/quality/code-audit-couverture.md` relève désormais des rapports PIT pour les 14 modules et le plugin (runs `code-audit.yml` du 16/10 cités : minos-cli 68 %, bootstrap 48 %, app 33 %). (relu le 17/10 sur `2ccbccb0`)",
+      "reserve": "Pas de plancher PIT (décision D3) et déclenchement manuel seulement ; runs CI non rejouables d'ici ; `ShadedJar*IT` exclus de la mutation de minos-app."
+    }
   },
   {
     "id": "AUD-TST-12",
@@ -1512,7 +1672,7 @@
     "changement": "borner-la-couverture-globale-et-du-coeur",
     "verification": {
       "verdict": "fermé",
-      "preuve": "PR #451 fusionnée le 2026-10-14 (4cc5a817) : WindowsJobObjectProcessOwnership rattachée à provider-sandbox-windows avec un plancher de classe 0,93 / 0,70 (mesure Windows 67/68 lignes, 15/20 branches) ; WindowsJobObjectProcessOwnershipPlanTest 7/0 et MINOS JACOCO GATE SUCCESS sous Windows, run 38623008754.",
+      "preuve": "`check-jacoco.py:136,145` rattache `WindowsJobObjectProcessOwnership` au scope `provider-sandbox-windows` (0,93 / 0,70). (revérifié le 14/10 sur `9e4a6e61`)",
       "reserve": null
     }
   },
@@ -1560,9 +1720,13 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "rendre-le-test-scip-java-hermetique",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "minos-provider-scip/pom.xml:54-58 `<excludedEnvironmentVariables>JAVA_HOME</excludedEnvironmentVariables>` dans surefire ; ManagedScipProviderRuntimeManagerTest.java (déplacé en runtime/install/):33 plan Windows prouvé dans une JVM enfant à environnement propre (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "Preuve CI Windows en attente ; second site ManagedScipProviderRuntimeManager.java:241 lit toujours l'environnement réel (rendu inoffensif par la garde surefire en test seulement)."
+    }
   },
   {
     "id": "AUD-PERF-09",
@@ -1581,9 +1745,13 @@
     "sprint": 9,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé",
     "changement": "borner-les-preuves-des-tests-lies",
-    "verification": null
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "RelatedTestDerivationService:53 MAX_LOCATIONS_PER_EVIDENCE_TYPE = 5, appliqué à :651. Test RelatedTestDerivationServiceTest présent. (revérifié le 22/10 sur `7e1faafe`)",
+      "reserve": "Plafond à la dérivation. Celui du codec reste à MAX_EVIDENCE = 1 000 000 (lecture). Tests non exécutés faute de JDK."
+    }
   },
   {
     "id": "AUD-PERF-10",
@@ -1602,9 +1770,13 @@
     "sprint": 11,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "calculer-le-rang-de-symbole-une-fois",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "InMemoryCodeKnowledgeStore.java:216-220 : map(new RankedSymbol(rank…)), puis filter(rank < NO_MATCH) et sorted(RANKED_ORDER). Le rang est calculé une seule fois par candidat, et aucun calcul n'est fait sans texte (:207-212). C'est le seul appel de symbolMatchRank. SymbolMatchRankTest.java:130-142 vérifie un appel par symbole, et 0 appel sans texte (:154, :165). (revérifié le 24/10 sur `bf633fc7`)",
+      "reserve": "Le précalcul des minuscules et la suppression du rang 6 ne sont pas faits, par décisions D2 et D3. Le gain mesuré (147 → 48 ms) n'a pas été rejoué : pas de JDK 25."
+    }
   },
   {
     "id": "AUD-PERF-11",
@@ -1614,7 +1786,7 @@
     "axes": [
       "Performance"
     ],
-    "preuve": "minos-application/src/main/java/com/minos/impact/ImpactAnalysisService.java:76 `incomingRelationships(snapshot, symbolsById)` (tri de toutes les relations, :199-220) à chaque `analyze` ; minos-application/src/main/java/com/minos/program/analysis/AdvancedImpactService.java:93-95 `graph.edges().stream().sorted(...)` sur tout le graphe de programme (jusqu'à 500 000 arêtes publiques) à chaque appel, alors que le graphe lui-même est en cache. Mesure existante (ARCHI-SUIVI § A6.3.5) : 15 ms (1 réplique) à 68,5 ms (3 répliques), 100 % du coût étant la préparation. — Relecture : connu — docs/project/audits/ARCHI-SUIVI.md § A6.8 (« ImpactAnalysisService reconstruit la table des symboles et l'index trié des arêtes entrantes à chaque appel ») et :927.",
+    "preuve": "minos-application/src/main/java/com/minos/impact/ImpactAnalysisService.java:76 `incomingRelationships(snapshot, symbolsById)` (tri de toutes les relations, :199-220) à chaque `analyze` ; minos-application/src/main/java/com/minos/program/analysis/AdvancedImpactService.java:93-95 `graph.edges().stream().sorted(...)` sur tout le graphe de programme (jusqu'à 500 000 arêtes publiques) à chaque appel, alors que le graphe lui-même est en cache. Mesure existante (ARCHI-SUIVI § A6.3.5) : 15 ms (1 réplique) à 68,5 ms (3 répliques), 100 % du coût étant la préparation. — Relecture : connu — docs/audit/ARCHI-SUIVI.md § A6.8 (« ImpactAnalysisService reconstruit la table des symboles et l'index trié des arêtes entrantes à chaque appel ») et :927.",
     "impact": "Coût fixe linéaire en taille de snapshot par appel `minos_impact` / `minos_impact_v2` ; faible aujourd'hui, mais il s'ajoute au rechargement d'AUD-PERF-03.",
     "effort": "S",
     "action": "Porter l'index des arêtes entrantes triées dans `SnapshotQueryView` (construit une fois avec la vue) et l'adjacence dans l'entrée de cache de `ProgramGraphService`. Ne pas introduire d'arrêt anticipé de la traversée (infirmé par la mesure, voir AUD-PERF-14).",
@@ -1625,9 +1797,13 @@
       "AUD-PERF-03"
     ],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé",
     "changement": "indexer-les-aretes-d-impact-avec-la-vue",
-    "verification": null
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "Index des arêtes porté par `InMemoryCodeKnowledgeStore.symbolEdgeIndex` (construit une fois par vue en cache), utilisé par `ImpactAnalysisService.java:66` ; `LocalProjectImpactQuery.java:43` passe par `loadActiveQueryView`. 120 + 80 rapports identiques à l'empreinte. (PR #457 ; revérifié le 16/10 sur `97c86a70`)",
+      "reserve": null
+    }
   },
   {
     "id": "AUD-PERF-12",
@@ -1671,9 +1847,13 @@
     "sprint": 4,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé",
     "changement": "idem",
-    "verification": null
+    "verification": {
+      "verdict": "fermé",
+      "preuve": "`RuntimeIntelligenceService.java:186` passe par `view.queryStore().findSymbolById(...)` ; plus de recherche linéaire dans le rapport runtime. (PR #457 ; revérifié le 16/10 sur `97c86a70`)",
+      "reserve": null
+    }
   },
   {
     "id": "AUD-DEP-10",
@@ -1717,9 +1897,13 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "rendre-le-build-maven-reproductible",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "pom.xml:134 project.build.outputTimestamp=2026-01-01T00:00:00Z ; pom.xml:217 <requirePluginVersions/> ; python3 scripts/quality/check-reproducible-build.py --self-test → SUCCESS (cases=6) (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "Pas de JDK : double build et comparaison Linux/Windows non rejoués"
+    }
   },
   {
     "id": "AUD-DEP-12",
@@ -1738,9 +1922,13 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "durcir-les-workflows-github",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "27 actions/checkout et 27 persist-credentials: false (grep sur .github/workflows) ; pr-ci.yml:237 verify timeout-minutes: 90 ; tous les jobs non réutilisables ont timeout-minutes (script yaml : 0 manquant) ; check-workflow-pins.py SUCCESS (uses=104), check-ci-wiring.py SUCCESS, unittest test_check_ci_wiring/test_check_workflow_pins OK (revérifié le 16/10 sur `0e5f14a7`)",
+      "reserve": "Preuve d'un run CI vert en attente"
+    }
   },
   {
     "id": "AUD-DEP-13",
@@ -1759,9 +1947,13 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Spécifié",
+    "statut": "Fermé avec réserve",
     "changement": "idem",
-    "verification": null
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "scripts/quality/check-workflow-pins.py:126-131 DOCKER_LOGIN_KEPT = 2 entrées justifiées, dont toujours (release-promotion-gate.yml, docker-upgrade-qualification) ; release-promotion-gate.yml:21-23 se déclenche sur pull_request vers main. pr-ci.yml:309-310 et code-audit.yml:161-162 : log_out() { docker logout || exit 1 } ; trap log_out EXIT. Gate rejoué : SUCCESS (external uses=104, runs-on=29) ; test_check_workflow_pins.py OK. Mutations sur copie (--root, python -I) : supprimer seulement `trap log_out EXIT` (pr-ci.yml:310) -> SUCCESS ; remplacer la ligne par un commentaire `# trap log_out EXIT (docker logout never runs)` -> SUCCESS ; supprimer les deux lignes -> échec (pr-ci.yml:302). SUIVI.md:406 « Fermé » : PR #561 (331b51b7), runs 40734500306 et 40742608561 du 28/10, jeton « Public Repo Read-only » confirmé par le propriétaire (non vérifiable depuis le dépôt). (revérifié le 28/10 sur `810dcfb2`)",
+      "reserve": "Le commit 13c05aa6 « clore les preuves » ferme la preuve CI et la portée du jeton, pas la faiblesse du gate : celui-ci reste purement textuel (`\"docker logout\" in line`, :256) et ne vérifie ni le `trap ... EXIT` ni que la fonction est appelée ; une étape dont la déconnexion n'est jamais exécutée, ou ne figure qu'en commentaire, passe. release-promotion-gate.yml garde le jeton lisible par du code du dépôt dans un job déclenché par PR vers main (exception volontaire, en liste fermée)."
+    }
   },
   {
     "id": "AUD-DEP-14",
@@ -1771,7 +1963,7 @@
     "axes": [
       "Dépendances"
     ],
-    "preuve": "pom.xml:61 `<testcontainers.version>2.0.5</testcontainers.version>` (inchangé depuis l'audit du 8/10) ; docs/developer/quality/code-audit-constats.md:143-147 (H03 : httpclient5 5.5.1 / httpcore5 5.3.6 embarqués par docker-java-transport-zerodep 3.7.1, statut « Risque », non corrigé). Rapport Dependency-Check non rejoué ici (réseau Maven Central refusé).",
+    "preuve": "pom.xml:61 `<testcontainers.version>2.0.5</testcontainers.version>` (inchangé depuis l'audit du 8/10) ; docs/quality/code-audit-constats.md:143-147 (H03 : httpclient5 5.5.1 / httpcore5 5.3.6 embarqués par docker-java-transport-zerodep 3.7.1, statut « Risque », non corrigé). Rapport Dependency-Check non rejoué ici (réseau Maven Central refusé).",
     "impact": "Machines de build et CI seulement ; exploitation improbable (pair = démon Docker local).",
     "effort": "S",
     "action": "Monter le BOM Testcontainers dès qu'une version embarque httpcore5 ≥ 5.4.3 et httpclient5 ≥ 5.6.3 ; rejouer le profil audit-dependency-check-tests.",
@@ -1780,12 +1972,12 @@
     "sprint": 3,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert",
+    "statut": "Risque accepté",
     "changement": "aucun nouveau changement : `aligner-dependances-de-test-testcontainers`, tâche 4.1",
     "verification": {
-      "verdict": "non fermé",
-      "preuve": "pom.xml:63 <testcontainers.version>2.0.5</testcontainers.version> inchangé",
-      "reserve": "Conforme au suivi ('Déjà porté', non corrigé) : risque à inscrire au registre."
+      "verdict": "risque accepté",
+      "preuve": "Risque accepté jusqu'au 2027-01-15 (registre R-27, décision du propriétaire le 17/10) : aucun docker-java postérieur à 3.7.1 ; CVE limitées à la portée test et visibles dans le rapport Dependency-Check. (relu le 17/10 sur `2ccbccb0`)",
+      "reserve": "À revoir à l'échéance du 2027-01-15."
     }
   },
   {
@@ -2014,7 +2206,7 @@
     "axes": [
       "Tests"
     ],
-    "preuve": "docs/project/audits/AUDIT-2026-09.md:559 (T3 sans colonne d'état). Tests présents : minos-engine/src/test/java/com/minos/hosted/HostedRoleGovernanceTest.java (S1), HostedDenialSaturationTest.java et minos-storage-local/src/test/java/com/minos/storage/local/store/HostedDenialByteBudgetTest.java (S2), minos-runtime-local/src/test/java/com/minos/runtime/local/LinuxCgroupJobOwnershipIsolationTest.java (S3, 10 tests, sautés sans cgroup délégué — voir AUD-TST-03). Q1 non revérifié.",
+    "preuve": "docs/audit/AUDIT-2026-09.md:559 (T3 sans colonne d'état). Tests présents : minos-engine/src/test/java/com/minos/hosted/HostedRoleGovernanceTest.java (S1), HostedDenialSaturationTest.java et minos-storage-local/src/test/java/com/minos/storage/local/store/HostedDenialByteBudgetTest.java (S2), minos-runtime-local/src/test/java/com/minos/runtime/local/LinuxCgroupJobOwnershipIsolationTest.java (S3, 10 tests, sautés sans cgroup délégué — voir AUD-TST-03). Q1 non revérifié.",
     "impact": "Un lecteur du registre croit encore ces correctifs sans test de non-régression.",
     "effort": "S",
     "action": "Marquer T3 clos pour S1–S3 (avec renvoi vers ces classes) et vérifier le test de Q1.",
@@ -2035,7 +2227,7 @@
     "axes": [
       "Performance"
     ],
-    "preuve": "PostgresSemanticVectorStore.java:22 `searchEngine() = \"pgvector-exact-cosine\"` et aucun index ANN dans PostgresSchemaMigrator.java:96-97 : choix explicite de l'ADR 0031 § 8 (« Exact cosine linear scan remains the reference retrieval backend »). docs/project/audits/ARCHI-SUIVI.md § A6.4 point 3 : `maxResults` appliqué après traversée complète = « INFIRMÉ en pratique » (portée ≤ 52 symboles) ; § A4.8 : analyses d'architecture ≈ 1 % du temps, découverte 96 %. Remarque : la colonne `embedding vector NOT NULL` (PostgresSchemaMigrator.java:96) n'a pas de dimension fixée ; pgvector exige une colonne dimensionnée pour créer un index HNSW/ivfflat.",
+    "preuve": "PostgresSemanticVectorStore.java:22 `searchEngine() = \"pgvector-exact-cosine\"` et aucun index ANN dans PostgresSchemaMigrator.java:96-97 : choix explicite de l'ADR 0031 § 8 (« Exact cosine linear scan remains the reference retrieval backend »). docs/audit/ARCHI-SUIVI.md § A6.4 point 3 : `maxResults` appliqué après traversée complète = « INFIRMÉ en pratique » (portée ≤ 52 symboles) ; § A4.8 : analyses d'architecture ≈ 1 % du temps, découverte 96 %. Remarque : la colonne `embedding vector NOT NULL` (PostgresSchemaMigrator.java:96) n'a pas de dimension fixée ; pgvector exige une colonne dimensionnée pour créer un index HNSW/ivfflat.",
     "impact": "Évite de rouvrir des optimisations déjà infirmées. Le jour où un index ANN serait justifié par une mesure, il faudra d'abord une migration de type (`vector(n)` par modèle, ou table par dimension), à prévoir dans la décision.",
     "effort": "S",
     "action": "Aucune action immédiate. Consigner la contrainte de dimension dans l'ADR 0031 ou dans `docs/developer/semantic-retrieval-2.md`.",
