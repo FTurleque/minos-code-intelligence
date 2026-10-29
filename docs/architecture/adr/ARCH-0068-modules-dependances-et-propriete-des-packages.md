@@ -19,7 +19,7 @@ MINOS est un monolithe modulaire. Des frontières tenues seulement par des packa
 
 Découper en modules sans découper les packages laisse un même nom de package déclaré par plusieurs modules, avec trois effets : la visibilité « package » traverse les jars, aucun `module-info.java` n'est possible (JPMS), et le nom d'un package ne dit plus où vit une classe (ADR 0044 § Context). Une liste de modules codée en dur dans le gate de frontières, jamais confrontée au reactor, laisse un module nouveau échapper à toutes les règles (ADR 0044 § Context, A7).
 
-Les deux adaptateurs de stockage sont livrés ensemble ; le backend PostgreSQL dépend du backend local pour ses codecs (ADR 0055 § Context). Une partie de la dette d'architecture mesurée (package `hosted` dans le moteur, lancement d'`icacls.exe` par `PrivateLocalStorage`, racines de packages sans préfixe de module) ne se résorbe qu'avec des chantiers dont les prérequis ne sont pas livrés (ADR 0062 § Context).
+Les deux adaptateurs de stockage sont livrés ensemble ; le backend PostgreSQL dépend du backend local pour ses codecs (ADR 0055 § Context). Une partie de la dette d'architecture mesurée (package `hosted` dans le moteur, racines de packages sans préfixe de module) ne se résorbe qu'avec des chantiers dont les prérequis ne sont pas livrés (ADR 0062 § Context).
 
 Options écartées :
 
@@ -63,7 +63,7 @@ assemblage minos-app
 - Sont interdites : domaine → SCIP ; domaine → SDK MCP ; moteur → CLI ; moteur → protocole MCP ; moteur → runtime de processus local concret ; runtime local générique → provider SCIP ; architecture et impact → couches d'exposition ; API publique → backend local concret lorsqu'un port stable peut être utilisé (ADR 0022 § « Direction des dépendances »). `minos-engine` ne dépend pas d'un adaptateur de stockage (ADR 0022 § Decision). L'arête `minos-mcp` → `minos-cli` n'existe pas et ne se recrée pas (ADR 0062 § Context et § Critères de décision).
 - La table `ALLOWED_DEPENDENCIES` de `scripts/architecture/check-module-boundaries.py` est l'ensemble maximal des dépendances internes directes : retirer une dépendance est permis, en ajouter une hors de la table est refusé.
 - `minos-integration-git` est le seul module qui déclare `org.eclipse.jgit` ; `minos-provider-scip` déclare `scip-java-bindings` ; aucune couche dont dépend le provider SCIP ne dépend de SCIP (ADR 0022 § Decision).
-- Dans `minos-domain`, `minos-engine` et `minos-application`, `PrivateLocalStorage` est le seul lanceur de processus admis (règle A12). Son mécanisme d'ACL Windows sort du moteur par un port d'E/S de plateforme fourni par `minos-runtime-local` et injecté, conçu avec AUD-SEC-06 et pas avant (ADR 0062 § 1 ; ADR 0022 § Mise en œuvre).
+- `minos-domain`, `minos-engine` et `minos-application` ne lancent aucun processus (règle A12, table `PROCESS_LAUNCHERS` vide). Le mécanisme d'ACL Windows du stockage privé est le port d'E/S de plateforme `com.minos.io.PlatformAccessControl`, fourni par `minos-runtime-local` et découvert par le moteur (ADR 0062 § 1 ; § Mise en œuvre ci-dessous).
 - Une arête d'exécution qu'un fichier `META-INF/services` crée entre deux modules, dont `minos-cli` → `minos-app` par le service `McpLaunchRoute`, figure dans le document généré `docs/architecture/diagrams/module-dependencies.md`, dont le contrôle échoue si elle manque (ADR 0062 § 2).
 
 ### 3. Un package, un module
@@ -134,7 +134,7 @@ L'ordre des tâches et leurs prérequis sont dans [le plan du chantier stockage]
 - Ne pas créer de module pour reproduire un package, ni de module vide.
 - Ne pas faire descendre un adaptateur dans `minos-engine` ou `minos-domain`.
 - Ne renommer ni un package existant ni un point d'entrée documenté.
-- Ne lancer aucun processus dans `minos-domain`, `minos-engine` et `minos-application` hors de `PrivateLocalStorage`.
+- Ne lancer aucun processus dans `minos-domain`, `minos-engine` et `minos-application` : un mécanisme de plateforme qui lance un outil passe par un port fourni par `minos-runtime-local`.
 - Ne pas faire dépendre `local` et `postgresql` l'un de l'autre, ni déclarer de classe de production dans `com.minos.storage` hors du moteur.
 - Ne pas laisser croître les listes des règles A11 et A13.
 
@@ -149,7 +149,7 @@ L'ordre des tâches et leurs prérequis sont dans [le plan du chantier stockage]
 ### Négatives
 
 - `minos-engine` concentre ports, orchestration, `hosted` et `MinosVersion` : c'est le prix de « déplacer plutôt que renommer » (ADR 0044 § Consequences).
-- `minos-engine` lance `icacls.exe` jusqu'au port de plateforme ; `hosted` et les racines sans préfixe de module restent en place (ADR 0062 § Consequences).
+- `hosted` et les racines sans préfixe de module restent en place (ADR 0062 § Consequences).
 - Tout nouvel usage légitime d'un type du moteur par une surface, ou d'un adaptateur par un autre, demande d'éditer une liste (ADR 0062 § Consequences).
 - Après la fusion du stockage, les dépendances JDBC et Jackson entrent dans le graphe transitif du module commun : l'impact sur l'API embarquée, la taille, le SBOM et les avis tiers est inventorié, et PostgreSQL n'est pas présenté comme absent du classpath local ; les frontières internes du stockage sont tenues par les packages et des tests d'architecture, pas par Maven seul (ADR 0055 § Alternatives et conséquences).
 - Les coordonnées Maven du stockage changent : les consommateurs sont vérifiés avant suppression, la migration est documentée ; des POM de relocation, sans duplication de classes, sont proposés et validés séparément si d'anciennes coordonnées sont consommées. Signatures Java et octets persistés restent inchangés (ADR 0055 § Alternatives et conséquences).
@@ -218,8 +218,6 @@ L'ordre des tâches et leurs prérequis sont dans [le plan du chantier stockage]
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
 
 - Le découpage ratifié par l'ADR 0022 compte 12 modules enfants ; le reactor en compte 13 : `minos-storage` y tient la place de `minos-storage-local` (§ 4), et `minos-bootstrap` (ADR 0042) s'y ajoute sans qu'un ADR source l'inscrive dans la liste ratifiée — preuve : `pom.xml` `<modules>`.
-
-- (Relevé le 2026-10-28.) Le § 2 (« `PrivateLocalStorage` est le seul lanceur de processus admis »), le Don't « hors de `PrivateLocalStorage` » et la conséquence négative « `minos-engine` lance `icacls.exe` jusqu'au port de plateforme » décrivent l'état antérieur au port d'E/S de plateforme : depuis SH-08 (Mise en œuvre), le moteur ne lance aucun processus et `PROCESS_LAUNCHERS` est vide — preuve : `scripts/architecture/check-module-boundaries.py` (`PROCESS_LAUNCHERS: dict[str, int] = {}`).
 
 ## References
 
