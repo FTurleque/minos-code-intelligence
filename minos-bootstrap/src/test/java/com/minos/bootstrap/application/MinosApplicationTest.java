@@ -75,8 +75,7 @@ class MinosApplicationTest {
         assertSame(application.providerRuntimeManager(), application.providerRuntimeManager());
         assertSame(application.snapshotStager(), application.snapshotStager());
         assertSame(application.snapshotPromoter(), application.snapshotPromoter());
-        assertSame(application.gitIntelligence(), application.gitIntelligence());
-        assertFalse(application.hostedControlPlaneService().isPresent());
+        assertFalse(application.teamControlPlane().isPresent());
         Set<String> providerIds = application.indexerDescriptors().stream()
                 .map(value -> value.id())
                 .collect(Collectors.toUnmodifiableSet());

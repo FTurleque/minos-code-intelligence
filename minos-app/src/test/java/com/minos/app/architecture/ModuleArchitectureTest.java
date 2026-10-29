@@ -95,8 +95,7 @@ class ModuleArchitectureTest {
                     Map.entry("query.SymbolResult", 1),
                     Map.entry("query.UsageResult", 1)),
             "minos-cli", Map.ofEntries(
-                    // Kept, as in the source table: a persisted I/O port, and MinosVersion placed by ADR 0068 section 3.
-                    Map.entry("registry.ProjectPathMappings", 1),
+                    // Kept, as in the source table: MinosVersion placed by ADR 0068 section 3.
                     Map.entry("runtime.MinosVersion", 1)),
             "minos-mcp", Map.ofEntries(
                     Map.entry("runtime.MinosVersion", 1)),
