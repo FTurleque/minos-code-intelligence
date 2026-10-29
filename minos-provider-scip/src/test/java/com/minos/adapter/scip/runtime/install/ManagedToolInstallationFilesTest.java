@@ -76,7 +76,7 @@ class ManagedToolInstallationFilesTest {
         Files.write(archive, zip("top/a.txt", "alpha", "top/sub/b.txt", "beta"));
         Path root = temporary.resolve("root");
 
-        ManagedScipProviderRuntimeManager.extractZipBounded(archive, root, 1024, 10);
+        BoundedZipExtraction.extractZipBounded(archive, root, 1024, 10);
 
         assertEquals("alpha", Files.readString(root.resolve("top/a.txt")));
         assertEquals("beta", Files.readString(root.resolve("top/sub/b.txt")));
@@ -93,7 +93,7 @@ class ManagedToolInstallationFilesTest {
         Path root = temporary.resolve("root");
 
         IOException refusal = assertThrows(IOException.class,
-                () -> ManagedScipProviderRuntimeManager.extractZipBounded(archive, root, 1024, 10));
+                () -> BoundedZipExtraction.extractZipBounded(archive, root, 1024, 10));
 
         assertEquals("archive has a duplicate entry", refusal.getMessage());
         assertFalse(refusal.getMessage().contains(temporary.toString()), "no absolute path in the message");
@@ -111,7 +111,7 @@ class ManagedToolInstallationFilesTest {
         Files.write(archive, zip("a.txt", "overwritten"));
 
         assertThrows(IOException.class,
-                () -> ManagedScipProviderRuntimeManager.extractZipBounded(archive, root, 1024, 10));
+                () -> BoundedZipExtraction.extractZipBounded(archive, root, 1024, 10));
 
         assertEquals("untouched", Files.readString(sentinel));
     }
@@ -126,7 +126,7 @@ class ManagedToolInstallationFilesTest {
         Files.writeString(root.resolve("top/a.txt"), "interrupted");
         Files.writeString(root.resolve("top/leftover.txt"), "stale");
 
-        ManagedScipProviderRuntimeManager.extractDistribution(archive, root, "top", 1024, 10);
+        BoundedZipExtraction.extractDistribution(archive, root, "top", 1024, 10);
 
         assertEquals("new", Files.readString(root.resolve("top/a.txt")));
         assertEquals("beta", Files.readString(root.resolve("top/sub/b.txt")));
@@ -176,7 +176,7 @@ class ManagedToolInstallationFilesTest {
         Path partial = tree(temporary.resolve("tools/java.partial"), "new");
         Path previous = temporary.resolve("tools/java.previous");
 
-        ManagedScipProviderRuntimeManager.swapIn(partial, destination, previous,
+        ScipJavaClasspathInstallation.swapIn(partial, destination, previous,
                 (source, target) -> com.minos.io.DurableAtomicFile.moveDirectory(source, target, "test swap"));
 
         assertEquals("new", Files.readString(destination.resolve("marker.txt")));
@@ -191,7 +191,7 @@ class ManagedToolInstallationFilesTest {
         Path partial = tree(root.resolve("java.partial"), "new");
         PrivateLocalStorage.ensurePrivateDirectory(root);
 
-        ManagedScipProviderRuntimeManager.swapIn(partial, destination, root.resolve("java.previous"));
+        ScipJavaClasspathInstallation.swapIn(partial, destination, root.resolve("java.previous"));
 
         assertEquals("new", Files.readString(destination.resolve("marker.txt")));
     }
@@ -203,7 +203,7 @@ class ManagedToolInstallationFilesTest {
         Path previous = temporary.resolve("tools/java.previous");
         int[] calls = {0};
 
-        IOException failure = assertThrows(IOException.class, () -> ManagedScipProviderRuntimeManager.swapIn(
+        IOException failure = assertThrows(IOException.class, () -> ScipJavaClasspathInstallation.swapIn(
                 partial, destination, previous, (source, target) -> {
                     if (++calls[0] == 2) throw new IOException("the new tree cannot be moved");
                     com.minos.io.DurableAtomicFile.moveDirectory(source, target, "test swap");
@@ -221,7 +221,7 @@ class ManagedToolInstallationFilesTest {
         Path partial = tree(temporary.resolve("tools/java.partial"), "new");
         Path previous = temporary.resolve("tools/java.previous");
 
-        assertThrows(AtomicMoveNotSupportedException.class, () -> ManagedScipProviderRuntimeManager.swapIn(
+        assertThrows(AtomicMoveNotSupportedException.class, () -> ScipJavaClasspathInstallation.swapIn(
                 partial, destination, previous, (source, target) -> {
                     throw new AtomicMoveNotSupportedException(null, null, "not atomic");
                 }));

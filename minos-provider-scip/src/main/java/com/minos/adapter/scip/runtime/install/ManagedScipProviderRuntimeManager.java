@@ -5,47 +5,41 @@ import com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory;
 import com.minos.adapter.scip.runtime.plan.ScipTypeScriptProcessPlanFactory;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.ConfinedFileOpener;
-import com.minos.io.DurableAtomicFile;
 import com.minos.io.BoundedFileLease;
-import com.minos.io.BoundedInputStream;
-import com.minos.io.BoundedLineReader;
-import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.runtime.local.process.InstallationProcessEnvironment;
-import com.minos.runtime.local.process.BoundedProcessOutput;
 import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import static com.minos.adapter.scip.runtime.install.BoundedZipExtraction.extractDistribution;
+import static com.minos.adapter.scip.runtime.install.BoundedZipExtraction.extractZipBounded;
+import static com.minos.adapter.scip.runtime.install.ManagedToolInstallation.deleteRecursively;
+import static com.minos.adapter.scip.runtime.install.ManagedToolInstallation.moveDirectory;
+import static com.minos.adapter.scip.runtime.install.ManagedToolInstallation.moveFile;
+import static com.minos.adapter.scip.runtime.install.ManagedToolInstallation.run;
+import static com.minos.adapter.scip.runtime.install.ManagedToolInstallation.writeNewFile;
 import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Local manager for MINOS-qualified SCIP runtimes. */
 public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeManager {
 
-    private static final int MAX_INSTALL_LOG_LINE_CHARS = 64 * 1024;
     private static final String NODE_MODULES_DIR = "node_modules";
     private static final String MINOS_USER_AGENT = "MINOS-Code-Intelligence";
 
@@ -72,7 +66,6 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private static final String JAVA_CLASSPATH_ID = "scip-java-classpath";
     private static final String EMBEDDED_TREE_SOURCE = "embedded-tools-manifest-sha256";
     private static final String CLASSPATH_DIRECTORY = "classpath";
-    private static final String CLASSPATH_FILE = "classpath.txt";
     private static final long MAX_COURSIER_ARCHIVE_BYTES = 64L * 1024L * 1024L;
     private static final long MAX_MAVEN_ARCHIVE_BYTES = 16L * 1024L * 1024L;
     private static final long MAX_MAVEN_ARCHIVE_ENTRIES = 4_096L;
@@ -80,8 +73,6 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private static final long MAX_NODE_ARCHIVE_BYTES = 128L * 1024L * 1024L;
     private static final long MAX_NODE_ARCHIVE_ENTRIES = 8_192L;
     private static final long MAX_NODE_EXTRACTED_BYTES = 256L * 1024L * 1024L;
-    // The largest jar of the lock is 54 MiB; a copy stops well before filling the disk.
-    private static final long MAX_CLASSPATH_JAR_BYTES = 128L * 1024L * 1024L;
     private static final long MAX_ASSEMBLED_ARCHIVE_BYTES = 256L * 1024L * 1024L;
     private static final long MAX_ASSEMBLED_ENTRIES = 50_000L;
     private static final long MAX_ASSEMBLED_EXTRACTED_BYTES = 512L * 1024L * 1024L;
@@ -355,7 +346,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         ClasspathLock lock = ClasspathLock.packaged();
         if (!installedClasspathVerifies(lock)) {
             run(List.of(coursier.toString(), "--help"), home, toolsRoot.resolve("coursier-verify.log"), Duration.ofMinutes(1));
-            List<Path> jars = fetchVerifiedClasspath(
+            List<Path> jars = ScipJavaClasspathInstallation.fetchVerifiedClasspath(
                     coursier, home, toolsRoot.resolve("scip-java-install.log"), lock);
             installClasspath(jars, lock);
         }
@@ -364,163 +355,15 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         return status;
     }
 
-    /** Resolution only: scip-java is never launched, so nothing from the network runs before it is verified. */
-    static List<String> scipJavaFetchCommand(Path coursier) {
-        return List.of(coursier.toString(), "fetch", "--classpath", SCIP_JAVA_COORDINATE);
-    }
-
-    /**
-     * Resolves the scip-java classpath with {@code coursier fetch} and compares every jar with the pinned lock before
-     * anything is kept. A mismatch (a jar replaced upstream or by a mirror, added, or missing) fails the installation.
-     */
-    static List<Path> fetchVerifiedClasspath(Path coursier, Path workingDirectory, Path log, ClasspathLock lock)
-            throws IOException, InterruptedException {
-        run(scipJavaFetchCommand(coursier), workingDirectory, log, Duration.ofMinutes(10));
-        List<Path> jars = resolvedJars(log);
-        lock.verify(jars);
-        return jars;
-    }
-
-    /** The classpath is the last line of the fetch output that names only absolute jar files. */
-    static List<Path> resolvedJars(Path log) throws IOException {
-        if (!Files.isRegularFile(log, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(log)) {
-            throw new IOException("scip-java installation log must be a regular non-symbolic file");
-        }
-        List<Path> classpath = List.of();
-        try (BoundedInputStream input = new BoundedInputStream(
-                     ConfinedFileOpener.openRegularFileNoFollow(log), BoundedProcessOutput.DEFAULT_MAX_BYTES_PER_STREAM,
-                     "scip-java installation log");
-             BoundedLineReader reader = new BoundedLineReader(
-                     new InputStreamReader(input, StandardCharsets.UTF_8), MAX_INSTALL_LOG_LINE_CHARS)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                List<Path> candidate = jarList(line.trim());
-                if (!candidate.isEmpty()) classpath = candidate;
-            }
-        }
-        if (classpath.isEmpty()) throw new IllegalStateException("scip-java classpath resolution returned no jar");
-        return classpath;
-    }
-
-    private static List<Path> jarList(String line) {
-        if (line.isEmpty()) return List.of();
-        List<Path> jars = new ArrayList<>();
-        for (String entry : line.split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))) {
-            if (!entry.endsWith(".jar")) return List.of();
-            Path jar;
-            try {
-                jar = Path.of(entry);
-            } catch (java.nio.file.InvalidPathException _) {
-                return List.of(); // a progress line such as "Downloaded https://.../x.jar" is not a classpath
-            }
-            if (!jar.isAbsolute()) return List.of();
-            jars.add(jar);
-        }
-        return jars;
-    }
-
-    /**
-     * Whether the installed classpath is the verified one: its jars match the lock and, off Windows, its launcher
-     * matches the listing. An absent, unreadable or altered tree (or one written by an older MINOS, which listed the
-     * jars of the Coursier cache by absolute path) is installed again.
-     */
+    /** Whether the installed classpath is the verified one; off Windows, its launcher is verified too. */
     boolean installedClasspathVerifies(ClasspathLock lock) {
-        Path listing = scipJavaClasspathFile();
-        if (!Files.isRegularFile(listing, LinkOption.NOFOLLOW_LINKS)) return false;
-        try {
-            ScipJavaClasspath.verify(listing, lock, !CommandLocator.isWindows());
-            return true;
-        } catch (IOException | RuntimeException _) {
-            return false;
-        }
+        return ScipJavaClasspathInstallation.installedClasspathVerifies(
+                scipJavaClasspathFile(), lock, !CommandLocator.isWindows());
     }
 
-    /**
-     * Copies the verified jars into MINOS_HOME/tools (the index plan never reads the Coursier cache), verifies the
-     * copies, writes the launcher and, last, the listing, then swaps the tree in. The layout is the one of the
-     * Windows distribution: jars and listing side by side, the listing naming the jars relative to itself.
-     *
-     * <p>The files inherit the owner-only access of the private partial directory instead of carrying a protected
-     * access list each, as the extracted Windows distribution does: the Windows sandbox grants its read access on the
-     * directory, and a protected file would not inherit it. The previous tree is moved aside, not deleted, until the
-     * new one is in place, so a failed swap restores it.</p>
-     */
+    /** Installs the verified jars as the classpath of this installation (see ScipJavaClasspathInstallation). */
     void installClasspath(List<Path> jars, ClasspathLock lock) throws IOException {
-        Path destination = scipJavaClasspathRoot();
-        Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
-        Path previous = destination.resolveSibling(destination.getFileName() + ".previous");
-        deleteRecursively(partial);
-        PrivateLocalStorage.ensurePrivateDirectory(partial);
-        try {
-            List<String> names = new ArrayList<>(jars.size());
-            List<Path> copies = new ArrayList<>(jars.size());
-            for (Path jar : jars) {
-                Path fileName = jar.getFileName();
-                String name = ScipJavaClasspath.requireJarName(fileName == null ? null : fileName.toString());
-                Path copy = partial.resolve(name);
-                copyJar(jar, copy);
-                names.add(name);
-                copies.add(copy);
-            }
-            lock.verify(copies);
-            writeNewFile(partial.resolve(ScipJavaClasspath.LAUNCHER),
-                    new ByteArrayInputStream(ScipJavaClasspath.launcherBytes(names)));
-            writeNewFile(partial.resolve(CLASSPATH_FILE), new ByteArrayInputStream(ScipJavaClasspath.listingBytes(names)));
-            swapIn(partial, destination, previous);
-        } catch (IOException | RuntimeException failure) {
-            try {
-                deleteRecursively(partial);
-            } catch (IOException cleanupFailure) {
-                failure.addSuppressed(cleanupFailure);
-            }
-            throw failure;
-        }
-    }
-
-    /** Replaces {@code destination} by {@code partial}, keeping the previous tree aside until the swap is done. */
-    static void swapIn(Path partial, Path destination, Path previous) throws IOException {
-        swapIn(partial, destination, previous, ManagedScipProviderRuntimeManager::moveDirectory);
-    }
-
-    /** The publication of a directory, a seam of the tests of {@link #swapIn}. */
-    @FunctionalInterface
-    interface DirectoryMover {
-        void move(Path source, Path target) throws IOException;
-    }
-
-    static void swapIn(Path partial, Path destination, Path previous, DirectoryMover mover) throws IOException {
-        deleteRecursively(previous);
-        boolean replacing = Files.exists(destination, LinkOption.NOFOLLOW_LINKS);
-        if (replacing) mover.move(destination, previous);
-        try {
-            mover.move(partial, destination);
-        } catch (IOException swapFailure) {
-            if (replacing) restore(previous, destination, swapFailure, mover);
-            throw swapFailure;
-        }
-        deleteRecursively(previous);
-    }
-
-    private static void restore(Path previous, Path destination, IOException swapFailure, DirectoryMover mover) {
-        try {
-            mover.move(previous, destination);
-        } catch (IOException restoreFailure) {
-            swapFailure.addSuppressed(restoreFailure);
-        }
-    }
-
-    private static void copyJar(Path jar, Path copy) throws IOException {
-        try (InputStream input = new BoundedInputStream(
-                ConfinedFileOpener.openRegularFileNoFollow(jar), MAX_CLASSPATH_JAR_BYTES, "scip-java classpath jar")) {
-            writeNewFile(copy, input);
-        }
-    }
-
-    /** A new file in a private directory, never through a link, whose access is inherited from the directory. */
-    private static void writeNewFile(Path target, InputStream content) throws IOException {
-        try (OutputStream output = PrivateLocalStorage.openNewTreeFile(target)) {
-            content.transferTo(output);
-        }
+        ScipJavaClasspathInstallation.installClasspath(scipJavaClasspathRoot(), jars, lock);
     }
 
     /**
@@ -852,67 +695,6 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         return parts.isEmpty() ? Optional.empty() : Optional.of("tools origin: " + String.join(", ", parts));
     }
 
-    /**
-     * Extracts a zip archive under {@code destinationRoot}, rejecting any entry that would resolve
-     * outside it (zip-slip) and bounding both entry count and total extracted bytes so a corrupted
-     * or oversized archive cannot turn installation into unbounded disk consumption.
-     */
-    static void extractZipBounded(
-            Path archive, Path destinationRoot, long maxTotalBytes, long maxEntries
-    ) throws IOException {
-        Path root = destinationRoot.toAbsolutePath().normalize();
-        PrivateLocalStorage.ensurePrivateDirectory(root);
-        long totalBytes = 0L;
-        long entries = 0L;
-        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(archive); ZipInputStream zip = new ZipInputStream(input)) {
-            ZipEntry entry;
-            while ((entry = zip.getNextEntry()) != null) {
-                if (++entries > maxEntries) throw new IOException("archive has too many entries: " + leafName(archive));
-                Path target = root.resolve(entry.getName()).normalize();
-                if (!target.startsWith(root)) {
-                    throw new IOException("archive entry escapes destination: " + entry.getName());
-                }
-                if (entry.isDirectory()) {
-                    Files.createDirectories(target);
-                    continue;
-                }
-                Files.createDirectories(target.getParent());
-                try (OutputStream output = openExtractedFile(target)) {
-                    byte[] buffer = new byte[64 * 1024];
-                    int read;
-                    while ((read = zip.read(buffer)) >= 0) {
-                        if (read == 0) continue;
-                        totalBytes += read;
-                        if (totalBytes > maxTotalBytes) {
-                            throw new IOException("archive exceeds extraction size budget: " + leafName(archive));
-                        }
-                        output.write(buffer, 0, read);
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Extracts a distribution archive whose entries all live under {@code topLevelDirectory}. An earlier extraction
-     * may have been interrupted: its tree is removed first, so that every entry is created new and a relaunch succeeds.
-     */
-    static void extractDistribution(
-            Path archive, Path root, String topLevelDirectory, long maxTotalBytes, long maxEntries
-    ) throws IOException {
-        deleteRecursively(root.resolve(topLevelDirectory));
-        extractZipBounded(archive, root, maxTotalBytes, maxEntries);
-    }
-
-    /** A file of an archive is new: a name met twice (or twice under case folding) is a defect of the archive. */
-    private static OutputStream openExtractedFile(Path target) throws IOException {
-        try {
-            return PrivateLocalStorage.openNewTreeFile(target);
-        } catch (java.nio.file.FileAlreadyExistsException duplicate) {
-            throw new IOException("archive has a duplicate entry", duplicate);
-        }
-    }
-
     private Optional<Path> coursierExecutable() {
         Path managed = toolsRoot.resolve("coursier").resolve(coursierLauncherId())
                 .resolve(CommandLocator.isWindows() ? "cs.exe" : "cs");
@@ -935,7 +717,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private Path scipJavaWindowsRunner() { return scipJavaRuntimeRoot().resolve(WINDOWS_RUNNER_RESOURCE); }
     private Path scipJavaRoot() { return toolsRoot.resolve("scip-java").resolve(SCIP_JAVA_VERSION); }
     private Path scipJavaClasspathRoot() { return scipJavaRoot().resolve(CLASSPATH_DIRECTORY); }
-    Path scipJavaClasspathFile() { return scipJavaClasspathRoot().resolve(CLASSPATH_FILE); }
+    Path scipJavaClasspathFile() { return scipJavaClasspathRoot().resolve(ScipJavaClasspathInstallation.CLASSPATH_FILE); }
 
     private boolean windowsRuntimeInstalled() {
         Path runtime = scipJavaRuntimeRoot();
@@ -965,41 +747,5 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             if (Files.isRegularFile(root.resolve("Microsoft.NET").resolve("Framework").resolve("v4.0.30319").resolve("csc.exe"))) return true;
         }
         return CommandLocator.find("csc").isPresent();
-    }
-
-    static void run(List<String> command, Path workingDirectory, Path log, Duration timeout)
-            throws IOException, InterruptedException {
-        PrivateLocalStorage.ensurePrivateDirectory(log.toAbsolutePath().normalize().getParent());
-        ProcessBuilder builder = new ProcessBuilder(command);
-        InstallationProcessEnvironment.apply(builder, Map.of());
-        builder.directory(workingDirectory.toFile());
-        builder.redirectErrorStream(true);
-        Process process = builder.start();
-        BoundedProcessOutput.Capture capture = BoundedProcessOutput.capture(process, log, null);
-        boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        if (!completed) {
-            process.descendants().toList().reversed().forEach(handle -> { if (handle.isAlive()) handle.destroyForcibly(); });
-            if (process.isAlive()) process.destroyForcibly();
-            process.waitFor(5, TimeUnit.SECONDS);
-            capture.await();
-            throw new IllegalStateException("tool command timed out; see the tool log " + leafName(log));
-        }
-        capture.await();
-        if (process.exitValue() != 0) throw new IllegalStateException("tool command failed with code " + process.exitValue() + "; see the tool log " + leafName(log));
-    }
-
-    private static void deleteRecursively(Path path) throws IOException {
-        FileTreeOperations.deleteRecursively(path);
-    }
-
-    /** The parent is made private before every publication, so that a new tool folder exists and is owner-only. */
-    private static void moveFile(Path source, Path target) throws IOException {
-        PrivateLocalStorage.ensurePrivateDirectory(target.toAbsolutePath().normalize().getParent());
-        DurableAtomicFile.replace(source, target, "managed tool file installation");
-    }
-
-    private static void moveDirectory(Path source, Path target) throws IOException {
-        PrivateLocalStorage.ensurePrivateDirectory(target.toAbsolutePath().normalize().getParent());
-        DurableAtomicFile.moveDirectory(source, target, "managed tool directory installation");
     }
 }

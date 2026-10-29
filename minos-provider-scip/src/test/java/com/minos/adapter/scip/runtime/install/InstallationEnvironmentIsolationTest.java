@@ -58,7 +58,7 @@ class InstallationEnvironmentIsolationTest {
                     "-cp", System.getProperty("java.class.path"), Printer.class.getName());
             Duration timeout = Duration.ofSeconds(60);
 
-            ManagedScipProviderRuntimeManager.run(command, directory, directory.resolve("java.log"), timeout);
+            ManagedToolInstallation.run(command, directory, directory.resolve("java.log"), timeout);
             Files.move(directory.resolve("java.log"), directory.resolve("java.env"));
             ManagedScipPythonRuntimeManager.run(command, directory, directory.resolve("python.log"), timeout);
             Files.move(directory.resolve("python.log"), directory.resolve("python.env"));

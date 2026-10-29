@@ -12,7 +12,7 @@
     "justification": "Sonde de poignée de main : crée MINOS_HOME lui-même, avant qu'un MINOS existe, à un chemin explicite donné en argument."
   },
   {
-    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java",
+    "file": "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/BoundedZipExtraction.java",
     "method": "Files.createDirectories",
     "max": 2,
     "justification": "Sous-répertoires d'extraction d'une archive d'outil vérifiée, sous une racine d'installation déjà rendue privée (ensurePrivateDirectory) : entrée durable, les dossiers héritent de l'ACL de la racine et durcir chaque entrée d'une extraction en masse réécrirait des milliers d'ACL."

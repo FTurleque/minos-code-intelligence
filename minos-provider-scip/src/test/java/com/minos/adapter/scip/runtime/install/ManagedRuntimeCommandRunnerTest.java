@@ -36,7 +36,7 @@ class ManagedRuntimeCommandRunnerTest {
         PROVIDER {
             @Override
             void run(List<String> command, Path directory, Path log, Duration timeout) throws Exception {
-                ManagedScipProviderRuntimeManager.run(command, directory, log, timeout);
+                ManagedToolInstallation.run(command, directory, log, timeout);
             }
         };
 

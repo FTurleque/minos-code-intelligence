@@ -47,28 +47,28 @@
       <Message>Known null at ManagedPolyglotScipRuntimeManager.java:[line 393]</Message>
     </SourceLine>
   </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="ba0c283759fde0e4ced927985a9529cd" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
+  <BugInstance instanceOccurrenceNum="0" instanceHash="da3dfc1c2ba8910947402230b136f91" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
-    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager.extractZipBounded(Path, Path, long, long)</LongMessage>
-    <Class classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" primary="true">
-      <SourceLine classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" start="85" end="819" sourcepath="com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java">
-        <Message>At ManagedScipProviderRuntimeManager.java:[lines 85-819]</Message>
+    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.adapter.scip.runtime.install.BoundedZipExtraction.extractZipBounded(Path, Path, long, long)</LongMessage>
+    <Class classname="com.minos.adapter.scip.runtime.install.BoundedZipExtraction" primary="true">
+      <SourceLine classname="com.minos.adapter.scip.runtime.install.BoundedZipExtraction" start="19" end="79" sourcepath="com/minos/adapter/scip/runtime/install/BoundedZipExtraction.java" sourcefile="BoundedZipExtraction.java">
+        <Message>At BoundedZipExtraction.java:[lines 19-79]</Message>
       </SourceLine>
-      <Message>In class com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager</Message>
+      <Message>In class com.minos.adapter.scip.runtime.install.BoundedZipExtraction</Message>
     </Class>
-    <Method isStatic="true" classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" signature="(Ljava/nio/file/Path;Ljava/nio/file/Path;JJ)V" name="extractZipBounded" primary="true">
-      <SourceLine endBytecode="906" classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" start="703" end="735" sourcepath="com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="0" />
-      <Message>In method com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager.extractZipBounded(Path, Path, long, long)</Message>
+    <Method isStatic="true" classname="com.minos.adapter.scip.runtime.install.BoundedZipExtraction" signature="(Ljava/nio/file/Path;Ljava/nio/file/Path;JJ)V" name="extractZipBounded" primary="true">
+      <SourceLine endBytecode="889" classname="com.minos.adapter.scip.runtime.install.BoundedZipExtraction" start="30" end="61" sourcepath="com/minos/adapter/scip/runtime/install/BoundedZipExtraction.java" sourcefile="BoundedZipExtraction.java" startBytecode="0" />
+      <Message>In method com.minos.adapter.scip.runtime.install.BoundedZipExtraction.extractZipBounded(Path, Path, long, long)</Message>
     </Method>
     <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
       <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
       <Message>Called method java.nio.file.Path.getParent()</Message>
     </Method>
-    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="164" classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" start="719" end="719" sourcepath="com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="164" primary="true">
-      <Message>Method invoked at ManagedScipProviderRuntimeManager.java:[line 719]</Message>
+    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="164" classname="com.minos.adapter.scip.runtime.install.BoundedZipExtraction" start="46" end="46" sourcepath="com/minos/adapter/scip/runtime/install/BoundedZipExtraction.java" sourcefile="BoundedZipExtraction.java" startBytecode="164" primary="true">
+      <Message>Method invoked at BoundedZipExtraction.java:[line 46]</Message>
     </SourceLine>
-    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="155" classname="com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager" start="719" end="719" sourcepath="com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java" sourcefile="ManagedScipProviderRuntimeManager.java" startBytecode="155">
-      <Message>Known null at ManagedScipProviderRuntimeManager.java:[line 719]</Message>
+    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="155" classname="com.minos.adapter.scip.runtime.install.BoundedZipExtraction" start="46" end="46" sourcepath="com/minos/adapter/scip/runtime/install/BoundedZipExtraction.java" sourcefile="BoundedZipExtraction.java" startBytecode="155">
+      <Message>Known null at BoundedZipExtraction.java:[line 46]</Message>
     </SourceLine>
   </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="64ba69ad865f8809dfbccadf4c4983fb" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">

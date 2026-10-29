@@ -24,7 +24,7 @@ class ManagedScipProviderRuntimeManagerTest {
     void fetchesPinnedScipJavaWithoutLaunchingIt() {
         Path coursier = temporaryDirectory.resolve("cs.exe");
 
-        List<String> command = ManagedScipProviderRuntimeManager.scipJavaFetchCommand(coursier);
+        List<String> command = ScipJavaClasspathInstallation.scipJavaFetchCommand(coursier);
 
         // Resolution only: scip-java is never launched, and nothing runs before the jars are verified.
         assertEquals(List.of(coursier.toString(), "fetch", "--classpath", "org.scip-code:scip-java:0.13.2"), command);

@@ -112,6 +112,10 @@ def main() -> int:
         file_tree = read("minos-engine/src/main/java/com/minos/io/FileTreeOperations.java")
         managed_java = read(
             "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java")
+        managed_steps = read(
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedToolInstallation.java")
+        scip_java_classpath = read(
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ScipJavaClasspathInstallation.java")
         managed_python = read(
             "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipPythonRuntimeManager.java")
         managed_polyglot = read(
@@ -222,8 +226,8 @@ def main() -> int:
         require("DistributedArtifactBundleStore.java", distributed,
                 "FileTreeOperations.deleteRecursively", "MAX_CACHE_ROOT_ENTRIES",
                 "MAX_CACHE_ENTRY_TREE_ENTRIES", "attributes.isRegularFile()")
-        require("ManagedScipProviderRuntimeManager.java", managed_java,
-                "BoundedInputStream", "BoundedLineReader", "FileTreeOperations.deleteRecursively")
+        require("ScipJavaClasspathInstallation.java", scip_java_classpath, "BoundedInputStream", "BoundedLineReader")
+        require("ManagedToolInstallation.java", managed_steps, "FileTreeOperations.deleteRecursively")
         require("ManagedScipPythonRuntimeManager.java", managed_python,
                 "FileTreeOperations.deleteRecursively")
         require("ManagedPolyglotScipRuntimeManager.java", managed_polyglot,
@@ -233,6 +237,8 @@ def main() -> int:
         for relative, text in (
             ("DistributedArtifactBundleStore.java", distributed),
             ("ManagedScipProviderRuntimeManager.java", managed_java),
+            ("ManagedToolInstallation.java", managed_steps),
+            ("ScipJavaClasspathInstallation.java", scip_java_classpath),
             ("ManagedScipPythonRuntimeManager.java", managed_python),
             ("ManagedPolyglotScipRuntimeManager.java", managed_polyglot),
         ):

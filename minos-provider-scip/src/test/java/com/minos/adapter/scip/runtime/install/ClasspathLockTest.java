@@ -133,7 +133,7 @@ class ClasspathLockTest {
         Path beta = jar("beta.jar", "beta");
         Path coursier = fakeCoursier(alpha + java.io.File.pathSeparator + beta);
 
-        List<Path> jars = ManagedScipProviderRuntimeManager.fetchVerifiedClasspath(
+        List<Path> jars = ScipJavaClasspathInstallation.fetchVerifiedClasspath(
                 coursier, temp, temp.resolve("logs").resolve("install.log"), twoJarLock());
 
         assertEquals(List.of(alpha, beta), jars);
@@ -150,7 +150,7 @@ class ClasspathLockTest {
         ClasspathLock lock = twoJarLock();
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> ManagedScipProviderRuntimeManager.fetchVerifiedClasspath(coursier, temp, log, lock));
+                () -> ScipJavaClasspathInstallation.fetchVerifiedClasspath(coursier, temp, log, lock));
 
         assertTrue(failure.getMessage().contains("beta.jar"), failure.getMessage());
         assertFalse(failure.getMessage().contains(temp.toString()), failure.getMessage());
@@ -163,7 +163,7 @@ class ClasspathLockTest {
         ClasspathLock lock = twoJarLock();
 
         assertThrows(IllegalStateException.class,
-                () -> ManagedScipProviderRuntimeManager.fetchVerifiedClasspath(coursier, temp, log, lock));
+                () -> ScipJavaClasspathInstallation.fetchVerifiedClasspath(coursier, temp, log, lock));
     }
 
     @Test
@@ -171,6 +171,6 @@ class ClasspathLockTest {
         Path log = temp.resolve("relative.log");
         Files.writeString(log, "alpha.jar" + java.io.File.pathSeparator + "beta.jar\n");
 
-        assertThrows(IllegalStateException.class, () -> ManagedScipProviderRuntimeManager.resolvedJars(log));
+        assertThrows(IllegalStateException.class, () -> ScipJavaClasspathInstallation.resolvedJars(log));
     }
 }

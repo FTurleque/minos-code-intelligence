@@ -36,7 +36,7 @@ Commande : `-Paudit-spotbugs`, effort `Max`, seuil `Medium`, 14 modules. Résult
 | `IS2_INCONSISTENT_SYNC` | 1 | `LazyApplication` (ligne 83) : un champ accédé avec et sans verrou. **À regarder en premier** avec la ligne 174 de la même classe (la classe compose les deux motifs de synchronisation) |
 | `OS_OPEN_STREAM` | 2 | flux possiblement non fermé : `BoundedFileDigest` (ligne 37), `ScipSymbolSnapshotImporter` (ligne 148) |
 | `CT_CONSTRUCTOR_THROW` | 2 | constructeur qui peut lever après avoir pris des ressources : `RemoteCloneBudget` (ligne 25), `AbstractScipProcessPlanFactory` (ligne 28) |
-| `ENV_USE_PROPERTY_INSTEAD_OF_ENV` | 2 | lecture d'une propriété système là où une variable d'environnement est attendue : `ManagedScipProviderRuntimeManager` (ligne 238), `ScipJavaProcessPlanFactory` (ligne 296) |
+| `ENV_USE_PROPERTY_INSTEAD_OF_ENV` | 2 | lecture d'une propriété système là où une variable d'environnement est attendue : `ManagedScipProviderRuntimeManager` (ligne 287), `ScipJavaProcessPlanFactory` (ligne 296) |
 | `REC_CATCH_EXCEPTION` | 2 | `catch (Exception)` trop large : `DistributedArtifactBundleStore` (ligne 473), `ProcessIndexerExecutor` (ligne 161) |
 | `VA_FORMAT_STRING_USES_NEWLINE` | 1 | `RelationshipCommand` (ligne 81) : `\n` dans une chaîne de format au lieu de `%n` |
 
