@@ -62,9 +62,7 @@ Validation : consommateur compilé avant/après si contrat publié, double de le
 
 ## Écarts constatés
 
-Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
-
-- Le changement `lire-l-identifiant-du-snapshot-a-la-reconciliation`, cité comme mis en œuvre, n'est pas archivé (tâche 3.2 ouverte) — preuve : `openspec/changes/lire-l-identifiant-du-snapshot-a-la-reconciliation/tasks.md:18`.
+Aucun écart ouvert.
 
 ## References
 

@@ -15,4 +15,4 @@ Ordre dans chaque section : rouge, correction, preuve. Tout `-pl` s'accompagne d
 ## 3. Clôture
 
 - [x] 3.1 Note de mise en œuvre dans l'ADR 0056 (migration additive de `Reconciliation`, décomptes avant/après) ; ligne de suivi dans `docs/project/audits/2026-10-10/SUIVI.md` (section « Clôture du sprint 4 », suite repérée).
-- [ ] 3.2 `openspec validate --all --strict` (64/64 le 2026-10-15) ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md` (coût du statut) ; aucune page utilisateur (aucune sortie ne change).
+- [x] 3.2 `openspec validate --all --strict` (64/64 le 2026-10-15) ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md` (coût du statut) ; aucune page utilisateur (aucune sortie ne change). — PR #460 fusionnée (`83dd1fbb`) ; coût du statut ajouté à `docs/project/governance/STATUS.md` à l'archivage, le 2026-10-29.

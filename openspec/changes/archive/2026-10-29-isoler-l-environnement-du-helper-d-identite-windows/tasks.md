@@ -10,5 +10,5 @@ Ordre : rouge, correction, preuve. Tout `-pl` s'accompagne de `-am`. Un seul `mv
 ## 2. Clôture
 
 - [x] 2.1 [revue PR #599] Revue `minos-security-reviewer` : conforme, aucun constat bloquant ; remarque hors périmètre sur `queryFailureMessage` renvoyée à la PR #599.
-- [ ] 2.2 CI de la PR verte sur `Verify (windows-2022)` et `Verify (ubuntu-24.04)`.
-- [ ] 2.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; archiver après fusion (aucune doc courante à mettre à jour : comportement interne, sans surface publique).
+- [x] 2.2 CI de la PR verte sur `Verify (windows-2022)` et `Verify (ubuntu-24.04)`. — PR #602 fusionnée (`7490b04a`) : `Verify (windows-2022)` et `Verify (ubuntu-24.04)` verts, run https://github.com/FTurleque/minos-code-intelligence/actions/runs/40784461918.
+- [x] 2.3 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; archiver après fusion (aucune doc courante à mettre à jour : comportement interne, sans surface publique). — gates rapides et `openspec validate --all --strict` rejoués à l'archivage, le 2026-10-29.
