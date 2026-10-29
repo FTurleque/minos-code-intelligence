@@ -272,6 +272,7 @@ MINOS_IMAGE=$image
 MINOS_QUERY_IMAGE=$image
 MINOS_DATA_DIR=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $dataDirectory))
 MINOS_PROJECTS_DIR=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $ProjectsRoot))
+MINOS_HOST_PROJECTS_ROOT=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $ProjectsRoot))
 MINOS_VERSION=$version
 MINOS_GIT_COMMIT=$commit
 "@
