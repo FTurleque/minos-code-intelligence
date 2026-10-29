@@ -413,7 +413,7 @@ Les six constats du sprint ont leur changement fusionné : AUD-DEP-01 (PR #434),
 
 **Chantiers ouverts le 2026-10-28** :
 
-- avis OSV du classpath de scip-java 0.13.1 : dérogation R-29 et résidus OSV, [PR #598](https://github.com/FTurleque/minos-code-intelligence/pull/598), **fusionnée** dans `develop` (`b68beef8`) ; montée de scip-java en 0.13.2, qui ne laisse que la dérogation `guava` jusqu'à son terme, [PR #603](https://github.com/FTurleque/minos-code-intelligence/pull/603), **ouverte** ;
+- avis OSV du classpath de scip-java 0.13.1 : dérogation R-29 et résidus OSV, [PR #598](https://github.com/FTurleque/minos-code-intelligence/pull/598), **fusionnée** dans `develop` (`b68beef8`) ; montée de scip-java en 0.13.2, qui réduit la dérogation R-29 à `guava`, [PR #603](https://github.com/FTurleque/minos-code-intelligence/pull/603), **fusionnée** (`90ccecc5`) ;
 - tests de confinement intermittents (`ProviderWriteContainmentTest` sous Windows) : [PR #599](https://github.com/FTurleque/minos-code-intelligence/pull/599), **fusionnée** (`9b074f61`), et [PR #602](https://github.com/FTurleque/minos-code-intelligence/pull/602) (environnement minimal du helper d'identité de chemin Windows), **fusionnée** (`7490b04a`) ;
 - scripts Docker en panne (observations b à d d'AUD-DEP-15 : `verify-run-configurations.ps1`, `.env` de `prod-mcp.ps1`, verrous npm de `build-local-windows-candidate.ps1`) : [PR #596](https://github.com/FTurleque/minos-code-intelligence/pull/596), **fusionnée** (`9bb39cc7`).
 
