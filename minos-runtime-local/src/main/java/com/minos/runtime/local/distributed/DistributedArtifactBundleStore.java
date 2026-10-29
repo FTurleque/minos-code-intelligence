@@ -192,7 +192,8 @@ public final class DistributedArtifactBundleStore {
 
             String cacheKey = cacheKey(manifest);
             ReentrantLock operationLock = operationStripe(cacheKey);
-            operationLock.lock();
+            // Released by the finally block that directly follows, on every path.
+            operationLock.lock(); // NOSONAR java:S2222, unlocked in the matching finally
             try {
                 leases.acquire(cacheKey);
                 leasedKey = cacheKey;
