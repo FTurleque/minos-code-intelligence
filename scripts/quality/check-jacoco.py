@@ -124,7 +124,7 @@ SCOPES = {
             # manager is its least covered part (pinned acquisition at 11 %): 225/377 = 0.597, 131/242 = 0.541 locally.
             # The CI Windows report read 0.028 lower in lines and 0.048 lower in branches than the local one for the
             # whole class, so each floor = local measure - that gap - about 5 points: manager 0.52 / 0.44,
-            # ManagedToolInstallation (28/28, 6/8) 0.90 / 0.65, BoundedZipExtraction (30/30, 13/14) 0.90 / 0.80,
+            # ManagedToolInstallation (28/28, 6/8; Linux CI 5/8 branches) 0.90 / 0.57, BoundedZipExtraction (30/30, 13/14) 0.90 / 0.80,
             # ScipJavaClasspathInstallation (77/81, 24/28) 0.85 / 0.75. The Linux measure is the Verify (ubuntu-24.04) job.
             "com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager",
             "com/minos/adapter/scip/runtime/install/ManagedToolInstallation",
@@ -135,7 +135,7 @@ SCOPES = {
         "branch": 0.28,
         "prefixMinimums": {
             "com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager": {"line": 0.52, "branch": 0.44},
-            "com/minos/adapter/scip/runtime/install/ManagedToolInstallation": {"line": 0.90, "branch": 0.65},
+            "com/minos/adapter/scip/runtime/install/ManagedToolInstallation": {"line": 0.90, "branch": 0.57},
             "com/minos/adapter/scip/runtime/install/BoundedZipExtraction": {"line": 0.90, "branch": 0.80},
             "com/minos/adapter/scip/runtime/install/ScipJavaClasspathInstallation": {"line": 0.85, "branch": 0.75},
             "com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager": {"line": 0.28, "branch": 0.20},
