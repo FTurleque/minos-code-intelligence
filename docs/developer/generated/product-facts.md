@@ -81,7 +81,7 @@ Nombre de tools : **31**
 
 ## Providers qualifiés
 
-### `scip-java` `0.13.1`
+### `scip-java` `0.13.2`
 
 Disposition : `QUALIFIED_WITH_CONSTRAINTS`
 

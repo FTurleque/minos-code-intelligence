@@ -210,7 +210,7 @@ class ManagedScipProviderRuntimeManagerToolchainTest {
         ChildJvm.Outcome outcome = child(JAVA, "inspect,executor");
 
         assertEquals("NOT_INSTALLED", outcome.get("inspect.state"));
-        assertTrue(outcome.get("inspect.diagnostics").contains("managed scip-java 0.13.1 classpath is not installed in MINOS_HOME/tools"),
+        assertTrue(outcome.get("inspect.diagnostics").contains("managed scip-java 0.13.2 classpath is not installed in MINOS_HOME/tools"),
                 outcome.get("inspect.diagnostics"));
         assertTrue(outcome.get("executor.failure").contains("provider runtime is not ready"), outcome.get("executor.failure"));
     }

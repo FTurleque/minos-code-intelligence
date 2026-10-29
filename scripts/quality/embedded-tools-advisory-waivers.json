@@ -4,32 +4,8 @@
   "waivers": [
     {
       "component": "scip-java-classpath",
-      "finding": "GHSA-j288-q9x7-2f5v",
-      "reason": "R-29: commons-lang3 3.8.1 is pulled by maven-core 3.8.8 through kotlin-scripting-dependencies-maven 2.2.0; a jar of the lock is never replaced alone. Uncontrolled recursion (denial of service) bounded by the sandbox limits; the Windows classpath is not executed (scip-java BLOCKED, ADR 0060).",
-      "expires": "2027-01-28"
-    },
-    {
-      "component": "scip-java-classpath",
-      "finding": "GHSA-5mg8-w23w-74h3",
-      "reason": "R-29: guava 25.1-android is pulled by guice 4.2.2 (maven-core 3.8.8). Disclosure through files created in a shared temporary directory: the Linux sandbox mounts a private /tmp (bubblewrap --tmpfs); the Windows classpath is not executed (ADR 0060).",
-      "expires": "2027-01-28"
-    },
-    {
-      "component": "scip-java-classpath",
-      "finding": "GHSA-7g45-4rm6-3mm3",
-      "reason": "R-29: guava 25.1-android is pulled by guice 4.2.2 (maven-core 3.8.8). Insecure use of a shared temporary directory: the Linux sandbox mounts a private /tmp (bubblewrap --tmpfs); the Windows classpath is not executed (ADR 0060).",
-      "expires": "2027-01-28"
-    },
-    {
-      "component": "scip-java-classpath",
       "finding": "GHSA-xxph-c9ww-hj94",
-      "reason": "R-29: guava fixes it in 33.7.2 only; no scip-java release ships it (0.13.2 resolves guava 33.6.0-jre). Memory exhaustion on Java deserialization, bounded by the sandbox memory limit; the Windows classpath is not executed (ADR 0060).",
-      "expires": "2027-01-28"
-    },
-    {
-      "component": "scip-java-classpath",
-      "finding": "GHSA-6fmv-xxpf-w3cw",
-      "reason": "R-29: plexus-utils 4.0.0 is pulled by the Maven resolver of kotlin-scripting-dependencies-maven 2.2.0. Directory traversal in archive extraction, confined to the sandbox writable roots with egress DENY; the Windows classpath is not executed (ADR 0060).",
+      "reason": "R-29: guava 33.6.0-jre is pulled by maven-core 3.9.16 and guice 5.1.0 through kotlin-scripting-dependencies-maven 2.4.21; guava fixes it in 33.7.2 only and no scip-java release ships it. Memory exhaustion on Java deserialization, bounded by the sandbox memory limit; the Windows classpath is not executed (ADR 0060).",
       "expires": "2027-01-28"
     }
   ]
