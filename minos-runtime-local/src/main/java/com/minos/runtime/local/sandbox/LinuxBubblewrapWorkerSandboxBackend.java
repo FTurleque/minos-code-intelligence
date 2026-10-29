@@ -211,7 +211,8 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
 
         private final WorkerNetworkPolicy networkPolicy;
         private final String jobName;
-        private volatile LinuxCgroupJob job;
+        // volatile only publishes the reference; LinuxCgroupJob guards its own state with synchronized methods.
+        private volatile LinuxCgroupJob job; // NOSONAR java:S3077, the referenced job is thread-safe
 
         ContainedSandboxSession(WorkerNetworkPolicy networkPolicy, String jobName) {
             this.networkPolicy = networkPolicy;

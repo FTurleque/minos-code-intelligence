@@ -39,7 +39,8 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
     private final Worker worker;
     private final DistributedArtifactBundleStore bundleStore;
     private final List<VerifiedArtifact> leasedArtifacts = new ArrayList<>();
-    private volatile VerifiedArtifact lastVerifiedArtifact;
+    // volatile only publishes the reference; VerifiedArtifact is an immutable record.
+    private volatile VerifiedArtifact lastVerifiedArtifact; // NOSONAR java:S3077, immutable referent
 
     public DistributedIndexerExecutor(
             String indexerId,

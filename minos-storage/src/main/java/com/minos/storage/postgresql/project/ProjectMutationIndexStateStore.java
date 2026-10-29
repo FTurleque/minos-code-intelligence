@@ -26,7 +26,8 @@ public final class ProjectMutationIndexStateStore implements IndexStateStore {
     private static final long LEASE_POLL_MILLIS = 50L;
     private final PostgresConnectionFactory connections;
     private final IndexStateStore delegate;
-    private final ThreadLocal<HeldLifecycleLease> heldLifecycleLease = new ThreadLocal<>();
+    // Set only once an acquisition succeeds, and removed when the outermost logical lease closes.
+    private final ThreadLocal<HeldLifecycleLease> heldLifecycleLease = new ThreadLocal<>(); // NOSONAR java:S5164, removed on release
     private final Object localGateMonitor = new Object();
     private final Map<UUID, LocalGateState> localGates = new HashMap<>();
 
