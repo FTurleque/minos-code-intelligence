@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.UserPrincipal;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The principal this process creates new objects as, read once per JVM from the owner the operating system gives a
@@ -13,17 +14,18 @@ import java.nio.file.attribute.UserPrincipal;
  */
 final class ProcessOwner {
 
-    private static volatile UserPrincipal current;
+    private static final AtomicReference<UserPrincipal> CURRENT = new AtomicReference<>();
 
     private ProcessOwner() {
     }
 
     /** The owner of a file this process creates, probed beside {@code near} the first time, then kept. */
     static UserPrincipal current(Path near) throws IOException {
-        UserPrincipal known = current;
+        UserPrincipal known = CURRENT.get();
         if (known != null) return known;
-        current = probe(near);
-        return current;
+        UserPrincipal probed = probe(near);
+        CURRENT.set(probed);
+        return probed;
     }
 
     /**
