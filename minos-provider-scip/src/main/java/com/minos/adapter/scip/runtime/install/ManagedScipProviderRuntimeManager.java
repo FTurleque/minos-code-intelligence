@@ -104,8 +104,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private final Path home;
     private final Path toolsRoot;
     private final ToolOriginLedger origins;
-    // volatile only publishes a lazily built reference; PinnedArtifactSource has final fields only.
-    private volatile PinnedArtifactSource source; // NOSONAR java:S3077, immutable referent
+    private volatile PinnedArtifactSource source;
 
     public ManagedScipProviderRuntimeManager(Path minosHome) {
         this.home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();

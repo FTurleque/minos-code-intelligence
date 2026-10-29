@@ -304,9 +304,7 @@ public final class LinuxCgroupJob implements AutoCloseable {
 
     /** Applies the ownership decision to one discovered cgroup and reclaims it when the decision says so. */
     private static CgroupJobOwnership.Verdict reclaimStaleJob(Path child, String name, SweepContext context) {
-        // Never closed on purpose: close() kills unconditionally, while only an owner proven dead
-        // authorizes a kill here; the cgroup is removed explicitly below through context.removal().
-        LinuxCgroupJob stale = new LinuxCgroupJob(child); // NOSONAR java:S2095, lifecycle owned by the sweep
+        LinuxCgroupJob stale = new LinuxCgroupJob(child);
         Optional<CgroupJobOwnership.Mark> mark = CgroupJobOwnership.Mark.parse(name);
         CgroupJobOwnership.Verdict verdict = CgroupJobOwnership.decide(
                 mark, context.self(), context.owners().apply(child), stale::aliveProcesses);
@@ -459,8 +457,7 @@ public final class LinuxCgroupJob implements AutoCloseable {
     public static LinuxCgroupJob createOwnershipOnly(Path root, String name) throws IOException {
         Path directory = jobDirectory(root, name);
         Files.createDirectory(directory);
-        // Returned to the caller, who closes it; on failure the still empty cgroup is discarded below.
-        LinuxCgroupJob job = new LinuxCgroupJob(directory); // NOSONAR java:S2095, factory hands ownership to the caller
+        LinuxCgroupJob job = new LinuxCgroupJob(directory);
         try {
             if (!Files.exists(directory.resolve(PROCS_FILE), LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("cgroup ownership file " + PROCS_FILE + " is missing in cgroup " + job.name());
@@ -502,8 +499,7 @@ public final class LinuxCgroupJob implements AutoCloseable {
 
     private static LinuxCgroupJob configure(Path directory, Limits limits) throws IOException {
         Files.createDirectory(directory);
-        // Returned to the caller, who closes it; on failure the still empty cgroup is discarded below.
-        LinuxCgroupJob job = new LinuxCgroupJob(directory); // NOSONAR java:S2095, factory hands ownership to the caller
+        LinuxCgroupJob job = new LinuxCgroupJob(directory);
         try {
             job.write("memory.max", Long.toString(limits.memoryBytes()));
             job.writeIfPresent("memory.swap.max", "0");
