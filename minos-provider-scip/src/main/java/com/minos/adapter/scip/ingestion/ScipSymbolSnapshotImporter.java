@@ -164,7 +164,9 @@ public final class ScipSymbolSnapshotImporter {
                 MessageDigest digest = Sha256.newDigest();
                 BoundedInputStream bounded = new BoundedInputStream(
                         Channels.newInputStream(sourceChannel), expectedBytes, "SCIP artifact snapshot");
-                DigestInputStream input = new DigestInputStream(bounded, digest);
+                // Wraps sourceChannel, closed by the enclosing try; closing this stream earlier would close the
+                // channel before the size re-check below.
+                DigestInputStream input = new DigestInputStream(bounded, digest); // NOSONAR java:S2095, closed with its channel
                 input.transferTo(output);
                 if (bounded.consumedBytes() != expectedBytes || sourceChannel.size() != expectedBytes) {
                     throw new IOException("SCIP artifact changed while being captured");
