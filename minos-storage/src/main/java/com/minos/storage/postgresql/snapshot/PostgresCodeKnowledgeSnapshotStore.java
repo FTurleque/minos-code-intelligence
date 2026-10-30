@@ -153,7 +153,6 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             if (cached.isPresent()) return cached;
 
             ReentrantLock buildLock = buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
-            boolean retry = false;
             buildLock.lock();
             try {
                 cached = cached(key);
@@ -164,8 +163,8 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                 if (row.isEmpty()) return Optional.empty();
                 Row value = row.orElseThrow();
                 if (!metadata.snapshotId().equals(value.snapshotId()) || !metadata.sha256().equals(value.sha256())) {
+                    // The active row moved on since the metadata read: drop the stale payload and resolve again.
                     Files.deleteIfExists(value.payload());
-                    retry = true;
                 } else {
                     long payloadBytes = Files.size(value.payload());
                     DecodedPayload decoded = decodeVerified(projectId, value);
@@ -185,7 +184,6 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             } finally {
                 buildLock.unlock();
             }
-            if (!retry) throw new IOException("PostgreSQL active snapshot resolution ended without a result");
         }
         throw new IOException("PostgreSQL active snapshot changed repeatedly; retry limit exceeded for project "
                 + projectId + " after " + MAX_ACTIVE_QUERY_RETRIES + " attempts");
