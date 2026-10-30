@@ -159,11 +159,11 @@ tasks {
 
 jacoco {
     // The version of the Maven reactor (pom.xml, jacoco.version).
-    toolVersion = "0.8.15"
+    toolVersion = "0.8.16"
 }
 
 spotbugs {
-    toolVersion = "4.10.4"
+    toolVersion = "4.10.5"
     effort = com.github.spotbugs.snom.Effort.MAX
     reportLevel = com.github.spotbugs.snom.Confidence.MEDIUM
     ignoreFailures = true
@@ -177,7 +177,7 @@ tasks.withType<com.github.spotbugs.snom.SpotBugsTask>().configureEach {
 
 
 pitest {
-    pitestVersion = "1.30.0"
+    pitestVersion = "1.30.1"
     junit5PluginVersion = "1.2.3"
     targetClasses = setOf("com.minos.intellij.*")
     targetTests = setOf("com.minos.intellij.*")
